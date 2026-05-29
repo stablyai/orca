@@ -159,6 +159,46 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('does not pass a Windows Codex home into WSL terminals', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.CODEX_HOME = 'C:\\Users\\jin\\.codex'
+          return env
+        }
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe('wsl.exe')
+      expect(spawnCall[2].env.CODEX_HOME).toBeUndefined()
+    })
+
+    it('preserves an explicit Linux Codex home for WSL terminals', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.CODEX_HOME = '/home/jin/.codex-alt'
+          return env
+        }
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe('wsl.exe')
+      expect(spawnCall[2].env.CODEX_HOME).toBe('/home/jin/.codex-alt')
+    })
+
     it('does not inherit parent Orca pane identity when caller omits pane env', async () => {
       const saved = {
         ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,

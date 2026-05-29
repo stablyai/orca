@@ -4,6 +4,7 @@
 import type { PreloadApi, PreflightStatus, RefreshAgentsResult } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
+  DetectedWorktreeListResult,
   DirEntry,
   GlobalSettings,
   MemorySnapshot,
@@ -25,8 +26,21 @@ import {
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
+import {
+  findKeybindingConflicts,
+  formatKeybindingList,
+  getKeybindingPlatform,
+  isKeybindingActionId,
+  normalizeKeybindingArrayForAction,
+  type KeybindingActionId,
+  type KeybindingFileDiagnostic,
+  type KeybindingFileSnapshot,
+  type KeybindingOverrides,
+  type KeybindingPlatform
+} from '../../../shared/keybindings'
 import {
   clearStoredWebRuntimeEnvironment,
   createStoredWebRuntimeEnvironment,
@@ -41,12 +55,18 @@ import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
 import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
 import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
+import {
+  normalizeFeatureInteractions,
+  type FeatureInteractionId,
+  type FeatureInteractionState
+} from '../../../shared/feature-interactions'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
 const SESSION_STORAGE_KEY = 'orca.web.workspaceSession.v1'
 const ONBOARDING_STORAGE_KEY = 'orca.web.onboarding.v1'
 const GITHUB_CACHE_STORAGE_KEY = 'orca.web.githubCache.v1'
+const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
 // Why: browser-paired clients need desktop parity for large dev sessions; the
 // runtime's no-limit default remains capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
@@ -55,9 +75,211 @@ let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntime
 let activeClient: WebRuntimeClient | null = null
 let activeClientEnvironmentId: string | null = null
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
+let cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
 
+function invalidateRuntimeWorktreeCaches(): void {
+  cachedWorktrees = null
+  cachedDetectedWorktrees = null
+}
+
 type WebSettingsApi = NonNullable<PreloadApi['settings']>
+type WebKeybindingsApi = NonNullable<PreloadApi['keybindings']>
+type WebGitHubApi = NonNullable<PreloadApi['gh']>
+type WebGitHubResult<K extends keyof WebGitHubApi> = Awaited<ReturnType<WebGitHubApi[K]>>
+type WebGitHubRouteKey =
+  | 'repoSlug'
+  | 'prForBranch'
+  | 'issue'
+  | 'workItem'
+  | 'workItemByOwnerRepo'
+  | 'workItemDetails'
+  | 'prFileContents'
+  | 'listIssues'
+  | 'createIssue'
+  | 'countWorkItems'
+  | 'listWorkItems'
+  | 'prChecks'
+  | 'prCheckDetails'
+  | 'rerunPRChecks'
+  | 'prComments'
+  | 'resolveReviewThread'
+  | 'setPRFileViewed'
+  | 'updatePRTitle'
+  | 'mergePR'
+  | 'updatePRState'
+  | 'requestPRReviewers'
+  | 'removePRReviewers'
+  | 'updateIssue'
+  | 'addIssueComment'
+  | 'addPRReviewCommentReply'
+  | 'addPRReviewComment'
+  | 'listLabels'
+  | 'listAssignableUsers'
+  | 'rateLimit'
+  | 'listAccessibleProjects'
+  | 'resolveProjectRef'
+  | 'listProjectViews'
+  | 'getProjectViewTable'
+  | 'projectWorkItemDetailsBySlug'
+  | 'updateProjectItemField'
+  | 'clearProjectItemField'
+  | 'updateIssueBySlug'
+  | 'updatePullRequestBySlug'
+  | 'addIssueCommentBySlug'
+  | 'updateIssueCommentBySlug'
+  | 'deleteIssueCommentBySlug'
+  | 'listLabelsBySlug'
+  | 'listAssignableUsersBySlug'
+  | 'listIssueTypesBySlug'
+  | 'updateIssueTypeBySlug'
+type WebGitHubRuntimeMethod =
+  | 'github.repoSlug'
+  | 'github.prForBranch'
+  | 'github.issue'
+  | 'github.workItem'
+  | 'github.workItemByOwnerRepo'
+  | 'github.workItemDetails'
+  | 'github.prFileContents'
+  | 'github.listIssues'
+  | 'github.createIssue'
+  | 'github.countWorkItems'
+  | 'github.listWorkItems'
+  | 'github.prChecks'
+  | 'github.prCheckDetails'
+  | 'github.rerunPRChecks'
+  | 'github.prComments'
+  | 'github.resolveReviewThread'
+  | 'github.setPRFileViewed'
+  | 'github.updatePRTitle'
+  | 'github.mergePR'
+  | 'github.updatePRState'
+  | 'github.requestPRReviewers'
+  | 'github.removePRReviewers'
+  | 'github.updateIssue'
+  | 'github.addIssueComment'
+  | 'github.addPRReviewCommentReply'
+  | 'github.addPRReviewComment'
+  | 'github.listLabels'
+  | 'github.listAssignableUsers'
+  | 'github.rateLimit'
+  | 'github.project.listAccessible'
+  | 'github.project.resolveRef'
+  | 'github.project.listViews'
+  | 'github.project.viewTable'
+  | 'github.project.workItemDetailsBySlug'
+  | 'github.project.updateItemField'
+  | 'github.project.clearItemField'
+  | 'github.project.updateIssueBySlug'
+  | 'github.project.updatePullRequestBySlug'
+  | 'github.project.addIssueCommentBySlug'
+  | 'github.project.updateIssueCommentBySlug'
+  | 'github.project.deleteIssueCommentBySlug'
+  | 'github.project.listLabelsBySlug'
+  | 'github.project.listAssignableUsersBySlug'
+  | 'github.project.listIssueTypesBySlug'
+  | 'github.project.updateIssueTypeBySlug'
+type WebGitLabApi = NonNullable<PreloadApi['gl']>
+type WebGitLabResult<K extends keyof WebGitLabApi> = Awaited<ReturnType<WebGitLabApi[K]>>
+type WebGitLabRouteKey =
+  | 'listMRs'
+  | 'listWorkItems'
+  | 'listIssues'
+  | 'createIssue'
+  | 'updateIssue'
+  | 'addIssueComment'
+  | 'todos'
+  | 'workItemDetails'
+  | 'closeMR'
+  | 'reopenMR'
+  | 'mergeMR'
+  | 'addMRComment'
+  | 'workItemByPath'
+type WebGitLabRuntimeMethod =
+  | 'gitlab.listMRs'
+  | 'gitlab.listWorkItems'
+  | 'gitlab.listIssues'
+  | 'gitlab.createIssue'
+  | 'gitlab.updateIssue'
+  | 'gitlab.addIssueComment'
+  | 'gitlab.todos'
+  | 'gitlab.workItemDetails'
+  | 'gitlab.updateMRState'
+  | 'gitlab.mergeMR'
+  | 'gitlab.addMRComment'
+  | 'gitlab.workItemByPath'
+type WebKeybindingDocument = {
+  version: 1
+  keybindings: KeybindingOverrides
+  platforms: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
+}
+
+export const GITHUB_WEB_RPC_METHODS = {
+  repoSlug: 'github.repoSlug',
+  prForBranch: 'github.prForBranch',
+  issue: 'github.issue',
+  workItem: 'github.workItem',
+  workItemByOwnerRepo: 'github.workItemByOwnerRepo',
+  workItemDetails: 'github.workItemDetails',
+  prFileContents: 'github.prFileContents',
+  listIssues: 'github.listIssues',
+  createIssue: 'github.createIssue',
+  countWorkItems: 'github.countWorkItems',
+  listWorkItems: 'github.listWorkItems',
+  prChecks: 'github.prChecks',
+  prCheckDetails: 'github.prCheckDetails',
+  rerunPRChecks: 'github.rerunPRChecks',
+  prComments: 'github.prComments',
+  resolveReviewThread: 'github.resolveReviewThread',
+  setPRFileViewed: 'github.setPRFileViewed',
+  updatePRTitle: 'github.updatePRTitle',
+  mergePR: 'github.mergePR',
+  updatePRState: 'github.updatePRState',
+  requestPRReviewers: 'github.requestPRReviewers',
+  removePRReviewers: 'github.removePRReviewers',
+  updateIssue: 'github.updateIssue',
+  addIssueComment: 'github.addIssueComment',
+  addPRReviewCommentReply: 'github.addPRReviewCommentReply',
+  addPRReviewComment: 'github.addPRReviewComment',
+  listLabels: 'github.listLabels',
+  listAssignableUsers: 'github.listAssignableUsers',
+  rateLimit: 'github.rateLimit',
+  listAccessibleProjects: 'github.project.listAccessible',
+  resolveProjectRef: 'github.project.resolveRef',
+  listProjectViews: 'github.project.listViews',
+  getProjectViewTable: 'github.project.viewTable',
+  projectWorkItemDetailsBySlug: 'github.project.workItemDetailsBySlug',
+  updateProjectItemField: 'github.project.updateItemField',
+  clearProjectItemField: 'github.project.clearItemField',
+  updateIssueBySlug: 'github.project.updateIssueBySlug',
+  updatePullRequestBySlug: 'github.project.updatePullRequestBySlug',
+  addIssueCommentBySlug: 'github.project.addIssueCommentBySlug',
+  updateIssueCommentBySlug: 'github.project.updateIssueCommentBySlug',
+  deleteIssueCommentBySlug: 'github.project.deleteIssueCommentBySlug',
+  listLabelsBySlug: 'github.project.listLabelsBySlug',
+  listAssignableUsersBySlug: 'github.project.listAssignableUsersBySlug',
+  listIssueTypesBySlug: 'github.project.listIssueTypesBySlug',
+  updateIssueTypeBySlug: 'github.project.updateIssueTypeBySlug'
+} as const satisfies Record<WebGitHubRouteKey, WebGitHubRuntimeMethod>
+
+export const GITLAB_WEB_RPC_METHODS = {
+  listMRs: 'gitlab.listMRs',
+  listWorkItems: 'gitlab.listWorkItems',
+  listIssues: 'gitlab.listIssues',
+  createIssue: 'gitlab.createIssue',
+  updateIssue: 'gitlab.updateIssue',
+  addIssueComment: 'gitlab.addIssueComment',
+  todos: 'gitlab.todos',
+  workItemDetails: 'gitlab.workItemDetails',
+  closeMR: 'gitlab.updateMRState',
+  reopenMR: 'gitlab.updateMRState',
+  mergeMR: 'gitlab.mergeMR',
+  addMRComment: 'gitlab.addMRComment',
+  workItemByPath: 'gitlab.workItemByPath'
+} as const satisfies Record<WebGitLabRouteKey, WebGitLabRuntimeMethod>
+
+const WEB_KEYBINDING_PLATFORMS: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+const webKeybindingListeners = new Set<(snapshot: KeybindingFileSnapshot) => void>()
 
 export function installWebPreloadApi(): void {
   activeEnvironment = readStoredWebRuntimeEnvironment()
@@ -82,10 +304,14 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
       relaunch: () => Promise.resolve(window.location.reload()),
+      restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
-      getFloatingTerminalCwd: () => Promise.resolve('~')
+      getFloatingTerminalCwd: () => Promise.resolve(''),
+      getFloatingMarkdownDirectory: () => Promise.resolve(''),
+      pickFloatingMarkdownDocument: () => Promise.resolve(null),
+      pickFloatingWorkspaceDirectory: () => Promise.resolve(null)
     },
     e2e: {
       getConfig: () => createE2EConfig({})
@@ -103,12 +329,38 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
+    keybindings: createWebKeybindingsApi(),
     ui: createWebUiApi(),
     crashReports: {
       getLatestPending: () => Promise.resolve(null),
+      getLatestReport: () => Promise.resolve(null),
       dismiss: () => Promise.resolve(null),
-      copyLatestDiagnostics: () => Promise.resolve({ ok: false, error: 'Unavailable on web.' }),
-      submit: () => Promise.resolve({ ok: false, status: null, error: 'Unavailable on web.' })
+      submit: () =>
+        Promise.resolve({
+          ok: false,
+          status: null,
+          error: 'Unavailable on web.'
+        }),
+      copyLatestDiagnostics: () => Promise.resolve({ ok: false, error: 'Unavailable on web.' })
+    },
+    diagnostics: {
+      getStatus: () =>
+        Promise.resolve({
+          localFileEnabled: false,
+          otlpEnabled: false,
+          bundleEnabled: false,
+          otlpStatus: 'Unavailable on web',
+          traceFilePath: '',
+          traceFamilySize: 0
+        }),
+      openTraceFolder: () => Promise.resolve(),
+      clearTraces: () => Promise.resolve(),
+      collectBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
+      openBundlePreview: () =>
+        Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
+      discardBundlePreview: () => Promise.resolve(),
+      uploadBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
+      deleteBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.'))
     },
     session: {
       get: () => Promise.resolve(getStoredWorkspaceSession()),
@@ -155,6 +407,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     git: createGitApi(),
     browser: createBrowserApi(),
     gh: createGitHubApi(),
+    gl: createGitLabApi(),
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
     linear: createRuntimeNamespaceApi('linear'),
     hooks: createHooksApi(),
@@ -215,6 +468,276 @@ function createWebPreloadApi(): Partial<PreloadApi> {
   }
 }
 
+function createEmptyWebKeybindingDocument(): WebKeybindingDocument {
+  return {
+    version: 1,
+    keybindings: {},
+    platforms: {
+      darwin: {},
+      linux: {},
+      win32: {}
+    }
+  }
+}
+
+function getWebKeybindingPlatform(): KeybindingPlatform {
+  return getKeybindingPlatform(getBrowserPlatform())
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeStoredWebOverrides(
+  value: unknown,
+  section: string,
+  diagnostics: KeybindingFileDiagnostic[]
+): KeybindingOverrides {
+  if (value === undefined) {
+    return {}
+  }
+  if (!isJsonObject(value)) {
+    diagnostics.push({ severity: 'error', section, message: `${section} must be an object.` })
+    return {}
+  }
+
+  const overrides: KeybindingOverrides = {}
+  for (const [actionId, rawBindings] of Object.entries(value)) {
+    if (!isKeybindingActionId(actionId)) {
+      diagnostics.push({
+        severity: 'warning',
+        section,
+        actionId,
+        message: `Unknown keybinding action "${actionId}" was ignored.`
+      })
+      continue
+    }
+    if (
+      !Array.isArray(rawBindings) ||
+      !rawBindings.every((binding) => typeof binding === 'string')
+    ) {
+      diagnostics.push({
+        severity: 'error',
+        section,
+        actionId,
+        message: `Shortcut for "${actionId}" was ignored: Use a string array.`
+      })
+      continue
+    }
+    const normalized = normalizeKeybindingArrayForAction(actionId, rawBindings)
+    if (!Array.isArray(normalized)) {
+      const error = normalized.ok ? 'Unable to parse shortcut.' : normalized.error
+      diagnostics.push({
+        severity: 'error',
+        section,
+        actionId,
+        message: `Shortcut for "${actionId}" was ignored: ${error}`
+      })
+      continue
+    }
+    overrides[actionId] = normalized
+  }
+  return overrides
+}
+
+function normalizeWebPlatformOverrides(
+  value: unknown,
+  diagnostics: KeybindingFileDiagnostic[]
+): Partial<Record<KeybindingPlatform, KeybindingOverrides>> {
+  if (value === undefined) {
+    return {}
+  }
+  if (!isJsonObject(value)) {
+    diagnostics.push({
+      severity: 'error',
+      section: 'platforms',
+      message: 'platforms must be an object with darwin, linux, or win32 sections.'
+    })
+    return {}
+  }
+
+  const result: Partial<Record<KeybindingPlatform, KeybindingOverrides>> = {}
+  for (const [platform, overrides] of Object.entries(value)) {
+    if (!WEB_KEYBINDING_PLATFORMS.includes(platform as KeybindingPlatform)) {
+      diagnostics.push({
+        severity: 'warning',
+        section: `platforms.${platform}`,
+        message: `Unknown platform "${platform}" was ignored.`
+      })
+      continue
+    }
+    result[platform as KeybindingPlatform] = normalizeStoredWebOverrides(
+      overrides,
+      `platforms.${platform}`,
+      diagnostics
+    )
+  }
+  return result
+}
+
+function removeConflictingWebOverrides(
+  platform: KeybindingPlatform,
+  overrides: KeybindingOverrides,
+  diagnostics: KeybindingFileDiagnostic[]
+): KeybindingOverrides {
+  let next = { ...overrides }
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const conflicts = findKeybindingConflicts(platform, next)
+    const conflictingOverrides = new Set<KeybindingActionId>()
+    for (const conflict of conflicts) {
+      for (const actionId of conflict.actionIds) {
+        if (Object.prototype.hasOwnProperty.call(next, actionId)) {
+          conflictingOverrides.add(actionId)
+        }
+      }
+    }
+    if (conflictingOverrides.size === 0) {
+      return next
+    }
+    for (const actionId of conflictingOverrides) {
+      delete next[actionId]
+    }
+    diagnostics.push({
+      severity: 'error',
+      message: `Conflicting custom shortcuts were ignored: ${Array.from(conflictingOverrides)
+        .map((actionId) => actionId)
+        .join(', ')}.`
+    })
+  }
+  return next
+}
+
+function readWebKeybindingDocument(): WebKeybindingDocument {
+  const document = readJson(KEYBINDINGS_STORAGE_KEY, createEmptyWebKeybindingDocument())
+  return {
+    version: 1,
+    keybindings: isJsonObject(document.keybindings)
+      ? (document.keybindings as KeybindingOverrides)
+      : {},
+    platforms: isJsonObject(document.platforms)
+      ? (document.platforms as Partial<Record<KeybindingPlatform, KeybindingOverrides>>)
+      : {}
+  }
+}
+
+function getWebKeybindingSnapshot(): KeybindingFileSnapshot {
+  const platform = getWebKeybindingPlatform()
+  const diagnostics: KeybindingFileDiagnostic[] = []
+  const document = readWebKeybindingDocument()
+  const commonOverrides = normalizeStoredWebOverrides(
+    document.keybindings,
+    'keybindings',
+    diagnostics
+  )
+  const platformOverrides = normalizeWebPlatformOverrides(document.platforms, diagnostics)
+  const overrides = removeConflictingWebOverrides(
+    platform,
+    {
+      ...commonOverrides,
+      ...platformOverrides[platform]
+    },
+    diagnostics
+  )
+
+  return {
+    path: 'Browser local storage',
+    platform,
+    exists: window.localStorage.getItem(KEYBINDINGS_STORAGE_KEY) !== null,
+    overrides,
+    commonOverrides,
+    platformOverrides,
+    diagnostics
+  }
+}
+
+function writeWebKeybindingAction(
+  actionId: KeybindingActionId,
+  bindings: string[] | null
+): KeybindingFileSnapshot {
+  if (!isKeybindingActionId(actionId)) {
+    throw new Error(`Unknown keybinding action "${actionId}".`)
+  }
+  const normalizedBindings =
+    bindings === null ? null : normalizeKeybindingArrayForAction(actionId, bindings)
+  if (normalizedBindings !== null && !Array.isArray(normalizedBindings)) {
+    throw new Error(normalizedBindings.ok ? 'Unable to parse shortcut.' : normalizedBindings.error)
+  }
+
+  const platform = getWebKeybindingPlatform()
+  const currentSnapshot = getWebKeybindingSnapshot()
+  const candidateOverrides = { ...currentSnapshot.overrides }
+  if (normalizedBindings === null) {
+    delete candidateOverrides[actionId]
+  } else {
+    candidateOverrides[actionId] = normalizedBindings
+  }
+  const blockingConflict = findKeybindingConflicts(platform, candidateOverrides).find((conflict) =>
+    conflict.actionIds.includes(actionId)
+  )
+  if (blockingConflict) {
+    throw new Error(
+      `${formatKeybindingList([blockingConflict.binding], platform)} conflicts with another shortcut.`
+    )
+  }
+
+  const activePlatform: KeybindingOverrides = { ...currentSnapshot.platformOverrides[platform] }
+  if (normalizedBindings === null) {
+    delete activePlatform[actionId]
+  } else {
+    activePlatform[actionId] = normalizedBindings
+  }
+
+  writeJson(KEYBINDINGS_STORAGE_KEY, {
+    version: 1,
+    keybindings: currentSnapshot.commonOverrides,
+    platforms: {
+      ...currentSnapshot.platformOverrides,
+      darwin: currentSnapshot.platformOverrides.darwin ?? {},
+      linux: currentSnapshot.platformOverrides.linux ?? {},
+      win32: currentSnapshot.platformOverrides.win32 ?? {},
+      [platform]: activePlatform
+    }
+  } satisfies WebKeybindingDocument)
+
+  const snapshot = getWebKeybindingSnapshot()
+  notifyWebKeybindingListeners(snapshot)
+  return snapshot
+}
+
+function notifyWebKeybindingListeners(snapshot: KeybindingFileSnapshot): void {
+  for (const listener of webKeybindingListeners) {
+    listener(snapshot)
+  }
+}
+
+function createWebKeybindingsApi(): WebKeybindingsApi {
+  return {
+    get: () => Promise.resolve(getWebKeybindingSnapshot()),
+    ensureFile: () => Promise.resolve(getWebKeybindingSnapshot()),
+    setAction: async ({ actionId, bindings }) => writeWebKeybindingAction(actionId, bindings),
+    reload: () => {
+      const snapshot = getWebKeybindingSnapshot()
+      notifyWebKeybindingListeners(snapshot)
+      return Promise.resolve(snapshot)
+    },
+    openFile: () => Promise.resolve(getWebKeybindingSnapshot()),
+    revealFile: () => Promise.resolve(getWebKeybindingSnapshot()),
+    onChanged: (callback) => {
+      webKeybindingListeners.add(callback)
+      const onStorage = (event: StorageEvent): void => {
+        if (event.key === KEYBINDINGS_STORAGE_KEY) {
+          callback(getWebKeybindingSnapshot())
+        }
+      }
+      window.addEventListener('storage', onStorage)
+      return () => {
+        webKeybindingListeners.delete(callback)
+        window.removeEventListener('storage', onStorage)
+      }
+    }
+  }
+}
+
 function createRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
   return {
     syncWindowGraph: async (_graph: RuntimeSyncWindowGraph) => getRemoteRuntimeStatus(),
@@ -271,21 +794,28 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
 function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
     list: async () => (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos,
-    add: async ({ path, kind }) => callRuntimeResult('repo.add', { path, kind }),
+    add: async ({ path, kind }) => {
+      invalidateRuntimeWorktreeCaches()
+      return callRuntimeResult('repo.add', { path, kind })
+    },
     remove: async ({ repoId }) => {
       await callRuntimeResult('repo.rm', { repo: repoId })
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
     },
     reorder: async ({ orderedIds }) => callRuntimeResult('repo.reorder', { orderedIds }),
     update: async ({ repoId, updates }) =>
       (await callRuntimeResult<{ repo: Repo }>('repo.update', { repo: repoId, updates })).repo,
     pickFolder: () => Promise.resolve(null),
     pickDirectory: () => Promise.resolve(null),
-    clone: async ({ url, destination }) =>
-      (await callRuntimeResult<{ repo: Repo }>('repo.clone', { url, destination }, 10 * 60_000))
-        .repo,
+    clone: async ({ url, destination }) => {
+      invalidateRuntimeWorktreeCaches()
+      return (
+        await callRuntimeResult<{ repo: Repo }>('repo.clone', { url, destination }, 10 * 60_000)
+      ).repo
+    },
     cloneAbort: () => Promise.resolve(),
     addRemote: async ({ remotePath, displayName, kind }) => {
+      invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{ repo: Repo }>('repo.add', {
         path: remotePath,
         kind
@@ -299,8 +829,10 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
           }
         : result
     },
-    create: async ({ parentPath, name, kind }) =>
-      callRuntimeResult('repo.create', { parentPath, name, kind }),
+    create: async ({ parentPath, name, kind }) => {
+      invalidateRuntimeWorktreeCaches()
+      return callRuntimeResult('repo.create', { parentPath, name, kind })
+    },
     onCloneProgress: () => noopUnsubscribe,
     getGitUsername: () => Promise.resolve(''),
     getBaseRefDefault: async ({ repoId }) =>
@@ -337,9 +869,10 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
           limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
         })
       ).worktrees,
+    listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
       return callRuntimeResult('worktree.create', {
         repo: args.repoId,
         name: args.name,
@@ -347,11 +880,16 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         branchNameOverride: args.branchNameOverride,
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
+        linkedLinearIssue: args.linkedLinearIssue,
+        linkedGitLabIssue: args.linkedGitLabIssue,
+        linkedGitLabMR: args.linkedGitLabMR,
         displayName: args.displayName,
         sparseCheckout: args.sparseCheckout,
         pushTarget: args.pushTarget,
         setupDecision: args.setupDecision,
-        createdWithAgent: args.createdWithAgent
+        createdWithAgent: args.createdWithAgent,
+        workspaceStatus: args.workspaceStatus,
+        manualOrder: args.manualOrder
       })
     },
     resolvePrBase: async ({ repoId, prNumber, headRefName, isCrossRepository }) =>
@@ -361,11 +899,15 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         headRefName,
         isCrossRepository
       }),
-    resolveMrBase: async () => ({
-      error: 'GitLab merge request base resolution is unavailable on web.'
-    }),
+    resolveMrBase: async ({ repoId, mrIid, sourceBranch, isCrossRepository }) =>
+      callRuntimeResult('worktree.resolveMrBase', {
+        repo: repoId,
+        mrIid,
+        sourceBranch,
+        isCrossRepository
+      }),
     remove: async ({ worktreeId, force }) => {
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
       await callRuntimeResult('worktree.rm', { worktree: worktreeId, force })
     },
     updateMeta: async ({ worktreeId, updates }) =>
@@ -382,7 +924,7 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         )
       ).lineage,
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
-      cachedWorktrees = null
+      invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{
         worktree: Worktree & { lineage?: WorktreeLineage | null }
       }>('worktree.set', {
@@ -528,6 +1070,14 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.conflictOperation', { worktree: worktree.id })
     },
+    abortMerge: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.abortMerge', { worktree: worktree.id })
+    },
+    abortRebase: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.abortRebase', { worktree: worktree.id })
+    },
     diff: async ({ worktreePath, filePath, staged, compareAgainstHead }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.diff', {
@@ -545,21 +1095,25 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.commitCompare', { worktree: worktree.id, commitId })
     },
-    upstreamStatus: async ({ worktreePath }) => {
+    upstreamStatus: async ({ worktreePath, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.upstreamStatus', { worktree: worktree.id })
+      return callRuntimeResult('git.upstreamStatus', { worktree: worktree.id, pushTarget })
     },
-    fetch: async ({ worktreePath }) => {
+    fetch: async ({ worktreePath, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.fetch', { worktree: worktree.id })
+      await callRuntimeResult('git.fetch', { worktree: worktree.id, pushTarget })
     },
     push: async ({ worktreePath, publish, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.push', { worktree: worktree.id, publish, pushTarget })
     },
-    pull: async ({ worktreePath }) => {
+    pull: async ({ worktreePath, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.pull', { worktree: worktree.id })
+      await callRuntimeResult('git.pull', { worktree: worktree.id, pushTarget })
+    },
+    rebaseFromBase: async ({ worktreePath, baseRef }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.rebaseFromBase', { worktree: worktree.id, baseRef })
     },
     branchDiff: async ({ worktreePath, filePath, compare, oldPath }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
@@ -681,19 +1235,21 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   } as unknown as NonNullable<Partial<PreloadApi>['browser']>
 }
 
-function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
-  const direct = (method: string) => (args?: unknown) =>
-    callRuntimeResult(method, mapRepoPathArg(args))
-  return {
+function createGitHubApi(): WebGitHubApi {
+  const route = <Result>(method: WebGitHubRuntimeMethod, args?: unknown): Promise<Result> =>
+    callRuntimeResult<Result>(method, mapRepoPathArg(args))
+  const githubApi = {
     viewer: () => Promise.resolve(null),
-    repoSlug: direct('github.repoSlug'),
-    prForBranch: direct('github.prForBranch'),
+    repoSlug: (args) => route<WebGitHubResult<'repoSlug'>>(GITHUB_WEB_RPC_METHODS.repoSlug, args),
+    prForBranch: (args) =>
+      route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate }) => {
-      const pr = await callRuntimeResult('github.prForBranch', {
-        repo: candidate.repoId || candidate.repoPath,
+      const pr = await route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, {
         repoPath: candidate.repoPath,
+        repoId: candidate.repoId,
         branch: candidate.branch,
-        linkedPRNumber: candidate.linkedPRNumber ?? null
+        linkedPRNumber: candidate.linkedPRNumber ?? null,
+        fallbackPRNumber: candidate.fallbackPRNumber ?? null
       })
       return pr
         ? { kind: 'found', pr, fetchedAt: Date.now() }
@@ -702,55 +1258,189 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
     enqueuePRRefresh: () => Promise.resolve(false),
     reportVisiblePRRefreshCandidates: () => Promise.resolve(false),
     onPRRefreshEvent: () => noopUnsubscribe,
-    issue: direct('github.issue'),
-    workItem: direct('github.workItem'),
-    workItemByOwnerRepo: direct('github.workItemByOwnerRepo'),
-    workItemDetails: direct('github.workItemDetails'),
-    prFileContents: direct('github.prFileContents'),
-    listIssues: async () => [],
-    createIssue: direct('github.createIssue'),
-    countWorkItems: direct('github.countWorkItems'),
-    listWorkItems: direct('github.listWorkItems'),
-    prChecks: direct('github.prChecks'),
-    prCheckDetails: direct('github.prCheckDetails'),
-    rerunPRChecks: direct('github.rerunPRChecks'),
-    prComments: direct('github.prComments'),
-    resolveReviewThread: direct('github.resolveReviewThread'),
-    setPRFileViewed: direct('github.setPRFileViewed'),
-    updatePRTitle: direct('github.updatePRTitle'),
-    mergePR: direct('github.mergePR'),
-    updatePRState: direct('github.updatePRState'),
-    requestPRReviewers: direct('github.requestPRReviewers'),
-    removePRReviewers: direct('github.removePRReviewers'),
-    updateIssue: direct('github.updateIssue'),
-    addIssueComment: direct('github.addIssueComment'),
-    addPRReviewCommentReply: direct('github.addPRReviewCommentReply'),
-    addPRReviewComment: direct('github.addPRReviewComment'),
-    listLabels: direct('github.listLabels'),
-    listAssignableUsers: direct('github.listAssignableUsers'),
+    issue: (args) => route<WebGitHubResult<'issue'>>(GITHUB_WEB_RPC_METHODS.issue, args),
+    workItem: (args) => route<WebGitHubResult<'workItem'>>(GITHUB_WEB_RPC_METHODS.workItem, args),
+    workItemByOwnerRepo: ({ repo: ownerRepo, ...args }) =>
+      route<WebGitHubResult<'workItemByOwnerRepo'>>(GITHUB_WEB_RPC_METHODS.workItemByOwnerRepo, {
+        ...args,
+        ownerRepo
+      }),
+    workItemDetails: (args) =>
+      route<WebGitHubResult<'workItemDetails'>>(GITHUB_WEB_RPC_METHODS.workItemDetails, args),
+    prFileContents: (args) =>
+      route<WebGitHubResult<'prFileContents'>>(GITHUB_WEB_RPC_METHODS.prFileContents, args),
+    listIssues: (args) =>
+      route<WebGitHubResult<'listIssues'>>(GITHUB_WEB_RPC_METHODS.listIssues, args),
+    createIssue: (args) =>
+      route<WebGitHubResult<'createIssue'>>(GITHUB_WEB_RPC_METHODS.createIssue, args),
+    countWorkItems: (args) =>
+      route<WebGitHubResult<'countWorkItems'>>(GITHUB_WEB_RPC_METHODS.countWorkItems, args),
+    listWorkItems: (args) =>
+      route<WebGitHubResult<'listWorkItems'>>(GITHUB_WEB_RPC_METHODS.listWorkItems, args),
+    prChecks: (args) => route<WebGitHubResult<'prChecks'>>(GITHUB_WEB_RPC_METHODS.prChecks, args),
+    prCheckDetails: (args) =>
+      route<WebGitHubResult<'prCheckDetails'>>(GITHUB_WEB_RPC_METHODS.prCheckDetails, args),
+    rerunPRChecks: (args) =>
+      route<WebGitHubResult<'rerunPRChecks'>>(GITHUB_WEB_RPC_METHODS.rerunPRChecks, args),
+    prComments: (args) =>
+      route<WebGitHubResult<'prComments'>>(GITHUB_WEB_RPC_METHODS.prComments, args),
+    resolveReviewThread: (args) =>
+      route<WebGitHubResult<'resolveReviewThread'>>(
+        GITHUB_WEB_RPC_METHODS.resolveReviewThread,
+        args
+      ),
+    setPRFileViewed: (args) =>
+      route<WebGitHubResult<'setPRFileViewed'>>(GITHUB_WEB_RPC_METHODS.setPRFileViewed, args),
+    updatePRTitle: (args) =>
+      route<WebGitHubResult<'updatePRTitle'>>(GITHUB_WEB_RPC_METHODS.updatePRTitle, args),
+    mergePR: (args) => route<WebGitHubResult<'mergePR'>>(GITHUB_WEB_RPC_METHODS.mergePR, args),
+    updatePRState: (args) =>
+      route<WebGitHubResult<'updatePRState'>>(GITHUB_WEB_RPC_METHODS.updatePRState, args),
+    requestPRReviewers: (args) =>
+      route<WebGitHubResult<'requestPRReviewers'>>(GITHUB_WEB_RPC_METHODS.requestPRReviewers, args),
+    removePRReviewers: (args) =>
+      route<WebGitHubResult<'removePRReviewers'>>(GITHUB_WEB_RPC_METHODS.removePRReviewers, args),
+    updateIssue: (args) =>
+      route<WebGitHubResult<'updateIssue'>>(GITHUB_WEB_RPC_METHODS.updateIssue, args),
+    addIssueComment: (args) =>
+      route<WebGitHubResult<'addIssueComment'>>(GITHUB_WEB_RPC_METHODS.addIssueComment, args),
+    addPRReviewCommentReply: (args) =>
+      route<WebGitHubResult<'addPRReviewCommentReply'>>(
+        GITHUB_WEB_RPC_METHODS.addPRReviewCommentReply,
+        args
+      ),
+    addPRReviewComment: (args) =>
+      route<WebGitHubResult<'addPRReviewComment'>>(GITHUB_WEB_RPC_METHODS.addPRReviewComment, args),
+    listLabels: (args) =>
+      route<WebGitHubResult<'listLabels'>>(GITHUB_WEB_RPC_METHODS.listLabels, args),
+    listAssignableUsers: (args) =>
+      route<WebGitHubResult<'listAssignableUsers'>>(
+        GITHUB_WEB_RPC_METHODS.listAssignableUsers,
+        args
+      ),
     onWorkItemMutated: () => noopUnsubscribe,
     checkOrcaStarred: () => Promise.resolve(null),
     starOrca: () => Promise.resolve(false),
-    rateLimit: direct('github.rateLimit'),
+    rateLimit: (args) =>
+      route<WebGitHubResult<'rateLimit'>>(GITHUB_WEB_RPC_METHODS.rateLimit, args),
     diagnoseAuth: () =>
       Promise.resolve({ ok: false, message: 'Unavailable in the web client.' } as never),
-    listAccessibleProjects: direct('github.project.listAccessible'),
-    resolveProjectRef: direct('github.project.resolveRef'),
-    listProjectViews: direct('github.project.listViews'),
-    getProjectViewTable: direct('github.project.viewTable'),
-    projectWorkItemDetailsBySlug: direct('github.project.workItemDetailsBySlug'),
-    updateProjectItemField: direct('github.project.updateItemField'),
-    clearProjectItemField: direct('github.project.clearItemField'),
-    updateIssueBySlug: direct('github.project.updateIssueBySlug'),
-    updatePullRequestBySlug: direct('github.project.updatePullRequestBySlug'),
-    addIssueCommentBySlug: direct('github.project.addIssueCommentBySlug'),
-    updateIssueCommentBySlug: direct('github.project.updateIssueCommentBySlug'),
-    deleteIssueCommentBySlug: direct('github.project.deleteIssueCommentBySlug'),
-    listLabelsBySlug: direct('github.project.listLabelsBySlug'),
-    listAssignableUsersBySlug: direct('github.project.listAssignableUsersBySlug'),
-    listIssueTypesBySlug: direct('github.project.listIssueTypesBySlug'),
-    updateIssueTypeBySlug: direct('github.project.updateIssueTypeBySlug')
-  } as NonNullable<Partial<PreloadApi>['gh']>
+    listAccessibleProjects: () =>
+      route<WebGitHubResult<'listAccessibleProjects'>>(
+        GITHUB_WEB_RPC_METHODS.listAccessibleProjects
+      ),
+    resolveProjectRef: (args) =>
+      route<WebGitHubResult<'resolveProjectRef'>>(GITHUB_WEB_RPC_METHODS.resolveProjectRef, args),
+    listProjectViews: (args) =>
+      route<WebGitHubResult<'listProjectViews'>>(GITHUB_WEB_RPC_METHODS.listProjectViews, args),
+    getProjectViewTable: (args) =>
+      route<WebGitHubResult<'getProjectViewTable'>>(
+        GITHUB_WEB_RPC_METHODS.getProjectViewTable,
+        args
+      ),
+    projectWorkItemDetailsBySlug: (args) =>
+      route<WebGitHubResult<'projectWorkItemDetailsBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.projectWorkItemDetailsBySlug,
+        args
+      ),
+    updateProjectItemField: (args) =>
+      route<WebGitHubResult<'updateProjectItemField'>>(
+        GITHUB_WEB_RPC_METHODS.updateProjectItemField,
+        args
+      ),
+    clearProjectItemField: (args) =>
+      route<WebGitHubResult<'clearProjectItemField'>>(
+        GITHUB_WEB_RPC_METHODS.clearProjectItemField,
+        args
+      ),
+    updateIssueBySlug: (args) =>
+      route<WebGitHubResult<'updateIssueBySlug'>>(GITHUB_WEB_RPC_METHODS.updateIssueBySlug, args),
+    updatePullRequestBySlug: (args) =>
+      route<WebGitHubResult<'updatePullRequestBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.updatePullRequestBySlug,
+        args
+      ),
+    addIssueCommentBySlug: (args) =>
+      route<WebGitHubResult<'addIssueCommentBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.addIssueCommentBySlug,
+        args
+      ),
+    updateIssueCommentBySlug: (args) =>
+      route<WebGitHubResult<'updateIssueCommentBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.updateIssueCommentBySlug,
+        args
+      ),
+    deleteIssueCommentBySlug: (args) =>
+      route<WebGitHubResult<'deleteIssueCommentBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.deleteIssueCommentBySlug,
+        args
+      ),
+    listLabelsBySlug: (args) =>
+      route<WebGitHubResult<'listLabelsBySlug'>>(GITHUB_WEB_RPC_METHODS.listLabelsBySlug, args),
+    listAssignableUsersBySlug: (args) =>
+      route<WebGitHubResult<'listAssignableUsersBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.listAssignableUsersBySlug,
+        args
+      ),
+    listIssueTypesBySlug: (args) =>
+      route<WebGitHubResult<'listIssueTypesBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.listIssueTypesBySlug,
+        args
+      ),
+    updateIssueTypeBySlug: (args) =>
+      route<WebGitHubResult<'updateIssueTypeBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.updateIssueTypeBySlug,
+        args
+      )
+  } satisfies WebGitHubApi
+
+  return githubApi
+}
+
+function createGitLabApi(): WebGitLabApi {
+  const route = <Result>(method: WebGitLabRuntimeMethod, args?: unknown): Promise<Result> =>
+    callRuntimeResult<Result>(method, mapRepoPathArg(args))
+
+  const gitLabApi = {
+    viewer: () => Promise.resolve(null),
+    projectSlug: () => Promise.resolve(null),
+    mrForBranch: () => Promise.resolve(null),
+    mr: () => Promise.resolve(null),
+    listMRs: (args) => route<WebGitLabResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args),
+    listWorkItems: (args) =>
+      route<WebGitLabResult<'listWorkItems'>>(GITLAB_WEB_RPC_METHODS.listWorkItems, args),
+    issue: () => Promise.resolve(null),
+    listIssues: (args) =>
+      route<WebGitLabResult<'listIssues'>>(GITLAB_WEB_RPC_METHODS.listIssues, args),
+    createIssue: (args) =>
+      route<WebGitLabResult<'createIssue'>>(GITLAB_WEB_RPC_METHODS.createIssue, args),
+    updateIssue: (args) =>
+      route<WebGitLabResult<'updateIssue'>>(GITLAB_WEB_RPC_METHODS.updateIssue, args),
+    addIssueComment: (args) =>
+      route<WebGitLabResult<'addIssueComment'>>(GITLAB_WEB_RPC_METHODS.addIssueComment, args),
+    listLabels: () => Promise.resolve([]),
+    listAssignableUsers: () => Promise.resolve([]),
+    todos: (args) => route<WebGitLabResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
+    workItemDetails: (args) =>
+      route<WebGitLabResult<'workItemDetails'>>(GITLAB_WEB_RPC_METHODS.workItemDetails, args),
+    closeMR: (args) =>
+      route<WebGitLabResult<'closeMR'>>(GITLAB_WEB_RPC_METHODS.closeMR, {
+        ...args,
+        state: 'closed'
+      }),
+    reopenMR: (args) =>
+      route<WebGitLabResult<'reopenMR'>>(GITLAB_WEB_RPC_METHODS.reopenMR, {
+        ...args,
+        state: 'opened'
+      }),
+    mergeMR: (args) => route<WebGitLabResult<'mergeMR'>>(GITLAB_WEB_RPC_METHODS.mergeMR, args),
+    addMRComment: (args) =>
+      route<WebGitLabResult<'addMRComment'>>(GITLAB_WEB_RPC_METHODS.addMRComment, args),
+    workItemByPath: (args) =>
+      route<WebGitLabResult<'workItemByPath'>>(GITLAB_WEB_RPC_METHODS.workItemByPath, args)
+  } satisfies WebGitLabApi
+
+  return gitLabApi
 }
 
 function createRuntimeNamespaceApi(prefix: string): never {
@@ -763,6 +1453,8 @@ function createRuntimeNamespaceApi(prefix: string): never {
 function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
   return {
     check: async ({ repoId }) => callRuntimeResult('repo.hooksCheck', { repo: repoId }),
+    inspectSetupScriptImports: async ({ repoId }) =>
+      callRuntimeResult('repo.setupScriptImports', { repo: repoId }),
     createIssueCommandRunner: async () => ({ launched: false }) as never,
     readIssueCommand: async ({ repoId }) =>
       callRuntimeResult('repo.issueCommandRead', { repo: repoId }),
@@ -782,7 +1474,14 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           undefined,
           15_000
         )
-        const next = mergeWebUIState(readLocalWebUIState(), result.ui)
+        const local = readLocalWebUIState()
+        const next = {
+          ...mergeWebUIState(local, result.ui),
+          featureInteractions: mergeFeatureInteractionState(
+            local.featureInteractions,
+            result.ui.featureInteractions
+          )
+        }
         writeJson(UI_STORAGE_KEY, next)
         zoomLevel = next.uiZoomLevel
         return next
@@ -798,6 +1497,41 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         await callRuntimeResult('ui.set', updates, 15_000)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
+      }
+    },
+    recordFeatureInteraction: async (id: FeatureInteractionId) => {
+      const current = readLocalWebUIState()
+      const featureInteractions = normalizeFeatureInteractions(current.featureInteractions)
+      const existing = featureInteractions[id]
+      const optimistic = mergeWebUIState(current, {
+        featureInteractions: {
+          ...featureInteractions,
+          [id]: {
+            firstInteractedAt: existing?.firstInteractedAt ?? Date.now(),
+            interactionCount: (existing?.interactionCount ?? 0) + 1
+          }
+        }
+      })
+      writeJson(UI_STORAGE_KEY, optimistic)
+      try {
+        const result = await callRuntimeResult<{ ui: PersistedUIState }>(
+          'ui.recordFeatureInteraction',
+          id,
+          15_000
+        )
+        const local = readLocalWebUIState()
+        const next = {
+          ...mergeWebUIState(local, result.ui),
+          featureInteractions: mergeFeatureInteractionState(
+            local.featureInteractions,
+            result.ui.featureInteractions
+          )
+        }
+        writeJson(UI_STORAGE_KEY, next)
+        zoomLevel = next.uiZoomLevel
+        return next
+      } catch {
+        return optimistic
       }
     },
     readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
@@ -817,12 +1551,13 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenSettings: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,
-    onShowFeatureTourNudge: () => noopUnsubscribe,
     onToggleLeftSidebar: () => noopUnsubscribe,
     onToggleRightSidebar: () => noopUnsubscribe,
     onToggleWorktreePalette: () => noopUnsubscribe,
     onToggleFloatingTerminal: () => noopUnsubscribe,
+    onTerminalShortcutCaptured: () => noopUnsubscribe,
     onOpenQuickOpen: () => noopUnsubscribe,
+    onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
@@ -841,6 +1576,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onCloseActiveTab: () => noopUnsubscribe,
     onSwitchTab: () => noopUnsubscribe,
     onSwitchTabAcrossAllTypes: () => noopUnsubscribe,
+    onSwitchRecentTab: () => noopUnsubscribe,
     onSwitchTerminalTab: () => noopUnsubscribe,
     onCtrlTabKeyDown: () => noopUnsubscribe,
     onCtrlTabKeyUp: () => noopUnsubscribe,
@@ -867,6 +1603,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onFileDrop: () => noopUnsubscribe,
     syncTrafficLights: () => {},
     setMarkdownEditorFocused: () => {},
+    setTerminalInputFocused: () => {},
+    setFloatingTerminalInputFocused: () => {},
+    setShortcutRecorderFocused: () => {},
     onRichMarkdownContextCommand: () => noopUnsubscribe,
     onFullscreenChanged: () => noopUnsubscribe,
     minimize: () => {},
@@ -967,6 +1706,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
       | 'antigravity'
       | 'cursor'
       | 'droid'
+      | 'command-code'
       | 'grok'
       | 'copilot'
       | 'hermes'
@@ -985,6 +1725,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     antigravityStatus: () => status('antigravity'),
     cursorStatus: () => status('cursor'),
     droidStatus: () => status('droid'),
+    commandCodeStatus: () => status('command-code'),
     grokStatus: () => status('grok'),
     copilotStatus: () => status('copilot'),
     hermesStatus: () => status('hermes')
@@ -1018,6 +1759,14 @@ function createComputerUsePermissionsApi(): NonNullable<
         openedSettings: false,
         launchedHelper: false,
         nextStep: 'Computer-use permissions are managed on the Orca server.'
+      }),
+    reset: () =>
+      Promise.resolve({
+        platform: getBrowserPlatform(),
+        helperAppPath: null,
+        helperUnavailableReason: 'web_client',
+        bundleId: null,
+        permissions: []
       })
   }
 }
@@ -1098,6 +1847,7 @@ function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
     },
     pickAttachment: () => Promise.resolve(null),
     pickImage: () => Promise.resolve(null),
+    pickRepoIconImage: () => Promise.resolve(null),
     pickAudio: () => Promise.resolve(null),
     pickDirectory: () => Promise.resolve(null),
     copyFile: () => Promise.resolve()
@@ -1118,6 +1868,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     listSessions: () => Promise.resolve([]),
+    getMainBufferSnapshot: () => Promise.resolve(null),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,
@@ -1226,7 +1977,7 @@ function closeActiveRuntimeClients(): void {
   activeClient?.close()
   activeClient = null
   activeClientEnvironmentId = null
-  cachedWorktrees = null
+  invalidateRuntimeWorktreeCaches()
 }
 
 function disconnectActiveRuntimeEnvironment(): void {
@@ -1333,10 +2084,18 @@ function closeWebOnboarding(base: OnboardingState): OnboardingState {
 }
 
 function readLocalWebUIState(): PersistedUIState {
-  return mergeWebUIState(
-    getDefaultUIState(),
-    readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  )
+  const defaults = getDefaultUIState()
+  const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
+  if (typeof stored.rightSidebarOpen === 'boolean') {
+    return mergeWebUIState(defaults, stored)
+  }
+  const storedSettings = getStoredSettings()
+  return mergeWebUIState(defaults, {
+    ...stored,
+    // Why: web fallback lacks main-process normalization, so migrate the
+    // retired setting only when the local UI preference is still absent.
+    rightSidebarOpen: storedSettings.rightSidebarOpenByDefault
+  })
 }
 
 function mergeWebUIState(
@@ -1347,6 +2106,32 @@ function mergeWebUIState(
     ...base,
     ...updates
   }
+}
+
+function mergeFeatureInteractionState(
+  current: PersistedUIState['featureInteractions'],
+  incoming: PersistedUIState['featureInteractions']
+): FeatureInteractionState {
+  const currentNormalized = normalizeFeatureInteractions(current)
+  const incomingNormalized = normalizeFeatureInteractions(incoming)
+  const merged: FeatureInteractionState = { ...currentNormalized }
+  for (const [id, incomingRecord] of Object.entries(incomingNormalized)) {
+    const featureId = id as FeatureInteractionId
+    const currentRecord = currentNormalized[featureId]
+    merged[featureId] = currentRecord
+      ? {
+          firstInteractedAt: Math.min(
+            currentRecord.firstInteractedAt,
+            incomingRecord.firstInteractedAt
+          ),
+          interactionCount: Math.max(
+            currentRecord.interactionCount,
+            incomingRecord.interactionCount
+          )
+        }
+      : incomingRecord
+  }
+  return merged
 }
 
 function mergeSettings(base: GlobalSettings, updates: Partial<GlobalSettings>): GlobalSettings {
@@ -1362,6 +2147,9 @@ function mergeSettings(base: GlobalSettings, updates: Partial<GlobalSettings>): 
       ...(base.githubProjects ?? defaults.githubProjects),
       ...updates.githubProjects
     } as GlobalSettings['githubProjects'],
+    disabledTuiAgents: normalizeDisabledTuiAgents(
+      updates.disabledTuiAgents ?? base.disabledTuiAgents
+    ),
     voice: {
       ...(base.voice ?? defaults.voice),
       ...updates.voice
@@ -1381,8 +2169,62 @@ async function listAllRuntimeWorktrees(): Promise<Worktree[]> {
   return result.worktrees
 }
 
+async function listAllRuntimeDetectedWorktrees(): Promise<Worktree[]> {
+  if (cachedDetectedWorktrees && Date.now() - cachedDetectedWorktrees.loadedAt < 5_000) {
+    return cachedDetectedWorktrees.worktrees
+  }
+
+  const repos = (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos
+  const detectedLists = await Promise.all(
+    repos.map((repo) => callRuntimeDetectedWorktrees(repo.id))
+  )
+  const worktrees = detectedLists.flatMap((result) => result.worktrees)
+  cachedDetectedWorktrees = { loadedAt: Date.now(), worktrees }
+  return worktrees
+}
+
+async function callRuntimeDetectedWorktrees(repoId: string): Promise<DetectedWorktreeListResult> {
+  const response = await callRuntimeEnvelope<DetectedWorktreeListResult>(
+    'worktree.detectedList',
+    { repo: repoId },
+    15_000
+  )
+  if (response.ok) {
+    return response.result
+  }
+  if (response.error.code !== 'method_not_found') {
+    throw new Error(response.error.message)
+  }
+
+  const legacy = await callRuntimeResult<{ worktrees: Worktree[] }>(
+    'worktree.list',
+    { repo: repoId, limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT },
+    15_000
+  )
+  return toLegacyDetectedWorktreeResult(repoId, legacy.worktrees)
+}
+
+function toLegacyDetectedWorktreeResult(
+  repoId: string,
+  worktrees: Worktree[]
+): DetectedWorktreeListResult {
+  return {
+    repoId,
+    authoritative: true,
+    source: 'session-fallback',
+    worktrees: worktrees.map((worktree) => ({
+      ...worktree,
+      ownership: 'orca-managed',
+      selectedCheckout: false,
+      visible: true
+    }))
+  }
+}
+
 async function resolveRuntimeWorktreeByPath(worktreePath: string): Promise<Worktree> {
-  const worktrees = await listAllRuntimeWorktrees()
+  // Why: hidden-but-open worktrees must still resolve for git/file operations.
+  // `worktree.list` is sidebar-visible only, so path resolution uses detected rows.
+  const worktrees = await listAllRuntimeDetectedWorktrees()
   const match = worktrees
     .map((worktree) => ({
       worktree,
@@ -1433,9 +2275,13 @@ function mapRepoPathArg(args: unknown): unknown {
     return args
   }
   const record = args as Record<string, unknown>
+  const repoId = typeof record.repoId === 'string' && record.repoId.trim() ? record.repoId : null
   return {
     ...record,
-    repo: record.repoPath
+    // Why: runtime repo selectors accept loose path/name forms, but duplicate
+    // checked-out repos can make those ambiguous. The renderer already passes
+    // Orca's repo id on task calls, so prefer the explicit selector.
+    repo: repoId ? `id:${repoId}` : record.repoPath
   }
 }
 

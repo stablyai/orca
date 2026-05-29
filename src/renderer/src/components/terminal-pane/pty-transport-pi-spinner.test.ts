@@ -13,6 +13,10 @@ const BEL = '\x07'
 const workingFrame = (frame: string): string => `${ESC}]0;${frame} π - cwd${BEL}`
 const idleTitle = (): string => `${ESC}]0;π - cwd${BEL}`
 
+function flushPtySideEffects(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
@@ -64,6 +68,7 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
     onData?.({ id: 'pty-pi', data: workingFrame('⠙') }) // ⠙
     onData?.({ id: 'pty-pi', data: workingFrame('⠹') }) // ⠹
     onData?.({ id: 'pty-pi', data: idleTitle() })
+    await flushPtySideEffects()
 
     const normalized = onTitleChange.mock.calls.map((c) => c[0])
     // The store only stores the normalized label, which is what the worktree
@@ -91,6 +96,7 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
 
     onData?.({ id: 'pty-pi', data: workingFrame('⠋') })
     onData?.({ id: 'pty-pi', data: workingFrame('⠙') })
+    await flushPtySideEffects()
 
     const calls = onTitleChange.mock.calls.map((c) => c[0])
     expect(calls).toContain('⠋ Pi')
@@ -115,6 +121,7 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
 
     const coalescedWorking = `${workingFrame('⠋')}output\r\n${workingFrame('⠙')}`
     onData?.({ id: 'pty-pi', data: coalescedWorking })
+    await flushPtySideEffects()
 
     const calls = onTitleChange.mock.calls.map((c) => c[0])
     expect(calls).toContain('⠋ Pi')

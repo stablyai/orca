@@ -25,9 +25,10 @@ function requestDevParentShutdown(): void {
 }
 
 export function installUncaughtPipeErrorGuard(): void {
-  process.on('uncaughtException', (error) => {
+  const onUncaughtException = (error: unknown): void => {
     if (
       error &&
+      typeof error === 'object' &&
       'code' in error &&
       ((error as NodeJS.ErrnoException).code === 'EIO' ||
         (error as NodeJS.ErrnoException).code === 'EPIPE')
@@ -35,8 +36,16 @@ export function installUncaughtPipeErrorGuard(): void {
       return
     }
 
-    throw error
-  })
+    process.off('uncaughtException', onUncaughtException)
+    // Why: throwing inside an uncaughtException handler makes Node exit with
+    // status 7, hiding the original fault. Re-throw on the next tick so the
+    // default fatal-exception path reports the real status and stack.
+    setImmediate(() => {
+      throw error
+    })
+  }
+
+  process.on('uncaughtException', onUncaughtException)
 }
 
 export function patchPackagedProcessPath(): void {
@@ -124,6 +133,17 @@ export function configureDevUserDataPath(isDev: boolean): void {
   // `pnpm dev` can overwrite the packaged app's runtime pointer and make the
   // public `orca` CLI look broken even though the packaged app is still open.
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
+}
+
+export function shouldInstallManagedHooks(isDev: boolean): boolean {
+  void isDev
+  // Why: managed hook installation now targets Orca-owned, environment-scoped
+  // homes for Codex rather than the user's default ~/.codex state, so plain
+  // dev runs need the install path enabled to keep hook-backed agent statuses
+  // accurate without an opt-in flag. The remaining agents still rely on the
+  // shared startup installer loop, so keep the policy uniformly on until
+  // they are migrated to more granular ownership seams.
+  return true
 }
 
 export function installDevParentDisconnectQuit(isDev: boolean): void {

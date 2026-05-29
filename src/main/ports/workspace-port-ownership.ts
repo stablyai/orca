@@ -1,6 +1,7 @@
 import path from 'path'
 import type { Store } from '../persistence'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { isFolderRepo } from '../../shared/repo-kind'
 import type {
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
@@ -27,12 +28,15 @@ export function getStoreWorkspacePortProbes(
     if (!repo || repo.connectionId) {
       return []
     }
+    const worktreePath = isFolderRepo(repo)
+      ? (splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? parsed.worktreePath)
+      : parsed.worktreePath
     return [
       {
         id: worktreeId,
         repoId: parsed.repoId,
-        displayName: meta.displayName || path.basename(parsed.worktreePath),
-        path: parsed.worktreePath
+        displayName: meta.displayName || path.basename(worktreePath),
+        path: worktreePath
       }
     ]
   })

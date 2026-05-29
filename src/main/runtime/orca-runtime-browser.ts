@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: this file is a command adapter for one external surface, Agent Browser automation. It stays separate from OrcaRuntimeService so runtime state does not grow further while browser routing remains easy to scan in one place. */
 import { randomUUID } from 'crypto'
 import { ipcMain, webContents, type BrowserWindow } from 'electron'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import type {
   BrowserBackResult,
   BrowserCaptureStartResult,
@@ -248,22 +247,14 @@ export class RuntimeBrowserCommands {
     return { browserPageId: resolvedPageId, webContents: guest }
   }
 
-  // Why: browser tabs only mount (and become operable) when their worktree is
-  // the active worktree in the renderer AND activeTabType is 'browser'. If either
-  // condition is false, the webview stays in display:none and Electron won't start
-  // its guest process — dom-ready never fires, registerGuest never runs, and CLI
-  // browser commands fail with "CDP connection refused".
+  // Why: browser tabs must become paintable before their webview guest starts
+  // and registerGuest fires, but automation must not steal the user's visible
+  // worktree/browser pane. Ask the renderer to background-mount the worktree and
+  // acquire a hidden automation visibility lease instead of activating the UI.
   private async ensureBrowserWorktreeActive(worktreeId: string): Promise<void> {
     const win = this.host.getAuthoritativeWindow()
-    const repoId = getRepoIdFromWorktreeId(worktreeId)
-    if (!repoId) {
-      return
-    }
-    win.webContents.send('ui:activateWorktree', { repoId, worktreeId })
-    // Why: switching worktree alone sets activeView='terminal'. Browser webviews
-    // won't mount until activeTabType is 'browser'. Send a second IPC to flip it.
     win.webContents.send('browser:activateView', { worktreeId })
-    // Why: give the renderer time to mount the webview after switching worktrees.
+    // Why: give the renderer time to mount the hidden paintable webview.
     // The webview needs to attach and fire dom-ready before registerGuest runs.
     await new Promise((resolve) => setTimeout(resolve, 500))
   }

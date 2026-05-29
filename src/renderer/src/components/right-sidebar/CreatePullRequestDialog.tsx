@@ -21,6 +21,13 @@ import type {
 } from '../../../../shared/hosted-review'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
+import {
+  DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
+  resolveSourceControlAiForOperation,
+  resolveSourceControlAiPrCreationDefaults
+} from '../../../../shared/source-control-ai'
+import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
+import { getRuntimeGitScope } from '@/runtime/runtime-git-client'
 
 type CreatePullRequestDialogProps = {
   open: boolean
@@ -62,10 +69,33 @@ export function CreatePullRequestDialog({
   onCreated
 }: CreatePullRequestDialogProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const repo = useAppStore((s) => s.repos.find((candidate) => candidate.id === repoId) ?? null)
   const createHostedReview = useAppStore((s) => s.createHostedReview)
   const submitInFlightRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const prCreationDefaults = React.useMemo(() => {
+    if (!settings) {
+      return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
+    }
+    const hostKey = getCommitMessageModelDiscoveryHostKeyForScope(
+      getRuntimeGitScope(settings, repo?.connectionId)
+    )
+    const resolved = resolveSourceControlAiForOperation({
+      settings,
+      repo,
+      operation: 'pullRequest',
+      discoveryHostKey: hostKey,
+      prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
+    })
+    return resolved.ok
+      ? resolved.value.prCreationDefaults
+      : resolveSourceControlAiPrCreationDefaults({
+          settings,
+          repo,
+          prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
+        })
+  }, [repo, settings])
   const {
     aiGenerationEnabled,
     base,
@@ -96,6 +126,7 @@ export function CreatePullRequestDialog({
     eligibility,
     settings,
     submitting,
+    prCreationDefaults,
     onBranchChangedByGeneration
   })
 
@@ -139,16 +170,14 @@ export function CreatePullRequestDialog({
         title: title.trim(),
         body,
         draft,
-        worktreePath
+        worktreePath,
+        useTemplate: prCreationDefaults.useTemplate
       })
       if (result.ok) {
-        toast.success(`Pull request #${result.number} created`, {
-          action: {
-            label: 'Open on GitHub',
-            onClick: () => window.api.shell.openUrl(result.url)
-          }
-        })
         await onCreated(result)
+        if (prCreationDefaults.openAfterCreate) {
+          window.api.shell.openUrl(result.url)
+        }
         onOpenChange(false)
         return
       }
@@ -184,6 +213,8 @@ export function CreatePullRequestDialog({
     onOpenChange,
     onPushBeforeCreate,
     pushBeforeCreate,
+    prCreationDefaults.openAfterCreate,
+    prCreationDefaults.useTemplate,
     repoPath,
     submitDisabled,
     title,
@@ -312,6 +343,7 @@ export function CreatePullRequestDialog({
               id="create-pr-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
+              placeholder="Title"
               aria-invalid={!title.trim()}
             />
           </div>
@@ -323,18 +355,19 @@ export function CreatePullRequestDialog({
               value={body}
               onChange={(event) => setBody(event.target.value)}
               rows={6}
+              placeholder="Description (optional)"
               className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-foreground">
+          <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
             <input
               type="checkbox"
               checked={draft}
               onChange={(event) => setDraft(event.target.checked)}
-              className="size-4 rounded border-border accent-primary"
+              className="size-4 shrink-0 rounded border-border accent-primary"
             />
-            Draft
+            <span className="min-w-0 flex-1 truncate">Create as draft</span>
           </label>
 
           {stripBaseRef(base).toLowerCase() === stripBaseRef(branch).toLowerCase() ? (

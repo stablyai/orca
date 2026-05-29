@@ -1,10 +1,11 @@
 import type { RefObject } from 'react'
 import { ArrowLeft, Search, Server, type LucideIcon, type LucideProps } from 'lucide-react'
-import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
+import type { RepoIcon } from '../../../../shared/repo-icon'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { cn } from '@/lib/utils'
+import { RepoIconGlyph } from '../repo/repo-icon'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-
-const SEARCH_SHORTCUT_HINT = isMacUserAgent() ? '⌘F' : 'Ctrl+F'
 
 type NavSection = {
   id: string
@@ -22,6 +23,7 @@ type NavGroup = {
 type RepoNavSection = NavSection & {
   badgeColor?: string
   isRemote?: boolean
+  repoIcon?: RepoIcon | null
 }
 
 type SettingsSidebarProps = {
@@ -35,7 +37,12 @@ type SettingsSidebarProps = {
   onSearchChange: (query: string) => void
   onSelectSection: (
     sectionId: string,
-    modifiers: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }
+    modifiers: {
+      metaKey: boolean
+      ctrlKey: boolean
+      shiftKey: boolean
+      altKey: boolean
+    }
   ) => void
 }
 
@@ -50,6 +57,15 @@ export function SettingsSidebar({
   onSearchChange,
   onSelectSection
 }: SettingsSidebarProps): React.JSX.Element {
+  const searchShortcutHint = useShortcutLabel('settings.search')
+  const navItemClassName = (isActive: boolean): string =>
+    cn(
+      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+      isActive
+        ? 'bg-accent font-medium text-accent-foreground'
+        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+    )
+
   return (
     <aside className="flex w-[280px] shrink-0 flex-col border-r border-border/50 bg-card/40">
       <div className="border-b border-border/50 px-3 py-3">
@@ -57,7 +73,7 @@ export function SettingsSidebar({
           variant="ghost"
           size="sm"
           onClick={onBack}
-          className="w-full justify-start gap-2 text-muted-foreground"
+          className="w-full justify-start gap-2 text-[13px] text-muted-foreground"
         >
           <ArrowLeft className="size-4" />
           Back to app
@@ -72,11 +88,11 @@ export function SettingsSidebar({
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search settings"
-            className="pl-9 pr-14"
+            className="pl-9 pr-14 text-[13px]"
           />
           {searchQuery === '' ? (
             <kbd className="pointer-events-none absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center rounded border border-border/60 bg-background/40 px-1.5 py-px font-mono text-[10px] font-medium text-muted-foreground">
-              {SEARCH_SHORTCUT_HINT}
+              {searchShortcutHint}
             </kbd>
           ) : null}
         </div>
@@ -97,6 +113,8 @@ export function SettingsSidebar({
                   return (
                     <button
                       key={section.id}
+                      aria-current={isActive ? 'page' : undefined}
+                      data-current={isActive ? 'true' : undefined}
                       onClick={(event) =>
                         onSelectSection(section.id, {
                           metaKey: event.metaKey,
@@ -105,13 +123,9 @@ export function SettingsSidebar({
                           altKey: event.altKey
                         })
                       }
-                      className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                        isActive
-                          ? 'bg-accent font-medium text-accent-foreground'
-                          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                      }`}
+                      className={navItemClassName(isActive)}
                     >
-                      <Icon className="mr-2 size-4" />
+                      <Icon className="size-4 shrink-0" />
                       <span className="truncate">{section.title}</span>
                       {section.badge ? (
                         <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -127,7 +141,7 @@ export function SettingsSidebar({
 
           <div className="space-y-2">
             <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Repositories
+              Projects
             </p>
 
             {repoSections.length > 0 ? (
@@ -138,6 +152,8 @@ export function SettingsSidebar({
                   return (
                     <button
                       key={section.id}
+                      aria-current={isActive ? 'page' : undefined}
+                      data-current={isActive ? 'true' : undefined}
                       onClick={(event) =>
                         onSelectSection(section.id, {
                           metaKey: event.metaKey,
@@ -146,15 +162,13 @@ export function SettingsSidebar({
                           altKey: event.altKey
                         })
                       }
-                      className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                        isActive
-                          ? 'bg-accent font-medium text-accent-foreground'
-                          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                      }`}
+                      className={navItemClassName(isActive)}
                     >
-                      <span
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: section.badgeColor ?? '#6b7280' }}
+                      <RepoIconGlyph
+                        repoIcon={section.repoIcon}
+                        color={section.badgeColor}
+                        className="size-4 shrink-0 text-muted-foreground"
+                        iconClassName="size-3.5"
                       />
                       <span className="truncate">{section.title}</span>
                       {section.isRemote && (
@@ -169,7 +183,7 @@ export function SettingsSidebar({
               </div>
             ) : (
               <p className="px-3 text-xs text-muted-foreground">
-                {hasRepos ? 'No matching repository settings.' : 'No repositories added yet.'}
+                {hasRepos ? 'No matching project settings.' : 'No projects added yet.'}
               </p>
             )}
           </div>

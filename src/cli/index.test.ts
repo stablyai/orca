@@ -182,7 +182,10 @@ describe('orca cli worktree awareness', () => {
   it('shows the enclosing worktree for `worktree current`', async () => {
     queueFixtures(
       callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      worktreeListFixture([
+        buildWorktree('/tmp/repo/feature', 'feature/foo'),
+        buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'duplicate-repo')
+      ]),
       okFixture('req_1', {
         worktree: {
           id: 'repo::/tmp/repo/feature',
@@ -197,7 +200,7 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
-      worktree: `path:${path.resolve('/tmp/repo/feature')}`
+      worktree: 'id:repo::/tmp/repo/feature'
     })
     expect(logSpy).toHaveBeenCalledTimes(1)
   })
@@ -245,7 +248,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.set', {
-      worktree: `path:${path.resolve('/tmp/repo/feature')}`,
+      worktree: 'id:repo::/tmp/repo/feature',
       displayName: undefined,
       linkedIssue: undefined,
       comment: 'hello',
@@ -332,7 +335,7 @@ describe('orca cli worktree awareness', () => {
       displayName: undefined,
       linkedIssue: undefined,
       comment: undefined,
-      parentWorktree: `path:${path.resolve('/tmp/repo/parent')}`,
+      parentWorktree: 'id:repo::/tmp/repo/parent',
       noParent: false
     })
   })
@@ -437,7 +440,7 @@ describe('orca cli worktree awareness', () => {
       runHooks: false,
       activate: true,
       parentWorktree: undefined,
-      cwdParentWorktree: `path:${path.resolve('/tmp/repo')}`,
+      cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
       callerTerminalHandle: undefined
     })
@@ -541,7 +544,7 @@ describe('orca cli worktree awareness', () => {
       comment: undefined,
       runHooks: false,
       activate: false,
-      parentWorktree: `path:${path.resolve('/tmp/repo/parent')}`,
+      parentWorktree: 'id:repo-1::/tmp/repo/parent',
       noParent: false,
       callerTerminalHandle: undefined
     })
@@ -666,7 +669,7 @@ describe('orca cli worktree awareness', () => {
       runHooks: false,
       activate: false,
       parentWorktree: undefined,
-      cwdParentWorktree: `path:${path.resolve('/tmp/repo')}`,
+      cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
       callerTerminalHandle: 'term_parent'
     })
@@ -882,7 +885,7 @@ describe('orca cli worktree awareness', () => {
       runHooks: true,
       activate: true,
       parentWorktree: undefined,
-      cwdParentWorktree: `path:${path.resolve('/tmp/repo')}`,
+      cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
       callerTerminalHandle: undefined
     })
@@ -923,7 +926,7 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
-  it('forces the visible terminal path for interactive Codex startup commands', async () => {
+  it('keeps interactive Codex startup commands backgrounded unless focus is explicit', async () => {
     queueFixtures(
       callMock,
       okFixture('req_terminal_create', {
@@ -1144,7 +1147,7 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
-  it('forces the visible terminal path for Codex prompts after global options', async () => {
+  it('keeps Codex prompts after global options backgrounded unless focus is explicit', async () => {
     queueFixtures(
       callMock,
       okFixture('req_terminal_create', {
@@ -1182,6 +1185,80 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('keeps interactive Claude startup commands backgrounded unless focus is explicit', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_1',
+          worktreeId: 'repo-1::/tmp/repo/feature',
+          title: 'Claude'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'path:/tmp/repo/feature',
+        '--title',
+        'Claude',
+        '--command',
+        'claude',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command: 'claude',
+      title: 'Claude',
+      focus: false,
+      rendererBacked: true,
+      activate: false
+    })
+  })
+
+  it('keeps Claude print commands on the background terminal path', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_1',
+          worktreeId: 'repo-1::/tmp/repo/feature',
+          title: 'Claude print'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'path:/tmp/repo/feature',
+        '--title',
+        'Claude print',
+        '--command',
+        'claude -p "summarize"',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command: 'claude -p "summarize"',
+      title: 'Claude print',
+      focus: false
+    })
+  })
+
   it('uses the resolved enclosing worktree for other worktree consumers', async () => {
     queueFixtures(
       callMock,
@@ -1199,7 +1276,7 @@ describe('orca cli worktree awareness', () => {
     await main(['worktree', 'show', '--worktree', 'current', '--json'], '/tmp/repo/feature/src')
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
-      worktree: `path:${path.resolve('/tmp/repo/feature')}`
+      worktree: 'id:repo::/tmp/repo/feature'
     })
   })
 
@@ -1232,6 +1309,54 @@ describe('orca cli worktree awareness', () => {
       devMode: false
     })
     expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
+  })
+
+  it('passes all reset scope explicitly for no-flag orchestration reset', async () => {
+    callMock.mockResolvedValueOnce(okFixture('req_reset', { reset: 'all' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['orchestration', 'reset'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.reset', {
+      all: true,
+      tasks: undefined,
+      messages: undefined
+    })
+  })
+
+  it.each([
+    {
+      args: ['orchestration', 'reset', '--all'],
+      params: { all: true, tasks: undefined, messages: undefined },
+      reset: 'all'
+    },
+    {
+      args: ['orchestration', 'reset', '--tasks'],
+      params: { all: undefined, tasks: true, messages: undefined },
+      reset: 'tasks'
+    },
+    {
+      args: ['orchestration', 'reset', '--messages'],
+      params: { all: undefined, tasks: undefined, messages: true },
+      reset: 'messages'
+    },
+    {
+      args: ['orchestration', 'reset', '--tasks', '--messages'],
+      params: { all: undefined, tasks: true, messages: true },
+      reset: 'tasks'
+    },
+    {
+      args: ['orchestration', 'reset', '--all', '--tasks'],
+      params: { all: true, tasks: true, messages: undefined },
+      reset: 'all'
+    }
+  ])('passes explicit reset flags through for $args', async ({ args, params, reset }) => {
+    callMock.mockResolvedValueOnce(okFixture('req_reset', { reset }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(args, '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.reset', params)
   })
 
   it('rejects unknown task-update status with an enum-aware error', async () => {
@@ -1323,7 +1448,7 @@ describe('orca cli worktree awareness', () => {
     await main(['terminal', 'list', '--worktree', 'active', '--json'], '/tmp/repo/feature/src')
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'terminal.list', {
-      worktree: `path:${path.resolve('/tmp/repo/feature')}`,
+      worktree: 'id:repo::/tmp/repo/feature',
       limit: undefined
     })
   })
@@ -1379,6 +1504,47 @@ describe('orca cli worktree awareness', () => {
       title: undefined,
       focus: false
     })
+  })
+
+  it('exits nonzero when terminal wait returns an unsatisfied blocked result', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    callMock.mockResolvedValueOnce({
+      id: 'req_terminal_wait',
+      ok: true,
+      result: {
+        wait: {
+          handle: 'term_worker',
+          condition: 'tui-idle',
+          satisfied: false,
+          status: 'running',
+          exitCode: null,
+          blockedReason: 'codex-cwd-prompt'
+        }
+      },
+      _meta: {
+        runtimeId: 'runtime-1'
+      }
+    })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['terminal', 'wait', '--terminal', 'term_worker', '--for', 'tui-idle'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.wait',
+      {
+        terminal: 'term_worker',
+        for: 'tui-idle',
+        timeoutMs: undefined
+      },
+      {
+        timeoutMs: 300000
+      }
+    )
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('blockedReason: codex-cwd-prompt')
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 
   it('does not force remote Codex terminal creates through a local renderer path', async () => {
@@ -1495,7 +1661,7 @@ describe('orca cli worktree awareness', () => {
       prompt: 'Review open changes',
       agentId: 'codex',
       repo: undefined,
-      workspace: `path:${path.resolve('/tmp/repo/feature')}`,
+      workspace: 'id:repo-1::/tmp/repo/feature',
       workspaceMode: 'existing',
       baseBranch: undefined,
       reuseSession: undefined,
@@ -1708,7 +1874,7 @@ describe('orca cli worktree awareness', () => {
       2,
       'automation.create',
       expect.objectContaining({
-        workspace: `path:${path.resolve('/tmp/repo/feature')}`,
+        workspace: 'id:repo-1::/tmp/repo/feature',
         workspaceMode: 'existing',
         reuseSession: true
       })
@@ -1835,7 +2001,7 @@ describe('orca cli worktree awareness', () => {
       prompt: 'Review open changes',
       agentId: 'codex',
       repo: undefined,
-      workspace: `path:${path.resolve('/tmp/repo/feature')}`,
+      workspace: 'id:repo-1::/tmp/repo/feature',
       workspaceMode: 'existing',
       baseBranch: undefined,
       timezone: undefined,
@@ -1867,7 +2033,7 @@ describe('orca cli worktree awareness', () => {
         prompt: undefined,
         agentId: undefined,
         repo: undefined,
-        workspace: `path:${path.resolve('/tmp/repo/feature')}`,
+        workspace: 'id:repo-1::/tmp/repo/feature',
         workspaceMode: undefined,
         baseBranch: undefined,
         reuseSession: undefined,

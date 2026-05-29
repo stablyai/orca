@@ -18,10 +18,12 @@ import type {
   BrowserSessionProfileSource,
   BrowserViewportOverride,
   ClaudeRateLimitAccountsState,
+  ClassifiedError,
   CodexRateLimitAccountsState,
   CreateWorktreeArgs,
   CreateWorktreeResult,
   CustomPet,
+  DetectedWorktreeListResult,
   DirEntry,
   FsChangedPayload,
   GhosttyImportPreview,
@@ -88,9 +90,13 @@ import type {
   PRInfo,
   PRRefreshOutcome,
   Repo,
+  ProjectGroup,
+  ProjectGroupImportResult,
+  ProjectGroupImportMode,
   ShellHydrationFailureReason,
   SparsePreset,
   SearchOptions,
+  NestedRepoScanResult,
   SearchResult,
   StatsSummary,
   MemorySnapshot,
@@ -104,10 +110,12 @@ import type {
   WorktreeStartupLaunch,
   WorkspaceSessionState
 } from '../shared/types'
+import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { RuntimeAccessGrant } from '../shared/runtime-access-grants'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
+import type { FeatureInteractionId } from '../shared/feature-interactions'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -202,6 +210,7 @@ import type {
 } from '../shared/developer-permissions-types'
 import type {
   ComputerUsePermissionId,
+  ComputerUsePermissionResetResult,
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../shared/computer-use-permissions-types'
@@ -228,6 +237,7 @@ import type {
   WorkspaceSpaceScanProgress
 } from '../shared/workspace-space-types'
 import type {
+  WorkspacePortAdvertisedUrlChangedEvent,
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
   WorkspacePortScanRequest,
@@ -238,7 +248,7 @@ import type {
   SshConnectionState,
   SshTarget,
   PortForwardEntry,
-  DetectedPort
+  EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
   CodexUsageBreakdownKind,
@@ -289,6 +299,7 @@ import type {
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanResult
 } from '../shared/workspace-cleanup'
+import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -322,7 +333,7 @@ export type BrowserApi = {
   onNavigationUpdate: (
     callback: (event: { browserPageId: string; url: string; title: string }) => void
   ) => () => void
-  onActivateView: (callback: (data: { worktreeId: string }) => void) => () => void
+  onActivateView: (callback: (data: { worktreeId?: string }) => void) => () => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
@@ -458,6 +469,33 @@ export type StatsApi = {
   getSummary: () => Promise<StatsSummary>
 }
 
+// Diagnostics — error-tracking-lane payload shapes that cross the IPC
+// boundary. Mirror the runtime types in
+// `src/main/observability/{index,bundle}.ts`. Kept here, not imported,
+// because the preload api-types file is the source of truth for the
+// renderer's view of the IPC surface.
+export type DiagnosticsStatusPayload = {
+  readonly localFileEnabled: boolean
+  readonly otlpEnabled: boolean
+  readonly bundleEnabled: boolean
+  readonly otlpStatus: string
+  readonly traceFilePath: string
+  readonly traceFamilySize: number
+  readonly disabledReason?:
+    | 'do_not_track'
+    | 'orca_telemetry_disabled'
+    | 'orca_diagnostics_disabled'
+    | 'ci'
+}
+export type DiagnosticsBundlePayload = {
+  readonly bundleSubmissionId: string
+  readonly bytes: number
+  readonly spanCount: number
+}
+export type DiagnosticsUploadPayload = {
+  readonly ticketId: string
+}
+
 export type MemoryApi = {
   getSnapshot: () => Promise<MemorySnapshot>
 }
@@ -544,6 +582,9 @@ export type AppApi = {
    *  by settings panes that need a full restart to apply changes (e.g. the
    *  terminal-window blur setting in TerminalWindowSection). */
   relaunch: () => Promise<void>
+  /** Restarts Orca through the normal quit pipeline so daemon-backed terminal
+   *  sessions survive and can reattach after the new process starts. */
+  restart: () => Promise<void>
   /** Reloads the current app renderer through main so expected renderer
    *  teardown can be classified before Electron emits process-gone events. */
   reload: () => Promise<void>
@@ -557,6 +598,15 @@ export type AppApi = {
   setUnreadDockBadgeCount: (count: number) => Promise<void>
   /** Resolves the launch directory for global Floating Terminal tabs. */
   getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest) => Promise<string>
+  /** Resolves Orca's app-owned directory for auto-created Floating Workspace
+   *  markdown notes. */
+  getFloatingMarkdownDirectory: () => Promise<string>
+  /** Opens a native picker for markdown documents, rooted in the floating
+   *  workspace, and authorizes the selected file for editor reads/writes. */
+  pickFloatingMarkdownDocument: () => Promise<MarkdownDocument | null>
+  /** Opens a native directory picker and authorizes the selected directory
+   *  for Floating Workspace markdown file creation. */
+  pickFloatingWorkspaceDirectory: () => Promise<string | null>
 }
 
 export type PreloadApi = {
@@ -580,10 +630,16 @@ export type PreloadApi = {
           Repo,
           | 'displayName'
           | 'badgeColor'
+          | 'repoIcon'
           | 'hookSettings'
           | 'worktreeBaseRef'
           | 'kind'
           | 'issueSourcePreference'
+          | 'externalWorktreeVisibility'
+          | 'externalWorktreeVisibilityPromptDismissedAt'
+          | 'projectGroupId'
+          | 'projectGroupOrder'
+          | 'sourceControlAi'
         >
       >
     }) => Promise<Repo>
@@ -615,6 +671,37 @@ export type PreloadApi = {
     }) => Promise<BaseRefSearchResult[]>
     onChanged: (callback: () => void) => () => void
   }
+  projectGroups: {
+    list: () => Promise<ProjectGroup[]>
+    create: (args: {
+      name: string
+      parentPath?: string | null
+      parentGroupId?: string | null
+      createdFrom?: ProjectGroup['createdFrom']
+    }) => Promise<ProjectGroup>
+    update: (args: {
+      groupId: string
+      updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    }) => Promise<ProjectGroup | null>
+    delete: (args: { groupId: string }) => Promise<boolean>
+    moveProject: (args: {
+      projectId: string
+      groupId: string | null
+      order?: number
+    }) => Promise<Repo | null>
+    scanNested: (args: {
+      path: string
+      connectionId?: string
+      options?: Record<string, unknown>
+    }) => Promise<NestedRepoScanResult>
+    importNested: (args: {
+      parentPath: string
+      groupName: string
+      projectPaths: string[]
+      connectionId?: string
+      mode: ProjectGroupImportMode
+    }) => Promise<ProjectGroupImportResult>
+  }
   sparsePresets: {
     list: (args: { repoId: string }) => Promise<SparsePreset[]>
     save: (args: {
@@ -628,6 +715,7 @@ export type PreloadApi = {
   }
   worktrees: {
     list: (args: { repoId: string }) => Promise<Worktree[]>
+    listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
     resolvePrBase: (args: {
@@ -644,7 +732,7 @@ export type PreloadApi = {
       mrIid: number
       sourceBranch?: string
       isCrossRepository?: boolean
-    }) => Promise<{ baseBranch: string } | { error: string }>
+    }) => Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>
     remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => Promise<void>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
     listLineage: () => Promise<Record<string, WorktreeLineage>>
@@ -676,6 +764,9 @@ export type PreloadApi = {
   workspacePorts: {
     scan: (args: WorkspacePortScanRequest) => Promise<WorkspacePortScanResult>
     kill: (args: WorkspacePortKillRequest) => Promise<WorkspacePortKillResult>
+    onAdvertisedUrlChanged: (
+      callback: (event: WorkspacePortAdvertisedUrlChangedEvent) => void
+    ) => () => void
   }
   pty: {
     spawn: (opts: {
@@ -723,7 +814,13 @@ export type PreloadApi = {
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
-    onData: (callback: (data: { id: string; data: string }) => void) => () => void
+    getMainBufferSnapshot: (
+      id: string,
+      opts?: { scrollbackRows?: number }
+    ) => Promise<{ data: string; cols: number; rows: number; seq?: number } | null>
+    onData: (
+      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+    ) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
     onSerializeBufferRequest: (
@@ -753,12 +850,13 @@ export type PreloadApi = {
   }
   crashReports: {
     getLatestPending: () => Promise<CrashReportRecord | null>
+    getLatestReport: () => Promise<CrashReportRecord | null>
     dismiss: (args: { reportId: string }) => Promise<CrashReportRecord | null>
+    submit: (args: CrashReportSubmitArgs) => Promise<CrashReportSubmitResult>
     copyLatestDiagnostics: (args?: {
       reportId?: string
       notes?: string
     }) => Promise<{ ok: true } | { ok: false; error: string }>
-    submit: (args: CrashReportSubmitArgs) => Promise<CrashReportSubmitResult>
   }
   export: ExportApi
   gh: {
@@ -772,6 +870,7 @@ export type PreloadApi = {
       repoId?: string
       branch: string
       linkedPRNumber?: number | null
+      fallbackPRNumber?: number | null
     }) => Promise<PRInfo | null>
     refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }) => Promise<PRRefreshOutcome>
     enqueuePRRefresh: (args: {
@@ -837,6 +936,7 @@ export type PreloadApi = {
       limit?: number
       query?: string
       before?: string
+      noCache?: boolean
     }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
     prChecks: (args: {
       repoPath: string
@@ -1047,7 +1147,12 @@ export type PreloadApi = {
       perPage?: number
     }) => Promise<ListMergeRequestsResult>
     issue: (args: { repoPath: string; number: number }) => Promise<GitLabIssueInfo | null>
-    listIssues: (args: { repoPath: string; limit?: number }) => Promise<GitLabIssueInfo[]>
+    listIssues: (args: {
+      repoPath: string
+      state?: 'opened' | 'closed' | 'all'
+      assignee?: string
+      limit?: number
+    }) => Promise<{ items: GitLabWorkItem[]; error?: ClassifiedError }>
     createIssue: (args: {
       repoPath: string
       title: string
@@ -1128,6 +1233,10 @@ export type PreloadApi = {
       workspaceId?: string
       parentIssueId?: string
       projectId?: string | null
+      stateId?: string
+      priority?: number
+      assigneeId?: string | null
+      labelIds?: string[]
     }) => Promise<
       | { ok: true; id: string; identifier: string; title: string; url: string }
       | { ok: false; error: string }
@@ -1168,6 +1277,21 @@ export type PreloadApi = {
   /** Flip the persisted opt-in preference. Subject to a per-session
    *  consent-mutation rate limit on the main side (≤5/session). */
   telemetrySetOptIn: (optedIn: boolean) => Promise<void>
+  /** Diagnostic-bundle / trace-folder controls. Surface for
+   *  telemetry-error-tracking.md §User controls. The renderer triggers
+   *  flows; main does the filesystem / network work and returns
+   *  serializable metadata. Main retains collected upload payloads so the
+   *  renderer can confirm without reading or substituting arbitrary bytes. */
+  diagnostics: {
+    getStatus: () => Promise<DiagnosticsStatusPayload>
+    openTraceFolder: () => Promise<void>
+    clearTraces: () => Promise<void>
+    collectBundle: (lookbackMinutes?: number) => Promise<DiagnosticsBundlePayload>
+    openBundlePreview: (bundleSubmissionId: string) => Promise<void>
+    discardBundlePreview: (bundleSubmissionId: string) => Promise<void>
+    uploadBundle: (bundleSubmissionId: string) => Promise<DiagnosticsUploadPayload>
+    deleteBundle: (ticketId: string) => Promise<void>
+  }
   /** Read-only view of effective consent state, including the reason if
    *  disabled (env var / user opt-out / CI / pending banner). Used by the
    *  Privacy pane to render the correct "blocked by X" helper text — env
@@ -1190,6 +1314,18 @@ export type PreloadApi = {
      *  menu toggles) so the renderer can stay in sync with main's persisted
      *  state without round-tripping through settings:get. */
     onChanged: (callback: (updates: Partial<GlobalSettings>) => void) => () => void
+  }
+  keybindings: {
+    get: () => Promise<KeybindingFileSnapshot>
+    ensureFile: () => Promise<KeybindingFileSnapshot>
+    setAction: (args: {
+      actionId: KeybindingActionId
+      bindings: string[] | null
+    }) => Promise<KeybindingFileSnapshot>
+    reload: () => Promise<KeybindingFileSnapshot>
+    openFile: () => Promise<KeybindingFileSnapshot>
+    revealFile: () => Promise<KeybindingFileSnapshot>
+    onChanged: (callback: (snapshot: KeybindingFileSnapshot) => void) => () => void
   }
   codexAccounts: {
     list: () => Promise<CodexRateLimitAccountsState>
@@ -1220,6 +1356,7 @@ export type PreloadApi = {
     antigravityStatus: () => Promise<AgentHookInstallStatus>
     cursorStatus: () => Promise<AgentHookInstallStatus>
     droidStatus: () => Promise<AgentHookInstallStatus>
+    commandCodeStatus: () => Promise<AgentHookInstallStatus>
     grokStatus: () => Promise<AgentHookInstallStatus>
     copilotStatus: () => Promise<AgentHookInstallStatus>
     hermesStatus: () => Promise<AgentHookInstallStatus>
@@ -1259,6 +1396,7 @@ export type PreloadApi = {
     openSetup: (args?: {
       id?: ComputerUsePermissionId
     }) => Promise<ComputerUsePermissionSetupResult>
+    reset: () => Promise<ComputerUsePermissionResetResult>
   }
   shell: {
     openPath: (path: string) => Promise<void>
@@ -1270,6 +1408,7 @@ export type PreloadApi = {
     pathExists: (path: string) => Promise<boolean>
     pickAttachment: () => Promise<string | null>
     pickImage: () => Promise<string | null>
+    pickRepoIconImage: () => Promise<{ dataUrl: string; fileName: string } | null>
     pickAudio: () => Promise<string | null>
     pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
@@ -1288,6 +1427,7 @@ export type PreloadApi = {
     check: (args: {
       repoId: string
     }) => Promise<{ hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
+    inspectSetupScriptImports: (args: { repoId: string }) => Promise<SetupScriptImportCandidate[]>
     createIssueCommandRunner: (args: {
       repoId: string
       worktreePath: string
@@ -1474,6 +1614,8 @@ export type PreloadApi = {
       worktreePath: string
       connectionId?: string
     }) => Promise<GitConflictOperation>
+    abortMerge: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+    abortRebase: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     diff: (args: {
       worktreePath: string
       filePath: string
@@ -1494,15 +1636,30 @@ export type PreloadApi = {
     upstreamStatus: (args: {
       worktreePath: string
       connectionId?: string
+      pushTarget?: GitPushTarget
     }) => Promise<GitUpstreamStatus>
-    fetch: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
-    push: (args: {
+    fetch: (args: {
       worktreePath: string
-      publish?: boolean
       connectionId?: string
       pushTarget?: GitPushTarget
     }) => Promise<void>
-    pull: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+    push: (args: {
+      worktreePath: string
+      publish?: boolean
+      forceWithLease?: boolean
+      connectionId?: string
+      pushTarget?: GitPushTarget
+    }) => Promise<void>
+    pull: (args: {
+      worktreePath: string
+      connectionId?: string
+      pushTarget?: GitPushTarget
+    }) => Promise<void>
+    rebaseFromBase: (args: {
+      worktreePath: string
+      baseRef: string
+      connectionId?: string
+    }) => Promise<void>
     branchDiff: (args: {
       worktreePath: string
       compare: {
@@ -1530,6 +1687,7 @@ export type PreloadApi = {
     }) => Promise<{ success: boolean; error?: string }>
     generateCommitMessage: (args: {
       worktreePath: string
+      repoId?: string
       connectionId?: string
     }) => Promise<
       | { success: true; message: string; agentLabel?: string }
@@ -1554,6 +1712,7 @@ export type PreloadApi = {
     }) => Promise<void>
     generatePullRequestFields: (args: {
       worktreePath: string
+      repoId?: string
       base: string
       title: string
       body: string
@@ -1611,16 +1770,20 @@ export type PreloadApi = {
   ui: {
     get: () => Promise<PersistedUIState>
     set: (args: Partial<PersistedUIState>) => Promise<void>
+    recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
     onOpenSettings: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
     onOpenCrashReport: (callback: () => void) => () => void
-    onShowFeatureTourNudge: (callback: () => void) => () => void
     onToggleLeftSidebar: (callback: () => void) => () => void
     onToggleRightSidebar: (callback: () => void) => () => void
     onToggleWorktreePalette: (callback: () => void) => () => void
     onToggleFloatingTerminal: (callback: () => void) => () => void
+    onTerminalShortcutCaptured: (
+      callback: (data: { actionId: KeybindingActionId }) => void
+    ) => () => void
     onOpenQuickOpen: (callback: () => void) => () => void
     onOpenNewWorkspace: (callback: () => void) => () => void
+    onOpenTasks: (callback: () => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
@@ -1649,6 +1812,7 @@ export type PreloadApi = {
     onCloseActiveTab: (callback: () => void) => () => void
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
+    onSwitchRecentTab: (callback: () => void) => () => void
     onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
     onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
     onCtrlTabKeyUp: (callback: () => void) => () => void
@@ -1765,6 +1929,9 @@ export type PreloadApi = {
     setZoomLevel: (level: number) => void
     syncTrafficLights: (zoomFactor: number) => void
     setMarkdownEditorFocused: (focused: boolean) => void
+    setTerminalInputFocused: (focused: boolean) => void
+    setFloatingTerminalInputFocused: (focused: boolean) => void
+    setShortcutRecorderFocused: (focused: boolean) => void
     onRichMarkdownContextCommand: (
       callback: (payload: RichMarkdownContextMenuCommandPayload) => void
     ) => () => void
@@ -1893,12 +2060,12 @@ export type PreloadApi = {
     }) => Promise<PortForwardEntry>
     removePortForward: (args: { id: string }) => Promise<PortForwardEntry | null>
     listPortForwards: (args?: { targetId?: string }) => Promise<PortForwardEntry[]>
-    listDetectedPorts: (args: { targetId: string }) => Promise<DetectedPort[]>
+    listDetectedPorts: (args: { targetId: string }) => Promise<EnrichedDetectedPort[]>
     onPortForwardsChanged: (
       callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
     ) => () => void
     onDetectedPortsChanged: (
-      callback: (data: { targetId: string; ports: DetectedPort[] }) => void
+      callback: (data: { targetId: string; ports: EnrichedDetectedPort[] }) => void
     ) => () => void
     browseDir: (args: { targetId: string; dirPath: string }) => Promise<{
       entries: { name: string; isDirectory: boolean }[]

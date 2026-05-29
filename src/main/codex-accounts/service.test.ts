@@ -25,10 +25,12 @@ vi.mock('node:os', async () => {
 
 function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   const appFontFamily = overrides.appFontFamily ?? 'Geist'
+  const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
   return {
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
+    autoRenameBranchFromWork: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     theme: 'system',
@@ -74,6 +76,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
       agentTaskComplete: true,
       terminalBell: false,
       suppressWhenFocused: true,
+      customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 100
     },
@@ -85,6 +88,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
+    disabledTuiAgents: [],
     skipDeleteWorktreeConfirm: false,
     skipDeleteAutomationConfirm: false,
     defaultTaskViewPreset: 'all',
@@ -100,16 +104,20 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     keepComputerAwakeWhileAgentsRun: false,
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
+    terminalJISYenToBackslash: false,
     experimentalMobile: false,
     mobileAutoRestoreFitMs: null,
     experimentalPet: false,
     experimentalActivity: true,
+    experimentalTerminalAttention: false,
+    experimentalCompactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides,
-    appFontFamily
+    appFontFamily,
+    agentStatusHooksEnabled
   }
 }
 

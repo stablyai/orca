@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: Claude rate-limit fallback tests share account/keychain/PTY mocks that would be noisier split apart. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -269,7 +270,15 @@ describe('fetchClaudeRateLimits', () => {
       })
     )
     netFetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: { type: 'rate_limit_error' } }), { status: 429 })
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'rate_limit_error',
+            message: 'Rate limited. Please try again later.'
+          }
+        }),
+        { status: 429 }
+      )
     )
 
     await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({

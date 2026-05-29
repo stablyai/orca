@@ -10,6 +10,14 @@ type MapLinearIssueOptions = {
   includeProject?: boolean
 }
 
+async function optionalRelation<T>(value: Promise<T> | T): Promise<T | undefined> {
+  try {
+    return await value
+  } catch {
+    return undefined
+  }
+}
+
 function mapLinearIssueChild(issue: Issue): LinearIssueChildSummary {
   return {
     id: issue.id,
@@ -28,8 +36,12 @@ export async function mapLinearIssue(
   issue: Issue | IssueSearchResult,
   options: MapLinearIssueOptions = {}
 ): Promise<LinearIssue> {
-  const [state, team, assignee] = await Promise.all([issue.state, issue.team, issue.assignee])
-  const project = options.includeProject ? await issue.project : undefined
+  const [state, team, assignee, project] = await Promise.all([
+    optionalRelation(issue.state),
+    optionalRelation(issue.team),
+    optionalRelation(issue.assignee),
+    options.includeProject ? optionalRelation(issue.project) : Promise.resolve(undefined)
+  ])
 
   // Why: IssueSearchResult does not expose the labels() relation method — only
   // the raw labelIds array. For Issue instances we resolve actual label names;

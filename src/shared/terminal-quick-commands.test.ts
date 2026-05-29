@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildTerminalQuickCommandInput,
+  flattenTerminalQuickCommand,
   getDefaultTerminalQuickCommands,
   normalizeTerminalQuickCommands,
   terminalQuickCommandMatchesRepo
@@ -166,5 +167,57 @@ describe('terminal quick commands', () => {
         appendEnter: false
       })
     ).toBe('git status')
+  })
+})
+
+describe('flattenTerminalQuickCommand', () => {
+  it('returns the same object when there are no line breaks', () => {
+    const command = {
+      id: 'test',
+      label: 'Test',
+      command: 'git status',
+      appendEnter: true
+    } as const
+    expect(flattenTerminalQuickCommand(command)).toBe(command)
+  })
+
+  it('replaces newlines with semicolons and spaces', () => {
+    const result = flattenTerminalQuickCommand({
+      id: 'test',
+      label: 'Test',
+      command: 'cd packages\nbun run build\ncd ..',
+      appendEnter: true
+    })
+    expect(result.command).toBe('cd packages; bun run build; cd ..')
+  })
+
+  it('collapses consecutive newlines into a single separator', () => {
+    const result = flattenTerminalQuickCommand({
+      id: 'test',
+      label: 'Test',
+      command: 'echo one\n\n\necho two',
+      appendEnter: true
+    })
+    expect(result.command).toBe('echo one; echo two')
+  })
+
+  it('handles Windows-style CRLF endings', () => {
+    const result = flattenTerminalQuickCommand({
+      id: 'test',
+      label: 'Test',
+      command: 'echo one\r\necho two',
+      appendEnter: true
+    })
+    expect(result.command).toBe('echo one; echo two')
+  })
+
+  it('drops empty edge lines without leaving dangling separators', () => {
+    const result = flattenTerminalQuickCommand({
+      id: 'test',
+      label: 'Test',
+      command: '\n  echo one  \n\n  echo two\n',
+      appendEnter: true
+    })
+    expect(result.command).toBe('echo one; echo two')
   })
 })

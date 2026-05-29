@@ -1,9 +1,11 @@
 import { createServer, type Server, type Socket } from 'net'
 import { randomUUID } from 'crypto'
+import { performance } from 'perf_hooks'
 import { writeFileSync, chmodSync, unlinkSync } from 'fs'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
+import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { SubprocessHandle } from './session'
 import {
   PROTOCOL_VERSION,
@@ -42,6 +44,14 @@ export class DaemonServer {
 
   private clients = new Map<string, ConnectedClient>()
   private streamDataBatcher = new DaemonStreamDataBatcher((clientId) => this.clients.get(clientId))
+  private lastInputAtBySessionId = new Map<string, number>()
+
+  // Why: main-process PTY IPC has the same recent-input bypass, but daemon
+  // output reaches main only after this stream layer. Keeping the window here
+  // removes the daemon's fixed batch delay from keystroke echo/redraws while
+  // preserving batching for background and large output.
+  private static readonly INTERACTIVE_OUTPUT_WINDOW_MS = 100
+  private static readonly INTERACTIVE_OUTPUT_MAX_CHARS = 1024
 
   constructor(opts: DaemonServerOptions) {
     this.socketPath = opts.socketPath
@@ -53,12 +63,16 @@ export class DaemonServer {
   async start(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server = createServer((socket) => this.handleConnection(socket))
-
-      this.server.on('error', (err) => {
+      const onListenError = (err: Error): void => {
         reject(err)
-      })
+      }
+
+      this.server.once('error', onListenError)
 
       this.server.listen(this.socketPath, () => {
+        // Why: after bind, steady-state socket errors are handled per client;
+        // the startup promise listener would otherwise retain this closure.
+        this.server?.off('error', onListenError)
         writeFileSync(this.tokenPath, this.token, { mode: 0o600 })
         try {
           chmodSync(this.socketPath, 0o600)
@@ -203,18 +217,28 @@ export class DaemonServer {
           rows: p.rows,
           cwd: p.cwd,
           env: p.env,
+          envToDelete: p.envToDelete,
           command: p.command,
           shellOverride: p.shellOverride,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
           shellReadySupported: p.shellReadySupported,
           streamClient: {
             onData: (data) => {
-              this.streamDataBatcher.enqueue(clientId, p.sessionId, data)
+              const lastInputAt = this.lastInputAtBySessionId.get(p.sessionId)
+              const isInteractiveOutput =
+                data.length <= DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS &&
+                lastInputAt !== undefined &&
+                performance.now() - lastInputAt <= DaemonServer.INTERACTIVE_OUTPUT_WINDOW_MS
+              this.streamDataBatcher.enqueue(clientId, p.sessionId, data, {
+                flushImmediately: isInteractiveOutput,
+                flushMaxChars: DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS
+              })
             },
             onExit: (code) => {
               // Why: exit tears down renderer handlers; flush final output first
               // so the last few milliseconds of PTY data are not stranded.
               this.streamDataBatcher.flush(clientId)
+              this.lastInputAtBySessionId.delete(p.sessionId)
               if (client?.streamSocket) {
                 client.streamSocket.write(
                   encodeNdjson({
@@ -238,8 +262,10 @@ export class DaemonServer {
 
       case 'write':
         try {
+          this.lastInputAtBySessionId.set(request.payload.sessionId, performance.now())
           this.host.write(request.payload.sessionId, request.payload.data)
         } catch (err) {
+          this.lastInputAtBySessionId.delete(request.payload.sessionId)
           if (err instanceof SessionNotFoundError) {
             this.sendExitEvent(client, request.payload.sessionId, -1)
           }
@@ -259,6 +285,7 @@ export class DaemonServer {
         return {}
 
       case 'kill':
+        this.lastInputAtBySessionId.delete(request.payload.sessionId)
         this.host.kill(request.payload.sessionId)
         return {}
 
@@ -286,6 +313,9 @@ export class DaemonServer {
 
       case 'ping':
         return { pong: true }
+
+      case 'systemResolverHealth':
+        return { health: readCurrentProcessMacSystemResolverHealth() }
 
       case 'shutdown':
         if (request.payload.killSessions) {

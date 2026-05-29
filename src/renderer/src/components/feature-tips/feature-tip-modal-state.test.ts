@@ -17,6 +17,7 @@ describe('feature tip modal state', () => {
     const tip = getFeatureTipForModal({
       modalData: { tipId: 'voice-dictation' },
       seenTipIds: ['voice-dictation'],
+      featureInteractions: {},
       settings: makeSettings()
     })
 
@@ -27,6 +28,7 @@ describe('feature tip modal state', () => {
     const tip = getFeatureTipForModal({
       modalData: {},
       seenTipIds: [],
+      featureInteractions: {},
       settings: makeSettings()
     })
 
@@ -37,6 +39,20 @@ describe('feature tip modal state', () => {
     const tip = getFeatureTipForModal({
       modalData: {},
       seenTipIds: ['voice-dictation'],
+      featureInteractions: {},
+      settings: makeSettings()
+    })
+
+    expect(tip).toBeNull()
+  })
+
+  it('returns no unpinned tip after the user already interacted with the feature', () => {
+    const tip = getFeatureTipForModal({
+      modalData: {},
+      seenTipIds: [],
+      featureInteractions: {
+        'voice-dictation': { firstInteractedAt: 100, interactionCount: 1 }
+      },
       settings: makeSettings()
     })
 

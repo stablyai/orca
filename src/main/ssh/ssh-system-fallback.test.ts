@@ -111,6 +111,22 @@ describe('spawnSystemSsh', () => {
     expect(args).toContain('/home/user/.ssh/id_ed25519')
   })
 
+  it('includes identity agent option', () => {
+    spawnSystemSsh(createTarget({ identityAgent: '/home/user/.1password/agent.sock' }))
+
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args).toContain('-o')
+    expect(args).toContain('IdentityAgent=/home/user/.1password/agent.sock')
+  })
+
+  it('includes identities only option', () => {
+    spawnSystemSsh(createTarget({ identitiesOnly: true }))
+
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args).toContain('-o')
+    expect(args).toContain('IdentitiesOnly=yes')
+  })
+
   it('includes jump host flag', () => {
     spawnSystemSsh(createTarget({ jumpHost: 'bastion.example.com' }))
 
@@ -135,6 +151,7 @@ describe('spawnSystemSsh', () => {
         port: 2222,
         username: 'deploy',
         identityFile: '/tmp/key',
+        identityAgent: '/tmp/agent.sock',
         proxyCommand: 'ignored'
       })
     )
@@ -143,6 +160,7 @@ describe('spawnSystemSsh', () => {
     expect(args).not.toContain('resolved.example.com')
     expect(args).not.toContain('-p')
     expect(args).not.toContain('-i')
+    expect(args).not.toContain('IdentityAgent=/tmp/agent.sock')
     expect(args).not.toContain('ProxyCommand=ignored')
   })
 

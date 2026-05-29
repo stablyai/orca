@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
+import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
+import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -27,15 +30,38 @@ const RepoSetBaseRef = z.object({
   ref: requiredString('Missing base ref')
 })
 
+const RepoSourceControlAiOverrides = z
+  .unknown()
+  .optional()
+  .transform((value) =>
+    value === undefined ? undefined : normalizeRepoSourceControlAiOverrides(value)
+  )
+
+const RepoBadgeColor = z
+  .unknown()
+  .optional()
+  .transform((value) =>
+    value === undefined ? undefined : (normalizeRepoBadgeColor(value) ?? undefined)
+  )
+
 const RepoUpdate = RepoSelector.extend({
   updates: z.object({
     displayName: OptionalString,
-    badgeColor: OptionalString,
+    badgeColor: RepoBadgeColor,
+    repoIcon: z
+      .unknown()
+      .transform((value) => sanitizeRepoIcon(value))
+      .optional(),
     hookSettings: z.unknown().optional(),
     worktreeBaseRef: OptionalString,
     kind: z.enum(['git', 'folder']).optional(),
     symlinkPaths: z.array(z.string()).optional(),
-    issueSourcePreference: z.enum(['auto', 'github', 'linear']).optional()
+    issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
+    externalWorktreeVisibility: z.enum(['hide', 'show']).optional(),
+    externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),
+    projectGroupId: OptionalString.nullable().optional(),
+    projectGroupOrder: OptionalFiniteNumber,
+    sourceControlAi: RepoSourceControlAiOverrides
   })
 })
 
@@ -52,8 +78,62 @@ const RepoReorder = z.object({
   orderedIds: z.array(z.string())
 })
 
+const ProjectGroupCreate = z.object({
+  name: requiredString('Missing group name'),
+  parentPath: OptionalString,
+  parentGroupId: OptionalString.nullable().optional(),
+  createdFrom: z.enum(['manual', 'folder-scan', 'migration']).optional()
+})
+
+const ProjectGroupUpdate = z.object({
+  groupId: requiredString('Missing group id'),
+  updates: z.object({
+    name: OptionalString,
+    isCollapsed: z.boolean().optional(),
+    tabOrder: OptionalFiniteNumber,
+    color: OptionalString.nullable().optional()
+  })
+})
+
+const ProjectGroupSelector = z.object({
+  groupId: requiredString('Missing group id')
+})
+
+const ProjectGroupMoveProject = z.object({
+  repo: requiredString('Missing repo selector'),
+  groupId: OptionalString.nullable(),
+  order: OptionalFiniteNumber
+})
+
+const ProjectGroupScanNested = z.object({
+  path: requiredString('Missing folder path')
+})
+
+const ProjectGroupImportNested = z.discriminatedUnion('mode', [
+  z.object({
+    parentPath: requiredString('Missing parent path'),
+    groupName: requiredString('Missing group name'),
+    projectPaths: z.array(z.string()),
+    mode: z.literal('group')
+  }),
+  z.object({
+    parentPath: requiredString('Missing parent path'),
+    // Why: "Import separately" does not create a group, so SSH must accept the
+    // same empty group-name state that the local dialog allows.
+    groupName: z.string().optional().default(''),
+    projectPaths: z.array(z.string()),
+    mode: z.literal('separate')
+  })
+])
+
 const RepoIssueCommandWrite = RepoSelector.extend({
   content: z.string()
+})
+
+const RepoSparsePresetSave = RepoSelector.extend({
+  id: OptionalString,
+  name: requiredString('Missing preset name'),
+  directories: z.array(z.string())
 })
 
 export const REPO_METHODS: RpcMethod[] = [
@@ -61,6 +141,65 @@ export const REPO_METHODS: RpcMethod[] = [
     name: 'repo.list',
     params: null,
     handler: (_params, { runtime }) => ({ repos: runtime.listRepos() })
+  }),
+  defineMethod({
+    name: 'projectGroup.list',
+    params: null,
+    handler: (_params, { runtime }) => ({ groups: runtime.listProjectGroups() })
+  }),
+  defineMethod({
+    name: 'projectGroup.create',
+    params: ProjectGroupCreate,
+    handler: async (params, { runtime }) => ({
+      group: await runtime.createProjectGroup(params)
+    })
+  }),
+  defineMethod({
+    name: 'projectGroup.update',
+    params: ProjectGroupUpdate,
+    handler: async (params, { runtime }) => ({
+      group: await runtime.updateProjectGroup(params.groupId, params.updates)
+    })
+  }),
+  defineMethod({
+    name: 'projectGroup.delete',
+    params: ProjectGroupSelector,
+    handler: async (params, { runtime }) => runtime.deleteProjectGroup(params.groupId)
+  }),
+  defineMethod({
+    name: 'projectGroup.moveProject',
+    params: ProjectGroupMoveProject,
+    handler: async (params, { runtime }) => ({
+      repo: await runtime.moveProjectToGroup(params.repo, params.groupId ?? null, params.order)
+    })
+  }),
+  defineMethod({
+    name: 'projectGroup.scanNested',
+    params: ProjectGroupScanNested,
+    handler: async (params, { runtime }) => runtime.scanNestedRepos(params.path)
+  }),
+  defineMethod({
+    name: 'projectGroup.importNested',
+    params: ProjectGroupImportNested,
+    handler: async (params, { runtime }) => runtime.importNestedRepos(params)
+  }),
+  defineMethod({
+    name: 'repo.sparsePresets',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => ({
+      presets: await runtime.listSparsePresets(params.repo)
+    })
+  }),
+  defineMethod({
+    name: 'repo.saveSparsePreset',
+    params: RepoSparsePresetSave,
+    handler: async (params, { runtime }) => ({
+      preset: await runtime.saveSparsePreset(params.repo, {
+        ...(params.id ? { id: params.id } : {}),
+        name: params.name,
+        directories: params.directories
+      })
+    })
   }),
   defineMethod({
     name: 'repo.add',
@@ -100,7 +239,7 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.rm',
     params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.removeRepo(params.repo)
+    handler: async (params, { runtime }) => runtime.removeProject(params.repo)
   }),
   defineMethod({
     name: 'repo.reorder',
@@ -134,6 +273,11 @@ export const REPO_METHODS: RpcMethod[] = [
     name: 'repo.hooksCheck',
     params: RepoSelector,
     handler: async (params, { runtime }) => runtime.checkRepoHooks(params.repo)
+  }),
+  defineMethod({
+    name: 'repo.setupScriptImports',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => runtime.inspectRepoSetupScriptImports(params.repo)
   }),
   defineMethod({
     name: 'repo.issueCommandRead',

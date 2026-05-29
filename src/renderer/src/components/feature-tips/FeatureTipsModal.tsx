@@ -48,12 +48,14 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
+  const featureInteractions = useAppStore((s) => s.featureInteractions)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const modalData = useAppStore((s) => s.modalData)
   const isOpen = activeModal === 'feature-tips'
   const currentTip = getFeatureTipForModal({
     modalData,
     seenTipIds,
+    featureInteractions,
     settings
   })
 

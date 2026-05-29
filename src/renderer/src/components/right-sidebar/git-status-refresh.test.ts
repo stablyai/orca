@@ -26,7 +26,8 @@ describe('refreshGitStatusForWorktree', () => {
         hasUpstream: true,
         upstreamName: 'origin/feature',
         ahead: 2,
-        behind: 1
+        behind: 1,
+        behindCommitsArePatchEquivalent: false
       }
     }
     const gitStatus = vi.fn().mockResolvedValue(status)
@@ -51,6 +52,31 @@ describe('refreshGitStatusForWorktree', () => {
     })
     expect(deps.setUpstreamStatus).toHaveBeenCalledWith('wt-1', status.upstreamStatus)
     expect(deps.fetchUpstreamStatus).not.toHaveBeenCalled()
+  })
+
+  it('refreshes explicit upstream details without storing diverged porcelain-only status', async () => {
+    const status: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown',
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/feature',
+        ahead: 14,
+        behind: 3
+      }
+    }
+    const gitStatus = vi.fn().mockResolvedValue(status)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    await refreshGitStatusForWorktree({
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      deps
+    })
+
+    expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
+    expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-1', '/repo', undefined)
   })
 
   it('falls back to explicit upstream refresh for legacy status payloads', async () => {

@@ -6,7 +6,6 @@ import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
-import type { SettingsSearchEntry } from '../settings/settings-search'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -15,28 +14,7 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
-
-export const STATS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Stats & Usage',
-    description:
-      'Orca stats plus combined Claude, Codex, and OpenCode usage analytics, tokens, cache, models, and sessions.',
-    keywords: [
-      'stats',
-      'usage',
-      'statistics',
-      'agents',
-      'prs',
-      'time',
-      'tracking',
-      'claude',
-      'codex',
-      'opencode',
-      'tokens',
-      'cache'
-    ]
-  }
-]
+export { STATS_PANE_SEARCH_ENTRIES } from './stats-search'
 
 function formatDuration(ms: number): string {
   if (ms <= 0) {
@@ -85,14 +63,16 @@ function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element
 export function StatsPane(): React.JSX.Element {
   const summary = useAppStore((s) => s.statsSummary)
   const fetchStatsSummary = useAppStore((s) => s.fetchStatsSummary)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [activeUsageTab, setActiveUsageTab] = useState<UsageTab>('overview')
   const activeUsageOption =
     USAGE_ANALYTICS_OPTIONS.find((option) => option.id === activeUsageTab) ??
     USAGE_ANALYTICS_OPTIONS[0]
 
   useEffect(() => {
+    recordFeatureInteraction('usage-tracking')
     void fetchStatsSummary()
-  }, [fetchStatsSummary])
+  }, [fetchStatsSummary, recordFeatureInteraction])
 
   return (
     <div className="space-y-5">

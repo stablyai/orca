@@ -3,9 +3,14 @@ import type { AppState } from '../types'
 import type {
   SshConnectionState,
   PortForwardEntry,
-  DetectedPort,
+  EnrichedDetectedPort,
   SshTarget
 } from '../../../../shared/ssh-types'
+import {
+  buildRemovedSshTargetCleanupPatch,
+  sshConnectionStatesEqual,
+  sshTargetLabelsEqual
+} from './ssh-target-cleanup'
 
 export type RemoteWorkspaceSyncStatus = {
   phase: 'idle' | 'pulling' | 'pushing' | 'synced' | 'conflict' | 'error' | 'offline'
@@ -28,7 +33,6 @@ export type SshSlice = {
   /** Maps target IDs to their user-facing labels. Populated during hydration
    * so components can look up labels without per-component IPC calls. */
   sshTargetLabels: Map<string, string>
-  sshTargetRemoteSyncEnabled: Map<string, boolean>
   remoteWorkspaceHydratedTargetIds: Set<string>
   remoteWorkspaceSyncStatusByTargetId: Record<string, RemoteWorkspaceSyncStatus>
   sshCredentialQueue: SshCredentialRequest[]
@@ -41,14 +45,13 @@ export type SshSlice = {
    *  objects. Spreading a Record produces a new reference that Zustand can diff
    *  by identity, whereas Map mutations are easy to get wrong. */
   portForwardsByConnection: Record<string, PortForwardEntry[]>
-  /** Detected listening ports on the remote, keyed by connection ID.
-   *  Updated by polling the relay's ports.detect RPC. */
-  detectedPortsByConnection: Record<string, DetectedPort[]>
+  /** Detected remote listening ports after main-process enrichment, keyed by
+   *  connection ID. Updated from SSH IPC snapshots and push events. */
+  detectedPortsByConnection: Record<string, EnrichedDetectedPort[]>
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
-  setSshTargetsMetadata: (
-    targets: Pick<SshTarget, 'id' | 'label' | 'remoteWorkspaceSyncEnabled'>[]
-  ) => void
+  setSshTargetsMetadata: (targets: Pick<SshTarget, 'id' | 'label'>[]) => void
+  clearRemovedSshTargetState: (targetId: string) => void
   markRemoteWorkspaceHydrated: (targetId: string) => void
   clearRemoteWorkspaceHydrated: (targetId: string) => void
   setRemoteWorkspaceSyncStatus: (targetId: string, status: RemoteWorkspaceSyncStatus) => void
@@ -56,13 +59,12 @@ export type SshSlice = {
   removeSshCredentialRequest: (requestId: string) => void
   setPortForwards: (targetId: string, forwards: PortForwardEntry[]) => void
   clearPortForwards: (targetId: string) => void
-  setDetectedPorts: (targetId: string, ports: DetectedPort[]) => void
+  setDetectedPorts: (targetId: string, ports: EnrichedDetectedPort[]) => void
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
-  sshTargetRemoteSyncEnabled: new Map(),
   remoteWorkspaceHydratedTargetIds: new Set(),
   remoteWorkspaceSyncStatusByTargetId: {},
   sshCredentialQueue: [],
@@ -74,6 +76,9 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
     set((s) => {
       const next = new Map(s.sshConnectionStates)
       const previous = next.get(targetId)
+      if (sshConnectionStatesEqual(previous, state)) {
+        return s
+      }
       next.set(targetId, state)
       return {
         sshConnectionStates: next,
@@ -86,12 +91,16 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
   setSshTargetsMetadata: (targets) =>
-    set({
-      sshTargetLabels: new Map(targets.map((target) => [target.id, target.label])),
-      sshTargetRemoteSyncEnabled: new Map(
-        targets.map((target) => [target.id, target.remoteWorkspaceSyncEnabled === true])
-      )
+    set((s) => {
+      if (sshTargetLabelsEqual(s.sshTargetLabels, targets)) {
+        return s
+      }
+      return {
+        sshTargetLabels: new Map(targets.map((target) => [target.id, target.label]))
+      }
     }),
+  clearRemovedSshTargetState: (targetId) =>
+    set((s) => buildRemovedSshTargetCleanupPatch(s, targetId) ?? s),
   markRemoteWorkspaceHydrated: (targetId) =>
     set((s) => {
       const next = new Set(s.remoteWorkspaceHydratedTargetIds)

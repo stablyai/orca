@@ -6,19 +6,26 @@ const {
   getIssueMock,
   listIssuesMock,
   listWorkItemsMock,
-  getAuthenticatedViewerMock
+  getAuthenticatedViewerMock,
+  mergePRMock,
+  getAllWebContentsMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
   getIssueMock: vi.fn(),
   listIssuesMock: vi.fn(),
   listWorkItemsMock: vi.fn(),
-  getAuthenticatedViewerMock: vi.fn()
+  getAuthenticatedViewerMock: vi.fn(),
+  mergePRMock: vi.fn(),
+  getAllWebContentsMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock
+  },
+  webContents: {
+    getAllWebContents: getAllWebContentsMock
   }
 }))
 
@@ -27,7 +34,8 @@ vi.mock('../github/client', () => ({
   getIssue: getIssueMock,
   listIssues: listIssuesMock,
   listWorkItems: listWorkItemsMock,
-  getAuthenticatedViewer: getAuthenticatedViewerMock
+  getAuthenticatedViewer: getAuthenticatedViewerMock,
+  mergePR: mergePRMock
 }))
 
 import { registerGitHubHandlers } from './github'
@@ -61,6 +69,9 @@ describe('registerGitHubHandlers', () => {
     listIssuesMock.mockReset()
     listWorkItemsMock.mockReset()
     getAuthenticatedViewerMock.mockReset()
+    mergePRMock.mockReset()
+    getAllWebContentsMock.mockReset()
+    getAllWebContentsMock.mockReturnValue([])
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
@@ -94,7 +105,13 @@ describe('registerGitHubHandlers', () => {
       branch: 'feature/test'
     })
 
-    expect(getPRForBranchMock).toHaveBeenCalledWith('/workspace/repo', 'feature/test', null, null)
+    expect(getPRForBranchMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'feature/test',
+      null,
+      null,
+      null
+    )
   })
 
   it('rejects unknown repository paths', async () => {
@@ -182,7 +199,8 @@ describe('registerGitHubHandlers', () => {
       repoPath: '/workspace/repo',
       limit: 10,
       query: 'is:open',
-      before: 'cursor-1'
+      before: 'cursor-1',
+      noCache: true
     })
 
     expect(listWorkItemsMock).toHaveBeenCalledWith(
@@ -191,7 +209,8 @@ describe('registerGitHubHandlers', () => {
       'is:open',
       'cursor-1',
       'origin',
-      null
+      null,
+      true
     )
   })
 
@@ -213,8 +232,31 @@ describe('registerGitHubHandlers', () => {
       '',
       undefined,
       undefined,
-      'openclaw-2'
+      'openclaw-2',
+      undefined
     )
+  })
+
+  it('threads SSH connectionId through pull request merge', async () => {
+    repos[0].connectionId = 'openclaw-2'
+    mergePRMock.mockResolvedValue({ ok: true })
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:mergePR'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        prNumber: 42,
+        method: 'squash',
+        prRepo: { owner: 'acme', repo: 'orca' }
+      }
+    )
+
+    expect(mergePRMock).toHaveBeenCalledWith('/workspace/repo', 42, 'squash', 'openclaw-2', {
+      owner: 'acme',
+      repo: 'orca'
+    })
   })
 
   it('forwards the authenticated viewer lookup', async () => {

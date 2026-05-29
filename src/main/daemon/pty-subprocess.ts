@@ -19,6 +19,7 @@ import {
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
 import { isPwshAvailable } from '../pwsh'
+import { isHostCodexHomeForWsl } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { parseWslPath } from '../wsl'
 import { getWslContextFromSessionId } from './wsl-session-context'
@@ -31,6 +32,7 @@ export type PtySubprocessOptions = {
   rows: number
   cwd?: string
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   /** Explicit shell executable path/basename the renderer asked for.
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
@@ -71,11 +73,18 @@ function removeInheritedDevAgentHookEndpoint(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
 ): void {
-  if (explicitEnv?.ORCA_AGENT_HOOK_ENV === 'development') {
+  if (explicitEnv?.ORCA_AGENT_HOOK_ENV === 'development' && !explicitEnv.ORCA_AGENT_HOOK_ENDPOINT) {
     // Why: the daemon inherits the app process env before per-PTY env is
-    // merged, so dev terminals must explicitly drop a parent endpoint.env.
+    // merged. Strip only stale parent endpoints; a fresh explicit endpoint is
+    // needed by hooks whose runners scrub token-like env vars before exec.
     delete env.ORCA_AGENT_HOOK_ENDPOINT
   }
+}
+
+function removeInheritedElectronRunAsNode(env: Record<string, string>): void {
+  // Why: the daemon needs ELECTRON_RUN_AS_NODE=1 internally, but user shells
+  // must not inherit it or nested Electron commands run as plain Node.
+  delete env.ELECTRON_RUN_AS_NODE
 }
 
 function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
@@ -177,10 +186,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // restores clickable refs like `owner/repo#123` / `PR#123`.
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
+  for (const key of opts.envToDelete ?? []) {
+    delete env[key]
+  }
   // Why: the daemon is forked from Electron and can inherit the pane identity
   // of the terminal that launched `pn dev`; each PTY must opt into its own.
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
   removeInheritedDevAgentHookEndpoint(env, opts.env)
+  removeInheritedElectronRunAsNode(env)
   removeInheritedNoColor(env)
 
   env.LANG ??= 'en_US.UTF-8'
@@ -237,6 +250,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
     validationCwd = resolved.validationCwd
+    if (
+      pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe' &&
+      isHostCodexHomeForWsl(env.CODEX_HOME)
+    ) {
+      // Why: Orca's selected Codex runtime home is host-local. WSL Codex must
+      // use its Linux-side ~/.codex instead of inheriting a Windows path.
+      delete env.CODEX_HOME
+    }
   } else {
     // Why: any Orca-injected overlay env that user rc files can clobber
     // needs the wrapper so the post-rc restore line runs.
@@ -244,7 +265,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       ? getShellReadyLaunchConfig(shellPath)
       : env.ORCA_ATTRIBUTION_SHIM_DIR ||
           env.ORCA_OPENCODE_CONFIG_DIR ||
-          env.ORCA_PI_CODING_AGENT_DIR
+          env.ORCA_PI_CODING_AGENT_DIR ||
+          env.ORCA_OMP_CODING_AGENT_DIR ||
+          env.ORCA_CODEX_HOME
         ? getAttributionShellLaunchConfig(shellPath)
         : null
     if (shellLaunch) {

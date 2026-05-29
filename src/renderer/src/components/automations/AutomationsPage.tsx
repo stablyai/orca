@@ -15,6 +15,8 @@ import {
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { isCustomTuiAgentId } from '../../../../shared/effective-tui-agent'
+import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -36,7 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -50,7 +52,7 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { TuiAgent, Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/types'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
 import {
   buildAutomationRrule,
@@ -68,7 +70,11 @@ import {
   formatAutomationTokens,
   summarizeAutomationRunUsage
 } from './automation-usage-model'
-import { getAutomationRunViewState } from './automation-run-view-state'
+import {
+  canRerunAutomationRun,
+  getAutomationRerunPendingRemainingMs,
+  getAutomationRunViewState
+} from './automation-run-view-state'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { AutomationDetail } from './AutomationDetail'
@@ -84,9 +90,7 @@ import { AUTOMATION_TEMPLATES, type AutomationTemplate } from './automation-temp
 import { ExternalAutomationManagers } from './ExternalAutomationManagers'
 import type { FetchExternalAutomationRuns } from './ExternalAutomationRunTable'
 
-// Why: AGENT_CATALOG is built-in only; the .id widened to TuiAgentId in
-// issue #2284 but values here are TuiAgent.
-const AGENTS = AGENT_CATALOG.map((agent) => agent.id as TuiAgent)
+const AGENTS = AGENT_CATALOG.map((agent) => agent.id)
 const DEFAULT_TIME = '09:00'
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 type AutomationPaneTab = 'overview' | 'runs'
@@ -222,6 +226,14 @@ function isMissingExternalRunsApiError(error: unknown): boolean {
   return /listExternalRuns|automations:listExternalRuns|No handler registered/i.test(message)
 }
 
+async function waitForAutomationRerunPendingVisibility(pendingStartedAt: number): Promise<void> {
+  const remainingMs = getAutomationRerunPendingRemainingMs({ pendingStartedAt })
+  if (remainingMs <= 0) {
+    return
+  }
+  await new Promise<void>((resolve) => window.setTimeout(resolve, remainingMs))
+}
+
 export default function AutomationsPage(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -241,14 +253,14 @@ export default function AutomationsPage(): React.JSX.Element {
   const setSelectedId = useAppStore((s) => s.setSelectedAutomationId)
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
-  // Why: automations are built-in only (issue #2284 plan §9). A custom
-  // default falls through to the first built-in here.
-  const defaultAgent: TuiAgent =
+  const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
+  const defaultAgent =
     settings?.defaultTuiAgent &&
     settings.defaultTuiAgent !== 'blank' &&
-    !settings.defaultTuiAgent.startsWith('custom:')
-      ? (settings.defaultTuiAgent as TuiAgent)
-      : AGENTS[0]
+    !isCustomTuiAgentId(settings.defaultTuiAgent) &&
+    isTuiAgentEnabled(settings.defaultTuiAgent, settings.disabledTuiAgents)
+      ? settings.defaultTuiAgent
+      : (enabledAgents[0] ?? AGENTS[0])
 
   const [automations, setAutomations] = useState<Automation[]>([])
   const [runs, setRuns] = useState<AutomationRun[]>([])
@@ -258,6 +270,9 @@ export default function AutomationsPage(): React.JSX.Element {
   }>({ automationId: null, runs: [] })
   const [externalManagers, setExternalManagers] = useState<ExternalAutomationManager[]>([])
   const [externalActionKey, setExternalActionKey] = useState<string | null>(null)
+  const [rerunRunIdsInFlight, setRerunRunIdsInFlight] = useState<ReadonlySet<string>>(
+    () => new Set()
+  )
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -288,6 +303,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const editRequestRef = useRef(0)
   const deleteConfirmButtonRef = useRef<HTMLButtonElement>(null)
   const completionInFlightRef = useRef<Set<string>>(new Set())
+  const rerunRunIdsInFlightRef = useRef<Set<string>>(new Set())
   const workspaceNameCacheRef = useRef<Map<string, string>>(new Map())
   const [draft, setDraft] = useState<AutomationDraft>({
     name: '',
@@ -423,6 +439,11 @@ export default function AutomationsPage(): React.JSX.Element {
           : false
       })
     : null
+  const canRerunSelectedAutomationRunPage =
+    selectedAutomationRunPage !== null &&
+    canRerunAutomationRun({ automation: selected, run: selectedAutomationRunPage })
+  const isSelectedAutomationRunPageRerunPending =
+    selectedAutomationRunPage !== null && rerunRunIdsInFlight.has(selectedAutomationRunPage.id)
   const selectedRepo = selected ? (repoMap.get(selected.projectId) ?? null) : null
   const selectedWorktree =
     selected && selected.workspaceId ? (worktreeMap.get(selected.workspaceId) ?? null) : null
@@ -504,6 +525,10 @@ export default function AutomationsPage(): React.JSX.Element {
       setIsLoading(false)
     }
   }, [setSelectedId])
+
+  const hydratePersistedUIState = useCallback(async (): Promise<void> => {
+    useAppStore.getState().hydratePersistedUI(await window.api.ui.get())
+  }, [])
 
   useEffect(() => {
     void fetchAllWorktrees()
@@ -842,6 +867,14 @@ export default function AutomationsPage(): React.JSX.Element {
       toast.error('Enter a valid 5-field cron expression before saving.')
       return
     }
+    if (
+      editingAutomationId === null &&
+      !isHermesSave &&
+      !isTuiAgentEnabled(draft.agentId, settings?.disabledTuiAgents)
+    ) {
+      toast.error('Choose an enabled agent before saving.')
+      return
+    }
     setIsSaving(true)
     try {
       const selectedWorkspaceExists =
@@ -888,6 +921,9 @@ export default function AutomationsPage(): React.JSX.Element {
               jobId: editingExternalTarget.job.id
             })
           : window.api.automations.createExternal(input))
+        if (!editingExternalTarget) {
+          useAppStore.getState().recordFeatureInteraction('automation-created')
+        }
         await refresh()
         setCreateOpen(false)
         setEditingExternalTarget(null)
@@ -963,6 +999,9 @@ export default function AutomationsPage(): React.JSX.Element {
             dtstart: now,
             missedRunGraceMinutes
           })
+      if (!editingAutomationId) {
+        await hydratePersistedUIState()
+      }
       setAutomations((current) => {
         const next = current.filter((entry) => entry.id !== automation.id)
         return [...next, automation].sort((left, right) => left.name.localeCompare(right.name))
@@ -1038,8 +1077,34 @@ export default function AutomationsPage(): React.JSX.Element {
 
   const runNow = async (automation: Automation): Promise<void> => {
     await window.api.automations.runNow({ id: automation.id })
+    await hydratePersistedUIState()
     await refresh()
     toast.message('Automation run queued.')
+  }
+
+  const rerunAutomationRun = async (automation: Automation, run: AutomationRun): Promise<void> => {
+    const automationId = automation.id
+    const runId = run.id
+    if (rerunRunIdsInFlightRef.current.has(runId)) {
+      return
+    }
+    const pendingStartedAt = Date.now()
+    rerunRunIdsInFlightRef.current.add(runId)
+    setRerunRunIdsInFlight(new Set(rerunRunIdsInFlightRef.current))
+    try {
+      await window.api.automations.runNow({ id: automationId })
+      await hydratePersistedUIState()
+      await refresh()
+      toast.message('Automation run queued.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to rerun automation.')
+      await refresh()
+    } finally {
+      // Why: fast skipped/failed reruns can settle before users or validation can see the guard.
+      await waitForAutomationRerunPendingVisibility(pendingStartedAt)
+      rerunRunIdsInFlightRef.current.delete(runId)
+      setRerunRunIdsInFlight(new Set(rerunRunIdsInFlightRef.current))
+    }
   }
 
   const runExternalAction = async (
@@ -1057,6 +1122,9 @@ export default function AutomationsPage(): React.JSX.Element {
         jobId: job.id,
         action
       })
+      if (action === 'run') {
+        useAppStore.getState().recordFeatureInteraction('automation-run')
+      }
       await refresh()
       toast.success(
         action === 'delete'
@@ -1502,10 +1570,10 @@ export default function AutomationsPage(): React.JSX.Element {
                         </span>
                         <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                           {automationRepo ? (
-                            <RepoDotLabel
+                            <RepoBadgeLabel
                               name={automationRepo.displayName}
                               color={automationRepo.badgeColor}
-                              dotClassName="size-1.5"
+                              badgeClassName="size-1.5"
                             />
                           ) : (
                             <span>Unknown project</span>
@@ -1864,18 +1932,39 @@ export default function AutomationsPage(): React.JSX.Element {
                     statusLabel={getAutomationRunStatusLabel(selectedAutomationRunPage.status)}
                     statusVariant={getAutomationRunStatusVariant(selectedAutomationRunPage.status)}
                     actions={
-                      selectedAutomationRunPageViewState ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={!selectedAutomationRunPageViewState.canOpen}
-                          onClick={() => openRunWorkspace(selectedAutomationRunPage)}
-                        >
-                          <Eye className="size-3.5" />
-                          {selectedAutomationRunPageViewState.actionLabel}
-                        </Button>
-                      ) : null
+                      <>
+                        {canRerunSelectedAutomationRunPage && selected ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isSelectedAutomationRunPageRerunPending}
+                            onClick={() =>
+                              void rerunAutomationRun(selected, selectedAutomationRunPage)
+                            }
+                          >
+                            <RefreshCw
+                              className={cn(
+                                'size-3.5',
+                                isSelectedAutomationRunPageRerunPending && 'animate-spin'
+                              )}
+                            />
+                            Rerun
+                          </Button>
+                        ) : null}
+                        {selectedAutomationRunPageViewState ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={!selectedAutomationRunPageViewState.canOpen}
+                            onClick={() => openRunWorkspace(selectedAutomationRunPage)}
+                          >
+                            <Eye className="size-3.5" />
+                            {selectedAutomationRunPageViewState.actionLabel}
+                          </Button>
+                        ) : null}
+                      </>
                     }
                     onBack={() => setSelectedAutomationRunPageId(null)}
                   >

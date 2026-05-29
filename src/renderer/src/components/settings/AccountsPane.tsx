@@ -3,7 +3,7 @@
    add/select/reauth/remove flow is tightly coupled to the provider-specific
    error handling and restart prompts below; splitting them into separate files
    would scatter those flows without a meaningful abstraction boundary. */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
@@ -28,6 +28,7 @@ import {
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
+import { getLocalPreflightContext } from '@/lib/local-preflight-context'
 import {
   Dialog,
   DialogContent,
@@ -110,7 +111,11 @@ function getClaudeAccountErrorDescription(error: unknown): string {
 
 export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const localPreflightContext = useAppStore(getLocalPreflightContext)
+  const activeWslDistro = localPreflightContext?.wslDistro?.trim() || null
+  const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
 
   const [codexAccounts, setCodexAccounts] = useState<CodexRateLimitAccountsState>({
     accounts: [],
@@ -128,6 +133,14 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
   >('idle')
   const [removeAccountId, setRemoveAccountId] = useState<string | null>(null)
   const [removeClaudeAccountId, setRemoveClaudeAccountId] = useState<string | null>(null)
+
+  const recordOpenCodeSettingEdit = (field: 'cookie' | 'workspaceId'): void => {
+    if (recordedOpenCodeSettingEditsRef.current.has(field)) {
+      return
+    }
+    recordedOpenCodeSettingEditsRef.current.add(field)
+    recordFeatureInteraction('usage-tracking')
+  }
 
   useEffect(() => {
     let stale = false
@@ -198,6 +211,7 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
     try {
       const next = await operation()
       await syncCodexAccounts(next)
+      recordFeatureInteraction('codex-account-switching')
       const shouldPromptRestart =
         action === 'adding' ||
         (action.startsWith('select:') && previousActiveAccountId !== next.activeAccountId) ||
@@ -229,6 +243,7 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
     try {
       const next = await operation()
       await syncClaudeAccounts(next)
+      recordFeatureInteraction('claude-account-switching')
       if (previousActiveAccountId !== next.activeAccountId || action === 'adding') {
         toast.info('Claude account updated.', {
           description: `${getClaudeAccountLabel(claudeAccounts, previousActiveAccountId)} → ${getClaudeAccountLabel(next, next.activeAccountId)}. Restart live Claude terminals before continuing old sessions.`
@@ -261,7 +276,7 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
           title="Claude Accounts"
           description="Optional account switcher for the shared Claude auth files."
           keywords={['claude', 'account', 'rate limit', 'status bar', 'quota']}
-          className="space-y-3 px-1 py-2"
+          className="space-y-3 py-2"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-0.5">
@@ -422,6 +437,12 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
             Optional. Orca can use your normal Codex login; add accounts only if you want quick
             switching in Orca.
           </p>
+          {activeWslDistro ? (
+            <p className="text-xs text-muted-foreground">
+              WSL terminals use the Codex login inside {activeWslDistro}. Managed Codex account
+              switching applies to host terminals.
+            </p>
+          ) : null}
           <p className="text-xs text-muted-foreground">
             Each account keeps its own local sign-in context in Orca. Account auth stays on this
             device.
@@ -441,7 +462,7 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
             entry.description ?? '',
             ...(entry.keywords ?? [])
           ])}
-          className="space-y-3 px-1 py-2"
+          className="space-y-3 py-2"
         >
           {/* Why: Settings deep-links can target this subsection directly from
           the status-bar account switcher. Keeping a stable DOM anchor here
@@ -451,7 +472,9 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
             <div className="space-y-0.5">
               <Label>Accounts</Label>
               <p className="text-xs text-muted-foreground">
-                Add a Codex account to use it in Orca.
+                {activeWslDistro
+                  ? `Use codex login in ${activeWslDistro} to change the WSL Codex account.`
+                  : 'Add a Codex account to use it in Orca.'}
               </p>
             </div>
             <Button
@@ -474,8 +497,9 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
 
           {codexAccounts.accounts.length === 0 ? (
             <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
-              No managed Codex accounts yet. Orca will use your system default Codex login until you
-              add one here.
+              {activeWslDistro
+                ? `No managed host Codex accounts yet. WSL terminals will use the Codex login in ${activeWslDistro}.`
+                : 'No managed Codex accounts yet. Orca will use your system default Codex login until you add one here.'}
             </div>
           ) : (
             <div className="space-y-2">
@@ -632,7 +656,7 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
             'rate limit',
             'status bar'
           ]}
-          className="flex items-center justify-between gap-4 px-1 py-2"
+          className="flex items-center justify-between gap-4 py-2"
         >
           <div className="space-y-0.5">
             <Label>Use Gemini CLI credentials (experimental)</Label>
@@ -645,11 +669,12 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
           <button
             role="switch"
             aria-checked={settings.geminiCliOAuthEnabled}
-            onClick={() =>
+            onClick={() => {
+              recordFeatureInteraction('usage-tracking')
               updateSettings({
                 geminiCliOAuthEnabled: !settings.geminiCliOAuthEnabled
               })
-            }
+            }}
             className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
               settings.geminiCliOAuthEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
             }`}
@@ -684,7 +709,10 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
             <Input
               type="password"
               value={settings.opencodeSessionCookie}
-              onChange={(e) => updateSettings({ opencodeSessionCookie: e.target.value })}
+              onChange={(e) => {
+                recordOpenCodeSettingEdit('cookie')
+                updateSettings({ opencodeSessionCookie: e.target.value })
+              }}
               placeholder="Fe26.2**… token or auth=Fe26.2**… header"
               spellCheck={false}
               className="flex-1 text-xs"
@@ -693,7 +721,10 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => updateSettings({ opencodeSessionCookie: '' })}
+                onClick={() => {
+                  recordFeatureInteraction('usage-tracking')
+                  updateSettings({ opencodeSessionCookie: '' })
+                }}
                 className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
               >
                 Clear
@@ -718,7 +749,10 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
             <Input
               type="text"
               value={settings.opencodeWorkspaceId}
-              onChange={(e) => updateSettings({ opencodeWorkspaceId: e.target.value })}
+              onChange={(e) => {
+                recordOpenCodeSettingEdit('workspaceId')
+                updateSettings({ opencodeWorkspaceId: e.target.value })
+              }}
               placeholder="wrk_…  (leave blank for automatic lookup)"
               spellCheck={false}
               className="flex-1 text-xs"
@@ -727,7 +761,10 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => updateSettings({ opencodeWorkspaceId: '' })}
+                onClick={() => {
+                  recordFeatureInteraction('usage-tracking')
+                  updateSettings({ opencodeWorkspaceId: '' })
+                }}
                 className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
               >
                 Clear

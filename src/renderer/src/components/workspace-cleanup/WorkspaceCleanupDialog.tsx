@@ -285,6 +285,8 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     [repoNameById, selectedScanErrors]
   )
   const readyCount = groups.ready.length
+  const protectedCount = groups.protected.length
+  const inactiveCount = filteredCandidates.length
   const hasAnyCandidates = candidates.length > 0
   const initialLoading = loading && !scan
   const activeRows = activeView === 'hidden' ? hiddenCandidates : groups[activeView]
@@ -476,9 +478,17 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
             </DialogHeader>
 
             {initialLoading ? (
-              <div className="flex items-center gap-2 border-b border-border bg-muted/25 px-5 py-3 text-xs text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" />
-                Checking inactive workspaces
+              <div className="flex items-start gap-2 border-b border-border bg-muted/25 px-5 py-3">
+                <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-foreground">
+                    Checking workspace safety
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    Scanning worktrees and git state, then combining open tab, terminal, live agent,
+                    and remote availability signals before suggesting deletions.
+                  </div>
+                </div>
               </div>
             ) : hasAnyCandidates ? (
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-4 py-2.5">
@@ -486,11 +496,15 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   <div className="min-w-0 text-sm font-medium text-foreground">
                     {selectedCount} selected
                   </div>
+                  <StatusPill>{inactiveCount} inactive</StatusPill>
                   {readyCount > 0 ? (
                     <StatusPill tone="ready">{readyCount} safe to remove</StatusPill>
                   ) : null}
                   {groups.review.length > 0 ? (
                     <StatusPill tone="review">{groups.review.length} need review</StatusPill>
+                  ) : null}
+                  {protectedCount > 0 ? (
+                    <StatusPill>{protectedCount} not suggested</StatusPill>
                   ) : null}
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">

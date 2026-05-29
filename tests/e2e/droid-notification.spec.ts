@@ -3,6 +3,7 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { getRendererTitleLog, installRendererTitleLog } from './helpers/terminal-title-log'
 import {
   sendToTerminal,
+  waitForActivePaneHookDescriptor,
   waitForActivePanePtyId,
   waitForActiveTerminalManager,
   waitForTerminalOutput
@@ -18,6 +19,14 @@ type NotificationDispatch = {
   agentType?: string
   agentPrompt?: string
   agentLastAssistantMessage?: string
+}
+
+type AgentStatusSummary = {
+  paneKey: string
+  state: string
+  agentType?: string
+  prompt?: string
+  lastAssistantMessage?: string
 }
 
 async function emitOscTitle(page: Page, ptyId: string, title: string) {
@@ -92,15 +101,7 @@ async function switchToOtherExistingWorktree(page: Page): Promise<string> {
   })
 }
 
-async function getAgentStatuses(page: Page): Promise<
-  {
-    paneKey: string
-    state: string
-    agentType?: string
-    prompt?: string
-    lastAssistantMessage?: string
-  }[]
-> {
+async function getAgentStatuses(page: Page): Promise<AgentStatusSummary[]> {
   return page.evaluate(() => {
     const store = window.__store
     if (!store) {
@@ -116,31 +117,25 @@ async function getAgentStatuses(page: Page): Promise<
   })
 }
 
-async function getActivePaneDescriptor(
-  page: Page
-): Promise<{ paneKey: string; worktreeId: string }> {
-  return page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
-    const state = store.getState()
-    const worktreeId = state.activeWorktreeId
-    if (!worktreeId) {
-      throw new Error('No active worktree')
-    }
-    const tabId = state.activeTabIdByWorktree[worktreeId] ?? state.activeTabId
-    if (!tabId) {
-      throw new Error('No active tab')
-    }
-    const manager = window.__paneManagers?.get(tabId)
-    const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-    const leafId = activePane ? manager?.getLeafIdMap?.().get(activePane.id) : null
-    if (!leafId) {
-      throw new Error('No active pane leaf id')
-    }
-    return { paneKey: `${tabId}:${leafId}`, worktreeId }
+async function getCachedAgentStatuses(page: Page): Promise<AgentStatusSummary[]> {
+  return page.evaluate(async () => {
+    const snapshot = await window.api.agentStatus.getSnapshot()
+    return snapshot.map((entry) => ({
+      paneKey: entry.paneKey,
+      state: entry.state,
+      agentType: entry.agentType,
+      prompt: entry.prompt,
+      lastAssistantMessage: entry.lastAssistantMessage
+    }))
   })
+}
+
+async function getRendererOrCachedAgentStatuses(page: Page): Promise<AgentStatusSummary[]> {
+  const [rendererStatuses, cachedStatuses] = await Promise.all([
+    getAgentStatuses(page),
+    getCachedAgentStatuses(page)
+  ])
+  return [...rendererStatuses, ...cachedStatuses]
 }
 
 test.describe('Droid notifications', () => {
@@ -155,7 +150,14 @@ test.describe('Droid notifications', () => {
     await installMainProcessNotificationDispatchSpy(electronApp)
     const endpoint = await readHookEndpoint(electronApp)
 
-    const { paneKey, worktreeId } = await getActivePaneDescriptor(orcaPage)
+    // Why: the synthetic hook bypasses the shell startup path; wait for a
+    // responsive PTY so the notification liveness gate can observe the turn.
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const readyMarker = `__CODEX_HOOK_NOTIFY_READY_${Date.now()}__`
+    await sendToTerminal(orcaPage, ptyId, `printf '${readyMarker}\\n'\r`)
+    await waitForTerminalOutput(orcaPage, readyMarker)
+
+    const { paneKey, worktreeId } = await waitForActivePaneHookDescriptor(orcaPage)
     const prompt = `codex-hook-notify-${Date.now()}`
     await emitCodexHookStatus(endpoint, {
       paneKey,
@@ -166,13 +168,15 @@ test.describe('Droid notifications', () => {
     await expect
       .poll(
         async () =>
-          (await getAgentStatuses(orcaPage)).some(
+          (await getRendererOrCachedAgentStatuses(orcaPage)).some(
             (status) =>
               status.agentType === 'codex' && status.state === 'working' && status.prompt === prompt
           ),
         {
-          timeout: 10_000,
-          message: 'Codex UserPromptSubmit hook did not reach renderer agent status'
+          timeout: 30_000,
+          // Why: this synthetic hook posts directly to main; main's cache is
+          // the durable source used to recover renderer startup/listener races.
+          message: 'Codex UserPromptSubmit hook did not reach agent status cache'
         }
       )
       .toBe(true)
@@ -198,7 +202,7 @@ test.describe('Droid notifications', () => {
               status.lastAssistantMessage === finalMessage
           ),
         {
-          timeout: 10_000,
+          timeout: 30_000,
           message: 'Codex Stop hook did not reach renderer agent status'
         }
       )
@@ -211,7 +215,7 @@ test.describe('Droid notifications', () => {
           return dispatches.filter((dispatch) => dispatch.source === 'agent-task-complete')
         },
         {
-          timeout: 10_000,
+          timeout: 30_000,
           message: 'Codex hook Stop did not dispatch task-complete while worktree was inactive'
         }
       )
@@ -246,7 +250,20 @@ test.describe('Droid notifications', () => {
     await waitForTerminalOutput(orcaPage, marker)
 
     await emitOscTitle(orcaPage, ptyId, 'Codex working')
+    await expect
+      .poll(async () => (await getRendererTitleLog(orcaPage)).includes('Codex working'), {
+        timeout: 10_000,
+        message: 'Codex working title did not reach the renderer before completion'
+      })
+      .toBe(true)
+
     await emitOscTitle(orcaPage, ptyId, 'Codex done')
+    await expect
+      .poll(async () => (await getRendererTitleLog(orcaPage)).includes('Codex done'), {
+        timeout: 10_000,
+        message: 'Codex done title did not reach the renderer'
+      })
+      .toBe(true)
 
     await expect
       .poll(

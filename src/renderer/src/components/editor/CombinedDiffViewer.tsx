@@ -40,7 +40,7 @@ import type {
   GitDiffResult,
   GitStatusEntry
 } from '../../../../shared/types'
-import { Check, Copy, MessageSquare, PanelLeftOpen, Trash2 } from 'lucide-react'
+import { Check, Copy, MessageSquare, PanelLeftOpen, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
@@ -1055,17 +1055,19 @@ export default function CombinedDiffViewer({
               {isCommitMode && commitCompare ? ` in ${commitCompare.compareRef}` : ''}
             </span>
             {diffCommentCount > 0 && (
-              <div className="ml-2 flex shrink-0 items-center overflow-hidden rounded-md border border-border/60 bg-muted/20">
+              <div className="ml-1 flex shrink-0 items-center overflow-hidden rounded-full border border-border/70 bg-muted/40">
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
                       type="button"
-                      className="inline-flex h-7 items-center gap-1 px-2 text-[11px] leading-none text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      className="inline-flex h-6 items-center gap-1 pl-2 pr-1.5 text-[11px] font-medium leading-none text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
                       aria-label={`Show ${diffCommentCount} AI ${diffCommentCount === 1 ? 'note' : 'notes'}`}
                     >
-                      <MessageSquare className="size-3" />
-                      AI notes
-                      <span className="tabular-nums">{diffCommentCount}</span>
+                      <Sparkles className="size-3 text-violet-500 dark:text-violet-400" />
+                      <span>AI notes</span>
+                      <span className="rounded-full bg-background/80 px-1 text-[10px] tabular-nums text-muted-foreground">
+                        {diffCommentCount}
+                      </span>
                     </button>
                   </PopoverTrigger>
                   <PopoverContent align="start" side="bottom" sideOffset={6} className="w-80 p-0">
@@ -1082,7 +1084,8 @@ export default function CombinedDiffViewer({
                   worktreeId={file.worktreeId}
                   groupId={activeGroupId ?? file.worktreeId}
                   comments={diffCommentsForWorktree}
-                  triggerClassName="h-7 rounded-none border-l border-border/60 px-2"
+                  actionLabel="Send"
+                  triggerClassName="h-6 gap-1 rounded-none border-l border-border/70 px-2 text-[11px] font-medium leading-none text-foreground/80 hover:bg-accent hover:text-foreground"
                   iconClassName="size-3"
                 />
               </div>

@@ -105,38 +105,39 @@ function TargetRow({
   targetId,
   label,
   status,
-  syncEnabled,
   syncStatus
 }: {
   targetId: string
   label: string
   status: SshConnectionStatus
-  syncEnabled: boolean
   syncStatus: RemoteWorkspaceSyncStatus | undefined
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const handleConnect = useCallback(async () => {
     setBusy(true)
     try {
       await window.api.ssh.connect({ targetId })
+      recordFeatureInteraction('ssh')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Connection failed')
     } finally {
       setBusy(false)
     }
-  }, [targetId])
+  }, [recordFeatureInteraction, targetId])
 
   const handleDisconnect = useCallback(async () => {
     setBusy(true)
     try {
       await window.api.ssh.disconnect({ targetId })
+      recordFeatureInteraction('ssh')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Disconnect failed')
     } finally {
       setBusy(false)
     }
-  }, [targetId])
+  }, [recordFeatureInteraction, targetId])
 
   return (
     <div className="flex items-center gap-2.5 px-2 py-1.5">
@@ -145,23 +146,17 @@ function TargetRow({
         <div className="truncate text-[12px] font-medium">{label}</div>
         <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
           <span>{STATUS_LABELS[status]}</span>
-          {syncEnabled && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span
-                className={`inline-flex min-w-0 items-center gap-1 ${syncStatusTone(syncStatus)}`}
-              >
-                {syncStatus?.phase === 'pulling' || syncStatus?.phase === 'pushing' ? (
-                  <Loader2 className="size-2.5 shrink-0 animate-spin" />
-                ) : syncStatus?.phase === 'conflict' || syncStatus?.phase === 'error' ? (
-                  <AlertTriangle className="size-2.5 shrink-0" />
-                ) : (
-                  <Cloud className="size-2.5 shrink-0" />
-                )}
-                <span className="truncate">{syncStatusLabel(syncStatus)}</span>
-              </span>
-            </>
-          )}
+          <span aria-hidden="true">·</span>
+          <span className={`inline-flex min-w-0 items-center gap-1 ${syncStatusTone(syncStatus)}`}>
+            {syncStatus?.phase === 'pulling' || syncStatus?.phase === 'pushing' ? (
+              <Loader2 className="size-2.5 shrink-0 animate-spin" />
+            ) : syncStatus?.phase === 'conflict' || syncStatus?.phase === 'error' ? (
+              <AlertTriangle className="size-2.5 shrink-0" />
+            ) : (
+              <Cloud className="size-2.5 shrink-0" />
+            )}
+            <span className="truncate">{syncStatusLabel(syncStatus)}</span>
+          </span>
         </div>
       </div>
       {busy ? (
@@ -196,12 +191,12 @@ export function SshStatusSegment({
 }): React.JSX.Element | null {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
-  const sshTargetRemoteSyncEnabled = useAppStore((s) => s.sshTargetRemoteSyncEnabled)
   const remoteWorkspaceSyncStatusByTargetId = useAppStore(
     (s) => s.remoteWorkspaceSyncStatusByTargetId
   )
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const targets = Array.from(sshTargetLabels.entries()).map(([id, label]) => {
     const state = sshConnectionStates.get(id)
@@ -209,7 +204,6 @@ export function SshStatusSegment({
       id,
       label,
       status: (state?.status ?? 'disconnected') as SshConnectionStatus,
-      syncEnabled: sshTargetRemoteSyncEnabled.get(id) === true,
       syncStatus: remoteWorkspaceSyncStatusByTargetId[id]
     }
   })
@@ -231,7 +225,13 @@ export function SshStatusSegment({
     : null
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) {
+          recordFeatureInteraction('ssh')
+        }
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -283,7 +283,12 @@ export function SshStatusSegment({
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-[220px]">
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="w-[min(20rem,calc(100vw-1rem))]"
+      >
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           SSH Connections
         </div>
@@ -293,13 +298,13 @@ export function SshStatusSegment({
             targetId={t.id}
             label={t.label}
             status={t.status}
-            syncEnabled={t.syncEnabled}
             syncStatus={t.syncStatus}
           />
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
+            recordFeatureInteraction('ssh')
             openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
             setActiveView('settings')
           }}

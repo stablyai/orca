@@ -1,16 +1,18 @@
 import { toast } from 'sonner'
 import { useAppStore, type AppState } from '@/store'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { isCustomTuiAgentId } from '../../../shared/effective-tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   CLIENT_PLATFORM,
   getLinkedWorkItemSuggestedName,
   getSetupConfig,
-  getWorkspaceSeedName
+  getWorkspaceSeedName,
+  isGitLabIssueUrl
 } from '@/lib/new-workspace'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
@@ -21,6 +23,7 @@ import type {
   RepoHookSettings,
   SetupDecision,
   TuiAgent,
+  TuiAgentId,
   WorkspaceCreateTelemetrySource
 } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -28,7 +31,7 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 export type LaunchableWorkItem = {
   title: string
   url: string
-  type: 'issue' | 'pr'
+  type: 'issue' | 'pr' | 'mr'
   number: number | null
   repoId?: string
   /** Content to paste into the agent's input. Defaults to the URL when omitted. */
@@ -66,28 +69,6 @@ export type LaunchWorkItemDirectArgs = {
    *  entry point (Tasks page row → `sidebar`, Create-from modal →
    *  `command_palette`). Omitted callers default to `unknown`. */
   telemetrySource?: WorkspaceCreateTelemetrySource
-}
-
-function pickAgent(
-  preferred: TuiAgent | 'blank' | null | undefined,
-  detected: Set<TuiAgent>
-): TuiAgent | null {
-  // Why: honor the explicit default when the agent is actually installed. A
-  // stale preference (uninstalled binary) must not block the flow — fall
-  // through to the first matching detected agent in catalog order, which
-  // matches the quick-composer's auto-pick behavior and keeps the experience
-  // consistent regardless of where the user launches the workspace from.
-  if (preferred && preferred !== 'blank' && detected.has(preferred)) {
-    return preferred
-  }
-  // Why: AGENT_CATALOG holds built-ins only; the .id widened to TuiAgentId
-  // in issue #2284 but the values here are TuiAgent.
-  for (const entry of AGENT_CATALOG) {
-    if (detected.has(entry.id as TuiAgent)) {
-      return entry.id as TuiAgent
-    }
-  }
-  return null
 }
 
 async function resolveDirectPrStartPoint(
@@ -138,7 +119,7 @@ async function resolveSetupDecision(
 // Why: telemetry rides the queued startup so main fires `agent_started`
 // only after pty:spawn confirms the launch. No agent / no plan → no event.
 function buildStartupOpts(
-  agent: TuiAgent | null,
+  agent: TuiAgentId | null,
   plan: ReturnType<typeof buildAgentStartupPlan>,
   launchSource: LaunchSource
 ): {
@@ -248,7 +229,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let worktreeId: string
   let primaryTabId: string | null
   let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
-  let effectiveAgent: TuiAgent | null = null
+  let effectiveAgent: TuiAgentId | null = null
   let draftLaunchedNatively = false
   try {
     const result = await store.createWorktree(
@@ -263,22 +244,32 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       item.type === 'pr' && item.number ? item.number : undefined,
       resolvedPushTarget,
       undefined,
-      item.linearIdentifier
+      item.linearIdentifier,
+      undefined,
+      undefined,
+      item.type === 'mr' && item.number ? item.number : undefined,
+      item.type === 'issue' && item.number && isGitLabIssueUrl(item.url) ? item.number : undefined
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
 
     const detectedIds = new Set(await detectedAgentsPromise)
-    // Why: this launch path records the agent against the worktree, which is
-    // built-in only (issue #2284 plan §9). A custom default is treated as no
-    // preference here so detection-order fallback picks a built-in.
-    const rawDefault = settings?.defaultTuiAgent
-    const builtInDefault =
-      rawDefault && typeof rawDefault === 'string' && rawDefault.startsWith('custom:')
-        ? null
-        : (rawDefault as TuiAgent | 'blank' | null | undefined)
-    effectiveAgent = pickAgent(builtInDefault, detectedIds as Set<TuiAgent>)
-    if (effectiveAgent) {
+    const customTuiAgents = settings?.customTuiAgents ?? []
+    effectiveAgent =
+      settings?.defaultTuiAgent && isCustomTuiAgentId(settings.defaultTuiAgent)
+        ? customTuiAgents.some(
+            (agent) => agent.id === settings.defaultTuiAgent && agent.command.trim().length > 0
+          )
+          ? settings.defaultTuiAgent
+          : null
+        : pickTuiAgent(
+            settings?.defaultTuiAgent && !isCustomTuiAgentId(settings.defaultTuiAgent)
+              ? settings.defaultTuiAgent
+              : null,
+            [...detectedIds].filter((id) => !isCustomTuiAgentId(id)) as TuiAgent[],
+            settings?.disabledTuiAgents
+          )
+    if (effectiveAgent && !isCustomTuiAgentId(effectiveAgent)) {
       // Why: direct task launch creates and starts the workspace in separate
       // steps so agent detection can overlap git worktree creation. Persist
       // the chosen agent once known so empty-worktree reopen can recreate it.
@@ -295,7 +286,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     // and we guard the IPC presence so a stale preload bundle (which can
     // ship a renderer that's ahead of the loaded preload) doesn't crash the
     // launch with "Cannot read properties of undefined".
-    if (effectiveAgent && worktreePath && window.api.agentTrust?.markTrusted) {
+    if (
+      effectiveAgent &&
+      !isCustomTuiAgentId(effectiveAgent) &&
+      worktreePath &&
+      window.api.agentTrust?.markTrusted
+    ) {
       const preflight = TUI_AGENT_CONFIG[effectiveAgent].preflightTrust
       if (preflight) {
         try {
@@ -323,7 +319,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
             agent: effectiveAgent,
             draft: draftContent,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
-            customTuiAgents: settings?.customTuiAgents ?? [],
+            customTuiAgents,
             platform: CLIENT_PLATFORM
           })
     if (draftLaunchPlan) {
@@ -340,13 +336,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         agent: effectiveAgent,
         prompt: '',
         cmdOverrides: settings?.agentCmdOverrides ?? {},
-        customTuiAgents: settings?.customTuiAgents ?? [],
+        customTuiAgents,
         platform: CLIENT_PLATFORM,
         allowEmptyPromptLaunch: true
       })
     }
 
     const activation = activateAndRevealWorktree(worktreeId, {
+      sidebarRevealBehavior: 'auto',
       setup: result.setup,
       ...buildStartupOpts(effectiveAgent, startupPlan, launchSource)
     })
@@ -364,10 +361,6 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   }
 
   store.setSidebarOpen(true)
-  if (settings?.rightSidebarOpenByDefault) {
-    store.setRightSidebarTab('explorer')
-    store.setRightSidebarOpen(true)
-  }
 
   // Why: at this point the workspace is live and the agent (if any) has
   // been queued on `primaryTabId`. The post-launch paste step below only

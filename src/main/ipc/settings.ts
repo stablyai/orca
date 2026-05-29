@@ -1,4 +1,4 @@
-import { ipcMain, nativeTheme } from 'electron'
+import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
 import type { GlobalSettings, PersistedState } from '../../shared/types'
 import { listSystemFontFamilies } from '../system-fonts'
@@ -7,6 +7,8 @@ import { rebuildAppMenu } from '../menu/register-app-menu'
 import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
 import type { AgentAwakeService } from '../agent-awake-service'
+import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
+import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -19,6 +21,7 @@ const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIS
 // items when the backing state changes.
 const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
   'showTasksButton',
+  'showMobileButton',
   'showTitlebarAppName'
 ]
 
@@ -26,11 +29,31 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
+  store.onSettingsChanged((updates, _settings, originWebContentsId) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      const isOrigin =
+        originWebContentsId !== undefined && window.webContents.id === originWebContentsId
+      if (!window.isDestroyed() && !isOrigin) {
+        window.webContents.send('settings:changed', updates)
+      }
+    }
+  })
+
   ipcMain.handle('settings:get', () => {
     return store.getSettings()
   })
 
-  ipcMain.handle('settings:set', (_event, args: Partial<GlobalSettings>) => {
+  ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
+    const sanitizedArgs = { ...args }
+    // Why: Floating Workspace grants are trusted only when written by the
+    // main-process directory picker, never by renderer-provided settings IPC.
+    delete sanitizedArgs.floatingTerminalTrustedCwds
+    if (typeof args.floatingTerminalCwd === 'string') {
+      sanitizedArgs.floatingTerminalCwd = await sanitizeFloatingWorkspaceDirectorySetting(
+        store,
+        args.floatingTerminalCwd
+      )
+    }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }
@@ -39,11 +62,24 @@ export function registerSettingsHandlers(
     // (e.g. blur after a no-op edit), and a `settings_changed` event for a
     // no-op flip would inflate the experimental-feature-adoption signal.
     const before = store.getSettings()
-    const result = store.updateSettings(args)
-    if ('keepComputerAwakeWhileAgentsRun' in args) {
+    const result = store.updateSettings(sanitizedArgs, {
+      notifyListeners: true,
+      originWebContentsId: event.sender.id
+    })
+    if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
       agentAwakeService?.setEnabled(result.keepComputerAwakeWhileAgentsRun)
     }
-    if (APPEARANCE_MENU_KEYS.some((key) => key in args)) {
+    if (
+      'agentStatusHooksEnabled' in sanitizedArgs &&
+      before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled
+    ) {
+      try {
+        applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled)
+      } catch (error) {
+        console.warn('[settings] failed to apply agentStatusHooksEnabled:', error)
+      }
+    }
+    if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
       rebuildAppMenu()
     }
 
@@ -55,7 +91,7 @@ export function registerSettingsHandlers(
     // the path the v1 enum has a slot for. If a non-bool whitelisted
     // setting is ever added, extend the discriminator here at the same
     // time the schema's `value_kind` enum gains the new value.
-    for (const key of Object.keys(args)) {
+    for (const key of Object.keys(sanitizedArgs)) {
       if (!SETTINGS_CHANGED_WHITELIST_SET.has(key)) {
         continue
       }

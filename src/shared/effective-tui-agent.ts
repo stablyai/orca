@@ -40,15 +40,62 @@ export function isCustomTuiAgentId(value: unknown): value is CustomTuiAgentId {
   return typeof value === 'string' && value.startsWith(CUSTOM_AGENT_ID_PREFIX)
 }
 
+function readFirstCommandToken(command: string): string {
+  const trimmed = command.trim()
+  let token = ''
+  let quote: '"' | "'" | null = null
+
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const char = trimmed[index]
+    if (!char) {
+      continue
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null
+      } else {
+        token += char
+      }
+      continue
+    }
+
+    if (char === '"' || char === "'") {
+      if (!token) {
+        quote = char
+        continue
+      }
+      token += char
+      continue
+    }
+
+    if (/\s/.test(char)) {
+      if (token) {
+        break
+      }
+      continue
+    }
+
+    if (char === '\\' && /\s/.test(trimmed[index + 1] ?? '')) {
+      token += trimmed[index + 1] ?? ''
+      index += 1
+      continue
+    }
+
+    token += char
+  }
+
+  return token
+}
+
 /** First whitespace-separated token of a command string, stripped of any path prefix.
  *  Used to derive a sensible default detect command / expected process name from a
  *  custom agent's launch command (e.g. `npx -y foo` -> `npx`, `/usr/bin/zsh -l` -> `zsh`). */
 export function firstExecutableToken(command: string): string {
-  const trimmed = command.trim()
-  if (!trimmed) {
+  const firstToken = readFirstCommandToken(command)
+  if (!firstToken) {
     return ''
   }
-  const firstToken = trimmed.split(/\s+/)[0] ?? ''
   const withoutPath = firstToken.split(/[\\/]/).pop() ?? ''
   return withoutPath
 }

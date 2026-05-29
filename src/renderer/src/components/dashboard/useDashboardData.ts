@@ -24,6 +24,12 @@ export type DashboardAgentRow = {
    *  stateHistory entry, falling back to updatedAt when no history exists yet.
    *  Used to sort agents by when they started. */
   startedAt: number
+  lineage?: {
+    depth: 0 | 1
+    isFirstSibling: boolean
+    isLastSibling: boolean
+    childCount: number
+  }
 }
 
 // Why: the shape here is deliberately minimal. The per-card rendering pipeline
@@ -35,7 +41,7 @@ export type DashboardWorktreeCard = {
   agents: DashboardAgentRow[]
 }
 
-export type DashboardRepoGroup = {
+export type DashboardProjectGroup = {
   repo: Repo
   worktrees: DashboardWorktreeCard[]
 }
@@ -101,7 +107,7 @@ function buildDashboardData(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>,
   now: number
-): DashboardRepoGroup[] {
+): DashboardProjectGroup[] {
   // Why: build a tabId -> entries index once per computation instead of
   // re-scanning every agent status entry inside the per-tab loop. paneKey is
   // formatted as `${tabId}:${leafId}`; parsePaneKey also drops legacy numeric
@@ -144,7 +150,7 @@ function buildDashboardData(
         return { repo, worktree, agents } satisfies DashboardWorktreeCard
       })
 
-    return { repo, worktrees } satisfies DashboardRepoGroup
+    return { repo, worktrees } satisfies DashboardProjectGroup
   })
 }
 
@@ -156,7 +162,7 @@ function buildDashboardData(
  * Not used to render anything directly — the inline list reads its own
  * worktree-scoped slice via useWorktreeAgentRows.
  */
-export function useDashboardData(): DashboardRepoGroup[] {
+export function useDashboardData(): DashboardProjectGroup[] {
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)

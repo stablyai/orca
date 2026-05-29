@@ -779,7 +779,7 @@ function AssigneesCell({
             'flex h-full w-full flex-wrap items-center gap-1 cursor-pointer px-1 text-xs text-muted-foreground hover:text-foreground'
           )}
         >
-          {labelContent ?? <EmptyCellPrompt label="Add assignee" />}
+          {labelContent ?? <EmptyCellPrompt label="Assign" />}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">

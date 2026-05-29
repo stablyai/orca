@@ -42,6 +42,7 @@ function createPane({
   const terminal = {
     cols: terminalCols,
     rows: terminalRows,
+    element: {} as HTMLElement,
     resize: vi.fn((cols: number, rows: number) => {
       terminal.cols = cols
       terminal.rows = rows
@@ -164,6 +165,24 @@ describe('safeFit', () => {
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
     expect(pane.terminal.scrollToLine).toHaveBeenCalledWith(42)
     expect(activeBuffer.viewportY).toBe(42)
+  })
+
+  it('does not throw when xterm rejects scroll restoration during layout', () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
+    activeBuffer.viewportY = 42
+    activeBuffer.baseY = 100
+    vi.mocked(pane.terminal.scrollToLine).mockImplementation(() => {
+      throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+    })
+
+    expect(() => safeFit(pane)).not.toThrow()
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
   })
 
   it('still refits when a split-scroll lock is active and the grid changed', () => {

@@ -56,6 +56,7 @@ describe('repo slice skipped-onboarding folder startup', () => {
       1,
       'folder-1::/folder',
       {
+        sidebarRevealBehavior: 'auto',
         startup: {
           command: 'codex',
           telemetry: {
@@ -69,7 +70,7 @@ describe('repo slice skipped-onboarding folder startup', () => {
     expect(worktreeActivation.activateAndRevealWorktree).toHaveBeenNthCalledWith(
       2,
       'folder-2::/folder',
-      undefined
+      { sidebarRevealBehavior: 'auto' }
     )
   })
 })

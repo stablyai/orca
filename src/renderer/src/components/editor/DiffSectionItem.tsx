@@ -35,6 +35,7 @@ import type { DiffComment } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { Button } from '@/components/ui/button'
+import { installEditorSaveShortcut } from './editor-shortcuts'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -307,7 +308,7 @@ export function DiffSectionItem({
     useIntrinsicImageHeight
   })
 
-  const handleMount: DiffOnMount = (editor, monaco) => {
+  const handleMount: DiffOnMount = (editor, _monaco) => {
     diffEditorRef.current = editor
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
@@ -377,9 +378,10 @@ export function DiffSectionItem({
     }
 
     modifiedEditorsRef.current.set(index, modified)
-    modified.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () =>
+    const cleanupSaveShortcut = installEditorSaveShortcut(modified.getContainerDomNode(), () =>
       handleSectionSaveRef.current(index)
     )
+    modified.onDidDispose(() => cleanupSaveShortcut())
     modified.onDidChangeModelContent(() => {
       const current = modified.getValue()
       setSections((prev) => {

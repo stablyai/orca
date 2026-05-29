@@ -16,6 +16,7 @@ import {
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
+import { installEditorSaveShortcut } from './editor-shortcuts'
 
 type DiffViewerProps = {
   modelKey: string
@@ -329,10 +330,14 @@ export default function DiffViewer({
       // from the first change (e.g. on a note further down the file).
 
       if (editable) {
-        // Cmd/Ctrl+S to save
-        modifiedEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-          onSaveRef.current?.(modifiedEditor.getValue())
-        })
+        const cleanupSaveShortcut = installEditorSaveShortcut(
+          modifiedEditor.getContainerDomNode(),
+          () => {
+            onSaveRef.current?.(modifiedEditor.getValue())
+          }
+        )
+
+        modifiedEditor.onDidDispose(() => cleanupSaveShortcut())
 
         // Track changes
         modifiedEditor.onDidChangeModelContent(() => {

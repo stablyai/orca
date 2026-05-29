@@ -4,7 +4,11 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu'
 import { WorktreeOpenInMenuItems } from '@/components/sidebar/WorktreeOpenInMenu'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
-import { FileExplorerRow, shouldShowCollapseFolderAction } from './FileExplorerRow'
+import {
+  FileExplorerRow,
+  shouldShowCollapseFolderAction,
+  shouldShowFindInFolderAction
+} from './FileExplorerRow'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import type { TreeNode } from './file-explorer-types'
 
@@ -323,6 +327,19 @@ describe('FileExplorerRow collapse folder action', () => {
     ).toBe(false)
   })
 
+  it('only shows find in folder for directories', () => {
+    expect(shouldShowFindInFolderAction(directoryNode)).toBe(true)
+    expect(
+      shouldShowFindInFolderAction({
+        ...directoryNode,
+        name: 'index.ts',
+        path: '/repo/src/index.ts',
+        relativePath: 'src/index.ts',
+        isDirectory: false
+      })
+    ).toBe(false)
+  })
+
   it('passes the row node to the collapse folder handler', () => {
     const onCollapseFolderSubtree = vi.fn()
     const element = FileExplorerVirtualRows({
@@ -354,6 +371,7 @@ describe('FileExplorerRow collapse folder action', () => {
       onDuplicate: vi.fn(),
       onRequestDelete: vi.fn(),
       onCollapseFolderSubtree,
+      onFindInFolder: vi.fn(),
       onMoveDrop: vi.fn(),
       onDragTargetChange: vi.fn(),
       onDragSourceChange: vi.fn(),
@@ -369,5 +387,54 @@ describe('FileExplorerRow collapse folder action', () => {
     ;(row.props.onCollapseFolderSubtree as () => void)()
 
     expect(onCollapseFolderSubtree).toHaveBeenCalledWith(directoryNode)
+  })
+
+  it('passes the row node to the find in folder handler', () => {
+    const onFindInFolder = vi.fn()
+    const element = FileExplorerVirtualRows({
+      virtualizer: {
+        getTotalSize: () => 26,
+        getVirtualItems: () => [{ index: 0, key: 'src', start: 0 }],
+        measureElement: vi.fn()
+      } as never,
+      inlineInputIndex: -1,
+      flatRows: [directoryNode],
+      inlineInput: null,
+      handleInlineSubmit: vi.fn(),
+      dismissInlineInput: vi.fn(),
+      folderStatusByRelativePath: new Map(),
+      statusByRelativePath: new Map(),
+      ignoredByRelativePath: new Set(),
+      expanded: new Set([directoryNode.path]),
+      dirCache: {},
+      selectedPaths: new Set(),
+      activeFileId: null,
+      flashingPath: null,
+      deleteShortcutLabel: 'Del',
+      onClick: vi.fn(),
+      onDoubleClick: vi.fn(),
+      onContextMenuSelect: vi.fn(),
+      onCopyPaths: vi.fn(),
+      onStartNew: vi.fn(),
+      onStartRename: vi.fn(),
+      onDuplicate: vi.fn(),
+      onRequestDelete: vi.fn(),
+      onCollapseFolderSubtree: vi.fn(),
+      onFindInFolder,
+      onMoveDrop: vi.fn(),
+      onDragTargetChange: vi.fn(),
+      onDragSourceChange: vi.fn(),
+      onDragExpandDir: vi.fn(),
+      onNativeDragTargetChange: vi.fn(),
+      onNativeDragExpandDir: vi.fn(),
+      dropTargetDir: null,
+      dragSourcePath: null,
+      nativeDropTargetDir: null
+    })
+
+    const row = findFileExplorerRow(element)
+    ;(row.props.onFindInFolder as () => void)()
+
+    expect(onFindInFolder).toHaveBeenCalledWith(directoryNode)
   })
 })

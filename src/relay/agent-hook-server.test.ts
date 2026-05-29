@@ -199,6 +199,19 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('can defer endpoint file publication until relay socket ownership is proven', async () => {
+    const forward = vi.fn()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start({ publishEndpoint: false })
+    try {
+      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+      expect(server.publishEndpointFile()).toBe(true)
+      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
+    } finally {
+      server.stop()
+    }
+  })
+
   it('keeps Copilot transcript retry alive across a following SessionEnd event', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })

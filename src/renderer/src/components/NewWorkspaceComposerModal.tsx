@@ -4,21 +4,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
 import { useComposerState } from '@/hooks/useComposerState'
-import { AGENT_CATALOG, buildAgentCatalog } from '@/lib/agent-catalog'
+import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import { pickQuickWorkspaceAgent } from '@/lib/quick-workspace-agent-selection'
 import { isCustomTuiAgentId } from '../../../shared/effective-tui-agent'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import {
-  shouldAllowComposerEnterSubmitTarget,
-  shouldSuppressEnterSubmit
-} from '@/lib/new-workspace-enter-guard'
+import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type {
-  TuiAgent,
+  CustomTuiAgent,
   TuiAgentId,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus
 } from '../../../shared/types'
 
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+const EMPTY_CUSTOM_TUI_AGENTS: readonly CustomTuiAgent[] = []
 
 type ComposerModalData = {
   prefilledName?: string
@@ -89,10 +88,6 @@ function ComposerModalBody({
           trigger?.focus({ preventScroll: true })
         }}
       >
-        <DialogHeader className="gap-1">
-          <DialogTitle className="text-base font-semibold">Create Workspace</DialogTitle>
-        </DialogHeader>
-
         <QuickTabBody modalData={modalData} onClose={onClose} active />
       </DialogContent>
     </Dialog>
@@ -139,31 +134,50 @@ function QuickTabBody({
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgentId | null | undefined>(
     undefined
   )
+  const customTuiAgents = settings?.customTuiAgents ?? EMPTY_CUSTOM_TUI_AGENTS
+  const defaultTuiAgent = settings?.defaultTuiAgent
+  const customDefaultIsValid =
+    isCustomTuiAgentId(defaultTuiAgent) &&
+    customTuiAgents.some((agent) => agent.id === defaultTuiAgent && agent.command.trim().length > 0)
   const preferredQuickAgent = useMemo<TuiAgentId | null>(() => {
-    const pref = settings?.defaultTuiAgent
-    if (pref === 'blank') {
-      // Why: 'blank' is the explicit "no agent" preference — the quick agent
-      // model already uses null to mean "blank terminal", so translate here.
-      return null
+    const pref = defaultTuiAgent
+    if (isCustomTuiAgentId(pref)) {
+      return customDefaultIsValid ? pref : null
     }
-    if (pref) {
-      if (isCustomTuiAgentId(pref)) {
-        const customExists = buildAgentCatalog(settings?.customTuiAgents ?? []).some(
-          (agent) => agent.id === pref
-        )
-        return customExists ? pref : null
-      }
-      return pref
-    }
-    const detected = cardProps.detectedAgentIds
-    // Why: detectedAgentIds is the built-in set; AGENT_CATALOG is built-in only,
-    // so this lookup yields a TuiAgent (subset of TuiAgentId).
-    return (
-      AGENT_CATALOG.find((agent) => detected === null || detected.has(agent.id as TuiAgent))?.id ??
-      null
-    )
-  }, [cardProps.detectedAgentIds, settings?.customTuiAgents, settings?.defaultTuiAgent])
+    // Why: detection can still be pending when quick-create submits; keep the
+    // prior catalog fallback while filtering disabled agents out of that choice.
+    return pickQuickWorkspaceAgent(pref, cardProps.detectedAgentIds, settings?.disabledTuiAgents)
+  }, [
+    cardProps.detectedAgentIds,
+    customDefaultIsValid,
+    defaultTuiAgent,
+    settings?.disabledTuiAgents
+  ])
   const quickAgent = quickAgentOverride === undefined ? preferredQuickAgent : quickAgentOverride
+
+  useEffect(() => {
+    const overrideIsCustom = isCustomTuiAgentId(quickAgentOverride)
+    if (
+      quickAgentOverride === undefined ||
+      quickAgentOverride === null ||
+      (overrideIsCustom
+        ? customTuiAgents.some(
+            (agent) => agent.id === quickAgentOverride && agent.command.trim().length > 0
+          )
+        : isTuiAgentEnabled(quickAgentOverride, settings?.disabledTuiAgents) &&
+          (cardProps.detectedAgentIds === null ||
+            cardProps.detectedAgentIds.has(quickAgentOverride)))
+    ) {
+      return
+    }
+    setQuickAgentOverride(preferredQuickAgent)
+  }, [
+    cardProps.detectedAgentIds,
+    customTuiAgents,
+    preferredQuickAgent,
+    quickAgentOverride,
+    settings?.disabledTuiAgents
+  ])
 
   const handleQuickAgentChange = useCallback((agent: TuiAgentId | null) => {
     setQuickAgentOverride(agent)
@@ -172,6 +186,7 @@ function QuickTabBody({
   const handleCreate = useCallback(async (): Promise<void> => {
     await submitQuick(quickAgent)
   }, [quickAgent, submitQuick])
+  const primaryActionLabel = cardProps.selectedRepoIsGit ? 'Create Worktree' : 'Create Workspace'
 
   // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
   useEffect(() => {
@@ -203,21 +218,15 @@ function QuickTabBody({
         return
       }
 
-      // Why: require the platform modifier (Cmd on macOS, Ctrl elsewhere) so
-      // plain Enter inside fields (notes, repo search) doesn't accidentally
-      // submit — users can type or confirm selections without triggering
-      // workspace creation.
-      const hasModifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-      if (!hasModifier) {
+      // Why: workspace creation is screen-local submit behavior, not a
+      // user-configurable app command.
+      if (!isScreenSubmitShortcut(event)) {
         return
       }
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
         return
       }
       if (createDisabled) {
-        return
-      }
-      if (shouldSuppressEnterSubmit(event, false)) {
         return
       }
       event.preventDefault()
@@ -229,12 +238,16 @@ function QuickTabBody({
 
   return (
     <>
+      <DialogHeader className="gap-1">
+        <DialogTitle className="text-base font-semibold">{primaryActionLabel}</DialogTitle>
+      </DialogHeader>
       <NewWorkspaceComposerCard
         composerRef={composerRef}
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
         {...cardProps}
+        primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
       />

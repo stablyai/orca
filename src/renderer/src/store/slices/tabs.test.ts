@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Tab, TabGroup } from '../../../../shared/types'
 import type * as AgentStatusModule from '@/lib/agent-status'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultUIState } from '../../../../shared/constants'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -41,6 +42,9 @@ const mockApi = {
   },
   settings: {
     get: vi.fn().mockResolvedValue({}),
+    set: vi.fn().mockResolvedValue(undefined)
+  },
+  ui: {
     set: vi.fn().mockResolvedValue(undefined)
   },
   cache: {
@@ -107,6 +111,7 @@ import { createTerminalSlice } from './terminals'
 import { createTabsSlice } from './tabs'
 import { createUISlice } from './ui'
 import { createSettingsSlice } from './settings'
+import { createKeybindingsSlice } from './keybindings'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
@@ -139,6 +144,7 @@ function createTestStore() {
     ...createTabsSlice(...a),
     ...createUISlice(...a),
     ...createSettingsSlice(...a),
+    ...createKeybindingsSlice(...a),
     ...createGitHubSlice(...a),
     ...createHostedReviewSlice(...a),
     ...createLinearSlice(...a),
@@ -206,6 +212,16 @@ describe('TabsSlice', () => {
       expect(group.tabOrder).toEqual([tab1.id, tab2.id])
     })
 
+    it('can create a tab without activating it', () => {
+      const tab1 = store.getState().createUnifiedTab(WT, 'terminal')
+      const tab2 = store.getState().createUnifiedTab(WT, 'browser', { activate: false })
+
+      const group = store.getState().groupsByWorktree[WT][0]
+      expect(group.activeTabId).toBe(tab1.id)
+      expect(group.tabOrder).toEqual([tab1.id, tab2.id])
+      expect(group.recentTabIds).toEqual([tab1.id])
+    })
+
     it('replaces existing preview tab when creating a new preview', () => {
       const preview1 = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'file-a.ts',
@@ -232,6 +248,24 @@ describe('TabsSlice', () => {
       store.getState().createUnifiedTab(WT, 'editor', { id: 'f.ts', label: 'f.ts' })
 
       expect(store.getState().groupsByWorktree[WT]).toHaveLength(1)
+    })
+  })
+
+  describe('terminal tab creation tracking', () => {
+    it('records normal terminal tab creation without recording activation fallback tabs', () => {
+      const setMock = vi.mocked(window.api.ui.set)
+      store.getState().hydratePersistedUI(getDefaultUIState())
+      setMock.mockClear()
+
+      store.getState().createTab(WT)
+      store.getState().createTab(WT, undefined, undefined, { pendingActivationSpawn: true })
+
+      expect(setMock).toHaveBeenCalledTimes(1)
+      expect(setMock).toHaveBeenCalledWith({
+        featureInteractions: {
+          'terminal-tabs': expect.objectContaining({ interactionCount: 1 })
+        }
+      })
     })
   })
 
@@ -860,6 +894,7 @@ describe('TabsSlice', () => {
     })
 
     it('merges a group into its sibling', () => {
+      const setMock = vi.mocked(window.api.ui.set)
       const t1 = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'file-a.ts',
         label: 'file-a.ts'
@@ -872,6 +907,8 @@ describe('TabsSlice', () => {
         label: 'file-b.ts',
         targetGroupId: targetGroupId!
       })
+      store.getState().hydratePersistedUI(getDefaultUIState())
+      setMock.mockClear()
 
       const mergedInto = store.getState().mergeGroupIntoSibling(WT, targetGroupId!)
 
@@ -880,6 +917,12 @@ describe('TabsSlice', () => {
       expect(state.groupsByWorktree[WT]).toHaveLength(1)
       expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([t1.id, 'file-b.ts'])
       expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: sourceGroupId })
+      expect(setMock).toHaveBeenCalledTimes(1)
+      expect(setMock).toHaveBeenCalledWith({
+        featureInteractions: {
+          'terminal-panes': expect.objectContaining({ interactionCount: 1 })
+        }
+      })
     })
 
     it('drops a unified tab into another group and collapses an emptied source group', () => {
@@ -970,6 +1013,16 @@ describe('TabsSlice', () => {
       const tab = store.getState().createUnifiedTab(WT, 'terminal')
       store.getState().setTabLabel(tab.id, 'zsh')
       expect(store.getState().unifiedTabsByWorktree[WT][0].label).toBe('zsh')
+    })
+
+    it('setTabLabel preserves tab map references when the label is unchanged', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().setTabLabel(tab.id, 'zsh')
+      const before = store.getState().unifiedTabsByWorktree
+
+      store.getState().setTabLabel(tab.id, 'zsh')
+
+      expect(store.getState().unifiedTabsByWorktree).toBe(before)
     })
 
     it('setTabCustomLabel updates customLabel', () => {
@@ -1204,6 +1257,44 @@ describe('TabsSlice', () => {
       expect(groups).toHaveLength(1)
       expect(groups[0].activeTabId).toBe('term-1')
       expect(groups[0].tabOrder).toEqual(['term-1', 'term-2', '/tmp/feature/src/main.ts'])
+    })
+
+    it('hydrates floating workspace unified tabs without a repo worktree', () => {
+      store.getState().hydrateTabsSession({
+        activeRepoId: null,
+        activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        unifiedTabs: {
+          [FLOATING_TERMINAL_WORKTREE_ID]: [
+            {
+              id: 'floating-browser-1',
+              entityId: 'floating-browser-1',
+              groupId: 'floating-group-1',
+              worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+              contentType: 'browser',
+              label: 'Browser',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        tabGroups: {
+          [FLOATING_TERMINAL_WORKTREE_ID]: [
+            {
+              id: 'floating-group-1',
+              worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+              activeTabId: 'floating-browser-1',
+              tabOrder: ['floating-browser-1']
+            }
+          ]
+        }
+      })
+
+      expect(store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
     })
 
     it('hydrates from unified format', () => {

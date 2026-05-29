@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { Send } from 'lucide-react'
+import { Send, Sparkles } from 'lucide-react'
 import type { DiffComment } from '../../../../shared/types'
 import { useAppStore } from '@/store'
 import {
@@ -24,6 +24,9 @@ export function DiffNotesSendMenu({
   filePath,
   showFileScope = false,
   triggerClassName,
+  triggerLabel,
+  triggerCount,
+  actionLabel,
   iconClassName = 'size-3.5',
   align = 'end'
 }: {
@@ -33,22 +36,20 @@ export function DiffNotesSendMenu({
   filePath?: string
   showFileScope?: boolean
   triggerClassName?: string
+  triggerLabel?: string
+  triggerCount?: number
+  actionLabel?: string
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
 }): React.JSX.Element {
-  const markDiffCommentsSent = useAppStore((s) => s.markDiffCommentsSent)
+  const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const unsentNotes = useMemo(() => comments.filter((comment) => !comment.sentAt), [comments])
-  const unsentNoteIds = useMemo(() => unsentNotes.map((comment) => comment.id), [unsentNotes])
   const unsentPrompt = useMemo(() => formatDiffComments(unsentNotes), [unsentNotes])
   const fileNotes = useMemo(
     () => (filePath ? comments.filter((comment) => comment.filePath === filePath) : []),
     [comments, filePath]
   )
   const unsentFileNotes = useMemo(() => fileNotes.filter((comment) => !comment.sentAt), [fileNotes])
-  const unsentFileNoteIds = useMemo(
-    () => unsentFileNotes.map((comment) => comment.id),
-    [unsentFileNotes]
-  )
   const unsentFilePrompt = useMemo(() => formatDiffComments(unsentFileNotes), [unsentFileNotes])
   const hasUnsentNotes = unsentNotes.length > 0
   const canSendFileScope = showFileScope && Boolean(filePath)
@@ -65,10 +66,25 @@ export function DiffNotesSendMenu({
                 triggerClassName
               )}
               disabled={!hasUnsentNotes}
-              aria-label="Send notes to a new agent"
+              aria-label={
+                triggerLabel ? `Send ${triggerLabel} to a new agent` : 'Send notes to a new agent'
+              }
               onClick={(event) => event.stopPropagation()}
             >
+              {triggerLabel ? (
+                <>
+                  <Sparkles className="size-3 text-violet-500 dark:text-violet-400" />
+                  <span className="whitespace-nowrap">{triggerLabel}</span>
+                  {triggerCount !== undefined ? (
+                    <span className="rounded-full bg-background/80 px-1 text-[10px] tabular-nums text-muted-foreground">
+                      {triggerCount}
+                    </span>
+                  ) : null}
+                  <span className="mx-0.5 h-3 w-px bg-border/70" aria-hidden />
+                </>
+              ) : null}
               <Send className={iconClassName} />
+              {actionLabel ? <span className="whitespace-nowrap">{actionLabel}</span> : null}
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -81,11 +97,11 @@ export function DiffNotesSendMenu({
           <>
             <DropdownMenuLabel>Send notes</DropdownMenuLabel>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger disabled={unsentFileNotes.length === 0}>
-                This file
-                <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
-                  {unsentFileNotes.length}
-                </span>
+              <DropdownMenuSubTrigger
+                disabled={unsentFileNotes.length === 0}
+                className="[&>svg:last-child]:ml-0"
+              >
+                <NoteScopeMenuRow label="This file" count={unsentFileNotes.length} />
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="min-w-[180px]">
                 <QuickLaunchAgentMenuItems
@@ -95,16 +111,18 @@ export function DiffNotesSendMenu({
                   prompt={unsentFilePrompt}
                   promptDelivery="submit-after-ready"
                   launchSource="notes_send"
-                  onPromptDelivered={() => void markDiffCommentsSent(worktreeId, unsentFileNoteIds)}
+                  onPromptDelivered={() =>
+                    void clearDeliveredDiffComments(worktreeId, unsentFileNotes)
+                  }
                 />
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger disabled={unsentNotes.length === 0}>
-                All unsent notes
-                <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
-                  {unsentNotes.length}
-                </span>
+              <DropdownMenuSubTrigger
+                disabled={unsentNotes.length === 0}
+                className="[&>svg:last-child]:ml-0"
+              >
+                <NoteScopeMenuRow label="All unsent notes" count={unsentNotes.length} />
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="min-w-[180px]">
                 <QuickLaunchAgentMenuItems
@@ -114,7 +132,7 @@ export function DiffNotesSendMenu({
                   prompt={unsentPrompt}
                   promptDelivery="submit-after-ready"
                   launchSource="notes_send"
-                  onPromptDelivered={() => void markDiffCommentsSent(worktreeId, unsentNoteIds)}
+                  onPromptDelivered={() => void clearDeliveredDiffComments(worktreeId, unsentNotes)}
                 />
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -127,10 +145,19 @@ export function DiffNotesSendMenu({
             prompt={unsentPrompt}
             promptDelivery="submit-after-ready"
             launchSource="notes_send"
-            onPromptDelivered={() => void markDiffCommentsSent(worktreeId, unsentNoteIds)}
+            onPromptDelivered={() => void clearDeliveredDiffComments(worktreeId, unsentNotes)}
           />
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+function NoteScopeMenuRow({ label, count }: { label: string; count: number }): React.JSX.Element {
+  return (
+    <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+      <span className="truncate">{label}</span>
+      <span className="text-[11px] tabular-nums text-muted-foreground">{count}</span>
+    </span>
   )
 }

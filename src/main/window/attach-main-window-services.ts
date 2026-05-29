@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { app, ipcMain, session } from 'electron'
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, Session } from 'electron'
 import type { Store } from '../persistence'
 import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/types'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
@@ -196,12 +196,7 @@ export function attachMainWindowServices(
     // signature while still denying the request.
     callback({ video: undefined, audio: undefined })
   })
-  browserSession.on('will-download', (_event, item, webContents) => {
-    // Why: browser-tab downloads need explicit product UX before arbitrary sites
-    // can write files through Orca. Pause the item and route it through
-    // BrowserManager so the user must explicitly accept the save path first.
-    browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
-  })
+  registerBrowserDownloadHandler(browserSession)
 
   mainWindow.on('closed', () => {
     // Why: parked browser webviews can outlive the visible tab body until the
@@ -210,6 +205,24 @@ export function attachMainWindowServices(
     // or hot-reload cycles.
     browserManager.unregisterAll()
   })
+}
+
+function handleBrowserWillDownload(
+  _event: Electron.Event,
+  item: Electron.DownloadItem,
+  webContents: Electron.WebContents
+): void {
+  // Why: browser-tab downloads need explicit product UX before arbitrary sites
+  // can write files through Orca. Pause the item and route it through
+  // BrowserManager so the user must explicitly accept the save path first.
+  browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
+}
+
+function registerBrowserDownloadHandler(browserSession: Session): void {
+  // Why: browser sessions are process-persistent while main windows can be
+  // recreated; replace the named handler so re-attach does not stack listeners.
+  browserSession.removeListener('will-download', handleBrowserWillDownload)
+  browserSession.on('will-download', handleBrowserWillDownload)
 }
 
 function registerAppReloadHandler(

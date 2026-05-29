@@ -27,6 +27,13 @@ export class ClientRequestAborts {
     }
   }
 
+  abortAll(): void {
+    for (const [, controller] of this.controllers) {
+      controller.abort()
+    }
+    this.controllers.clear()
+  }
+
   private key(clientId: number, requestId: number): string {
     return `${clientId}:${requestId}`
   }

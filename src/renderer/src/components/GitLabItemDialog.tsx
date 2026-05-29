@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VisuallyHidden } from 'radix-ui'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { cn } from '@/lib/utils'
 import type {
   GitLabPipelineJob,
@@ -421,15 +422,9 @@ export default function GitLabItemDialog({
                   disabled={commentSubmitting}
                   className="min-h-9 w-full resize-none rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm shadow-xs focus:border-ring focus:outline-none focus:ring-[3px] focus:ring-ring/50"
                   onKeyDown={(e) => {
-                    // Why: Cmd/Ctrl+Enter sends — matches gitlab.com's
-                    // textarea behavior so users coming from the web UI
-                    // get a familiar shortcut.
-                    if (
-                      e.key === 'Enter' &&
-                      (e.metaKey || e.ctrlKey) &&
-                      commentDraft.trim() &&
-                      !commentSubmitting
-                    ) {
+                    // Why: this is local textarea submit behavior; Settings
+                    // keybindings only cover app commands.
+                    if (isScreenSubmitShortcut(e) && commentDraft.trim() && !commentSubmitting) {
                       e.preventDefault()
                       void handleSubmitComment()
                     }
@@ -458,7 +453,7 @@ export default function GitLabItemDialog({
                   className="gap-1.5"
                 >
                   <ExternalLink className="size-3.5" />
-                  Open in browser
+                  Open in GitLab
                 </Button>
                 <div className="flex items-center gap-2">
                   {onCreateWorkspace ? (

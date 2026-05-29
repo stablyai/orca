@@ -32,6 +32,11 @@ export type GitUncommittedEntry = {
   conflictKind?: GitConflictKind
   conflictStatus?: GitConflictResolutionStatus
   conflictStatusSource?: GitConflictStatusSource
+  // Working-tree line counts for this entry's staging area (staged vs unstaged
+  // diffs are reported separately). Untracked files count their full contents
+  // as additions. Undefined for binary files and when the diff is unavailable.
+  added?: number
+  removed?: number
 }
 
 export type GitStatusEntry = GitUncommittedEntry
@@ -56,6 +61,10 @@ export type GitUpstreamStatus = {
   upstreamName?: string
   ahead: number
   behind: number
+  // Why: when a branch was rebased, the upstream-only commits can be older
+  // patch-equivalent copies. Pulling them reintroduces stale history; a
+  // lease-protected force push is the correct reconciliation.
+  behindCommitsArePatchEquivalent?: boolean
 }
 
 export type GitBranchChangeStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied'

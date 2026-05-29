@@ -70,11 +70,31 @@ beforeEach(() => {
                 totalCount: 1,
                 truncated: false
               }
-            : method === 'browser.profile.list'
-              ? { profiles: [] }
-              : method === 'worktree.lineageList'
-                ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
-                : {}
+            : method === 'worktree.detectedList'
+              ? {
+                  repoId: 'repo-env-2',
+                  authoritative: true,
+                  source: 'git',
+                  worktrees: [
+                    {
+                      ...makeWorktree({
+                        id: 'repo-env-2::/env-2/repo',
+                        repoId: 'repo-env-2',
+                        path: '/env-2/repo'
+                      }),
+                      ownership: 'orca-managed',
+                      selectedCheckout: true,
+                      visible: true
+                    }
+                  ]
+                }
+              : method === 'browser.profile.list'
+                ? { profiles: [] }
+                : method === 'projectGroup.list'
+                  ? { groups: [] }
+                  : method === 'worktree.lineageList'
+                    ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
+                    : {}
     return Promise.resolve({ id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-2' } })
   })
   vi.stubGlobal('window', {
@@ -86,6 +106,29 @@ beforeEach(() => {
 })
 
 describe('createSettingsSlice runtime switching', () => {
+  it('repairs drifted task provider settings before sending updates', async () => {
+    settingsSet.mockResolvedValueOnce({
+      visibleTaskProviders: ['github', 'linear'],
+      defaultTaskSource: 'github'
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: {
+        visibleTaskProviders: ['linear'],
+        defaultTaskSource: 'github'
+      } as AppState['settings']
+    })
+
+    await store.getState().updateSettings({
+      visibleTaskProviders: ['linear']
+    })
+
+    expect(settingsSet).toHaveBeenCalledWith({
+      visibleTaskProviders: ['github', 'linear'],
+      defaultTaskSource: 'github'
+    })
+  })
+
   it('rebases local state to the authoritative settings:set response', async () => {
     settingsSet.mockResolvedValueOnce({
       openInApplications: [{ id: 'cursor', label: 'Cursor', command: 'cursor' }],
@@ -113,6 +156,20 @@ describe('createSettingsSlice runtime switching', () => {
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [{ id: 'repo-env-1', path: '/env-1/repo', displayName: 'Env 1' } as never],
+      projectGroups: [
+        {
+          id: 'group-env-1',
+          name: 'Env 1 Group',
+          parentPath: '/env-1',
+          parentGroupId: null,
+          createdFrom: 'manual',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
       worktreesByRepo: {
         'repo-env-1': [makeWorktree({ id: 'repo-env-1::/env-1/repo', repoId: 'repo-env-1' })]
       },
@@ -184,6 +241,7 @@ describe('createSettingsSlice runtime switching', () => {
       })
     )
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['repo-env-2'])
+    expect(store.getState().projectGroups).toEqual([])
     expect(store.getState().worktreesByRepo['repo-env-2']?.map((worktree) => worktree.id)).toEqual([
       'repo-env-2::/env-2/repo'
     ])

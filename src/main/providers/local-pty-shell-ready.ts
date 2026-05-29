@@ -12,7 +12,7 @@
  */
 import { tmpdir } from 'os'
 import { basename, win32 as pathWin32 } from 'path'
-import { mkdirSync, writeFileSync, chmodSync } from 'fs'
+import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'fs'
 import { app } from 'electron'
 import type * as pty from 'node-pty'
 import {
@@ -20,12 +20,10 @@ import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
+import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
+import { getZshEnvTemplate } from '../shell-templates'
 
 let didEnsureShellReadyWrappers = false
-
-function quotePosixSingle(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
 
 const STARTUP_COMMAND_READY_MAX_WAIT_MS = 1500
 const SHELL_READY_MARKER = '\x1b]777;orca-shell-ready'
@@ -85,6 +83,20 @@ function getShellReadyWrapperRoot(): string {
   return `${userDataPath}/shell-ready`
 }
 
+function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
+  return [
+    `${root}/zsh/.zshenv`,
+    `${root}/zsh/.zprofile`,
+    `${root}/zsh/.zshrc`,
+    `${root}/zsh/.zlogin`,
+    `${root}/bash/rcfile`
+  ]
+}
+
+function shellReadyWrappersExist(): boolean {
+  return getRequiredShellReadyWrapperPaths().every((path) => existsSync(path))
+}
+
 // Why: if our own process inherited ZDOTDIR from a parent shell that was
 // itself an Orca PTY (e.g. the user launched `pn dev` from a terminal inside
 // a running Orca), that ZDOTDIR points at an Orca shell-ready wrapper dir.
@@ -122,6 +134,10 @@ function resolveOriginalZdotdir(): string {
   )
 }
 
+function resolveOriginalZshenvSourceDir(): string {
+  return normalizeOriginalZdotdirCandidate(process.env.ZDOTDIR) || process.env.HOME || ''
+}
+
 export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
 [[ -f /etc/profile ]] && source /etc/profile
@@ -146,25 +162,98 @@ __orca_restore_attribution_path
 # Why: user startup files may set the default OpenCode config after Orca's
 # spawn env; restore the PTY-scoped overlay before the first prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-# Why: PI_CODING_AGENT_DIR is also a single-root env var users may re-export.
+# Why: bare shells carry both Pi and OMP shadows so a later typed OMP can
+# switch on demand. Keep Pi as the shell default unless this PTY is OMP-only.
 [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
+if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
+  export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
+fi
+${getPosixOmpShellWrapper()}
+# Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
+[[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+# Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
+# status when the foreground command (e.g. an interrupted Claude/Codex CLI)
+# exits — mirrors the zsh wrapper. Without this, bash users (default on most
+# Linux distros) keep a stuck 'working' spinner for up to 30 min after the
+# CLI exits without sending a Stop/SessionEnd hook.
+__orca_osc133_precmd() {
+  local exit_code=$?
+  __orca_in_prompt_command=1
+  if [[ -n "\${__orca_in_command:-}" ]]; then
+    printf "\\033]133;D;%s\\007" "$exit_code"
+    unset __orca_in_command
+  fi
+  printf "\\033]133;A\\007"
+}
+__orca_osc133_prompt_done() {
+  unset __orca_in_prompt_command
+}
+__orca_run_user_debug_trap() {
+  if [[ -n "\${__orca_user_debug_trap:-}" ]]; then
+    eval "$__orca_user_debug_trap" || true
+  fi
+}
+__orca_osc133_preexec() {
+  __orca_run_user_debug_trap
+  [[ -z "\${__orca_in_prompt_command:-}" ]] || return
+  # Why: bash DEBUG fires for every simple command, including PROMPT_COMMAND
+  # bodies. Skip our own prompt-time helpers so they don't mark the shell as
+  # "in command" before the prompt has even drawn.
+  case "$BASH_COMMAND" in
+    *__orca_osc133_precmd*|*__orca_osc133_prompt_done*|*__orca_prompt_mark*) return ;;
+  esac
+  printf "\\033]133;C\\007"
+  __orca_in_command=1
+}
+# Why: prepend so we capture $? before the user's PROMPT_COMMAND chain mutates it.
+__orca_normalize_prompt_command() {
+  local __orca_joined="" __orca_prompt_part
+  if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+    for __orca_prompt_part in "\${PROMPT_COMMAND[@]}"; do
+      [[ -n "$__orca_prompt_part" ]] || continue
+      if [[ -n "$__orca_joined" ]]; then
+        __orca_joined="$__orca_joined;$__orca_prompt_part"
+      else
+        __orca_joined="$__orca_prompt_part"
+      fi
+    done
+    PROMPT_COMMAND="$__orca_joined"
+  fi
+}
+__orca_prepend_prompt_command() {
+  __orca_normalize_prompt_command
+  PROMPT_COMMAND="__orca_osc133_precmd\${PROMPT_COMMAND:+;\${PROMPT_COMMAND}}"
+}
+__orca_append_prompt_command() {
+  local command="$1"
+  __orca_normalize_prompt_command
+  if [[ -n "\${PROMPT_COMMAND:-}" ]]; then
+    PROMPT_COMMAND="\${PROMPT_COMMAND};$command"
+  else
+    PROMPT_COMMAND="$command"
+  fi
+}
+__orca_prepend_prompt_command
 # Why: append the marker through PROMPT_COMMAND so it fires after the login
 # startup files have rebuilt the prompt, without re-running user rc files.
 if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
   __orca_prompt_mark() {
     printf "${SHELL_READY_MARKER_ESCAPED}"
   }
-  if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
-    PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
-  else
-    _orca_prev_prompt_command="\${PROMPT_COMMAND}"
-    if [[ -n "\${_orca_prev_prompt_command}" ]]; then
-      PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
-    else
-      PROMPT_COMMAND="__orca_prompt_mark"
-    fi
-  fi
+  __orca_append_prompt_command "__orca_prompt_mark"
 fi
+__orca_append_prompt_command "__orca_osc133_prompt_done"
+__orca_debug_trap_spec="$(trap -p DEBUG)"
+if [[ -n "$__orca_debug_trap_spec" ]]; then
+  __orca_debug_trap_command="\${__orca_debug_trap_spec#trap -- }"
+  __orca_debug_trap_command="\${__orca_debug_trap_command% DEBUG}"
+  eval "__orca_user_debug_trap=$__orca_debug_trap_command"
+fi
+unset __orca_debug_trap_spec __orca_debug_trap_command
+unset -f __orca_normalize_prompt_command __orca_prepend_prompt_command __orca_append_prompt_command
+# Why: arm DEBUG after wrapper setup; otherwise bash treats our own rcfile
+# commands as a foreground command and emits a fake C/D before the first prompt.
+trap '__orca_osc133_preexec' DEBUG
 `
 }
 
@@ -185,8 +274,15 @@ __orca_restore_attribution_path() {
 if [[ ! -o login ]]; then
   # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-  # Why: PI_CODING_AGENT_DIR must keep the same PTY-scoped overlay after rc files.
+  # Why: bare shells carry both Pi and OMP shadows; keep Pi as the default and
+  # let the OMP wrapper switch to OMP only for that command.
   [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
+  if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
+    export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
+  fi
+  ${getPosixOmpShellWrapper()}
+  # Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
+  [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 fi
 __orca_osc133_precmd() {
   local exit_code=$?
@@ -207,7 +303,10 @@ preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})
 }
 
 function ensureShellReadyWrappers(): void {
-  if (didEnsureShellReadyWrappers || process.platform === 'win32') {
+  if (process.platform === 'win32') {
+    return
+  }
+  if (didEnsureShellReadyWrappers && shellReadyWrappersExist()) {
     return
   }
   didEnsureShellReadyWrappers = true
@@ -216,42 +315,7 @@ function ensureShellReadyWrappers(): void {
   const zshDir = `${root}/zsh`
   const bashDir = `${root}/bash`
 
-  const zshEnv = `# Orca zsh shell-ready wrapper
-_orca_spawn_orig_zdotdir="\${ORCA_ORIG_ZDOTDIR:-}"
-# Why: clearing ZDOTDIR lets user .zshenv use the canonical XDG idiom
-# \`export ZDOTDIR="\${ZDOTDIR:-$XDG_CONFIG_HOME/zsh}"\` to compute its
-# preferred dir; pre-setting it (even to HOME) defeats that default.
-unset ZDOTDIR
-# Why: function isolates user .zshenv \`return\` so it doesn't abort our wrapper.
-# Trade-off: top-level \`setopt LOCAL_OPTIONS\`/\`LOCAL_TRAPS\`, \`TRAPEXIT\`, and
-# bare \`local\`/\`typeset\` in user .zshenv become function-scoped; use \`typeset -g\`
-# or \`export\` to escape.
-__orca_source_user_zshenv() {
-  # Why: honor an externally-set ZDOTDIR (login manager, /etc/zshenv, parent
-  # shell) so users whose real .zshenv lives at $ZDOTDIR (not $HOME) still
-  # get PATH/aliases/exports loaded. Falls back to $HOME when no spawn-env
-  # ZDOTDIR was inherited.
-  local _orca_user_zdotdir="\${_orca_spawn_orig_zdotdir:-$HOME}"
-  [[ -f "$_orca_user_zdotdir/.zshenv" ]] && source "$_orca_user_zdotdir/.zshenv"
-}
-__orca_source_user_zshenv
-unfunction __orca_source_user_zshenv
-# Why: prefer the ZDOTDIR user .zshenv resolved (XDG case); else preserve
-# the spawn-env value (an inherited resolution from a parent Orca PTY);
-# else HOME.
-export ORCA_ORIG_ZDOTDIR="\${ZDOTDIR:-\${_orca_spawn_orig_zdotdir:-$HOME}}"
-unset _orca_spawn_orig_zdotdir
-# Why: strip trailing slashes (matches Node-side normalizer) before the
-# self-loop check, so a wrapper-shaped ZDOTDIR with one or more trailing
-# slashes still gets normalized away from .zprofile/.zshrc/.zlogin.
-while [[ "\${ORCA_ORIG_ZDOTDIR}" == */ ]]; do
-  ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR%/}"
-done
-case "\${ORCA_ORIG_ZDOTDIR}" in
-  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
-esac
-export ZDOTDIR=${quotePosixSingle(zshDir)}
-`
+  const zshEnv = getZshEnvTemplate(zshDir)
   const zshProfile = `# Orca zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 case "\${_orca_home%/}" in
@@ -279,6 +343,11 @@ __orca_restore_attribution_path
 # Why: .zlogin is the final login startup file before the prompt is shown.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
+if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
+  export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
+fi
+${getPosixOmpShellWrapper()}
+[[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 # Why: zsh precmd runs before the prompt is drawn and before zle owns input,
 # which can double-echo startup commands. line-init fires when zle is ready.
 if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
@@ -300,11 +369,26 @@ fi
     [`${bashDir}/rcfile`, bashRc]
   ] as const
 
-  for (const [path, content] of files) {
-    const dir = path.slice(0, path.lastIndexOf('/'))
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(path, content, 'utf8')
-    chmodSync(path, 0o644)
+  try {
+    for (const [path, content] of files) {
+      const dir = path.slice(0, path.lastIndexOf('/'))
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(path, content, 'utf8')
+      chmodSync(path, 0o644)
+    }
+  } catch (error) {
+    // Why: wrapper file creation can fail due to read-only filesystems, permission
+    // issues, or disk space. Rather than crashing, log the error and continue.
+    // The shell will launch without the wrapper, which means no shell-ready marker
+    // but at least the PTY is usable.
+    const errorMessage =
+      error instanceof Error
+        ? `${error.message} (${(error as NodeJS.ErrnoException).code || 'unknown'})`
+        : String(error)
+    console.error(`[shell-ready] Failed to create wrapper files in ${root}: ${errorMessage}`)
+    console.error('[shell-ready] Shell will launch without wrapper (no shell-ready marker)')
+    // Reset the flag so next attempt will try again
+    didEnsureShellReadyWrappers = false
   }
 }
 
@@ -328,6 +412,7 @@ function getWrappedShellLaunchConfig(
       args: ['-l'],
       env: {
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
+        ORCA_ZSHENV_SOURCE_DIR: resolveOriginalZshenvSourceDir(),
         ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
         ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },

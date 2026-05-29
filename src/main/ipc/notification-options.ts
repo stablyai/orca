@@ -13,6 +13,7 @@ const AGENT_TYPE_LABELS: Readonly<Record<string, string>> = {
   cursor: 'Cursor',
   aider: 'Aider',
   pi: 'Pi',
+  omp: 'OMP',
   droid: 'Droid',
   grok: 'Grok',
   hermes: 'Hermes'
@@ -22,6 +23,7 @@ export function buildNotificationOptions(args: NotificationDispatchRequest): {
   title: string
   body: string
   silent?: boolean
+  sound?: string
 } {
   if (args.source === 'terminal-bell') {
     return {

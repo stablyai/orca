@@ -8,6 +8,7 @@ single design or implementation pass.
 - Stable reference material.
 - Public-facing docs that are not part of the root README.
 - Docs that other checked-in files link to.
+- Telemetry availability notes that dashboard authors need after the original design or implementation branch is gone. See [Telemetry Availability](./telemetry-availability.md).
 
 ## What Stays Out
 

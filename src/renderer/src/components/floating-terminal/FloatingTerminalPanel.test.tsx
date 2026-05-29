@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { BrowserTab, Tab, TabGroup, TerminalTab } from '../../../../shared/types'
 import type { OpenFile } from '@/store/slices/editor'
+import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
 
 type EffectCallback = () => void | (() => void)
 
@@ -20,6 +21,7 @@ type FloatingPanelStoreState = {
   groupsByWorktree: Record<string, TabGroup[]>
   unifiedTabsByWorktree: Record<string, Tab[]>
   openFiles: OpenFile[]
+  activeGroupIdByWorktree: Record<string, string | null>
   activeTabIdByWorktree: Record<string, string | null>
   expandedPaneByTabId: Record<string, boolean>
   createTab: (
@@ -77,11 +79,13 @@ const mocks = vi.hoisted(() => ({
   createWebRuntimeSessionBrowserTab: vi.fn(),
   createWebRuntimeSessionTerminal: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
+  getFloatingMarkdownDirectory: vi.fn(),
   getFloatingTerminalCwd: vi.fn(),
   getInstallStatus: vi.fn(),
   isWebRuntimeSessionActive: vi.fn(),
   markFileDirty: vi.fn(),
   openFile: vi.fn(),
+  pickFloatingMarkdownDocument: vi.fn(),
   pinFile: vi.fn(),
   setActiveTab: vi.fn(),
   setTabColor: vi.fn(),
@@ -346,6 +350,7 @@ function setFloatingTabs(tabs: TerminalTab[]): void {
       }
     ]
   }
+  state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
   state.activeTabIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: tabs[0]?.id ?? null }
   state.tabBarOrderByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: tabs.map((tab) => tab.id) }
 }
@@ -378,6 +383,7 @@ function setFloatingEditorTabs(files: OpenFile[]): void {
       }
     ]
   }
+  state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
 }
 
 function resetStore(tabs: TerminalTab[] = []): void {
@@ -388,6 +394,7 @@ function resetStore(tabs: TerminalTab[] = []): void {
     groupsByWorktree: {},
     unifiedTabsByWorktree: {},
     openFiles: [],
+    activeGroupIdByWorktree: {},
     activeTabIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs[0]?.id ?? null },
     expandedPaneByTabId: {},
     activateTab: mocks.activateTab,
@@ -405,7 +412,7 @@ function resetStore(tabs: TerminalTab[] = []): void {
     setTabPaneExpanded: mocks.setTabPaneExpanded,
     browserDefaultUrl: 'about:blank',
     tabBarOrderByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs.map((tab) => tab.id) },
-    settings: { floatingTerminalCwd: '~' }
+    settings: { floatingTerminalCwd: '' }
   } satisfies FloatingPanelStoreState
 }
 
@@ -444,6 +451,19 @@ function findByTypeName(node: unknown, typeName: string): ReactElementLike {
   return found
 }
 
+function findByProp(node: unknown, propName: string): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.props[propName]) {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error(`${propName} not found`)
+  }
+  return found
+}
+
 function runEffects(): void {
   const effects = hookRuntime.effects.splice(0)
   for (const effect of effects) {
@@ -462,6 +482,35 @@ async function renderPanel(open: boolean, onOpenChange = vi.fn()): Promise<unkno
   return FloatingTerminalPanel({ open, onOpenChange })
 }
 
+function makeMacShortcutKeyEvent({
+  key,
+  preventDefault = vi.fn(),
+  shiftKey = false,
+  target
+}: {
+  key: string
+  preventDefault?: () => void
+  shiftKey?: boolean
+  target: unknown
+}): unknown {
+  const nativeEvent = {
+    altKey: false,
+    code: `Key${key.toUpperCase()}`,
+    ctrlKey: false,
+    key,
+    metaKey: true,
+    shiftKey,
+    target: target as EventTarget
+  }
+  return {
+    ...nativeEvent,
+    defaultPrevented: false,
+    nativeEvent,
+    preventDefault,
+    repeat: false
+  }
+}
+
 describe('FloatingTerminalPanel close behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -473,19 +522,32 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.createTab.mockReturnValue(makeTab({ id: 'created-tab' }))
     mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(false)
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue(false)
+    mocks.getFloatingMarkdownDirectory.mockResolvedValue('/tmp/orca/floating-notes')
     mocks.getFloatingTerminalCwd.mockResolvedValue('/tmp/orca')
-    mocks.getInstallStatus.mockResolvedValue({ state: 'installed' })
+    mocks.getInstallStatus.mockResolvedValue({ state: 'installed', pathConfigured: true })
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
+    mocks.pickFloatingMarkdownDocument.mockResolvedValue(null)
     vi.stubGlobal('window', {
       addEventListener: vi.fn(),
       api: {
-        app: { getFloatingTerminalCwd: mocks.getFloatingTerminalCwd },
+        app: {
+          getFloatingMarkdownDirectory: mocks.getFloatingMarkdownDirectory,
+          getFloatingTerminalCwd: mocks.getFloatingTerminalCwd,
+          pickFloatingMarkdownDocument: mocks.pickFloatingMarkdownDocument
+        },
         browser: { notifyActiveTabChanged: vi.fn() },
-        cli: { getInstallStatus: mocks.getInstallStatus }
+        cli: { getInstallStatus: mocks.getInstallStatus },
+        ui: { setFloatingTerminalInputFocused: vi.fn() }
       },
       innerWidth: 1200,
+      requestAnimationFrame: vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      }),
       removeEventListener: vi.fn()
     })
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    vi.stubGlobal('HTMLElement', class {})
     vi.stubGlobal('localStorage', { setItem: vi.fn() })
   })
 
@@ -493,7 +555,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     vi.unstubAllGlobals()
   })
 
-  it('bootstraps a terminal tab only when the panel opens', async () => {
+  it('does not bootstrap a terminal tab when the panel opens empty', async () => {
     await renderPanel(false)
     runEffects()
     await flushAsyncWork()
@@ -502,27 +564,56 @@ describe('FloatingTerminalPanel close behavior', () => {
     await renderPanel(true)
     runEffects()
     await flushAsyncWork()
-    expect(mocks.createTab).toHaveBeenCalledTimes(1)
-    expect(mocks.createTab).toHaveBeenCalledWith(
-      FLOATING_TERMINAL_WORKTREE_ID,
-      undefined,
-      undefined,
-      { activate: false }
-    )
-    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
+    expect(mocks.createTab).not.toHaveBeenCalled()
 
     await renderPanel(true)
     runEffects()
     await flushAsyncWork()
-    expect(mocks.createTab).toHaveBeenCalledTimes(1)
+    expect(mocks.createTab).not.toHaveBeenCalled()
 
     await renderPanel(false)
     runEffects()
     await renderPanel(true)
     runEffects()
     await flushAsyncWork()
-    expect(mocks.createTab).toHaveBeenCalledTimes(2)
+    expect(mocks.createTab).not.toHaveBeenCalled()
+  })
+
+  it('focuses the empty floating workspace when opened for immediate shortcuts', async () => {
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { focus: vi.fn() }
+    ;(panel.props.ref as { current: unknown }).current = panelElement
+
+    runEffects()
+
+    expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it('minimizes the empty floating workspace from the empty state', async () => {
+    const onOpenChange = vi.fn()
+    const element = await renderPanel(true, onOpenChange)
+
+    const emptyState = findByTypeName(element, 'FloatingTerminalEmptyState')
+    ;(emptyState.props.onClose as () => void)()
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(mocks.closeTab).not.toHaveBeenCalled()
+    expect(mocks.closeFile).not.toHaveBeenCalled()
+    expect(mocks.closeBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('shows the empty state when only stale unified tabs remain', async () => {
+    const state = storeBox.state as FloatingPanelStoreState
+    const staleTab = makeTab({ id: 'stale-tab' })
+    setFloatingTabs([staleTab])
+    state.tabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [] }
+    state.activeTabIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: null }
+
+    const element = await renderPanel(true)
+    const emptyState = findByTypeName(element, 'FloatingTerminalEmptyState')
+
+    expect(emptyState).toBeTruthy()
   })
 
   it('creates new floating terminal tabs without globally activating createTab', async () => {
@@ -543,7 +634,332 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
   })
 
-  it('closes the panel when the explicit close action removes the last tab', async () => {
+  it('routes titlebar Cmd+T to the floating workspace', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const titlebarTarget = {
+      closest: vi.fn().mockReturnValue({}),
+      getAttribute: vi.fn().mockReturnValue(null)
+    }
+    Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
+    const preventDefault = vi.fn()
+
+    ;(panel.props.onKeyDownCapture as (event: unknown) => void)(
+      makeMacShortcutKeyEvent({
+        key: 't',
+        preventDefault,
+        target: titlebarTarget
+      })
+    )
+    await flushAsyncWork()
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(mocks.createTab).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'floating-group',
+      undefined,
+      { activate: false }
+    )
+    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
+  })
+
+  it('routes titlebar Cmd+Shift+O to the floating markdown picker', async () => {
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const titlebarTarget = {
+      closest: vi.fn().mockReturnValue({}),
+      getAttribute: vi.fn().mockReturnValue(null)
+    }
+    Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
+    const preventDefault = vi.fn()
+
+    ;(panel.props.onKeyDownCapture as (event: unknown) => void)(
+      makeMacShortcutKeyEvent({
+        key: 'o',
+        preventDefault,
+        shiftKey: true,
+        target: titlebarTarget
+      })
+    )
+    await flushAsyncWork()
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(mocks.pickFloatingMarkdownDocument).toHaveBeenCalledWith()
+  })
+
+  it('routes focused floating tab switch shortcuts to the floating workspace', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    const target = {
+      classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
+      closest: vi.fn((selector: string) =>
+        selector === '[data-floating-terminal-panel]' ? panelElement : null
+      )
+    }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    Object.setPrototypeOf(target, HTMLElement.prototype)
+    ;(panel.props.ref as { current: unknown }).current = panelElement
+    vi.stubGlobal('document', {
+      activeElement,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    runEffects()
+    const keydownListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
+      | ((event: unknown) => void)
+      | undefined
+    if (!keydownListener) {
+      throw new Error('keydown listener not registered')
+    }
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+
+    keydownListener({
+      altKey: false,
+      code: 'BracketRight',
+      ctrlKey: false,
+      defaultPrevented: false,
+      key: ']',
+      metaKey: true,
+      preventDefault,
+      repeat: false,
+      shiftKey: true,
+      stopImmediatePropagation,
+      stopPropagation,
+      target
+    })
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(stopPropagation).toHaveBeenCalledWith()
+    expect(stopImmediatePropagation).toHaveBeenCalledWith()
+    expect(mocks.activateTab).toHaveBeenCalledWith('tab-2')
+    expect(mocks.setActiveTab).toHaveBeenCalledWith('tab-2')
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-2')
+  })
+
+  it('keeps the empty floating workspace focused after Cmd+W closes the last tab', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    const target = { classList: { contains: vi.fn().mockReturnValue(true) }, closest: vi.fn() }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    Object.setPrototypeOf(target, HTMLElement.prototype)
+    ;(panel.props.ref as { current: unknown }).current = panelElement
+    vi.stubGlobal('document', {
+      activeElement,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    runEffects()
+    const keydownListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
+      | ((event: unknown) => void)
+      | undefined
+    if (!keydownListener) {
+      throw new Error('keydown listener not registered')
+    }
+
+    keydownListener({
+      altKey: false,
+      ctrlKey: false,
+      defaultPrevented: false,
+      key: 'w',
+      metaKey: true,
+      preventDefault: vi.fn(),
+      repeat: false,
+      shiftKey: false,
+      stopImmediatePropagation: vi.fn(),
+      stopPropagation: vi.fn(),
+      target
+    })
+
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it('does not steal focus from the next floating tab after Cmd+W closes one of many tabs', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    const target = { classList: { contains: vi.fn().mockReturnValue(true) }, closest: vi.fn() }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    Object.setPrototypeOf(target, HTMLElement.prototype)
+    ;(panel.props.ref as { current: unknown }).current = panelElement
+    vi.stubGlobal('document', {
+      activeElement,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    runEffects()
+    const keydownListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
+      | ((event: unknown) => void)
+      | undefined
+    if (!keydownListener) {
+      throw new Error('keydown listener not registered')
+    }
+
+    keydownListener({
+      altKey: false,
+      ctrlKey: false,
+      defaultPrevented: false,
+      key: 'w',
+      metaKey: true,
+      preventDefault: vi.fn(),
+      repeat: false,
+      shiftKey: false,
+      stopImmediatePropagation: vi.fn(),
+      stopPropagation: vi.fn(),
+      target
+    })
+
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(panelElement.focus).not.toHaveBeenCalled()
+  })
+
+  it('preserves terminal focus when dragging the titlebar from inside the floating panel', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const titlebar = findByProp(element, 'data-floating-terminal-shortcut-surface')
+    const panelElement = { focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    const titlebarTarget = { closest: vi.fn().mockReturnValue(null) }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
+    ;(panel.props.ref as { current: unknown }).current = panelElement
+    vi.stubGlobal('document', { activeElement })
+
+    ;(titlebar.props.onPointerDown as (event: unknown) => void)({
+      button: 0,
+      clientX: 10,
+      clientY: 20,
+      currentTarget: { setPointerCapture: vi.fn() },
+      pointerId: 1,
+      target: titlebarTarget
+    })
+
+    expect(panelElement.focus).not.toHaveBeenCalled()
+  })
+
+  it('focuses the floating panel for titlebar shortcuts when focus starts outside it', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const titlebar = findByProp(element, 'data-floating-terminal-shortcut-surface')
+    const panelElement = { focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(null) }
+    const titlebarTarget = { closest: vi.fn().mockReturnValue(null) }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
+    ;(panel.props.ref as { current: unknown }).current = panelElement
+    vi.stubGlobal('document', { activeElement })
+
+    ;(titlebar.props.onPointerDown as (event: unknown) => void)({
+      button: 0,
+      clientX: 10,
+      clientY: 20,
+      currentTarget: { setPointerCapture: vi.fn() },
+      pointerId: 1,
+      target: titlebarTarget
+    })
+
+    expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it('minimizes the empty floating workspace on Cmd+W after landing focus', async () => {
+    const onOpenChange = vi.fn()
+    const element = await renderPanel(true, onOpenChange)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const emptyStateTarget = {
+      closest: vi.fn().mockReturnValue({}),
+      getAttribute: vi.fn().mockReturnValue(null)
+    }
+    Object.setPrototypeOf(emptyStateTarget, HTMLElement.prototype)
+
+    ;(panel.props.onKeyDownCapture as (event: unknown) => void)(
+      makeMacShortcutKeyEvent({
+        key: 'w',
+        preventDefault: vi.fn(),
+        target: emptyStateTarget
+      })
+    )
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(mocks.closeTab).not.toHaveBeenCalled()
+  })
+
+  it('creates floating markdown files in local filesystem mode', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    vi.mocked(createUntitledMarkdownFile).mockResolvedValue({
+      filePath: '/tmp/orca/floating-notes/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+
+    let element = await renderPanel(true)
+    runEffects()
+    await flushAsyncWork()
+    element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onNewFileTab as () => void)()
+    await flushAsyncWork()
+
+    expect(createUntitledMarkdownFile).toHaveBeenCalledWith(
+      '/tmp/orca/floating-notes',
+      FLOATING_TERMINAL_WORKTREE_ID,
+      undefined,
+      { activeRuntimeEnvironmentId: null }
+    )
+    expect(mocks.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/orca/floating-notes/untitled.md' }),
+      expect.objectContaining({ suppressActiveRuntimeFallback: true })
+    )
+  })
+
+  it('opens existing markdown documents through the floating picker', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    mocks.pickFloatingMarkdownDocument.mockResolvedValue({
+      filePath: '/tmp/orca/notes.md',
+      relativePath: 'notes.md',
+      basename: 'notes.md',
+      name: 'notes'
+    })
+
+    const element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onOpenFileTab as () => void)()
+    await flushAsyncWork()
+
+    expect(mocks.pickFloatingMarkdownDocument).toHaveBeenCalledWith()
+    expect(mocks.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/orca/notes.md',
+        relativePath: 'notes.md',
+        runtimeEnvironmentId: null,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      }),
+      expect.objectContaining({ suppressActiveRuntimeFallback: true })
+    )
+  })
+
+  it('keeps the panel open when the explicit close action removes the last tab', async () => {
     const onOpenChange = vi.fn()
     setFloatingTabs([makeTab({ id: 'tab-1' })])
 
@@ -552,7 +968,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
 
     expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(onOpenChange).not.toHaveBeenCalled()
   })
 
   it('keeps the panel open when the explicit close action leaves another tab', async () => {
@@ -587,7 +1003,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.closeTab.mockClear()
     ;(terminalPane.props.onCloseTab as () => void)()
     expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(onOpenChange).not.toHaveBeenCalled()
   })
 
   it('routes floating terminal create and close through active web runtime sessions', async () => {

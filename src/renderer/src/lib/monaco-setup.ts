@@ -10,6 +10,7 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
+import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -71,6 +72,7 @@ monacoTS.javascriptDefaults.setCompilerOptions({
 registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
+installMonacoDiffEditorDisposalGuard(monaco)
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })

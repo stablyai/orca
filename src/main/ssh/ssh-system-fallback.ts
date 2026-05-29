@@ -177,6 +177,14 @@ export function buildSshArgs(target: SshTarget): string[] {
     args.push('-i', target.identityFile)
   }
 
+  if (!useConfigHost && target.identityAgent) {
+    args.push('-o', `IdentityAgent=${target.identityAgent}`)
+  }
+
+  if (!useConfigHost && target.identitiesOnly) {
+    args.push('-o', 'IdentitiesOnly=yes')
+  }
+
   if (!useConfigHost && target.jumpHost) {
     args.push('-J', target.jumpHost)
   }

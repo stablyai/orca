@@ -6,6 +6,12 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
+import {
+  keybindingMatchesAction,
+  type KeybindingOverrides,
+  type KeybindingPlatform,
+  type TerminalShortcutPolicy
+} from '../../../../shared/keybindings'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
@@ -71,13 +77,17 @@ export function matchSearchNavigate(
 
 export function matchFileSearchShortcut(
   e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'>,
-  isMac: boolean
+  platform: KeybindingPlatform,
+  keybindings?: KeybindingOverrides,
+  terminalShortcutPolicy: TerminalShortcutPolicy = 'orca-first'
 ): boolean {
-  if (e.repeat || e.altKey) {
+  if (e.repeat) {
     return false
   }
-  const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
-  return mod && e.shiftKey && e.key.toLowerCase() === 'f'
+  return keybindingMatchesAction('sidebar.search.toggle', e, platform, keybindings, {
+    context: 'terminal',
+    terminalShortcutPolicy
+  })
 }
 
 type KeyboardHandlersDeps = {
@@ -100,6 +110,8 @@ type KeyboardHandlersDeps = {
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
+  keybindings?: KeybindingOverrides
+  terminalShortcutPolicy?: TerminalShortcutPolicy
 }
 
 export function useTerminalKeyboardShortcuts({
@@ -120,7 +132,9 @@ export function useTerminalKeyboardShortcuts({
   onRequestClosePane,
   searchOpenRef,
   searchStateRef,
-  macOptionAsAltRef
+  macOptionAsAltRef,
+  keybindings,
+  terminalShortcutPolicy = 'orca-first'
 }: KeyboardHandlersDeps): void {
   useEffect(() => {
     if (!isActive) {
@@ -129,6 +143,7 @@ export function useTerminalKeyboardShortcuts({
 
     const isMac = navigator.userAgent.includes('Mac')
     const isWindows = navigator.userAgent.includes('Windows')
+    const shortcutPlatform: KeybindingPlatform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
 
     // Why: KeyboardEvent.location on a character key (e.g. Period) always
     // reports that key's own position (0 = standard), not which modifier is
@@ -156,7 +171,7 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      if (matchFileSearchShortcut(e, isMac)) {
+      if (matchFileSearchShortcut(e, shortcutPlatform, keybindings, terminalShortcutPolicy)) {
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         const selectedText = normalizeSelectedTextForFileSearch(pane?.terminal.getSelection())
         if (selectedText) {
@@ -201,7 +216,8 @@ export function useTerminalKeyboardShortcuts({
         isMac,
         macOptionAsAltRef.current,
         optionKeyLocation,
-        isWindows
+        isWindows,
+        keybindings
       )
       if (!action) {
         return
@@ -287,6 +303,20 @@ export function useTerminalKeyboardShortcuts({
         const dir = action.direction === 'next' ? 1 : -1
         const nextPane = panes[(currentIdx + dir + panes.length) % panes.length]
         manager.setActivePane(nextPane.id, { focus: true })
+        return
+      }
+
+      if (action.type === 'equalizePaneSizes') {
+        // Consume the chord first so a user-assigned terminal shortcut can't fall
+        // through to app-level zoom when an expanded pane blocks the equalize.
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        if (expandedPaneIdRef.current !== null) {
+          return
+        }
+        manager.equalizePaneSizes()
+        const paneToFocus = manager.getActivePane() ?? manager.getPanes()[0]
+        paneToFocus?.terminal.focus()
         return
       }
 
@@ -390,6 +420,8 @@ export function useTerminalKeyboardShortcuts({
     onRequestClosePane,
     searchOpenRef,
     searchStateRef,
-    macOptionAsAltRef
+    macOptionAsAltRef,
+    keybindings,
+    terminalShortcutPolicy
   ])
 }

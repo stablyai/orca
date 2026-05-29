@@ -174,12 +174,43 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
   const terminal = result.terminal
+  const oldestCursor =
+    typeof terminal.oldestCursor === 'string' ? [`oldest cursor: ${terminal.oldestCursor}`] : []
+  const latestCursor =
+    typeof terminal.latestCursor === 'string' ? [`latest cursor: ${terminal.latestCursor}`] : []
+  const limitedWarning = formatTerminalReadLimitedWarning(terminal)
   const header = [
     `handle: ${terminal.handle}`,
     `status: ${terminal.status}`,
-    ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : [])
+    ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : []),
+    ...oldestCursor,
+    ...latestCursor,
+    ...(terminal.truncated ? ['warning: older output is no longer retained'] : []),
+    ...(limitedWarning ? [limitedWarning] : [])
   ]
   return [...header, '', ...terminal.tail].join('\n')
+}
+
+function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string | null {
+  if (!terminal.limited) {
+    return null
+  }
+  if (
+    typeof terminal.nextCursor === 'string' &&
+    typeof terminal.latestCursor === 'string' &&
+    terminal.nextCursor !== terminal.latestCursor
+  ) {
+    return `warning: output limited; continue with --cursor ${terminal.nextCursor}`
+  }
+  if (
+    typeof terminal.oldestCursor === 'string' &&
+    typeof terminal.latestCursor === 'string' &&
+    terminal.oldestCursor !== terminal.latestCursor
+  ) {
+    // A tail preview's next cursor is already latest, so oldestCursor is the retained history entry point.
+    return `warning: output limited; page retained output with --cursor ${terminal.oldestCursor} --limit <count>`
+  }
+  return 'warning: output limited'
 }
 
 export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {

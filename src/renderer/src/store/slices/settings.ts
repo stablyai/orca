@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -8,9 +9,10 @@ import {
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
-import { normalizeVisibleTaskProviders } from '../../../../shared/task-providers'
+import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
+import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
@@ -34,12 +36,14 @@ function createOpenInApplicationId(): string {
 function runtimeScopedStateReset(): Partial<AppState> {
   return {
     repos: [],
+    projectGroups: [],
     activeRepoId: null,
     sparsePresetsByRepo: {},
     sparsePresetsLoadingByRepo: {},
     sparsePresetsLoadStatusByRepo: {},
     sparsePresetsErrorByRepo: {},
     worktreesByRepo: {},
+    detectedWorktreesByRepo: {},
     worktreeLineageById: {},
     activeWorktreeId: null,
     deleteStateByWorktreeId: {},
@@ -78,6 +82,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     deferredSshReconnectTargets: [],
     deferredSshSessionIdsByTabId: {},
     cacheTimerByKey: {},
+    recentQuickCommandIdByGroup: {},
     expandedDirs: {},
     pendingExplorerReveal: null,
     openFiles: [],
@@ -244,10 +249,19 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
           updates.terminalQuickCommands
         )
       }
-      if ('visibleTaskProviders' in updates) {
-        sanitizedUpdates.visibleTaskProviders = normalizeVisibleTaskProviders(
-          updates.visibleTaskProviders
-        )
+      if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
+        const taskProviderSettings = normalizeTaskProviderSettings({
+          visibleTaskProviders:
+            'visibleTaskProviders' in updates
+              ? updates.visibleTaskProviders
+              : get().settings?.visibleTaskProviders,
+          defaultTaskSource:
+            'defaultTaskSource' in updates
+              ? updates.defaultTaskSource
+              : get().settings?.defaultTaskSource
+        })
+        sanitizedUpdates.defaultTaskSource = taskProviderSettings.defaultTaskSource
+        sanitizedUpdates.visibleTaskProviders = taskProviderSettings.visibleTaskProviders
       }
       if ('openInApplications' in updates) {
         sanitizedUpdates.openInApplications = normalizeOpenInApplications(
@@ -256,6 +270,9 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
             createId: createOpenInApplicationId
           }
         )
+      }
+      if ('disabledTuiAgents' in updates) {
+        sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
       }
       const nextSettings = await window.api.settings.set(sanitizedUpdates)
       set((s) => ({ settings: (nextSettings as GlobalSettings | undefined) ?? s.settings }))
@@ -297,6 +314,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       // terminal, browser, and issue IDs cannot be used against the new server
       // while the new environment is loading.
       await get().fetchRepos()
+      await get().fetchProjectGroups()
       await get().fetchAllWorktrees()
       await get().fetchWorktreeLineage()
       await get().fetchBrowserSessionProfiles()

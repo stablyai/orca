@@ -9,6 +9,7 @@ import {
   normalizeSourceControlViewMode,
   pickDefaultSourceControlAgent,
   readCommitDraftForWorktree,
+  refreshSourceControlAfterRemoteAction,
   requestSourceControlViewModePreferenceWrite,
   shouldRenderCommitArea,
   type SourceControlViewModePreferenceWriteState,
@@ -152,6 +153,46 @@ describe('SourceControl conflict resolution state', () => {
     expect(pickDefaultSourceControlAgent('codex', ['claude', 'codex'])).toBe('codex')
     expect(pickDefaultSourceControlAgent('blank', ['codex'])).toBe('codex')
     expect(pickDefaultSourceControlAgent('claude', [])).toBeNull()
+    expect(pickDefaultSourceControlAgent('codex', ['claude', 'codex'], ['codex'])).toBe('claude')
+    expect(
+      pickDefaultSourceControlAgent('blank', ['claude', 'codex'], ['claude', 'codex'])
+    ).toBeNull()
+    expect(pickDefaultSourceControlAgent(null, ['claude'], ['claude'])).toBeNull()
+  })
+})
+
+describe('SourceControl remote action refresh', () => {
+  it('refreshes status, branch compare, and history after remote actions settle', async () => {
+    const refreshGitStatus = vi.fn().mockResolvedValue(undefined)
+    const refreshBranchCompare = vi.fn().mockResolvedValue(undefined)
+    const refreshGitHistory = vi.fn().mockResolvedValue(undefined)
+
+    refreshSourceControlAfterRemoteAction({
+      refreshGitStatus,
+      refreshBranchCompare,
+      refreshGitHistory
+    })
+    await Promise.resolve()
+
+    expect(refreshGitStatus).toHaveBeenCalledTimes(1)
+    expect(refreshBranchCompare).toHaveBeenCalledTimes(1)
+    expect(refreshGitHistory).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes post-remote refresh failures to the provided error handler', async () => {
+    const error = new Error('refresh failed')
+    const onError = vi.fn()
+
+    refreshSourceControlAfterRemoteAction({
+      refreshGitStatus: vi.fn().mockResolvedValue(undefined),
+      refreshBranchCompare: vi.fn().mockRejectedValue(error),
+      refreshGitHistory: vi.fn().mockResolvedValue(undefined),
+      onError
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onError).toHaveBeenCalledWith(error)
   })
 })
 

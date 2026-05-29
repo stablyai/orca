@@ -2,33 +2,22 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { CustomTuiAgentId, GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/types'
 import { useAppStore } from '../../store'
+import { AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
 import { getAgentAwakeDescription } from './agent-awake-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import {
+  AgentAvailabilityControl,
+  AgentStatusHooksSetting,
   AgentsPane,
   AGENTS_PANE_SEARCH_ENTRIES,
+  buildAgentEnabledSettingsUpdate,
   buildCreateCustomAgentSettings,
   buildDeleteCustomAgentSettings,
   buildUpdateCustomAgentSettings
 } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
-
-const detectedAgentsMock = vi.hoisted(() => ({
-  detectedIds: ['claude'],
-  isRefreshing: false,
-  refresh: vi.fn()
-}))
-
-vi.mock('@/hooks/useDetectedAgents', () => ({
-  useDetectedAgents: () => ({
-    detectedIds: detectedAgentsMock.detectedIds,
-    isLoading: false,
-    isRefreshing: detectedAgentsMock.isRefreshing,
-    refresh: detectedAgentsMock.refresh
-  })
-}))
 
 type ReactElementLike = {
   type: unknown
@@ -59,10 +48,10 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   }
 }
 
-function findSwitch(node: unknown): ReactElementLike {
+function findSwitch(node: unknown, ariaLabel: string): ReactElementLike {
   let found: ReactElementLike | null = null
   visit(node, (entry) => {
-    if (entry.props.role === 'switch') {
+    if (entry.props.role === 'switch' && entry.props['aria-label'] === ariaLabel) {
       found = entry
     }
   })
@@ -72,11 +61,25 @@ function findSwitch(node: unknown): ReactElementLike {
   return found
 }
 
+function findSwitchRow(node: unknown, ariaLabel: string): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (
+      entry.props.ariaLabel === ariaLabel &&
+      typeof entry.props.checked === 'boolean' &&
+      typeof entry.props.onChange === 'function'
+    ) {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error('switch row not found')
+  }
+  return found
+}
+
 describe('AgentsPane', () => {
   beforeEach(() => {
-    detectedAgentsMock.detectedIds = ['claude']
-    detectedAgentsMock.isRefreshing = false
-    detectedAgentsMock.refresh.mockReset()
     useAppStore.setState({
       settingsSearchQuery: '',
       detectedAgentIds: ['claude'],
@@ -111,7 +114,7 @@ describe('AgentsPane', () => {
       updateSettings
     })
 
-    const keepAwakeSwitch = findSwitch(element)
+    const keepAwakeSwitch = findSwitch(element, 'Keep computer awake while agents are working')
     expect(keepAwakeSwitch.props['aria-label']).toBe('Keep computer awake while agents are working')
     expect(keepAwakeSwitch.props['aria-checked']).toBe(false)
 
@@ -123,15 +126,114 @@ describe('AgentsPane', () => {
     })
   })
 
+  it('toggles the agent status hook setting with the next value', () => {
+    const updateSettings = vi.fn()
+    const element = AgentStatusHooksSetting({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        agentStatusHooksEnabled: true
+      },
+      updateSettings
+    })
+
+    const statusSwitch = findSwitchRow(element, AGENT_STATUS_HOOKS_TITLE)
+    expect(statusSwitch.props.checked).toBe(true)
+
+    const onChange = statusSwitch.props.onChange as () => void
+    onChange()
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      agentStatusHooksEnabled: false
+    })
+  })
+
   it('includes awake and sleep search metadata for the setting', () => {
     expect(matchesSettingsSearch('awake', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
     expect(matchesSettingsSearch('sleep', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
     expect(matchesSettingsSearch('lid', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
   })
 
-  it('renders custom agent presets in the agents pane', () => {
+  it('includes hook search metadata for the status setting', () => {
+    expect(matchesSettingsSearch('hooks', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('waiting', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('codex', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+  })
+
+  it('includes enable and hide search metadata for agent visibility', () => {
+    expect(matchesSettingsSearch('disable', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('hide', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+  })
+
+  it('renders per-agent availability as labeled status choices with explicit row copy', () => {
     const markup = renderPane({
       ...getDefaultSettings('/tmp'),
+      disabledTuiAgents: ['claude']
+    })
+
+    expect(markup).toContain('aria-label="Claude availability"')
+    expect(markup).toContain('Enabled')
+    expect(markup).toContain('Disabled')
+    expect(markup).toContain('Hidden from launch and default choices.')
+    expect(markup).not.toContain('aria-label="Enable Claude"')
+    expect(markup).not.toContain('aria-label="Disable Claude"')
+  })
+
+  it('only toggles agent availability when the segmented value changes', () => {
+    const onToggleEnabled = vi.fn()
+    const control = AgentAvailabilityControl({
+      label: 'Claude',
+      isEnabled: true,
+      onToggleEnabled
+    })
+    const props = control.props as {
+      value: 'enabled' | 'disabled'
+      onChange: (value: 'enabled' | 'disabled') => void
+      ariaLabel: string
+    }
+
+    expect(props.value).toBe('enabled')
+    expect(props.ariaLabel).toBe('Claude availability')
+
+    props.onChange('enabled')
+    expect(onToggleEnabled).not.toHaveBeenCalled()
+
+    props.onChange('disabled')
+    expect(onToggleEnabled).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the default agent when disabling that agent', () => {
+    expect(
+      buildAgentEnabledSettingsUpdate(
+        {
+          defaultTuiAgent: 'claude',
+          disabledTuiAgents: []
+        },
+        'claude'
+      )
+    ).toEqual({
+      disabledTuiAgents: ['claude'],
+      defaultTuiAgent: null
+    })
+  })
+
+  it('keeps the default setting untouched when re-enabling an agent', () => {
+    expect(
+      buildAgentEnabledSettingsUpdate(
+        {
+          defaultTuiAgent: null,
+          disabledTuiAgents: ['claude']
+        },
+        'claude'
+      )
+    ).toEqual({
+      disabledTuiAgents: []
+    })
+  })
+
+  it('renders custom agent presets and default state', () => {
+    const markup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      defaultTuiAgent: 'custom:wrapper-abc123',
       customTuiAgents: [
         {
           id: 'custom:wrapper-abc123',
@@ -146,14 +248,68 @@ describe('AgentsPane', () => {
     expect(markup).toContain('Custom agents')
     expect(markup).toContain('Wrapper CLI')
     expect(markup).toContain('wrapper --profile dev')
-    expect(markup).toContain('Detect command')
-    expect(markup).toContain('Edit Wrapper CLI')
-    expect(markup).toContain('Delete Wrapper CLI')
+    expect(markup).toContain('Detect command:')
+    expect(markup).toContain('Default')
   })
 
-  it('renders custom agent presets before installable agents', () => {
-    const markup = renderPane({
+  it('builds create custom agent settings from trimmed draft input', () => {
+    const update = buildCreateCustomAgentSettings(getDefaultSettings('/tmp'), {
+      label: '  Wrapper CLI  ',
+      command: '  wrapper --profile dev  ',
+      detectCmd: '  wrapper  '
+    })
+
+    expect(update.customTuiAgents).toHaveLength(1)
+    expect(update.customTuiAgents[0]).toMatchObject({
+      label: 'Wrapper CLI',
+      command: 'wrapper --profile dev',
+      detectCmd: 'wrapper',
+      promptInjectionMode: 'stdin-after-start'
+    })
+    expect(update.customTuiAgents[0]?.id).toMatch(/^custom:wrapper-cli-[a-z0-9]{6}$/)
+  })
+
+  it('updates custom agent settings while keeping the stable id', () => {
+    const settings: GlobalSettings = {
       ...getDefaultSettings('/tmp'),
+      customTuiAgents: [
+        {
+          id: 'custom:wrapper-abc123',
+          label: 'Wrapper CLI',
+          command: 'wrapper',
+          detectCmd: 'wrapper',
+          promptInjectionMode: 'stdin-after-start'
+        }
+      ]
+    }
+
+    expect(
+      buildUpdateCustomAgentSettings(settings, 'custom:wrapper-abc123', {
+        label: '  Work Wrapper  ',
+        command: '  wrapper --profile work  ',
+        detectCmd: '  '
+      })
+    ).toEqual({
+      customTuiAgents: [
+        {
+          id: 'custom:wrapper-abc123',
+          label: 'Work Wrapper',
+          command: 'wrapper --profile work',
+          detectCmd: undefined,
+          promptInjectionMode: 'stdin-after-start'
+        }
+      ]
+    })
+  })
+
+  it('deleting a custom default also removes its command override', () => {
+    const settings: GlobalSettings = {
+      ...getDefaultSettings('/tmp'),
+      defaultTuiAgent: 'custom:wrapper-abc123',
+      agentCmdOverrides: {
+        'custom:wrapper-abc123': 'wrapper --debug',
+        claude: 'claude --dangerously-skip-permissions'
+      },
       customTuiAgents: [
         {
           id: 'custom:wrapper-abc123',
@@ -162,99 +318,14 @@ describe('AgentsPane', () => {
           promptInjectionMode: 'stdin-after-start'
         }
       ]
-    })
-
-    expect(markup.indexOf('Custom agents')).toBeGreaterThan(-1)
-    expect(markup.indexOf('Available to install')).toBeGreaterThan(-1)
-    expect(markup.indexOf('Custom agents')).toBeLessThan(markup.indexOf('Available to install'))
-  })
-
-  it('generates a custom agent id from the saved draft name', () => {
-    const created = buildCreateCustomAgentSettings(getDefaultSettings('/tmp'), {
-      label: 'Codex Work Profile',
-      command: 'codex --profile work',
-      detectCmd: 'codex'
-    })
-
-    expect(created.customTuiAgents).toHaveLength(1)
-    expect(created.customTuiAgents?.[0]).toMatchObject({
-      label: 'Codex Work Profile',
-      command: 'codex --profile work',
-      detectCmd: 'codex',
-      promptInjectionMode: 'stdin-after-start'
-    })
-    expect(created.customTuiAgents?.[0]?.id).toMatch(/^custom:codex-work-profile-[a-z0-9]{6}$/)
-  })
-
-  it('cascades default and command overrides when deleting a custom agent', () => {
-    const customId: CustomTuiAgentId = 'custom:wrapper-abc123'
-    const settings: GlobalSettings = {
-      ...getDefaultSettings('/tmp'),
-      defaultTuiAgent: customId,
-      agentCmdOverrides: {
-        claude: 'claude',
-        [customId]: 'wrapper-dev'
-      },
-      customTuiAgents: [
-        {
-          id: customId,
-          label: 'Wrapper CLI',
-          command: 'wrapper',
-          promptInjectionMode: 'stdin-after-start'
-        }
-      ]
     }
 
-    expect(buildDeleteCustomAgentSettings(settings, customId)).toEqual({
+    expect(buildDeleteCustomAgentSettings(settings, 'custom:wrapper-abc123')).toEqual({
       customTuiAgents: [],
       defaultTuiAgent: null,
       agentCmdOverrides: {
-        claude: 'claude'
+        claude: 'claude --dangerously-skip-permissions'
       }
     })
-  })
-
-  it('updates only the selected custom agent and preserves its id', () => {
-    const firstId: CustomTuiAgentId = 'custom:first-agent-abc123'
-    const secondId: CustomTuiAgentId = 'custom:second-agent-def456'
-    const settings: GlobalSettings = {
-      ...getDefaultSettings('/tmp'),
-      customTuiAgents: [
-        {
-          id: firstId,
-          label: 'First Agent',
-          command: 'first',
-          promptInjectionMode: 'stdin-after-start'
-        },
-        {
-          id: secondId,
-          label: 'Second Agent',
-          command: 'second',
-          promptInjectionMode: 'stdin-after-start'
-        }
-      ]
-    }
-
-    const updated = buildUpdateCustomAgentSettings(settings, secondId, {
-      label: 'Second Agent Edited',
-      command: 'second --edited',
-      detectCmd: 'second'
-    })
-
-    expect(updated.customTuiAgents).toEqual([
-      {
-        id: firstId,
-        label: 'First Agent',
-        command: 'first',
-        promptInjectionMode: 'stdin-after-start'
-      },
-      {
-        id: secondId,
-        label: 'Second Agent Edited',
-        command: 'second --edited',
-        detectCmd: 'second',
-        promptInjectionMode: 'stdin-after-start'
-      }
-    ])
   })
 })

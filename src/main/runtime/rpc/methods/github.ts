@@ -10,7 +10,12 @@ const RepoSelector = z.object({
 const WorkItemsList = RepoSelector.extend({
   limit: OptionalFiniteNumber,
   query: OptionalString,
-  before: OptionalString
+  before: OptionalString,
+  noCache: z.boolean().optional()
+})
+
+const IssuesList = RepoSelector.extend({
+  limit: OptionalFiniteNumber
 })
 
 const WorkItem = RepoSelector.extend({
@@ -46,7 +51,8 @@ const SlugAssignableUsers = SlugRepo.extend({
 
 const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
-  linkedPRNumber: z.number().int().positive().nullable().optional()
+  linkedPRNumber: z.number().int().positive().nullable().optional(),
+  fallbackPRNumber: z.number().int().positive().nullable().optional()
 })
 
 const Issue = RepoSelector.extend({
@@ -99,6 +105,15 @@ const ReviewThread = RepoSelector.extend({
 const UpdatePrTitle = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   title: requiredString('Missing title'),
+  prRepo: SlugRepo.nullable().optional()
+})
+
+const UpdatePr = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  updates: z.object({
+    title: OptionalString,
+    body: z.string().optional()
+  }),
   prRepo: SlugRepo.nullable().optional()
 })
 
@@ -269,7 +284,18 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.listWorkItems',
     params: WorkItemsList,
     handler: async (params, { runtime }) =>
-      runtime.listRepoWorkItems(params.repo, params.limit, params.query, params.before)
+      runtime.listRepoWorkItems(
+        params.repo,
+        params.limit,
+        params.query,
+        params.before,
+        params.noCache
+      )
+  }),
+  defineMethod({
+    name: 'github.listIssues',
+    params: IssuesList,
+    handler: async (params, { runtime }) => runtime.listRepoIssues(params.repo, params.limit)
   }),
   defineMethod({
     name: 'github.countWorkItems',
@@ -313,7 +339,12 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.prForBranch',
     params: PrForBranch,
     handler: async (params, { runtime }) =>
-      runtime.getRepoPRForBranch(params.repo, params.branch, params.linkedPRNumber)
+      runtime.getRepoPRForBranch(
+        params.repo,
+        params.branch,
+        params.linkedPRNumber,
+        params.fallbackPRNumber
+      )
   }),
   defineMethod({
     name: 'github.issue',
@@ -391,6 +422,17 @@ export const GITHUB_METHODS: RpcMethod[] = [
     params: UpdatePrTitle,
     handler: async (params, { runtime }) =>
       runtime.updateRepoPRTitle(params.repo, params.prNumber, params.title, params.prRepo ?? null)
+  }),
+  defineMethod({
+    name: 'github.updatePR',
+    params: UpdatePr,
+    handler: async (params, { runtime }) =>
+      runtime.updateRepoPRDetails(
+        params.repo,
+        params.prNumber,
+        params.updates,
+        params.prRepo ?? null
+      )
   }),
   defineMethod({
     name: 'github.mergePR',

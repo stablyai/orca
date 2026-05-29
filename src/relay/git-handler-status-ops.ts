@@ -10,6 +10,17 @@ import { readFile } from 'fs/promises'
 import { parseUnmergedEntry } from './git-handler-utils'
 import { parseStatusOutput } from './git-status-output-parser'
 import type { GitExec } from './git-handler-ops'
+import type { GitUpstreamStatus } from '../shared/types'
+import {
+  getEffectiveGitUpstreamStatus,
+  splitRemoteBranchName
+} from '../shared/git-effective-upstream'
+import {
+  applyLineStats,
+  collectUntrackedAdditions,
+  parseNumstat,
+  type GitLineStats
+} from '../shared/git-uncommitted-line-stats'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
@@ -54,12 +65,7 @@ export async function getStatusOp(
   conflictOperation: string
   head?: string
   branch?: string
-  upstreamStatus?: {
-    hasUpstream: boolean
-    upstreamName?: string
-    ahead: number
-    behind: number
-  }
+  upstreamStatus?: GitUpstreamStatus
   ignoredPaths?: string[]
 }> {
   const worktreePath = params.worktreePath as string
@@ -68,14 +74,7 @@ export async function getStatusOp(
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
   let branch: string | undefined
-  let upstreamStatus:
-    | {
-        hasUpstream: boolean
-        upstreamName?: string
-        ahead: number
-        behind: number
-      }
-    | undefined
+  let upstreamStatus: GitUpstreamStatus | undefined
   let ignoredPaths: string[] = []
 
   try {
@@ -105,6 +104,14 @@ export async function getStatusOp(
     branch = parsed.branch
     upstreamStatus = parsed.upstreamStatus
     ignoredPaths = parsed.ignoredPaths
+    if (shouldProbeEffectiveUpstreamStatus(branch, upstreamStatus?.upstreamName)) {
+      try {
+        upstreamStatus = await getEffectiveGitUpstreamStatus((args) => git(args, worktreePath))
+      } catch {
+        // Why: status polling should keep returning working-tree entries even
+        // if the richer upstream probe hits a transient SSH/git ref error.
+      }
+    }
 
     for (const uLine of parsed.unmergedLines) {
       const entry = parseUnmergedEntry(worktreePath, uLine)
@@ -116,6 +123,13 @@ export async function getStatusOp(
     // not a git repo or git not available
   }
 
+  // Why: attach per-area line counts for the sidebar. Diffs run after status
+  // (we need the entry list first) and only for areas that have entries, so a
+  // clean tree costs zero extra git calls. Staged and unstaged are diffed
+  // separately so each row reflects only its own staging area; untracked files
+  // have no baseline and count their full contents as additions.
+  await attachLineStats(git, worktreePath, entries)
+
   return {
     entries,
     conflictOperation,
@@ -124,6 +138,77 @@ export async function getStatusOp(
     upstreamStatus,
     ...(includeIgnored ? { ignoredPaths } : {})
   }
+}
+
+async function runNumstat(
+  git: GitExec,
+  worktreePath: string,
+  cached: boolean
+): Promise<Map<string, GitLineStats>> {
+  try {
+    const { stdout } = await git(
+      ['-c', 'core.quotePath=false', 'diff', ...(cached ? ['--cached'] : []), '--numstat', '-M'],
+      worktreePath,
+      { disableOptionalLocks: true }
+    )
+    return parseNumstat(stdout)
+  } catch {
+    // Why: a numstat failure should leave rows without counts rather than break
+    // the whole status refresh.
+    return new Map()
+  }
+}
+
+async function attachLineStats(
+  git: GitExec,
+  worktreePath: string,
+  entries: Record<string, unknown>[]
+): Promise<void> {
+  if (entries.length === 0) {
+    return
+  }
+  const hasStaged = entries.some((entry) => entry.area === 'staged')
+  const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
+  const untrackedPaths = entries
+    .filter((entry) => entry.area === 'untracked')
+    .map((entry) => entry.path as string)
+  const emptyStats = new Map<string, GitLineStats>()
+  const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
+    hasStaged ? runNumstat(git, worktreePath, true) : Promise.resolve(emptyStats),
+    hasUnstaged ? runNumstat(git, worktreePath, false) : Promise.resolve(emptyStats),
+    collectUntrackedAdditions(worktreePath, untrackedPaths)
+  ])
+  for (const entry of entries) {
+    const filePath = entry.path as string
+    applyLineStats(
+      entry as { added?: number; removed?: number },
+      entry.area === 'staged'
+        ? stagedStats.get(filePath)
+        : entry.area === 'unstaged'
+          ? unstagedStats.get(filePath)
+          : untrackedStats.get(filePath)
+    )
+  }
+}
+
+function getShortBranchName(branch: string | undefined): string | null {
+  const prefix = 'refs/heads/'
+  return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
+}
+
+function shouldProbeEffectiveUpstreamStatus(
+  branch: string | undefined,
+  upstreamName: string | undefined
+): boolean {
+  const branchName = getShortBranchName(branch)
+  if (!branchName) {
+    return false
+  }
+  if (!upstreamName) {
+    return true
+  }
+  const parsed = splitRemoteBranchName(upstreamName)
+  return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
 }
 
 function parseCheckIgnoreOutput(stdout: string): string[] {

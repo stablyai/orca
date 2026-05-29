@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { findWorktreeById } from './worktree-helpers'
+import type { GitHubWorkItem, LinearIssue } from '../../../../shared/types'
 
 // Why: cap the per-session history so a long-lived workspace with many
 // worktree jumps cannot grow the array unbounded. 50 is generous enough
@@ -13,7 +14,18 @@ const MAX_HISTORY = 50
 // "worktree"/"WorktreeHistory" prefix for call-site stability — renaming
 // across ~20 sites would churn for no behavior win. View entries are
 // always live (never skipped by findPrev/NextLiveWorktreeHistoryIndex).
-export type WorktreeNavHistoryViewEntry = 'tasks' | 'automations'
+export type WorktreeNavHistorySimpleViewEntry = 'tasks' | 'automations'
+export type WorktreeNavHistoryTaskDetailEntry =
+  | {
+      kind: 'task-detail'
+      source: 'github'
+      workItem: GitHubWorkItem
+      initialTab?: 'conversation' | 'checks' | 'files'
+    }
+  | { kind: 'task-detail'; source: 'linear'; issue: LinearIssue }
+export type WorktreeNavHistoryViewEntry =
+  | WorktreeNavHistorySimpleViewEntry
+  | WorktreeNavHistoryTaskDetailEntry
 export type WorktreeNavHistoryEntry = string | WorktreeNavHistoryViewEntry
 
 export type WorktreeNavHistorySlice = {
@@ -57,8 +69,26 @@ export function setWorktreeNavViewActivator(fn: ViewActivateFn | null): void {
 
 // Why: view entries short-circuit as live unconditionally — findWorktreeById
 // takes a worktree id and would always return undefined for page sentinels.
+function isViewEntry(entry: WorktreeNavHistoryEntry): entry is WorktreeNavHistoryViewEntry {
+  return entry === 'tasks' || entry === 'automations' || typeof entry === 'object'
+}
+
+function isTaskStackEntry(entry: WorktreeNavHistoryEntry): boolean {
+  return entry === 'tasks' || (typeof entry === 'object' && entry.kind === 'task-detail')
+}
+
+function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
+  if (typeof entry === 'string') {
+    return entry === 'tasks' || entry === 'automations' ? `view:${entry}` : `worktree:${entry}`
+  }
+  if (entry.source === 'github') {
+    return `view:task-detail:github:${entry.workItem.repoId}:${entry.workItem.type}:${entry.workItem.number}:${entry.initialTab ?? 'conversation'}`
+  }
+  return `view:task-detail:linear:${entry.issue.workspaceId ?? 'selected'}:${entry.issue.id}`
+}
+
 function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {
-  if (entry === 'tasks' || entry === 'automations') {
+  if (isViewEntry(entry)) {
     return true
   }
   return findWorktreeById(state.worktreesByRepo, entry) !== undefined
@@ -72,7 +102,8 @@ function appendHistoryEntry(
   // applies only to the current entry so that A -> B -> A remains a valid
   // stack (user left B, returned to A). Same rule covers page re-opens:
   // Tasks data changes and repeated Automations opens collapse to one entry.
-  if (s.worktreeNavHistory[s.worktreeNavHistoryIndex] === entry) {
+  const current = s.worktreeNavHistory[s.worktreeNavHistoryIndex]
+  if (current !== undefined && getHistoryEntryKey(current) === getHistoryEntryKey(entry)) {
     return s
   }
 
@@ -98,6 +129,16 @@ function appendHistoryEntry(
 export function findPrevLiveWorktreeHistoryIndex(state: AppState): number | null {
   for (let i = state.worktreeNavHistoryIndex - 1; i >= 0; i--) {
     if (isLiveEntry(state.worktreeNavHistory[i], state)) {
+      return i
+    }
+  }
+  return null
+}
+
+export function findPrevLiveNonTaskStackHistoryIndex(state: AppState): number | null {
+  for (let i = state.worktreeNavHistoryIndex - 1; i >= 0; i--) {
+    const entry = state.worktreeNavHistory[i]
+    if (!isTaskStackEntry(entry) && isLiveEntry(entry, state)) {
       return i
     }
   }
@@ -179,7 +220,7 @@ function navigateToIndex(
   const prevNavigating = get().isNavigatingHistory
   set({ isNavigatingHistory: true } as Partial<AppState>)
   try {
-    if (targetEntry === 'tasks' || targetEntry === 'automations') {
+    if (isViewEntry(targetEntry)) {
       if (!viewActivator) {
         // Why: a silent no-op would mean the back/forward chord lands on a
         // page history entry and appears broken. See setWorktreeNavActivator

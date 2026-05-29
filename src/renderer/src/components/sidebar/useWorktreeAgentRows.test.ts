@@ -8,13 +8,18 @@ import type { TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import {
   buildWorktreeAgentRows,
-  selectMigrationUnsupportedEntriesForWorktree
+  selectLiveAgentStatusEntriesForWorktree,
+  selectMigrationUnsupportedEntriesForWorktree,
+  selectRetainedAgentEntriesForWorktree
 } from './useWorktreeAgentRows'
+import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', '11111111-1111-4111-8111-111111111111')
 const PANE_KEY_1 = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
 const PANE_KEY_2 = makePaneKey('tab-2', '33333333-3333-4333-8333-333333333333')
+const PANE_KEY_3 = makePaneKey('tab-3', '55555555-5555-4555-8555-555555555555')
+const PANE_KEY_4 = makePaneKey('tab-4', '66666666-6666-4666-8666-666666666666')
 
 function makeTab(id: string): TerminalTab {
   return {
@@ -113,6 +118,110 @@ describe('buildWorktreeAgentRows', () => {
   })
 })
 
+describe('applyAgentRowLineage', () => {
+  it('places orchestration children immediately after their parent', () => {
+    const parent = makeEntry(PANE_KEY_2, 2000, {
+      prompt: 'parent'
+    })
+    const firstChild = makeEntry(PANE_KEY_1, 1000, {
+      prompt: 'first child',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentTerminalHandle: 'term-parent',
+        parentPaneKey: PANE_KEY_2
+      }
+    })
+    const secondChild = makeEntry(PANE_KEY_3, 3000, {
+      prompt: 'second child',
+      orchestration: {
+        taskId: 'task-2',
+        dispatchId: 'ctx-2',
+        parentTerminalHandle: 'term-parent',
+        parentPaneKey: PANE_KEY_2
+      }
+    })
+
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1'), makeTab('tab-2'), makeTab('tab-3')],
+      entries: [firstChild, parent, secondChild],
+      retained: [],
+      now: 4000
+    })
+    const ordered = applyAgentRowLineage(rows)
+
+    expect(ordered.map((row) => row.paneKey)).toEqual([PANE_KEY_2, PANE_KEY_1, PANE_KEY_3])
+    expect(ordered[0].lineage).toMatchObject({ depth: 0, childCount: 2 })
+    expect(ordered[1].lineage).toMatchObject({
+      depth: 1,
+      isFirstSibling: true,
+      isLastSibling: false
+    })
+    expect(ordered[2].lineage).toMatchObject({
+      depth: 1,
+      isFirstSibling: false,
+      isLastSibling: true
+    })
+  })
+
+  it('leaves orphan orchestration rows flat when the parent pane is not visible', () => {
+    const child = makeEntry(PANE_KEY_1, 1000, {
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentTerminalHandle: 'term-missing',
+        parentPaneKey: PANE_KEY_2
+      }
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [child],
+      retained: [],
+      now: 2000
+    })
+
+    expect(applyAgentRowLineage(rows)[0].lineage).toMatchObject({ depth: 0, childCount: 0 })
+  })
+
+  it('keeps nested dispatches under their nearest visible parent', () => {
+    const parent = makeEntry(PANE_KEY_1, 1000, { prompt: 'parent' })
+    const child = makeEntry(PANE_KEY_2, 2000, {
+      prompt: 'child',
+      orchestration: {
+        taskId: 'task-child',
+        dispatchId: 'ctx-child',
+        parentPaneKey: PANE_KEY_1
+      }
+    })
+    const grandchild = makeEntry(PANE_KEY_3, 3000, {
+      prompt: 'grandchild',
+      orchestration: {
+        taskId: 'task-grandchild',
+        dispatchId: 'ctx-grandchild',
+        parentPaneKey: PANE_KEY_2
+      }
+    })
+    const sibling = makeEntry(PANE_KEY_4, 4000, { prompt: 'sibling root' })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1'), makeTab('tab-2'), makeTab('tab-3'), makeTab('tab-4')],
+      entries: [parent, child, grandchild, sibling],
+      retained: [],
+      now: 5000
+    })
+
+    const ordered = applyAgentRowLineage(rows)
+
+    expect(ordered.map((row) => row.paneKey)).toEqual([
+      PANE_KEY_1,
+      PANE_KEY_2,
+      PANE_KEY_3,
+      PANE_KEY_4
+    ])
+    expect(ordered[1].lineage).toMatchObject({ depth: 1, childCount: 1 })
+    expect(ordered[2].lineage).toMatchObject({ depth: 1, childCount: 0 })
+  })
+})
+
 describe('selectMigrationUnsupportedEntriesForWorktree', () => {
   it('returns raw migration records so shallow selectors can cache snapshots', () => {
     const unsupported: MigrationUnsupportedPtyEntry = {
@@ -140,6 +249,85 @@ describe('selectMigrationUnsupportedEntriesForWorktree', () => {
     // records preserves element identity for useShallow.
     expect(first).toEqual([unsupported])
     expect(second).toEqual([unsupported])
+    expect(first).toBe(second)
     expect(first[0]).toBe(second[0])
+  })
+})
+
+describe('selectLiveAgentStatusEntriesForWorktree', () => {
+  it('reuses unaffected worktree arrays when another worktree receives a same-state ping', () => {
+    const wt1Entry = makeEntry(PANE_KEY_1, 1000, { state: 'working', prompt: 'first' })
+    const wt2Entry = makeEntry(PANE_KEY_2, 1000, { state: 'working', prompt: 'first' })
+    const state = {
+      tabsByWorktree: {
+        'wt-1': [makeTab('tab-1')],
+        'wt-2': [makeTab('tab-2')]
+      },
+      agentStatusByPaneKey: {
+        [PANE_KEY_1]: wt1Entry,
+        [PANE_KEY_2]: wt2Entry
+      },
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {}
+    }
+
+    const firstWt1 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')
+    const firstWt2 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-2')
+    const nextState = {
+      ...state,
+      agentStatusByPaneKey: {
+        [PANE_KEY_1]: wt1Entry,
+        [PANE_KEY_2]: {
+          ...wt2Entry,
+          prompt: 'updated prompt preview',
+          updatedAt: 1100
+        }
+      }
+    }
+
+    const secondWt1 = selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')
+    const secondWt2 = selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-2')
+
+    // Why: WorktreeCard mounts one selector per visible card. A same-state
+    // hook ping for wt-2 must not make wt-1 pay a fresh array/render cost.
+    expect(secondWt1).toBe(firstWt1)
+    expect(secondWt2).not.toBe(firstWt2)
+    expect(secondWt2[0]?.prompt).toBe('updated prompt preview')
+  })
+})
+
+describe('selectRetainedAgentEntriesForWorktree', () => {
+  it('reuses unaffected worktree arrays when another worktree retained row changes', () => {
+    const wt1Retained = makeRetained(PANE_KEY_1, 'wt-1', 1000)
+    const wt2Retained = makeRetained(PANE_KEY_2, 'wt-2', 1000)
+    const state = {
+      tabsByWorktree: {},
+      agentStatusByPaneKey: {},
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {
+        [PANE_KEY_1]: wt1Retained,
+        [PANE_KEY_2]: wt2Retained
+      }
+    }
+
+    const firstWt1 = selectRetainedAgentEntriesForWorktree(state, 'wt-1')
+    const firstWt2 = selectRetainedAgentEntriesForWorktree(state, 'wt-2')
+    const nextState = {
+      ...state,
+      retainedAgentsByPaneKey: {
+        [PANE_KEY_1]: wt1Retained,
+        [PANE_KEY_2]: {
+          ...wt2Retained,
+          startedAt: 1100
+        }
+      }
+    }
+
+    const secondWt1 = selectRetainedAgentEntriesForWorktree(nextState, 'wt-1')
+    const secondWt2 = selectRetainedAgentEntriesForWorktree(nextState, 'wt-2')
+
+    expect(secondWt1).toBe(firstWt1)
+    expect(secondWt2).not.toBe(firstWt2)
+    expect(secondWt2[0]?.startedAt).toBe(1100)
   })
 })

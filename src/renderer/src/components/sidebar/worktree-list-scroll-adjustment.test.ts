@@ -1,9 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  countRecordKeysByReference,
+  getScrollTopToRevealBounds,
   resolvePendingSidebarReveal,
+  WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
   shouldAdjustWorktreeSidebarMeasuredRowScroll
 } from './WorktreeList'
-import { estimateRenderRowSize } from './worktree-list-virtual-rows'
+import {
+  estimateRenderRowSize,
+  GROUP_HEADER_ROW_HEIGHT,
+  getActiveStickyHeaderIndexForScroll
+} from './worktree-list-virtual-rows'
 
 const makeHeaderRow = (key: string) =>
   ({
@@ -14,7 +21,25 @@ const makeHeaderRow = (key: string) =>
     tone: 'text-foreground'
   }) as const
 
+const makeScrollContainer = (scrollTop: number, clientHeight: number): HTMLElement =>
+  ({ scrollTop, clientHeight }) as HTMLElement
+
 describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
+  it('counts record keys once per object reference', () => {
+    const keysSpy = vi.spyOn(Object, 'keys')
+    const first = { a: 1, b: 2 }
+    const second = { ...first, c: 3 }
+
+    try {
+      expect(countRecordKeysByReference(first)).toBe(2)
+      expect(countRecordKeysByReference(first)).toBe(2)
+      expect(countRecordKeysByReference(second)).toBe(3)
+      expect(keysSpy).toHaveBeenCalledTimes(2)
+    } finally {
+      keysSpy.mockRestore()
+    }
+  })
+
   it('suppresses measured-row scroll correction while TanStack is scrolling', () => {
     expect(
       shouldAdjustWorktreeSidebarMeasuredRowScroll({
@@ -73,6 +98,68 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   })
 })
 
+describe('getScrollTopToRevealBounds', () => {
+  it('treats the sticky header as occluding the viewport top', () => {
+    const container = makeScrollContainer(100, 400)
+
+    expect(
+      getScrollTopToRevealBounds(
+        container,
+        {
+          start: 100,
+          end: 216
+        },
+        GROUP_HEADER_ROW_HEIGHT
+      )
+    ).toBe(72)
+  })
+
+  it('includes extra reveal clearance for the highlight ring', () => {
+    const container = makeScrollContainer(100, 400)
+
+    expect(
+      getScrollTopToRevealBounds(
+        container,
+        {
+          start: 100,
+          end: 216
+        },
+        WORKTREE_SIDEBAR_REVEAL_TOP_INSET
+      )
+    ).toBe(66)
+  })
+
+  it('does not scroll when the bounds are below the sticky header', () => {
+    const container = makeScrollContainer(100, 400)
+
+    expect(
+      getScrollTopToRevealBounds(
+        container,
+        {
+          start: 128,
+          end: 244
+        },
+        GROUP_HEADER_ROW_HEIGHT
+      )
+    ).toBeNull()
+  })
+
+  it('keeps the viewport bottom independent of the sticky header inset', () => {
+    const container = makeScrollContainer(100, 400)
+
+    expect(
+      getScrollTopToRevealBounds(
+        container,
+        {
+          start: 430,
+          end: 520
+        },
+        GROUP_HEADER_ROW_HEIGHT
+      )
+    ).toBe(120)
+  })
+})
+
 describe('estimateRenderRowSize', () => {
   it('keeps secondary group header size stable while it is the active sticky header', () => {
     const rows = [makeHeaderRow('first'), makeHeaderRow('second')]
@@ -88,5 +175,30 @@ describe('estimateRenderRowSize', () => {
 
     expect(inactiveSize).toBe(36)
     expect(activeSize).toBe(36)
+  })
+
+  it('keeps the previous header active until the secondary header row reaches the top', () => {
+    expect(
+      getActiveStickyHeaderIndexForScroll({
+        rangeStartIndex: 1,
+        scrollOffset: 99,
+        stickyHeaderIndexes: [0, 1],
+        virtualItems: [{ key: 'hdr:second', index: 1, start: 100, end: 136, size: 36, lane: 0 }]
+      })
+    ).toBe(0)
+  })
+
+  it('activates a secondary header as soon as its row reaches the top (no spacer dead zone)', () => {
+    // Regression: the swap must fire when the header row reaches the top
+    // (scrollOffset === start), not 8px later. Gating on start + spacer left
+    // the previous repo's opaque header pinned over the incoming one.
+    expect(
+      getActiveStickyHeaderIndexForScroll({
+        rangeStartIndex: 1,
+        scrollOffset: 100,
+        stickyHeaderIndexes: [0, 1],
+        virtualItems: [{ key: 'hdr:second', index: 1, start: 100, end: 136, size: 36, lane: 0 }]
+      })
+    ).toBe(1)
   })
 })

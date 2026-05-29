@@ -3,12 +3,12 @@ import type { SettingsSearchEntry } from './settings-search'
 export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Workspace Directory',
-    description: 'Root directory where worktree folders are created.',
+    description: 'Root directory where workspace folders are created.',
     keywords: ['workspace', 'folder', 'path', 'worktree']
   },
   {
     title: 'Nest Workspaces',
-    description: 'Create worktrees inside a repo-named subfolder.',
+    description: 'Create workspaces inside a repo-named subfolder.',
     keywords: ['nested', 'subfolder', 'directory']
   },
   {
@@ -23,7 +23,7 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Open In Menu',
-    description: 'Add custom launchers to the worktree Open in menu.',
+    description: 'Add custom launchers to the workspace Open in menu.',
     keywords: ['open in', 'editor', 'launcher', 'cursor', 'zed', 'command', 'vscode']
   }
 ]
@@ -58,6 +58,23 @@ export const GENERAL_EDITOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Markdown Review Notes',
     description: 'Show local markdown review note controls in rich editor mode.',
     keywords: ['markdown', 'review', 'notes', 'annotations', 'agents']
+  }
+]
+
+export const GENERAL_NAVIGATION_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Tab Order',
+    description: 'Recent or tab strip.',
+    keywords: [
+      'recent tab order',
+      'tab',
+      'ctrl',
+      'control',
+      'recent',
+      'mru',
+      'sequential',
+      'switch'
+    ]
   }
 ]
 
@@ -101,6 +118,7 @@ export const GENERAL_AGENT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'codex',
       'opencode',
       'pi',
+      'omp',
       'gemini',
       'aider',
       'copilot',
@@ -119,6 +137,7 @@ export const GENERAL_SUPPORT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 
 export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_WORKSPACE_SEARCH_ENTRIES,
+  ...GENERAL_NAVIGATION_SEARCH_ENTRIES,
   ...GENERAL_EDITOR_SEARCH_ENTRIES,
   ...GENERAL_CLI_SEARCH_ENTRIES,
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES,

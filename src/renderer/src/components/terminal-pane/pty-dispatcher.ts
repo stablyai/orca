@@ -13,7 +13,12 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 // PTY ID. Eliminates the N-listener problem that triggers
 // MaxListenersExceededWarning with many panes/tabs.
 
-export const ptyDataHandlers = new Map<string, (data: string) => void>()
+export type PtyDataMeta = {
+  seq?: number
+  rawLength?: number
+}
+
+export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 /** Sidecar subscriptions that observe PTY data without owning the primary
  *  handler. Used by features that need to react to the live byte stream
  *  (e.g. agent-paste-draft watching for DECSET 2004 / bracketed-paste-
@@ -81,7 +86,16 @@ export function ensurePtyDispatcher(): void {
   }
   ptyDispatcherAttached = true
   window.api.pty.onData((payload) => {
-    ptyDataHandlers.get(payload.id)?.(payload.data)
+    let meta: PtyDataMeta | undefined
+    if (typeof payload.seq === 'number') {
+      meta ??= {}
+      meta.seq = payload.seq
+    }
+    if (typeof payload.rawLength === 'number') {
+      meta ??= {}
+      meta.rawLength = payload.rawLength
+    }
+    ptyDataHandlers.get(payload.id)?.(payload.data, meta)
     const sidecars = ptyDataSidecars.get(payload.id)
     if (sidecars && sidecars.size > 0) {
       // Why: snapshot the Set before iterating because watchers commonly
@@ -140,6 +154,13 @@ export function subscribeToPtyExit(ptyId: string, watcher: (code: number) => voi
 
 export type EagerPtyHandle = { flush: () => string; dispose: () => void }
 const eagerPtyHandles = new Map<string, EagerPtyHandle>()
+const eagerBufferTextEncoder = new TextEncoder()
+const eagerBufferTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true })
+
+type EagerBufferChunk = {
+  data: string
+  bytes: number
+}
 
 export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefined {
   return eagerPtyHandles.get(ptyId)
@@ -150,22 +171,47 @@ export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefin
 // runs a long-lived command (e.g. tail -f) in a worktree the user never opens.
 const EAGER_BUFFER_MAX_BYTES = 512 * 1024
 
+function clampUtf8Tail(data: string, maxBytes: number): EagerBufferChunk {
+  const encoded = eagerBufferTextEncoder.encode(data)
+  if (encoded.byteLength <= maxBytes) {
+    return { data, bytes: encoded.byteLength }
+  }
+  let start = encoded.byteLength - maxBytes
+  while (start < encoded.byteLength && (encoded[start] & 0xc0) === 0x80) {
+    start += 1
+  }
+  const tail = eagerBufferTextDecoder.decode(encoded.subarray(start))
+  return { data: tail, bytes: encoded.byteLength - start }
+}
+
 export function registerEagerPtyBuffer(
   ptyId: string,
   onExit: (ptyId: string, code: number) => void
 ): EagerPtyHandle {
   ensurePtyDispatcher()
 
-  const buffer: string[] = []
+  // Why: a head index instead of Array.shift() — shift() is O(n), making
+  // pre-attach buffering quadratic under many small chunks. Compaction is deferred.
+  const chunks: EagerBufferChunk[] = []
+  let head = 0
   let bufferBytes = 0
 
   const dataHandler = (data: string): void => {
-    buffer.push(data)
-    bufferBytes += data.length
-    // Trim from the front when the buffer exceeds the cap, keeping the
-    // most recent output which contains the shell prompt.
-    while (bufferBytes > EAGER_BUFFER_MAX_BYTES && buffer.length > 1) {
-      bufferBytes -= buffer.shift()!.length
+    // A single chunk larger than the cap would otherwise bypass trimming and
+    // store the whole payload; keep only its most-recent tail.
+    const chunk = clampUtf8Tail(data, EAGER_BUFFER_MAX_BYTES)
+    chunks.push(chunk)
+    bufferBytes += chunk.bytes
+    // Drop whole leading chunks (keeping the prompt-bearing tail) until within cap.
+    while (bufferBytes > EAGER_BUFFER_MAX_BYTES && head < chunks.length - 1) {
+      bufferBytes -= chunks[head].bytes
+      chunks[head] = { data: '', bytes: 0 }
+      head += 1
+    }
+    // Compact when dead slots reach half the array so it can't grow unbounded.
+    if (head > 0 && head * 2 >= chunks.length) {
+      chunks.splice(0, head)
+      head = 0
     }
   }
   const exitHandler = (code: number): void => {
@@ -183,8 +229,13 @@ export function registerEagerPtyBuffer(
 
   const handle: EagerPtyHandle = {
     flush() {
-      const data = buffer.join('')
-      buffer.length = 0
+      const data = chunks
+        .slice(head)
+        .map((chunk) => chunk.data)
+        .join('')
+      chunks.length = 0
+      head = 0
+      bufferBytes = 0
       return data
     },
     dispose() {
@@ -230,7 +281,7 @@ export type PtyTransport = {
     callbacks: {
       onConnect?: () => void
       onDisconnect?: () => void
-      onData?: (data: string) => void
+      onData?: (data: string, meta?: PtyDataMeta) => void
       /** Replay bytes from a prior session (eager buffers, attach-time screen
        *  clears). Routed separately from onData so the renderer can engage
        *  the replay guard — otherwise xterm auto-replies to embedded query
@@ -254,7 +305,7 @@ export type PtyTransport = {
     callbacks: {
       onConnect?: () => void
       onDisconnect?: () => void
-      onData?: (data: string) => void
+      onData?: (data: string, meta?: PtyDataMeta) => void
       /** See note on connect.callbacks.onReplayData. */
       onReplayData?: (data: string) => void
       onStatus?: (shell: string) => void

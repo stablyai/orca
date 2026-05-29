@@ -166,13 +166,22 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:prForBranch',
-    async (_event, args: { repoPath: string; branch: string; linkedPRNumber?: number | null }) => {
+    async (
+      _event,
+      args: {
+        repoPath: string
+        branch: string
+        linkedPRNumber?: number | null
+        fallbackPRNumber?: number | null
+      }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       const pr = await getPRForBranch(
         repo.path,
         args.branch,
         args.linkedPRNumber ?? null,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        args.linkedPRNumber == null ? (args.fallbackPRNumber ?? null) : null
       )
       // Emit pr_created when a PR is first detected for a branch.
       // Why here: the renderer polls gh:prForBranch to check PR status per worktree.
@@ -285,7 +294,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:listWorkItems',
     (
       _event,
-      args: { repoPath: string; repoId?: string; limit?: number; query?: string; before?: string }
+      args: {
+        repoPath: string
+        repoId?: string
+        limit?: number
+        query?: string
+        before?: string
+        noCache?: boolean
+      }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       return listWorkItems(
@@ -294,7 +310,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.query,
         args.before,
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        args.noCache
       )
     }
   )

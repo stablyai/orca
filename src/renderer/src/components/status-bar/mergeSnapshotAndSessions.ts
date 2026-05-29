@@ -30,7 +30,10 @@ import type {
 } from '../../../../shared/types'
 import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
 import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
-import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
+import {
+  getRepoIdFromWorktreeId,
+  getWorktreePathBasenameFromId
+} from '../../../../shared/worktree-id'
 
 // ─── View-model types (renderer-local) ──────────────────────────────
 
@@ -71,7 +74,7 @@ export type UnifiedWorktreeRow = {
   sessions: UnifiedSessionRow[]
 }
 
-export type UnifiedRepoGroup = {
+export type UnifiedProjectGroup = {
   repoId: string
   repoName: string
   cpu: Metric
@@ -111,16 +114,7 @@ function deriveRepoIdFromWorktreeId(worktreeId: string): string {
 }
 
 function deriveWorktreeNameFromWorktreeId(worktreeId: string): string {
-  const parsed = splitWorktreeId(worktreeId)
-  if (!parsed) {
-    return worktreeId
-  }
-  const path = parsed.worktreePath
-  if (!path) {
-    return worktreeId
-  }
-  const parts = path.split(/[\\/]+/).filter(Boolean)
-  return parts.at(-1) ?? worktreeId
+  return getWorktreePathBasenameFromId(worktreeId) ?? worktreeId
 }
 
 function shortCwd(cwd: string): string {
@@ -242,8 +236,8 @@ export function mergeSnapshotAndSessions(
   snapshot: MemorySnapshot | null,
   daemonSessions: readonly DaemonSession[],
   ctx: MergeContext
-): UnifiedRepoGroup[] {
-  const repos = new Map<string, UnifiedRepoGroup>()
+): UnifiedProjectGroup[] {
+  const repos = new Map<string, UnifiedProjectGroup>()
   const seenSessionIds = new Set<string>()
   const index = buildMergeIndex(ctx)
   // Why: bound = the daemon session id appears as a pty id under some tab.
@@ -266,12 +260,12 @@ export function mergeSnapshotAndSessions(
     repoId: string,
     repoName: string,
     initiallyHasRemoteChildren = false
-  ): UnifiedRepoGroup {
+  ): UnifiedProjectGroup {
     const existing = repos.get(repoId)
     if (existing) {
       return existing
     }
-    const next: UnifiedRepoGroup = {
+    const next: UnifiedProjectGroup = {
       repoId,
       repoName,
       cpu: null,
@@ -284,7 +278,7 @@ export function mergeSnapshotAndSessions(
   }
 
   function findWorktreeRow(
-    repo: UnifiedRepoGroup,
+    repo: UnifiedProjectGroup,
     worktreeId: string
   ): UnifiedWorktreeRow | undefined {
     return repo.worktrees.find((w) => w.worktreeId === worktreeId)

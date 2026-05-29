@@ -19,8 +19,6 @@ import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
 
-const isMac = navigator.userAgent.includes('Mac')
-
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
   activeViewStateId: activeViewStateIdProp
@@ -55,7 +53,6 @@ function EditorPanelInner({
   const [showMarkdownTableOfContents, setShowMarkdownTableOfContents] = useState(false)
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
-  const markdownReviewToolsEnabled = settings?.markdownReviewToolsEnabled ?? true
 
   if (settings?.diffDefaultView !== prevDiffView) {
     setPrevDiffView(settings?.diffDefaultView)
@@ -91,7 +88,7 @@ function EditorPanelInner({
 
   useEffect(() => acquireExportPdfListener(), [])
   useClosedEditorTabCleanup(openFiles)
-  useMarkdownPreviewShortcut({ activeFile, panelRef, isMac, openMarkdownPreview })
+  useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
   useEffect(() => {
     if (!copiedPathToast) {
       return
@@ -249,13 +246,16 @@ function EditorPanelInner({
     }
   }
   const handleOpenMarkdownPreview = (): void => {
-    openMarkdownPreview({
-      filePath: activeFile.filePath,
-      relativePath: activeFile.relativePath,
-      worktreeId: activeFile.worktreeId,
-      runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
-      language: model.resolvedLanguage
-    })
+    openMarkdownPreview(
+      {
+        filePath: activeFile.filePath,
+        relativePath: activeFile.relativePath,
+        worktreeId: activeFile.worktreeId,
+        runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
+        language: model.resolvedLanguage
+      },
+      { sourceFileId: activeFile.id }
+    )
   }
   const handleOpenContainingFolder = (): void => {
     if (
@@ -284,7 +284,6 @@ function EditorPanelInner({
       model={model}
       copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
       showMarkdownTableOfContents={showMarkdownTableOfContents}
-      markdownReviewToolsEnabled={markdownReviewToolsEnabled}
       sideBySide={sideBySide}
       openFiles={openFiles}
       fileContents={fileContents}

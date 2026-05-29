@@ -17,6 +17,12 @@ export async function seedLineageScenario(page: Page): Promise<LineageScenario> 
     state.setSidebarOpen(true)
     state.setGroupBy('none')
     state.setSortBy('recent')
+    // Why: these specs assert lineage structure, not the user's persisted
+    // sidebar filters. Make the seeded child render even when it has no live PTY.
+    state.setShowActiveOnly(false)
+    state.setShowSleepingWorkspaces(true)
+    state.setHideDefaultBranchWorkspace(false)
+    state.setFilterRepoIds([])
 
     const worktrees = Object.values(state.worktreesByRepo)
       .flat()

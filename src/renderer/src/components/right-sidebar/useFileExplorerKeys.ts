@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
 import { formatFileExplorerPathsForClipboard } from './file-explorer-selection'
@@ -11,41 +12,7 @@ import {
   redoFileExplorer,
   undoFileExplorer
 } from './fileExplorerUndoRedo'
-
-const isMac = navigator.userAgent.includes('Mac')
-
-function isCmdZRedo(e: KeyboardEvent): boolean {
-  const mod = isMac ? e.metaKey : e.ctrlKey
-  if (!mod || e.altKey) {
-    return false
-  }
-  if (isMac) {
-    return e.code === 'KeyZ' && e.shiftKey
-  }
-  // Windows/Linux: Ctrl+Shift+Z or Ctrl+Y
-  return (e.code === 'KeyZ' && e.shiftKey) || (e.code === 'KeyY' && !e.shiftKey)
-}
-
-function isCmdZUndo(e: KeyboardEvent): boolean {
-  const mod = isMac ? e.metaKey : e.ctrlKey
-  if (!mod || e.altKey || e.shiftKey) {
-    return false
-  }
-  // Prefer code (layout-independent); fall back to key for edge IME/layout cases.
-  return e.code === 'KeyZ' || e.key.toLowerCase() === 'z'
-}
-
-function isCopyRelativePathShortcut(e: KeyboardEvent): boolean {
-  return e.code === 'KeyC' && e.altKey && e.shiftKey && (isMac ? e.metaKey : e.ctrlKey)
-}
-
-function isCopyPathShortcut(e: KeyboardEvent): boolean {
-  return (
-    e.code === 'KeyC' &&
-    e.altKey &&
-    ((isMac && e.metaKey && !e.shiftKey) || (!isMac && e.shiftKey && !e.ctrlKey))
-  )
-}
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
 
 /**
  * Keyboard shortcuts for the file explorer.
@@ -59,11 +26,14 @@ export function useFileExplorerKeys(opts: {
   inlineInput: InlineInput | null
   selectedPaths: Set<string>
   selectedNode: TreeNode | null
+  selectedNodes: TreeNode[]
   startRename: (node: TreeNode) => void
   requestDelete: (node: TreeNode) => void
+  requestDeleteAll: (nodes: TreeNode[]) => void
 }): void {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const keybindings = useAppStore((s) => s.keybindings)
 
   const flatRowsRef = useRef(opts.flatRows)
   flatRowsRef.current = opts.flatRows
@@ -73,10 +43,14 @@ export function useFileExplorerKeys(opts: {
   selectedPathsRef.current = opts.selectedPaths
   const selectedNodeRef = useRef(opts.selectedNode)
   selectedNodeRef.current = opts.selectedNode
+  const selectedNodesRef = useRef(opts.selectedNodes)
+  selectedNodesRef.current = opts.selectedNodes
   const startRenameRef = useRef(opts.startRename)
   startRenameRef.current = opts.startRename
   const requestDeleteRef = useRef(opts.requestDelete)
   requestDeleteRef.current = opts.requestDelete
+  const requestDeleteAllRef = useRef(opts.requestDeleteAll)
+  requestDeleteAllRef.current = opts.requestDeleteAll
 
   useEffect(() => {
     // Find the node that the focused button represents (for bare-key shortcuts).
@@ -121,8 +95,13 @@ export function useFileExplorerKeys(opts: {
       // Why: require focus inside the explorer shell (includes the scrollbar, not just
       // the viewport — Radix renders the scrollbar as a sibling of the viewport).
       const inExplorer = focusInExplorer()
-      const wantUndo = isCmdZUndo(e) && fileExplorerHasUndo()
-      const wantRedo = isCmdZRedo(e) && fileExplorerHasRedo()
+      const platform = getShortcutPlatform()
+      const wantUndo =
+        keybindingMatchesAction('fileExplorer.undo', e, platform, keybindings) &&
+        fileExplorerHasUndo()
+      const wantRedo =
+        keybindingMatchesAction('fileExplorer.redo', e, platform, keybindings) &&
+        fileExplorerHasRedo()
       if (inExplorer && (wantUndo || wantRedo)) {
         e.preventDefault()
         const run = wantRedo ? redoFileExplorer() : undoFileExplorer()
@@ -136,20 +115,22 @@ export function useFileExplorerKeys(opts: {
       if (focusInExplorer()) {
         const node = findFocusedNode() ?? selectedNodeRef.current
         if (node) {
-          // Enter — Rename
           if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
             e.preventDefault()
             startRenameRef.current(node)
             return
           }
-          // ⌘⌫ (Mac) / Delete (Win) / Forward Delete (Mac full keyboard) — Delete
-          if (
-            (isMac && e.key === 'Backspace' && e.metaKey) ||
-            (isMac && e.key === 'Delete' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) ||
-            (!isMac && e.key === 'Delete' && !e.metaKey && !e.ctrlKey)
-          ) {
+          const wantsDelete = keybindingMatchesAction(
+            'fileExplorer.delete',
+            e,
+            platform,
+            keybindings
+          )
+          if (wantsDelete) {
             e.preventDefault()
-            requestDeleteRef.current(node)
+            requestDeleteAllRef.current(
+              selectedNodesRef.current.length > 1 ? selectedNodesRef.current : [node]
+            )
             return
           }
         }
@@ -160,8 +141,18 @@ export function useFileExplorerKeys(opts: {
       if (!focusInExplorer()) {
         return
       }
-      const wantsCopyRelativePath = isCopyRelativePathShortcut(e)
-      const wantsCopyPath = isCopyPathShortcut(e)
+      const wantsCopyRelativePath = keybindingMatchesAction(
+        'fileExplorer.copyRelativePath',
+        e,
+        platform,
+        keybindings
+      )
+      const wantsCopyPath = keybindingMatchesAction(
+        'fileExplorer.copyPath',
+        e,
+        platform,
+        keybindings
+      )
       if (!wantsCopyRelativePath && !wantsCopyPath) {
         return
       }
@@ -193,5 +184,5 @@ export function useFileExplorerKeys(opts: {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [rightSidebarOpen, rightSidebarTab, opts.containerRef])
+  }, [keybindings, rightSidebarOpen, rightSidebarTab, opts.containerRef])
 }

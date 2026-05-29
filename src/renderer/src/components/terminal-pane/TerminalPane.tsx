@@ -13,7 +13,7 @@ import {
   normalizeColor,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent, shellEscapePath } from './pane-helpers'
@@ -73,12 +73,15 @@ import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
 // that otherwise leaves createTerminalSlice undefined at store-init time.
 import { shutdownBufferCaptures } from './shutdown-buffer-captures'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
+import { pasteTerminalText } from './terminal-bracketed-paste'
 
 type TerminalPaneProps = {
   tabId: string
@@ -99,6 +102,10 @@ type TerminalPaneProps = {
 function formatClipboardImagePasteError(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
   return `Image paste failed: ${detail}`
+}
+
+function isXtermHelperTextarea(target: EventTarget | null): target is HTMLElement {
+  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
 }
 
 export default function TerminalPane({
@@ -308,19 +315,27 @@ export default function TerminalPane({
   const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
   const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
   const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
+  const markTerminalPaneUnread = useAppStore((store) => store.markTerminalPaneUnread)
   const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
   const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
+  const clearTerminalPaneUnread = useAppStore((store) => store.clearTerminalPaneUnread)
+  const unreadTerminalPanes = useAppStore((store) => store.unreadTerminalPanes)
+  const terminalAttentionEnabled = useAppStore(
+    (store) => store.settings?.experimentalTerminalAttention === true
+  )
   const openSpacePage = useAppStore((store) => store.openSpacePage)
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
   const repos = useAppStore((store) => store.repos)
   const updateSettings = useAppStore((store) => store.updateSettings)
+  const keybindings = useAppStore((store) => store.keybindings)
   // Why: Windows is the only platform where bare right-click is repurposed as
   // a paste gesture; on macOS/Linux the terminal still owns right-click for the
   // context menu. The settings default keeps the Windows shortcut feeling native
   // without changing the other platforms' interaction model.
   const rightClickToPaste = isWindowsUserAgent() && (settings?.terminalRightClickToPaste ?? true)
   const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
+  const shouldMeasureHiddenStartup = startup !== undefined && !isVisible
   const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
   const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
@@ -692,8 +707,10 @@ export default function TerminalPane({
     updateTabPtyId,
     markWorktreeUnread,
     markTerminalTabUnread,
+    markTerminalPaneUnread,
     clearWorktreeUnread,
     clearTerminalTabUnread,
+    clearTerminalPaneUnread,
     dispatchNotification,
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
@@ -895,8 +912,10 @@ export default function TerminalPane({
         updateTabPtyId,
         markWorktreeUnread,
         markTerminalTabUnread,
+        markTerminalPaneUnread,
         clearWorktreeUnread,
         clearTerminalTabUnread,
+        clearTerminalPaneUnread,
         dispatchNotification,
         setCacheTimerStartedAt,
         syncPanePtyLayoutBinding
@@ -912,8 +931,10 @@ export default function TerminalPane({
       dispatchNotification,
       markWorktreeUnread,
       markTerminalTabUnread,
+      markTerminalPaneUnread,
       clearWorktreeUnread,
       clearTerminalTabUnread,
+      clearTerminalPaneUnread,
       onPtyExitRef,
       setCacheTimerStartedAt,
       setRuntimePaneTitle,
@@ -966,7 +987,9 @@ export default function TerminalPane({
     onRequestClosePane: handleRequestClosePane,
     searchOpenRef,
     searchStateRef,
-    macOptionAsAltRef
+    macOptionAsAltRef,
+    keybindings,
+    terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'
   })
 
   useTerminalPaneGlobalEffects({
@@ -989,7 +1012,51 @@ export default function TerminalPane({
     toggleExpandPane
   })
 
-  // Intercept paste at the keydown level (Cmd+V / Ctrl+V) AND as a fallback
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) {
+      return
+    }
+    const syncFocused = (focused: boolean): void => {
+      window.api.ui.setTerminalInputFocused?.(focused)
+    }
+    const onFocusIn = (event: FocusEvent): void => {
+      if (isXtermHelperTextarea(event.target)) {
+        syncFocused(true)
+      }
+    }
+    const onFocusOut = (event: FocusEvent): void => {
+      if (!isXtermHelperTextarea(event.target)) {
+        return
+      }
+      if (isXtermHelperTextarea(event.relatedTarget)) {
+        return
+      }
+      syncFocused(false)
+    }
+
+    if (
+      isXtermHelperTextarea(document.activeElement) &&
+      container.contains(document.activeElement)
+    ) {
+      syncFocused(true)
+    }
+    container.addEventListener('focusin', onFocusIn)
+    container.addEventListener('focusout', onFocusOut)
+    return () => {
+      container.removeEventListener('focusin', onFocusIn)
+      container.removeEventListener('focusout', onFocusOut)
+      if (
+        isXtermHelperTextarea(document.activeElement) &&
+        container.contains(document.activeElement)
+      ) {
+        syncFocused(false)
+      }
+    }
+  }, [])
+
+  // Intercept paste at the keydown level (configurable terminal paste chords)
+  // AND as a fallback
   // on the paste event. We must handle keydown because Chromium does not fire
   // a paste event when the clipboard contains only image data (no text
   // representation) and the target is a textarea — which is exactly how
@@ -1009,54 +1076,56 @@ export default function TerminalPane({
       return
     }
 
-    // Shared helper: try text first (fast path, single IPC call for the
-    // common case), then check for a clipboard image only when text is empty
-    // — which is the image-only clipboard scenario this fix targets.
-    const pasteFromClipboard = (pane: { terminal: { paste: (data: string) => void } }): void => {
-      void window.api.ui
-        .readClipboardText()
-        .then((text) => {
-          if (text) {
-            pane.terminal.paste(text)
-            return
-          }
-          // Why: clipboard has no text — check for an image. This is the
-          // image-only clipboard case (e.g. screenshot) where Chromium's paste
-          // event would never fire on a textarea. We save the image to a temp
-          // file owned by the terminal host and paste that path.
-          const connectionId = getConnectionId(worktreeId) ?? null
-          return window.api.ui
-            .saveClipboardImageAsTempFile({ connectionId })
-            .then((filePath) => {
-              if (filePath) {
-                pane.terminal.paste(filePath)
-              }
-            })
-            .catch((error: unknown) => {
-              setTerminalError(formatClipboardImagePasteError(error))
-            })
-        })
-        .catch(() => {
-          /* ignore clipboard failures */
-        })
+    const pasteFromClipboard = (pane: ManagedPane): void => {
+      const connectionId = getConnectionId(worktreeId) ?? null
+      void pasteTerminalClipboard({
+        readClipboardText: window.api.ui.readClipboardText,
+        saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+        connectionId,
+        pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
+        onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
+      }).catch(() => {
+        /* ignore clipboard failures */
+      })
     }
 
-    // Why: intercept Cmd+V / Ctrl+V at the keydown level so we can check
-    // for clipboard images via Electron's main-process clipboard API. The
-    // browser's paste event is unreliable for image-only clipboards when the
-    // target is a <textarea> (xterm.js's hidden input), so this handler
-    // ensures image paste works regardless.
     const isMac = navigator.userAgent.includes('Mac')
+    const shortcutPlatform: NodeJS.Platform = isMac
+      ? 'darwin'
+      : navigator.userAgent.includes('Windows')
+        ? 'win32'
+        : 'linux'
+    let suppressNextNativePaste = false
+    const shouldSuppressNativePaste = (e: KeyboardEvent): boolean => {
+      const key = e.key.toLowerCase()
+      return (
+        (isMac && key === 'v' && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) ||
+        (!isMac && key === 'v' && e.ctrlKey && !e.metaKey && !e.altKey) ||
+        (!isMac && e.key === 'Insert' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey)
+      )
+    }
     const onKeyPaste = (e: KeyboardEvent): void => {
-      if (e.key.toLowerCase() !== 'v') {
-        return
-      }
-      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
-      if (!mod || e.altKey || e.shiftKey) {
-        return
-      }
       const target = e.target
       if (target instanceof Element && target.closest('[data-terminal-search-root]')) {
+        return
+      }
+      const matchesPaste = keybindingMatchesAction(
+        'terminal.paste',
+        e,
+        shortcutPlatform,
+        keybindings,
+        { context: 'terminal' }
+      )
+      if (!matchesPaste) {
+        if (shouldSuppressNativePaste(e)) {
+          // Why: bare Ctrl+V is readline's quote-insert on Windows/Linux. If
+          // Chromium turns it into a native paste event, suppress that follow-up
+          // paste while still letting xterm receive the original keydown.
+          suppressNextNativePaste = true
+          window.setTimeout(() => {
+            suppressNextNativePaste = false
+          }, 0)
+        }
         return
       }
       e.preventDefault()
@@ -1079,6 +1148,12 @@ export default function TerminalPane({
       if (target instanceof Element && target.closest('[data-terminal-search-root]')) {
         return
       }
+      if (suppressNextNativePaste) {
+        suppressNextNativePaste = false
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
       e.preventDefault()
       e.stopPropagation()
       const manager = managerRef.current
@@ -1098,10 +1173,10 @@ export default function TerminalPane({
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
     }
-  }, [isActive, worktreeId])
+  }, [isActive, worktreeId, keybindings])
 
   // Why: a click inside the terminal container is a deliberate interaction
-  // with the pane — dismiss the bell indicator for this tab and worktree
+  // with the pane — dismiss the attention indicator for this tab and worktree
   // (ghostty "show until interact" semantics). onData already covers
   // keystrokes; pointerdown covers the mouse path, including right-click
   // and middle-click paste, which also count as engagement with the pane.
@@ -1121,15 +1196,36 @@ export default function TerminalPane({
     if (!container) {
       return
     }
-    const onPointerDown = (): void => {
+    const onPointerDown = (event: PointerEvent): void => {
       clearTerminalTabUnread(tabId)
       clearWorktreeUnread(worktreeId)
+      const paneElement =
+        event.target instanceof Element ? event.target.closest('.pane[data-leaf-id]') : null
+      const leafId = paneElement?.getAttribute('data-leaf-id')
+      if (leafId) {
+        clearTerminalPaneUnread(makePaneKey(tabId, leafId))
+      }
     }
     container.addEventListener('pointerdown', onPointerDown, { capture: true })
     return () => {
       container.removeEventListener('pointerdown', onPointerDown, { capture: true })
     }
-  }, [tabId, worktreeId, clearTerminalTabUnread, clearWorktreeUnread])
+  }, [tabId, worktreeId, clearTerminalTabUnread, clearTerminalPaneUnread, clearWorktreeUnread])
+
+  useLayoutEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    for (const pane of manager.getPanes()) {
+      const paneKey = makePaneKey(tabId, pane.leafId)
+      if (terminalAttentionEnabled && unreadTerminalPanes[paneKey]) {
+        pane.container.setAttribute('data-terminal-attention', '')
+      } else {
+        pane.container.removeAttribute('data-terminal-attention')
+      }
+    }
+  }, [tabId, paneCount, terminalAttentionEnabled, unreadTerminalPanes])
 
   // Sync the data-has-title attribute on pane containers when titles change,
   // and reflow terminals so safeFit() sees the correct available height.
@@ -1448,7 +1544,7 @@ export default function TerminalPane({
       clickedPane.terminal.focus()
       void readPrimarySelectionText().then((text) => {
         if (text) {
-          clickedPane.terminal.paste(text)
+          pasteTerminalText(clickedPane.terminal, text)
         }
       })
     },
@@ -1486,7 +1582,8 @@ export default function TerminalPane({
     // Why: split groups can keep one terminal visible in an unfocused group so
     // users still see its output while typing elsewhere. Hiding on `isActive`
     // blanked the previously focused pane and exposed the white group body.
-    display: isVisible ? 'flex' : 'none',
+    display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
+    ...(shouldMeasureHiddenStartup ? { opacity: 0, pointerEvents: 'none' } : {}),
     ['--orca-terminal-divider-color' as string]:
       effectiveAppearance?.dividerColor ?? DEFAULT_TERMINAL_DIVIDER_DARK,
     ['--orca-terminal-divider-color-strong' as string]: normalizeColor(

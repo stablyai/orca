@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn, type ChildProcess, type SpawnOptions } from 'child_process'
 import {
   RELAY_SENTINEL,
   FrameDecoder,
@@ -22,9 +22,14 @@ export type RelayProcess = {
   waitForExit: (timeoutMs?: number) => Promise<number | null>
 }
 
-export function spawnRelay(entryPath: string, args: string[] = []): RelayProcess {
+export function spawnRelay(
+  entryPath: string,
+  args: string[] = [],
+  options: Pick<SpawnOptions, 'env'> = {}
+): RelayProcess {
   const proc = spawn('node', [entryPath, ...args], {
-    stdio: ['pipe', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe'],
+    ...options
   })
 
   const responses: (JsonRpcResponse | JsonRpcNotification)[] = []

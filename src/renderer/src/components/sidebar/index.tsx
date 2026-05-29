@@ -4,17 +4,23 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
+import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
 import WorktreeMetaDialog from './WorktreeMetaDialog'
 import NonGitFolderDialog from './NonGitFolderDialog'
 import RemoveFolderDialog from './RemoveFolderDialog'
 import AddRepoDialog from './AddRepoDialog'
+import ProjectAddedDialog from './ProjectAddedDialog'
+import WorktreeVisibilityDialog from './WorktreeVisibilityDialog'
 import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
+// Why: match the right sidebar's 4px resize target; a 1px seam is too hard to acquire.
+export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
+  'absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-ring/20 active:bg-ring/30'
 
 type SidebarProps = {
   worktreeScrollOffsetRef: React.MutableRefObject<number>
@@ -63,24 +69,32 @@ function Sidebar({
         ref={containerRef}
         className="relative min-h-0 flex-shrink-0 bg-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
       >
-        {/* Fixed controls */}
-        <SidebarNav />
-        <SidebarHeader />
+        {sidebarOpen && (
+          <>
+            {/* Fixed controls */}
+            <SidebarNav />
+            <SidebarHeader />
 
-        <WorktreeList
-          scrollOffsetRef={worktreeScrollOffsetRef}
-          scrollAnchorRef={worktreeScrollAnchorRef}
-        />
+            <WorktreeList
+              scrollOffsetRef={worktreeScrollOffsetRef}
+              scrollAnchorRef={worktreeScrollAnchorRef}
+            />
 
-        {/* Fixed bottom toolbar */}
-        <SidebarToolbar />
+            <SetupScriptPromptCard />
+
+            {/* Fixed bottom toolbar */}
+            <SidebarToolbar />
+          </>
+        )}
 
         {/* Resize handle */}
-        <div
-          data-sidebar-resize-handle=""
-          className="absolute top-0 right-0 z-10 h-full w-px cursor-col-resize transition-colors hover:bg-ring/20 active:bg-ring/30"
-          onMouseDown={onResizeStart}
-        />
+        {sidebarOpen && (
+          <div
+            data-sidebar-resize-handle=""
+            className={WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME}
+            onMouseDown={onResizeStart}
+          />
+        )}
       </div>
 
       {/* Dialog (rendered outside sidebar to avoid clipping) */}
@@ -88,6 +102,8 @@ function Sidebar({
       <NonGitFolderDialog />
       <RemoveFolderDialog />
       <AddRepoDialog />
+      <ProjectAddedDialog />
+      <WorktreeVisibilityDialog />
       <OrcaYamlTrustDialog />
     </TooltipProvider>
   )

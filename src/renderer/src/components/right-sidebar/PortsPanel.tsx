@@ -1,6 +1,6 @@
 /* oxlint-disable max-lines -- Why: co-locates forwarded list, detected list, modal form, and
 per-entry actions in one file to keep the data flow straightforward. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import {
   ExternalLink,
   Copy,
@@ -18,13 +18,22 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
-  callRuntimeRpc,
-  getActiveRuntimeTarget,
-  RuntimeRpcCallError,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-rpc-client'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+  killWorkspacePortForTarget,
+  openWorkspacePortInBrowser,
+  refreshWorkspacePortScanAfterStop,
+  scanWorkspacePortsForTarget,
+  shouldOpenWorkspacePortInOrcaBrowser,
+  workspacePortRuntimeTargetKey
+} from '@/lib/workspace-port-actions'
+import {
+  addressForPort,
+  addressForPortForwardEntry,
+  advertisedBrowserUrlForDetectedPort,
+  advertisedBrowserUrlForForwardedRow,
+  browserUrlForPortForwardEntry
+} from '@/lib/workspace-port-urls'
 import {
   Dialog,
   DialogContent,
@@ -42,14 +51,63 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import type { PortForwardEntry, DetectedPort } from '../../../../shared/ssh-types'
-import type {
-  WorkspacePort,
-  WorkspacePortKillResult,
-  WorkspacePortScanResult
-} from '../../../../shared/workspace-ports'
+import type { PortForwardEntry, EnrichedDetectedPort } from '../../../../shared/ssh-types'
+import type { WorkspacePort } from '../../../../shared/workspace-ports'
 
-const LOCAL_PORT_SCAN_INTERVAL_MS = 5_000
+export {
+  killWorkspacePortForTarget,
+  openWorkspacePortInBrowser,
+  scanWorkspacePortsForTarget
+} from '@/lib/workspace-port-actions'
+
+export function getLocalWorkspacePortSections(
+  scan: { ports: WorkspacePort[] } | null | undefined,
+  activeRepoId: string | null | undefined,
+  activeWorktreeId: string | null | undefined
+): {
+  activePorts: WorkspacePort[]
+  otherWorkspacePorts: WorkspacePort[]
+  externalPorts: WorkspacePort[]
+} {
+  const ports = scan?.ports ?? []
+  return {
+    activePorts: ports.filter(
+      (port) =>
+        port.kind === 'workspace' &&
+        port.owner.repoId === activeRepoId &&
+        port.owner.worktreeId === activeWorktreeId
+    ),
+    otherWorkspacePorts: ports.filter(
+      (port) =>
+        port.kind === 'workspace' &&
+        port.owner.repoId === activeRepoId &&
+        port.owner.worktreeId !== activeWorktreeId
+    ),
+    // Why: the old repo-scoped scan showed listeners from other repos as
+    // External, without workspace-only actions or cross-worktree activation.
+    // Keep that behavior now that the shared scan can attribute them globally.
+    externalPorts: ports.flatMap((port) => {
+      if (port.kind !== 'workspace') {
+        return [port]
+      }
+      return port.owner.repoId === activeRepoId ? [] : [workspacePortAsExternal(port)]
+    })
+  }
+}
+
+function workspacePortAsExternal(port: WorkspacePort & { kind: 'workspace' }): WorkspacePort {
+  return {
+    id: port.id,
+    bindHost: port.bindHost,
+    connectHost: port.connectHost,
+    port: port.port,
+    pid: port.pid,
+    processName: port.processName,
+    protocol: port.protocol,
+    kind: 'external'
+  }
+}
+
 const LOCAL_PORT_MENU_CONTENT_CLASS =
   '!rounded-md !border-border/60 !bg-popover !text-popover-foreground !shadow-[0_10px_24px_rgba(0,0,0,0.18)] !backdrop-blur-none'
 const LOCAL_PORT_MENU_ITEM_CLASS =
@@ -65,129 +123,14 @@ function safeLocalPort(remotePort: number): number {
   return remotePort
 }
 
-const HTTPS_PORTS = new Set([443, 8443])
-
-// Why: the scanner reports numeric addresses (127.0.0.1, 0.0.0.0, ::1, ::)
-// while forwards typically use "localhost". Normalize all loopback/wildcard
-// variants to "localhost" so dedup matching works regardless of representation.
+// Why: forwarded SSH ports and detected remote ports may report the same loopback
+// endpoint using different textual hosts. Normalize for deduping only.
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::'])
 function normalizeHost(host: string | undefined): string {
   if (!host || LOOPBACK_HOSTS.has(host)) {
     return 'localhost'
   }
   return host
-}
-
-function hostForLocalAction(host: string): string {
-  if (!host) {
-    return 'localhost'
-  }
-  return host.includes(':') ? `[${host}]` : host
-}
-
-function addressForPort(port: WorkspacePort): string {
-  return `${hostForLocalAction(port.connectHost)}:${port.port}`
-}
-
-export function browserUrlForPort(port: WorkspacePort): string {
-  const protocol = port.protocol === 'https' ? 'https' : 'http'
-  return `${protocol}://${addressForPort(port)}`
-}
-
-type BrowserTabCreator = ReturnType<typeof useAppStore.getState>['createBrowserTab']
-type RemoteBrowserPageHandleSetter = ReturnType<
-  typeof useAppStore.getState
->['setRemoteBrowserPageHandle']
-
-export async function openWorkspacePortInBrowser(args: {
-  port: WorkspacePort
-  activeWorktreeId?: string | null
-  runtimeTarget: RuntimeClientTarget
-  createBrowserTab: BrowserTabCreator
-  setRemoteBrowserPageHandle: RemoteBrowserPageHandleSetter
-}): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const worktreeId =
-    args.port.kind === 'workspace' ? args.port.owner.worktreeId : args.activeWorktreeId
-  if (!worktreeId) {
-    return { ok: false, reason: 'No workspace selected for the browser.' }
-  }
-  const url = browserUrlForPort(args.port)
-  activateAndRevealWorktree(worktreeId)
-  if (args.runtimeTarget.kind === 'environment') {
-    try {
-      const remotePage = await callRuntimeRpc<{ browserPageId: string }>(
-        args.runtimeTarget,
-        'browser.tabCreate',
-        { worktree: `id:${worktreeId}`, url },
-        { timeoutMs: 30_000 }
-      )
-      const tab = args.createBrowserTab(worktreeId, url, { activate: true })
-      if (!tab.activePageId) {
-        return { ok: false, reason: 'Failed to create a browser page.' }
-      }
-      args.setRemoteBrowserPageHandle(tab.activePageId, {
-        environmentId: args.runtimeTarget.environmentId,
-        remotePageId: remotePage.browserPageId
-      })
-      return { ok: true }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return { ok: false, reason: message || 'Failed to open remote browser.' }
-    }
-  }
-  args.createBrowserTab(worktreeId, url, { activate: true })
-  return { ok: true }
-}
-
-function runtimeTargetKey(target: RuntimeClientTarget): string {
-  return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
-}
-
-export async function scanWorkspacePortsForTarget(
-  target: RuntimeClientTarget,
-  repoId: string
-): Promise<WorkspacePortScanResult> {
-  const params = { repoId }
-  if (target.kind === 'local') {
-    return window.api.workspacePorts.scan(params)
-  }
-  try {
-    return await callRuntimeRpc<WorkspacePortScanResult>(target, 'workspacePorts.scan', params, {
-      timeoutMs: 15_000
-    })
-  } catch (error) {
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return {
-        platform: 'unknown',
-        scannedAt: Date.now(),
-        ports: [],
-        unavailableReason: 'The connected runtime does not support workspace port management yet.'
-      }
-    }
-    throw error
-  }
-}
-
-export async function killWorkspacePortForTarget(
-  target: RuntimeClientTarget,
-  args: { repoId: string; pid: number; port: number }
-): Promise<WorkspacePortKillResult> {
-  if (target.kind === 'local') {
-    return window.api.workspacePorts.kill(args)
-  }
-  try {
-    return await callRuntimeRpc<WorkspacePortKillResult>(target, 'workspacePorts.kill', args, {
-      timeoutMs: 15_000
-    })
-  } catch (error) {
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return {
-        ok: false,
-        reason: 'The connected runtime does not support workspace port management yet.'
-      }
-    }
-    throw error
-  }
 }
 
 type PortForwardDialogState =
@@ -215,90 +158,42 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
   const settings = useAppStore((s) => s.settings)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
-  const [scan, setScan] = useState<{ key: string; result: WorkspacePortScanResult } | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
+  const scan = useAppStore((s) => s.workspacePortScan)
+  const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
+  const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const [detailsPort, setDetailsPort] = useState<WorkspacePort | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     other: true,
     external: true
   })
-  const inFlightScanRef = useRef<Promise<void> | null>(null)
-  const inFlightScanKeyRef = useRef<string | null>(null)
-  const scanGenerationRef = useRef(0)
 
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
-  const scanKey = `${runtimeTargetKey(runtimeTarget)}:${activeRepo?.id ?? ''}`
+  const scanKey = `${workspacePortRuntimeTargetKey(runtimeTarget)}:all`
 
   const refresh = useCallback(() => {
     if (!activeRepo) {
-      setScan(null)
       return Promise.resolve()
     }
-    if (inFlightScanRef.current && inFlightScanKeyRef.current === scanKey) {
-      return inFlightScanRef.current
-    }
-    const generation = scanGenerationRef.current
-    setRefreshing(true)
-    const promise = scanWorkspacePortsForTarget(runtimeTarget, activeRepo.id)
+    setWorkspacePortScanRefreshing(true)
+    const promise = scanWorkspacePortsForTarget(runtimeTarget)
       .then((nextScan) => {
-        if (generation === scanGenerationRef.current) {
-          setScan({ key: scanKey, result: nextScan })
-        }
+        setWorkspacePortScan({ key: scanKey, result: nextScan })
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        toast.error('Failed to refresh ports', {
+          description: message || 'Workspace port scan failed.'
+        })
       })
       .finally(() => {
-        if (inFlightScanRef.current === promise) {
-          inFlightScanRef.current = null
-          inFlightScanKeyRef.current = null
-        }
-        if (generation === scanGenerationRef.current) {
-          setRefreshing(false)
-        }
+        setWorkspacePortScanRefreshing(false)
       })
-    inFlightScanRef.current = promise
-    inFlightScanKeyRef.current = scanKey
     return promise
-  }, [activeRepo, runtimeTarget, scanKey])
+  }, [activeRepo, runtimeTarget, scanKey, setWorkspacePortScan, setWorkspacePortScanRefreshing])
 
-  useEffect(() => {
-    let cancelled = false
-    scanGenerationRef.current += 1
-
-    if (!isVisible) {
-      inFlightScanRef.current = null
-      inFlightScanKeyRef.current = null
-      setScan(null)
-      setRefreshing(false)
-      return () => {
-        cancelled = true
-        scanGenerationRef.current += 1
-      }
-    }
-
-    async function run(): Promise<void> {
-      try {
-        await refresh()
-      } catch {
-        // Why: a transient RPC failure must not halt the poll loop.
-      }
-      if (!cancelled) {
-        timeout = setTimeout(() => void run(), LOCAL_PORT_SCAN_INTERVAL_MS)
-      }
-    }
-
-    let timeout: ReturnType<typeof setTimeout> | null = null
-    setScan(null)
-    void run()
-    return () => {
-      cancelled = true
-      scanGenerationRef.current += 1
-      inFlightScanRef.current = null
-      inFlightScanKeyRef.current = null
-      if (timeout) {
-        clearTimeout(timeout)
-      }
-    }
-  }, [isVisible, refresh])
-
+  // Why: WorkspacePortScanner already owns the 30s all-worktree poll. The
+  // panel scopes that shared result instead of starting a second scan loop.
   const displayScan = scan?.key === scanKey && isVisible ? scan.result : null
 
   const toggleSection = useCallback((sectionId: string) => {
@@ -320,9 +215,18 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
         return
       }
       toast.success(`Stopped process on :${port.port}`)
-      await refresh()
+      const refreshResult = await refreshWorkspacePortScanAfterStop({
+        runtimeTarget,
+        setWorkspacePortScan,
+        setWorkspacePortScanRefreshing
+      })
+      if (!refreshResult.ok) {
+        toast.error('Failed to refresh ports', {
+          description: refreshResult.reason
+        })
+      }
     },
-    [activeRepo, refresh, runtimeTarget]
+    [activeRepo, runtimeTarget, setWorkspacePortScan, setWorkspacePortScanRefreshing]
   )
 
   const handleOpenPortInBrowser = useCallback(
@@ -332,32 +236,19 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
         activeWorktreeId: activeWorktree?.id,
         runtimeTarget,
         createBrowserTab,
-        setRemoteBrowserPageHandle
+        setRemoteBrowserPageHandle,
+        openInOrcaBrowser: shouldOpenWorkspacePortInOrcaBrowser(settings)
       })
       if (!result.ok) {
         toast.error('Failed to open browser', { description: result.reason })
       }
     },
-    [activeWorktree?.id, createBrowserTab, runtimeTarget, setRemoteBrowserPageHandle]
+    [activeWorktree?.id, createBrowserTab, runtimeTarget, setRemoteBrowserPageHandle, settings]
   )
 
-  const activePorts = useMemo(
-    () =>
-      (displayScan?.ports ?? []).filter(
-        (port) => port.kind === 'workspace' && port.owner.worktreeId === activeWorktree?.id
-      ),
-    [activeWorktree?.id, displayScan?.ports]
-  )
-  const otherWorkspacePorts = useMemo(
-    () =>
-      (displayScan?.ports ?? []).filter(
-        (port) => port.kind === 'workspace' && port.owner.worktreeId !== activeWorktree?.id
-      ),
-    [activeWorktree?.id, displayScan?.ports]
-  )
-  const externalPorts = useMemo(
-    () => (displayScan?.ports ?? []).filter((port) => port.kind !== 'workspace'),
-    [displayScan?.ports]
+  const { activePorts, otherWorkspacePorts, externalPorts } = useMemo(
+    () => getLocalWorkspacePortSections(displayScan, activeRepo?.id, activeWorktree?.id),
+    [activeRepo?.id, activeWorktree?.id, displayScan]
   )
 
   if (!activeRepo) {
@@ -482,7 +373,7 @@ function LocalPortSection({
     <div className="px-3 pt-2">
       <button
         type="button"
-        className="flex items-center gap-1 w-full text-left mb-1 text-muted-foreground hover:text-foreground transition-colors"
+        className="sticky top-0 z-10 mb-1 flex w-full items-center gap-1 border-b border-border/40 bg-background py-1 text-left text-muted-foreground transition-colors hover:text-foreground"
         onClick={onToggle}
         aria-expanded={!collapsed}
         aria-controls={`local-port-section-${id}`}
@@ -567,6 +458,7 @@ function LocalPortRow({
   )
 
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const address = addressForPort(port)
   const ownerLabel =
     port.kind === 'workspace'
       ? port.owner.displayName
@@ -596,6 +488,9 @@ function LocalPortRow({
                 <span className="truncate text-xs text-muted-foreground">{processLabel}</span>
               </div>
               <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="truncate">{address}</span>
+              </div>
+              <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70">
                 <span className="truncate">{ownerLabel}</span>
                 {confidenceLabel && (
                   <span className="shrink-0 text-muted-foreground/70">{confidenceLabel}</span>
@@ -614,13 +509,13 @@ function LocalPortRow({
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
                   onClick={handleOpenBrowserButtonClick}
-                  aria-label="Open in Orca Browser"
+                  aria-label="Open in Browser"
                 >
                   <ExternalLink size={13} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                Open in Orca Browser
+                Open in Browser
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -631,13 +526,13 @@ function LocalPortRow({
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
                   onClick={handleCopyButtonClick}
-                  aria-label="Copy Address"
+                  aria-label={`Copy ${address}`}
                 >
                   <Copy size={13} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                Copy Address
+                Copy {address}
               </TooltipContent>
             </Tooltip>
             {canStopProcess && (
@@ -668,7 +563,7 @@ function LocalPortRow({
         >{`:${port.port}`}</ContextMenuLabel>
         <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleOpenBrowser}>
           <ExternalLink size={13} />
-          Open in Orca Browser
+          Open in Browser
         </ContextMenuItem>
         <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleCopy}>
           <Copy size={13} />
@@ -751,6 +646,7 @@ function LocalPortDetailsDialog({
 }
 
 function SshPortsPanel(): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
   const portForwardsByConnection = useAppStore((s) => s.portForwardsByConnection)
   const detectedPortsByConnection = useAppStore((s) => s.detectedPortsByConnection)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
@@ -796,7 +692,7 @@ function SshPortsPanel(): React.JSX.Element {
   const [detectedCollapsed, setDetectedCollapsed] = useState(false)
   const [dialogState, setDialogState] = useState<PortForwardDialogState>({ mode: 'closed' })
 
-  const handleForwardDetected = useCallback((port: DetectedPort & { targetId: string }) => {
+  const handleForwardDetected = useCallback((port: EnrichedDetectedPort & { targetId: string }) => {
     setDialogState({
       mode: 'add',
       defaults: {
@@ -814,18 +710,20 @@ function SshPortsPanel(): React.JSX.Element {
 
   const handleOpenForwardInBrowser = useCallback(
     (entry: PortForwardEntry) => {
+      const url = browserUrlForPortForwardEntry(entry)
+      if (!shouldOpenWorkspacePortInOrcaBrowser(settings)) {
+        void window.api.shell.openUrl(url)
+        return
+      }
       if (!activeWorktree?.id) {
         toast.error('No workspace selected for the browser.')
         return
       }
-      // Why: the protocol hint comes from the remote port (the actual service),
-      // not the local port which may be an arbitrary remap.
-      const protocol = HTTPS_PORTS.has(entry.remotePort) ? 'https' : 'http'
-      createBrowserTab(activeWorktree.id, `${protocol}://127.0.0.1:${entry.localPort}`, {
+      createBrowserTab(activeWorktree.id, url, {
         activate: true
       })
     },
-    [activeWorktree?.id, createBrowserTab]
+    [activeWorktree?.id, createBrowserTab, settings]
   )
 
   const handleDialogClose = useCallback(() => {
@@ -965,6 +863,7 @@ function ForwardedPortRow({
   onOpenInBrowser: () => void
 }): React.JSX.Element {
   const [removing, setRemoving] = useState(false)
+  const forwardedAddress = addressForPortForwardEntry(entry)
 
   const handleRemove = useCallback(async () => {
     setRemoving(true)
@@ -977,11 +876,8 @@ function ForwardedPortRow({
   }, [entry.id])
 
   const handleCopy = useCallback(() => {
-    // Why: use 127.0.0.1 instead of localhost because the local TCP listener
-    // binds to 127.0.0.1 specifically. On systems that resolve localhost to
-    // ::1 first, "localhost:<port>" would fail even though the forward is up.
-    void window.api.ui.writeClipboardText(`127.0.0.1:${entry.localPort}`)
-  }, [entry.localPort])
+    void window.api.ui.writeClipboardText(forwardedAddress)
+  }, [forwardedAddress])
 
   const handleOpenBrowser = useCallback(() => {
     onOpenInBrowser()
@@ -1027,6 +923,8 @@ function ForwardedPortRow({
     [handleRemove]
   )
 
+  const advertisedBrowserUrl = advertisedBrowserUrlForForwardedRow(entry)
+
   return (
     <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
       <div className="flex-1 min-w-0">
@@ -1043,13 +941,20 @@ function ForwardedPortRow({
             :{entry.localPort} → :{entry.remotePort}
           </span>
         </div>
+        {advertisedBrowserUrl && (
+          <div className="text-[11px] text-muted-foreground/70 truncate">
+            opens {advertisedBrowserUrl}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
         <button
           type="button"
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleOpenBrowserButtonClick}
-          title="Open in Orca Browser"
+          title={
+            advertisedBrowserUrl ? `Open ${advertisedBrowserUrl} in Browser` : 'Open in Browser'
+          }
         >
           <ExternalLink size={13} />
         </button>
@@ -1057,7 +962,7 @@ function ForwardedPortRow({
           type="button"
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleCopyButtonClick}
-          title="Copy Address"
+          title={`Copy ${forwardedAddress}`}
         >
           <Copy size={13} />
         </button>
@@ -1090,15 +995,23 @@ function DetectedPortRow({
   port,
   onForward
 }: {
-  port: DetectedPort & { targetId: string }
+  port: EnrichedDetectedPort & { targetId: string }
   onForward: () => void
 }): React.JSX.Element {
+  const advertisedBrowserUrl = advertisedBrowserUrlForDetectedPort(port)
   return (
     <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
       <div className="flex-1 min-w-0">
-        <span className="text-xs text-foreground">:{port.port}</span>
-        {port.processName && (
-          <span className="text-xs text-muted-foreground ml-1.5">{port.processName}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-foreground">:{port.port}</span>
+          {port.processName && (
+            <span className="text-xs text-muted-foreground truncate">{port.processName}</span>
+          )}
+        </div>
+        {advertisedBrowserUrl && (
+          <div className="text-[11px] text-muted-foreground/70 truncate">
+            advertised as {advertisedBrowserUrl}
+          </div>
         )}
       </div>
       <button

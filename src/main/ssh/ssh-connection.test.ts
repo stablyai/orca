@@ -1,19 +1,33 @@
+/* eslint-disable max-lines -- Why: SSH connection lifecycle tests share one ssh2 mock so auth, reconnect, and system-transport behavior stay consistent. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Socket } from 'net'
 import { EventEmitter } from 'events'
+import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 
-let eventHandlers: Map<string, (...args: unknown[]) => void>
+let eventHandlers: Map<string, Set<(...args: unknown[]) => void>>
 let connectBehavior: 'ready' | 'error' = 'ready'
 let connectErrorMessage = ''
+let destroyErrorMessage = ''
+let connectSequence: ('ready' | Error)[] = []
 
 type MockSshClient = {
   setNoDelay: ReturnType<typeof vi.fn>
   _sock: Socket | undefined
   lastExecCommand?: string
+  lastConnectConfig?: unknown
 }
 let clientInstances: MockSshClient[] = []
 
+function emitSshEvent(event: string, ...args: unknown[]): void {
+  for (const handler of eventHandlers?.get(event) ?? []) {
+    handler(...args)
+  }
+}
+
 vi.mock('ssh2', () => {
+  class MockBaseAgent {}
   class MockSshClient {
     setNoDelay = vi.fn()
     // Why: production code reads `client._sock` and checks `instanceof net.Socket`
@@ -21,30 +35,66 @@ vi.mock('ssh2', () => {
     // exercise the "enabled" branch instead of the "skipped (proxy socket)" branch.
     _sock: Socket | undefined = new Socket()
     lastExecCommand?: string
+    lastConnectConfig?: unknown
     constructor() {
       clientInstances.push(this)
     }
     on(event: string, handler: (...args: unknown[]) => void) {
-      eventHandlers?.set(event, handler)
+      const handlers = eventHandlers?.get(event) ?? new Set<(...args: unknown[]) => void>()
+      handlers.add(handler)
+      eventHandlers?.set(event, handlers)
     }
-    connect() {
+    off(event: string, handler: (...args: unknown[]) => void) {
+      const handlers = eventHandlers?.get(event)
+      handlers?.delete(handler)
+      if (handlers?.size === 0) {
+        eventHandlers.delete(event)
+      }
+    }
+    connect(config?: unknown) {
+      this.lastConnectConfig = config
       setTimeout(() => {
+        const next = connectSequence.shift()
+        if (next instanceof Error) {
+          emitSshEvent('error', next)
+          return
+        }
+        if (next === 'ready') {
+          emitSshEvent('ready')
+          return
+        }
         if (connectBehavior === 'error') {
-          eventHandlers?.get('error')?.(new Error(connectErrorMessage))
+          emitSshEvent('error', new Error(connectErrorMessage))
         } else {
-          eventHandlers?.get('ready')?.()
+          emitSshEvent('ready')
         }
       }, 0)
     }
     end() {}
-    destroy() {}
+    destroy() {
+      if (!destroyErrorMessage) {
+        return
+      }
+      if (eventHandlers?.has('error')) {
+        emitSshEvent('error', new Error(destroyErrorMessage))
+        return
+      }
+      throw new Error(destroyErrorMessage)
+    }
     exec(cmd: string, cb: (err: Error | undefined, channel: unknown) => void) {
       this.lastExecCommand = cmd
       cb(undefined, {})
     }
     sftp() {}
   }
-  return { Client: MockSshClient }
+  return {
+    BaseAgent: MockBaseAgent,
+    Client: MockSshClient,
+    createAgent: vi.fn(),
+    utils: {
+      parseKey: vi.fn()
+    }
+  }
 })
 
 const { spawnSystemSshCommandMock } = vi.hoisted(() => ({
@@ -121,6 +171,8 @@ describe('SshConnection', () => {
     eventHandlers = new Map()
     connectBehavior = 'ready'
     connectErrorMessage = ''
+    destroyErrorMessage = ''
+    connectSequence = []
     clientInstances = []
     spawnSystemSshCommandMock.mockReset()
     spawnSystemSshCommandMock.mockImplementation(() => createSystemCommandChannel())
@@ -150,6 +202,16 @@ describe('SshConnection', () => {
     expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
   })
 
+  it('removes startup listeners after ssh2 connect succeeds', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+
+    await conn.connect()
+
+    expect(eventHandlers.has('ready')).toBe(false)
+    // The remaining error listener is the steady-state disconnect handler.
+    expect(eventHandlers.has('error')).toBe(true)
+  })
+
   it('enables TCP_NODELAY on the new ssh2 client after a reconnect cycle', async () => {
     // Why: guards the "Nagle is re-enabled because someone refactored only
     // the initial connect path" regression class. attemptConnect bumps
@@ -175,6 +237,23 @@ describe('SshConnection', () => {
     expect(clientInstances[1].setNoDelay).toHaveBeenCalledWith(true)
   })
 
+  it('forces a fresh SSH connection for an explicit reconnect', async () => {
+    const states: string[] = []
+    const conn = new SshConnection(
+      createTarget(),
+      createCallbacks({
+        onStateChange: vi.fn((_id, state) => states.push(state.status))
+      })
+    )
+    await conn.connect()
+
+    await conn.reconnect()
+
+    expect(clientInstances).toHaveLength(2)
+    expect(states).toEqual(['connecting', 'connected', 'reconnecting', 'connecting', 'connected'])
+    expect(conn.getState().status).toBe('connected')
+  })
+
   it('transitions through connecting → connected states', async () => {
     const states: string[] = []
     const callbacks = createCallbacks({
@@ -196,6 +275,18 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget(), callbacks)
 
     await expect(conn.connect()).rejects.toThrow('Connection refused')
+    expect(conn.getState().status).toBe('error')
+  })
+
+  it('guards late ssh2 errors emitted while destroying a failed startup client', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'Connection lost before handshake'
+    destroyErrorMessage = 'Connection lost before handshake'
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget(), callbacks)
+
+    await expect(conn.connect()).rejects.toThrow('Connection lost before handshake')
+
     expect(conn.getState().status).toBe('error')
   })
 
@@ -249,6 +340,199 @@ describe('SshConnection', () => {
     expect(resolveWithSshG).toHaveBeenCalledWith('ssh-alias')
   })
 
+  it('tries ssh-agent before reading an explicit private key', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    const callbacks = createCallbacks({
+      onCredentialRequest: vi.fn()
+    })
+    const conn = new SshConnection(
+      createTarget({
+        identityFile: '/tmp/encrypted-key'
+      }),
+      callbacks
+    )
+
+    await conn.connect()
+
+    const initialConfig = clientInstances[0].lastConnectConfig as {
+      agent?: unknown
+      privateKey?: unknown
+    }
+    expect(initialConfig.agent).toBe('/tmp/agent.sock')
+    expect(initialConfig.privateKey).toBeUndefined()
+    expect(callbacks.onCredentialRequest).not.toHaveBeenCalled()
+  })
+
+  it('falls back to direct private key auth when agent auth fails', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'test-key')
+    connectSequence = [new Error('All configured authentication methods failed'), 'ready']
+
+    try {
+      const conn = new SshConnection(createTarget({ identityFile: keyPath }), createCallbacks())
+
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(2)
+      const initialConfig = clientInstances[0].lastConnectConfig as {
+        agent?: unknown
+        privateKey?: unknown
+      }
+      const fallbackConfig = clientInstances[1].lastConnectConfig as {
+        agent?: unknown
+        privateKey?: Buffer
+      }
+      expect(initialConfig.agent).toBe('/tmp/agent.sock')
+      expect(initialConfig.privateKey).toBeUndefined()
+      expect(fallbackConfig.agent).toBeUndefined()
+      expect(fallbackConfig.privateKey).toEqual(Buffer.from('test-key'))
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to direct private key auth when the agent socket is unavailable', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/stale-agent.sock')
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'test-key')
+    const agentError = new Error('Failed to connect to agent') as Error & { level: string }
+    agentError.level = 'agent'
+    connectSequence = [agentError, 'ready']
+
+    try {
+      const conn = new SshConnection(createTarget({ identityFile: keyPath }), createCallbacks())
+
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(2)
+      const fallbackConfig = clientInstances[1].lastConnectConfig as {
+        agent?: unknown
+        privateKey?: Buffer
+      }
+      expect(fallbackConfig.agent).toBeUndefined()
+      expect(fallbackConfig.privateKey).toEqual(Buffer.from('test-key'))
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to direct private key auth after too many agent authentication failures', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'test-key')
+    connectSequence = [new Error('Received disconnect: Too many authentication failures'), 'ready']
+
+    try {
+      const conn = new SshConnection(createTarget({ identityFile: keyPath }), createCallbacks())
+
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(2)
+      const fallbackConfig = clientInstances[1].lastConnectConfig as {
+        agent?: unknown
+        privateKey?: Buffer
+      }
+      expect(fallbackConfig.agent).toBeUndefined()
+      expect(fallbackConfig.privateKey).toEqual(Buffer.from('test-key'))
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('retries password auth without a stale agent when no private key fallback exists', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/stale-agent.sock')
+    const agentError = new Error('Failed to connect to agent') as Error & { level: string }
+    agentError.level = 'agent'
+    connectSequence = [agentError, 'ready']
+    const onCredentialRequest = vi.fn(async () => 'password-123')
+    const conn = new SshConnection(
+      createTarget({ identityFile: join(tmpdir(), 'missing-key') }),
+      createCallbacks({ onCredentialRequest })
+    )
+
+    await conn.connect()
+
+    expect(clientInstances).toHaveLength(2)
+    const retryConfig = clientInstances[1].lastConnectConfig as {
+      agent?: unknown
+      password?: string
+      privateKey?: unknown
+    }
+    expect(retryConfig.agent).toBeUndefined()
+    expect(retryConfig.password).toBe('password-123')
+    expect(retryConfig.privateKey).toBeUndefined()
+    expect(onCredentialRequest).toHaveBeenCalledWith('target-1', 'password', 'example.com')
+  })
+
+  it('retries password auth with the no-agent key config after direct key fallback fails', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'test-key')
+    connectSequence = [
+      new Error('All configured authentication methods failed'),
+      new Error('All configured authentication methods failed'),
+      'ready'
+    ]
+    const onCredentialRequest = vi.fn(async () => 'password-123')
+
+    try {
+      const conn = new SshConnection(
+        createTarget({ identityFile: keyPath }),
+        createCallbacks({ onCredentialRequest })
+      )
+
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(3)
+      const keyRetryConfig = clientInstances[1].lastConnectConfig as {
+        agent?: unknown
+        privateKey?: Buffer
+      }
+      const passwordRetryConfig = clientInstances[2].lastConnectConfig as {
+        agent?: unknown
+        password?: string
+        privateKey?: Buffer
+      }
+      expect(keyRetryConfig.agent).toBeUndefined()
+      expect(keyRetryConfig.privateKey).toEqual(Buffer.from('test-key'))
+      expect(passwordRetryConfig.agent).toBeUndefined()
+      expect(passwordRetryConfig.privateKey).toEqual(Buffer.from('test-key'))
+      expect(passwordRetryConfig.password).toBe('password-123')
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not prompt twice when post-agent private key passphrase is cancelled', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'test-key')
+    connectSequence = [
+      new Error('All configured authentication methods failed'),
+      new Error('Encrypted private OpenSSH key detected, but no passphrase given')
+    ]
+    const onCredentialRequest = vi.fn(async () => null)
+
+    try {
+      const conn = new SshConnection(
+        createTarget({ identityFile: keyPath }),
+        createCallbacks({ onCredentialRequest })
+      )
+
+      await expect(conn.connect()).rejects.toThrow('Encrypted private OpenSSH key detected')
+      expect(onCredentialRequest).toHaveBeenCalledTimes(1)
+      expect(onCredentialRequest).toHaveBeenCalledWith('target-1', 'passphrase', keyPath)
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
   it('wraps exec commands in /bin/sh so non-POSIX login shells do not parse relay snippets', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
@@ -266,6 +550,7 @@ describe('SshConnection', () => {
       port: 22,
       identityFile: [],
       forwardAgent: false,
+      identitiesOnly: false,
       proxyUseFdpass: true
     })
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
@@ -299,6 +584,7 @@ describe('SshConnectionManager', () => {
     eventHandlers = new Map()
     connectBehavior = 'ready'
     connectErrorMessage = ''
+    connectSequence = []
     clientInstances = []
   })
 

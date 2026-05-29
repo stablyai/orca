@@ -18,7 +18,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { Repo } from '../../../../shared/types'
 
-type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'setup'
+type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup'
 type RepoKind = 'git' | 'folder'
 
 export function useCreateRepo(
@@ -137,15 +137,15 @@ export function useCreateRepo(
         }
         setStep('setup')
       } else {
-        // Why: without activating the new folder, the dialog closes and users
-        // see no change. Matches addNonGitFolder's behavior in the store slice.
+        // Why: folder repos skip the Git setup step, so activate the synthetic
+        // root workspace before closing. Matches addNonGitFolder's behavior.
         await fetchWorktrees(repo.id)
         if (gen !== createGenRef.current) {
           return
         }
         const folderWorktree = useAppStore.getState().worktreesByRepo[repo.id]?.[0]
         if (folderWorktree) {
-          activateAndRevealWorktree(folderWorktree.id)
+          activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
         }
         closeModal()
       }

@@ -177,6 +177,25 @@ describe('WslCliInstaller', () => {
     expect(bridge).toContain('exit 1')
   })
 
+  it('wraps WSL bash scripts as a single encoded command line', () => {
+    const command = [
+      'set -euo pipefail',
+      `cat > "$command_tmp" <<'ORCA_WSL_CLI'`,
+      '#!/usr/bin/env bash',
+      'exec powershell.exe "$@"',
+      'ORCA_WSL_CLI'
+    ].join('\n')
+    const wrapped = _internals.buildEncodedWslBashCommand(command)
+    const encoded = wrapped.match(
+      /^set -o pipefail; printf %s '([^']+)' \| base64 -d \| bash$/
+    )?.[1]
+
+    expect(wrapped).not.toContain('\n')
+    expect(wrapped).toContain('set -o pipefail;')
+    expect(encoded).toBeTruthy()
+    expect(Buffer.from(encoded as string, 'base64').toString('utf8')).toBe(command)
+  })
+
   it('refuses to remove an old managed launcher when the bridge path is user-owned', async () => {
     const oldLauncher = _internals.buildWslLauncher(
       'C:\\Old\\orca.cmd',

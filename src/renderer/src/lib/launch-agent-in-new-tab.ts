@@ -10,6 +10,7 @@ import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { getEffectiveTuiAgent } from '../../../shared/effective-tui-agent'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgentId } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 
@@ -37,6 +38,23 @@ export type LaunchAgentInNewTabResult = {
   startupPlan: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
 } | null
+
+function seedCommandCodeSubmittedPromptStatus(tabId: string, prompt: string): void {
+  const state = useAppStore.getState()
+  const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
+  if (!leafId) {
+    return
+  }
+  try {
+    state.setAgentStatus(makePaneKey(tabId, leafId), {
+      state: 'working',
+      prompt,
+      agentType: 'command-code'
+    })
+  } catch {
+    // Best-effort UI seed. Real hooks still own refinement/completion.
+  }
+}
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -75,8 +93,6 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const customTuiAgents = store.settings?.customTuiAgents ?? []
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  // Why: a missing effective agent (unknown custom id) is treated as
-  // followup-path because we have no other strategy for it.
   const effective = getEffectiveTuiAgent(agent, customTuiAgents)
   const isFollowupPath =
     effective?.promptInjectionMode === 'stdin-after-start' || effective === null
@@ -127,6 +143,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         agent,
         prompt: '',
         cmdOverrides,
+        customTuiAgents,
         platform: CLIENT_PLATFORM,
         allowEmptyPromptLaunch: true
       })
@@ -171,6 +188,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    ...(agent === 'command-code' && hasPrompt && promptDelivery === 'auto-submit'
+      ? { initialAgentStatus: { agent, prompt: trimmedPrompt } }
+      : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: launchSource ?? 'tab_bar_quick_launch',
@@ -222,6 +242,11 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       }
     }).then((delivered) => {
       if (delivered) {
+        if (agent === 'command-code' && submitPastedPrompt) {
+          // Why: Command Code has no prompt-submit hook; when Orca submits a
+          // generated prompt after readiness, seed working at delivery time.
+          seedCommandCodeSubmittedPromptStatus(tabId, pasteDraftAfterLaunch)
+        }
         onPromptDelivered?.()
       }
     })

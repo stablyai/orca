@@ -27,6 +27,11 @@ const ORCA_POSTHOG_WRITE_KEY_LITERAL =
   typeof orcaPostHogWriteKey === 'string' && orcaPostHogWriteKey.length > 0
     ? JSON.stringify(orcaPostHogWriteKey)
     : 'null'
+const orcaDiagnosticsTokenUrl = process.env.ORCA_DIAGNOSTICS_TOKEN_URL
+const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL =
+  typeof orcaDiagnosticsTokenUrl === 'string' && orcaDiagnosticsTokenUrl.length > 0
+    ? JSON.stringify(orcaDiagnosticsTokenUrl)
+    : 'null'
 
 export default defineConfig({
   main: {
@@ -43,7 +48,12 @@ export default defineConfig({
           index: resolve('src/main/index.ts'),
           'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
-          'stt-worker': resolve('src/main/speech/stt-worker.ts')
+          'stt-worker': resolve('src/main/speech/stt-worker.ts'),
+          // Why: electron-vite cleans out/main in dev. The dev CLI imports
+          // this path for `orca agent hooks ...`, so it must survive rebuilds.
+          'agent-hooks/managed-agent-hook-controls': resolve(
+            'src/main/agent-hooks/managed-agent-hook-controls.ts'
+          )
         }
       }
     },
@@ -51,7 +61,8 @@ export default defineConfig({
     // above for the full rationale.
     define: {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
-      ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL
+      ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
+      ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL
     },
     // Why: @xterm/headless declares "exports": null in package.json, which
     // prevents Vite's default resolver from finding the CJS entry. Point

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Orca",
     "slug": "orca-mobile",
-    "version": "0.0.8",
+    "version": "0.0.10",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -69,7 +69,7 @@
         "expo-camera",
         {
           "cameraPermission": "Allow Orca to use the camera for QR code scanning.",
-          "microphonePermission": false,
+          "microphonePermission": "Allow Orca to use your microphone for voice dictation sent to your paired desktop for transcription.",
           "recordAudioAndroid": false
         }
       ],

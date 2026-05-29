@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { basename, dirname } from '@/lib/path'
+import { folderRelativePathToIncludeGlob } from './file-search-include-pattern'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
@@ -28,6 +29,7 @@ import { useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerGitIgnoredRows } from './useFileExplorerGitIgnoredRows'
+import type { TreeNode } from './file-explorer-types'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -46,8 +48,10 @@ function FileExplorerInner(): React.JSX.Element {
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
 
   const worktreePath = activeWorktree?.path ?? null
+  const visibleWorktreePath = rightSidebarOpen ? worktreePath : null
   const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
@@ -64,6 +68,8 @@ function FileExplorerInner(): React.JSX.Element {
     rootCache,
     rootError,
     loadDir,
+    statPath,
+    markPathAsDirectory,
     refreshTree,
     refreshDir,
     resetAndLoad
@@ -97,6 +103,7 @@ function FileExplorerInner(): React.JSX.Element {
     selectedPath,
     selectedPaths,
     setSingleSelectedPath,
+    setSelectedPaths,
     resetSelection,
     selectRowWithModifiers,
     preserveSelectionForContextMenu,
@@ -117,14 +124,12 @@ function FileExplorerInner(): React.JSX.Element {
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
 
-  const { deleteShortcutLabel, requestDelete } = useFileDeletion({
+  const { deleteShortcutLabel, requestDelete, requestDeleteAll } = useFileDeletion({
     activeWorktreeId,
     openFiles,
     closeFile,
     refreshDir,
-    selectedPath,
-    setSelectedPath: setSingleSelectedPath,
-    isMac,
+    setSelectedPaths,
     isWindows
   })
 
@@ -153,13 +158,15 @@ function FileExplorerInner(): React.JSX.Element {
   })
 
   useEffect(() => {
-    if (!worktreePath) {
+    if (!visibleWorktreePath) {
       return
     }
+    // Why: the sidebar remains mounted while closed to preserve caches, but
+    // loading the hidden tree would probe every clicked workspace on macOS.
     resetSelection()
     resetAndLoad()
     clearFileExplorerUndoHistory()
-  }, [worktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visibleWorktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Why: on app startup the file explorer loads before SSH providers are
   // registered, so readDir fails for remote worktrees. When the SSH
@@ -170,24 +177,25 @@ function FileExplorerInner(): React.JSX.Element {
   useEffect(() => {
     if (sshConnectedGeneration > sshGenRef.current) {
       sshGenRef.current = sshConnectedGeneration
-      if (worktreePath && rootError) {
+      if (visibleWorktreePath && rootError) {
         resetAndLoad()
       }
     }
-  }, [sshConnectedGeneration]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sshConnectedGeneration, visibleWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => clearFlashTimeout, [clearFlashTimeout])
 
   useEffect(() => {
+    if (!visibleWorktreePath) {
+      return
+    }
     for (const dirPath of expanded) {
       if (!dirCache[dirPath]?.children.length && !dirCache[dirPath]?.loading) {
-        const depth = worktreePath
-          ? splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-          : 0
+        const depth = splitPathSegments(dirPath.slice(visibleWorktreePath.length + 1)).length - 1
         void loadDir(dirPath, depth)
       }
     }
-  }, [expanded]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [expanded, visibleWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const {
     inlineInput,
@@ -206,7 +214,7 @@ function FileExplorerInner(): React.JSX.Element {
   })
 
   useFileExplorerWatch({
-    worktreePath,
+    worktreePath: visibleWorktreePath,
     activeWorktreeId,
     dirCache,
     setDirCache,
@@ -282,14 +290,20 @@ function FileExplorerInner(): React.JSX.Element {
   }, [inlineInputIndex, virtualizer])
 
   const selectedNode = selectedPath ? (rowsByPath.get(selectedPath) ?? null) : null
+  const selectedNodes = useMemo(
+    () => visibleFlatRows.filter((row) => selectedPaths.has(row.path)),
+    [visibleFlatRows, selectedPaths]
+  )
   useFileExplorerKeys({
     containerRef: explorerShellRef,
     flatRows: visibleFlatRows,
     inlineInput,
     selectedPaths,
     selectedNode,
+    selectedNodes,
     startRename,
-    requestDelete
+    requestDelete,
+    requestDeleteAll
   })
 
   const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
@@ -297,9 +311,26 @@ function FileExplorerInner(): React.JSX.Element {
     openFile,
     pinFile,
     toggleDir,
+    loadDir,
+    statPath,
+    markPathAsDirectory,
     setSelectedPath: setSingleSelectedPath,
     scrollRef
   })
+
+  // Why: context-menu Delete should respect the multi-selection — if the
+  // right-clicked node is already part of a multi-selection, delete the whole
+  // set; otherwise fall through to single-node delete.
+  const handleContextMenuDelete = useCallback(
+    (node: TreeNode) => {
+      if (selectedPaths.has(node.path) && selectedNodes.length > 1) {
+        requestDeleteAll(selectedNodes)
+      } else {
+        requestDelete(node)
+      }
+    },
+    [selectedPaths, selectedNodes, requestDelete, requestDeleteAll]
+  )
 
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
   const handleRowClick = useCallback(
@@ -316,11 +347,28 @@ function FileExplorerInner(): React.JSX.Element {
     },
     [activeWorktreeId, collapseDirSubtree]
   )
+  const seedFileSearchIncludePattern = useAppStore((s) => s.seedFileSearchIncludePattern)
+  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
+  const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
+  const handleFindInFolder = useCallback(
+    (node: (typeof flatRows)[number]) => {
+      if (!activeWorktreeId || !node.isDirectory) {
+        return
+      }
+      seedFileSearchIncludePattern(
+        activeWorktreeId,
+        folderRelativePathToIncludeGlob(node.relativePath)
+      )
+      setRightSidebarTab('search')
+      setRightSidebarOpen(true)
+    },
+    [activeWorktreeId, seedFileSearchIncludePattern, setRightSidebarTab, setRightSidebarOpen]
+  )
 
   if (!worktreePath) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
-        Select a worktree to browse files
+        Select a workspace to browse files
       </div>
     )
   }
@@ -332,12 +380,18 @@ function FileExplorerInner(): React.JSX.Element {
   const isEmptyState = visibleFlatRows.length === 0 && !inlineInput
   const isLoading = isEmptyState && (rootCache?.loading ?? true)
   const hasError = isEmptyState && !isLoading && !!rootError
-  const isEmpty = isEmptyState && !isLoading && !hasError
   const showTree = !isEmptyState
 
   return (
     <>
-      <div ref={explorerShellRef} data-orca-explorer-shell className="flex h-full min-h-0 flex-col">
+      <div
+        ref={explorerShellRef}
+        data-orca-explorer-shell
+        data-selected-folder-relative-path={
+          selectedNode?.isDirectory ? selectedNode.relativePath : undefined
+        }
+        className="flex h-full min-h-0 flex-col"
+      >
         <FileExplorerToolbar
           repoName={repoName}
           worktreePath={worktreePath}
@@ -395,7 +449,7 @@ function FileExplorerInner(): React.JSX.Element {
             <FileExplorerTreeStatus
               isLoading={isLoading}
               error={hasError ? rootError : null}
-              isEmpty={isEmpty}
+              isEmpty={isEmptyState && !isLoading && !hasError}
             />
           )}
           {showTree && (
@@ -422,8 +476,9 @@ function FileExplorerInner(): React.JSX.Element {
               onStartNew={startNew}
               onStartRename={startRename}
               onDuplicate={handleDuplicate}
-              onRequestDelete={requestDelete}
+              onRequestDelete={handleContextMenuDelete}
               onCollapseFolderSubtree={handleCollapseFolderSubtree}
+              onFindInFolder={handleFindInFolder}
               onMoveDrop={handleMoveDrop}
               onDragTargetChange={setDropTargetDir}
               onDragSourceChange={setDragSourcePath}

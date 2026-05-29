@@ -7,6 +7,7 @@ import { createTerminalSlice } from './slices/terminals'
 import { createTabsSlice } from './slices/tabs'
 import { createUISlice } from './slices/ui'
 import { createSettingsSlice } from './slices/settings'
+import { createKeybindingsSlice } from './slices/keybindings'
 import { createGitHubSlice } from './slices/github'
 import { createHostedReviewSlice } from './slices/hosted-review'
 import { createLinearSlice } from './slices/linear'
@@ -38,6 +39,7 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createTabsSlice(...a),
   ...createUISlice(...a),
   ...createSettingsSlice(...a),
+  ...createKeybindingsSlice(...a),
   ...createGitHubSlice(...a),
   ...createHostedReviewSlice(...a),
   ...createLinearSlice(...a),

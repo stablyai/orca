@@ -41,7 +41,6 @@ function removeDeletedWorktreesFromAnalysis(
       reclaimableBytes: repoRows.reduce((sum, row) => sum + row.reclaimableBytes, 0)
     }
   })
-
   return {
     ...analysis,
     totalSizeBytes: worktrees.reduce((sum, row) => sum + row.sizeBytes, 0),
@@ -66,7 +65,8 @@ function isWorkspaceSpaceScanCancelled(error: unknown): boolean {
 }
 
 export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], WorkspaceSpaceSlice> = (
-  set
+  set,
+  get
 ) => ({
   workspaceSpaceAnalysis: null,
   workspaceSpaceScanProgress: null,
@@ -88,6 +88,9 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
   cancelWorkspaceSpaceScan: async () => {
     const cancelled = await window.api.workspaceSpace.cancel()
     if (cancelled) {
+      get().recordFeatureInteraction?.('workspace-cleanup')
+    }
+    if (cancelled) {
       set((state) =>
         state.workspaceSpaceScanProgress
           ? {
@@ -106,6 +109,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
     if (inFlightScan) {
       return inFlightScan
     }
+    get().recordFeatureInteraction?.('workspace-cleanup')
     set({
       workspaceSpaceScanning: true,
       workspaceSpaceScanProgress: null,
@@ -142,7 +146,10 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
       })
     return inFlightScan
   },
-  removeWorkspaceSpaceWorktrees: (worktreeIds) =>
+  removeWorkspaceSpaceWorktrees: (worktreeIds) => {
+    if (worktreeIds.length > 0) {
+      get().recordFeatureInteraction?.('workspace-cleanup')
+    }
     set((state) =>
       state.workspaceSpaceAnalysis
         ? {
@@ -153,4 +160,5 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
           }
         : state
     )
+  }
 })

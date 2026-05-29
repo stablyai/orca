@@ -4,6 +4,7 @@ adapter ↔ history lifecycle logic. */
 import { basename } from 'path'
 import { existsSync } from 'fs'
 import { DaemonClient } from './client'
+import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
@@ -41,6 +42,8 @@ export class TerminalKilledError extends Error {
 
 export class DaemonPtyAdapter implements IPtyProvider {
   readonly protocolVersion: number
+  private socketPath: string
+  private tokenPath: string
   private client: DaemonClient
   private historyManager: HistoryManager | null
   private historyReader: HistoryReader | null
@@ -66,7 +69,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private coldRestoreCache = new Map<string, { scrollback: string; cwd: string }>()
   private activeSessionIds = new Set<string>()
   private dirtySessionVersions = new Map<string, number>()
-  private checkpointInterval: ReturnType<typeof setInterval> | null = null
+  private checkpointTimer: ReturnType<typeof setTimeout> | null = null
   private checkpointInFlight: Promise<void> | null = null
   // Why: checkpoint-based persistence requires the getSnapshot RPC (v4+).
   // Legacy daemons reject it, causing noisy log spam every 5 seconds.
@@ -75,6 +78,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
+    this.socketPath = opts.socketPath
+    this.tokenPath = opts.tokenPath
     this.client = new DaemonClient({
       socketPath: opts.socketPath,
       tokenPath: opts.tokenPath,
@@ -95,12 +100,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   private async doSpawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    await this.ensureConnected()
-
     const sessionId = opts.sessionId ?? mintPtySessionId(opts.worktreeId)
 
     if (this.killedSessionTombstones.has(sessionId)) {
       throw new TerminalKilledError(sessionId)
+    }
+
+    if (opts.isNewSession) {
+      await this.replaceUnhealthyMacResolverDaemonBeforeNewPty()
     }
 
     // Why: detect crash-recovery history before spawning a replacement PTY so
@@ -111,12 +118,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
     const effectiveCols = restoreInfo?.cols ?? opts.cols
     const effectiveRows = restoreInfo?.rows ?? opts.rows
 
+    await this.ensureConnected()
+
     const result = await this.client.request<CreateOrAttachResult>('createOrAttach', {
       sessionId,
       cols: effectiveCols,
       rows: effectiveRows,
       cwd: effectiveCwd,
       env: opts.env,
+      envToDelete: opts.envToDelete,
       command: opts.command,
       // Why: without this, the daemon always spawns cmd.exe (COMSPEC) or
       // PowerShell as a fallback — regardless of which shell the renderer
@@ -246,6 +256,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     await this.client.request('kill', { sessionId: id })
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
+    this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     // Why: history removal is for the "user explicitly closed this terminal"
     // path. Sleep also calls shutdown but expects scrollback to survive — wake
@@ -407,6 +418,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
     this.dirtySessionVersions.clear()
+    this.stopCheckpointTimer()
     for (const id of ids) {
       // Why: listener throws are intentionally *not* caught — matches the
       // natural onExit fanout in setupEventRouting, so synthetic exits don't
@@ -462,10 +474,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   dispose(): void {
-    if (this.checkpointInterval) {
-      clearInterval(this.checkpointInterval)
-      this.checkpointInterval = null
-    }
+    this.stopCheckpointTimer()
     this.dirtySessionVersions.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
@@ -487,10 +496,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // We write a final checkpoint before disconnecting so that if the daemon
   // later crashes while Orca is closed, checkpoint.json has recovery data.
   async disconnectOnly(): Promise<void> {
-    if (this.checkpointInterval) {
-      clearInterval(this.checkpointInterval)
-      this.checkpointInterval = null
-    }
+    this.stopCheckpointTimer()
     // Why: wait for any in-flight timer pass to finish before starting
     // the final checkpoint. Otherwise both passes race on the shared tmp
     // file, risking ENOENT on rename and disabling future writes.
@@ -512,23 +518,47 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private async ensureConnected(): Promise<void> {
     await this.client.ensureConnected()
     this.setupEventRouting()
-    this.startCheckpointTimer()
+    this.scheduleCheckpointTimer()
   }
 
-  private startCheckpointTimer(): void {
-    if (this.checkpointInterval || !this.historyManager || !this.supportsCheckpoints) {
+  private stopCheckpointTimer(): void {
+    if (!this.checkpointTimer) {
       return
     }
-    this.checkpointInterval = setInterval(() => {
+    clearTimeout(this.checkpointTimer)
+    this.checkpointTimer = null
+  }
+
+  private stopCheckpointTimerIfIdle(): void {
+    if (this.dirtySessionVersions.size === 0) {
+      this.stopCheckpointTimer()
+    }
+  }
+
+  private scheduleCheckpointTimer(): void {
+    if (
+      this.checkpointTimer ||
+      !this.historyManager ||
+      !this.supportsCheckpoints ||
+      this.dirtySessionVersions.size === 0
+    ) {
+      return
+    }
+    // Why: checkpointing is only needed after terminal data/resize/write marks
+    // a session dirty. A permanent interval woke the main process every 5s for
+    // idle daemon-backed terminals just to discover there was nothing to write.
+    this.checkpointTimer = setTimeout(() => {
+      this.checkpointTimer = null
       // Why: if the previous pass is still in-flight (slow RPC or disk),
-      // skip this tick. Overlapping passes race on the shared tmp file
-      // in checkpoint(), and a lost rename triggers handleWriteError which
-      // permanently disables the session's history writes.
+      // retry later instead of overlapping checkpoint() writes to the same tmp
+      // file, which can lose a rename and disable future history writes.
       if (this.checkpointInFlight) {
+        this.scheduleCheckpointTimer()
         return
       }
       this.checkpointInFlight = this.checkpointDirtySessions().finally(() => {
         this.checkpointInFlight = null
+        this.scheduleCheckpointTimer()
       })
     }, DaemonPtyAdapter.CHECKPOINT_INTERVAL_MS)
   }
@@ -538,6 +568,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       return
     }
     this.dirtySessionVersions.set(sessionId, (this.dirtySessionVersions.get(sessionId) ?? 0) + 1)
+    this.scheduleCheckpointTimer()
   }
 
   private async checkpointDirtySessions(): Promise<void> {
@@ -552,6 +583,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       [...this.dirtySessionVersions].filter(([sessionId]) => this.activeSessionIds.has(sessionId))
     )
     if (versions.size === 0) {
+      this.dirtySessionVersions.clear()
+      this.stopCheckpointTimer()
       return
     }
     const completed = await this.checkpointSessions(versions.keys())
@@ -560,6 +593,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.dirtySessionVersions.delete(sessionId)
       }
     }
+    this.stopCheckpointTimerIfIdle()
   }
 
   // Why: the adapter runs in the Electron main process and does not have direct
@@ -622,8 +656,56 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
   }
 
-  private async doRespawn(): Promise<void> {
-    console.warn('[daemon] Daemon died — respawning')
+  private async replaceUnhealthyMacResolverDaemonBeforeNewPty(): Promise<void> {
+    if (!this.respawnFn) {
+      return
+    }
+
+    const health = await getMacDaemonSystemResolverHealth(
+      this.socketPath,
+      this.tokenPath,
+      this.protocolVersion
+    )
+    if (health !== 'unhealthy') {
+      return
+    }
+
+    const daemonLiveSessionCount = await this.getDaemonLiveSessionCount()
+    const liveSessionCount = Math.max(this.activeSessionIds.size, daemonLiveSessionCount ?? 0)
+    if (daemonLiveSessionCount === null || liveSessionCount > 0) {
+      console.warn(
+        daemonLiveSessionCount === null
+          ? '[daemon] macOS system resolver unavailable - preserving daemon because live session state could not be verified'
+          : `[daemon] macOS system resolver unavailable - preserving daemon because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+      )
+      return
+    }
+
+    // Why: replacing the daemon kills its sessions without daemon-side exit
+    // fanout. Emit exits first so renderer panes do not write to dead PTYs.
+    this.fanoutSyntheticExits(-1)
+    if (!this.respawnPromise) {
+      this.respawnPromise = this.doRespawn(
+        '[daemon] macOS system resolver unavailable - respawning daemon'
+      ).finally(() => {
+        this.respawnPromise = null
+      })
+    }
+    await this.respawnPromise
+  }
+
+  private async getDaemonLiveSessionCount(): Promise<number | null> {
+    try {
+      await this.client.ensureConnected()
+      const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+      return result.sessions.filter((session) => session.isAlive).length
+    } catch {
+      return null
+    }
+  }
+
+  private async doRespawn(message = '[daemon] Daemon died — respawning'): Promise<void> {
+    console.warn(message)
     this.removeEventListener?.()
     this.removeEventListener = null
     this.client.disconnect()
@@ -650,6 +732,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       } else if (event.event === 'exit') {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
+        this.stopCheckpointTimerIfIdle()
         if (this.historyManager) {
           void this.historyManager
             .closeSession(event.sessionId, event.payload.code)

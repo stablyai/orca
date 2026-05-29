@@ -5,7 +5,7 @@
  * more clarity than the ~5 lines of bloat is worth. */
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
-import { FilePlus, Globe, Plus, TerminalSquare } from 'lucide-react'
+import { FilePlus, FileText, Globe, Plus, TerminalSquare } from 'lucide-react'
 import type {
   BrowserTab as BrowserTabState,
   TerminalTab,
@@ -27,6 +27,7 @@ import { ShellIcon } from './shell-icons'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,11 +37,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 
-const isMac = navigator.userAgent.includes('Mac')
 const isWindows = navigator.userAgent.includes('Windows')
-const NEW_TERMINAL_SHORTCUT = isMac ? '⌘T' : 'Ctrl+T'
-const NEW_BROWSER_SHORTCUT = isMac ? '⌘⇧B' : 'Ctrl+Shift+B'
-const NEW_FILE_SHORTCUT = isMac ? '⌘⇧M' : 'Ctrl+Shift+M'
+const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
+const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
+type GitStatusEntries = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree'][string]
+const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 
 type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -59,6 +60,7 @@ type TabBarProps = {
   terminalOnly?: boolean
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
+  onOpenFileTab?: () => void
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
@@ -123,6 +125,7 @@ function TabBarInner({
   terminalOnly = false,
   showAgentLaunchItems = true,
   onNewFileTab,
+  onOpenFileTab,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePaneExpand,
@@ -142,7 +145,12 @@ function TabBarInner({
   onCreateSplitGroup,
   hoveredTabInsertion
 }: TabBarProps): React.JSX.Element {
-  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
+  const newBrowserShortcut = useShortcutLabel('tab.newBrowser')
+  const newFileShortcut = useShortcutLabel('tab.newMarkdown')
+  const gitStatusEntries = useAppStore(
+    (s) => s.gitStatusByWorktree[worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
+  )
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
   )
@@ -152,10 +160,7 @@ function TabBarInner({
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(isWindows)
   const resolvedGroupId = groupId ?? worktreeId
 
-  const statusByRelativePath = useMemo(
-    () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
-    [worktreeId, gitStatusByWorktree]
-  )
+  const statusByRelativePath = useMemo(() => buildStatusMap(gitStatusEntries), [gitStatusEntries])
 
   // Why: Electron <webview> elements run in a separate process, so clicking
   // inside one never dispatches a pointerdown on the renderer document.
@@ -163,6 +168,78 @@ function TabBarInner({
   // clicks, so it misses webview clicks entirely. Listening for window blur
   // catches the moment focus leaves the renderer (including into a webview).
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const pendingNewTabMenuFocusRef = useRef<(() => void) | null>(null)
+  const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)
+  const pendingNewTabMenuFocusRetryRef = useRef<number | null>(null)
+  const clearPendingNewTabMenuFocusAnimation = (): void => {
+    if (pendingNewTabMenuFocusAnimationRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(pendingNewTabMenuFocusAnimationRef.current)
+    pendingNewTabMenuFocusAnimationRef.current = null
+  }
+  const clearPendingNewTabMenuFocusRetry = (): void => {
+    if (pendingNewTabMenuFocusRetryRef.current === null) {
+      return
+    }
+    window.clearTimeout(pendingNewTabMenuFocusRetryRef.current)
+    pendingNewTabMenuFocusRetryRef.current = null
+  }
+  const focusNewActiveTerminalWhenReady = (
+    previousActiveTabId: string | null,
+    expiresAt: number
+  ): void => {
+    const state = useAppStore.getState()
+    if (
+      state.activeTabType === 'terminal' &&
+      state.activeTabId &&
+      state.activeTabId !== previousActiveTabId
+    ) {
+      focusTerminalTabSurface(state.activeTabId)
+      return
+    }
+    if (Date.now() >= expiresAt) {
+      return
+    }
+    pendingNewTabMenuFocusRetryRef.current = window.setTimeout(() => {
+      pendingNewTabMenuFocusRetryRef.current = null
+      focusNewActiveTerminalWhenReady(previousActiveTabId, expiresAt)
+    }, NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS)
+  }
+  const queueNewActiveTerminalFocusAfterNewTabMenuClose = (): void => {
+    const previousActiveTabId = useAppStore.getState().activeTabId
+    pendingNewTabMenuFocusRef.current = () => {
+      // Why: paired web/SSH runtime tab creation is async; wait for the host
+      // snapshot to publish the newly active terminal instead of focusing the
+      // pre-existing active tab.
+      focusNewActiveTerminalWhenReady(
+        previousActiveTabId,
+        Date.now() + NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS
+      )
+    }
+  }
+  const queueTerminalTabFocusAfterNewTabMenuClose = (tabId: string): void => {
+    pendingNewTabMenuFocusRef.current = () => focusTerminalTabSurface(tabId)
+  }
+  const runPendingNewTabMenuFocusAfterClose = (): void => {
+    const pendingFocus = pendingNewTabMenuFocusRef.current
+    pendingNewTabMenuFocusRef.current = null
+    clearPendingNewTabMenuFocusAnimation()
+    clearPendingNewTabMenuFocusRetry()
+    if (pendingFocus) {
+      pendingNewTabMenuFocusAnimationRef.current = requestAnimationFrame(() => {
+        pendingNewTabMenuFocusAnimationRef.current = null
+        pendingFocus()
+      })
+    }
+  }
+  useEffect(
+    () => () => {
+      clearPendingNewTabMenuFocusAnimation()
+      clearPendingNewTabMenuFocusRetry()
+    },
+    []
+  )
   useEffect(() => {
     if (!newTabMenuOpen) {
       return
@@ -460,11 +537,11 @@ function TabBarInner({
           sideOffset={6}
           className="min-w-[11rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
           onCloseAutoFocus={(e) => {
-            // Why: selecting "New Terminal" activates a freshly-mounted xterm on
-            // the next frame. Radix's default focus restore sends focus back to
-            // the "+" trigger after close, which steals it from the new tab and
-            // makes the terminal look unfocused until the user clicks again.
+            // Why: terminal-producing menu actions activate a freshly-mounted
+            // xterm. Radix's default focus restore sends focus back to the "+"
+            // trigger after close, stealing it from the new terminal.
             e.preventDefault()
+            runPendingNewTabMenuFocusAfterClose()
           }}
         >
           {isWindows && onNewTerminalWithShell ? (
@@ -507,6 +584,7 @@ function TabBarInner({
                       // picked PowerShell 7+ in advanced settings, launching the
                       // "PowerShell" menu item must preserve that implementation
                       // instead of forcing inbox powershell.exe.
+                      queueNewActiveTerminalFocusAfterNewTabMenuClose()
                       onNewTerminalWithShell(
                         resolveWindowsShellLaunchTarget(
                           entry.shell,
@@ -520,7 +598,7 @@ function TabBarInner({
                     <ShellIcon shell={entry.shell} size={14} />
                     <span className="flex-1">New Terminal: {entry.label}</span>
                     {isDefault ? (
-                      <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
+                      <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
                     ) : null}
                   </DropdownMenuItem>
                 )
@@ -529,13 +607,14 @@ function TabBarInner({
           ) : (
             <DropdownMenuItem
               onSelect={() => {
+                queueNewActiveTerminalFocusAfterNewTabMenuClose()
                 onNewTerminalTab()
               }}
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             >
               <TerminalSquare className="size-4 text-muted-foreground" />
               New Terminal
-              <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
+              <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
             </DropdownMenuItem>
           )}
           {!terminalOnly && (
@@ -545,7 +624,7 @@ function TabBarInner({
             >
               <Globe className="size-4 text-muted-foreground" />
               New Browser Tab
-              <DropdownMenuShortcut>{NEW_BROWSER_SHORTCUT}</DropdownMenuShortcut>
+              <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
             </DropdownMenuItem>
           )}
           {!terminalOnly && onNewFileTab && (
@@ -555,7 +634,16 @@ function TabBarInner({
             >
               <FilePlus className="size-4 text-muted-foreground" />
               New Markdown
-              <DropdownMenuShortcut>{NEW_FILE_SHORTCUT}</DropdownMenuShortcut>
+              <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
+          {!terminalOnly && onOpenFileTab && (
+            <DropdownMenuItem
+              onSelect={onOpenFileTab}
+              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+            >
+              <FileText className="size-4 text-muted-foreground" />
+              Open Markdown...
             </DropdownMenuItem>
           )}
           {showAgentLaunchItems ? (
@@ -564,7 +652,7 @@ function TabBarInner({
               <QuickLaunchAgentMenuItems
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
-                onFocusTerminal={focusTerminalTabSurface}
+                onFocusTerminal={queueTerminalTabFocusAfterNewTabMenuClose}
               />
             </>
           ) : null}

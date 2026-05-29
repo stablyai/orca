@@ -17,6 +17,7 @@ import {
 } from '../../shared/agent-hook-relay'
 import { agentHookServer, _internals as agentHookInternals } from '../agent-hooks/server'
 import { getSshPtyProvider } from '../ipc/pty'
+import { toAppSshPtyId } from '../providers/ssh-pty-id'
 
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
@@ -230,7 +231,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
       }
     })
 
-    expect(spawn.id).toBe('remote-pty-1')
+    expect(spawn.id).toBe(toAppSshPtyId('conn-fake', 'remote-pty-1'))
     expect(relay.ptySpawnRequests).toHaveLength(1)
     expect(relay.ptySpawnRequests[0]).toMatchObject({
       cwd: '/home/orca/project',

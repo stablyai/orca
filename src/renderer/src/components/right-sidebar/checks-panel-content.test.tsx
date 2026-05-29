@@ -19,7 +19,12 @@ function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
 
 function renderNotice(pr: PRInfo, isRefreshingConflictDetails = false): string {
   return renderToStaticMarkup(
-    React.createElement(MergeConflictNotice, { pr, isRefreshingConflictDetails })
+    React.createElement(MergeConflictNotice, {
+      pr,
+      isRefreshingConflictDetails,
+      isResolvingWithAI: false,
+      onResolveWithAI: () => {}
+    })
   )
 }
 
@@ -50,5 +55,13 @@ describe('MergeConflictNotice', () => {
     )
 
     expect(markup).toBe('')
+  })
+
+  it('renders the Sparkles icon on the idle Resolve with AI button', () => {
+    const markup = renderNotice(makePR())
+
+    expect(markup).toContain('Resolve with AI')
+    expect(markup).toContain('lucide-sparkles')
+    expect(markup).not.toMatch(/\blucide-sparkle(?!s)\b/)
   })
 })

@@ -1,28 +1,8 @@
 import type { GlobalSettings } from '../../../../shared/types'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
-import type { SettingsSearchEntry } from './settings-search'
-import { isLinuxUserAgent } from '@/components/terminal-pane/pane-helpers'
-
-export const INPUT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Middle-click Paste from Selection',
-    description:
-      'On Linux, selected text uses the system selection clipboard. Other platforms use a private buffer when enabled.',
-    keywords: [
-      'input',
-      'editing',
-      'selection',
-      'primary selection',
-      'middle click',
-      'middle mouse',
-      'paste',
-      'clipboard',
-      'x11',
-      'linux'
-    ]
-  }
-]
+import { isDefaultPrimarySelectionMiddleClickPasteUserAgent } from '@/hooks/usePrimarySelectionPaste'
+export { INPUT_PANE_SEARCH_ENTRIES } from './input-search'
 
 type InputPaneProps = {
   settings: GlobalSettings
@@ -30,13 +10,15 @@ type InputPaneProps = {
 }
 
 export function InputPane({ settings, updateSettings }: InputPaneProps): React.JSX.Element {
-  const enabled = settings.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()
+  const enabled =
+    settings.primarySelectionMiddleClickPaste ??
+    isDefaultPrimarySelectionMiddleClickPasteUserAgent()
 
   return (
     <section className="space-y-4">
       <SearchableSetting
         title="Middle-click Paste from Selection"
-        description="On Linux, selected text uses the system selection clipboard. Other platforms use a private buffer when enabled."
+        description="Enabled by default on Linux and macOS. Linux uses the system selection clipboard; other platforms use a private buffer."
         keywords={[
           'input',
           'editing',
@@ -47,15 +29,16 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
           'paste',
           'clipboard',
           'x11',
-          'linux'
+          'linux',
+          'macos'
         ]}
-        className="flex items-center justify-between gap-4 px-1 py-2"
+        className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
           <Label>Middle-click Paste from Selection</Label>
           <p className="text-xs text-muted-foreground">
-            On Linux, use the system selection clipboard. On other platforms, use a private buffer
-            when this is enabled.
+            Enabled by default on Linux and macOS. Linux uses the system selection clipboard; other
+            platforms use a private buffer.
           </p>
         </div>
         <button

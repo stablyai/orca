@@ -17,7 +17,7 @@ import {
   ConflictReviewPanel,
   getNextConflictNavigationIndex
 } from './ConflictComponents'
-import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { getMarkdownRenderMode } from './markdown-render-mode'
@@ -53,6 +53,16 @@ type FileContent = {
   isImage?: boolean
   mimeType?: string
   loadError?: string
+}
+
+function matchesPendingEditorReveal(
+  reveal: PendingEditorReveal | null,
+  file: Pick<OpenFile, 'id' | 'filePath'>
+): reveal is PendingEditorReveal {
+  if (!reveal) {
+    return false
+  }
+  return reveal.fileId ? reveal.fileId === file.id : reveal.filePath === file.filePath
 }
 
 function FileLoadErrorView({
@@ -96,7 +106,6 @@ export function EditorContent({
   isChangesMode,
   sideBySide,
   showMarkdownTableOfContents = false,
-  markdownReviewToolsEnabled = true,
   onCloseMarkdownTableOfContents = () => {},
   pendingEditorReveal,
   handleContentChange,
@@ -122,14 +131,8 @@ export function EditorContent({
   isChangesMode: boolean
   sideBySide: boolean
   showMarkdownTableOfContents?: boolean
-  markdownReviewToolsEnabled?: boolean
   onCloseMarkdownTableOfContents?: () => void
-  pendingEditorReveal: {
-    filePath?: string
-    line?: number
-    column?: number
-    matchLength?: number
-  } | null
+  pendingEditorReveal: PendingEditorReveal | null
   handleContentChange: (content: string) => void
   handleContentChangeForFile: (file: OpenFile, content: string) => void
   handleDirtyStateHint: (dirty: boolean) => void
@@ -275,6 +278,7 @@ export function EditorContent({
     // tab keeps its own viewport state even when the underlying file is shared.
     <MonacoEditor
       key={viewStateScopeId}
+      fileId={activeFile.id}
       filePath={activeFile.filePath}
       viewStateKey={editorViewStateKey}
       relativePath={activeFile.relativePath}
@@ -283,18 +287,20 @@ export function EditorContent({
       onContentChange={handleContentChange}
       onSave={isMarkdown ? md.mdSave : handleSave}
       worktreeId={activeFile.worktreeId}
-      markdownAnnotationsEnabled={false}
+      markdownAnnotationsEnabled={isMarkdown}
       conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
       revealLine={
-        pendingEditorReveal?.filePath === activeFile.filePath ? pendingEditorReveal.line : undefined
+        matchesPendingEditorReveal(pendingEditorReveal, activeFile)
+          ? pendingEditorReveal.line
+          : undefined
       }
       revealColumn={
-        pendingEditorReveal?.filePath === activeFile.filePath
+        matchesPendingEditorReveal(pendingEditorReveal, activeFile)
           ? pendingEditorReveal.column
           : undefined
       }
       revealMatchLength={
-        pendingEditorReveal?.filePath === activeFile.filePath
+        matchesPendingEditorReveal(pendingEditorReveal, activeFile)
           ? pendingEditorReveal.matchLength
           : undefined
       }
@@ -379,7 +385,7 @@ export function EditorContent({
                 markdownDocuments={md.markdownDocuments}
                 showTableOfContents={showMarkdownTableOfContents}
                 onCloseTableOfContents={onCloseMarkdownTableOfContents}
-                markdownAnnotationsEnabled={markdownReviewToolsEnabled}
+                markdownAnnotationsEnabled={true}
                 markdownAnnotationFilePath={activeFile.relativePath}
                 markdownSourceLineOffset={fm ? getMarkdownSourceLineOffset(fm.raw) : 0}
                 markdownReviewContent={currentContent}
@@ -413,10 +419,13 @@ export function EditorContent({
               key={viewStateScopeId}
               content={currentContent}
               filePath={activeFile.filePath}
+              sourceFileId={activeFile.id}
+              sourceWorktreeId={activeFile.worktreeId}
+              sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
               scrollCacheKey={`${editorViewStateKey}:preview`}
               showTableOfContents={showMarkdownTableOfContents}
               onCloseTableOfContents={onCloseMarkdownTableOfContents}
-              markdownAnnotationsEnabled={false}
+              markdownAnnotationsEnabled={true}
               {...md.previewProps}
             />
           </div>
@@ -512,6 +521,7 @@ export function EditorContent({
         <div className={autoHeight ? 'shrink-0' : 'min-h-0 flex-1'}>
           <MonacoEditor
             key={`${viewStateScopeId}:${contentFile.id}:${viewStateKeySuffix}`}
+            fileId={contentFile.id}
             filePath={contentFile.filePath}
             viewStateKey={selectedViewStateKey}
             relativePath={contentFile.relativePath}
@@ -527,17 +537,17 @@ export function EditorContent({
             readOnly={readOnly}
             autoHeight={autoHeight}
             revealLine={
-              pendingEditorReveal?.filePath === contentFile.filePath
+              matchesPendingEditorReveal(pendingEditorReveal, contentFile)
                 ? pendingEditorReveal.line
                 : undefined
             }
             revealColumn={
-              pendingEditorReveal?.filePath === contentFile.filePath
+              matchesPendingEditorReveal(pendingEditorReveal, contentFile)
                 ? pendingEditorReveal.column
                 : undefined
             }
             revealMatchLength={
-              pendingEditorReveal?.filePath === contentFile.filePath
+              matchesPendingEditorReveal(pendingEditorReveal, contentFile)
                 ? pendingEditorReveal.matchLength
                 : undefined
             }
@@ -657,11 +667,14 @@ export function EditorContent({
           key={viewStateScopeId}
           content={previewContent}
           filePath={activeFile.filePath}
+          sourceFileId={previewSourceFileId}
+          sourceWorktreeId={activeFile.worktreeId}
+          sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
           scrollCacheKey={markdownPreviewViewStateKey}
           initialAnchor={activeFile.markdownPreviewAnchor ?? null}
           showTableOfContents={showMarkdownTableOfContents}
           onCloseTableOfContents={onCloseMarkdownTableOfContents}
-          markdownAnnotationsEnabled={false}
+          markdownAnnotationsEnabled={true}
           {...md.previewProps}
         />
       </div>
@@ -811,10 +824,13 @@ export function EditorContent({
             key={viewStateScopeId}
             content={modifiedDiffContent}
             filePath={activeFile.filePath}
+            sourceFileId={activeFile.id}
+            sourceWorktreeId={activeFile.worktreeId}
+            sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
             scrollCacheKey={`${diffViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}
             onCloseTableOfContents={onCloseMarkdownTableOfContents}
-            markdownAnnotationsEnabled={false}
+            markdownAnnotationsEnabled={true}
             {...md.previewProps}
           />
         </div>

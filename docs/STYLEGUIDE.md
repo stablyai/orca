@@ -231,6 +231,8 @@ Apply one of these to overflow containers; don't write a fourth style.
 
 These are the rules a contributor will most often get wrong if they're working in isolation. They apply to every UI change.
 
+**UI copy must not overclaim.** Never imply the app has taken an action, made a decision, or observed a fact unless the code has real state or result data to support it. Use neutral process language while work is pending, and reserve result verbs like "skipped", "protected", "found", "verified", or "deleted" for actual results.
+
 ### 1. Match in-flight feedback to perceived duration
 
 The right question isn't *"should this control change while it's working?"* — it's *"how long does the action take, and what does the user need to know during that time?"*

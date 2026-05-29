@@ -182,7 +182,7 @@ describe('repo slice runtime routing', () => {
       activeRepoId: remoteRepo.id
     })
 
-    await store.getState().removeRepo(remoteRepo.id)
+    await store.getState().removeProject(remoteRepo.id)
 
     expect(store.getState().repos).toEqual([])
     expect(store.getState().activeRepoId).toBeNull()
@@ -212,7 +212,7 @@ describe('repo slice runtime routing', () => {
       }
     })
 
-    await store.getState().removeRepo(localRepo.id)
+    await store.getState().removeProject(localRepo.id)
 
     expect(Object.keys(store.getState().workItemsCache)).toEqual([
       workItemsCacheKey('other-repo', 20, '')
@@ -244,7 +244,7 @@ describe('repo slice runtime routing', () => {
       }
     })
 
-    await store.getState().removeRepo(remoteRepo.id)
+    await store.getState().removeProject(remoteRepo.id)
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
@@ -254,6 +254,48 @@ describe('repo slice runtime routing', () => {
     })
     expect(ptyKill).toHaveBeenCalledWith('pty-local-stale')
     expect(ptyKill).not.toHaveBeenCalledWith('remote:term-1')
+  })
+
+  it('cleans up hidden detected worktree state when removing a repo', async () => {
+    const store = createTestStore()
+    const hiddenWorktree = makeWorktree({
+      id: `${localRepo.id}::/local/hidden`,
+      repoId: localRepo.id,
+      path: '/local/hidden'
+    })
+    store.setState({
+      repos: [localRepo],
+      worktreesByRepo: { [localRepo.id]: [] },
+      detectedWorktreesByRepo: {
+        [localRepo.id]: {
+          repoId: localRepo.id,
+          authoritative: true,
+          source: 'git',
+          worktrees: [
+            {
+              ...hiddenWorktree,
+              ownership: 'external',
+              selectedCheckout: false,
+              visible: false
+            }
+          ]
+        }
+      },
+      tabsByWorktree: {
+        [hiddenWorktree.id]: [{ id: 'tab-hidden', worktreeId: hiddenWorktree.id }] as never
+      },
+      ptyIdsByTabId: {
+        'tab-hidden': ['pty-hidden']
+      },
+      activeWorktreeId: hiddenWorktree.id
+    })
+
+    await store.getState().removeProject(localRepo.id)
+
+    expect(store.getState().detectedWorktreesByRepo[localRepo.id]).toBeUndefined()
+    expect(store.getState().tabsByWorktree[hiddenWorktree.id]).toBeUndefined()
+    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(ptyKill).toHaveBeenCalledWith('pty-hidden')
   })
 
   it('reorders repos through the active remote runtime environment', async () => {

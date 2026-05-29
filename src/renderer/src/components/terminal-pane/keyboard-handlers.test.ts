@@ -78,13 +78,13 @@ describe('matchSearchNavigate', () => {
 describe('matchFileSearchShortcut', () => {
   it('matches Cmd+Shift+F on macOS', () => {
     expect(
-      matchFileSearchShortcut(makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true }), true)
+      matchFileSearchShortcut(makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true }), 'darwin')
     ).toBe(true)
   })
 
   it('matches Ctrl+Shift+F on Linux/Windows', () => {
     expect(
-      matchFileSearchShortcut(makeKeyEvent({ key: 'F', ctrlKey: true, shiftKey: true }), false)
+      matchFileSearchShortcut(makeKeyEvent({ key: 'F', ctrlKey: true, shiftKey: true }), 'linux')
     ).toBe(true)
   })
 
@@ -92,17 +92,55 @@ describe('matchFileSearchShortcut', () => {
     expect(
       matchFileSearchShortcut(
         makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true, repeat: true }),
-        true
+        'darwin'
       )
     ).toBe(false)
     expect(
       matchFileSearchShortcut(
         makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true, altKey: true }),
-        true
+        'darwin'
       )
     ).toBe(false)
     expect(
-      matchFileSearchShortcut(makeKeyEvent({ key: 'F', ctrlKey: true, shiftKey: true }), true)
+      matchFileSearchShortcut(makeKeyEvent({ key: 'F', ctrlKey: true, shiftKey: true }), 'darwin')
+    ).toBe(false)
+  })
+
+  it('follows customized file-search bindings', () => {
+    const overrides = { 'sidebar.search.toggle': ['Ctrl+Alt+S'] }
+
+    expect(
+      matchFileSearchShortcut(
+        makeKeyEvent({ key: 's', ctrlKey: true, altKey: true }),
+        'linux',
+        overrides
+      )
+    ).toBe(true)
+    expect(
+      matchFileSearchShortcut(
+        makeKeyEvent({ key: 'F', ctrlKey: true, shiftKey: true }),
+        'linux',
+        overrides
+      )
+    ).toBe(false)
+  })
+
+  it('lets terminal-first pass the file-search shortcut through to the terminal', () => {
+    expect(
+      matchFileSearchShortcut(
+        makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true }),
+        'darwin',
+        undefined,
+        'terminal-first'
+      )
+    ).toBe(false)
+  })
+
+  it('does not match when file search is disabled', () => {
+    expect(
+      matchFileSearchShortcut(makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true }), 'darwin', {
+        'sidebar.search.toggle': []
+      })
     ).toBe(false)
   })
 })

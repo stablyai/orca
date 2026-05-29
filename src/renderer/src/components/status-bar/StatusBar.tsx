@@ -4,13 +4,14 @@ states stay consistent across Claude and Codex. */
 import {
   AlertTriangle,
   Activity,
+  Plug,
   ChevronDown,
   ChevronRight,
+  PanelsTopLeft,
   RefreshCw,
-  Server,
-  TerminalSquare
+  Server
 } from 'lucide-react'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -34,11 +35,14 @@ import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { SshStatusSegment } from './SshStatusSegment'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
+import { PortsStatusSegment } from './PortsStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
+import { summarizeCodexRestartStatus } from './codex-restart-status-summary'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -52,6 +56,57 @@ function getCodexAccountLabel(
     return 'System default'
   }
   return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
+}
+
+function CodexRestartStatusPrompt(): React.JSX.Element | null {
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
+  const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
+
+  const staleCodexStatus = useMemo(
+    () =>
+      summarizeCodexRestartStatus({
+        tabsByWorktree,
+        ptyIdsByTabId,
+        codexRestartNoticeByPtyId
+      }),
+    [codexRestartNoticeByPtyId, ptyIdsByTabId, tabsByWorktree]
+  )
+
+  if (staleCodexStatus.staleTabCount === 0) {
+    return null
+  }
+
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <div className="px-2 py-2">
+        <div className="text-[11px] text-muted-foreground">
+          {/* Why: stale restart notices are tracked per PTY session, but the
+          bulk restart action operates per PTY-backed pane restart. Show
+          both counts so split panes do not make the number look wrong. */}
+          {staleCodexStatus.staleSessionCount === 1
+            ? '1 Codex session is still on the old account'
+            : `${staleCodexStatus.staleSessionCount} Codex sessions are still on the old account.`}
+          {staleCodexStatus.staleWorktreeCount > 1 ? (
+            <span className="mt-0.5 block">
+              Visible sessions restart now. Others restart when their worktree becomes active.
+            </span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => queueCodexPaneRestarts(staleCodexStatus.stalePtyIds)}
+          className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+        >
+          {staleCodexStatus.staleSessionCount === 1
+            ? 'Restart Session'
+            : `Restart ${staleCodexStatus.staleSessionCount} Sessions`}
+        </button>
+      </div>
+    </>
+  )
 }
 
 function ClaudeSwitcherMenu({
@@ -73,6 +128,7 @@ function ClaudeSwitcherMenu({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
   const claudeAccountSyncKey = useAppStore((s) => {
@@ -94,11 +150,12 @@ function ClaudeSwitcherMenu({
     })
   }, [loadAccounts, open, claudeAccountSyncKey])
 
-  useEffect(() => {
-    if (!open) {
+  const handleOpenChange = useCallback((nextOpen: boolean): void => {
+    setOpen(nextOpen)
+    if (!nextOpen) {
       setAccountsExpanded(false)
     }
-  }, [open])
+  }, [])
 
   useEffect(() => {
     if (accountsExpanded) {
@@ -113,6 +170,7 @@ function ClaudeSwitcherMenu({
     setIsSwitching(true)
     try {
       const next = await window.api.claudeAccounts.select({ accountId })
+      recordFeatureInteraction('claude-account-switching')
       setAccounts(next)
       await fetchSettings()
       setAccountsExpanded(false)
@@ -144,7 +202,7 @@ function ClaudeSwitcherMenu({
       iconOnly={iconOnly}
       ariaLabel="Open Claude details and account switcher"
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
     >
       <DropdownMenuLabel>Claude Account</DropdownMenuLabel>
       <DropdownMenuItem
@@ -428,12 +486,9 @@ function CodexSwitcherMenu({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
   const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
-  const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
   const codexAccountSyncKey = useAppStore((s) => {
     const settings = s.settings
     if (!settings) {
@@ -465,6 +520,7 @@ function CodexSwitcherMenu({
     setIsSwitching(true)
     try {
       const next = await window.api.codexAccounts.select({ accountId })
+      recordFeatureInteraction('codex-account-switching')
       setAccounts(next)
       await fetchSettings()
       if (previousActiveAccountId !== next.activeAccountId) {
@@ -485,11 +541,12 @@ function CodexSwitcherMenu({
     }
   }
 
-  useEffect(() => {
-    if (!open) {
+  const handleOpenChange = useCallback((nextOpen: boolean): void => {
+    setOpen(nextOpen)
+    if (!nextOpen) {
       setAccountsExpanded(false)
     }
-  }, [open])
+  }, [])
 
   useEffect(() => {
     if (accountsExpanded) {
@@ -515,17 +572,6 @@ function CodexSwitcherMenu({
           : account.email
       }))
   ]
-  const staleCodexPtyIds = Object.keys(codexRestartNoticeByPtyId)
-  const staleCodexTabIds = Object.keys(ptyIdsByTabId).filter((tabId) =>
-    (ptyIdsByTabId[tabId] ?? []).some((ptyId) => Boolean(codexRestartNoticeByPtyId[ptyId]))
-  )
-  const staleCodexWorktreeCount = new Set(
-    Object.entries(tabsByWorktree).flatMap(([worktreeId, tabs]) =>
-      tabs.some((tab) => staleCodexTabIds.includes(tab.id)) ? [worktreeId] : []
-    )
-  ).size
-  const staleCodexSessionCount = staleCodexPtyIds.length
-  const staleCodexTabCount = staleCodexTabIds.length
 
   return (
     <ProviderDetailsMenu
@@ -534,7 +580,7 @@ function CodexSwitcherMenu({
       iconOnly={iconOnly}
       ariaLabel="Open Codex details and account switcher"
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
     >
       <DropdownMenuLabel>Codex Account</DropdownMenuLabel>
       <DropdownMenuItem
@@ -596,35 +642,7 @@ function CodexSwitcherMenu({
           </div>
         </div>
       ) : null}
-      {staleCodexTabCount > 0 ? (
-        <>
-          <DropdownMenuSeparator />
-          <div className="px-2 py-2">
-            <div className="text-[11px] text-muted-foreground">
-              {/* Why: stale restart notices are tracked per PTY session, but the
-              bulk restart action operates per PTY-backed pane restart. Show
-              both counts so split panes do not make the number look wrong. */}
-              {staleCodexSessionCount === 1
-                ? '1 Codex session is still on the old account'
-                : `${staleCodexSessionCount} Codex sessions are still on the old account.`}
-              {staleCodexWorktreeCount > 1 ? (
-                <span className="mt-0.5 block">
-                  Visible sessions restart now. Others restart when their worktree becomes active.
-                </span>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              onClick={() => queueCodexPaneRestarts(staleCodexPtyIds)}
-              className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
-            >
-              {staleCodexSessionCount === 1
-                ? 'Restart Session'
-                : `Restart ${staleCodexSessionCount} Sessions`}
-            </button>
-          </div>
-        </>
-      ) : null}
+      {open ? <CodexRestartStatusPrompt /> : null}
       <DropdownMenuSeparator />
       <DropdownMenuItem
         onSelect={() => {
@@ -659,8 +677,17 @@ function ProviderDetailsMenu({
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
 }): React.JSX.Element {
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+
+  const handleOpenChange = (nextOpen: boolean): void => {
+    if (nextOpen) {
+      recordFeatureInteraction('usage-tracking')
+    }
+    onOpenChange?.(nextOpen)
+  }
+
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -709,10 +736,12 @@ function ProviderDetailsMenu({
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
 function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Element | null {
+  const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const rateLimits = useAppStore((s) => s.rateLimits)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
   const floatingTerminalTriggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
@@ -818,6 +847,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showOpencodeGo = opencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
+  const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showResourceUsage
@@ -829,7 +859,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
-  const floatingTerminalActionLabel = floatingTerminalOpen ? 'Minimize Terminal' : 'Show Terminal'
+  const floatingTerminalActionLabel = floatingTerminalOpen
+    ? 'Minimize Floating Workspace'
+    : 'Show Floating Workspace'
 
   return (
     <div
@@ -899,6 +931,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         {petEnabled && <PetStatusSegment />}
         {showResourceUsage && <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />}
+        {showPorts && <PortsStatusSegment compact={compact} iconOnly={iconOnly} />}
         {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
         {showFloatingTerminalToggle && (
           <FloatingTerminalIconContextMenu currentLocation="status-bar" className="relative">
@@ -912,15 +945,11 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                     window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
                   }}
                 >
-                  <TerminalSquare className="size-3.5" />
+                  <PanelsTopLeft className="size-3.5" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                {floatingTerminalActionLabel} (
-                {typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-                  ? '⌘⌥T'
-                  : 'Ctrl+Alt+T'}
-                )
+                {floatingTerminalActionLabel} ({floatingTerminalShortcut})
               </TooltipContent>
             </Tooltip>
           </FloatingTerminalIconContextMenu>
@@ -940,7 +969,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           {isStatusBarItemAvailable('claude', detectedAgentIds) && (
             <DropdownMenuCheckboxItem
               checked={statusBarItems.includes('claude')}
-              onCheckedChange={() => toggleStatusBarItem('claude')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('claude')
+              }}
             >
               <ClaudeIcon size={14} />
               Claude Usage
@@ -949,7 +981,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           {isStatusBarItemAvailable('codex', detectedAgentIds) && (
             <DropdownMenuCheckboxItem
               checked={statusBarItems.includes('codex')}
-              onCheckedChange={() => toggleStatusBarItem('codex')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('codex')
+              }}
             >
               <OpenAIIcon size={14} />
               Codex Usage
@@ -958,7 +993,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           {isStatusBarItemAvailable('gemini', detectedAgentIds) && (
             <DropdownMenuCheckboxItem
               checked={statusBarItems.includes('gemini')}
-              onCheckedChange={() => toggleStatusBarItem('gemini')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('gemini')
+              }}
             >
               <GeminiIcon size={14} />
               Gemini Usage
@@ -966,24 +1004,43 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           )}
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('opencode-go')}
-            onCheckedChange={() => toggleStatusBarItem('opencode-go')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('opencode-go')
+            }}
           >
             <OpenCodeGoIcon size={14} />
             OpenCode Go Usage
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}
-            onCheckedChange={() => toggleStatusBarItem('ssh')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('ssh')
+              toggleStatusBarItem('ssh')
+            }}
           >
             <Server className="size-3.5" />
             SSH Status
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('resource-usage')}
-            onCheckedChange={() => toggleStatusBarItem('resource-usage')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('resource-manager')
+              toggleStatusBarItem('resource-usage')
+            }}
           >
             <Activity className="size-3.5" />
             Resource Manager
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('ports')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('ports')
+              toggleStatusBarItem('ports')
+            }}
+          >
+            <Plug className="size-3.5" />
+            Ports
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>

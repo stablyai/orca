@@ -9,3 +9,18 @@ export function normalizeHookCommandSourcePolicy(policy: unknown): HookCommandSo
   // Treat any unknown value as the authoritative committed config policy.
   return 'shared-only'
 }
+
+export function resolveHookCommandSourcePolicy(
+  policy: unknown,
+  { hasLocalScript }: { hasLocalScript: boolean }
+): HookCommandSourcePolicy {
+  if (policy === 'local-only' || policy === 'run-both' || policy === 'shared-only') {
+    return policy
+  }
+
+  if (policy === undefined && hasLocalScript) {
+    return 'local-only'
+  }
+
+  return 'shared-only'
+}

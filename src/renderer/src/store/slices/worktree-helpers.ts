@@ -1,6 +1,8 @@
 import type {
   CreateWorktreeResult,
   CreateSparseCheckoutRequest,
+  DetectedWorktree,
+  DetectedWorktreeListResult,
   GitPushTarget,
   SetupDecision,
   TuiAgent,
@@ -22,6 +24,7 @@ export type WorktreeDeleteState = {
 
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
+  detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
   worktreeLineageById: Record<string, WorktreeLineage>
   activeWorktreeId: string | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
@@ -41,9 +44,10 @@ export type WorktreeSlice = {
    * their PTYs, and the resulting `updateTabPtyId`/`clearTabPtyId` calls
    * are all side-effects of the click — not real activity. On first
    * activation we tag every terminal tab with `pendingActivationSpawn` so
-   * the bump is suppressed. After the first activation we do NOT re-tag,
-   * so subsequent events on the worktree (codex restart, new pane spawn,
-   * agent output) count normally. Session-only; never persisted.
+   * the bump is suppressed. Split-layout tabs may carry a numeric count so
+   * every click-driven pane remount is suppressed. After the first activation
+   * we do NOT re-tag, so subsequent events on the worktree (codex restart,
+   * new pane spawn, agent output) count normally. Session-only; never persisted.
    */
   everActivatedWorktreeIds: Set<string>
   /**
@@ -63,6 +67,7 @@ export type WorktreeSlice = {
    * sessions (design §4.4). Session-only; never persisted.
    */
   hasHydratedWorktreePurge: boolean
+  fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
   fetchWorktrees: (repoId: string) => Promise<void>
   fetchAllWorktrees: () => Promise<void>
   fetchWorktreeLineage: () => Promise<void>
@@ -87,7 +92,9 @@ export type WorktreeSlice = {
     createdWithAgent?: TuiAgent,
     linkedLinearIssue?: string,
     branchNameOverride?: string,
-    workspaceStatus?: WorkspaceStatus
+    workspaceStatus?: WorkspaceStatus,
+    linkedGitLabMR?: number,
+    linkedGitLabIssue?: number
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,
@@ -128,6 +135,7 @@ export type WorktreeSlice = {
   seedActiveWorktreeLastVisitedIfMissing: () => void
   setActiveWorktree: (worktreeId: string | null) => void
   allWorktrees: () => Worktree[]
+  getKnownWorktreeById: (worktreeId: string) => Worktree | DetectedWorktree | undefined
   /**
    * Wipes every terminal- and worktree-scoped map entry for each given id.
    * Called by the `worktrees:changed` listener on server-side deletions and

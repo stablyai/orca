@@ -117,11 +117,35 @@ branch refs/heads/main
       expect.arrayContaining([
         'git worktree remove /repo-feature',
         'git worktree prune',
-        'git branch -D feature/test'
+        'git branch -d feature/test'
       ])
     )
     expectGitCallOrder(calls, 'git worktree remove /repo-feature', 'git worktree prune')
-    expectGitCallOrder(calls, 'git worktree prune', 'git branch -D feature/test')
+    expectGitCallOrder(calls, 'git worktree prune', 'git branch -d feature/test')
+  })
+
+  it('preserves the branch when requested for a pre-existing local branch checkout', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      }
+    })
+
+    await removeWorktree('/repo', '/repo-feature', false, { deleteBranch: false })
+
+    const calls = getGitCalls()
+    expect(calls).toEqual(
+      expect.arrayContaining(['git worktree remove /repo-feature', 'git worktree prune'])
+    )
+    expect(calls).not.toContain('git branch -d feature/test')
+    expect(calls).not.toContain('git branch -D feature/test')
   })
 
   it('skips branch deletion when another worktree still points at the branch', async () => {
@@ -162,6 +186,7 @@ branch refs/heads/feature/test
         'git worktree list --porcelain'
       ])
     )
+    expect(calls).not.toContain('git branch -d feature/test')
     expect(calls).not.toContain('git branch -D feature/test')
     expectGitCallOrder(calls, 'git worktree remove /repo-feature', 'git worktree prune')
   })
@@ -198,10 +223,10 @@ branch refs/heads/main
       expect.arrayContaining([
         'git worktree remove /repo-feature',
         'git worktree prune',
-        'git branch -D feature/test'
+        'git branch -d feature/test'
       ])
     )
-    expectGitCallOrder(calls, 'git worktree prune', 'git branch -D feature/test')
+    expectGitCallOrder(calls, 'git worktree prune', 'git branch -d feature/test')
   })
 
   it('passes --force before the worktree path when forced removal is requested', async () => {
@@ -256,7 +281,7 @@ branch refs/heads/main
       expect.arrayContaining([
         'git worktree remove c:\\workspaces\\delete-branch-ui-test',
         'git worktree prune',
-        'git branch -D feature/test'
+        'git branch -d feature/test'
       ])
     )
   })
@@ -280,7 +305,7 @@ HEAD abc123
 branch refs/heads/main
 `
       },
-      'git branch -D feature/test': {
+      'git branch -d feature/test': {
         error: new Error('branch delete failed'),
         stderr: 'branch delete failed'
       }
@@ -289,7 +314,7 @@ branch refs/heads/main
     await expect(removeWorktree('/repo', '/repo-feature')).resolves.toBeUndefined()
 
     expect(warnSpy).toHaveBeenCalledWith(
-      '[git] Failed to delete local branch "feature/test" after removing worktree',
+      '[git] Preserved local branch "feature/test" after removing worktree (not fully merged)',
       expect.any(Error)
     )
 

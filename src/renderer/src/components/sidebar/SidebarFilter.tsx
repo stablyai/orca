@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Activity, Check, FolderPlus, GitBranch, ListFilter, Server } from 'lucide-react'
+import { Check, FolderPlus, GitBranch, ListFilter, Moon, Server } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,9 +16,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
+import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 
 type SidebarFilterProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -33,8 +34,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
   contentSide = 'right',
   onMenuOpenChange
 }: SidebarFilterProps) {
-  const showActiveOnly = useAppStore((s) => s.showActiveOnly)
-  const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
+  const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
@@ -44,7 +45,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
 
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [commandValue, setCommandValue] = useState('')
+  const [commandValueOverride, setCommandValueOverride] = useState<string | null>(null)
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -88,28 +89,23 @@ const SidebarFilter = React.memo(function SidebarFilter({
   }, [repos, filterRepoIds])
   const selectedCount = selectedRepoIdSet.size
   const hasRepoFilter = selectedCount > 0
-  const hasAnyFilter = showActiveOnly || hideDefaultBranchWorkspace || hasRepoFilter
+  const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
+  const hasAnyFilter = hasSleepingFilter || hideDefaultBranchWorkspace || hasRepoFilter
   const activeFilterCount =
-    (showActiveOnly ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
+    (hasSleepingFilter ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
 
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
-
-  // Why: with shouldFilter={false} cmdk won't auto-highlight a row, so Enter
-  // has no target. Keep the highlighted value pinned to the first filtered
-  // repo whenever the query changes.
-  useEffect(() => {
-    const first = filteredRepos[0]
-    if (first && !filteredRepos.some((r) => r.id === commandValue)) {
-      setCommandValue(first.id)
-    }
-  }, [filteredRepos, commandValue])
+  const commandValue =
+    commandValueOverride && filteredRepos.some((repo) => repo.id === commandValueOverride)
+      ? commandValueOverride
+      : (filteredRepos[0]?.id ?? '')
   const allSelected = canFilterRepos && selectedCount === repos.length
 
   const clearAll = useCallback(() => {
-    setShowActiveOnly(false)
+    setShowSleepingWorkspaces(DEFAULT_SHOW_SLEEPING_WORKSPACES)
     setHideDefaultBranchWorkspace(false)
     setFilterRepoIds([])
-  }, [setShowActiveOnly, setHideDefaultBranchWorkspace, setFilterRepoIds])
+  }, [setShowSleepingWorkspaces, setHideDefaultBranchWorkspace, setFilterRepoIds])
 
   // Why: derive ids from the live repos list at click time so a repo added
   // while the popover is open is included immediately.
@@ -160,10 +156,10 @@ const SidebarFilter = React.memo(function SidebarFilter({
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
         <FilterToggleRow
-          icon={<Activity className="size-3.5" />}
-          label="Active only"
-          checked={showActiveOnly}
-          onChange={setShowActiveOnly}
+          icon={<Moon className="size-3.5" />}
+          label="Hide sleeping"
+          checked={!showSleepingWorkspaces}
+          onChange={(hideSleeping) => setShowSleepingWorkspaces(!hideSleeping)}
         />
         <FilterToggleRow
           icon={<GitBranch className="size-3.5" />}
@@ -177,7 +173,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
             <DropdownMenuSeparator />
             <div className="flex items-center justify-between px-2 py-1">
               <span className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">
-                Repositories
+                Projects
                 {hasRepoFilter && (
                   <span className="ml-1.5 normal-case tracking-normal font-medium text-foreground">
                     · {selectedCount}
@@ -207,21 +203,26 @@ const SidebarFilter = React.memo(function SidebarFilter({
             <Command
               shouldFilter={false}
               value={commandValue}
-              onValueChange={setCommandValue}
+              onValueChange={setCommandValueOverride}
               className="bg-transparent"
             >
               <CommandInput
                 autoFocus
-                placeholder="Search repos..."
+                placeholder="Search projects..."
                 value={query}
-                onValueChange={setQuery}
+                onValueChange={(nextQuery) => {
+                  // Why: typing creates a new filtered list, so keyboard
+                  // selection should return to the derived first match.
+                  setCommandValueOverride(null)
+                  setQuery(nextQuery)
+                }}
                 onKeyDown={(event) => event.stopPropagation()}
                 className="h-8 py-2 text-xs"
                 wrapperClassName="mx-1 rounded-[7px] border border-border/70 px-2"
                 iconClassName="h-3.5 w-3.5"
               />
               <CommandList className="max-h-64 py-1">
-                <CommandEmpty className="py-4 text-[11px]">No repos match</CommandEmpty>
+                <CommandEmpty className="py-4 text-[11px]">No projects match</CommandEmpty>
                 {filteredRepos.map((r) => {
                   const checked = selectedRepoIdSet.has(r.id)
                   return (
@@ -232,7 +233,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                       className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
                     >
                       <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
-                        <RepoDotLabel
+                        <RepoBadgeLabel
                           name={r.displayName}
                           color={r.badgeColor}
                           className="max-w-full"
@@ -256,8 +257,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
         )}
 
         <DropdownMenuSeparator />
-        {/* Why: "Add repo" stays visible regardless of repo count so users
-            can recover from the 0/1-repo state where the repo section is
+        {/* Why: "Add project" stays visible regardless of project count so users
+            can recover from the 0/1-project state where the project section is
             hidden. Reset sits beside it only when a filter is active. */}
         <div className="flex items-center justify-between gap-1 px-1 py-1">
           {hasAnyFilter ? (
@@ -277,7 +278,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
             className="inline-flex items-center gap-1.5 rounded-[5px] px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <FolderPlus className="size-3.5" />
-            Add repo
+            Add project
           </button>
         </div>
       </DropdownMenuContent>

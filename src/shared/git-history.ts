@@ -183,13 +183,9 @@ export async function loadGitHistoryFromExecutor(
       ? rawBaseRef
       : undefined
 
-  const revisions = Array.from(
-    new Set(
-      [currentRef.revision, remoteRef?.revision, baseRef?.revision].filter(
-        (revision): revision is string => Boolean(revision)
-      )
-    )
-  )
+  // Why: this panel is scoped to the active workspace. Upstream and base refs
+  // stay as comparison metadata so old workspaces do not list newly fetched upstream/base commits.
+  const historyRevisions = [headOid]
 
   let mergeBase: string | undefined
   if (remoteRef?.revision && currentRef.revision && remoteRef.revision !== currentRef.revision) {
@@ -209,7 +205,7 @@ export async function loadGitHistoryFromExecutor(
       '--topo-order',
       '--decorate=full',
       `-n${limit + 1}`,
-      ...revisions
+      ...historyRevisions
     ],
     cwd
   )

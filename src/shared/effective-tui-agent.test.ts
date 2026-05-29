@@ -38,6 +38,8 @@ describe('firstExecutableToken', () => {
   it('strips path prefixes', () => {
     expect(firstExecutableToken('/usr/bin/zsh -l')).toBe('zsh')
     expect(firstExecutableToken('C:\\Tools\\my.exe --flag')).toBe('my.exe')
+    expect(firstExecutableToken('"C:\\Program Files\\Agent\\agent.exe" --flag')).toBe('agent.exe')
+    expect(firstExecutableToken('/Applications/Foo\\ Bar/bin/agent --flag')).toBe('agent')
   })
 
   it('returns empty string for blank input', () => {

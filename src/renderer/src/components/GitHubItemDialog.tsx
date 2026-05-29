@@ -19,6 +19,7 @@ import {
   Braces,
   Check,
   ChevronDown,
+  ChevronLeft,
   CircleDashed,
   CircleDot,
   Copy,
@@ -107,6 +108,8 @@ import {
   normalizeGitHubReviewerLogins
 } from '@/components/github-pr-reviewer-display'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { isCustomTuiAgentId } from '../../../shared/effective-tui-agent'
+import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { getConnectionId } from '@/lib/connection-context'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -218,6 +221,8 @@ type GitHubItemDialogProps = {
   repoPath: string | null
   repoId?: string | null
   initialTab?: ItemDialogTab
+  variant?: 'sheet' | 'page'
+  backLabel?: string
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (
@@ -362,14 +367,14 @@ function getStateTone(item: GitHubWorkItem): string {
 }
 
 function getPRMergeTooltip(item: GitHubWorkItem): string {
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge status has not loaded yet'
-  }
   if (item.state === 'merged') {
     return 'This pull request is already merged'
   }
   if (item.state === 'closed') {
     return 'This pull request is closed'
+  }
+  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
+    return 'Merge status is unavailable for this PR'
   }
   if (item.mergeable === 'CONFLICTING') {
     return 'GitHub reports merge conflicts'
@@ -3243,19 +3248,22 @@ function findWorkspaceAttachedToPR(
 }
 
 function pickDefaultAgent(
-  defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detectedAgents: TuiAgent[]
+  defaultAgent: TuiAgent | `custom:${string}` | 'blank' | null | undefined,
+  detectedAgents: (TuiAgent | `custom:${string}`)[],
+  disabledAgents?: TuiAgent[]
 ): TuiAgent | null {
-  if (defaultAgent && defaultAgent !== 'blank' && detectedAgents.includes(defaultAgent)) {
+  const enabledAgents = filterEnabledTuiAgents(detectedAgents, disabledAgents).filter(
+    (agent): agent is TuiAgent => !isCustomTuiAgentId(agent)
+  )
+  if (
+    defaultAgent &&
+    defaultAgent !== 'blank' &&
+    !isCustomTuiAgentId(defaultAgent) &&
+    enabledAgents.includes(defaultAgent)
+  ) {
     return defaultAgent
   }
-  // Why: AGENT_CATALOG is built-in only; the .id widened to TuiAgentId in
-  // issue #2284, but the actual values here are still TuiAgent.
-  return (
-    (AGENT_CATALOG.find((entry) => detectedAgents.includes(entry.id as TuiAgent))?.id as
-      | TuiAgent
-      | undefined) ?? null
-  )
+  return AGENT_CATALOG.find((entry) => enabledAgents.includes(entry.id))?.id ?? null
 }
 
 type CheckDetailsLoadState = {
@@ -3448,18 +3456,13 @@ function ChecksTab({
         typeof connectionId === 'string'
           ? await activeStore.ensureRemoteDetectedAgents(connectionId)
           : await activeStore.ensureDetectedAgents()
-      // Why: this launch path is built-in only (issue #2284 plan §9). A
-      // custom default is treated as no preference here.
-      const rawDefault = activeStore.settings?.defaultTuiAgent
-      const builtInDefault =
-        rawDefault && typeof rawDefault === 'string' && rawDefault.startsWith('custom:')
-          ? null
-          : (rawDefault as TuiAgent | 'blank' | null | undefined)
-      // Why: detectedAgents may include custom ids (issue #2284), but this
-      // launch path is built-in only. Cast narrows for the helper.
-      const agent = pickDefaultAgent(builtInDefault, detectedAgents as TuiAgent[])
+      const agent = pickDefaultAgent(
+        activeStore.settings?.defaultTuiAgent,
+        detectedAgents,
+        activeStore.settings?.disabledTuiAgents
+      )
       if (!agent) {
-        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        toast.error('No enabled AI agents. Configure agents in Settings.')
         return
       }
 
@@ -4265,7 +4268,8 @@ function GHEditSection({
   onLabelsChange,
   onMutated,
   assignees,
-  onUse
+  onUse,
+  layout = 'horizontal'
 }: {
   item: GitHubWorkItem
   repoPath: string | null
@@ -4281,6 +4285,10 @@ function GHEditSection({
   onMutated: () => void
   assignees: string[]
   onUse: (item: GitHubWorkItem) => void
+  /** `'horizontal'` is the legacy strip rendered above the conversation; the
+   *  `'sidebar'` layout matches the GitHub issue page's right rail with each
+   *  metadata row stacked under a section heading. */
+  layout?: 'horizontal' | 'sidebar'
 }): React.JSX.Element | null {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
@@ -4542,6 +4550,222 @@ function GHEditSection({
       />
     </svg>
   )
+
+  if (layout === 'sidebar') {
+    return (
+      <aside className="flex flex-col gap-5 text-[13px]">
+        {/* State */}
+        <section>
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            Status
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'inline-flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
+                  getStateTone({ ...item, state: localState })
+                )}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  {localState === 'closed' ? (
+                    <CircleDashed className="size-3.5" />
+                  ) : (
+                    <CircleDot className="size-3.5" />
+                  )}
+                  {getStateLabel({ ...item, state: localState })}
+                </span>
+                <ChevronDown className="size-3 opacity-60" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-44 p-1" align="start">
+              <button
+                type="button"
+                onClick={() => handleStateChange('open')}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+                  localState === 'open' && 'bg-accent/50'
+                )}
+              >
+                <CircleDot className="size-3 text-emerald-500" />
+                Open
+              </button>
+              <button
+                type="button"
+                onClick={() => handleStateChange('closed')}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+                  localState === 'closed' && 'bg-accent/50'
+                )}
+              >
+                <CircleDashed className="size-3 text-rose-500" />
+                Closed
+              </button>
+            </PopoverContent>
+          </Popover>
+        </section>
+
+        {/* Assignees */}
+        <section>
+          <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            <span>Assignees</span>
+            <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  disabled={isPending('assignees') || repoAssignees.loading}
+                  aria-label="Edit assignees"
+                  className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+                >
+                  {isPending('assignees') ? (
+                    <LoaderCircle className="size-3 animate-spin" />
+                  ) : (
+                    <Pencil className="size-3" />
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="popover-scroll-content scrollbar-sleek w-60 p-1"
+                align="end"
+              >
+                {repoAssignees.error ? (
+                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                    {repoAssignees.error}
+                  </div>
+                ) : (
+                  <div>
+                    {repoAssignees.data.map((user) => (
+                      <button
+                        key={user.login}
+                        type="button"
+                        onClick={() => handleAssigneeToggle(user.login)}
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                      >
+                        <span
+                          className={cn(
+                            'flex size-3.5 items-center justify-center rounded-sm border',
+                            localAssignees.includes(user.login)
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-input'
+                          )}
+                        >
+                          {localAssignees.includes(user.login) && checkIcon}
+                        </span>
+                        <span className="min-w-0 flex-1 text-left">
+                          <span className="block truncate">{user.login}</span>
+                          {user.name && (
+                            <span className="block truncate text-[11px] text-muted-foreground">
+                              {user.name}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
+          {localAssignees.length === 0 ? (
+            <div className="text-[12px] text-muted-foreground">No one assigned</div>
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {localAssignees.map((login) => {
+                const user = repoAssignees.data.find((u) => u.login === login)
+                return (
+                  <li key={login} className="flex min-w-0 items-center gap-2">
+                    {user?.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt=""
+                        className="size-5 shrink-0 rounded-full border border-border/40 object-cover"
+                      />
+                    ) : (
+                      <div className="size-5 shrink-0 rounded-full bg-muted" />
+                    )}
+                    <span className="min-w-0 truncate text-[12px] font-medium text-foreground">
+                      {login}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+
+        {/* Labels */}
+        <section>
+          <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            <span>Labels</span>
+            <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  disabled={isPending('labels') || repoLabels.loading}
+                  aria-label="Edit labels"
+                  className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+                >
+                  {isPending('labels') ? (
+                    <LoaderCircle className="size-3 animate-spin" />
+                  ) : (
+                    <Pencil className="size-3" />
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="popover-scroll-content scrollbar-sleek w-60 p-1"
+                align="end"
+              >
+                {repoLabels.error ? (
+                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                    {repoLabels.error}
+                  </div>
+                ) : (
+                  <div>
+                    {repoLabels.data.map((label) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => handleLabelToggle(label)}
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                      >
+                        <span
+                          className={cn(
+                            'flex size-3.5 items-center justify-center rounded-sm border',
+                            localLabels.includes(label)
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-input'
+                          )}
+                        >
+                          {localLabels.includes(label) && checkIcon}
+                        </span>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
+          {localLabels.length === 0 ? (
+            <div className="text-[12px] text-muted-foreground">None yet</div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {localLabels.map((name) => (
+                <span
+                  key={name}
+                  className="inline-flex items-center rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground"
+                >
+                  {name}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+      </aside>
+    )
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
@@ -4887,6 +5111,8 @@ export default function GitHubItemDialog({
   repoPath,
   repoId,
   initialTab,
+  variant = 'sheet',
+  backLabel = 'Back',
   projectOrigin,
   onUse,
   onReviewRequestsChange,
@@ -5263,6 +5489,505 @@ export default function GitHubItemDialog({
     [details?.pullRequestId, detailsCacheKey, repoPath, workItem]
   )
 
+  const isIssuePage = variant === 'page' && workItem?.type === 'issue'
+  const ownerRepo = workItem ? parseOwnerRepoFromItemUrl(workItem.url) : null
+  const issueStateBadgeTone =
+    localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
+
+  const content = workItem ? (
+    <div className="flex h-full min-h-0 flex-col">
+      {isIssuePage ? (
+        <>
+          {/* Row 1: breadcrumb-style strip mirroring GitHub's canvas-subtle header */}
+          <div className="flex-none border-b border-border/60 bg-muted/30 px-6 py-2.5">
+            <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="-ml-2 h-7 gap-1 px-2 text-muted-foreground hover:text-foreground"
+                aria-label={backLabel}
+              >
+                <ChevronLeft className="size-4" />
+                {backLabel}
+              </Button>
+              <span className="text-border">·</span>
+              {ownerRepo ? (
+                <>
+                  <span className="truncate">
+                    <span className="text-muted-foreground">{ownerRepo.owner}</span>
+                    <span className="mx-1 text-muted-foreground/60">/</span>
+                    <span className="font-medium text-foreground">{ownerRepo.repo}</span>
+                  </span>
+                  <span className="text-muted-foreground/60">·</span>
+                </>
+              ) : null}
+              <span className="font-mono text-muted-foreground">#{workItem.number}</span>
+              <div className="ml-auto flex items-center gap-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => void handleCopyWorkItemLink()}
+                      aria-label="Copy GitHub link"
+                    >
+                      {linkCopied ? (
+                        <Check className="size-4 text-emerald-500" />
+                      ) : (
+                        <Copy className="size-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {linkCopied ? 'Copied' : 'Copy GitHub link'}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => window.api.shell.openUrl(workItem.url)}
+                      aria-label="Open on GitHub"
+                    >
+                      <ExternalLink className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    Open on GitHub
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: large title block */}
+          <div className="flex-none border-b border-border/60 bg-card px-6 py-4">
+            <div className="flex items-start gap-4">
+              <h1 className="min-w-0 flex-1 text-[28px] font-medium leading-tight text-foreground">
+                <span className="break-words">{workItem.title}</span>
+                <span className="ml-2 font-light text-muted-foreground">#{workItem.number}</span>
+              </h1>
+              <div className="flex shrink-0 items-center gap-2">
+                {/* Why: Orca's signature affordance — keep this primary so it
+                    stands out against GitHub's familiar surface. */}
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onUse(workItem)}
+                  className="gap-1.5 whitespace-nowrap"
+                  aria-label="Start workspace from issue"
+                >
+                  Start workspace from issue
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium',
+                  issueStateBadgeTone
+                )}
+              >
+                {localState === 'closed' ? (
+                  <CircleDashed className="size-3.5" />
+                ) : (
+                  <CircleDot className="size-3.5" />
+                )}
+                {localState === 'closed' ? 'Closed' : 'Open'}
+              </span>
+              <span className="flex flex-wrap items-center gap-1.5">
+                <span className="font-semibold text-foreground">
+                  {workItem.author ?? 'unknown'}
+                </span>
+                <span>opened this issue</span>
+                <span className="text-muted-foreground/80">
+                  · updated {formatRelativeTime(workItem.updatedAt)}
+                </span>
+              </span>
+              <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
+          <div className="flex items-start gap-3">
+            {variant === 'page' ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="-ml-1 mt-0.5 shrink-0 gap-1.5"
+                aria-label={backLabel}
+              >
+                <ChevronLeft className="size-4" />
+                {backLabel}
+              </Button>
+            ) : null}
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
+              <Icon className="size-4" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                <WorkItemStateBadge item={{ ...workItem, state: localState }} />
+                <span className="font-mono">#{workItem.number}</span>
+                <span>{workItem.type === 'pr' ? 'Pull request' : 'Issue'}</span>
+              </div>
+              <h2 className="text-[15px] font-semibold leading-snug text-foreground">
+                {workItem.title}
+              </h2>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                <span>{workItem.author ?? 'unknown'}</span>
+                <span>updated {formatRelativeTime(workItem.updatedAt)}</span>
+                {workItem.branchName && (
+                  <span className="max-w-full truncate rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    {workItem.branchName}
+                  </span>
+                )}
+              </div>
+              {workItem.type === 'issue' && (
+                <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
+              )}
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-1">
+              {workItem.type === 'pr' && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onUse(workItem)}
+                  className="gap-1.5 whitespace-nowrap"
+                  aria-label="Start workspace from PR"
+                >
+                  Start workspace from PR
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => void handleCopyWorkItemLink()}
+                    aria-label="Copy GitHub link"
+                  >
+                    {linkCopied ? (
+                      <Check className="size-4 text-emerald-500" />
+                    ) : (
+                      <Copy className="size-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {linkCopied ? 'Copied' : 'Copy GitHub link'}
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => window.api.shell.openUrl(workItem.url)}
+                    aria-label="Open on GitHub"
+                  >
+                    <ExternalLink className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  Open on GitHub
+                </TooltipContent>
+              </Tooltip>
+              {variant === 'sheet' ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={onClose}
+                      aria-label="Close preview"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    Close · Esc
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isIssuePage && (repoPath || projectOrigin) && (
+        <GHEditSection
+          item={workItem}
+          repoPath={repoPath}
+          repoId={effectiveRepoId}
+          projectOrigin={projectOrigin}
+          localState={localState}
+          localLabels={localLabels}
+          onStateChange={setLocalState}
+          onLabelsChange={setLocalLabels}
+          onMutated={() => {
+            // Why: drop the cached details for this item so the next
+            // open issues a fresh fetch instead of painting pre-edit
+            // state. We invalidate by (repoPath, type, number) match
+            // because a single mutation can affect entries across all
+            // issueSourcePreference values for the same number.
+            if (repoPath) {
+              invalidateWorkItemDetailsCacheByMatch({
+                repoPath,
+                repoId: effectiveRepoId ?? undefined,
+                type: workItem.type,
+                number: workItem.number
+              })
+            }
+          }}
+          assignees={details?.assignees ?? []}
+          onUse={onUse}
+        />
+      )}
+
+      <div className="min-h-0 flex-1">
+        {error ? (
+          <div className="px-4 py-6 text-[12px] text-destructive">{error}</div>
+        ) : isIssuePage ? (
+          <div className="h-full min-h-0 overflow-y-auto scrollbar-sleek bg-background">
+            <div className="mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-8 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+              <div className="min-w-0">
+                <ConversationTab
+                  item={displayWorkItem ?? workItem}
+                  repoPath={repoPath}
+                  repoId={effectiveRepoId}
+                  body={body}
+                  comments={comments}
+                  files={files}
+                  headSha={details?.headSha}
+                  baseSha={details?.baseSha}
+                  loading={loading}
+                  detailsLoaded={detailsLoaded}
+                  checks={checks}
+                  participants={details?.participants ?? []}
+                  localState={localState}
+                  onStateChange={setLocalState}
+                  projectOrigin={projectOrigin}
+                  onMutated={() => {
+                    if (repoPath) {
+                      invalidateWorkItemDetailsCacheByMatch({
+                        repoPath,
+                        repoId: effectiveRepoId ?? undefined,
+                        type: workItem.type,
+                        number: workItem.number
+                      })
+                    }
+                  }}
+                  onChecksUpdated={(nextChecks) => {
+                    if (detailsCacheKey) {
+                      patchCachedPRChecks(detailsCacheKey, nextChecks)
+                    }
+                  }}
+                  onBodyUpdated={(nextBody) => {
+                    if (detailsCacheKey) {
+                      patchCachedWorkItemBody(detailsCacheKey, nextBody)
+                    }
+                  }}
+                  onCommentAdded={appendOptimisticComment}
+                  onReviewersRequested={(nextReviewRequests) => {
+                    if (detailsCacheKey) {
+                      patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
+                    }
+                    onReviewRequestsChange?.(
+                      { id: workItem.id, repoId: workItem.repoId },
+                      nextReviewRequests
+                    )
+                  }}
+                />
+              </div>
+              {(repoPath || projectOrigin) && (
+                <div className="min-w-0">
+                  <div className="lg:sticky lg:top-4">
+                    <GHEditSection
+                      item={workItem}
+                      repoPath={repoPath}
+                      repoId={effectiveRepoId}
+                      projectOrigin={projectOrigin}
+                      localState={localState}
+                      localLabels={localLabels}
+                      onStateChange={setLocalState}
+                      onLabelsChange={setLocalLabels}
+                      onMutated={() => {
+                        if (repoPath) {
+                          invalidateWorkItemDetailsCacheByMatch({
+                            repoPath,
+                            repoId: effectiveRepoId ?? undefined,
+                            type: workItem.type,
+                            number: workItem.number
+                          })
+                        }
+                      }}
+                      assignees={details?.assignees ?? []}
+                      onUse={onUse}
+                      layout="sidebar"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <Tabs
+            value={tab}
+            onValueChange={(value) => setTab(value as ItemDialogTab)}
+            className="flex h-full min-h-0 flex-col gap-0"
+          >
+            <TabsList
+              variant="line"
+              className="mx-4 mt-2 justify-start gap-3 border-b border-border/60 bg-transparent"
+            >
+              <TabsTrigger value="conversation" className="px-2">
+                <MessageSquare className="size-3.5" />
+                Conversation
+              </TabsTrigger>
+              {workItem.type === 'pr' && (
+                <>
+                  <TabsTrigger value="checks" className="px-2">
+                    <ListChecks className="size-3.5" />
+                    Checks
+                    {checks.length > 0 && (
+                      <span className="ml-1 text-[10px] text-muted-foreground">
+                        {checks.length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="files" className="px-2">
+                    <FileText className="size-3.5" />
+                    Files
+                    {files.length > 0 && (
+                      <span className="ml-1 text-[10px] text-muted-foreground">{files.length}</span>
+                    )}
+                  </TabsTrigger>
+                </>
+              )}
+            </TabsList>
+
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+              <TabsContent value="conversation" className="mt-0">
+                <ConversationTab
+                  item={displayWorkItem ?? workItem}
+                  repoPath={repoPath}
+                  repoId={effectiveRepoId}
+                  body={body}
+                  comments={comments}
+                  files={files}
+                  headSha={details?.headSha}
+                  baseSha={details?.baseSha}
+                  loading={loading}
+                  detailsLoaded={detailsLoaded}
+                  checks={checks}
+                  participants={details?.participants ?? []}
+                  localState={localState}
+                  onStateChange={setLocalState}
+                  projectOrigin={projectOrigin}
+                  onMutated={() => {
+                    if (repoPath) {
+                      invalidateWorkItemDetailsCacheByMatch({
+                        repoPath,
+                        repoId: effectiveRepoId ?? undefined,
+                        type: workItem.type,
+                        number: workItem.number
+                      })
+                    }
+                  }}
+                  onChecksUpdated={(nextChecks) => {
+                    if (detailsCacheKey) {
+                      patchCachedPRChecks(detailsCacheKey, nextChecks)
+                    }
+                  }}
+                  onBodyUpdated={(nextBody) => {
+                    if (detailsCacheKey) {
+                      patchCachedWorkItemBody(detailsCacheKey, nextBody)
+                    }
+                  }}
+                  onCommentAdded={appendOptimisticComment}
+                  onReviewersRequested={(nextReviewRequests) => {
+                    if (detailsCacheKey) {
+                      patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
+                    }
+                    onReviewRequestsChange?.(
+                      { id: workItem.id, repoId: workItem.repoId },
+                      nextReviewRequests
+                    )
+                  }}
+                />
+              </TabsContent>
+
+              {workItem.type === 'pr' && (
+                <>
+                  <TabsContent value="checks" className="mt-0">
+                    <ChecksTab
+                      item={workItem}
+                      repoPath={repoPath}
+                      repoId={effectiveRepoId}
+                      headSha={details?.headSha}
+                      checks={checks}
+                      loading={loading || !detailsLoaded}
+                      variant="page"
+                      onChecksUpdated={(nextChecks) => {
+                        if (detailsCacheKey) {
+                          patchCachedPRChecks(detailsCacheKey, nextChecks)
+                        }
+                      }}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="files" className="mt-0">
+                    {loading && files.length === 0 ? (
+                      <div className="flex items-center justify-center py-10">
+                        <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : files.length === 0 ? (
+                      <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
+                        No files changed.
+                      </div>
+                    ) : (
+                      <PRFilesCombinedDiffViewer
+                        files={files}
+                        comments={comments}
+                        repoPath={repoPath ?? ''}
+                        repoId={effectiveRepoId ?? ''}
+                        prNumber={workItem.number}
+                        prUrl={workItem.url}
+                        headSha={details?.headSha}
+                        baseSha={details?.baseSha}
+                        pendingViewedPaths={pendingViewedPaths}
+                        onCommentAdded={appendOptimisticComment}
+                        onViewedChange={handlePRFileViewedChange}
+                      />
+                    )}
+                  </TabsContent>
+                </>
+              )}
+            </div>
+          </Tabs>
+        )}
+      </div>
+    </div>
+  ) : null
+
+  if (variant === 'page') {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
+        {content}
+      </div>
+    )
+  }
+
   return (
     <Sheet open={workItem !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
@@ -5304,276 +6029,7 @@ export default function GitHubItemDialog({
           </SheetDescription>
         </VisuallyHidden.Root>
 
-        {workItem && (
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
-                  <Icon className="size-4" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                    <WorkItemStateBadge item={{ ...workItem, state: localState }} />
-                    <span className="font-mono">#{workItem.number}</span>
-                    <span>{workItem.type === 'pr' ? 'Pull request' : 'Issue'}</span>
-                  </div>
-                  <h2 className="text-[15px] font-semibold leading-snug text-foreground">
-                    {workItem.title}
-                  </h2>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-                    <span>{workItem.author ?? 'unknown'}</span>
-                    <span>updated {formatRelativeTime(workItem.updatedAt)}</span>
-                    {workItem.branchName && (
-                      <span className="max-w-full truncate rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                        {workItem.branchName}
-                      </span>
-                    )}
-                  </div>
-                  {workItem.type === 'issue' && (
-                    <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
-                  )}
-                </div>
-                <div className="flex shrink-0 items-center justify-end gap-1">
-                  {workItem.type === 'pr' && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => onUse(workItem)}
-                      className="gap-1.5 whitespace-nowrap"
-                      aria-label="Start workspace from PR"
-                    >
-                      Start workspace from PR
-                      <ArrowRight className="size-3.5" />
-                    </Button>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => void handleCopyWorkItemLink()}
-                        aria-label="Copy GitHub link"
-                      >
-                        {linkCopied ? (
-                          <Check className="size-4 text-emerald-500" />
-                        ) : (
-                          <Copy className="size-4" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      {linkCopied ? 'Copied' : 'Copy GitHub link'}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => window.api.shell.openUrl(workItem.url)}
-                        aria-label="Open on GitHub"
-                      >
-                        <ExternalLink className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Open on GitHub
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={onClose}
-                        aria-label="Close preview"
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Close · Esc
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              </div>
-            </div>
-
-            {(repoPath || projectOrigin) && (
-              <GHEditSection
-                item={workItem}
-                repoPath={repoPath}
-                repoId={effectiveRepoId}
-                projectOrigin={projectOrigin}
-                localState={localState}
-                localLabels={localLabels}
-                onStateChange={setLocalState}
-                onLabelsChange={setLocalLabels}
-                onMutated={() => {
-                  // Why: drop the cached details for this item so the next
-                  // open issues a fresh fetch instead of painting pre-edit
-                  // state. We invalidate by (repoPath, type, number) match
-                  // because a single mutation can affect entries across all
-                  // issueSourcePreference values for the same number.
-                  if (repoPath) {
-                    invalidateWorkItemDetailsCacheByMatch({
-                      repoPath,
-                      repoId: effectiveRepoId ?? undefined,
-                      type: workItem.type,
-                      number: workItem.number
-                    })
-                  }
-                }}
-                assignees={details?.assignees ?? []}
-                onUse={onUse}
-              />
-            )}
-
-            <div className="min-h-0 flex-1">
-              {error ? (
-                <div className="px-4 py-6 text-[12px] text-destructive">{error}</div>
-              ) : (
-                <Tabs
-                  value={tab}
-                  onValueChange={(value) => setTab(value as ItemDialogTab)}
-                  className="flex h-full min-h-0 flex-col gap-0"
-                >
-                  <TabsList
-                    variant="line"
-                    className="mx-4 mt-2 justify-start gap-3 border-b border-border/60 bg-transparent"
-                  >
-                    <TabsTrigger value="conversation" className="px-2">
-                      <MessageSquare className="size-3.5" />
-                      Conversation
-                    </TabsTrigger>
-                    {workItem.type === 'pr' && (
-                      <>
-                        <TabsTrigger value="checks" className="px-2">
-                          <ListChecks className="size-3.5" />
-                          Checks
-                          {checks.length > 0 && (
-                            <span className="ml-1 text-[10px] text-muted-foreground">
-                              {checks.length}
-                            </span>
-                          )}
-                        </TabsTrigger>
-                        <TabsTrigger value="files" className="px-2">
-                          <FileText className="size-3.5" />
-                          Files
-                          {files.length > 0 && (
-                            <span className="ml-1 text-[10px] text-muted-foreground">
-                              {files.length}
-                            </span>
-                          )}
-                        </TabsTrigger>
-                      </>
-                    )}
-                  </TabsList>
-
-                  <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
-                    <TabsContent value="conversation" className="mt-0">
-                      <ConversationTab
-                        item={displayWorkItem ?? workItem}
-                        repoPath={repoPath}
-                        repoId={effectiveRepoId}
-                        body={body}
-                        comments={comments}
-                        files={files}
-                        headSha={details?.headSha}
-                        baseSha={details?.baseSha}
-                        loading={loading}
-                        detailsLoaded={detailsLoaded}
-                        checks={checks}
-                        participants={details?.participants ?? []}
-                        localState={localState}
-                        onStateChange={setLocalState}
-                        projectOrigin={projectOrigin}
-                        onMutated={() => {
-                          if (repoPath) {
-                            invalidateWorkItemDetailsCacheByMatch({
-                              repoPath,
-                              repoId: effectiveRepoId ?? undefined,
-                              type: workItem.type,
-                              number: workItem.number
-                            })
-                          }
-                        }}
-                        onChecksUpdated={(nextChecks) => {
-                          if (detailsCacheKey) {
-                            patchCachedPRChecks(detailsCacheKey, nextChecks)
-                          }
-                        }}
-                        onBodyUpdated={(nextBody) => {
-                          if (detailsCacheKey) {
-                            patchCachedWorkItemBody(detailsCacheKey, nextBody)
-                          }
-                        }}
-                        onCommentAdded={appendOptimisticComment}
-                        onReviewersRequested={(nextReviewRequests) => {
-                          if (detailsCacheKey) {
-                            patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
-                          }
-                          onReviewRequestsChange?.(
-                            { id: workItem.id, repoId: workItem.repoId },
-                            nextReviewRequests
-                          )
-                        }}
-                      />
-                    </TabsContent>
-
-                    {workItem.type === 'pr' && (
-                      <>
-                        <TabsContent value="checks" className="mt-0">
-                          <ChecksTab
-                            item={workItem}
-                            repoPath={repoPath}
-                            repoId={effectiveRepoId}
-                            headSha={details?.headSha}
-                            checks={checks}
-                            loading={loading || !detailsLoaded}
-                            variant="page"
-                            onChecksUpdated={(nextChecks) => {
-                              if (detailsCacheKey) {
-                                patchCachedPRChecks(detailsCacheKey, nextChecks)
-                              }
-                            }}
-                          />
-                        </TabsContent>
-
-                        <TabsContent value="files" className="mt-0">
-                          {loading && files.length === 0 ? (
-                            <div className="flex items-center justify-center py-10">
-                              <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-                            </div>
-                          ) : files.length === 0 ? (
-                            <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-                              No files changed.
-                            </div>
-                          ) : (
-                            <PRFilesCombinedDiffViewer
-                              files={files}
-                              comments={comments}
-                              repoPath={repoPath ?? ''}
-                              repoId={effectiveRepoId ?? ''}
-                              prNumber={workItem.number}
-                              prUrl={workItem.url}
-                              headSha={details?.headSha}
-                              baseSha={details?.baseSha}
-                              pendingViewedPaths={pendingViewedPaths}
-                              onCommentAdded={appendOptimisticComment}
-                              onViewedChange={handlePRFileViewedChange}
-                            />
-                          )}
-                        </TabsContent>
-                      </>
-                    )}
-                  </div>
-                </Tabs>
-              )}
-            </div>
-          </div>
-        )}
+        {content}
       </SheetContent>
     </Sheet>
   )

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Clipboard, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -27,28 +27,34 @@ export function CrashReportDialog(): React.JSX.Element {
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
+  const deferredNotes = useDeferredValue(notes)
   const diagnosticText = useMemo(
-    () => (report ? formatCrashReportText(report, notes) : ''),
-    [notes, report]
+    // Why: formatting applies redaction and truncation over the full crash
+    // payload. Keep that preview update out of the textarea keystroke path.
+    () => (report ? formatCrashReportText(report, deferredNotes) : ''),
+    [deferredNotes, report]
   )
 
-  const loadPendingReport = async (promptIfPresent: boolean): Promise<void> => {
+  const loadCrashReport = async (promptIfPresent: boolean): Promise<void> => {
     setLoading(true)
     try {
-      const pending = await window.api.crashReports.getLatestPending()
-      let displayedReport = pending
-      if (pending && promptIfPresent) {
+      const nextReport = promptIfPresent
+        ? await window.api.crashReports.getLatestPending()
+        : await window.api.crashReports.getLatestReport()
+      let displayedReport = nextReport
+      if (nextReport?.status === 'pending' && promptIfPresent) {
         try {
           // Why: startup crash prompts are one-shot. The open dialog keeps the
-          // report data locally if the user chooses to send immediately.
-          await window.api.crashReports.dismiss({ reportId: pending.id })
-          displayedReport = { ...pending, status: 'dismissed' as const }
+          // report data locally if the user chooses to send immediately, while
+          // Help > Report Crash can still reopen dismissed unsent reports.
+          await window.api.crashReports.dismiss({ reportId: nextReport.id })
+          displayedReport = { ...nextReport, status: 'dismissed' as const }
         } catch (error) {
           console.error('Failed to dismiss crash report after startup prompt:', error)
         }
       }
       setReport(displayedReport)
-      if (pending && promptIfPresent) {
+      if (nextReport && promptIfPresent) {
         setOpen(true)
       }
     } catch (error) {
@@ -63,12 +69,12 @@ export function CrashReportDialog(): React.JSX.Element {
       return
     }
     promptedThisLaunch.current = true
-    void loadPendingReport(true)
+    void loadCrashReport(true)
   }, [])
 
   useEffect(() => {
     return window.api.ui.onOpenCrashReport(() => {
-      void loadPendingReport(false).then(() => setOpen(true))
+      void loadCrashReport(false).then(() => setOpen(true))
     })
   }, [])
 
@@ -201,7 +207,7 @@ export function CrashReportDialog(): React.JSX.Element {
           </div>
         ) : (
           <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
-            {loading ? 'Checking for crash reports...' : 'No pending crash report is available.'}
+            {loading ? 'Checking for crash reports...' : 'No crash report is available.'}
           </div>
         )}
 

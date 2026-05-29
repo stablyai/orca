@@ -73,6 +73,10 @@ export type RelayHookServerOptions = {
   forward: RelayHookForward
 }
 
+export type RelayHookServerStartOptions = {
+  publishEndpoint?: boolean
+}
+
 export class RelayAgentHookServer {
   private server: ReturnType<typeof createServer> | null = null
   private port = 0
@@ -103,7 +107,7 @@ export class RelayAgentHookServer {
     this.forward = options.forward
   }
 
-  async start(): Promise<void> {
+  async start(options: RelayHookServerStartOptions = {}): Promise<void> {
     if (this.server) {
       return
     }
@@ -129,12 +133,9 @@ export class RelayAgentHookServer {
         if (address && typeof address === 'object') {
           this.port = address.port
         }
-        this.endpointFileWritten = writeEndpointFile(this.endpointDir, this.endpointFilePath, {
-          port: this.port,
-          token: this.token,
-          env: this.env,
-          version: ORCA_HOOK_PROTOCOL_VERSION
-        })
+        if (options.publishEndpoint !== false) {
+          this.publishEndpointFile()
+        }
         resolve()
       }
       this.server!.once('error', onStartupError)
@@ -143,6 +144,20 @@ export class RelayAgentHookServer {
       // 127.0.0.1:PORT; nobody outside the box can.
       this.server!.listen(0, '127.0.0.1', onListening)
     })
+  }
+
+  publishEndpointFile(): boolean {
+    if (this.port <= 0 || !this.token) {
+      this.endpointFileWritten = false
+      return false
+    }
+    this.endpointFileWritten = writeEndpointFile(this.endpointDir, this.endpointFilePath, {
+      port: this.port,
+      token: this.token,
+      env: this.env,
+      version: ORCA_HOOK_PROTOCOL_VERSION
+    })
+    return this.endpointFileWritten
   }
 
   stop(): void {
@@ -277,6 +292,10 @@ export class RelayAgentHookServer {
       worktreeId: event.worktreeId,
       connectionId: null,
       hasExplicitPrompt: event.hasExplicitPrompt,
+      hookEventName: event.hookEventName,
+      toolUseId: event.toolUseId,
+      toolAgentId: event.toolAgentId,
+      toolAgentType: event.toolAgentType,
       isReplay: options.isReplay === true ? true : undefined,
       env,
       version,

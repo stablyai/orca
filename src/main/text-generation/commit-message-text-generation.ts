@@ -2,8 +2,7 @@
    spawn failure handling, and output normalization; keeping them together
    prevents those paths from drifting. */
 import { exec, spawn, type ChildProcess } from 'child_process'
-import type { GlobalSettings, TuiAgent } from '../../shared/types'
-import { isCustomTuiAgentId } from '../../shared/effective-tui-agent'
+import type { GlobalSettings, Repo, TuiAgent } from '../../shared/types'
 import {
   buildCommitMessagePrompt,
   splitGeneratedCommitMessage,
@@ -21,11 +20,12 @@ import {
   extractAgentErrorMessage
 } from '../../shared/commit-message-prompt'
 import {
-  CUSTOM_AGENT_ID,
+  buildBranchNamePrompt,
+  sanitizeBranchSlug,
+  type BranchNameWorkContext
+} from '../../shared/branch-name-from-work'
+import {
   getCommitMessageAgentSpec,
-  getCommitMessageModel,
-  isCustomAgentId,
-  resolveCommitMessageAgentChoice,
   type CommitMessageAgentCapability,
   type CommitMessageModelCapability
 } from '../../shared/commit-message-agent-spec'
@@ -35,24 +35,23 @@ import {
   type CommitMessagePlan
 } from '../../shared/commit-message-plan'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
+import {
+  resolveSourceControlAiForOperation,
+  type ResolvedSourceControlAiGenerationParams
+} from '../../shared/source-control-ai'
+import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
 import { resolveCliCommand } from '../codex-cli/command'
 import {
   getSpawnArgsForWindows,
   UnsafeWindowsBatchArgumentsError,
   WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR
 } from '../win32-utils'
+import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
 
-export type GenerateCommitMessageParams = {
-  agentId: TuiAgent | 'custom'
-  model: string
-  thinkingLevel?: string
-  customPrompt?: string
-  customAgentCommand?: string
-  agentCommandOverride?: string
-}
+export type GenerateCommitMessageParams = ResolvedSourceControlAiGenerationParams
 
 export type GenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
@@ -112,88 +111,26 @@ export function trimGeneratedCommitMessage(message: string): string {
 
 export function resolveCommitMessageSettings(
   settings: GlobalSettings,
-  discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY
+  discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
+  operation: SourceControlAiOperation = 'commitMessage',
+  repo?: Pick<Repo, 'sourceControlAi'> | null
 ): ResolveCommitMessageSettingsResult {
-  const config = settings.commitMessageAi
-  if (!config?.enabled) {
-    return { ok: false, error: 'Enable AI commit messages in Settings -> Git.' }
-  }
+  const resolved = resolveSourceControlAiForOperation({
+    settings,
+    repo,
+    operation,
+    discoveryHostKey
+  })
+  return resolved.ok ? { ok: true, params: resolved.value.params } : resolved
+}
 
-  // Why: commit-message AI is built-in-only (issue #2284 plan §9). A `custom:*`
-  // default agent has no commit-message spec, so we pass `null` and let the
-  // resolver fall through to the feature's own default.
-  const defaultForCommitMsg = isCustomTuiAgentId(settings.defaultTuiAgent)
-    ? null
-    : settings.defaultTuiAgent
-  const agentChoice = resolveCommitMessageAgentChoice(config.agentId, defaultForCommitMsg)
-  if (!agentChoice) {
-    return {
-      ok: false,
-      error:
-        `Default agent "${settings.defaultTuiAgent}" does not support AI commit messages. ` +
-        'Choose Claude or Codex in Settings -> Git -> AI Commit Messages.'
-    }
-  }
-
-  if (isCustomAgentId(agentChoice)) {
-    const customAgentCommand = config.customAgentCommand.trim()
-    if (!customAgentCommand) {
-      return {
-        ok: false,
-        error: 'Custom command is empty. Add one in Settings -> Git -> AI Commit Messages.'
-      }
-    }
-    return {
-      ok: true,
-      params: {
-        agentId: CUSTOM_AGENT_ID,
-        model: '',
-        customPrompt: config.customPrompt,
-        customAgentCommand
-      }
-    }
-  }
-
-  const agentId = agentChoice
-  const spec = getCommitMessageAgentSpec(agentId)
-  if (!spec) {
-    return { ok: false, error: `Agent "${agentId}" does not support AI commit messages.` }
-  }
-
-  const hostSelectedModels = config.selectedModelByAgentByHost?.[discoveryHostKey]
-  const legacySelectedModels =
-    discoveryHostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY ? config.selectedModelByAgent : undefined
-  const persistedModelId =
-    hostSelectedModels?.[agentId] ?? legacySelectedModels?.[agentId] ?? spec.defaultModelId
-  const discoveredModels =
-    config.discoveredModelsByAgentByHost?.[discoveryHostKey]?.[agentId] ??
-    (discoveryHostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
-      ? (config.discoveredModelsByAgent?.[agentId] ?? [])
-      : [])
-  const model =
-    spec.models.find((candidate) => candidate.id === persistedModelId) ??
-    discoveredModels.find((candidate) => candidate.id === persistedModelId) ??
-    getCommitMessageModel(agentId, spec.defaultModelId)
-  if (!model) {
-    return { ok: false, error: `No model is available for ${spec.label}.` }
-  }
-
-  const persistedThinking = config.selectedThinkingByModel[model.id]
-  const thinkingLevel = model.thinkingLevels?.some((level) => level.id === persistedThinking)
-    ? persistedThinking
-    : model.defaultThinkingLevel
-
-  const agentCommandOverride = settings.agentCmdOverrides?.[agentId]?.trim()
-  return {
-    ok: true,
-    params: {
-      agentId,
-      model: model.id,
-      thinkingLevel,
-      customPrompt: config.customPrompt,
-      ...(agentCommandOverride ? { agentCommandOverride } : {})
-    }
-  }
+export function resolveTextGenerationParams(
+  settings: GlobalSettings,
+  discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
+  operation: SourceControlAiOperation = 'commitMessage',
+  repo?: Pick<Repo, 'sourceControlAi'> | null
+): ResolveCommitMessageSettingsResult {
+  return resolveCommitMessageSettings(settings, discoveryHostKey, operation, repo)
 }
 
 function sanitizeAgentFailureDetail(detail: string | null): string | null {
@@ -204,8 +141,15 @@ function sanitizeAgentFailureDetail(detail: string | null): string | null {
   return trimmed.length > 240 ? `${trimmed.slice(0, 240).trimEnd()}...` : trimmed
 }
 
-function userFacingAgentFailure(label: string): string {
-  return `${label} failed. Check the agent CLI configuration and try again.`
+function userFacingAgentFailure(
+  label: string,
+  detail?: string | null,
+  options?: { includeLocalMacDnsHint?: boolean }
+): string {
+  const message = `${label} failed. Check the agent CLI configuration and try again.`
+  return options?.includeLocalMacDnsHint === false
+    ? message
+    : withMacTailscaleDnsHint(message, detail)
 }
 
 function userFacingUnsafeWindowsBatchArgs(label: string): string {
@@ -248,7 +192,10 @@ function finalizeModelDiscoveryOutput(
     })
     return {
       success: false,
-      error: `${spec.label} model discovery failed. Check the agent CLI configuration and try again.`
+      error: withMacTailscaleDnsHint(
+        `${spec.label} model discovery failed. Check the agent CLI configuration and try again.`,
+        safeDetail
+      )
     }
   }
   let models = spec.modelDiscovery?.parse(stdout) ?? []
@@ -481,7 +428,7 @@ function killProcessTree(child: ChildProcess): void {
   }
 }
 
-type LocalGenerationOperation = 'commit-message' | 'pull-request-fields'
+type LocalGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
 
 // Keying by operation plus `local:${cwd}` keeps local cancellation independent
 // from SSH worktrees and from other generation features in the same worktree.
@@ -626,8 +573,9 @@ function finalizeFromAgentOutput(args: {
   label: string
   emptyResultName: string
   finalize: (result: InternalTextGenerationResult) => void
+  includeLocalMacDnsHint?: boolean
 }): void {
-  const { code, stdout, stderr, label, emptyResultName, finalize } = args
+  const { code, stdout, stderr, label, emptyResultName, finalize, includeLocalMacDnsHint } = args
   if (code !== 0) {
     const safeDetail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
     console.error('[commit-message] Generator failed:', {
@@ -637,7 +585,10 @@ function finalizeFromAgentOutput(args: {
       stdout,
       stderr
     })
-    finalize({ success: false, error: userFacingAgentFailure(label) })
+    finalize({
+      success: false,
+      error: userFacingAgentFailure(label, safeDetail, { includeLocalMacDnsHint })
+    })
     return
   }
   const cleaned = cleanGeneratedCommitMessage(stdout)
@@ -651,7 +602,10 @@ function finalizeFromAgentOutput(args: {
         stdout,
         stderr
       })
-      finalize({ success: false, error: userFacingAgentFailure(label) })
+      finalize({
+        success: false,
+        error: userFacingAgentFailure(label, safeDetail, { includeLocalMacDnsHint })
+      })
       return
     }
     finalize({ success: false, error: `${label} returned an empty ${emptyResultName}.` })
@@ -716,7 +670,9 @@ async function runRemotePlan(
       stderr: result.stderr,
       label,
       emptyResultName,
-      finalize: resolve
+      finalize: resolve,
+      // Why: remote agent output reflects the SSH target, not this Mac's DNS.
+      includeLocalMacDnsHint: false
     })
   })
 }
@@ -808,4 +764,38 @@ export async function generatePullRequestFieldsFromContext(
       ? await runRemotePlan(planned.plan, target)
       : await runLocalPlan(planned.plan, target.cwd, target.env, 'details', 'pull-request-fields')
   return formatPullRequestFieldsGenerationResult(internalResult, context)
+}
+
+export type GenerateBranchNameResult =
+  | { success: true; slug: string; agentLabel?: string }
+  | { success: false; error: string; canceled?: boolean }
+
+/**
+ * Generate a short kebab-case branch name from the work the agent is starting.
+ * Reuses the commit-message generation plan + spawn machinery; only the prompt
+ * and the post-processing (slug sanitization) differ.
+ */
+export async function generateBranchNameFromContext(
+  context: BranchNameWorkContext,
+  params: GenerateCommitMessageParams,
+  target: CommitMessageGenerationTarget
+): Promise<GenerateBranchNameResult> {
+  const prompt = buildBranchNamePrompt(context, params.customPrompt ?? '')
+  const planned = planCommitMessageGeneration(params, prompt)
+  if (!planned.ok) {
+    return { success: false, error: planned.error }
+  }
+
+  const internalResult =
+    target.kind === 'remote'
+      ? await runRemotePlan(planned.plan, target, 'branch name')
+      : await runLocalPlan(planned.plan, target.cwd, target.env, 'branch name', 'branch-name')
+  if (!internalResult.success) {
+    return internalResult
+  }
+  const slug = sanitizeBranchSlug(internalResult.rawOutput)
+  if (!slug) {
+    return { success: false, error: 'Generated branch name was empty after sanitization.' }
+  }
+  return { success: true, slug, agentLabel: internalResult.agentLabel }
 }

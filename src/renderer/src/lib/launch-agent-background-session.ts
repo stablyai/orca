@@ -102,9 +102,12 @@ export async function launchAgentBackgroundSession(
 
   // Why: automation runs should start without revealing the workspace.
   // Spawn the PTY immediately, then attach an inactive tab to the live session.
-  const tab = store.createTab(worktreeId, undefined, undefined, { activate: false })
+  const tab = store.createTab(worktreeId, undefined, undefined, {
+    activate: false,
+    recordInteraction: false
+  })
   if (title) {
-    store.setTabCustomTitle(tab.id, title)
+    store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
   }
   // Why: agent hook callbacks are keyed by pane, and background automation
   // tabs never mount a TerminalPane to inject this env for us.
@@ -118,6 +121,34 @@ export async function launchAgentBackgroundSession(
     ORCA_PANE_KEY: paneKey,
     ORCA_TAB_ID: tab.id,
     ORCA_WORKTREE_ID: worktreeId
+  }
+  const sshConnectionId = repo?.connectionId ?? null
+  let pendingSshStartupCommand = sshConnectionId ? startupPlan.launchCommand : null
+  let sshStartupInjectTimer: ReturnType<typeof setTimeout> | null = null
+  const clearSshStartupInjectTimer = (): void => {
+    if (sshStartupInjectTimer !== null) {
+      clearTimeout(sshStartupInjectTimer)
+      sshStartupInjectTimer = null
+    }
+  }
+  const scheduleSshStartupInjection = (ptyId: string): void => {
+    if (!pendingSshStartupCommand) {
+      return
+    }
+    clearSshStartupInjectTimer()
+    sshStartupInjectTimer = setTimeout(() => {
+      sshStartupInjectTimer = null
+      const command = pendingSshStartupCommand
+      if (!command) {
+        return
+      }
+      pendingSshStartupCommand = null
+      // Why: the SSH relay ignores spawn.command for interactive PTYs; hidden
+      // automation tabs must type the startup command themselves after shell output.
+      const submittedCommand =
+        command.endsWith('\r') || command.endsWith('\n') ? command : `${command}\r`
+      window.api.pty.write(ptyId, submittedCommand)
+    }, 50)
   }
   const runtimeTarget = getActiveRuntimeTarget(store.settings)
   let ptyId: string
@@ -145,9 +176,9 @@ export async function launchAgentBackgroundSession(
         cols: 120,
         rows: 40,
         cwd: worktree.path,
-        command: startupPlan.launchCommand,
+        ...(sshConnectionId ? {} : { command: startupPlan.launchCommand }),
         env: paneEnv,
-        connectionId: repo?.connectionId ?? null,
+        connectionId: sshConnectionId,
         worktreeId,
         tabId: tab.id,
         leafId,
@@ -160,11 +191,20 @@ export async function launchAgentBackgroundSession(
       ptyId = result.id
     }
   } catch (error) {
-    store.closeTab(tab.id)
+    store.closeTab(tab.id, { recordInteraction: false })
     throw error
   }
   store.updateTabPtyId(tab.id, ptyId)
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
+  if (agent === 'command-code' && hasPrompt && !isFollowupPath) {
+    // Why: Command Code does not expose a prompt-start hook; seed working for
+    // hidden prompt launches so sidebar/activity surfaces do not stay idle.
+    store.setAgentStatus(paneKey, {
+      state: 'working',
+      prompt: trimmedPrompt,
+      agentType: agent
+    })
+  }
   let exitHandled = false
   let unsubscribeExit = (): void => {}
   let unsubscribeData = (): void => {}
@@ -175,12 +215,14 @@ export async function launchAgentBackgroundSession(
     exitHandled = true
     unsubscribeExit()
     unsubscribeData()
+    clearSshStartupInjectTimer()
     useAppStore.getState().clearTabPtyId(tab.id, ptyId)
     onExit?.(ptyId, code)
   }
   const processAgentStatus = createAgentStatusOscProcessor()
   const handleData = (data: string): void => {
     onData?.(data)
+    scheduleSshStartupInjection(ptyId)
     const processed = processAgentStatus(data)
     for (const payload of processed.payloads) {
       useAppStore.getState().setAgentStatus(paneKey, payload, undefined)

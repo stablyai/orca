@@ -20,6 +20,15 @@ function createMockMux(): MockMultiplexer {
   }
 }
 
+async function waitForRequestCount(mock: ReturnType<typeof vi.fn>, count: number): Promise<void> {
+  for (let i = 0; i < 20; i++) {
+    if (mock.mock.calls.length >= count) {
+      return
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  }
+}
+
 describe('SshGitProvider', () => {
   let mux: MockMultiplexer
   let provider: SshGitProvider
@@ -106,6 +115,67 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(commitResult)
   })
 
+  it('execNonInteractive delegates fixed binary commands to the relay', async () => {
+    const execResult = {
+      stdout: '10.0.0\n',
+      stderr: '',
+      exitCode: 0,
+      timedOut: false
+    }
+    mux.request.mockResolvedValue(execResult)
+
+    const result = await provider.execNonInteractive('pnpm', ['--version'], '/home/user/repo', 8000)
+
+    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
+      binary: 'pnpm',
+      args: ['--version'],
+      cwd: '/home/user/repo',
+      stdin: null,
+      timeoutMs: 8000
+    })
+    expect(result).toEqual(execResult)
+  })
+
+  it('execNonInteractive forwards environment variables to the relay', async () => {
+    const execResult = {
+      stdout: '',
+      stderr: '',
+      exitCode: 0,
+      timedOut: false
+    }
+    mux.request.mockResolvedValue(execResult)
+
+    await provider.execNonInteractive(
+      '/bin/bash',
+      ['-lc', 'echo "$ORCA_WORKTREE_PATH"'],
+      '/home/user/repo',
+      120_000,
+      undefined,
+      {
+        ORCA_ROOT_PATH: '/home/user/repo',
+        ORCA_WORKTREE_PATH: '/home/user/repo-feature'
+      }
+    )
+
+    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
+      binary: '/bin/bash',
+      args: ['-lc', 'echo "$ORCA_WORKTREE_PATH"'],
+      cwd: '/home/user/repo',
+      stdin: null,
+      timeoutMs: 120_000,
+      env: {
+        ORCA_ROOT_PATH: '/home/user/repo',
+        ORCA_WORKTREE_PATH: '/home/user/repo-feature'
+      }
+    })
+  })
+
+  it('cancelNonInteractiveExec sends best-effort relay cancellation', async () => {
+    await provider.cancelNonInteractiveExec('/home/user/repo')
+
+    expect(mux.request).toHaveBeenCalledWith('agent.cancelExec', { cwd: '/home/user/repo' })
+  })
+
   it('getStagedCommitContext reads branch, staged summary, and staged patch remotely', async () => {
     mux.request.mockImplementation(async (method, payload) => {
       expect(method).toBe('git.exec')
@@ -174,6 +244,151 @@ describe('SshGitProvider', () => {
       timeoutMs: 60_000
     })
     expect(result).toEqual(execResult)
+  })
+
+  it('serializes non-interactive relay execs for the same cwd', async () => {
+    const completeRequests: (() => void)[] = []
+    mux.request.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          completeRequests.push(() =>
+            resolve({
+              stdout: '',
+              stderr: '',
+              exitCode: 0,
+              timedOut: false
+            })
+          )
+        })
+    )
+
+    const first = provider.execNonInteractive('pnpm', ['store', 'prune'], '/home/user/repo', 8000)
+    const second = provider.executeCommitMessagePlan(
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        stdinPayload: null,
+        label: 'Codex'
+      },
+      '/home/user/repo',
+      60_000
+    )
+
+    await waitForRequestCount(mux.request, 1)
+    expect(mux.request).toHaveBeenCalledTimes(1)
+
+    completeRequests.shift()?.()
+    await first
+    await waitForRequestCount(mux.request, 2)
+
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'agent.execNonInteractive', {
+      binary: 'codex',
+      args: ['exec', 'PROMPT'],
+      cwd: '/home/user/repo',
+      stdin: null,
+      timeoutMs: 60_000
+    })
+    completeRequests.shift()?.()
+    await second
+  })
+
+  it('cancels a queued non-interactive exec without canceling the active relay child', async () => {
+    const completeRequests: (() => void)[] = []
+    mux.request.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          completeRequests.push(() =>
+            resolve({
+              stdout: '',
+              stderr: '',
+              exitCode: 0,
+              timedOut: false
+            })
+          )
+        })
+    )
+
+    const first = provider.execNonInteractive('pnpm', ['store', 'prune'], '/home/user/repo', 8000)
+    const second = provider.executeCommitMessagePlan(
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        stdinPayload: null,
+        label: 'Codex'
+      },
+      '/home/user/repo',
+      60_000
+    )
+
+    await waitForRequestCount(mux.request, 1)
+    await provider.cancelNonInteractiveExec('/home/user/repo')
+
+    expect(mux.request).toHaveBeenCalledTimes(1)
+    expect(mux.request).not.toHaveBeenCalledWith('agent.cancelExec', { cwd: '/home/user/repo' })
+
+    completeRequests.shift()?.()
+    await first
+    const secondResult = await second
+
+    expect(mux.request).toHaveBeenCalledTimes(1)
+    expect(secondResult).toMatchObject({ canceled: true })
+  })
+
+  it('uses an exec abort signal to cancel the matching active relay child with queued work present', async () => {
+    const completeRequests: (() => void)[] = []
+    mux.request.mockImplementation((method) => {
+      if (method === 'agent.cancelExec') {
+        return Promise.resolve({ canceled: true })
+      }
+      return new Promise((resolve) => {
+        completeRequests.push(() =>
+          resolve({
+            stdout: '',
+            stderr: '',
+            exitCode: 0,
+            timedOut: false
+          })
+        )
+      })
+    })
+
+    const controller = new AbortController()
+    const first = provider.execNonInteractive(
+      'pnpm',
+      ['store', 'prune'],
+      '/home/user/repo',
+      8000,
+      controller.signal
+    )
+    const second = provider.executeCommitMessagePlan(
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        stdinPayload: null,
+        label: 'Codex'
+      },
+      '/home/user/repo',
+      60_000
+    )
+
+    await waitForRequestCount(mux.request, 1)
+    controller.abort()
+    await waitForRequestCount(mux.request, 2)
+
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'agent.cancelExec', { cwd: '/home/user/repo' })
+
+    completeRequests.shift()?.()
+    await first
+    await waitForRequestCount(mux.request, 3)
+    expect(mux.request).toHaveBeenNthCalledWith(3, 'agent.execNonInteractive', {
+      binary: 'codex',
+      args: ['exec', 'PROMPT'],
+      cwd: '/home/user/repo',
+      stdin: null,
+      timeoutMs: 60_000
+    })
+    completeRequests.shift()?.()
+    await second
   })
 
   it('cancelGenerateCommitMessage sends best-effort relay cancellation', async () => {
@@ -275,6 +490,20 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(upstreamResult)
   })
 
+  it('getUpstreamStatus forwards an explicit push target', async () => {
+    const upstreamResult = { hasUpstream: true, upstreamName: 'fork/feature', ahead: 0, behind: 1 }
+    mux.request.mockResolvedValue(upstreamResult)
+
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+    const result = await provider.getUpstreamStatus('/home/user/repo', pushTarget)
+
+    expect(mux.request).toHaveBeenCalledWith('git.upstreamStatus', {
+      worktreePath: '/home/user/repo',
+      pushTarget
+    })
+    expect(result).toEqual(upstreamResult)
+  })
+
   it('pushBranch sends git.push request and forwards publish mode and target', async () => {
     await provider.pushBranch('/home/user/repo', true, {
       remoteName: 'pr-fork-orca',
@@ -290,6 +519,17 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('pushBranch forwards force-with-lease mode', async () => {
+    await provider.pushBranch('/home/user/repo', false, undefined, { forceWithLease: true })
+
+    expect(mux.request).toHaveBeenCalledWith('git.push', {
+      worktreePath: '/home/user/repo',
+      publish: false,
+      pushTarget: undefined,
+      forceWithLease: true
+    })
+  })
+
   it('pullBranch sends git.pull request', async () => {
     await provider.pullBranch('/home/user/repo')
     expect(mux.request).toHaveBeenCalledWith('git.pull', {
@@ -297,10 +537,57 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('pullBranch forwards an explicit push target', async () => {
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await provider.pullBranch('/home/user/repo', pushTarget)
+
+    expect(mux.request).toHaveBeenCalledWith('git.pull', {
+      worktreePath: '/home/user/repo',
+      pushTarget
+    })
+  })
+
+  it('rebaseFromBase sends git.rebaseFromBase request', async () => {
+    await provider.rebaseFromBase('/home/user/repo', 'upstream/main')
+
+    expect(mux.request).toHaveBeenCalledWith('git.rebaseFromBase', {
+      worktreePath: '/home/user/repo',
+      baseRef: 'upstream/main'
+    })
+  })
+
   it('fetchRemote sends git.fetch request', async () => {
     await provider.fetchRemote('/home/user/repo')
     expect(mux.request).toHaveBeenCalledWith('git.fetch', {
       worktreePath: '/home/user/repo'
+    })
+  })
+
+  it('fetchRemote forwards an explicit push target', async () => {
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await provider.fetchRemote('/home/user/repo', pushTarget)
+
+    expect(mux.request).toHaveBeenCalledWith('git.fetch', {
+      worktreePath: '/home/user/repo',
+      pushTarget
+    })
+  })
+
+  it('fetchRemoteTrackingRef sends git.fetchRemoteTrackingRef request', async () => {
+    await provider.fetchRemoteTrackingRef(
+      '/home/user/repo',
+      'origin',
+      'main',
+      'refs/remotes/origin/main'
+    )
+
+    expect(mux.request).toHaveBeenCalledWith('git.fetchRemoteTrackingRef', {
+      worktreePath: '/home/user/repo',
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main'
     })
   })
 
@@ -339,12 +626,16 @@ describe('SshGitProvider', () => {
   })
 
   it('addWorktree sends git.addWorktree request', async () => {
-    await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', { base: 'main' })
+    await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
+      base: 'main',
+      noCheckout: true
+    })
     expect(mux.request).toHaveBeenCalledWith('git.addWorktree', {
       repoPath: '/home/user/repo',
       branchName: 'feature',
       targetDir: '/home/user/feat',
-      base: 'main'
+      base: 'main',
+      noCheckout: true
     })
   })
 
@@ -353,6 +644,14 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('git.removeWorktree', {
       worktreePath: '/home/user/feat',
       force: true
+    })
+  })
+
+  it('renameCurrentBranch sends the narrow branch-rename request', async () => {
+    await provider.renameCurrentBranch('/home/user/feat', 'you/fix-auth')
+    expect(mux.request).toHaveBeenCalledWith('git.renameCurrentBranch', {
+      worktreePath: '/home/user/feat',
+      newBranch: 'you/fix-auth'
     })
   })
 

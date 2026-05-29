@@ -65,10 +65,11 @@ function broadcast(event: Omit<GitHubPRRefreshEvent, 'sequence'>, sequenceOverri
 }
 
 function refreshKey(candidate: GitHubPRRefreshCandidate): string {
+  const connectionScope = candidate.connectionId ?? 'local'
   if (typeof candidate.linkedPRNumber === 'number') {
-    return `${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
+    return `${connectionScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
   }
-  return `${candidate.repoPath}::branch::${candidate.branch}`
+  return `${connectionScope}::${candidate.repoPath}::branch::${candidate.branch}`
 }
 
 function isVisibleKey(key: string): boolean {
@@ -153,6 +154,21 @@ function freshRetryAt(candidate: GitHubPRRefreshCandidate): number | null {
   return candidate.cachedFetchedAt == null
     ? null
     : candidate.cachedFetchedAt + refreshIntervalForCandidate(candidate)
+}
+
+function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubPRRefreshAlias {
+  return {
+    cacheKey: candidate.cacheKey,
+    repoId: candidate.repoId,
+    repoPath: candidate.repoPath,
+    branch: candidate.branch,
+    worktreeId: candidate.worktreeId,
+    connectionId: candidate.connectionId ?? null,
+    linkedPRNumber: candidate.linkedPRNumber ?? null,
+    fallbackPRNumber:
+      candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
+    fallbackPRSource: candidate.linkedPRNumber == null ? (candidate.fallbackPRSource ?? null) : null
+  }
 }
 
 function visibleCandidateAfterOutcome(
@@ -381,7 +397,11 @@ async function drainQueue(): Promise<void> {
         continue
       }
       const requestSequence = nextSequence()
-      broadcast({ aliases, reason: next.reason, status: 'in-flight' }, requestSequence)
+      const requestStartedAt = Date.now()
+      broadcast(
+        { aliases, reason: next.reason, status: 'in-flight', requestStartedAt },
+        requestSequence
+      )
 
       if (isBackground(next.reason)) {
         const rateLimit = await getRateLimit()
@@ -427,10 +447,11 @@ async function drainQueue(): Promise<void> {
         next.candidate.repoPath,
         next.candidate.branch,
         next.candidate.linkedPRNumber ?? null,
-        next.candidate.connectionId ?? null
+        next.candidate.connectionId ?? null,
+        next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null
       )
       outcomeObserver?.(next.candidate, outcome)
-      broadcast({ aliases, reason: next.reason, outcome }, requestSequence)
+      broadcast({ aliases, reason: next.reason, outcome, requestStartedAt }, requestSequence)
       scheduleVisibleFollowUp(
         next.key,
         next.candidate,
@@ -451,13 +472,7 @@ export function enqueuePRRefresh(
   priority = 0,
   windowId?: number
 ): void {
-  const alias: GitHubPRRefreshAlias = {
-    cacheKey: candidate.cacheKey,
-    repoId: candidate.repoId,
-    repoPath: candidate.repoPath,
-    branch: candidate.branch,
-    worktreeId: candidate.worktreeId
-  }
+  const alias = aliasFromCandidate(candidate)
   const key = refreshKey(candidate)
   const skippedReason = validateCandidate(candidate)
   if (skippedReason) {
@@ -534,19 +549,12 @@ export function reportVisiblePRRefreshCandidates(
 }
 
 export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise<PRRefreshOutcome> {
-  const alias: GitHubPRRefreshAlias = {
-    cacheKey: candidate.cacheKey,
-    repoId: candidate.repoId,
-    repoPath: candidate.repoPath,
-    branch: candidate.branch,
-    worktreeId: candidate.worktreeId
-  }
+  const alias = aliasFromCandidate(candidate)
   const key = refreshKey(candidate)
   const existing = queue.get(key)
-  const aliases = existing ? Array.from(existing.aliases.values()) : [alias]
-  if (!aliases.some((entry) => entry.cacheKey === alias.cacheKey)) {
-    aliases.push(alias)
-  }
+  const aliasMap = new Map(existing ? existing.aliases : [])
+  aliasMap.set(alias.cacheKey, alias)
+  const aliases = Array.from(aliasMap.values())
   const skippedReason = validateCandidate(candidate)
   if (skippedReason) {
     removeQueuedAliasForInvalidCandidate(key, alias)
@@ -562,15 +570,17 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
 
   queue.delete(key)
   const requestSequence = nextSequence()
-  broadcast({ aliases, reason: 'manual', status: 'in-flight' }, requestSequence)
+  const requestStartedAt = Date.now()
+  broadcast({ aliases, reason: 'manual', status: 'in-flight', requestStartedAt }, requestSequence)
   const outcome = await getPRForBranchOutcome(
     candidate.repoPath,
     candidate.branch,
     candidate.linkedPRNumber ?? null,
-    candidate.connectionId ?? null
+    candidate.connectionId ?? null,
+    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null
   )
   outcomeObserver?.(candidate, outcome)
-  broadcast({ aliases, reason: 'manual', outcome }, requestSequence)
+  broadcast({ aliases, reason: 'manual', outcome, requestStartedAt }, requestSequence)
   scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases)
   return outcome
 }

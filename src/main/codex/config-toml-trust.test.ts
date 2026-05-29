@@ -1,6 +1,14 @@
 /* eslint-disable max-lines -- Why: this suite keeps the hash fixture, TOML edit edge cases, and trust-state parser regressions together so Codex compatibility failures are easy to audit. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
@@ -218,6 +226,23 @@ describe('computeTrustKey', () => {
         command: 'irrelevant'
       })
     ).toBe('/Users/thebr/.codex/hooks.json:pre_tool_use:0:0')
+  })
+
+  it('uses Codex canonicalized source paths when hooks.json exists', () => {
+    const nestedDir = join(tmpDir, 'nested')
+    mkdirSync(nestedDir)
+    const hooksPath = join(nestedDir, '..', 'hooks.json')
+    writeFileSync(hooksPath, '{"hooks":{}}\n', 'utf-8')
+
+    expect(
+      computeTrustKey({
+        sourcePath: hooksPath,
+        eventLabel: 'user_prompt_submit',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'irrelevant'
+      })
+    ).toBe(`${realpathSync.native(hooksPath)}:user_prompt_submit:0:0`)
   })
 })
 
@@ -639,6 +664,20 @@ describe('upsertProjectTrustLevel', () => {
   it('creates a projects trust block when the config is empty', () => {
     expect(upsertProjectTrustLevelInContent('', '/tmp/codex-ws', 'trusted')).toBe(
       ['[projects."/tmp/codex-ws"]', 'trust_level = "trusted"', ''].join('\n')
+    )
+  })
+
+  it('uses Codex canonicalized project paths when the project exists', () => {
+    const nestedDir = join(tmpDir, 'nested')
+    const projectDir = join(tmpDir, 'project')
+    mkdirSync(nestedDir)
+    mkdirSync(projectDir)
+    const aliasedProjectPath = join(nestedDir, '..', 'project')
+    const trustedPath = realpathSync.native(aliasedProjectPath)
+    const trustedTomlPath = trustedPath.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+
+    expect(upsertProjectTrustLevelInContent('', aliasedProjectPath, 'trusted')).toBe(
+      [`[projects."${trustedTomlPath}"]`, 'trust_level = "trusted"', ''].join('\n')
     )
   })
 

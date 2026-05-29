@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { GlobalSettings, Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type WorktreeCardComponent from './WorktreeCard'
 
 const fetchHostedReviewForBranch = vi.fn()
 const fetchIssue = vi.fn()
@@ -9,6 +10,11 @@ const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'unread']
+let tabsByWorktree: Record<string, { id: string }[]> = {}
+let ptyIdsByTabId: Record<string, string[]> = {}
+let browserTabsByWorktree: Record<string, { id: string }[]> = {}
+let settings: Partial<GlobalSettings> | null = null
+let WorktreeCard: typeof WorktreeCardComponent
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -21,9 +27,12 @@ vi.mock('@/store', () => ({
       issueCache: {},
       openModal,
       remoteBranchConflictByWorktreeId: {},
-      settings: null,
+      settings,
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map(),
+      browserTabsByWorktree,
+      ptyIdsByTabId,
+      tabsByWorktree,
       updateWorktreeMeta,
       worktreeCardProperties
     })
@@ -44,7 +53,8 @@ vi.mock('./use-worktree-activity-status', () => ({
 }))
 
 vi.mock('./CacheTimer', () => ({
-  default: () => null
+  default: () => null,
+  usePromptCacheCountdownStartedAt: () => null
 }))
 
 vi.mock('./WorktreeCardAgents', () => ({
@@ -58,7 +68,8 @@ vi.mock('./SshDisconnectedDialog', () => ({
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
   CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
-  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
+  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
+  WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
 
 function makeRepo(): Repo {
@@ -95,19 +106,182 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 describe('WorktreeCard quick actions', () => {
+  beforeAll(async () => {
+    WorktreeCard = (await import('./WorktreeCard')).default
+  }, 20_000)
+
   beforeEach(() => {
     vi.clearAllMocks()
     worktreeCardProperties = ['status', 'unread']
+    tabsByWorktree = {}
+    ptyIdsByTabId = {}
+    browserTabsByWorktree = {}
+    settings = null
   })
 
-  it('marks the unread toggle as a workspace-board-preserving action', async () => {
-    const { default: WorktreeCard } = await import('./WorktreeCard')
-
+  it('marks the unread toggle as a workspace-board-preserving action', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
     )
 
     expect(markup).toContain('aria-label="Mark as read"')
     expect(markup).toContain('data-workspace-board-preserve-open=""')
+  })
+
+  it('keeps the branch row by default when it repeats the workspace title', () => {
+    worktreeCardProperties = []
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: 'quick-action', branch: 'quick-action' })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('quick-action')
+    expect(markup).toContain('text-[11px] text-muted-foreground truncate leading-none')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('tabindex="0"')
+  })
+
+  it('hides the repeated branch row only when compact cards are enabled', () => {
+    worktreeCardProperties = []
+    settings = { experimentalCompactWorktreeCards: true }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: 'quick-action', branch: 'quick-action' })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('tabindex="0"')
+  })
+
+  it('keeps the branch row when the workspace has a custom title', () => {
+    worktreeCardProperties = []
+    settings = { experimentalCompactWorktreeCards: true }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: 'Custom workspace', branch: 'quick-action' })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('Custom workspace')
+    expect(markup).toContain('quick-action')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('text-[11px] text-muted-foreground truncate leading-none')
+  })
+
+  it('uses the pre-compact unread lane and primary badge when compact cards are disabled', () => {
+    worktreeCardProperties = ['status', 'unread']
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'main',
+          branch: 'main',
+          isMainWorktree: true
+        })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('primary')
+    expect(markup).not.toContain('aria-label="Primary worktree"')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('moves unread and primary into the title row when compact cards are enabled', () => {
+    worktreeCardProperties = ['status', 'unread']
+    settings = { experimentalCompactWorktreeCards: true }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'main',
+          branch: 'main',
+          isMainWorktree: true
+        })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('aria-label="Primary worktree"')
+    expect(markup).not.toContain('>primary<')
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('shows delete as the top-right quick action for an inactive workspace', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('aria-label="Delete workspace"')
+  })
+
+  it('shows delete as the quick action for inactive folder workspace instances', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          id: 'repo-1::/repo::workspace:123e4567-e89b-12d3-a456-426614174000',
+          path: '/repo',
+          isMainWorktree: false
+        })}
+        repo={{ ...makeRepo(), kind: 'folder' }}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('aria-label="Delete workspace"')
+  })
+
+  it('does not replace sleep with delete for a workspace with live activity', () => {
+    const worktree = makeWorktree()
+    tabsByWorktree = { [worktree.id]: [{ id: 'tab-1' }] }
+    ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).not.toContain('aria-label="Sleep workspace"')
+    expect(markup).not.toContain('aria-label="Delete workspace"')
+  })
+
+  it('does not show sleep as the top-right quick action for an active workspace', () => {
+    const worktree = makeWorktree()
+    tabsByWorktree = { [worktree.id]: [{ id: 'tab-1' }] }
+    ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive />
+    )
+
+    expect(markup).not.toContain('aria-label="Sleep workspace"')
+    expect(markup).not.toContain('aria-label="Delete workspace"')
+  })
+
+  it('does not show delete when the workspace is current but not selected in the sidebar', () => {
+    const worktree = makeWorktree()
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} isCurrentWorktree />
+    )
+
+    expect(markup).not.toContain('aria-label="Delete workspace"')
   })
 })

@@ -1,5 +1,8 @@
 import type { TerminalQuickCommand } from '../../../../shared/types'
-import { buildTerminalQuickCommandInput } from '../../../../shared/terminal-quick-commands'
+import {
+  buildTerminalQuickCommandInput,
+  flattenTerminalQuickCommand
+} from '../../../../shared/terminal-quick-commands'
 
 type QuickCommandPane = {
   terminal: {
@@ -24,7 +27,9 @@ export function sendTerminalQuickCommandToPane({
     return false
   }
 
-  const sent = transport.sendInput(buildTerminalQuickCommandInput(command))
+  const sent = transport.sendInput(
+    buildTerminalQuickCommandInput(flattenTerminalQuickCommand(command))
+  )
   if (sent) {
     pane.terminal.focus()
   }

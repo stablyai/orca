@@ -2,13 +2,18 @@ import React, { useCallback, useMemo } from 'react'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { AGENT_CATALOG, AgentIcon, buildAgentCatalog } from '@/lib/agent-catalog'
+import {
+  AGENT_CATALOG,
+  AgentIcon,
+  buildAgentCatalog,
+  type AgentCatalogEntry
+} from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { waitForAgentReady } from '@/lib/agent-ready-wait'
 import type { CustomTuiAgent, TuiAgentId } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
+import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -31,28 +36,27 @@ export type QuickLaunchAgentMenuItemsProps = {
   onPromptDelivered?: () => void
 }
 
+function getCatalogEntry(
+  agent: TuiAgentId,
+  catalog: readonly AgentCatalogEntry[]
+): AgentCatalogEntry | null {
+  return catalog.find((a) => a.id === agent) ?? null
+}
+
 export function orderAgents(
   defaultAgent: TuiAgentId | 'blank' | null | undefined,
   detected: TuiAgentId[],
   customAgents: readonly CustomTuiAgent[]
 ): TuiAgentId[] {
-  const builtInOrder: TuiAgentId[] = []
   const detectedSet = new Set(detected)
-  for (const entry of AGENT_CATALOG) {
-    if (detectedSet.has(entry.id)) {
-      builtInOrder.push(entry.id)
-    }
-  }
-  // Why: custom presets may be absolute paths or wrapper commands that do not
-  // pass PATH detection. Once a command is configured, keep them launchable in
-  // manual surfaces and sort by their user-facing label.
-  const readyCustomAgents: CustomTuiAgent[] = []
-  for (const agent of customAgents) {
-    if (agent.command.trim().length > 0) {
-      readyCustomAgents.push(agent)
-    }
-  }
-  readyCustomAgents.sort((a, b) => a.label.localeCompare(b.label))
+  const builtInOrder = AGENT_CATALOG.filter((entry) => detectedSet.has(entry.id)).map(
+    (entry) => entry.id
+  )
+  // Why: custom presets may wrap absolute paths or aliases that are not PATH-detectable.
+  // Keep configured custom commands launchable in manual picker surfaces.
+  const readyCustomAgents = customAgents
+    .filter((agent) => agent.command.trim().length > 0)
+    .sort((a, b) => a.label.localeCompare(b.label))
   const readyCustoms = readyCustomAgents.map((agent) => agent.id)
   const inCatalogOrder = [...builtInOrder, ...readyCustoms]
   if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
@@ -63,27 +67,42 @@ export function orderAgents(
   return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
 }
 
-export function shouldShowLaunchWatchdogTimeout({
-  launchSource,
-  prompt,
-  pasteDraftAfterLaunch,
-  hasPty
-}: {
-  launchSource?: LaunchSource
-  prompt?: string
-  pasteDraftAfterLaunch: boolean
-  hasPty: boolean
-}): boolean {
-  return !(
-    (launchSource === 'notes_send' || launchSource === 'conflict_resolution') &&
-    (prompt?.trim().length ?? 0) > 0 &&
-    pasteDraftAfterLaunch &&
-    hasPty
-  )
+export function shouldShowLaunchWatchdogTimeout({ hasPty }: { hasPty: boolean }): boolean {
+  return !hasPty
 }
 
 function getLaunchWatchdogTimeoutMessage(label: string): string {
-  return `Couldn't launch ${label} — the terminal is still open.`
+  return `Couldn't launch ${label} — the terminal did not start.`
+}
+
+function getTerminalLaunchState(tabId: string): { stillOpen: boolean; hasPty: boolean } {
+  const state = useAppStore.getState()
+  const hasPtyBinding = (state.ptyIdsByTabId[tabId]?.length ?? 0) > 0
+  let stillOpen = false
+  let tabPtyId: string | null = null
+
+  for (const tabs of Object.values(state.tabsByWorktree)) {
+    const tab = tabs.find((t) => t.id === tabId)
+    if (tab) {
+      stillOpen = true
+      tabPtyId = tab.ptyId
+      break
+    }
+  }
+
+  return { stillOpen, hasPty: hasPtyBinding || tabPtyId !== null }
+}
+
+async function waitForTerminalPty(tabId: string, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const launchState = getTerminalLaunchState(tabId)
+    if (launchState.hasPty) {
+      return true
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 100))
+  }
+  return getTerminalLaunchState(tabId).hasPty
 }
 
 function QuickLaunchAgentMenuItemsInner({
@@ -110,6 +129,7 @@ function QuickLaunchAgentMenuItemsInner({
   })
   const { detectedIds } = useDetectedAgents(connectionId)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+  const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const customTuiAgents = useAppStore((s) => s.settings?.customTuiAgents ?? [])
   const catalog = useMemo(() => buildAgentCatalog(customTuiAgents), [customTuiAgents])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -122,7 +142,7 @@ function QuickLaunchAgentMenuItemsInner({
 
   const runLaunch = useCallback(
     (agent: TuiAgentId) => {
-      const entry = catalog.find((candidate) => candidate.id === agent) ?? null
+      const entry = getCatalogEntry(agent, catalog)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
         agent,
@@ -139,36 +159,21 @@ function QuickLaunchAgentMenuItemsInner({
       }
       onFocusTerminal(result.tabId)
 
-      // Why: the watchdog guards against "queued startup command never ran" —
-      // e.g. shell failed to spawn. Suppress the toast if the tab has been
-      // closed or the worktree has been navigated away from before the
-      // deadline (see §States: Launch failure handling). Bracketed-paste
-      // failures have their own toast in launch-agent-in-new-tab.ts.
-      void waitForAgentReady(result.tabId, result.startupPlan.expectedProcess, {
-        timeoutMs: 5000
-      }).then((ready) => {
-        if (ready.ready) {
+      // Why: launch success means the terminal session exists. Agent readiness
+      // can lag behind on slow machines, and prompt paste flows already own
+      // their own readiness timeout once a PTY exists.
+      void waitForTerminalPty(result.tabId, 5000).then((hasPty) => {
+        if (hasPty) {
           return
         }
-        const state = useAppStore.getState()
-        const stillOpen = Object.values(state.tabsByWorktree).some((tabs) =>
-          tabs.some((t) => t.id === result.tabId)
-        )
-        if (!stillOpen) {
+        const launchState = getTerminalLaunchState(result.tabId)
+        if (!launchState.stillOpen) {
           return
         }
-        if (state.activeWorktreeId !== worktreeId) {
+        if (useAppStore.getState().activeWorktreeId !== worktreeId) {
           return
         }
-        const hasPty = (state.ptyIdsByTabId[result.tabId]?.length ?? 0) > 0
-        if (
-          !shouldShowLaunchWatchdogTimeout({
-            launchSource,
-            prompt,
-            pasteDraftAfterLaunch: result.pasteDraftAfterLaunch,
-            hasPty
-          })
-        ) {
+        if (!shouldShowLaunchWatchdogTimeout({ hasPty: launchState.hasPty })) {
           return
         }
         toast.message(getLaunchWatchdogTimeoutMessage(label))
@@ -186,7 +191,8 @@ function QuickLaunchAgentMenuItemsInner({
     ]
   )
 
-  const agents = detectedIds ? orderAgents(defaultAgent, detectedIds, customTuiAgents) : []
+  const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
+  const agents = detectedIds ? orderAgents(defaultAgent, enabledDetectedIds, customTuiAgents) : []
 
   return (
     <>
@@ -195,11 +201,11 @@ function QuickLaunchAgentMenuItemsInner({
           disabled
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
         >
-          No agents detected
+          {detectedIds && detectedIds.length > 0 ? 'No enabled agents' : 'No agents detected'}
         </DropdownMenuItem>
       ) : null}
       {agents.map((agent) => {
-        const entry = catalog.find((candidate) => candidate.id === agent) ?? null
+        const entry = getCatalogEntry(agent, catalog)
         const label = entry?.label ?? agent
         return (
           <DropdownMenuItem

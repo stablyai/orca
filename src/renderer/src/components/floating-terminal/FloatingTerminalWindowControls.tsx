@@ -3,7 +3,7 @@ import { Maximize2, Minimize2, Minus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AGENT_CATALOG, AgentIcon, buildAgentCatalog } from '@/lib/agent-catalog'
+import { AgentIcon, buildAgentCatalog } from '@/lib/agent-catalog'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
@@ -11,6 +11,7 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isCustomTuiAgentId } from '../../../../shared/effective-tui-agent'
+import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean
@@ -32,19 +33,21 @@ export function FloatingTerminalWindowControls({
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
   const catalog = useMemo(() => buildAgentCatalog(customTuiAgents), [customTuiAgents])
 
+  const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const defaultAgent =
     defaultTuiAgent && defaultTuiAgent !== 'blank'
-      ? isCustomTuiAgentId(defaultTuiAgent) &&
-        !catalog.some((agent) => agent.id === defaultTuiAgent)
-        ? null
-        : defaultTuiAgent
+      ? isCustomTuiAgentId(defaultTuiAgent)
+        ? catalog.some((agent) => agent.id === defaultTuiAgent)
+          ? defaultTuiAgent
+          : null
+        : isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents)
+          ? defaultTuiAgent
+          : null
       : null
   const defaultAgentLabel = useMemo(
     () =>
       defaultAgent
-        ? (catalog.find((agent) => agent.id === defaultAgent)?.label ??
-          AGENT_CATALOG.find((agent) => agent.id === defaultAgent)?.label ??
-          defaultAgent)
+        ? (catalog.find((agent) => agent.id === defaultAgent)?.label ?? defaultAgent)
         : null,
     [catalog, defaultAgent]
   )
@@ -82,11 +85,9 @@ export function FloatingTerminalWindowControls({
     const stored = fresh.tabBarOrderByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
     const validIds = new Set(currentTabs.map((entry) => entry.id))
     const order = stored.filter((id) => validIds.has(id) && id !== tab.id)
-    const orderIds = new Set(order)
     for (const entry of currentTabs) {
-      if (entry.id !== tab.id && !orderIds.has(entry.id)) {
+      if (entry.id !== tab.id && !order.includes(entry.id)) {
         order.push(entry.id)
-        orderIds.add(entry.id)
       }
     }
     order.push(tab.id)
@@ -96,6 +97,25 @@ export function FloatingTerminalWindowControls({
 
   return (
     <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>
+      {defaultAgent ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-xs"
+              className={controlButtonClassName}
+              aria-label={`Open ${defaultAgentLabel ?? defaultAgent} in floating workspace`}
+              onClick={launchDefaultAgent}
+            >
+              <AgentIcon agent={defaultAgent} size={14} catalog={catalog} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            Open {defaultAgentLabel ?? defaultAgent}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -103,29 +123,7 @@ export function FloatingTerminalWindowControls({
             variant="outline"
             size="icon-xs"
             className={controlButtonClassName}
-            aria-label={
-              defaultAgentLabel
-                ? `Open ${defaultAgentLabel} in floating terminal`
-                : 'No default agent configured'
-            }
-            disabled={!defaultAgent}
-            onClick={launchDefaultAgent}
-          >
-            <AgentIcon agent={defaultAgent} size={14} catalog={catalog} />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {defaultAgentLabel ? `Open ${defaultAgentLabel}` : 'Choose a default agent first'}
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-xs"
-            className={controlButtonClassName}
-            aria-label={maximized ? 'Restore floating terminal' : 'Maximize floating terminal'}
+            aria-label={maximized ? 'Restore floating workspace' : 'Maximize floating workspace'}
             aria-pressed={maximized}
             onClick={onToggleMaximized}
           >
@@ -143,7 +141,7 @@ export function FloatingTerminalWindowControls({
             variant="outline"
             size="icon-xs"
             className={controlButtonClassName}
-            aria-label="Minimize floating terminal"
+            aria-label="Minimize floating workspace"
             onClick={onMinimize}
           >
             <Minus className="size-3.5" />

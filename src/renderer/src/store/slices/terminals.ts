@@ -3,8 +3,10 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
   SetupSplitDirection,
+  Tab,
   TerminalLayoutSnapshot,
   TerminalTab,
+  TuiAgent,
   Worktree,
   WorkspaceSessionState
 } from '../../../../shared/types'
@@ -36,6 +38,7 @@ import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
@@ -58,6 +61,23 @@ function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
   return typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId) !== null
 }
 
+function getPendingActivationSpawnCount(value: boolean | number | undefined): number {
+  if (value === true) {
+    return 1
+  }
+  return typeof value === 'number' && value > 0 ? value : 0
+}
+
+function consumePendingActivationSpawn(
+  value: boolean | number | undefined
+): boolean | number | undefined {
+  const count = getPendingActivationSpawnCount(value)
+  if (count <= 1) {
+    return undefined
+  }
+  return count === 2 ? true : count - 1
+}
+
 function getFallbackTabTitle(tab: TerminalTab, index?: number): string {
   return (
     tab.customTitle?.trim() ||
@@ -65,6 +85,40 @@ function getFallbackTabTitle(tab: TerminalTab, index?: number): string {
     tab.title ||
     `Terminal ${(index ?? 0) + 1}`
   )
+}
+
+let terminalTabOwnerCacheSource: Record<string, TerminalTab[]> | null = null
+let terminalTabOwnerCache = new Map<string, string>()
+
+function getTerminalTabOwnerWorktreeId(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  tabId: string
+): string | null {
+  if (terminalTabOwnerCacheSource !== tabsByWorktree) {
+    const nextCache = new Map<string, string>()
+    for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+      for (const tab of tabs) {
+        nextCache.set(tab.id, worktreeId)
+      }
+    }
+    terminalTabOwnerCacheSource = tabsByWorktree
+    terminalTabOwnerCache = nextCache
+  }
+  return terminalTabOwnerCache.get(tabId) ?? null
+}
+
+function updateUnifiedTerminalLabel(
+  unifiedTabs: Tab[],
+  terminalTabId: string,
+  label: string
+): Tab[] | null {
+  const unifiedIndex = unifiedTabs.findIndex(
+    (entry) => entry.contentType === 'terminal' && entry.entityId === terminalTabId
+  )
+  if (unifiedIndex === -1 || unifiedTabs[unifiedIndex]?.label === label) {
+    return null
+  }
+  return unifiedTabs.map((entry, index) => (index === unifiedIndex ? { ...entry, label } : entry))
 }
 
 function isWindowsRendererRuntime(): boolean {
@@ -129,16 +183,16 @@ export type TerminalSlice = {
   /** Live pane titles keyed by tabId then paneId. Unlike the legacy tab title,
    *  this preserves split-pane agent status per pane while TerminalPane is mounted. */
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  /** Why: per-tab activity indicators. A tab gets flagged unread when an
-   *  agent in any of its panes transitions working→idle (onAgentBecameIdle
-   *  in pty-connection.ts) while the tab is not currently focused. The flag
-   *  clears when the user activates the tab. This is ephemeral UI state
-   *  only — not persisted across restarts.
-   *
-   *  Note: BEL (0x07) bytes intentionally do NOT flip this flag. See the
-   *  long-form rationale in pty-connection.ts around `onAgentBecameIdle`
-   *  for why BEL is too ambiguous to drive cross-surface attention. */
+  /** Why: per-tab activity indicators. A tab gets flagged unread when terminal
+   *  output requests attention (BEL) or an agent-complete notification is
+   *  dispatched for one of its panes. The flag clears when the user activates
+   *  or interacts with the tab. This is ephemeral UI state only — not
+   *  persisted across restarts. */
   unreadTerminalTabs: Record<string, true>
+  /** Pane-keyed attention marker for split-pane precision. This is narrower
+   *  than unreadTerminalTabs and clears when the user interacts with the exact
+   *  pane that raised attention. */
+  unreadTerminalPanes: Record<string, true>
   suppressedPtyExitIds: Record<string, true>
   pendingCodexPaneRestartIds: Record<string, true>
   codexRestartNoticeByPtyId: Record<
@@ -148,11 +202,21 @@ export type TerminalSlice = {
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  /** Most recently run quick-command id per tab group. In-memory only; resets
+   *  on app restart so a stale id from a deleted command can't surface as the
+   *  split-button label across sessions. */
+  recentQuickCommandIdByGroup: Record<string, string>
+  setRecentQuickCommandForGroup: (groupId: string, quickCommandId: string) => void
   pendingStartupByTabId: Record<
     string,
     {
       command: string
+      /** Renderer-delivered startup input for callers that need xterm paste
+       *  semantics before the submit Enter. */
+      delivery?: 'terminal-paste'
       env?: Record<string, string>
+      /** Initial prompt-start status for agents that lack native prompt hooks. */
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       /** Telemetry metadata for the `agent_started` event. Threaded all the
        *  way to the `pty:spawn` IPC handler in main so the event fires only
        *  after spawn confirms — never on click-intent. */
@@ -216,6 +280,7 @@ export type TerminalSlice = {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
       activate?: boolean
+      recordInteraction?: boolean
       /** Pre-allocated tab id (e.g. minted by main for CLI/runtime-spawned
        *  terminals whose PTY env already carries a pane key). Falls back to
        *  minting a fresh id when omitted or when the supplied id collides
@@ -224,7 +289,8 @@ export type TerminalSlice = {
       id?: string
     }
   ) => TerminalTab
-  closeTab: (tabId: string) => void
+  openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
+  closeTab: (tabId: string, opts?: { recordInteraction?: boolean }) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
   setTabBarOrder: (worktreeId: string, order: string[]) => void
   setActiveTab: (tabId: string) => void
@@ -238,12 +304,18 @@ export type TerminalSlice = {
    *  group within the active worktree. A visible tab is already "seen",
    *  so a flag would never clear naturally. */
   markTerminalTabUnread: (tabId: string) => void
+  markTerminalPaneUnread: (paneKey: string) => void
   /** Clear a tab's unread indicator. Called on user interaction with the
    *  pane (keystroke, click) — matches ghostty's "show until interact"
    *  model where the bell stays visible until the user engages with the
    *  surface that raised it. */
   clearTerminalTabUnread: (tabId: string) => void
-  setTabCustomTitle: (tabId: string, title: string | null) => void
+  clearTerminalPaneUnread: (paneKey: string) => void
+  setTabCustomTitle: (
+    tabId: string,
+    title: string | null,
+    opts?: { recordInteraction?: boolean }
+  ) => void
   setTabColor: (tabId: string, color: string | null) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
   clearTabPtyId: (tabId: string, ptyId?: string) => void
@@ -266,7 +338,9 @@ export type TerminalSlice = {
     tabId: string,
     startup: {
       command: string
+      delivery?: 'terminal-paste'
       env?: Record<string, string>
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       telemetry?: AgentStartedTelemetry
     }
   ) => void
@@ -317,6 +391,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   ptyIdsByTabId: {},
   runtimePaneTitlesByTabId: {},
   unreadTerminalTabs: {},
+  unreadTerminalPanes: {},
   suppressedPtyExitIds: {},
   pendingCodexPaneRestartIds: {},
   codexRestartNoticeByPtyId: {},
@@ -341,6 +416,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   deferredSshReconnectTargets: [],
   deferredSshSessionIdsByTabId: {},
   cacheTimerByKey: {},
+  recentQuickCommandIdByGroup: {},
+
+  setRecentQuickCommandForGroup: (groupId, quickCommandId) => {
+    set((s) => ({
+      recentQuickCommandIdByGroup: {
+        ...s.recentQuickCommandIdByGroup,
+        [groupId]: quickCommandId
+      }
+    }))
+  },
 
   setCacheTimerStartedAt: (key, ts) => {
     set((s) => {
@@ -566,10 +651,61 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
     })
+    const shouldRecordInteraction =
+      options?.recordInteraction ?? (!options?.pendingActivationSpawn && !options?.initialPtyId)
+    if (shouldRecordInteraction) {
+      get().recordFeatureInteraction?.('terminal-tabs')
+    }
     return tab
   },
 
-  closeTab: (tabId) => {
+  openNewTerminalTabInActiveWorkspace: async (groupId) => {
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return
+    }
+    const pairedWebRuntimeEnvironmentId = (globalThis as { __ORCA_WEB_CLIENT__?: boolean })
+      .__ORCA_WEB_CLIENT__
+      ? state.settings?.activeRuntimeEnvironmentId?.trim()
+      : null
+    if (pairedWebRuntimeEnvironmentId) {
+      const { createWebRuntimeSessionTerminal } = await import('@/runtime/web-runtime-session')
+      await createWebRuntimeSessionTerminal({
+        worktreeId,
+        environmentId: pairedWebRuntimeEnvironmentId,
+        targetGroupId: groupId,
+        activate: true
+      })
+      return
+    }
+    const terminal = get().createTab(worktreeId, groupId)
+    get().setActiveTab(terminal.id)
+    get().setActiveTabType('terminal')
+    const latest = get()
+    const currentTerminals = latest.tabsByWorktree[worktreeId] ?? []
+    const currentEditors = latest.openFiles.filter((file) => file.worktreeId === worktreeId)
+    const currentBrowsers = latest.browserTabsByWorktree[worktreeId] ?? []
+    const stored = latest.tabBarOrderByWorktree[worktreeId]
+    const validIds = new Set([
+      ...currentTerminals.map((tab) => tab.id),
+      ...currentEditors.map((file) => file.id),
+      ...currentBrowsers.map((tab) => tab.id)
+    ])
+    const base = (stored ?? []).filter((id) => validIds.has(id))
+    const inBase = new Set(base)
+    for (const id of validIds) {
+      if (!inBase.has(id)) {
+        base.push(id)
+      }
+    }
+    // Why: Cmd+J uses the same creation path as the titlebar button, so a new
+    // terminal should append after mixed editor/browser tabs rather than jump first.
+    get().setTabBarOrder(worktreeId, [...base.filter((id) => id !== terminal.id), terminal.id])
+    focusTerminalTabSurface(terminal.id)
+  },
+
+  closeTab: (tabId, opts) => {
     set((s) => {
       const next = { ...s.tabsByWorktree }
       let closingPtyId: string | null = null
@@ -603,6 +739,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       if (s.unreadTerminalTabs[tabId]) {
         nextUnreadTerminalTabs = { ...s.unreadTerminalTabs }
         delete nextUnreadTerminalTabs[tabId]
+      }
+      let nextUnreadTerminalPanes = s.unreadTerminalPanes
+      for (const paneKey of Object.keys(s.unreadTerminalPanes)) {
+        if (paneKey.startsWith(`${tabId}:`)) {
+          if (nextUnreadTerminalPanes === s.unreadTerminalPanes) {
+            nextUnreadTerminalPanes = { ...s.unreadTerminalPanes }
+          }
+          delete nextUnreadTerminalPanes[paneKey]
+        }
       }
       const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
       delete nextPendingStartupByTabId[tabId]
@@ -669,6 +814,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ...(nextUnreadTerminalTabs !== s.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
           : {}),
+        ...(nextUnreadTerminalPanes !== s.unreadTerminalPanes
+          ? { unreadTerminalPanes: nextUnreadTerminalPanes }
+          : {}),
         expandedPaneByTabId: nextExpanded,
         canExpandPaneByTabId: nextCanExpand,
         terminalLayoutsByTabId: nextLayouts,
@@ -693,7 +841,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
       )
       if (workspaceItem) {
-        get().closeUnifiedTab(workspaceItem.id)
+        get().closeUnifiedTab(workspaceItem.id, opts)
       }
     }
   },
@@ -812,38 +960,47 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // unchanged) would break shallow-equality checks in unrelated
       // selectors and trigger spurious re-renders across background
       // worktrees on every OSC title frame.
-      let ownerWorktreeId: string | null = null
-      let ownerTabs: TerminalTab[] | null = null
-      for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
-        const idx = tabs.findIndex((t) => t.id === tabId)
-        if (idx === -1) {
-          continue
-        }
-        const t = tabs[idx]
-        const nextTitle = title.trim() || getFallbackTabTitle(t)
-        if (t.title === nextTitle) {
-          return s
-        }
-        ownerWorktreeId = wId
-        ownerTabs = tabs.map((tab) =>
-          tab.id === tabId
-            ? {
-                ...tab,
-                // Why: PTYs can briefly emit an empty title while an agent exits.
-                // Keep the stable fallback label instead of rendering a blank tab.
-                title: nextTitle,
-                defaultTitle:
-                  tab.defaultTitle ??
-                  (/^Terminal \d+$/.test(tab.title) ? tab.title : undefined) ??
-                  (/^Terminal \d+$/.test(nextTitle) ? nextTitle : undefined)
-              }
-            : tab
-        )
-        break
-      }
-      if (!ownerWorktreeId || !ownerTabs) {
+      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+      if (!ownerWorktreeId) {
         return s
       }
+      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
+      const tabIndex = tabs.findIndex((t) => t.id === tabId)
+      const currentTab = tabs[tabIndex]
+      if (!currentTab) {
+        return s
+      }
+      const nextTitle = title.trim() || getFallbackTabTitle(currentTab)
+      const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
+      const unifiedTabsWithUpdatedLabel = updateUnifiedTerminalLabel(
+        currentUnifiedTabs,
+        tabId,
+        nextTitle
+      )
+      if (currentTab.title === nextTitle) {
+        return unifiedTabsWithUpdatedLabel
+          ? {
+              unifiedTabsByWorktree: {
+                ...s.unifiedTabsByWorktree,
+                [ownerWorktreeId]: unifiedTabsWithUpdatedLabel
+              }
+            }
+          : s
+      }
+      const ownerTabs = tabs.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              // Why: PTYs can briefly emit an empty title while an agent exits.
+              // Keep the stable fallback label instead of rendering a blank tab.
+              title: nextTitle,
+              defaultTitle:
+                tab.defaultTitle ??
+                (/^Terminal \d+$/.test(tab.title) ? tab.title : undefined) ??
+                (/^Terminal \d+$/.test(nextTitle) ? nextTitle : undefined)
+            }
+          : tab
+      )
       scheduleRuntimeGraphSync()
       const nextTabsByWorktree = { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs }
       // Agent status is derived from terminal titles and affects sort scoring,
@@ -854,20 +1011,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // title update). Bumping sortEpoch here would reorder the sidebar
       // on click — the exact bug PR #209 intended to fix.
       const isActive = ownerWorktreeId === s.activeWorktreeId
-      return isActive
+      const nextState: Partial<AppState> = isActive
         ? { tabsByWorktree: nextTabsByWorktree }
         : { tabsByWorktree: nextTabsByWorktree, sortEpoch: s.sortEpoch + 1 }
+      if (unifiedTabsWithUpdatedLabel) {
+        nextState.unifiedTabsByWorktree = {
+          ...s.unifiedTabsByWorktree,
+          [ownerWorktreeId]: unifiedTabsWithUpdatedLabel
+        }
+      }
+      return nextState
     })
-    const item = Object.values(get().unifiedTabsByWorktree)
-      .flat()
-      .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
-    if (item) {
-      const resolvedTitle =
-        Object.values(get().tabsByWorktree)
-          .flat()
-          .find((tab) => tab.id === tabId)?.title ?? title.trim()
-      get().setTabLabel(item.id, resolvedTitle)
-    }
   },
 
   setRuntimePaneTitle: (tabId, paneId, title) => {
@@ -892,13 +1046,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // re-emits its working title) — bumping would re-rank the sidebar on
       // click, the exact bug PR #209 fixed for updateTabTitle. If no owner
       // is found the pane is orphaned; skip the bump as unsafe.
-      let ownerWorktreeId: string | null = null
-      for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
-        if (tabs.some((t) => t.id === tabId)) {
-          ownerWorktreeId = wId
-          break
-        }
-      }
+      const ownerWorktreeId = classificationChanged
+        ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+        : null
       const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
       const shouldBump = classificationChanged && ownerWorktreeId !== null && !isActive
       return {
@@ -936,13 +1086,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // fire as a side-effect of a click-driven PTY teardown in the active
       // worktree must not re-rank the sidebar. Skip bumping when no owner is
       // found (orphaned pane) for the same safety reason.
-      let ownerWorktreeId: string | null = null
-      for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
-        if (tabs.some((t) => t.id === tabId)) {
-          ownerWorktreeId = wId
-          break
-        }
-      }
+      const ownerWorktreeId = hadClassification
+        ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+        : null
       const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
       const shouldBump = hadClassification && ownerWorktreeId !== null && !isActive
       return {
@@ -960,9 +1106,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     if (!ownerTab) {
       return
     }
-    // Why: BEL must fire regardless of focus (ghostty semantics — "show
-    // until interact"). A BEL on the focused tab sets the indicator; real
-    // user interaction with the pane dismisses it. Keystroke/pointerdown
+    // Why: terminal attention must stay visible until interaction ("show
+    // until interact"). A signal on the focused tab still sets the indicator;
+    // real user interaction with the pane dismisses it. Keystroke/pointerdown
     // routes through clearTerminalTabUnread (see pty-connection.ts and
     // TerminalPane.tsx); tab/group activation clears unreadTerminalTabs
     // directly in activateTab/focusGroup as a pre-existing side-effect.
@@ -971,6 +1117,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         return s
       }
       return { unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: true as const } }
+    })
+  },
+
+  markTerminalPaneUnread: (paneKey) => {
+    set((s) => {
+      if (s.unreadTerminalPanes[paneKey]) {
+        return s
+      }
+      return { unreadTerminalPanes: { ...s.unreadTerminalPanes, [paneKey]: true as const } }
     })
   },
 
@@ -985,7 +1140,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
-  setTabCustomTitle: (tabId, title) => {
+  clearTerminalPaneUnread: (paneKey) => {
+    set((s) => {
+      if (!s.unreadTerminalPanes[paneKey]) {
+        return s
+      }
+      const copy = { ...s.unreadTerminalPanes }
+      delete copy[paneKey]
+      return { unreadTerminalPanes: copy }
+    })
+  },
+
+  setTabCustomTitle: (tabId, title, opts) => {
     set((s) => {
       const next = { ...s.tabsByWorktree }
       for (const wId of Object.keys(next)) {
@@ -998,7 +1164,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       .flat()
       .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
     if (item) {
-      get().setTabCustomLabel(item.id, title)
+      get().setTabCustomLabel(item.id, title, opts)
     }
   },
 
@@ -1035,15 +1201,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
         worktreeId = wId
         const tab = tabs[index]
-        if (tab.pendingActivationSpawn) {
+        if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
           wasActivationSpawn = true
         }
-        // Why: consume pendingActivationSpawn here. The flag is set by
-        // setActiveWorktree when it bumps generation on all-dead tabs, and
-        // must be cleared on the first PTY that comes back or a later
-        // legitimate respawn (e.g. the user restarting a codex tab) would
-        // also be classified as activation and silently dropped from the
-        // recency sort.
+        // Why: consume one pendingActivationSpawn unit here. Split layouts can
+        // remount several panes for one click, and each pane's activation-time
+        // PTY callback must be suppressed without hiding later real activity.
         const { pendingActivationSpawn: _unused, ...rest } = tab
         void _unused
         // Why: tab.ptyId is the single-pane fallback used by legacy attach
@@ -1051,9 +1214,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // primary binding from the original pane or remount/close flows can
         // reattach the tab to the wrong PTY and appear to "reset" panes.
         const nextTabPtyId = tab.ptyId ?? nextPtyIds[0] ?? null
+        const nextPendingActivationSpawn = consumePendingActivationSpawn(tab.pendingActivationSpawn)
         if (tab.pendingActivationSpawn || tab.ptyId !== nextTabPtyId) {
           const nextTabs = [...tabs]
-          nextTabs[index] = { ...rest, ptyId: nextTabPtyId }
+          nextTabs[index] = {
+            ...rest,
+            ...(nextPendingActivationSpawn
+              ? { pendingActivationSpawn: nextPendingActivationSpawn }
+              : {}),
+            ptyId: nextTabPtyId
+          }
           nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
         }
         break
@@ -1106,24 +1276,34 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
         worktreeId = wId
         const tab = tabs[index]
-        if (tab.pendingActivationSpawn) {
+        if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
           wasActivationSpawn = true
         }
         if (!ptyId) {
           isRemoteRuntimeMirror =
             existingPtyIds.length > 0 && existingPtyIds.every((id) => isRemoteRuntimePtyId(id))
         }
-        // Why: consume pendingActivationSpawn here too. Panes tearing down
-        // during a worktree switch (e.g. the previously-active worktree
-        // unmounting its panes) fire onExit → clearTabPtyId, which must
-        // not count as activity. Strip the flag on consumption so later
-        // legitimate exits still bump.
+        // Why: consume pendingActivationSpawn for real activation-time clears,
+        // but keep it when clearing a stale wake-hint id that was not live in
+        // ptyIdsByTabId. That path immediately falls back to a fresh spawn,
+        // and the spawn still needs the click-driven suppression.
         const { pendingActivationSpawn: _unused, ...rest } = tab
         void _unused
         const nextTabPtyId = remainingPtyIds.at(-1) ?? null
+        const shouldRetainActivationSpawn =
+          wasActivationSpawn && ptyId != null && !existingPtyIds.includes(ptyId)
+        const nextPendingActivationSpawn = shouldRetainActivationSpawn
+          ? tab.pendingActivationSpawn
+          : consumePendingActivationSpawn(tab.pendingActivationSpawn)
         if (tab.pendingActivationSpawn || tab.ptyId !== nextTabPtyId) {
           const nextTabs = [...tabs]
-          nextTabs[index] = { ...rest, ptyId: nextTabPtyId }
+          nextTabs[index] = {
+            ...rest,
+            ...(nextPendingActivationSpawn
+              ? { pendingActivationSpawn: nextPendingActivationSpawn }
+              : {}),
+            ptyId: nextTabPtyId
+          }
           nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
         }
         break
@@ -1272,6 +1452,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // selectors on unrelated shutdown calls. Mirrors the sibling pattern
       // in tabs.ts.
       let nextUnreadTerminalTabs = s.unreadTerminalTabs
+      let nextUnreadTerminalPanes = s.unreadTerminalPanes
       for (const tab of tabs) {
         if (!keepIdentifiers) {
           delete nextRuntimePaneTitlesByTabId[tab.id]
@@ -1283,6 +1464,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             nextUnreadTerminalTabs = { ...s.unreadTerminalTabs }
           }
           delete nextUnreadTerminalTabs[tab.id]
+        }
+        for (const paneKey of Object.keys(nextUnreadTerminalPanes)) {
+          if (paneKey.startsWith(`${tab.id}:`)) {
+            if (nextUnreadTerminalPanes === s.unreadTerminalPanes) {
+              nextUnreadTerminalPanes = { ...s.unreadTerminalPanes }
+            }
+            delete nextUnreadTerminalPanes[paneKey]
+          }
         }
         if (!keepIdentifiers) {
           const existingLayout = nextTerminalLayoutsByTabId[tab.id]
@@ -1325,6 +1514,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // of full-state selectors. Mirrors the sibling pattern in tabs.ts.
         ...(nextUnreadTerminalTabs !== s.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+          : {}),
+        ...(nextUnreadTerminalPanes !== s.unreadTerminalPanes
+          ? { unreadTerminalPanes: nextUnreadTerminalPanes }
           : {})
       }
     })
@@ -1592,7 +1784,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // Only SSH repos need this: local worktrees are persisted and a missing
       // local worktree genuinely means it was deleted.
       const sshRepoIds = new Set(s.repos.filter((r) => r.connectionId).map((r) => r.id))
-      // Why: the Floating Terminal is intentionally not a repo worktree, but
+      // Why: the Floating Workspace is intentionally not a repo worktree, but
       // its tabs still use the normal terminal session pipeline so daemon PTYs
       // can survive app restart just like workspace terminals.
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
