@@ -108,7 +108,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3051 | `nwparker/react-perf-low-risk-3`     | Status-bar account submenus collapse in provider menu open-change handlers    | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/status-bar/StatusBar.tsx`; `pnpm run typecheck:web`.           |
 | #3052 | `nwparker/react-perf-low-risk-4`     | Browser tab favicon failure reset happens during render for new favicon IDs   | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/tab-bar/BrowserTab.tsx`; `pnpm run typecheck:web`.             |
 | #3053 | `nwparker/react-perf-low-risk-5`     | Inline workspace-title rename removes inactive draft sync Effect              | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/WorktreeTitleInlineRename.tsx`; `pnpm run typecheck:web`. |
-| #3054 | `nwparker/react-perf-low-risk-6`     | Feature-wall tour removes static substep id repair Effects                    | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx`; `pnpm run typecheck:web`. |
+| #3054 | `nwparker/react-perf-low-risk-6`     | Feature-wall tour removes static substep id repair Effects                    | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx`; `pnpm run typecheck:web`. |
 
 ## Reproduction Commands
 

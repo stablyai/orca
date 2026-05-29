@@ -37,7 +37,7 @@ export default function RepoCombobox({
   autoOpenOnMount = false,
   showStandaloneAddButton = true
 }: RepoComboboxProps): React.JSX.Element {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(autoOpenOnMount)
   const [query, setQuery] = useState('')
   // Why: controlled cmdk selection so hovering the footer (which lives outside
   // the cmdk tree) can clear the list's highlighted item — otherwise cmdk keeps
@@ -46,7 +46,6 @@ export default function RepoCombobox({
   const addRepo = useAppStore((s) => s.addRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const [isAdding, setIsAdding] = useState(false)
-  const autoOpenedRef = React.useRef(false)
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
 
   const selectedRepo = useMemo(
@@ -54,14 +53,6 @@ export default function RepoCombobox({
     [repos, value]
   )
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
-
-  React.useEffect(() => {
-    if (!autoOpenOnMount || autoOpenedRef.current) {
-      return
-    }
-    autoOpenedRef.current = true
-    setOpen(true)
-  }, [autoOpenOnMount])
 
   React.useEffect(() => {
     if (!open) {
