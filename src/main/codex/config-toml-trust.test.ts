@@ -11,9 +11,11 @@ import {
 } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { escapeRegex } from '../../shared/string-utils'
 import {
   computeTrustKey,
   computeTrustedHash,
+  escapeTomlString,
   parseTrustKey,
   readHookTrustEntries,
   removeHookTrustEntries,
@@ -339,6 +341,49 @@ describe('upsertHookTrustEntries', () => {
     const written = readFileSync(configPath, 'utf-8')
     const occurrences = written.match(/\[hooks\.state\./g) ?? []
     expect(occurrences).toHaveLength(1)
+  })
+
+  it('collapses duplicate blocks for the same hook key while preserving unrelated hook state', () => {
+    const key =
+      'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json:session_start:0:0'
+    const unrelatedKey =
+      'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json:stop:0:0'
+    const original = [
+      `[hooks.state."${escapeTomlString(key)}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:STALE1"',
+      '',
+      `[hooks.state."${escapeTomlString(unrelatedKey)}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:KEEP"',
+      '',
+      `[hooks.state."${escapeTomlString(key)}"]`,
+      'enabled = false',
+      'trusted_hash = "sha256:STALE2"',
+      ''
+    ].join('\r\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const entry: CodexTrustEntry = {
+      sourcePath: 'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json',
+      eventLabel: 'session_start',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo session'
+    }
+    upsertHookTrustEntries(configPath, [entry])
+
+    const written = readFileSync(configPath, 'utf-8')
+    const duplicateKeyOccurrences = written.match(
+      new RegExp(`\\[hooks\\.state\\."${escapeRegex(escapeTomlString(key))}"\\]`, 'g')
+    )
+    expect(duplicateKeyOccurrences).toHaveLength(1)
+    expect(written).toContain(`[hooks.state."${escapeTomlString(unrelatedKey)}"]`)
+    expect(written).toContain('trusted_hash = "sha256:KEEP"')
+    expect(written).toContain('enabled = false')
+    expect(written).not.toContain('STALE1')
+    expect(written).not.toContain('STALE2')
+    expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
   })
 
   it('writes a .bak file before overwriting an existing config', () => {

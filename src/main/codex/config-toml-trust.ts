@@ -307,9 +307,8 @@ export function escapeTomlString(value: string): string {
 }
 
 function upsertTrustBlock(content: string, key: string, hash: string): string {
-  const headerPattern = buildHeaderPattern(key)
-  const match = headerPattern.exec(content)
-  if (!match) {
+  const ranges = findTrustBlockRanges(content, key)
+  if (ranges.length === 0) {
     const block = buildTrustBlock(key, hash, true)
     if (content.length === 0) {
       return `${block}\n`
@@ -320,24 +319,29 @@ function upsertTrustBlock(content: string, key: string, hash: string): string {
     const separator = content.endsWith('\n\n') ? '' : content.endsWith('\n') ? '\n' : '\n\n'
     return `${content}${separator}${block}\n`
   }
-  const headerStart = match.index + (match[1] ? match[1].length : 0)
-  const headerLineEnd = match.index + match[0].length
-  // Why: find the next top-level table header [...] so we replace ONLY this
-  // block. Comments and blank lines between us and the next header are part
-  // of our block and get rewritten — Codex itself only writes the two known
-  // fields, so this is safe.
-  const after = content.slice(headerLineEnd)
-  const nextHeaderRel = findNextTableHeader(after)
-  const blockEnd = nextHeaderRel === -1 ? content.length : headerLineEnd + nextHeaderRel
+
   // Why: preserve a user-set `enabled = false` so a hand-disabled hook is not
   // silently re-enabled by the next auto-install on app start.
-  const existingBlock = content.slice(headerLineEnd, blockEnd)
-  const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(
-    existingBlock
-  )
-  const enabled = enabledMatch ? enabledMatch[1] === 'true' : true
+  // If duplicate blocks already exist, treat any disabled copy as authoritative
+  // while collapsing the malformed TOML back to one table.
+  const enabled = !ranges.some((range) => {
+    const existingBlock = content.slice(range.headerLineEnd, range.end)
+    const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(
+      existingBlock
+    )
+    return enabledMatch?.[1] === 'false'
+  })
   const block = buildTrustBlock(key, hash, enabled)
-  return `${content.slice(0, headerStart)}${block}\n${content.slice(blockEnd)}`
+  let cursor = 0
+  let deduped = ''
+  ranges.forEach((range, index) => {
+    deduped += content.slice(cursor, range.start)
+    if (index === 0) {
+      deduped += `${block}\n`
+    }
+    cursor = range.end
+  })
+  return deduped + content.slice(cursor)
 }
 
 // Why: Codex emits the canonical form with the key double-quoted; we never
@@ -358,6 +362,33 @@ function buildHeaderPattern(key: string): RegExp {
   return new RegExp(
     `(^|\\r?\\n)[ \\t]*\\[hooks\\.state\\."${escapedKey}"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`
   )
+}
+
+type TrustBlockRange = {
+  start: number
+  headerLineEnd: number
+  end: number
+}
+
+function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
+  const headerPattern = buildHeaderPattern(key)
+  const ranges: TrustBlockRange[] = []
+  let offset = 0
+  while (offset < content.length) {
+    const match = headerPattern.exec(content.slice(offset))
+    if (!match) {
+      break
+    }
+    const matchIndex = offset + match.index
+    const headerStart = matchIndex + (match[1] ? match[1].length : 0)
+    const headerLineEnd = matchIndex + match[0].length
+    const after = content.slice(headerLineEnd)
+    const nextHeaderRel = findNextTableHeader(after)
+    const blockEnd = nextHeaderRel === -1 ? content.length : headerLineEnd + nextHeaderRel
+    ranges.push({ start: headerStart, headerLineEnd, end: blockEnd })
+    offset = Math.max(blockEnd, headerLineEnd + 1)
+  }
+  return ranges
 }
 
 function buildProjectHeaderPattern(projectPath: string): RegExp {
