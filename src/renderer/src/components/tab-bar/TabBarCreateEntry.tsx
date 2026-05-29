@@ -50,6 +50,7 @@ export default function TabBarCreateEntry({
   }, [query])
 
   const disabled = !onOpenEntry
+  const hasQuery = query.trim().length > 0
   const activeOptions = options.filter(isActiveEntryOption)
   const activeSelectedIndex = Math.min(selectedIndex, Math.max(activeOptions.length - 1, 0))
   const selectedActiveOption = activeOptions[activeSelectedIndex]
@@ -113,35 +114,43 @@ export default function TabBarCreateEntry({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <Input
-        ref={inputRef}
-        value={query}
-        onChange={(event) => {
-          setQuery(event.target.value)
-          setError(null)
-        }}
-        disabled={disabled}
-        aria-label="Open URL, file, or new file"
-        aria-invalid={error ? true : undefined}
-        placeholder="URL, file, or new file"
-        className="h-8 rounded-[7px] px-2 text-[12px]"
-      />
-      <div className="mt-1 space-y-0.5">
-        {error ? (
-          <EntryStatusRow message={error} />
-        ) : activeOptions.length > 0 ? (
-          activeOptions.map((option, index) => (
-            <EntryActionRow
-              key={option.id}
-              classification={option.classification}
-              selected={index === activeSelectedIndex}
-              onClick={() => submitOption(option.classification)}
-            />
-          ))
-        ) : (
-          <EntryStatusRow loading={fileList.loading} message={statusMessage} />
-        )}
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <Input
+          ref={inputRef}
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setError(null)
+          }}
+          disabled={disabled}
+          aria-label="Open URL, file, or new file"
+          aria-invalid={error ? true : undefined}
+          placeholder="URL, file, or new file"
+          className="h-8 rounded-[7px] pl-7 pr-2 text-[12px]"
+        />
       </div>
+      {error || activeOptions.length > 0 || hasQuery ? (
+        <div className="mt-1 space-y-0.5">
+          {error ? (
+            <EntryStatusRow message={error} />
+          ) : activeOptions.length > 0 ? (
+            activeOptions.map((option, index) => (
+              <EntryActionRow
+                key={option.id}
+                classification={option.classification}
+                selected={index === activeSelectedIndex}
+                onClick={() => submitOption(option.classification)}
+              />
+            ))
+          ) : (
+            <EntryStatusRow loading={fileList.loading} message={statusMessage} />
+          )}
+        </div>
+      ) : null}
     </form>
   )
 }
@@ -161,10 +170,9 @@ function EntryStatusRow({
   loading?: boolean
   message: string
 }): React.JSX.Element {
-  const Icon = loading ? Loader2 : Search
   return (
     <div className="flex min-h-6 items-center gap-1.5 rounded-[7px] px-1 text-[11px] leading-5 text-muted-foreground">
-      <Icon className={cn('size-3.5 shrink-0', loading && 'animate-spin')} aria-hidden="true" />
+      {loading ? <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" /> : null}
       <span className="truncate">{message}</span>
     </div>
   )

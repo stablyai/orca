@@ -539,7 +539,7 @@ function TabBarInner({
         <DropdownMenuContent
           align="start"
           sideOffset={6}
-          className="min-w-[11rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
+          className="w-80 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
           onCloseAutoFocus={(e) => {
             // Why: terminal-producing menu actions activate a freshly-mounted
             // xterm. Radix's default focus restore sends focus back to the "+"
