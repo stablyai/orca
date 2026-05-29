@@ -10,6 +10,10 @@ describe('pairing deep links', () => {
     expect(extractPairingCodeFromUrl('orca://pair?code=abc123')).toBe('abc123')
   })
 
+  it('prefers the query pairing code when both query and hash are present', () => {
+    expect(extractPairingCodeFromUrl('orca://pair?code=query-code#hash-code')).toBe('query-code')
+  })
+
   it('ignores empty and unrelated URLs', () => {
     expect(extractPairingCodeFromUrl('orca://pair')).toBeNull()
     expect(extractPairingCodeFromUrl('https://example.com/pair#abc123')).toBeNull()
