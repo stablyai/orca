@@ -47,7 +47,7 @@ Initial inventory:
 
 ## Coverage Ledger
 
-Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, and #3054: 959 Effect hook call sites.
+Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, and #3055: 958 Effect hook call sites.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -88,6 +88,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR N         | Browser tab favicon fallback                          | Extra render pass from resetting failed favicon state in an Effect after tab favicon identity changes.   | `BrowserTab.tsx` covered by #3052                                                                                        | Low            |
 | PR O         | Workspace title rename draft                          | Redundant draft sync Effect runs while the inline title rename input is not mounted.                     | `WorktreeTitleInlineRename.tsx` covered by #3053                                                                         | Low            |
 | PR P         | Feature-wall tour static substep repair               | Three no-op Effects scan static step arrays and repair ids that are only written from those arrays.      | `FeatureWallTourSurface.tsx` covered by #3054                                                                            | Low            |
+| PR Q         | Repo combobox mount-open state                        | Mount-only auto-open path uses an Effect and ref guard instead of initializing state from the prop.       | `RepoCombobox.tsx` covered by #3055                                                                                      | Low            |
 
 ## Merge Risk Scale
 
@@ -109,6 +110,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3052 | `nwparker/react-perf-low-risk-4`     | Browser tab favicon failure reset happens during render for new favicon IDs   | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/tab-bar/BrowserTab.tsx`; `pnpm run typecheck:web`.             |
 | #3053 | `nwparker/react-perf-low-risk-5`     | Inline workspace-title rename removes inactive draft sync Effect              | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/WorktreeTitleInlineRename.tsx`; `pnpm run typecheck:web`. |
 | #3054 | `nwparker/react-perf-low-risk-6`     | Feature-wall tour removes static substep id repair Effects                    | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx`; `pnpm run typecheck:web`. |
+| #3055 | `nwparker/react-perf-low-risk-7`     | Repo combobox initializes mount-open state without an Effect                  | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/repo/RepoCombobox.tsx`; `pnpm run typecheck:web`.              |
 
 ## Reproduction Commands
 
