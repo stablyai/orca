@@ -14,11 +14,21 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').terminalUseSeparateLightTheme).toBe(true)
   })
 
-  it('enables AI commit messages by default without pinning a separate agent', () => {
+  it('enables Source Control AI by default without pinning a separate agent', () => {
     expect(getDefaultSettings('/tmp').commitMessageAi).toMatchObject({
       enabled: true,
       agentId: null,
       selectedModelByAgent: {}
+    })
+    expect(getDefaultSettings('/tmp').sourceControlAi).toMatchObject({
+      enabled: true,
+      agentId: null,
+      selectedModelByAgent: {},
+      instructionsByOperation: {
+        commitMessage: '',
+        pullRequest: '',
+        branchName: ''
+      }
     })
   })
 })

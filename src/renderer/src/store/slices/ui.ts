@@ -27,6 +27,11 @@ import {
   type WorkspaceCleanupDismissal
 } from '../../../../shared/workspace-cleanup'
 import { normalizeFeatureTipIds, type FeatureTipId } from '../../../../shared/feature-tips'
+import {
+  normalizeFeatureInteractions,
+  type FeatureInteractionId,
+  type FeatureInteractionState
+} from '../../../../shared/feature-interactions'
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import {
   normalizeVisibleTaskProviders,
@@ -59,6 +64,32 @@ export type PendingSidebarWorktreeReveal = {
   worktreeId: string
   behavior: 'auto' | 'smooth'
   highlight?: boolean
+}
+
+function mergeFeatureInteractionState(
+  current: FeatureInteractionState,
+  incoming: PersistedUIState['featureInteractions']
+): FeatureInteractionState {
+  const currentNormalized = normalizeFeatureInteractions(current)
+  const incomingNormalized = normalizeFeatureInteractions(incoming)
+  const merged: FeatureInteractionState = { ...currentNormalized }
+  for (const [id, incomingRecord] of Object.entries(incomingNormalized)) {
+    const featureId = id as FeatureInteractionId
+    const currentRecord = currentNormalized[featureId]
+    merged[featureId] = currentRecord
+      ? {
+          firstInteractedAt: Math.min(
+            currentRecord.firstInteractedAt,
+            incomingRecord.firstInteractedAt
+          ),
+          interactionCount: Math.max(
+            currentRecord.interactionCount,
+            incomingRecord.interactionCount
+          )
+        }
+      : incomingRecord
+  }
+  return merged
 }
 
 function clampPetSize(size: number): number {
@@ -467,6 +498,8 @@ export type UISlice = {
   closeModal: () => void
   featureTipsSeenIds: FeatureTipId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
+  featureInteractions: FeatureInteractionState
+  recordFeatureInteraction: (id: FeatureInteractionId) => void
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   markOrcaHookScriptConfirmed: (
     repoId: string,
@@ -639,6 +672,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
   openTaskPage: (data = {}) => {
+    get().recordFeatureInteraction?.('tasks')
     // Why: record a Tasks visit in the shared back/forward history so the
     // titlebar Back/Forward buttons can return to Tasks. All task-source
     // variants (github/linear presets) collapse to a single 'tasks' entry;
@@ -799,6 +833,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   selectedAutomationId: null,
   setSelectedAutomationId: (id) => set({ selectedAutomationId: id }),
   openAutomationsPage: () => {
+    get().recordFeatureInteraction?.('automations')
     get().recordViewVisit('automations')
     set((state) => ({
       activeView: 'automations',
@@ -879,6 +914,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   activeModal: 'none',
   modalData: {},
   openModal: (modal, data = {}) => {
+    if (modal === 'new-workspace-composer' || modal === 'add-repo' || modal === 'create-worktree') {
+      get().recordFeatureInteraction?.('workspace-creation')
+    }
     set({
       activeModal: modal,
       modalData: data
@@ -905,6 +943,36 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const next = [...current]
       window.api.ui.set({ featureTipsSeenIds: next }).catch(console.error)
       return { featureTipsSeenIds: next }
+    }),
+  featureInteractions: {},
+  recordFeatureInteraction: (id) =>
+    set((s) => {
+      if (!s.persistedUIReady) {
+        return s
+      }
+      const existing = s.featureInteractions[id]
+      const next: FeatureInteractionState = {
+        ...s.featureInteractions,
+        [id]: {
+          firstInteractedAt: existing?.firstInteractedAt ?? Date.now(),
+          interactionCount: (existing?.interactionCount ?? 0) + 1
+        }
+      }
+      if (typeof window !== 'undefined') {
+        const recordInteraction = window.api.ui.recordFeatureInteraction
+        const persist = recordInteraction
+          ? recordInteraction(id).then((ui) => {
+              set((current) => ({
+                featureInteractions: mergeFeatureInteractionState(
+                  current.featureInteractions,
+                  ui.featureInteractions
+                )
+              }))
+            })
+          : window.api.ui.set({ featureInteractions: next })
+        persist.catch(console.error)
+      }
+      return { featureInteractions: next }
     }),
   trustedOrcaHooks: {},
   markOrcaHookScriptConfirmed: (repoId, kind, contentHash) =>
@@ -1236,6 +1304,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
         taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
         featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
+        featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),
         trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(
           ui.trustedOrcaHooks ?? {},
           validRepoIds

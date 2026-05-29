@@ -54,7 +54,9 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(createTab).toHaveBeenCalledTimes(2)
     expect(store.setActiveTab).toHaveBeenNthCalledWith(1, 'tab-1')
     expect(store.setActiveTab).toHaveBeenLastCalledWith('tab-1')
-    expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup')
+    expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
+      recordInteraction: false
+    })
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
       command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
       env: {
@@ -285,7 +287,9 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     // and the helper re-activates the main tab so focus stays on tab-1.
     expect(store.setActiveTab).toHaveBeenNthCalledWith(1, 'tab-1')
     expect(store.setActiveTab).toHaveBeenLastCalledWith('tab-1')
-    expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup')
+    expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
+      recordInteraction: false
+    })
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
       command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
       env: { ORCA_ROOT_PATH: '/tmp/repo' }

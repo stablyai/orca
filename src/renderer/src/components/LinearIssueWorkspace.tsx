@@ -30,6 +30,7 @@ import {
   type LinearLocalComment
 } from '@/components/LinearItemDrawer'
 import { Button } from '@/components/ui/button'
+import { LinearIssueTextEditor } from '@/components/LinearIssueTextEditor'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -401,6 +402,14 @@ export default function LinearIssueWorkspace({
     setEditState((prev) => (prev ? { ...prev, ...patch } : prev))
   }, [])
 
+  const handleIssueTextChange = useCallback(
+    (patch: Partial<Pick<LinearIssue, 'title' | 'description'>>) => {
+      hasEditedRef.current = true
+      setFullIssue((prev) => (prev ? { ...prev, ...patch } : prev))
+    },
+    []
+  )
+
   const loadComments = useCallback(
     async (targetIssue: LinearIssue, requestId: number): Promise<void> => {
       setCommentsLoading(true)
@@ -480,6 +489,8 @@ export default function LinearIssueWorkspace({
             return {
               ...fetched,
               state: prev.state,
+              title: prev.title,
+              description: prev.description,
               priority: prev.priority,
               assignee: prev.assignee,
               estimate: prev.estimate,
@@ -648,20 +659,7 @@ export default function LinearIssueWorkspace({
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         <div className="mx-auto grid w-full grid-cols-1 gap-10 px-7 py-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10 xl:px-12">
           <main className="min-w-0">
-            <h1 className="max-w-[820px] text-[28px] font-semibold leading-tight text-foreground">
-              {displayed.title}
-            </h1>
-
-            <section className="mt-7 max-w-[820px] text-[15px] leading-7 text-foreground">
-              {displayed.description?.trim() ? (
-                <CommentMarkdown
-                  content={displayed.description}
-                  className="text-[15px] leading-7"
-                />
-              ) : (
-                <p className="text-sm italic text-muted-foreground">No description provided.</p>
-              )}
-            </section>
+            <LinearIssueTextEditor issue={displayed} onIssueChange={handleIssueTextChange} />
 
             <LinearIssueSubIssueButton issue={displayed} onOpenIssue={onOpenIssue} />
 

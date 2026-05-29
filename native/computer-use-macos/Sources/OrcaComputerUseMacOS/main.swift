@@ -196,7 +196,7 @@ final class Provider {
         var action = try runAction()
         do {
             return try renderActionResult(action: action, snapshot: observe(params: params))
-        } catch let error as ProviderError where (error.code == "window_not_found" || error.code == "window_stale") && (requestedWindowId(params) != nil || requestedWindowIndex(params) != nil) {
+        } catch let error as ProviderError where (error.code == "window_not_found" || error.code == "window_stale") && hasRequestedWindowSelector(params) {
             var fallbackParams = params
             fallbackParams.removeValue(forKey: "windowId")
             fallbackParams.removeValue(forKey: "windowIndex")
@@ -209,6 +209,8 @@ final class Provider {
 
     private func observe(params: [String: JSONValue]) throws -> Snapshot {
         let query = try requiredString(params, "app")
+        let windowId = try requestedWindowId(params)
+        let windowIndex = try requestedWindowIndex(params)
         let app = try resolveApp(query)
         if params["restoreWindow"]?.bool == true {
             recoverWindow(app)
@@ -216,8 +218,8 @@ final class Provider {
         let snapshot = try buildSnapshot(
             app: app,
             includeScreenshot: params["noScreenshot"]?.bool != true,
-            windowId: requestedWindowId(params),
-            windowIndex: requestedWindowIndex(params),
+            windowId: windowId,
+            windowIndex: windowIndex,
             restoreWindow: params["restoreWindow"]?.bool == true
         )
         let keys = [query, app.name, app.bundleId ?? ""].filter { !$0.isEmpty }.map { $0.lowercased() }
@@ -226,13 +228,13 @@ final class Provider {
             if !isExplicitSnapshotNamespace(namespace) {
                 snapshots[key] = snapshot
                 snapshots[snapshotWindowKey(key, snapshot.windowId)] = snapshot
-                if let windowIndex = requestedWindowIndex(params) {
+                if let windowIndex {
                     snapshots[snapshotWindowIndexKey(key, windowIndex)] = snapshot
                 }
             }
             snapshots[namespacedSnapshotKey(namespace, key)] = snapshot
             snapshots[namespacedSnapshotKey(namespace, snapshotWindowKey(key, snapshot.windowId))] = snapshot
-            if let windowIndex = requestedWindowIndex(params) {
+            if let windowIndex {
                 snapshots[namespacedSnapshotKey(namespace, snapshotWindowIndexKey(key, windowIndex))] = snapshot
             }
         }
@@ -240,7 +242,7 @@ final class Provider {
     }
 
     private func currentSnapshot(params: [String: JSONValue]) throws -> Snapshot {
-        let cached = cachedSnapshot(params: params)
+        let cached = try cachedSnapshot(params: params)
         // Why: cached AX frames can be stale after a window move or resize, and
         // stale geometry can turn an intended action into a misclick.
         let snapshot = try observe(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
@@ -256,15 +258,15 @@ final class Provider {
         return snapshot
     }
 
-    private func cachedSnapshot(params: [String: JSONValue]) -> Snapshot? {
+    private func cachedSnapshot(params: [String: JSONValue]) throws -> Snapshot? {
         guard let query = params["app"]?.string, !query.isEmpty else { return nil }
         let namespace = snapshotNamespace(params)
-        if let targetWindowId = requestedWindowId(params) {
+        if let targetWindowId = try requestedWindowId(params) {
             let windowKey = snapshotWindowKey(query.lowercased(), targetWindowId)
             return snapshots[namespacedSnapshotKey(namespace, windowKey)] ??
                 (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[windowKey])
         }
-        if let targetWindowIndex = requestedWindowIndex(params) {
+        if let targetWindowIndex = try requestedWindowIndex(params) {
             let windowKey = snapshotWindowIndexKey(query.lowercased(), targetWindowIndex)
             return snapshots[namespacedSnapshotKey(namespace, windowKey)] ??
                 (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[windowKey])
@@ -275,16 +277,15 @@ final class Provider {
     }
 
     private func validateRequestedElements(cached: Snapshot?, current: Snapshot, params: [String: JSONValue]) throws {
-        let requestedKeys = ["elementIndex", "fromElementIndex", "toElementIndex"].filter {
-            params[$0]?.number != nil
+        let requestedIndexes = try ["elementIndex", "fromElementIndex", "toElementIndex"].compactMap { key -> Int? in
+            guard params[key]?.number != nil else { return nil }
+            return try optionalInteger(params, key)
         }
-        guard !requestedKeys.isEmpty else { return }
+        guard !requestedIndexes.isEmpty else { return }
         guard let cached else {
             throw ProviderError.coded("element_not_found", "element indexes require a fresh get-app-state snapshot for this app/window")
         }
-        for key in requestedKeys {
-            guard let value = params[key]?.number else { continue }
-            let index = Int(value)
+        for index in requestedIndexes {
             guard let expected = cached.elements[index], let actual = current.elements[index] else {
                 throw ProviderError.coded("element_not_found", "element \(index) is stale; run get-app-state again and use a fresh element index")
             }
@@ -577,9 +578,9 @@ final class Provider {
     private func click(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentSnapshot(params: params)
         let button = params["mouseButton"]?.string ?? "left"
-        let count = Int(params["clickCount"]?.number ?? 1)
-        if let elementIndex = params["elementIndex"]?.number {
-            let record = try element(snapshot, Int(elementIndex))
+        let count = try optionalInteger(params, "clickCount") ?? 1
+        if let elementIndex = try optionalInteger(params, "elementIndex") {
+            let record = try element(snapshot, elementIndex)
             if count <= 1, let actionName = try performClickAction(record: record, mouseButton: button) {
                 return actionMetadata(path: "accessibility", actionName: actionName)
             }
@@ -618,7 +619,7 @@ final class Provider {
 
     private func performSecondaryAction(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentSnapshot(params: params)
-        let record = try element(snapshot, Int(try requiredNumber(params, "elementIndex")))
+        let record = try element(snapshot, try requiredInteger(params, "elementIndex"))
         let requested = try requiredString(params, "action")
         let action = record.actions.first { SnapshotRenderHeuristics.prettyAction($0).caseInsensitiveCompare(requested) == .orderedSame || $0.caseInsensitiveCompare(requested) == .orderedSame }
         guard let action else {
@@ -632,7 +633,7 @@ final class Provider {
 
     private func setValue(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentSnapshot(params: params)
-        let record = try element(snapshot, Int(try requiredNumber(params, "elementIndex")))
+        let record = try element(snapshot, try requiredInteger(params, "elementIndex"))
         guard isSettable(record.element, kAXValueAttribute as String) else {
             throw ProviderError.coded("value_not_settable", "element \(record.index) is not settable")
         }
@@ -691,11 +692,12 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let direction = try requiredString(params, "direction")
         let pages = params["pages"]?.number ?? 1
-        if let elementIndex = params["elementIndex"]?.number {
-            let record = try element(snapshot, Int(elementIndex))
+        if let elementIndex = try optionalInteger(params, "elementIndex") {
+            let record = try element(snapshot, elementIndex)
             let action = "AXScroll\(direction.capitalized)ByPage"
-            if pages.rounded() == pages, record.actions.contains(action) {
-                for _ in 0..<max(1, Int(pages)) {
+            if pages.rounded() == pages, let pageCount = boundedInteger(pages, as: Int.self),
+               record.actions.contains(action) {
+                for _ in 0..<max(1, pageCount) {
                     _ = performAction(record.element, action)
                 }
                 return actionMetadata(path: "accessibility", actionName: action)
@@ -715,9 +717,10 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let start: CGPoint
         let end: CGPoint
-        if let fromIndex = params["fromElementIndex"]?.number, let toIndex = params["toElementIndex"]?.number {
-            let from = try element(snapshot, Int(fromIndex))
-            let to = try element(snapshot, Int(toIndex))
+        if let fromIndex = try optionalInteger(params, "fromElementIndex"),
+           let toIndex = try optionalInteger(params, "toElementIndex") {
+            let from = try element(snapshot, fromIndex)
+            let to = try element(snapshot, toIndex)
             guard let fromPoint = center(from.localFrame, in: snapshot.windowBounds),
                   let toPoint = center(to.localFrame, in: snapshot.windowBounds)
             else {
@@ -776,6 +779,21 @@ private func requiredStringAllowingEmpty(_ params: [String: JSONValue], _ key: S
 private func requiredNumber(_ params: [String: JSONValue], _ key: String) throws -> Double {
     guard let value = params[key]?.number, value.isFinite else {
         throw ProviderError.coded("invalid_argument", "missing \(key)")
+    }
+    return value
+}
+
+private func requiredInteger(_ params: [String: JSONValue], _ key: String) throws -> Int {
+    guard let value = boundedInteger(try requiredNumber(params, key), as: Int.self) else {
+        throw ProviderError.coded("invalid_argument", "\(key) is out of range")
+    }
+    return value
+}
+
+private func optionalInteger(_ params: [String: JSONValue], _ key: String) throws -> Int? {
+    guard let raw = params[key]?.number else { return nil }
+    guard let value = boundedInteger(raw, as: Int.self) else {
+        throw ProviderError.coded("invalid_argument", "\(key) is out of range")
     }
     return value
 }
@@ -949,9 +967,16 @@ private func openBundle(_ bundleId: String) {
     process.waitUntilExit()
 }
 
-private func requestedWindowId(_ params: [String: JSONValue]) -> CGWindowID? {
-    guard let value = params["windowId"]?.number, value >= 0 else { return nil }
-    return CGWindowID(UInt32(value))
+private func hasRequestedWindowSelector(_ params: [String: JSONValue]) -> Bool {
+    params["windowId"] != nil || params["windowIndex"] != nil
+}
+
+private func requestedWindowId(_ params: [String: JSONValue]) throws -> CGWindowID? {
+    guard let raw = params["windowId"] else { return nil }
+    guard let value = raw.number, value >= 0, let id = boundedInteger(value, as: UInt32.self) else {
+        throw ProviderError.coded("invalid_argument", "windowId is out of range")
+    }
+    return CGWindowID(id)
 }
 
 private func snapshotWindowKey(_ query: String, _ windowId: CGWindowID) -> String {
@@ -980,9 +1005,12 @@ private func isExplicitSnapshotNamespace(_ namespace: String) -> Bool {
     namespace != "default"
 }
 
-private func requestedWindowIndex(_ params: [String: JSONValue]) -> Int? {
-    guard let value = params["windowIndex"]?.number, value >= 0 else { return nil }
-    return Int(value)
+private func requestedWindowIndex(_ params: [String: JSONValue]) throws -> Int? {
+    guard let raw = params["windowIndex"] else { return nil }
+    guard let value = raw.number, value >= 0, let index = boundedInteger(value, as: Int.self) else {
+        throw ProviderError.coded("invalid_argument", "windowIndex is out of range")
+    }
+    return index
 }
 
 private func usableWindow(_ element: AXUIElement) -> Bool {
@@ -1788,7 +1816,9 @@ private enum Input {
     }
 
     static func scroll(pid: pid_t, at point: CGPoint, direction: String, pages: Double) throws {
-        let delta = Int32(max(1, (12 * pages).rounded()))
+        guard let delta = boundedInteger(max(1, (12 * pages).rounded()), as: Int32.self) else {
+            throw ProviderError.coded("invalid_argument", "pages is out of range")
+        }
         let wheel1: Int32 = direction == "up" ? delta : direction == "down" ? -delta : 0
         let wheel2: Int32 = direction == "left" ? delta : direction == "right" ? -delta : 0
         guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: wheel1, wheel2: wheel2, wheel3: 0) else {

@@ -39,6 +39,7 @@ import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
+import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: declared separately from CacheEntry<T> (not a generified E parameter)
@@ -511,6 +512,9 @@ function buildPRRefreshCandidate(
 ): GitHubPRRefreshCandidate | null {
   const repo = state.repos.find((r) => r.id === worktree.repoId)
   if (!repo) {
+    return null
+  }
+  if (isMacAppDataPath(repoPath ?? repo.path)) {
     return null
   }
   const branch = worktree.branch.replace(/^refs\/heads\//, '')
@@ -1724,7 +1728,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   fetchWorkItemsAcrossRepos: async (repos, perRepoLimit, displayLimit, query, options) => {
     const state = get()
     let failedCount = 0
-    const perRepoResults = await Promise.all(
+    const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         try {
           return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, options)
@@ -1750,13 +1754,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
       })
     )
-    const merged = sortWorkItemsByUpdatedAt(perRepoResults.flat()).slice(0, displayLimit)
+    const merged = sortWorkItemsByUpdatedAt(perProjectResults.flat()).slice(0, displayLimit)
     return { items: merged, failedCount }
   },
 
   fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, before) => {
     let failedCount = 0
-    const perRepoResults = await Promise.all(
+    const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         await acquireWorkItemSlot()
         try {
@@ -1793,7 +1797,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
       })
     )
-    const merged = sortWorkItemsByUpdatedAt(perRepoResults.flat()).slice(0, displayLimit)
+    const merged = sortWorkItemsByUpdatedAt(perProjectResults.flat()).slice(0, displayLimit)
     return { items: merged, failedCount }
   },
 

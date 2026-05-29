@@ -2,10 +2,14 @@
 import { stat } from 'fs/promises'
 import { join, posix, win32 } from 'path'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import type { GitWorktreeInfo } from '../../shared/types'
+import type { GitWorktreeInfo, LocalBaseRefRefreshResult } from '../../shared/types'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+
+export type AddWorktreeResult = {
+  localBaseRefRefresh?: LocalBaseRefRefreshResult
+}
 
 type SparseWorktreeCreateError = Error & {
   cleanupFailed?: boolean
@@ -37,6 +41,44 @@ function isNotGitRepositoryError(error: unknown): boolean {
 
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
+}
+
+async function persistWorktreeCreationBase(
+  worktreePath: string,
+  branch: string,
+  effectiveBase: string
+): Promise<void> {
+  const configKey = `branch.${branch}.base`
+  try {
+    await gitExecFileAsync(['config', '--local', '--replace-all', configKey, effectiveBase], {
+      cwd: worktreePath
+    })
+  } catch (error) {
+    console.warn(`addWorktree: failed to set ${configKey} for ${worktreePath}`, error)
+    try {
+      // Why: reused branch names may carry stale base metadata; if replacement
+      // fails, remove the old value so consumers do not trust outdated lineage.
+      await gitExecFileAsync(['config', '--local', '--unset-all', configKey], {
+        cwd: worktreePath
+      })
+    } catch (unsetError) {
+      console.warn(
+        `addWorktree: failed to unset stale ${configKey} for ${worktreePath}`,
+        unsetError
+      )
+    }
+  }
+}
+
+async function unsetWorktreeCreationBase(worktreePath: string, branch: string): Promise<void> {
+  try {
+    await gitExecFileAsync(['config', '--local', '--unset-all', `branch.${branch}.base`], {
+      cwd: worktreePath
+    })
+  } catch {
+    // Best-effort cleanup; missing keys and locked config both leave the
+    // original sparse setup error as the actionable failure.
+  }
 }
 
 function areWorktreePathsEqual(
@@ -154,15 +196,94 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
   }
 }
 
+async function refreshLocalBaseRefForWorktreeCreate(
+  repoPath: string,
+  baseBranch: string,
+  remoteTrackingRef: string
+): Promise<LocalBaseRefRefreshResult | undefined> {
+  const remoteRefPrefix = 'refs/remotes/'
+  if (!remoteTrackingRef.startsWith(remoteRefPrefix)) {
+    return undefined
+  }
+
+  // Why: Only refs proven to be remote-tracking refs get refresh status.
+  // Local branches can contain slashes (e.g. release/2026) and must not
+  // produce a fake "Local 2026 was not refreshed" warning.
+  const shortRemoteRef = remoteTrackingRef.slice(remoteRefPrefix.length)
+  const slashIndex = shortRemoteRef.indexOf('/')
+  if (slashIndex <= 0) {
+    return undefined
+  }
+
+  const localBranch = shortRemoteRef.slice(slashIndex + 1)
+  const fullRef = `refs/heads/${localBranch}`
+  const resultBase = { baseRef: baseBranch, localBranch }
+
+  try {
+    // Why: We only fast-forward the local branch pointer. A force-move (`branch -f`)
+    // would silently destroy unpushed local commits if the branch has diverged from
+    // remote. `merge-base --is-ancestor` returns exit 0 when localBranch is an
+    // ancestor of baseBranch — i.e. the update is a safe fast-forward.
+    await gitExecFileAsync(['merge-base', '--is-ancestor', localBranch, remoteTrackingRef], {
+      cwd: repoPath
+    })
+  } catch {
+    // merge-base fails if the local branch doesn't exist or has diverged.
+    return { ...resultBase, status: 'skipped_not_fast_forward' }
+  }
+
+  try {
+    // Why: We need to find which worktree (if any) has localBranch checked
+    // out, because moving the ref without updating that worktree's files would
+    // leave it looking massively dirty. A sibling worktree we don't control is
+    // just as vulnerable as the primary one.
+    const { stdout: worktreeListOutput } = await gitExecFileAsync(
+      ['worktree', 'list', '--porcelain'],
+      { cwd: repoPath }
+    )
+    const worktrees = parseWorktreeList(translateWslOutputPaths(worktreeListOutput, repoPath))
+    const ownerWorktree = worktrees.find((wt) => wt.branch === fullRef)
+
+    if (ownerWorktree) {
+      // Why: localBranch is checked out in a worktree. We can only safely
+      // update if that worktree is clean, and we must use `reset --hard`
+      // (run inside that worktree) so the files move with the ref.
+      const { stdout: status } = await gitExecFileAsync(
+        ['status', '--porcelain', '--untracked-files=no'],
+        { cwd: ownerWorktree.path }
+      )
+      if (status.trim()) {
+        return {
+          ...resultBase,
+          status: 'skipped_dirty_worktree',
+          ownerWorktreePath: ownerWorktree.path
+        }
+      }
+      await gitExecFileAsync(['reset', '--hard', remoteTrackingRef], { cwd: ownerWorktree.path })
+      return { ...resultBase, status: 'updated', ownerWorktreePath: ownerWorktree.path }
+    }
+
+    // Why: localBranch is not checked out anywhere, so there is no working
+    // tree to desync. `update-ref` is safe here.
+    await gitExecFileAsync(['update-ref', fullRef, remoteTrackingRef], { cwd: repoPath })
+    return { ...resultBase, status: 'updated' }
+  } catch {
+    // update-ref/reset can fail on locked refs, filesystem errors, or unusual
+    // worktree states. Worktree creation should still proceed.
+    return { ...resultBase, status: 'skipped_error' }
+  }
+}
+
 /**
  * Create a new worktree.
  * @param repoPath - Path to the main repo (or bare repo)
  * @param worktreePath - Absolute path where the worktree will be created
  * @param branch - Branch name for the new worktree
  * @param baseBranch - Optional base branch to create from (defaults to HEAD)
- * @remarks Side effect: passes `--no-track` and may write `push.autoSetupRemote=true`
- * to the repo's shared config (best-effort, warn-only on failure; preserves any
- * user-set value at any scope). See body comment below for the full rationale.
+ * @remarks Side effect: passes `--no-track`, writes `branch.<branch>.base`
+ * for new-branch worktrees with a base ref, and may write
+ * `push.autoSetupRemote=true` to the repo's shared config. Config writes are
+ * best-effort and warn-only. See body comments below for the full rationale.
  */
 export async function addWorktree(
   repoPath: string,
@@ -172,62 +293,10 @@ export async function addWorktree(
   refreshLocalBaseRef = false,
   noCheckout = false,
   options: { checkoutExistingBranch?: boolean } = {}
-): Promise<void> {
-  // Why: Some users want Orca-created worktrees to make plain commands like
-  // `git diff main...HEAD` work out of the box, while others do not want
-  // worktree creation to mutate their local main/master ref at all. Keep this
-  // behavior behind an explicit setting so the default stays conservative.
-  if (baseBranch && refreshLocalBaseRef && !options.checkoutExistingBranch) {
-    // Why: We split on '/' instead of matching a hardcoded 'origin/' prefix because
-    // callers may pass arbitrary remotes (e.g. 'upstream/main'), not just 'origin'.
-    const slashIndex = baseBranch.indexOf('/')
-    if (slashIndex > 0) {
-      const localBranch = baseBranch.slice(slashIndex + 1)
-      try {
-        // Why: We only fast-forward the local branch pointer. A force-move (`branch -f`)
-        // would silently destroy unpushed local commits if the branch has diverged from
-        // remote. `merge-base --is-ancestor` returns exit 0 when localBranch is an
-        // ancestor of baseBranch — i.e. the update is a safe fast-forward.
-        await gitExecFileAsync(['merge-base', '--is-ancestor', localBranch, baseBranch], {
-          cwd: repoPath
-        })
-        // Why: We need to find which worktree (if any) has localBranch checked
-        // out, because moving the ref without updating that worktree's files would
-        // leave it looking massively dirty. A sibling worktree we don't control is
-        // just as vulnerable as the primary one.
-        const { stdout: worktreeListOutput } = await gitExecFileAsync(
-          ['worktree', 'list', '--porcelain'],
-          { cwd: repoPath }
-        )
-        const worktrees = parseWorktreeList(translateWslOutputPaths(worktreeListOutput, repoPath))
-        const fullRef = `refs/heads/${localBranch}`
-        const ownerWorktree = worktrees.find((wt) => wt.branch === fullRef)
-
-        if (ownerWorktree) {
-          // Why: localBranch is checked out in a worktree. We can only safely
-          // update if that worktree is clean, and we must use `reset --hard`
-          // (run inside that worktree) so the files move with the ref.
-          const { stdout: status } = await gitExecFileAsync(
-            ['status', '--porcelain', '--untracked-files=no'],
-            { cwd: ownerWorktree.path }
-          )
-          if (!status.trim()) {
-            await gitExecFileAsync(['reset', '--hard', baseBranch], { cwd: ownerWorktree.path })
-          }
-        } else {
-          // Why: localBranch is not checked out anywhere, so there is no working
-          // tree to desync. `update-ref` is safe here.
-          await gitExecFileAsync(['update-ref', fullRef, baseBranch], { cwd: repoPath })
-        }
-      } catch {
-        // merge-base fails if the local branch doesn't exist or has diverged;
-        // update-ref fails on locked/corrupted refs or filesystem errors.
-        // Both cases are non-fatal — skip the update silently.
-      }
-    }
-  }
-
+): Promise<AddWorktreeResult> {
+  let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   const args = ['worktree', 'add']
+  let effectiveBase: string | undefined
   if (noCheckout) {
     args.push('--no-checkout')
   }
@@ -242,19 +311,34 @@ export async function addWorktree(
     // below for the terminal ergonomics.
     args.push('--no-track', '-b', branch, worktreePath)
     if (baseBranch) {
-      const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
+      effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
         hasWorktreeBaseCommitRef(repoPath, qualifiedRef)
       )
+      // Why: resolving the creation base first distinguishes real
+      // remote-tracking refs from slash-containing local branch names.
+      // The mutation stays behind the explicit setting so the default
+      // remains conservative.
+      if (refreshLocalBaseRef) {
+        localBaseRefRefresh = await refreshLocalBaseRefForWorktreeCreate(
+          repoPath,
+          baseBranch,
+          effectiveBase
+        )
+      }
       args.push(effectiveBase)
     }
   }
   await gitExecFileAsync(args, { cwd: repoPath })
 
   if (options.checkoutExistingBranch) {
-    return
+    return localBaseRefRefresh ? { localBaseRefRefresh } : {}
   }
 
-  // SSH parity: src/relay/git-handler.ts addWorktree mirrors this exact
+  if (effectiveBase) {
+    await persistWorktreeCreationBase(worktreePath, branch, effectiveBase)
+  }
+
+  // SSH parity: src/relay/git-handler-worktree-ops.ts addWorktreeOp mirrors this exact
   // probe-and-write state machine. If you change the logic here, update
   // the relay handler in lockstep so local and SSH paths stay aligned.
   //
@@ -310,6 +394,7 @@ export async function addWorktree(
   } catch (error) {
     console.warn(`addWorktree: failed to set push.autoSetupRemote for ${worktreePath}`, error)
   }
+  return localBaseRefRefresh ? { localBaseRefRefresh } : {}
 }
 
 export async function addSparseWorktree(
@@ -320,10 +405,11 @@ export async function addSparseWorktree(
   baseBranch?: string,
   refreshLocalBaseRef = false,
   options: { checkoutExistingBranch?: boolean } = {}
-): Promise<void> {
+): Promise<AddWorktreeResult> {
   let created = false
+  let addResult: AddWorktreeResult = {}
   try {
-    await addWorktree(
+    addResult = await addWorktree(
       repoPath,
       worktreePath,
       branch,
@@ -336,10 +422,14 @@ export async function addSparseWorktree(
     await gitExecFileAsync(['sparse-checkout', 'init', '--cone'], { cwd: worktreePath })
     await gitExecFileAsync(['sparse-checkout', 'set', '--', ...directories], { cwd: worktreePath })
     await gitExecFileAsync(['checkout', branch], { cwd: worktreePath })
+    return addResult
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =
       error instanceof Error ? (error as SparseWorktreeCreateError) : new Error(String(error))
     if (created) {
+      if (!options.checkoutExistingBranch) {
+        await unsetWorktreeCreationBase(worktreePath, branch)
+      }
       try {
         await removeWorktree(repoPath, worktreePath, true, {
           deleteBranch: !options.checkoutExistingBranch

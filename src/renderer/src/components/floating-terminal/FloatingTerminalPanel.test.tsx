@@ -482,6 +482,35 @@ async function renderPanel(open: boolean, onOpenChange = vi.fn()): Promise<unkno
   return FloatingTerminalPanel({ open, onOpenChange })
 }
 
+function makeMacShortcutKeyEvent({
+  key,
+  preventDefault = vi.fn(),
+  shiftKey = false,
+  target
+}: {
+  key: string
+  preventDefault?: () => void
+  shiftKey?: boolean
+  target: unknown
+}): unknown {
+  const nativeEvent = {
+    altKey: false,
+    code: `Key${key.toUpperCase()}`,
+    ctrlKey: false,
+    key,
+    metaKey: true,
+    shiftKey,
+    target: target as EventTarget
+  }
+  return {
+    ...nativeEvent,
+    defaultPrevented: false,
+    nativeEvent,
+    preventDefault,
+    repeat: false
+  }
+}
+
 describe('FloatingTerminalPanel close behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -616,17 +645,13 @@ describe('FloatingTerminalPanel close behavior', () => {
     Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
     const preventDefault = vi.fn()
 
-    ;(panel.props.onKeyDownCapture as (event: unknown) => void)({
-      altKey: false,
-      ctrlKey: false,
-      defaultPrevented: false,
-      key: 't',
-      metaKey: true,
-      preventDefault,
-      repeat: false,
-      shiftKey: false,
-      target: titlebarTarget
-    })
+    ;(panel.props.onKeyDownCapture as (event: unknown) => void)(
+      makeMacShortcutKeyEvent({
+        key: 't',
+        preventDefault,
+        target: titlebarTarget
+      })
+    )
     await flushAsyncWork()
 
     expect(preventDefault).toHaveBeenCalledWith()
@@ -649,17 +674,14 @@ describe('FloatingTerminalPanel close behavior', () => {
     Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
     const preventDefault = vi.fn()
 
-    ;(panel.props.onKeyDownCapture as (event: unknown) => void)({
-      altKey: false,
-      ctrlKey: false,
-      defaultPrevented: false,
-      key: 'o',
-      metaKey: true,
-      preventDefault,
-      repeat: false,
-      shiftKey: true,
-      target: titlebarTarget
-    })
+    ;(panel.props.onKeyDownCapture as (event: unknown) => void)(
+      makeMacShortcutKeyEvent({
+        key: 'o',
+        preventDefault,
+        shiftKey: true,
+        target: titlebarTarget
+      })
+    )
     await flushAsyncWork()
 
     expect(preventDefault).toHaveBeenCalledWith()
@@ -868,17 +890,13 @@ describe('FloatingTerminalPanel close behavior', () => {
     }
     Object.setPrototypeOf(emptyStateTarget, HTMLElement.prototype)
 
-    ;(panel.props.onKeyDownCapture as (event: unknown) => void)({
-      altKey: false,
-      ctrlKey: false,
-      defaultPrevented: false,
-      key: 'w',
-      metaKey: true,
-      preventDefault: vi.fn(),
-      repeat: false,
-      shiftKey: false,
-      target: emptyStateTarget
-    })
+    ;(panel.props.onKeyDownCapture as (event: unknown) => void)(
+      makeMacShortcutKeyEvent({
+        key: 'w',
+        preventDefault: vi.fn(),
+        target: emptyStateTarget
+      })
+    )
 
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(mocks.closeTab).not.toHaveBeenCalled()

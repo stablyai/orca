@@ -9,6 +9,7 @@ import { join } from 'path'
 let eventHandlers: Map<string, (...args: unknown[]) => void>
 let connectBehavior: 'ready' | 'error' = 'ready'
 let connectErrorMessage = ''
+let destroyErrorMessage = ''
 let connectSequence: ('ready' | Error)[] = []
 
 type MockSshClient = {
@@ -35,6 +36,11 @@ vi.mock('ssh2', () => {
     on(event: string, handler: (...args: unknown[]) => void) {
       eventHandlers?.set(event, handler)
     }
+    off(event: string, handler: (...args: unknown[]) => void) {
+      if (eventHandlers?.get(event) === handler) {
+        eventHandlers.delete(event)
+      }
+    }
     connect(config?: unknown) {
       this.lastConnectConfig = config
       setTimeout(() => {
@@ -55,7 +61,17 @@ vi.mock('ssh2', () => {
       }, 0)
     }
     end() {}
-    destroy() {}
+    destroy() {
+      if (!destroyErrorMessage) {
+        return
+      }
+      const handler = eventHandlers?.get('error')
+      if (handler) {
+        handler(new Error(destroyErrorMessage))
+        return
+      }
+      throw new Error(destroyErrorMessage)
+    }
     exec(cmd: string, cb: (err: Error | undefined, channel: unknown) => void) {
       this.lastExecCommand = cmd
       cb(undefined, {})
@@ -146,6 +162,7 @@ describe('SshConnection', () => {
     eventHandlers = new Map()
     connectBehavior = 'ready'
     connectErrorMessage = ''
+    destroyErrorMessage = ''
     connectSequence = []
     clientInstances = []
     spawnSystemSshCommandMock.mockReset()
@@ -176,6 +193,16 @@ describe('SshConnection', () => {
     expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
   })
 
+  it('removes startup listeners after ssh2 connect succeeds', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+
+    await conn.connect()
+
+    expect(eventHandlers.has('ready')).toBe(false)
+    // The remaining error listener is the steady-state disconnect handler.
+    expect(eventHandlers.has('error')).toBe(true)
+  })
+
   it('enables TCP_NODELAY on the new ssh2 client after a reconnect cycle', async () => {
     // Why: guards the "Nagle is re-enabled because someone refactored only
     // the initial connect path" regression class. attemptConnect bumps
@@ -201,6 +228,23 @@ describe('SshConnection', () => {
     expect(clientInstances[1].setNoDelay).toHaveBeenCalledWith(true)
   })
 
+  it('forces a fresh SSH connection for an explicit reconnect', async () => {
+    const states: string[] = []
+    const conn = new SshConnection(
+      createTarget(),
+      createCallbacks({
+        onStateChange: vi.fn((_id, state) => states.push(state.status))
+      })
+    )
+    await conn.connect()
+
+    await conn.reconnect()
+
+    expect(clientInstances).toHaveLength(2)
+    expect(states).toEqual(['connecting', 'connected', 'reconnecting', 'connecting', 'connected'])
+    expect(conn.getState().status).toBe('connected')
+  })
+
   it('transitions through connecting → connected states', async () => {
     const states: string[] = []
     const callbacks = createCallbacks({
@@ -222,6 +266,18 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget(), callbacks)
 
     await expect(conn.connect()).rejects.toThrow('Connection refused')
+    expect(conn.getState().status).toBe('error')
+  })
+
+  it('guards late ssh2 errors emitted while destroying a failed startup client', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'Connection lost before handshake'
+    destroyErrorMessage = 'Connection lost before handshake'
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget(), callbacks)
+
+    await expect(conn.connect()).rejects.toThrow('Connection lost before handshake')
+
     expect(conn.getState().status).toBe('error')
   })
 

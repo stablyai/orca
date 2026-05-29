@@ -68,7 +68,11 @@ import {
   formatAutomationTokens,
   summarizeAutomationRunUsage
 } from './automation-usage-model'
-import { getAutomationRunViewState } from './automation-run-view-state'
+import {
+  canRerunAutomationRun,
+  getAutomationRerunPendingRemainingMs,
+  getAutomationRunViewState
+} from './automation-run-view-state'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { AutomationDetail } from './AutomationDetail'
@@ -220,6 +224,14 @@ function isMissingExternalRunsApiError(error: unknown): boolean {
   return /listExternalRuns|automations:listExternalRuns|No handler registered/i.test(message)
 }
 
+async function waitForAutomationRerunPendingVisibility(pendingStartedAt: number): Promise<void> {
+  const remainingMs = getAutomationRerunPendingRemainingMs({ pendingStartedAt })
+  if (remainingMs <= 0) {
+    return
+  }
+  await new Promise<void>((resolve) => window.setTimeout(resolve, remainingMs))
+}
+
 export default function AutomationsPage(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -252,6 +264,9 @@ export default function AutomationsPage(): React.JSX.Element {
   }>({ automationId: null, runs: [] })
   const [externalManagers, setExternalManagers] = useState<ExternalAutomationManager[]>([])
   const [externalActionKey, setExternalActionKey] = useState<string | null>(null)
+  const [rerunRunIdsInFlight, setRerunRunIdsInFlight] = useState<ReadonlySet<string>>(
+    () => new Set()
+  )
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -282,6 +297,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const editRequestRef = useRef(0)
   const deleteConfirmButtonRef = useRef<HTMLButtonElement>(null)
   const completionInFlightRef = useRef<Set<string>>(new Set())
+  const rerunRunIdsInFlightRef = useRef<Set<string>>(new Set())
   const workspaceNameCacheRef = useRef<Map<string, string>>(new Map())
   const [draft, setDraft] = useState<AutomationDraft>({
     name: '',
@@ -417,6 +433,11 @@ export default function AutomationsPage(): React.JSX.Element {
           : false
       })
     : null
+  const canRerunSelectedAutomationRunPage =
+    selectedAutomationRunPage !== null &&
+    canRerunAutomationRun({ automation: selected, run: selectedAutomationRunPage })
+  const isSelectedAutomationRunPageRerunPending =
+    selectedAutomationRunPage !== null && rerunRunIdsInFlight.has(selectedAutomationRunPage.id)
   const selectedRepo = selected ? (repoMap.get(selected.projectId) ?? null) : null
   const selectedWorktree =
     selected && selected.workspaceId ? (worktreeMap.get(selected.workspaceId) ?? null) : null
@@ -498,6 +519,10 @@ export default function AutomationsPage(): React.JSX.Element {
       setIsLoading(false)
     }
   }, [setSelectedId])
+
+  const hydratePersistedUIState = useCallback(async (): Promise<void> => {
+    useAppStore.getState().hydratePersistedUI(await window.api.ui.get())
+  }, [])
 
   useEffect(() => {
     void fetchAllWorktrees()
@@ -882,6 +907,9 @@ export default function AutomationsPage(): React.JSX.Element {
               jobId: editingExternalTarget.job.id
             })
           : window.api.automations.createExternal(input))
+        if (!editingExternalTarget) {
+          useAppStore.getState().recordFeatureInteraction('automation-created')
+        }
         await refresh()
         setCreateOpen(false)
         setEditingExternalTarget(null)
@@ -957,6 +985,9 @@ export default function AutomationsPage(): React.JSX.Element {
             dtstart: now,
             missedRunGraceMinutes
           })
+      if (!editingAutomationId) {
+        await hydratePersistedUIState()
+      }
       setAutomations((current) => {
         const next = current.filter((entry) => entry.id !== automation.id)
         return [...next, automation].sort((left, right) => left.name.localeCompare(right.name))
@@ -1032,8 +1063,34 @@ export default function AutomationsPage(): React.JSX.Element {
 
   const runNow = async (automation: Automation): Promise<void> => {
     await window.api.automations.runNow({ id: automation.id })
+    await hydratePersistedUIState()
     await refresh()
     toast.message('Automation run queued.')
+  }
+
+  const rerunAutomationRun = async (automation: Automation, run: AutomationRun): Promise<void> => {
+    const automationId = automation.id
+    const runId = run.id
+    if (rerunRunIdsInFlightRef.current.has(runId)) {
+      return
+    }
+    const pendingStartedAt = Date.now()
+    rerunRunIdsInFlightRef.current.add(runId)
+    setRerunRunIdsInFlight(new Set(rerunRunIdsInFlightRef.current))
+    try {
+      await window.api.automations.runNow({ id: automationId })
+      await hydratePersistedUIState()
+      await refresh()
+      toast.message('Automation run queued.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to rerun automation.')
+      await refresh()
+    } finally {
+      // Why: fast skipped/failed reruns can settle before users or validation can see the guard.
+      await waitForAutomationRerunPendingVisibility(pendingStartedAt)
+      rerunRunIdsInFlightRef.current.delete(runId)
+      setRerunRunIdsInFlight(new Set(rerunRunIdsInFlightRef.current))
+    }
   }
 
   const runExternalAction = async (
@@ -1051,6 +1108,9 @@ export default function AutomationsPage(): React.JSX.Element {
         jobId: job.id,
         action
       })
+      if (action === 'run') {
+        useAppStore.getState().recordFeatureInteraction('automation-run')
+      }
       await refresh()
       toast.success(
         action === 'delete'
@@ -1858,18 +1918,39 @@ export default function AutomationsPage(): React.JSX.Element {
                     statusLabel={getAutomationRunStatusLabel(selectedAutomationRunPage.status)}
                     statusVariant={getAutomationRunStatusVariant(selectedAutomationRunPage.status)}
                     actions={
-                      selectedAutomationRunPageViewState ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={!selectedAutomationRunPageViewState.canOpen}
-                          onClick={() => openRunWorkspace(selectedAutomationRunPage)}
-                        >
-                          <Eye className="size-3.5" />
-                          {selectedAutomationRunPageViewState.actionLabel}
-                        </Button>
-                      ) : null
+                      <>
+                        {canRerunSelectedAutomationRunPage && selected ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isSelectedAutomationRunPageRerunPending}
+                            onClick={() =>
+                              void rerunAutomationRun(selected, selectedAutomationRunPage)
+                            }
+                          >
+                            <RefreshCw
+                              className={cn(
+                                'size-3.5',
+                                isSelectedAutomationRunPageRerunPending && 'animate-spin'
+                              )}
+                            />
+                            Rerun
+                          </Button>
+                        ) : null}
+                        {selectedAutomationRunPageViewState ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={!selectedAutomationRunPageViewState.canOpen}
+                            onClick={() => openRunWorkspace(selectedAutomationRunPage)}
+                          >
+                            <Eye className="size-3.5" />
+                            {selectedAutomationRunPageViewState.actionLabel}
+                          </Button>
+                        ) : null}
+                      </>
                     }
                     onBack={() => setSelectedAutomationRunPageId(null)}
                   >

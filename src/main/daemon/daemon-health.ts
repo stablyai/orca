@@ -5,9 +5,16 @@ import { existsSync, readFileSync, unlinkSync } from 'fs'
 import { connect, type Socket } from 'net'
 import { encodeNdjson } from './ndjson'
 import { getDaemonPidPath } from './daemon-spawner'
-import { PROTOCOL_VERSION, type HelloMessage, type HelloResponse } from './types'
+import {
+  PROTOCOL_VERSION,
+  type HelloMessage,
+  type HelloResponse,
+  type SystemResolverHealth,
+  type SystemResolverHealthResult
+} from './types'
 
 const HEALTH_CHECK_TIMEOUT_MS = 3_000
+const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
 const KILL_WAIT_MS = 3_000
 const KILL_POLL_MS = 100
 const START_TIME_TOLERANCE_MS = 1_500
@@ -118,6 +125,109 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
 
         if (message.id === 'health-1') {
           settle(Boolean(message.ok))
+          return
+        }
+      }
+    })
+  })
+}
+
+function isSystemResolverHealth(value: unknown): value is SystemResolverHealth {
+  return value === 'healthy' || value === 'unhealthy' || value === 'unknown'
+}
+
+export function getMacDaemonSystemResolverHealth(
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion = PROTOCOL_VERSION
+): Promise<SystemResolverHealth> {
+  if (process.platform !== 'darwin') {
+    return Promise.resolve('unknown')
+  }
+
+  return new Promise((resolve) => {
+    if (!existsSync(socketPath)) {
+      resolve('unknown')
+      return
+    }
+
+    let token: string
+    try {
+      token = readFileSync(tokenPath, 'utf8').trim()
+    } catch {
+      resolve('unknown')
+      return
+    }
+
+    let settled = false
+    let sock: Socket | null = null
+    const settle = (result: SystemResolverHealth): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      sock?.destroy()
+      resolve(result)
+    }
+    const timer = setTimeout(() => settle('unknown'), RESOLVER_HEALTH_CHECK_TIMEOUT_MS)
+
+    sock = connect({ path: socketPath })
+    sock.on('error', () => settle('unknown'))
+    sock.on('connect', () => {
+      const hello: HelloMessage = {
+        type: 'hello',
+        version: protocolVersion,
+        token,
+        clientId: 'resolver-health-check',
+        role: 'control'
+      }
+      sock?.write(encodeNdjson(hello))
+    })
+
+    let buffer = ''
+    sock.on('data', (chunk: Buffer) => {
+      if (settled) {
+        return
+      }
+      buffer += chunk.toString()
+      for (;;) {
+        const newlineIdx = buffer.indexOf('\n')
+        if (newlineIdx === -1) {
+          break
+        }
+        const line = buffer.slice(0, newlineIdx)
+        buffer = buffer.slice(newlineIdx + 1)
+        if (!line) {
+          continue
+        }
+
+        let message: Record<string, unknown>
+        try {
+          message = JSON.parse(line) as Record<string, unknown>
+        } catch {
+          settle('unknown')
+          return
+        }
+
+        if (message.type === 'hello') {
+          if (!(message as HelloResponse).ok) {
+            settle('unknown')
+            return
+          }
+          // Why: the daemon must report health from inside its own process;
+          // external launchctl bsexec probes can misclassify healthy PTYs.
+          sock?.write(encodeNdjson({ id: 'resolver-health-1', type: 'systemResolverHealth' }))
+          continue
+        }
+
+        if (message.id === 'resolver-health-1') {
+          if (!message.ok || typeof message.payload !== 'object' || message.payload === null) {
+            settle('unknown')
+            return
+          }
+          const payload = message.payload as Partial<SystemResolverHealthResult>
+          settle(isSystemResolverHealth(payload.health) ? payload.health : 'unknown')
           return
         }
       }

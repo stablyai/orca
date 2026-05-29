@@ -178,6 +178,17 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }, 150)
   })
 
+  ipcMain.handle('app:restart', () => {
+    // Why: the hidden admin restart should mirror the update relaunch path:
+    // schedule a new Orca process, then use the normal quit pipeline so daemon
+    // checkpoints, runtime metadata, and telemetry flush before exit.
+    options.onBeforeRelaunch?.()
+    setTimeout(() => {
+      app.relaunch()
+      app.quit()
+    }, 150)
+  })
+
   ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
     setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)
   })

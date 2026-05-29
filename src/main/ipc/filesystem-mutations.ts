@@ -20,7 +20,7 @@ import type { Store } from '../persistence'
 import { authorizeExternalPath, resolveAuthorizedPath, isENOENT } from './filesystem-auth'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { importExternalPathsSsh } from './filesystem-import-ssh'
-import { assertFileExplorerRenameDestinationAvailable } from '../file-explorer-rename-collision'
+import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 
 /**
  * Re-throw filesystem errors with user-friendly messages.
@@ -109,7 +109,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     ): Promise<void> => {
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.rename(args.oldPath, args.newPath)
+        return provider.renameNoClobber(args.oldPath, args.newPath)
       }
       // Why: rename() operates on directory entries, not file contents. If
       // oldPath is a symlink, we must rename the link itself rather than
@@ -119,7 +119,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // accidentally write into a symlinked destination name.
       const oldPath = await resolveAuthorizedPath(args.oldPath, store, { preserveSymlink: true })
       const newPath = await resolveAuthorizedPath(args.newPath, store, { preserveSymlink: true })
-      await assertFileExplorerRenameDestinationAvailable(oldPath, newPath)
+      await assertNoClobberRenameDestinationAvailable(oldPath, newPath)
       await rename(oldPath, newPath)
     }
   )

@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   countRecordKeysByReference,
+  getScrollTopToRevealBounds,
   resolvePendingSidebarReveal,
+  WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
   shouldAdjustWorktreeSidebarMeasuredRowScroll
 } from './WorktreeList'
 import {
   estimateRenderRowSize,
+  GROUP_HEADER_ROW_HEIGHT,
   getActiveStickyHeaderIndexForScroll
 } from './worktree-list-virtual-rows'
 
@@ -17,6 +20,9 @@ const makeHeaderRow = (key: string) =>
     count: 0,
     tone: 'text-foreground'
   }) as const
+
+const makeScrollContainer = (scrollTop: number, clientHeight: number): HTMLElement =>
+  ({ scrollTop, clientHeight }) as HTMLElement
 
 describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   it('counts record keys once per object reference', () => {
@@ -89,6 +95,68 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
         targetWorktreeStillExists: true
       })
     ).toBe('scroll-and-clear')
+  })
+})
+
+describe('getScrollTopToRevealBounds', () => {
+  it('treats the sticky header as occluding the viewport top', () => {
+    const container = makeScrollContainer(100, 400)
+
+    expect(
+      getScrollTopToRevealBounds(
+        container,
+        {
+          start: 100,
+          end: 216
+        },
+        GROUP_HEADER_ROW_HEIGHT
+      )
+    ).toBe(72)
+  })
+
+  it('includes extra reveal clearance for the highlight ring', () => {
+    const container = makeScrollContainer(100, 400)
+
+    expect(
+      getScrollTopToRevealBounds(
+        container,
+        {
+          start: 100,
+          end: 216
+        },
+        WORKTREE_SIDEBAR_REVEAL_TOP_INSET
+      )
+    ).toBe(66)
+  })
+
+  it('does not scroll when the bounds are below the sticky header', () => {
+    const container = makeScrollContainer(100, 400)
+
+    expect(
+      getScrollTopToRevealBounds(
+        container,
+        {
+          start: 128,
+          end: 244
+        },
+        GROUP_HEADER_ROW_HEIGHT
+      )
+    ).toBeNull()
+  })
+
+  it('keeps the viewport bottom independent of the sticky header inset', () => {
+    const container = makeScrollContainer(100, 400)
+
+    expect(
+      getScrollTopToRevealBounds(
+        container,
+        {
+          start: 430,
+          end: 520
+        },
+        GROUP_HEADER_ROW_HEIGHT
+      )
+    ).toBe(120)
   })
 })
 

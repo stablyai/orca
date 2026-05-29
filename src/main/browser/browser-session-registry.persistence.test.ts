@@ -33,6 +33,7 @@ function installModuleMocks(
     setPermissionCheckHandler: vi.fn(),
     setDisplayMediaRequestHandler: vi.fn(),
     on: vi.fn(),
+    removeListener: vi.fn(),
     clearStorageData: vi.fn().mockResolvedValue(undefined),
     clearCache: vi.fn().mockResolvedValue(undefined)
   }))

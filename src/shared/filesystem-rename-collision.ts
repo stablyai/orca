@@ -28,7 +28,7 @@ function isCaseOnlySameParentRename(oldPath: string, newPath: string): boolean {
   )
 }
 
-export async function assertFileExplorerRenameDestinationAvailable(
+export async function assertNoClobberRenameDestinationAvailable(
   oldPath: string,
   newPath: string
 ): Promise<void> {

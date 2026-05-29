@@ -110,7 +110,13 @@ describe('linear RPC methods', () => {
       'Details',
       'workspace-1',
       undefined,
-      undefined
+      undefined,
+      {
+        assigneeId: undefined,
+        labelIds: undefined,
+        priority: undefined,
+        stateId: undefined
+      }
     )
     expect(runtime.linearCreateIssue).toHaveBeenCalledWith(
       'team-1',
@@ -118,7 +124,13 @@ describe('linear RPC methods', () => {
       undefined,
       'workspace-1',
       'issue-3',
-      'project-1'
+      'project-1',
+      {
+        assigneeId: undefined,
+        labelIds: undefined,
+        priority: undefined,
+        stateId: undefined
+      }
     )
     expect(runtime.linearUpdateIssue).toHaveBeenCalledWith(
       'issue-3',

@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -101,6 +102,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -115,6 +117,8 @@ import {
 } from '@/components/editor/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
 import {
+  abortRuntimeGitMerge,
+  abortRuntimeGitRebase,
   bulkDiscardRuntimeGitPaths,
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
@@ -132,7 +136,11 @@ import {
 } from '@/runtime/runtime-git-client'
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { PullRequestIcon } from './checks-panel-content'
-import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
+import {
+  stripBaseRef,
+  useCreatePullRequestDialogFields,
+  type PullRequestFieldRevisions
+} from './useCreatePullRequestDialogFields'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
 import type { GitHistoryItem } from '../../../../shared/git-history'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
@@ -157,10 +165,28 @@ import {
   isCustomAgentId,
   resolveCommitMessageAgentChoice
 } from '../../../../shared/commit-message-agent-spec'
+import {
+  DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
+  hasConfiguredSourceControlAiInstructions,
+  normalizeSourceControlAiSettings,
+  resolveSourceControlAiForOperation,
+  resolveSourceControlAiPrCreationDefaults
+} from '../../../../shared/source-control-ai'
+import type { SourceControlAiOperation } from '../../../../shared/source-control-ai-types'
+import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
+import { getRuntimeGitScope } from '@/runtime/runtime-git-client'
+import { getRepositorySourceControlAiSectionId } from '@/components/settings/repository-settings-targets'
 import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
 
 export type SourceControlScope = 'all' | 'uncommitted'
-type RemoteActionError = { kind: RemoteOpKind; message: string }
+type AbortConflictOperation = Extract<GitConflictOperation, 'merge' | 'rebase'>
+type AbortActionErrorKind = 'abort_merge' | 'abort_rebase'
+type SourceControlActionError = { kind: RemoteOpKind | AbortActionErrorKind; message: string }
+type SourceControlAiInstructionGuidance = {
+  operation: SourceControlAiOperation
+  repoBacked: boolean
+  onOpenSettings: () => void
+}
 
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
@@ -240,6 +266,7 @@ export type PullRequestGenerationStatus = 'idle' | 'running' | 'canceled' | 'fai
 export type PullRequestGenerationRecord = {
   context: PullRequestGenerationContext
   seed: PullRequestGenerationFields
+  seedFieldRevisions: PullRequestFieldRevisions
   status: PullRequestGenerationStatus
   result: PullRequestGenerationFields | null
   error: string | null
@@ -409,42 +436,31 @@ export function arePullRequestGenerationFieldsEqual(
 
 export function shouldApplyPullRequestGenerationResult({
   record,
-  requestId,
-  currentFields
+  requestId
 }: {
   record: PullRequestGenerationRecord | null | undefined
   requestId: number
-  currentFields: PullRequestGenerationFields
 }): boolean {
-  return (
-    record?.context.requestId === requestId &&
-    record.status === 'running' &&
-    arePullRequestGenerationFieldsEqual(record.seed, currentFields)
-  )
+  return record?.context.requestId === requestId && record.status === 'running'
 }
 
 export function shouldHydratePullRequestGenerationResult({
-  record,
-  currentFields
+  record
 }: {
   record: PullRequestGenerationRecord | null | undefined
-  currentFields: PullRequestGenerationFields
 }): boolean {
-  return (
-    record?.status === 'succeeded' &&
-    record.result !== null &&
-    !record.hydrated &&
-    arePullRequestGenerationFieldsEqual(record.seed, currentFields)
-  )
+  return record?.status === 'succeeded' && record.result !== null && !record.hydrated
 }
 
 export function createRunningPullRequestGenerationRecord(
   context: PullRequestGenerationContext,
-  seed: PullRequestGenerationFields
+  seed: PullRequestGenerationFields,
+  seedFieldRevisions: PullRequestFieldRevisions
 ): PullRequestGenerationRecord {
   return {
     context,
     seed,
+    seedFieldRevisions,
     status: 'running',
     result: null,
     error: null,
@@ -455,25 +471,14 @@ export function createRunningPullRequestGenerationRecord(
 export function resolvePullRequestGenerationSuccess({
   record,
   requestId,
-  currentFields,
   result
 }: {
   record: PullRequestGenerationRecord | null | undefined
   requestId: number
-  currentFields: PullRequestGenerationFields
   result: PullRequestGenerationFields
 }): PullRequestGenerationRecord | null {
   if (!record || record.context.requestId !== requestId || record.status !== 'running') {
     return null
-  }
-  if (!shouldApplyPullRequestGenerationResult({ record, requestId, currentFields })) {
-    return {
-      ...record,
-      status: 'failed',
-      result: null,
-      error: 'Fields changed while generating. Run generate again for a fresh draft.',
-      hydrated: false
-    }
   }
   return {
     ...record,
@@ -925,6 +930,8 @@ function SourceControlInner(): React.JSX.Element {
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const getHostedReviewCreationEligibility = useAppStore(
@@ -1119,7 +1126,7 @@ function SourceControlInner(): React.JSX.Element {
   const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>({})
   const [commitErrors, setCommitErrors] = useState<Record<string, string | null>>({})
   const [remoteActionErrors, setRemoteActionErrors] = useState<
-    Record<string, RemoteActionError | null>
+    Record<string, SourceControlActionError | null>
   >({})
   // Why: keep commit-in-flight state per-worktree. A single boolean would be
   // cleared when the user switched worktrees, letting them double-click Commit
@@ -1128,6 +1135,11 @@ function SourceControlInner(): React.JSX.Element {
   const [commitInFlightByWorktree, setCommitInFlightByWorktree] = useState<Record<string, boolean>>(
     {}
   )
+  const [abortOperationInFlightByWorktree, setAbortOperationInFlightByWorktree] = useState<
+    Record<string, boolean>
+  >({})
+  const isAbortingOperation = abortOperationInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  const confirmAction = useConfirmationDialog()
   const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   // Why: parallel state to commit. Same per-worktree shape so navigating between
   // worktrees mid-generation never silently cancels the in-flight request.
@@ -1149,12 +1161,17 @@ function SourceControlInner(): React.JSX.Element {
   const createPrError = createPrErrors[activeWorktreeId ?? ''] ?? null
   const prGenerationRequestSeqRef = useRef(0)
   const prGenerationInFlightRef = useRef<Record<string, boolean>>({})
-  const prFieldsByGenerationKeyRef = useRef<Record<string, PullRequestGenerationFields>>({})
   const [prGenerationRecords, setPrGenerationRecords] = useState<PullRequestGenerationRecords>({})
-  const commitMessageAi = useAppStore((s) => s.settings?.commitMessageAi)
+  const sourceControlAi = useMemo(() => {
+    const normalized = normalizeSourceControlAiSettings(
+      settings?.sourceControlAi,
+      settings?.commitMessageAi
+    )
+    return settings ? normalized : { ...normalized, enabled: false }
+  }, [settings])
   const effectiveCommitMessageAgentId = useMemo(
-    () => resolveCommitMessageAgentChoice(commitMessageAi?.agentId, settings?.defaultTuiAgent),
-    [commitMessageAi?.agentId, settings?.defaultTuiAgent]
+    () => resolveCommitMessageAgentChoice(sourceControlAi.agentId, settings?.defaultTuiAgent),
+    [sourceControlAi.agentId, settings?.defaultTuiAgent]
   )
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
@@ -1173,6 +1190,62 @@ function SourceControlInner(): React.JSX.Element {
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
+  const sourceControlAiDiscoveryHostKey = useMemo(
+    () =>
+      getCommitMessageModelDiscoveryHostKeyForScope(
+        getRuntimeGitScope(settings, activeRepo?.connectionId)
+      ),
+    [activeRepo?.connectionId, settings]
+  )
+  const resolvedPrCreationDefaults = useMemo(() => {
+    if (!settings) {
+      return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
+    }
+    const resolved = resolveSourceControlAiForOperation({
+      settings,
+      repo: activeRepo ?? null,
+      operation: 'pullRequest',
+      discoveryHostKey: sourceControlAiDiscoveryHostKey,
+      prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
+    })
+    return resolved.ok
+      ? resolved.value.prCreationDefaults
+      : resolveSourceControlAiPrCreationDefaults({
+          settings,
+          repo: activeRepo ?? null,
+          prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
+        })
+  }, [activeRepo, settings, sourceControlAiDiscoveryHostKey])
+  const shouldShowCommitInstructionGuidance =
+    Boolean(settings) &&
+    !hasConfiguredSourceControlAiInstructions({
+      settings: settings!,
+      repo: activeRepo ?? null,
+      operation: 'commitMessage'
+    })
+  const shouldShowPullRequestInstructionGuidance =
+    Boolean(settings) &&
+    !hasConfiguredSourceControlAiInstructions({
+      settings: settings!,
+      repo: activeRepo ?? null,
+      operation: 'pullRequest'
+    })
+  const openSourceControlAiSettings = useCallback((): void => {
+    if (activeRepo) {
+      openSettingsTarget({
+        pane: 'repo',
+        repoId: activeRepo.id,
+        sectionId: getRepositorySourceControlAiSectionId(activeRepo.id)
+      })
+    } else {
+      openSettingsTarget({
+        pane: 'git',
+        repoId: null,
+        sectionId: 'source-control-ai-settings'
+      })
+    }
+    openSettingsPage()
+  }, [activeRepo, openSettingsPage, openSettingsTarget])
   const activePullRequestGenerationKey = getPullRequestGenerationRecordKey({
     worktreeId: activeWorktreeId,
     worktreePath,
@@ -1267,7 +1340,7 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (!activeRepo || isFolder) {
+    if (!isBranchVisible || !activeRepo || isFolder) {
       return
     }
 
@@ -1301,7 +1374,7 @@ function SourceControlInner(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [activeRepo, isFolder])
+  }, [activeRepo, isBranchVisible, isFolder])
 
   const effectiveBaseRef = activeRepo?.worktreeBaseRef ?? defaultBaseRef
   const hasUncommittedEntries = entries.length > 0
@@ -1677,6 +1750,7 @@ function SourceControlInner(): React.JSX.Element {
     setCommitErrors((prev) => pruneRecord(prev))
     setRemoteActionErrors((prev) => pruneRecord(prev))
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
+    setAbortOperationInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateErrors((prev) => pruneRecord(prev))
     setGitHistoryByWorktree((prev) => pruneRecord(prev))
@@ -1832,17 +1906,17 @@ function SourceControlInner(): React.JSX.Element {
     if (generateInFlightRef.current[activeWorktreeId]) {
       return
     }
-    if (!commitMessageAi?.enabled || !effectiveCommitMessageAgentId) {
+    if (!sourceControlAi.enabled || !effectiveCommitMessageAgentId) {
       return
     }
 
     if (isCustomAgentId(effectiveCommitMessageAgentId)) {
-      const command = commitMessageAi.customAgentCommand?.trim() ?? ''
+      const command = sourceControlAi.customAgentCommand?.trim() ?? ''
       if (!command) {
         setGenerateErrors((prev) => ({
           ...prev,
           [activeWorktreeId]:
-            'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
+            'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
         }))
         return
       }
@@ -1884,6 +1958,7 @@ function SourceControlInner(): React.JSX.Element {
         }
         return writeCommitDraftForWorktree(prev, activeWorktreeId, result.message)
       })
+      useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
       setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
     } catch (error) {
       setGenerateErrors((prev) => ({
@@ -1895,7 +1970,7 @@ function SourceControlInner(): React.JSX.Element {
       setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
       generateInFlightRef.current[activeWorktreeId] = false
     }
-  }, [activeWorktreeId, commitMessageAi, effectiveCommitMessageAgentId, worktreePath])
+  }, [activeWorktreeId, effectiveCommitMessageAgentId, sourceControlAi, worktreePath])
 
   const handleCancelGenerate = useCallback((): void => {
     if (!activeWorktreeId || !worktreePath) {
@@ -2013,6 +2088,92 @@ function SourceControlInner(): React.JSX.Element {
     ]
   )
 
+  const handleAbortOperation = useCallback(
+    async (requestedOperation: AbortConflictOperation): Promise<void> => {
+      if (
+        !activeWorktreeId ||
+        !worktreePath ||
+        conflictOperation !== requestedOperation ||
+        isAbortingOperation
+      ) {
+        return
+      }
+
+      const isRebase = requestedOperation === 'rebase'
+      const label = isRebase ? 'rebase' : 'merge'
+      const title = isRebase ? 'Abort rebase?' : 'Abort merge?'
+      const description = isRebase
+        ? 'This cancels the rebase in progress and can discard conflict resolutions made during this rebase.'
+        : 'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
+      const confirmed = await confirmAction({
+        title,
+        description,
+        confirmLabel: `Abort ${label}`,
+        confirmVariant: 'destructive'
+      })
+      if (!confirmed) {
+        return
+      }
+
+      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      setAbortOperationInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+      setRemoteActionErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+      try {
+        const context = {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        }
+        const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
+        await abortGitOperation(context)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : `Failed to abort ${label}`
+        toast.error(`Abort ${label} failed`, { description: message })
+        setRemoteActionErrors((prev) => ({
+          ...prev,
+          [activeWorktreeId]: { kind: isRebase ? 'abort_rebase' : 'abort_merge', message }
+        }))
+      } finally {
+        setAbortOperationInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+        refreshSourceControlAfterRemoteAction({
+          refreshGitStatus: refreshActiveGitStatusAfterMutation,
+          refreshBranchCompare: refreshBranchCompareRef.current,
+          refreshGitHistory: refreshGitHistoryRef.current
+        })
+      }
+    },
+    [
+      activeWorktreeId,
+      confirmAction,
+      conflictOperation,
+      isAbortingOperation,
+      refreshActiveGitStatusAfterMutation,
+      worktreePath
+    ]
+  )
+
+  const handleAbortMerge = useCallback(async (): Promise<void> => {
+    await handleAbortOperation('merge')
+  }, [handleAbortOperation])
+
+  const handleAbortRebase = useCallback(async (): Promise<void> => {
+    await handleAbortOperation('rebase')
+  }, [handleAbortOperation])
+
+  const handleAbortOperationForConflict = useCallback(
+    (operation: GitConflictOperation): void => {
+      if (operation === 'merge') {
+        void handleAbortMerge()
+        return
+      }
+      if (operation === 'rebase') {
+        void handleAbortRebase()
+      }
+    },
+    [handleAbortMerge, handleAbortRebase]
+  )
+
   // Why: compound actions must commit first and only run the follow-up remote
   // op when the commit succeeds. handleCommit's return value carries that
   // signal — a failure leaves commitError populated and short-circuits here
@@ -2089,7 +2250,10 @@ function SourceControlInner(): React.JSX.Element {
   }, [refreshActiveGitStatusAfterMutation])
 
   const handleGeneratePullRequestFieldsForActive = useCallback(
-    async (fields: PullRequestGenerationFields): Promise<void> => {
+    async (
+      fields: PullRequestGenerationFields,
+      fieldRevisions: PullRequestFieldRevisions
+    ): Promise<void> => {
       if (!activeRepo || !activePullRequestGenerationKey || !worktreePath || !branchName) {
         return
       }
@@ -2109,10 +2273,9 @@ function SourceControlInner(): React.JSX.Element {
       }
       const seed = { ...fields }
       prGenerationInFlightRef.current[generationKey] = true
-      prFieldsByGenerationKeyRef.current[generationKey] = seed
       setPrGenerationRecords((prev) => ({
         ...prev,
-        [generationKey]: createRunningPullRequestGenerationRecord(context, seed)
+        [generationKey]: createRunningPullRequestGenerationRecord(context, seed, fieldRevisions)
       }))
 
       try {
@@ -2132,6 +2295,9 @@ function SourceControlInner(): React.JSX.Element {
         )
         if (result.branchChangedByPreparation) {
           await refreshGitStatusAfterPullRequestGeneration(context)
+        }
+        if (result.success) {
+          useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
         }
         setPrGenerationRecords((prev) => {
           const record = prev[generationKey]
@@ -2153,11 +2319,9 @@ function SourceControlInner(): React.JSX.Element {
           if (!record) {
             return prev
           }
-          const currentFields = prFieldsByGenerationKeyRef.current[generationKey] ?? record.seed
           const nextRecord = resolvePullRequestGenerationSuccess({
             record,
             requestId,
-            currentFields,
             result: {
               base: stripBaseRef(result.fields.base),
               title: result.fields.title,
@@ -2272,7 +2436,8 @@ function SourceControlInner(): React.JSX.Element {
     generateDisabled: prGenerateDisabled,
     generateDisabledReason: prGenerateDisabledReason,
     handleGenerate: handleGeneratePullRequestFields,
-    handleCancelGenerate: handleCancelGeneratePullRequestFields
+    handleCancelGenerate: handleCancelGeneratePullRequestFields,
+    applyGeneratedFields: applyGeneratedPullRequestFields
   } = useCreatePullRequestDialogFields({
     open: hostedReviewCreation?.canCreate === true,
     repoId: activeRepo?.id ?? '',
@@ -2282,41 +2447,17 @@ function SourceControlInner(): React.JSX.Element {
     eligibility: hostedReviewCreation,
     settings,
     submitting: isCreatingPr,
+    prCreationDefaults: resolvedPrCreationDefaults,
     onBranchChangedByGeneration: handleBranchChangedByPullRequestGeneration,
     generation: {
       generating: activePullRequestGenerationRecord?.status === 'running',
       generateError: activePullRequestGenerationRecord?.error ?? null,
-      onGenerate: (fields) => {
-        void handleGeneratePullRequestFieldsForActive(fields)
+      onGenerate: (fields, fieldRevisions) => {
+        void handleGeneratePullRequestFieldsForActive(fields, fieldRevisions)
       },
       onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
     }
   })
-
-  useEffect(() => {
-    if (!activePullRequestGenerationKey) {
-      return
-    }
-    if (
-      activePullRequestGenerationRecord?.status === 'succeeded' &&
-      !activePullRequestGenerationRecord.hydrated
-    ) {
-      return
-    }
-    prFieldsByGenerationKeyRef.current[activePullRequestGenerationKey] = {
-      base: prBase,
-      title: prTitle,
-      body: prBody,
-      draft: prDraft
-    }
-  }, [
-    activePullRequestGenerationKey,
-    activePullRequestGenerationRecord,
-    prBase,
-    prBody,
-    prDraft,
-    prTitle
-  ])
 
   useEffect(() => {
     if (
@@ -2328,37 +2469,15 @@ function SourceControlInner(): React.JSX.Element {
     ) {
       return
     }
-    const currentFields = prFieldsByGenerationKeyRef.current[activePullRequestGenerationKey] ?? {
-      base: prBase,
-      title: prTitle,
-      body: prBody,
-      draft: prDraft
-    }
     if (
       !shouldHydratePullRequestGenerationResult({
-        record: activePullRequestGenerationRecord,
-        currentFields
+        record: activePullRequestGenerationRecord
       })
     ) {
-      setPrGenerationRecords((prev) => ({
-        ...prev,
-        [activePullRequestGenerationKey]: {
-          ...activePullRequestGenerationRecord,
-          status: 'failed',
-          error: 'Fields changed while generating. Run generate again for a fresh draft.',
-          hydrated: false
-        }
-      }))
       return
     }
     const result = activePullRequestGenerationRecord.result
-    setPrBase(result.base)
-    setPrBaseQuery('')
-    setPrBaseResults([])
-    setPrTitle(result.title)
-    setPrBody(result.body)
-    setPrDraft(result.draft)
-    prFieldsByGenerationKeyRef.current[activePullRequestGenerationKey] = result
+    applyGeneratedPullRequestFields(result, activePullRequestGenerationRecord.seedFieldRevisions)
     setPrGenerationRecords((prev) => ({
       ...prev,
       [activePullRequestGenerationKey]: {
@@ -2369,16 +2488,7 @@ function SourceControlInner(): React.JSX.Element {
   }, [
     activePullRequestGenerationKey,
     activePullRequestGenerationRecord,
-    prBase,
-    prBody,
-    prDraft,
-    prTitle,
-    setPrBase,
-    setPrBaseQuery,
-    setPrBaseResults,
-    setPrBody,
-    setPrDraft,
-    setPrTitle
+    applyGeneratedPullRequestFields
   ])
 
   useEffect(() => {
@@ -2490,11 +2600,15 @@ function SourceControlInner(): React.JSX.Element {
         title,
         body: prBody,
         draft: prDraft,
-        worktreePath
+        worktreePath,
+        useTemplate: resolvedPrCreationDefaults.useTemplate
       })
 
       if (result.ok) {
         await handlePullRequestCreated(result)
+        if (resolvedPrCreationDefaults.openAfterCreate) {
+          window.api.shell.openUrl(result.url)
+        }
         return
       }
 
@@ -2537,6 +2651,8 @@ function SourceControlInner(): React.JSX.Element {
     prDraft,
     prGenerating,
     prTitle,
+    resolvedPrCreationDefaults.openAfterCreate,
+    resolvedPrCreationDefaults.useTemplate,
     worktreePath
   ])
 
@@ -2557,7 +2673,7 @@ function SourceControlInner(): React.JSX.Element {
       hasMessage: commitMessage.trim().length > 0,
       hasUnresolvedConflicts: unresolvedConflicts.length > 0,
       isCommitting,
-      isRemoteOperationActive,
+      isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
       upstreamStatus: remoteStatus,
       prState: hostedReview?.state ?? null,
       isPRStateLoading: isHostedReviewStateLoading,
@@ -2575,6 +2691,7 @@ function SourceControlInner(): React.JSX.Element {
     hasUnstagedChanges,
     hasPartiallyStagedChanges,
     isCommitting,
+    isAbortingOperation,
     isRemoteOperationActive,
     inFlightRemoteOpKind,
     hostedReviewCreation,
@@ -2596,7 +2713,8 @@ function SourceControlInner(): React.JSX.Element {
         hasMessage: commitMessage.trim().length > 0,
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
         isCommitting,
-        isRemoteOperationActive,
+        isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
+        conflictOperation,
         upstreamStatus: remoteStatus,
         prState: hostedReview?.state ?? null,
         isPRStateLoading: isHostedReviewStateLoading,
@@ -2613,6 +2731,8 @@ function SourceControlInner(): React.JSX.Element {
       hasUnstagedChanges,
       hasPartiallyStagedChanges,
       isCommitting,
+      conflictOperation,
+      isAbortingOperation,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
       hostedReviewCreation,
@@ -2647,6 +2767,12 @@ function SourceControlInner(): React.JSX.Element {
         case 'commit_sync':
           void runCompoundCommitAction('sync')
           return
+        case 'abort_merge':
+          void handleAbortMerge()
+          return
+        case 'abort_rebase':
+          void handleAbortRebase()
+          return
         case 'create_pr':
           void handleCreatePullRequest()
           return
@@ -2673,6 +2799,8 @@ function SourceControlInner(): React.JSX.Element {
     [
       handleCommit,
       handleCreatePullRequest,
+      handleAbortMerge,
+      handleAbortRebase,
       isCreatingPr,
       prGenerating,
       runCompoundCommitAction,
@@ -3926,6 +4054,8 @@ function SourceControlInner(): React.JSX.Element {
                 conflictOperation={conflictOperation}
                 unresolvedCount={unresolvedConflictReviewEntries.length}
                 isResolvingWithAI={isLaunchingConflictAgent}
+                isAbortingOperation={isAbortingOperation}
+                onAbortOperation={handleAbortOperationForConflict}
                 onResolveWithAI={() => {
                   void handleResolveConflictsWithAI()
                 }}
@@ -3949,7 +4079,11 @@ function SourceControlInner(): React.JSX.Element {
               ConflictSummaryCard handles the "has conflicts" case above. */}
           {unresolvedConflictReviewEntries.length === 0 && conflictOperation !== 'unknown' && (
             <div className="px-3 pb-2">
-              <OperationBanner conflictOperation={conflictOperation} />
+              <OperationBanner
+                conflictOperation={conflictOperation}
+                isAbortingOperation={isAbortingOperation}
+                onAbortOperation={handleAbortOperationForConflict}
+              />
             </div>
           )}
 
@@ -4008,6 +4142,15 @@ function SourceControlInner(): React.JSX.Element {
                 generateDisabled={prGenerateDisabled}
                 generateDisabledReason={prGenerateDisabledReason}
                 generateError={prGenerateError}
+                instructionGuidance={
+                  prAiGenerationEnabled && shouldShowPullRequestInstructionGuidance
+                    ? {
+                        operation: 'pullRequest',
+                        repoBacked: Boolean(activeRepo),
+                        onOpenSettings: openSourceControlAiSettings
+                      }
+                    : undefined
+                }
                 createError={createPrError}
                 isCreating={isCreatingPr}
                 primaryAction={primaryAction}
@@ -4028,21 +4171,30 @@ function SourceControlInner(): React.JSX.Element {
                 isFixingCommitFailureWithAI={isLaunchingCommitFailureAgent}
                 groupId={activeGroupId ?? activeWorktreeId}
                 showComposer={!(scope === 'all' && showGenericEmptyState)}
-                aiEnabled={commitMessageAi?.enabled === true}
+                aiEnabled={sourceControlAi.enabled === true}
                 aiAgentConfigured={
-                  commitMessageAi?.enabled === true &&
+                  sourceControlAi.enabled === true &&
                   effectiveCommitMessageAgentId !== null &&
                   // Why: 'custom' is configured only once the user types a command.
                   // Without this guard, Generate would spawn an empty command and
                   // fail with a confusing error.
                   (!isCustomAgentId(effectiveCommitMessageAgentId) ||
-                    (commitMessageAi.customAgentCommand ?? '').trim().length > 0)
+                    (sourceControlAi.customAgentCommand ?? '').trim().length > 0)
                 }
                 isGenerating={isGenerating}
                 generateError={generateError}
+                instructionGuidance={
+                  sourceControlAi.enabled && shouldShowCommitInstructionGuidance
+                    ? {
+                        operation: 'commitMessage',
+                        repoBacked: Boolean(activeRepo),
+                        onOpenSettings: openSourceControlAiSettings
+                      }
+                    : undefined
+                }
                 stagedCount={grouped.staged.length}
                 hasUnresolvedConflicts={unresolvedConflicts.length > 0}
-                isRemoteOperationActive={isRemoteOperationActive}
+                isRemoteOperationActive={isRemoteOperationActive || isAbortingOperation}
                 inFlightRemoteOpKind={inFlightRemoteOpKind}
                 primaryAction={primaryAction}
                 dropdownItems={dropdownItems}
@@ -4497,6 +4649,7 @@ type PullRequestComposerProps = {
   generateDisabled: boolean
   generateDisabledReason?: string
   generateError: string | null
+  instructionGuidance?: SourceControlAiInstructionGuidance
   createError: string | null
   isCreating: boolean
   primaryAction: PrimaryAction
@@ -4505,6 +4658,51 @@ type PullRequestComposerProps = {
   onCancelGenerate: () => void
   onPrimaryAction: () => void
   onDropdownAction: (kind: DropdownActionKind) => void
+}
+
+function SourceControlAiInstructionGuidanceButton({
+  guidance
+}: {
+  guidance: SourceControlAiInstructionGuidance
+}): React.JSX.Element {
+  const label =
+    guidance.operation === 'commitMessage'
+      ? 'Add commit message instructions'
+      : 'Add pull request instructions'
+  const target = guidance.repoBacked
+    ? 'Repo Settings > Source Control AI'
+    : 'Settings > Git > Source Control AI'
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          aria-label={label}
+          title={label}
+        >
+          <Settings2 className="size-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="left" sideOffset={6} className="w-64 space-y-2 p-3">
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-foreground">{label}</p>
+          <p className="text-[11px] text-muted-foreground">
+            No instructions are configured for this generator. Add them in {target}.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="xs"
+          className="w-full"
+          onClick={guidance.onOpenSettings}
+        >
+          Open settings
+        </Button>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 function PullRequestComposer({
@@ -4527,6 +4725,7 @@ function PullRequestComposer({
   generateDisabled,
   generateDisabledReason,
   generateError,
+  instructionGuidance,
   createError,
   isCreating,
   primaryAction,
@@ -4600,6 +4799,9 @@ function PullRequestComposer({
                 Generate
               </button>
             )
+          ) : null}
+          {instructionGuidance ? (
+            <SourceControlAiInstructionGuidanceButton guidance={instructionGuidance} />
           ) : null}
         </div>
 
@@ -4763,6 +4965,7 @@ function PullRequestComposer({
                     key={entry.kind}
                     disabled={entry.disabled}
                     title={entry.title}
+                    variant={entry.variant}
                     onSelect={(event) => {
                       if (entry.disabled) {
                         event.preventDefault()
@@ -4916,6 +5119,7 @@ type CommitAreaProps = {
   aiAgentConfigured: boolean
   isGenerating: boolean
   generateError: string | null
+  instructionGuidance?: SourceControlAiInstructionGuidance
   stagedCount: number
   hasUnresolvedConflicts: boolean
   isRemoteOperationActive: boolean
@@ -4945,6 +5149,7 @@ export function CommitArea({
   aiAgentConfigured,
   isGenerating,
   generateError,
+  instructionGuidance,
   stagedCount,
   hasUnresolvedConflicts,
   isRemoteOperationActive,
@@ -5056,7 +5261,7 @@ export function CommitArea({
   } else if (isCommitting) {
     generateDisabledReason = 'Commit in progress…'
   } else if (!aiAgentConfigured) {
-    generateDisabledReason = 'Pick an agent in Settings → AI Commit Messages.'
+    generateDisabledReason = 'Pick an agent in Settings -> Git -> Source Control AI.'
   } else if (stagedCount === 0) {
     generateDisabledReason = 'Stage at least one file to generate a message.'
   } else if (hasMessage) {
@@ -5084,7 +5289,7 @@ export function CommitArea({
             // Why: reserve right padding so typed text does not slide under the
             // absolute-positioned Generate icon in the top-right corner.
             className={`mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring ${
-              showGenerate ? 'pr-7' : ''
+              showGenerate ? (instructionGuidance ? 'pr-12' : 'pr-7') : ''
             }`}
           />
           {showGenerate &&
@@ -5112,16 +5317,21 @@ export function CommitArea({
                 </TooltipContent>
               </Tooltip>
             ) : (
-              <button
-                type="button"
-                disabled={isGenerateDisabled}
-                onClick={() => onGenerate()}
-                title={generateDisabledReason ?? 'Generate commit message with AI'}
-                aria-label="Generate commit message with AI"
-                className="absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-              >
-                <Sparkles className="size-3.5" />
-              </button>
+              <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
+                {instructionGuidance ? (
+                  <SourceControlAiInstructionGuidanceButton guidance={instructionGuidance} />
+                ) : null}
+                <button
+                  type="button"
+                  disabled={isGenerateDisabled}
+                  onClick={() => onGenerate()}
+                  title={generateDisabledReason ?? 'Generate commit message with AI'}
+                  aria-label="Generate commit message with AI"
+                  className="inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                >
+                  <Sparkles className="size-3.5" />
+                </button>
+              </div>
             ))}
         </div>
       ) : null}
@@ -5205,6 +5415,7 @@ export function CommitArea({
                       <DropdownMenuItem
                         disabled={entry.disabled}
                         title={entry.title}
+                        variant={entry.variant}
                         className="w-full"
                         onSelect={(event) => {
                           if (entry.disabled) {
@@ -5692,12 +5903,16 @@ export function ConflictSummaryCard({
   conflictOperation,
   unresolvedCount,
   isResolvingWithAI,
+  isAbortingOperation = false,
+  onAbortOperation,
   onResolveWithAI,
   onReview
 }: {
   conflictOperation: GitConflictOperation
   unresolvedCount: number
   isResolvingWithAI: boolean
+  isAbortingOperation?: boolean
+  onAbortOperation?: (operation: GitConflictOperation) => void
   onResolveWithAI: () => void
   onReview: () => void
 }): React.JSX.Element {
@@ -5736,7 +5951,7 @@ export function ConflictSummaryCard({
           {isResolvingWithAI ? (
             <RefreshCw className="size-3.5 animate-spin" />
           ) : (
-            <Sparkle className="size-3.5" />
+            <Sparkles className="size-3.5" />
           )}
           Resolve with AI
         </Button>
@@ -5750,6 +5965,19 @@ export function ConflictSummaryCard({
           <GitMerge className="size-3.5" />
           Review conflicts
         </Button>
+        {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="mt-1.5 h-7 w-full text-xs"
+            disabled={isResolvingWithAI || isAbortingOperation}
+            onClick={() => onAbortOperation(conflictOperation)}
+          >
+            {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
+            {conflictOperation === 'rebase' ? 'Abort rebase' : 'Abort merge'}
+          </Button>
+        ) : null}
       </div>
     </div>
   )
@@ -5760,10 +5988,14 @@ export function ConflictSummaryCard({
 // rebase steps, or after resolving all conflicts but before --continue. The
 // user needs to see the operation state so they know the worktree is mid-rebase
 // and that they should run `git rebase --continue` or `--abort`.
-function OperationBanner({
-  conflictOperation
+export function OperationBanner({
+  conflictOperation,
+  isAbortingOperation = false,
+  onAbortOperation
 }: {
   conflictOperation: GitConflictOperation
+  isAbortingOperation?: boolean
+  onAbortOperation?: (operation: GitConflictOperation) => void
 }): React.JSX.Element {
   const label =
     conflictOperation === 'merge'
@@ -5782,6 +6014,19 @@ function OperationBanner({
         <Icon className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <span className="text-xs font-medium text-foreground">{label}</span>
       </div>
+      {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          className="mt-2 h-7 w-full text-xs"
+          disabled={isAbortingOperation}
+          onClick={() => onAbortOperation(conflictOperation)}
+        >
+          {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
+          {conflictOperation === 'rebase' ? 'Abort rebase' : 'Abort merge'}
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -5919,6 +6164,30 @@ function SourceControlBranchTreeDirectoryRow({
   )
 }
 
+// Why: a compact +added/-removed magnitude lets users gauge change size at a
+// glance. Use git decoration tokens so the source-control sidebar follows the
+// documented light/dark status palette.
+function DiffLineCounts({
+  added,
+  removed
+}: {
+  added?: number
+  removed?: number
+}): React.JSX.Element | null {
+  const hasAdded = typeof added === 'number' && added > 0
+  const hasRemoved = typeof removed === 'number' && removed > 0
+  if (!hasAdded && !hasRemoved) {
+    return null
+  }
+  return (
+    <span className="shrink-0 tabular-nums text-[10px]">
+      {hasAdded && <span style={{ color: 'var(--git-decoration-added)' }}>+{added}</span>}
+      {hasAdded && hasRemoved && <span> </span>}
+      {hasRemoved && <span style={{ color: 'var(--git-decoration-deleted)' }}>-{removed}</span>}
+    </span>
+  )
+}
+
 const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   entryKey,
   entry,
@@ -6046,12 +6315,15 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         {entry.conflictStatus ? (
           <ConflictBadge entry={entry} />
         ) : (
-          <span
-            className="w-4 shrink-0 text-center text-[10px] font-bold"
-            style={{ color: STATUS_COLORS[entry.status] }}
-          >
-            {STATUS_LABELS[entry.status]}
-          </span>
+          <>
+            <DiffLineCounts added={entry.added} removed={entry.removed} />
+            <span
+              className="w-4 shrink-0 text-center text-[10px] font-bold"
+              style={{ color: STATUS_COLORS[entry.status] }}
+            >
+              {STATUS_LABELS[entry.status]}
+            </span>
+          </>
         )}
         <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
           {canDiscard && (
@@ -6191,6 +6463,7 @@ function BranchEntryRow({
             <span className="tabular-nums">{commentCount}</span>
           </span>
         )}
+        <DiffLineCounts added={entry.added} removed={entry.removed} />
         <span
           className="w-4 shrink-0 text-center text-[10px] font-bold"
           style={{ color: STATUS_COLORS[entry.status] }}

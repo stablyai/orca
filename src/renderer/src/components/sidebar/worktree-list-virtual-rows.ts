@@ -2,7 +2,7 @@ import type { VirtualItem } from '@tanstack/react-virtual'
 import type { Row } from './worktree-list-groups'
 import { PINNED_GROUP_KEY } from './worktree-list-groups'
 
-const GROUP_HEADER_ROW_HEIGHT = 28
+export const GROUP_HEADER_ROW_HEIGHT = 28
 const SECONDARY_GROUP_HEADER_TOP_MARGIN = 8
 
 type WorktreeItemRow = Extract<Row, { type: 'item' }>

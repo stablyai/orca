@@ -5,11 +5,14 @@ import { spawn } from 'child_process'
 import type * as ChildProcess from 'child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
+import { sourceControlAiSettingsFromLegacy } from '../../shared/source-control-ai'
+import type { GlobalSettings } from '../../shared/types'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
   discoverCommitMessageModelsLocal,
   discoverCommitMessageModelsRemote,
+  generateBranchNameFromContext,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
@@ -25,6 +28,10 @@ vi.mock('child_process', async (importOriginal) => {
 })
 
 const spawnMock = vi.mocked(spawn)
+
+function syncSourceControlAiFromLegacy(settings: GlobalSettings): void {
+  settings.sourceControlAi = sourceControlAiSettingsFromLegacy(settings.commitMessageAi)
+}
 
 function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
@@ -52,6 +59,7 @@ describe('resolveCommitMessageSettings', () => {
       customPrompt: 'Use Conventional Commits.',
       customAgentCommand: ''
     }
+    settings.sourceControlAi = undefined
 
     const result = resolveCommitMessageSettings(settings)
 
@@ -76,6 +84,7 @@ describe('resolveCommitMessageSettings', () => {
       customPrompt: '',
       customAgentCommand: ''
     }
+    syncSourceControlAiFromLegacy(settings)
 
     const result = resolveCommitMessageSettings(settings)
 
@@ -125,6 +134,7 @@ describe('resolveCommitMessageSettings', () => {
       customPrompt: '',
       customAgentCommand: ''
     }
+    syncSourceControlAiFromLegacy(settings)
 
     const result = resolveCommitMessageSettings(settings)
 
@@ -153,6 +163,7 @@ describe('resolveCommitMessageSettings', () => {
       customPrompt: '',
       customAgentCommand: ''
     }
+    syncSourceControlAiFromLegacy(settings)
 
     const result = resolveCommitMessageSettings(settings, 'ssh:conn-1')
 
@@ -175,6 +186,7 @@ describe('resolveCommitMessageSettings', () => {
       customPrompt: '',
       customAgentCommand: ''
     }
+    syncSourceControlAiFromLegacy(settings)
 
     const result = resolveCommitMessageSettings(settings)
 
@@ -199,6 +211,7 @@ describe('resolveCommitMessageSettings', () => {
       customPrompt: '',
       customAgentCommand: ''
     }
+    syncSourceControlAiFromLegacy(settings)
 
     const result = resolveCommitMessageSettings(settings)
 
@@ -221,6 +234,7 @@ describe('resolveCommitMessageSettings', () => {
       customPrompt: '',
       customAgentCommand: ''
     }
+    syncSourceControlAiFromLegacy(settings)
 
     const result = resolveCommitMessageSettings(settings)
 
@@ -243,10 +257,11 @@ describe('resolveCommitMessageSettings', () => {
       customPrompt: '',
       customAgentCommand: '   '
     }
+    syncSourceControlAiFromLegacy(settings)
 
     expect(resolveCommitMessageSettings(settings)).toEqual({
       ok: false,
-      error: 'Custom command is empty. Add one in Settings -> Git -> AI Commit Messages.'
+      error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
     })
   })
 })
@@ -973,6 +988,93 @@ describe('generateCommitMessageFromContext', () => {
       })
       expect(spawnMock).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('generateBranchNameFromContext', () => {
+  it('sanitizes remote agent output into a short branch slug', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '"Fix/Login Flow now please"\n',
+          stderr: '',
+          exitCode: 0,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: true,
+      slug: 'fix-login-flow-now',
+      agentLabel: 'agent'
+    })
+  })
+
+  it('fails when remote agent output sanitizes to an empty branch slug', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '!!! ___\n',
+          stderr: '',
+          exitCode: 0,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Generated branch name was empty after sanitization.'
+    })
+  })
+
+  it('includes branch-name custom instructions in the generated prompt', async () => {
+    let prompt = ''
+    await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent',
+        customPrompt: 'Prefer auth terminology.'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async (plan) => {
+          prompt = plan.stdinPayload ?? ''
+          return {
+            stdout: 'fix-login-flow\n',
+            stderr: '',
+            exitCode: 0,
+            timedOut: false
+          }
+        }
+      }
+    )
+
+    expect(prompt).toContain('Additional user instructions:')
+    expect(prompt).toContain('Prefer auth terminology.')
   })
 })
 

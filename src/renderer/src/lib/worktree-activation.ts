@@ -1,4 +1,9 @@
-import type { SetupSplitDirection, Worktree, WorktreeSetupLaunch } from '../../../shared/types'
+import type {
+  SetupSplitDirection,
+  TuiAgent,
+  Worktree,
+  WorktreeSetupLaunch
+} from '../../../shared/types'
 import type { EventProps } from '../../../shared/telemetry-events'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { buildSetupRunnerCommand } from './setup-runner'
@@ -37,16 +42,21 @@ type WorktreeActivationStore = {
     worktreeId: string,
     targetGroupId?: string,
     shellOverride?: string,
-    options?: { pendingActivationSpawn?: boolean }
+    options?: { pendingActivationSpawn?: boolean; recordInteraction?: boolean }
   ) => { id: string }
   setActiveTab: (tabId: string) => void
-  setTabCustomTitle: (tabId: string, title: string | null) => void
+  setTabCustomTitle: (
+    tabId: string,
+    title: string | null,
+    opts?: { recordInteraction?: boolean }
+  ) => void
   reconcileWorktreeTabModel: (worktreeId: string) => { renderableTabCount: number }
   queueTabStartupCommand: (
     tabId: string,
     startup: {
       command: string
       env?: Record<string, string>
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       telemetry?: AgentStartedTelemetry
     }
   ) => void
@@ -120,6 +130,7 @@ export function activateAndRevealWorktree(
     startup?: {
       command: string
       env?: Record<string, string>
+      initialAgentStatus?: { agent: TuiAgent; prompt: string }
       telemetry?: AgentStartedTelemetry
     }
     setup?: WorktreeSetupLaunch
@@ -200,7 +211,12 @@ export function activateAndRevealWorktree(
 export function ensureWorktreeHasInitialTerminal(
   store: WorktreeActivationStore,
   worktreeId: string,
-  startup?: { command: string; env?: Record<string, string>; telemetry?: AgentStartedTelemetry },
+  startup?: {
+    command: string
+    env?: Record<string, string>
+    initialAgentStatus?: { agent: TuiAgent; prompt: string }
+    telemetry?: AgentStartedTelemetry
+  },
   setup?: WorktreeSetupLaunch,
   issueCommand?: IssueCommandLaunch
 ): string | null {
@@ -248,7 +264,9 @@ export function ensureWorktreeHasInitialTerminal(
       env: setup.envVars
     }
     if (mode === 'new-tab') {
-      const setupTab = store.createTab(worktreeId)
+      const setupTab = store.createTab(worktreeId, undefined, undefined, {
+        recordInteraction: false
+      })
       // Why: createTab auto-activates the new tab. Revert activation so the
       // user's focus stays on the primary terminal — per the design, the
       // Setup tab runs unattended in the background.
@@ -256,7 +274,7 @@ export function ensureWorktreeHasInitialTerminal(
       // Why: customTitle wins over the auto-generated "Terminal N" label
       // everywhere the tab is rendered (tab bar, switcher, session snapshots),
       // so labeling via customTitle is the single authoritative source.
-      store.setTabCustomTitle(setupTab.id, 'Setup')
+      store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
       store.queueTabStartupCommand(setupTab.id, setupCommand)
     } else {
       store.queueTabSetupSplit(terminalTab.id, {

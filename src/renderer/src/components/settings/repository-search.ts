@@ -55,6 +55,23 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
       ? []
       : [
           {
+            title: 'Source Control AI',
+            description: 'Project-specific source-control generation overrides.',
+            keywords: [
+              repo.displayName,
+              'source control',
+              'ai',
+              'commit message',
+              'pull request',
+              'pr',
+              'branch name',
+              'rename',
+              'model',
+              'prompt',
+              'instructions'
+            ]
+          },
+          {
             title: 'Worktree Symlinks',
             description: 'Paths to symlink from the primary checkout into newly created worktrees.',
             keywords: [

@@ -271,6 +271,40 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('token')
   })
 
+  it('preserves explicit development agent hook endpoint files', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previousEndpoint = process.env.ORCA_AGENT_HOOK_ENDPOINT
+    process.env.ORCA_AGENT_HOOK_ENDPOINT = '/tmp/stale-endpoint.env'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {
+          ORCA_AGENT_HOOK_ENV: 'development',
+          ORCA_AGENT_HOOK_PORT: '1234',
+          ORCA_AGENT_HOOK_TOKEN: 'token',
+          ORCA_AGENT_HOOK_VERSION: '1',
+          ORCA_AGENT_HOOK_ENDPOINT: '/tmp/fresh-endpoint.env'
+        }
+      })
+    } finally {
+      if (previousEndpoint === undefined) {
+        delete process.env.ORCA_AGENT_HOOK_ENDPOINT
+      } else {
+        process.env.ORCA_AGENT_HOOK_ENDPOINT = previousEndpoint
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe('/tmp/fresh-endpoint.env')
+    expect(env.ORCA_AGENT_HOOK_ENV).toBe('development')
+    expect(env.ORCA_AGENT_HOOK_PORT).toBe('1234')
+    expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('token')
+  })
+
   it('forwards write calls', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

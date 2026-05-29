@@ -70,6 +70,7 @@ function mockBrowserManager(
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
     getGuestWebContentsId: vi.fn(() => null),
     ensureWebviewVisible: vi.fn(async () => () => {}),
+    acquireAutomationVisibility: vi.fn(async () => () => {}),
     ...overrides
   } as unknown as BrowserManager
 }
@@ -420,6 +421,55 @@ describe('AgentBrowserBridge', () => {
     expect(snapshotIdx).toBeLessThan(clickIdx)
   })
 
+  it('acquires an automation visibility lease while running snapshot commands', async () => {
+    const lifecycleEvents: string[] = []
+    const restore = vi.fn(() => {
+      lifecycleEvents.push('restore-100')
+    })
+    const acquireAutomationVisibility = vi.fn(async (webContentsId: number) => {
+      lifecycleEvents.push(`acquire-${webContentsId}`)
+      return restore
+    })
+
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(undefined, undefined, {
+        acquireAutomationVisibility
+      })
+    )
+    b.setActiveTab(100)
+
+    let releaseSnapshot: (() => void) | null = null
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        if (args.includes('close')) {
+          cb(null, JSON.stringify({ success: true, data: null }), '')
+          return
+        }
+        if (args.includes('snapshot')) {
+          lifecycleEvents.push('command-snapshot')
+          releaseSnapshot = () => {
+            cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
+          }
+          return
+        }
+        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+      }
+    )
+
+    const snapshot = b.snapshot()
+
+    await vi.waitFor(() => {
+      expect(releaseSnapshot).not.toBeNull()
+    })
+    expect(lifecycleEvents).toEqual(['acquire-100', 'command-snapshot'])
+    expect(restore).not.toHaveBeenCalled()
+
+    releaseSnapshot!()
+
+    await expect(snapshot).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'tree' })
+    expect(lifecycleEvents).toEqual(['acquire-100', 'command-snapshot', 'restore-100'])
+  })
+
   it('serializes screenshot visibility prep across sessions', async () => {
     vi.useFakeTimers()
     try {
@@ -432,8 +482,8 @@ describe('AgentBrowserBridge', () => {
         ['tab-2', 'wt-2']
       ])
       const lifecycleEvents: string[] = []
-      const ensureWebviewVisibleMock = vi.fn(async (webContentsId: number) => {
-        lifecycleEvents.push(`ensure-${webContentsId}`)
+      const acquireAutomationVisibilityMock = vi.fn(async (webContentsId: number) => {
+        lifecycleEvents.push(`acquire-${webContentsId}`)
         return () => {
           lifecycleEvents.push(`restore-${webContentsId}`)
         }
@@ -449,7 +499,7 @@ describe('AgentBrowserBridge', () => {
 
       const b = new AgentBrowserBridge(
         mockBrowserManager(tabs, worktrees, {
-          ensureWebviewVisible: ensureWebviewVisibleMock
+          acquireAutomationVisibility: acquireAutomationVisibilityMock
         })
       )
       b.setActiveTab(1, 'wt-1')
@@ -489,9 +539,9 @@ describe('AgentBrowserBridge', () => {
       await Promise.resolve()
       await vi.advanceTimersByTimeAsync(300)
 
-      expect(lifecycleEvents).toContain('ensure-1')
+      expect(lifecycleEvents).toContain('acquire-1')
       expect(lifecycleEvents).toContain('command-orca-tab-tab-1')
-      expect(lifecycleEvents).not.toContain('ensure-2')
+      expect(lifecycleEvents).not.toContain('acquire-2')
 
       expect(releaseFirstScreenshot).not.toBeNull()
       releaseFirstScreenshot!()
@@ -503,7 +553,9 @@ describe('AgentBrowserBridge', () => {
       await Promise.resolve()
       await Promise.resolve()
 
-      expect(lifecycleEvents.indexOf('restore-1')).toBeLessThan(lifecycleEvents.indexOf('ensure-2'))
+      expect(lifecycleEvents.indexOf('restore-1')).toBeLessThan(
+        lifecycleEvents.indexOf('acquire-2')
+      )
 
       await vi.advanceTimersByTimeAsync(300)
       await expect(second).resolves.toEqual({
@@ -665,7 +717,9 @@ describe('AgentBrowserBridge', () => {
     )
 
     const runningSnapshot = bridge.snapshot()
-    await Promise.resolve()
+    await vi.waitFor(() => {
+      expect(resolveRunningCommand).not.toBeNull()
+    })
 
     const destroyPromise = (
       bridge as unknown as { destroySession: (name: string) => Promise<void> }

@@ -10,6 +10,13 @@ export type GitHubLinkQuery = {
   directNumber: number | null
 }
 
+export function buildGitHubRepoUrl(slug: RepoSlug | null | undefined): string | null {
+  if (!slug?.owner || !slug.repo) {
+    return null
+  }
+  return `https://github.com/${encodeURIComponent(slug.owner)}/${encodeURIComponent(slug.repo)}`
+}
+
 function matchGitHubItemPath(url: URL): RegExpExecArray | null {
   return GH_ITEM_PATH_RE.exec(url.pathname.replace(/\/+$/, ''))
 }
