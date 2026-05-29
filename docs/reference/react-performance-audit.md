@@ -112,7 +112,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3053 | `nwparker/react-perf-low-risk-5`     | Inline workspace-title rename removes inactive draft sync Effect              | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/WorktreeTitleInlineRename.tsx`; `pnpm run typecheck:web`. |
 | #3054 | `nwparker/react-perf-low-risk-6`     | Feature-wall tour removes static substep id repair Effects                    | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx`; `pnpm run typecheck:web`. |
 | #3055 | `nwparker/react-perf-low-risk-7`     | Repo combobox initializes mount-open state without an Effect                  | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/repo/RepoCombobox.tsx`; `pnpm run typecheck:web`.              |
-| #3056 | `nwparker/react-perf-low-risk-8`     | Quick Open clears its query on the open edge without a reset Effect           | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/QuickOpen.tsx`; `pnpm run typecheck:web`.                      |
+| #3056 | `nwparker/react-perf-low-risk-8`     | Quick Open clears its query on the open edge without a reset Effect           | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/QuickOpen.tsx`; `pnpm run typecheck:web`.                      |
 
 ## Reproduction Commands
 
