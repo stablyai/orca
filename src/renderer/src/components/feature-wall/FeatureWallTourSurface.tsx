@@ -94,6 +94,16 @@ export function FeatureWallTourSurface({
   const [reviewStepId, setReviewStepId] = useState<ReviewStepId>(
     () => reviewSteps[0]?.id ?? 'notes'
   )
+  const [previousOpen, setPreviousOpen] = useState(isOpen)
+  if (isOpen !== previousOpen) {
+    setPreviousOpen(isOpen)
+    if (!isOpen) {
+      setSelectedId(DEFAULT_FEATURE_WALL_WORKFLOW_ID)
+      setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
+      setWorkbenchStepId(workbenchSteps[0]?.id ?? 'terminal')
+      setReviewStepId(reviewSteps[0]?.id ?? 'notes')
+    }
+  }
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
   const completion = useFeatureWallCompletion(
@@ -151,31 +161,6 @@ export function FeatureWallTourSurface({
     }
   }, [isOpen, source])
 
-  useEffect(() => {
-    if (!isOpen) {
-      setSelectedId(DEFAULT_FEATURE_WALL_WORKFLOW_ID)
-      setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
-      setWorkbenchStepId(workbenchSteps[0]?.id ?? 'terminal')
-      setReviewStepId(reviewSteps[0]?.id ?? 'notes')
-    }
-  }, [agentsSteps, isOpen, reviewSteps, workbenchSteps])
-
-  useEffect(() => {
-    if (selected.id === 'agents-orchestration') {
-      setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
-    }
-  }, [agentsSteps, selected.id])
-  useEffect(() => {
-    if (selected.id === 'workbench') {
-      setWorkbenchStepId(workbenchSteps[0]?.id ?? 'terminal')
-    }
-  }, [selected.id, workbenchSteps])
-  useEffect(() => {
-    if (selected.id === 'review') {
-      setReviewStepId(reviewSteps[0]?.id ?? 'notes')
-    }
-  }, [reviewSteps, selected.id])
-
   const {
     markWorkflowVisited,
     markAgentStepVisited,
@@ -210,6 +195,13 @@ export function FeatureWallTourSurface({
         return
       }
       setSelectedId(workflow.id)
+      if (workflow.id === 'agents-orchestration') {
+        setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
+      } else if (workflow.id === 'workbench') {
+        setWorkbenchStepId(workbenchSteps[0]?.id ?? 'terminal')
+      } else if (workflow.id === 'review') {
+        setReviewStepId(reviewSteps[0]?.id ?? 'notes')
+      }
       track('feature_wall_group_selected', { group_id: workflow.id, source })
       const tile = getFeatureWallMediaTile(workflow.primaryTileId)
       if (tile) {
@@ -221,7 +213,7 @@ export function FeatureWallTourSurface({
         track('feature_wall_tile_focused', { tile_id: tile.id })
       }
     },
-    [markWorkflowVisited, selectedId, source]
+    [agentsSteps, markWorkflowVisited, reviewSteps, selectedId, source, workbenchSteps]
   )
 
   const handleRailKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
