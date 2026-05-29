@@ -1299,7 +1299,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
       reviewDecision: 'APPROVED',
       mergeStateStatus: 'CLEAN',
       autoMergeRequest: null,
-      baseRefName: 'main',
+      baseRefName: 'true',
       baseRefOid: 'base-oid',
       headRefOid: 'head-oid'
     }
@@ -1324,6 +1324,10 @@ describe('GitHub GraphQL rate-limit guard', () => {
     expect(
       ghExecFileAsyncMock.mock.calls.filter((call) => call[0].includes('graphql'))
     ).toHaveLength(1)
+    expect(ghExecFileAsyncMock.mock.calls[1]?.[0]).toEqual(
+      expect.arrayContaining(['-f', 'owner=stablyai', '-f', 'repo=orca', '-f', 'branch=true'])
+    )
+    expect(ghExecFileAsyncMock.mock.calls[1]?.[0]).not.toContain('-F')
   })
 
   it('caches unknown merge queue probes after GraphQL failures', async () => {

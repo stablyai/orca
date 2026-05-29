@@ -1795,11 +1795,11 @@ async function detectMergeQueueRequired(
         'graphql',
         '-f',
         `query=${query}`,
-        '-F',
+        '-f',
         `owner=${ownerRepo.owner}`,
-        '-F',
+        '-f',
         `repo=${ownerRepo.repo}`,
-        '-F',
+        '-f',
         `branch=${branchName}`
       ],
       ghOptions
