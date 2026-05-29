@@ -1170,11 +1170,7 @@ app.whenReady().then(async () => {
       // Why: these appearance settings are default-on for older profiles, so
       // a missing persisted value must toggle from visible -> hidden.
       const next = getNextDefaultOnAppearanceSettingValue(current[key])
-      store.updateSettings({ [key]: next })
-      // Why: settings:get returns the current snapshot; renderer tracks
-      // settings through window.api.settings.get(). Push the new value so
-      // the sidebar/titlebar re-render without waiting for a round-trip.
-      mainWindow?.webContents.send('settings:changed', { [key]: next })
+      store.updateSettings({ [key]: next }, { notifyListeners: true })
       rebuildAppMenu()
     },
     getAppearanceState: () => {

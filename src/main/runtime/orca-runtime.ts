@@ -470,7 +470,10 @@ type RuntimeStore = {
   // Why: narrow to `unknown` return so test mocks can return void without
   // a cast. The runtime never reads the return value — the persisted value
   // is read back via getSettings() on the next access.
-  updateSettings?: (updates: Partial<GlobalSettings>) => unknown
+  updateSettings?: (
+    updates: Partial<GlobalSettings>,
+    options?: { notifyListeners?: boolean; originWebContentsId?: number }
+  ) => unknown
 }
 
 export type RuntimeAutomationCreateInput = Omit<
@@ -1391,7 +1394,7 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const before = this.store.getSettings().agentStatusHooksEnabled !== false
-    this.store.updateSettings(updates)
+    this.store.updateSettings(updates, { notifyListeners: true })
     if (
       typeof updates.agentStatusHooksEnabled === 'boolean' &&
       before !== updates.agentStatusHooksEnabled
@@ -3688,7 +3691,7 @@ export class OrcaRuntimeService {
         MOBILE_AUTO_RESTORE_FIT_MAX_MS
       )
     }
-    this.store.updateSettings({ mobileAutoRestoreFitMs: normalized })
+    this.store.updateSettings({ mobileAutoRestoreFitMs: normalized }, { notifyListeners: true })
     if (normalized == null) {
       this.cancelAllPendingFitRestoreTimers()
     }
@@ -7368,15 +7371,32 @@ export class OrcaRuntimeService {
     }
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
+    const createSettings = this.store.getSettings()
+    const requestedAgentEnabled =
+      args.createdWithAgent !== undefined
+        ? isTuiAgentEnabled(args.createdWithAgent, createSettings.disabledTuiAgents)
+        : false
+    if (args.startup && args.createdWithAgent && !requestedAgentEnabled) {
+      throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+    }
+    if (
+      args.startup &&
+      args.startupDraftPaste &&
+      !isTuiAgentEnabled(args.startupDraftPaste.agent, createSettings.disabledTuiAgents)
+    ) {
+      throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+    }
     const draftStartup = args.startupDraft
       ? await this.buildStartupForDraft(repo, args.startupDraft, args.createdWithAgent)
       : null
     const effectiveStartup = args.startup ?? draftStartup?.startup
-    const effectiveCreatedWithAgent = args.createdWithAgent ?? draftStartup?.agent
+    const effectiveCreatedWithAgent = args.startup
+      ? args.createdWithAgent
+      : (draftStartup?.agent ?? (requestedAgentEnabled ? args.createdWithAgent : undefined))
     const effectiveDraftPaste = args.startupDraftPaste ?? draftStartup?.draftPaste
     if (isFolderRepo(repo)) {
       const now = Date.now()
-      const settings = this.store.getSettings()
+      const settings = createSettings
       const instanceId = randomUUID()
       const worktreeId = getRuntimeFolderWorkspaceInstanceId(repo, instanceId)
       const meta = this.store.setWorktreeMeta(worktreeId, {
@@ -7475,7 +7495,7 @@ export class OrcaRuntimeService {
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
     const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput)
-    const settings = this.store.getSettings()
+    const settings = createSettings
     const requestedName = args.name
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)

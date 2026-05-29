@@ -511,9 +511,30 @@ export function NewWorktreeModal({
         setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
         return
       }
+      let latestRuntimeSettings = runtimeSettings
+      try {
+        const settingsResponse = await client.sendRequest('settings.get')
+        if (settingsResponse.ok) {
+          const result = (settingsResponse as RpcSuccess).result as { settings: RuntimeSettings }
+          latestRuntimeSettings = result.settings
+          setRuntimeSettings(result.settings)
+        }
+      } catch {
+        // Best-effort refresh; the runtime validates the same setting before spawning.
+      }
+      if (
+        selectedAgent.id !== '__blank__' &&
+        !isMobileTuiAgentEnabled(selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
+      ) {
+        setSelectedAgent(pickPreferredAgent(latestRuntimeSettings, detectedAgentIds))
+        setAgentOverridden(false)
+        setError('Selected agent is disabled. Choose an enabled agent before creating.')
+        return
+      }
+
       const command =
         selectedAgent.id !== '__blank__'
-          ? (runtimeSettings?.agentCmdOverrides?.[selectedAgent.id] ??
+          ? (latestRuntimeSettings?.agentCmdOverrides?.[selectedAgent.id] ??
             (isMobileTuiAgent(selectedAgent.id)
               ? MOBILE_TUI_AGENT_LAUNCH_COMMANDS[selectedAgent.id]
               : undefined))

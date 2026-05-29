@@ -5109,6 +5109,33 @@ export default function MobileTasksScreen() {
           )
         }
         await ensureWorkspaceSshReady(targetRepo)
+        let latestRuntimeTaskSettings = runtimeTaskSettings
+        try {
+          const settingsResponse = await client.sendRequest('settings.get')
+          if (isSuccess(settingsResponse)) {
+            latestRuntimeTaskSettings = ((
+              settingsResponse.result as { settings?: RuntimeTaskSettings }
+            ).settings ?? {}) as RuntimeTaskSettings
+            setRuntimeTaskSettings(latestRuntimeTaskSettings)
+          }
+        } catch {
+          // Best-effort refresh; the runtime still validates agent availability before spawning.
+        }
+        const selectedAgent =
+          agentOverride &&
+          (agentOverride === 'blank' ||
+            isWorkspaceAgentEnabled(agentOverride, latestRuntimeTaskSettings.disabledTuiAgents))
+            ? agentOverride
+            : pickWorkspaceAgent(latestRuntimeTaskSettings, workspaceDetectedAgentIds)
+        if (
+          agentOverride &&
+          agentOverride !== 'blank' &&
+          !isWorkspaceAgentEnabled(agentOverride, latestRuntimeTaskSettings.disabledTuiAgents)
+        ) {
+          setWorkspaceAgent(selectedAgent)
+          setWorkspaceAgentOverridden(false)
+          throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+        }
         const setupResolution = await resolveCreateSetupDecision(targetRepo, setupOverride)
         const comment = noteOverride?.trim()
         if (setupResolution.kind === 'prompt') {
@@ -5162,7 +5189,6 @@ export default function MobileTasksScreen() {
           })
           return
         }
-        const selectedAgent = agentOverride
         let params: Record<string, unknown>
         if (item.provider === 'github') {
           const source = item.source
@@ -5299,9 +5325,11 @@ export default function MobileTasksScreen() {
       hostId,
       resolveCreateSetupDecision,
       router,
+      runtimeTaskSettings,
       taskStateHydrated,
       tasksSupported,
-      trustedOrcaHooks
+      trustedOrcaHooks,
+      workspaceDetectedAgentIds
     ]
   )
 

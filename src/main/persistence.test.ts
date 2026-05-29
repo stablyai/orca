@@ -1769,6 +1769,52 @@ describe('Store', () => {
     expect(updated.branchPrefix).toBe('git-username')
   })
 
+  it('notifies settings listeners with changed keys only', async () => {
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings(
+      {
+        theme: 'dark',
+        disabledTuiAgents: ['codex', 'not-real', 'codex'] as never
+      },
+      { notifyListeners: true, originWebContentsId: 42 }
+    )
+
+    expect(listener).toHaveBeenCalledWith(
+      {
+        theme: 'dark',
+        disabledTuiAgents: ['codex']
+      },
+      expect.objectContaining({
+        theme: 'dark',
+        disabledTuiAgents: ['codex']
+      }),
+      42
+    )
+  })
+
+  it('does not notify settings listeners for unchanged scalar updates', async () => {
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings({ theme: store.getSettings().theme }, { notifyListeners: true })
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('does not notify settings listeners unless requested by the producer', async () => {
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings({ theme: 'dark' })
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('normalizes disabled TUI agents on load and update', async () => {
     writeFileSync(
       join(testState.dir, 'orca-data.json'),

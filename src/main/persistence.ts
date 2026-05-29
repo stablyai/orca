@@ -1268,7 +1268,13 @@ export class Store {
   private writeGeneration = 0
   private gitUsernameCache = new Map<string, string>()
   private loadNeedsSave = false
-  private settingsChangeListeners = new Set<(settings: GlobalSettings) => void>()
+  private settingsChangeListeners = new Set<
+    (
+      updates: Partial<GlobalSettings>,
+      settings: GlobalSettings,
+      originWebContentsId?: number
+    ) => void
+  >()
 
   constructor() {
     const loaded = this.load()
@@ -2628,20 +2634,32 @@ export class Store {
     return this.state.settings
   }
 
-  onSettingsChanged(listener: (settings: GlobalSettings) => void): () => void {
+  onSettingsChanged(
+    listener: (
+      updates: Partial<GlobalSettings>,
+      settings: GlobalSettings,
+      originWebContentsId?: number
+    ) => void
+  ): () => void {
     this.settingsChangeListeners.add(listener)
     return () => {
       this.settingsChangeListeners.delete(listener)
     }
   }
 
-  private notifySettingsChanged(): void {
+  private notifySettingsChanged(
+    updates: Partial<GlobalSettings>,
+    originWebContentsId?: number
+  ): void {
     for (const listener of this.settingsChangeListeners) {
-      listener(this.state.settings)
+      listener(updates, this.state.settings, originWebContentsId)
     }
   }
 
-  updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
+  updateSettings(
+    updates: Partial<GlobalSettings>,
+    options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
+  ): GlobalSettings {
     const sanitizedUpdates = { ...updates }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
@@ -2706,6 +2724,7 @@ export class Store {
         sanitizedUpdates.commitMessageAi
       )
     }
+    const previousSettings = this.state.settings
     this.state.settings = {
       ...this.state.settings,
       ...sanitizedUpdates,
@@ -2716,7 +2735,15 @@ export class Store {
       ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
     }
     this.scheduleSave()
-    this.notifySettingsChanged()
+    const changedUpdates = {} as Partial<GlobalSettings> & Record<string, unknown>
+    for (const key of Object.keys(sanitizedUpdates) as (keyof GlobalSettings)[]) {
+      if (!Object.is(previousSettings[key], this.state.settings[key])) {
+        changedUpdates[String(key)] = this.state.settings[key]
+      }
+    }
+    if (options.notifyListeners === true && Object.keys(changedUpdates).length > 0) {
+      this.notifySettingsChanged(changedUpdates, options.originWebContentsId)
+    }
     return this.state.settings
   }
 

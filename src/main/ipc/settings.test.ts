@@ -18,6 +18,13 @@ vi.mock('../ghostty/index', () => ({
 
 import { registerSettingsHandlers } from './settings'
 
+const settingsInvokeEvent = { sender: { id: 1 } }
+type SettingsChangedListener = (
+  updates: unknown,
+  settings: unknown,
+  originWebContentsId?: number
+) => void
+
 const store = {
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
@@ -65,15 +72,37 @@ describe('registerSettingsHandlers', () => {
     registerSettingsHandlers(store as never)
 
     const onSettingsChanged = store.onSettingsChanged as unknown as {
-      mock: { calls: [(settings: unknown) => void][] }
+      mock: { calls: [SettingsChangedListener][] }
     }
     const listener = onSettingsChanged.mock.calls[0]?.[0]
     if (!listener) {
       throw new Error('settings change listener was not registered')
     }
-    listener({ defaultTuiAgent: 'codex' })
+    listener({ defaultTuiAgent: 'codex' }, { defaultTuiAgent: 'codex' })
 
     expect(send).toHaveBeenCalledWith('settings:changed', { defaultTuiAgent: 'codex' })
+  })
+
+  it('does not rebroadcast renderer settings writes to the origin window', () => {
+    const originSend = vi.fn()
+    const otherSend = vi.fn()
+    browserWindowGetAllWindowsMock.mockReturnValue([
+      { isDestroyed: () => false, webContents: { id: 1, send: originSend } },
+      { isDestroyed: () => false, webContents: { id: 2, send: otherSend } }
+    ])
+    registerSettingsHandlers(store as never)
+
+    const onSettingsChanged = store.onSettingsChanged as unknown as {
+      mock: { calls: [SettingsChangedListener][] }
+    }
+    const listener = onSettingsChanged.mock.calls[0]?.[0]
+    if (!listener) {
+      throw new Error('settings change listener was not registered')
+    }
+    listener({ defaultTuiAgent: 'codex' }, { defaultTuiAgent: 'codex' }, 1)
+
+    expect(originSend).not.toHaveBeenCalled()
+    expect(otherSend).toHaveBeenCalledWith('settings:changed', { defaultTuiAgent: 'codex' })
   })
 
   it('updates the agent awake service when the keep-awake setting changes', () => {
@@ -87,7 +116,7 @@ describe('registerSettingsHandlers', () => {
       args: unknown
     ) => unknown
 
-    handler(null, { keepComputerAwakeWhileAgentsRun: true })
+    handler(settingsInvokeEvent, { keepComputerAwakeWhileAgentsRun: true })
 
     expect(agentAwakeService.setEnabled).toHaveBeenCalledWith(true)
   })
@@ -103,7 +132,7 @@ describe('registerSettingsHandlers', () => {
       args: unknown
     ) => unknown
 
-    handler(null, { defaultTuiAgent: 'codex' })
+    handler(settingsInvokeEvent, { defaultTuiAgent: 'codex' })
 
     expect(agentAwakeService.setEnabled).not.toHaveBeenCalled()
   })
@@ -118,8 +147,11 @@ describe('registerSettingsHandlers', () => {
       args: unknown
     ) => Promise<unknown>
 
-    await handler(null, { floatingTerminalTrustedCwds: ['/tmp/notes'] })
+    await handler(settingsInvokeEvent, { floatingTerminalTrustedCwds: ['/tmp/notes'] })
 
-    expect(store.updateSettings).toHaveBeenCalledWith({})
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {},
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
   })
 })
