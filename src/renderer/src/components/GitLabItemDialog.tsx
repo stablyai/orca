@@ -311,7 +311,17 @@ export default function GitLabItemDialog({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshNonce, setRefreshNonce] = useState(0)
-  const [commentDraft, setCommentDraft] = useState('')
+  const itemId = item?.id ?? null
+  const [commentDraftState, setCommentDraftState] = useState<{
+    itemId: string | null
+    value: string
+  }>(() => ({ itemId, value: '' }))
+  const commentDraft = commentDraftState.itemId === itemId ? commentDraftState.value : ''
+  if (commentDraftState.itemId !== itemId) {
+    // Why: comment drafts are tied to one GitLab item, so switching the sheet
+    // target must not leave a draft that could post to the wrong MR/issue.
+    setCommentDraftState({ itemId, value: '' })
+  }
   const [commentSubmitting, setCommentSubmitting] = useState(false)
   const [resolvingThreadId, setResolvingThreadId] = useState<string | null>(null)
   const [editingDetails, setEditingDetails] = useState(false)
@@ -334,6 +344,12 @@ export default function GitLabItemDialog({
   const [retryingJobId, setRetryingJobId] = useState<number | null>(null)
   const [actionInFlight, setActionInFlight] = useState<'close' | 'reopen' | 'merge' | null>(null)
   const mountedRef = useMountedRef()
+  const updateCommentDraft = useCallback(
+    (value: string): void => {
+      setCommentDraftState({ itemId, value })
+    },
+    [itemId]
+  )
 
   useEffect(() => {
     if (!item || !repoPath) {
@@ -373,10 +389,9 @@ export default function GitLabItemDialog({
     }
   }, [item, repoPath, refreshNonce])
 
-  // Why: clear the comment draft when the sheet target changes so the
-  // user doesn't accidentally post one MR's draft against another.
+  // Why: clear item-scoped dialog state when the sheet target changes. The
+  // top-level comment draft is reconciled during render so it cannot flash stale.
   useEffect(() => {
-    setCommentDraft('')
     setEditingDetails(false)
     setTitleDraft('')
     setBodyDraft('')
@@ -812,7 +827,9 @@ export default function GitLabItemDialog({
           : await window.api.gl.addIssueComment({ repoPath, number: item.number, body })
       if (res.ok) {
         if (mountedRef.current) {
-          setCommentDraft('')
+          setCommentDraftState((current) =>
+            current.itemId === itemId ? { itemId, value: '' } : current
+          )
           handleRefresh()
         }
       } else {
@@ -825,7 +842,7 @@ export default function GitLabItemDialog({
         setCommentSubmitting(false)
       }
     }
-  }, [commentDraft, item, repoPath, mountedRef, handleRefresh])
+  }, [commentDraft, item, itemId, repoPath, mountedRef, handleRefresh])
 
   const handleResolveDiscussion = useCallback(
     async (threadId: string, resolved: boolean): Promise<void> => {
@@ -1391,7 +1408,7 @@ export default function GitLabItemDialog({
               <div className="flex items-end gap-2">
                 <textarea
                   value={commentDraft}
-                  onChange={(e) => setCommentDraft(e.target.value)}
+                  onChange={(e) => updateCommentDraft(e.target.value)}
                   placeholder={`Comment on ${prefix}${item.number}…`}
                   rows={2}
                   disabled={commentSubmitting}
