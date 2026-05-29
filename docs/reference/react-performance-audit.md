@@ -47,7 +47,7 @@ Initial inventory:
 
 ## Coverage Ledger
 
-Current count after low-risk PRs #3038, #3041, #3042, #3044, and #3051: 964 Effect hook call sites.
+Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, and #3052: 963 Effect hook call sites.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -85,6 +85,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR K         | Sidebar project filter                                | Extra render pass from mirroring the first filtered repo into command selection state.                   | `SidebarFilter.tsx` covered by #3042                                                                                     | Low            |
 | PR L         | Diff note edit draft                                  | Extra render pass from mirroring saved note body into edit draft while not editing.                      | `DiffCommentCard.tsx` covered by #3044                                                                                   | Low            |
 | PR M         | Status-bar account menus                              | Extra render pass from closing Claude/Codex account submenus in Effects after the provider menu closes.  | `StatusBar.tsx` covered by #3051                                                                                         | Low            |
+| PR N         | Browser tab favicon fallback                          | Extra render pass from resetting failed favicon state in an Effect after tab favicon identity changes.   | `BrowserTab.tsx` covered by #3052                                                                                        | Low            |
 
 ## Merge Risk Scale
 
@@ -103,6 +104,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3042 | `nwparker/react-perf-sidebar-filter` | Sidebar project filter command selection derived from filtered repos          | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/SidebarFilter.tsx`; `pnpm run typecheck:web`.          |
 | #3044 | `nwparker/react-perf-low-risk-2`     | Diff note card removes saved-body-to-draft mirror Effect                      | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/diff-comments/DiffCommentCard.tsx`; `pnpm run typecheck:web`.  |
 | #3051 | `nwparker/react-perf-low-risk-3`     | Status-bar account submenus collapse in provider menu open-change handlers    | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/status-bar/StatusBar.tsx`; `pnpm run typecheck:web`.           |
+| #3052 | `nwparker/react-perf-low-risk-4`     | Browser tab favicon failure reset happens during render for new favicon IDs   | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/tab-bar/BrowserTab.tsx`; `pnpm run typecheck:web`.             |
 
 ## Reproduction Commands
 
