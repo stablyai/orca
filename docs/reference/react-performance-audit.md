@@ -49,7 +49,7 @@ Initial inventory:
 
 Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, #3060, #3062, #3063, #3064, #3065, #3066, #3067, #3068, and #3069: 936 Effect hook call sites.
 
-Open medium-risk PR #3070 lowers the branch count to 935 Effect hook call sites, but is not counted in the merged baseline until reviewed and merged.
+Open medium-risk PRs #3070 and #3073 each lower their branch count to 935 Effect hook call sites, but are not counted in the merged baseline until reviewed and merged.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -104,6 +104,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR AB        | Feature-wall tour telemetry refs                      | Close telemetry reads source/depth payload inputs through Effect-updated refs.                             | `use-feature-wall-tour-telemetry.ts` covered by #3068                                                                    | Low            |
 | PR AC        | Onboarding persisted theme ref                        | The theme cleanup ref mirrors the latest persisted setting through an Effect.                               | `use-onboarding-flow.ts` covered by #3069                                                                                | Low            |
 | PR AD        | Terminal window blur restart snapshot                 | A mount-only Effect rewrites the same startup blur snapshot already captured by the lazy ref initializer.   | `TerminalWindowSection.tsx` covered by #3070                                                                             | Medium         |
+| PR AE        | New-workspace composer note ref                       | A note ref mirror Effect runs after each note edit so stable PR/MR selection callbacks can read latest text. | `useComposerState.ts` covered by #3073                                                                                   | Medium         |
 
 ## Merge Risk Scale
 
@@ -139,6 +140,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3068 | `nwparker/react-perf-feature-wall-telemetry-ref` | Feature-wall tour telemetry ref mirror moves out of an Effect | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/feature-wall/use-feature-wall-tour-telemetry.ts`; `pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/feature-wall/use-feature-wall-tour-telemetry.test.ts`; `pnpm run typecheck:web`. |
 | #3069 | `nwparker/react-perf-onboarding-theme-ref` | Onboarding persisted theme ref mirror moves out of an Effect | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/onboarding/use-onboarding-flow.ts`; `pnpm run typecheck:web`. |
 | #3070 | `nwparker/react-perf-terminal-window-ref` | Terminal window blur startup snapshot removes redundant mount Effect | Medium | Open   | `pnpm exec oxlint src/renderer/src/components/settings/TerminalWindowSection.tsx`; `pnpm run typecheck:web`. |
+| #3073 | `nwparker/react-perf-composer-note-ref` | New-workspace composer note ref mirror moves out of an Effect | Medium | Open   | `pnpm exec oxlint src/renderer/src/hooks/useComposerState.ts`; `pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/composer-branch-selection.test.ts`; `pnpm run typecheck:web`. |
 
 ## Reproduction Commands
 
