@@ -47,7 +47,7 @@ Initial inventory:
 
 ## Coverage Ledger
 
-Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, and #3055: 958 Effect hook call sites.
+Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, and #3056: 957 Effect hook call sites.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -89,6 +89,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR O         | Workspace title rename draft                          | Redundant draft sync Effect runs while the inline title rename input is not mounted.                     | `WorktreeTitleInlineRename.tsx` covered by #3053                                                                         | Low            |
 | PR P         | Feature-wall tour static substep repair               | Three no-op Effects scan static step arrays and repair ids that are only written from those arrays.      | `FeatureWallTourSurface.tsx` covered by #3054                                                                            | Low            |
 | PR Q         | Repo combobox mount-open state                        | Mount-only auto-open path uses an Effect and ref guard instead of initializing state from the prop.       | `RepoCombobox.tsx` covered by #3055                                                                                      | Low            |
+| PR R         | Quick Open query reset                                | Extra render pass from clearing the Quick Open input after the dialog opens.                             | `QuickOpen.tsx` covered by #3056                                                                                         | Low            |
 
 ## Merge Risk Scale
 
@@ -111,6 +112,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3053 | `nwparker/react-perf-low-risk-5`     | Inline workspace-title rename removes inactive draft sync Effect              | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/WorktreeTitleInlineRename.tsx`; `pnpm run typecheck:web`. |
 | #3054 | `nwparker/react-perf-low-risk-6`     | Feature-wall tour removes static substep id repair Effects                    | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx`; `pnpm run typecheck:web`. |
 | #3055 | `nwparker/react-perf-low-risk-7`     | Repo combobox initializes mount-open state without an Effect                  | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/repo/RepoCombobox.tsx`; `pnpm run typecheck:web`.              |
+| #3056 | `nwparker/react-perf-low-risk-8`     | Quick Open clears its query on the open edge without a reset Effect           | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/QuickOpen.tsx`; `pnpm run typecheck:web`.                      |
 
 ## Reproduction Commands
 
