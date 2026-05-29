@@ -39,7 +39,6 @@ export function WorktreeTitleInlineRename({
   onEditingChange,
   onRename
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
-  const inputRef = useRef<HTMLInputElement>(null)
   const savingRef = useRef(false)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(displayName)
@@ -54,15 +53,14 @@ export function WorktreeTitleInlineRename({
     }
   }, [editing, onEditingChange])
 
-  useEffect(() => {
-    if (!editing) {
+  const handleInputRef = useCallback((input: HTMLInputElement | null) => {
+    if (!input) {
       return
     }
-    const input = inputRef.current
-    input?.focus()
+    input.focus()
     // Why: double-click rename should make replacing the workspace title a one-keystroke action.
-    input?.select()
-  }, [editing])
+    input.select()
+  }, [])
 
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -142,7 +140,7 @@ export function WorktreeTitleInlineRename({
           {displayName}
         </span>
         <Input
-          ref={inputRef}
+          ref={handleInputRef}
           value={value}
           style={{ font: 'inherit' }}
           disabled={saving}
