@@ -1564,6 +1564,7 @@ export type TuiAgent =
   | 'openclaw' // OpenClaw
   | 'copilot' // GitHub Copilot CLI
   | 'grok' // xAI Grok CLI
+  | 'adal' // AdaL (SylphAI)
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 

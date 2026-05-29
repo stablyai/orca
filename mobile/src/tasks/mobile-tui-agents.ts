@@ -32,7 +32,8 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'qwen-code',
   'rovo',
   'hermes',
-  'openclaw'
+  'openclaw',
+  'adal'
 ] as const satisfies readonly TuiAgent[]
 
 export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
@@ -64,7 +65,8 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   'qwen-code': 'Qwen Code',
   rovo: 'Rovo Dev',
   hermes: 'Hermes',
-  openclaw: 'OpenClaw'
+  openclaw: 'OpenClaw',
+  adal: 'AdaL'
 }
 
 export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
@@ -92,7 +94,8 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   'qwen-code': 'qwenlm.github.io',
   rovo: 'atlassian.com',
   hermes: 'nousresearch.com',
-  openclaw: 'openclaw.ai'
+  openclaw: 'openclaw.ai',
+  adal: 'sylph.ai'
 }
 
 export const MOBILE_TUI_AGENT_LAUNCH_COMMANDS: Record<TuiAgent, string> = {
@@ -124,7 +127,8 @@ export const MOBILE_TUI_AGENT_LAUNCH_COMMANDS: Record<TuiAgent, string> = {
   'qwen-code': 'qwen-code',
   rovo: 'rovo',
   hermes: 'hermes',
-  openclaw: 'openclaw'
+  openclaw: 'openclaw',
+  adal: 'adal'
 }
 
 export function isMobileTuiAgent(value: unknown): value is TuiAgent {
