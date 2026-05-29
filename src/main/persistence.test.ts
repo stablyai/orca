@@ -1606,6 +1606,26 @@ describe('Store', () => {
     expect(store.getRepo('r1')!.repoIcon).toBeUndefined()
   })
 
+  it('updateRepo normalizes custom repo badge colors before storing', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', { badgeColor: ' ABCDEF ' })
+
+    expect(updated!.badgeColor).toBe('#abcdef')
+    expect(store.getRepo('r1')!.badgeColor).toBe('#abcdef')
+  })
+
+  it('updateRepo ignores invalid repo badge colors without clearing the existing color', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ badgeColor: '#123456' }))
+
+    const updated = store.updateRepo('r1', { badgeColor: 'blue' })
+
+    expect(updated!.badgeColor).toBe('#123456')
+    expect(store.getRepo('r1')!.badgeColor).toBe('#123456')
+  })
+
   it('getRepo does not expose invalid persisted repo icons', async () => {
     const store = await createStore()
     store.addRepo(
@@ -1804,6 +1824,71 @@ describe('Store', () => {
     expect(updated.terminalFontWeight).toBe(600)
     // Other fields preserved
     expect(updated.branchPrefix).toBe('git-username')
+  })
+
+  it('notifies settings listeners with changed keys only', async () => {
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings(
+      {
+        theme: 'dark',
+        disabledTuiAgents: ['codex', 'not-real', 'codex'] as never
+      },
+      { notifyListeners: true, originWebContentsId: 42 }
+    )
+
+    expect(listener).toHaveBeenCalledWith(
+      {
+        theme: 'dark',
+        disabledTuiAgents: ['codex']
+      },
+      expect.objectContaining({
+        theme: 'dark',
+        disabledTuiAgents: ['codex']
+      }),
+      42
+    )
+  })
+
+  it('does not notify settings listeners for unchanged scalar updates', async () => {
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings({ theme: store.getSettings().theme }, { notifyListeners: true })
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('does not notify settings listeners unless requested by the producer', async () => {
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings({ theme: 'dark' })
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('normalizes disabled TUI agents on load and update', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          disabledTuiAgents: ['codex', 'not-real', 'codex', 'claude']
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().disabledTuiAgents).toEqual(['codex', 'claude'])
+
+    const updated = store.updateSettings({
+      disabledTuiAgents: ['gemini', 'not-real', 'gemini', 'opencode'] as never
+    })
+    expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
   })
 
   it('updateSettings keeps the legacy commit-message AI projection in sync', async () => {

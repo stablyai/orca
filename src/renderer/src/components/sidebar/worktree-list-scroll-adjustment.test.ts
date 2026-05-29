@@ -177,30 +177,25 @@ describe('estimateRenderRowSize', () => {
     expect(activeSize).toBe(36)
   })
 
-  it('keeps the previous header active while a secondary header spacer crosses the top', () => {
-    const rows = [makeHeaderRow('first'), makeHeaderRow('second')]
-
+  it('keeps the previous header active until the secondary header row reaches the top', () => {
     expect(
       getActiveStickyHeaderIndexForScroll({
-        firstHeaderIndex: 0,
         rangeStartIndex: 1,
-        rows,
-        scrollOffset: 100,
+        scrollOffset: 99,
         stickyHeaderIndexes: [0, 1],
         virtualItems: [{ key: 'hdr:second', index: 1, start: 100, end: 136, size: 36, lane: 0 }]
       })
     ).toBe(0)
   })
 
-  it('activates a secondary header once its painted header reaches the top', () => {
-    const rows = [makeHeaderRow('first'), makeHeaderRow('second')]
-
+  it('activates a secondary header as soon as its row reaches the top (no spacer dead zone)', () => {
+    // Regression: the swap must fire when the header row reaches the top
+    // (scrollOffset === start), not 8px later. Gating on start + spacer left
+    // the previous repo's opaque header pinned over the incoming one.
     expect(
       getActiveStickyHeaderIndexForScroll({
-        firstHeaderIndex: 0,
         rangeStartIndex: 1,
-        rows,
-        scrollOffset: 108,
+        scrollOffset: 100,
         stickyHeaderIndexes: [0, 1],
         virtualItems: [{ key: 'hdr:second', index: 1, start: 100, end: 136, size: 36, lane: 0 }]
       })

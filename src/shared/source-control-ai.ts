@@ -55,7 +55,8 @@ type ResolveSourceControlAiInput = {
   settings: Pick<
     GlobalSettings,
     'defaultTuiAgent' | 'agentCmdOverrides' | 'commitMessageAi' | 'sourceControlAi'
-  >
+  > &
+    Partial<Pick<GlobalSettings, 'disabledTuiAgents'>>
   repo?: Pick<Repo, 'sourceControlAi'> | null
   operation: SourceControlAiOperation
   discoveryHostKey?: string
@@ -767,7 +768,8 @@ export function resolveSourceControlAiForOperation(
   // commitMessageAi should not make that choice sticky again.
   const agentChoice = resolveCommitMessageAgentChoice(
     source.agentId,
-    input.settings.defaultTuiAgent
+    input.settings.defaultTuiAgent,
+    input.settings.disabledTuiAgents
   )
   if (!agentChoice) {
     return {

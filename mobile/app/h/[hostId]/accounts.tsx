@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   View,
   Text,
@@ -12,7 +12,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
-import type { RpcClient } from '../../../src/transport/rpc-client'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
 import type { RpcSuccess } from '../../../src/transport/types'
@@ -38,11 +37,6 @@ export default function AccountsScreen() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
-  const clientRef = useRef<RpcClient | null>(null)
-
-  useEffect(() => {
-    clientRef.current = client
-  }, [client])
 
   useEffect(() => {
     if (!hostId) return

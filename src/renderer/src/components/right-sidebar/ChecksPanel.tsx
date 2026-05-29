@@ -1099,9 +1099,13 @@ export default function ChecksPanel(): React.JSX.Element {
         typeof connectionId === 'string'
           ? await store.ensureRemoteDetectedAgents(connectionId)
           : await store.ensureDetectedAgents()
-      const agent = pickDefaultSourceControlAgent(store.settings?.defaultTuiAgent, detectedAgents)
+      const agent = pickDefaultSourceControlAgent(
+        store.settings?.defaultTuiAgent,
+        detectedAgents,
+        store.settings?.disabledTuiAgents
+      )
       if (!agent) {
-        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        toast.error('No enabled AI agents. Configure agents in Settings.')
         return
       }
       const prompt = buildResolvePullRequestConflictsPrompt({
@@ -1148,9 +1152,13 @@ export default function ChecksPanel(): React.JSX.Element {
         typeof connectionId === 'string'
           ? await store.ensureRemoteDetectedAgents(connectionId)
           : await store.ensureDetectedAgents()
-      const agent = pickDefaultSourceControlAgent(store.settings?.defaultTuiAgent, detectedAgents)
+      const agent = pickDefaultSourceControlAgent(
+        store.settings?.defaultTuiAgent,
+        detectedAgents,
+        store.settings?.disabledTuiAgents
+      )
       if (!agent) {
-        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        toast.error('No enabled AI agents. Configure agents in Settings.')
         return
       }
       const prompt = buildFixBrokenChecksPrompt({

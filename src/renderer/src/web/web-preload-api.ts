@@ -26,6 +26,7 @@ import {
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -2146,6 +2147,9 @@ function mergeSettings(base: GlobalSettings, updates: Partial<GlobalSettings>): 
       ...(base.githubProjects ?? defaults.githubProjects),
       ...updates.githubProjects
     } as GlobalSettings['githubProjects'],
+    disabledTuiAgents: normalizeDisabledTuiAgents(
+      updates.disabledTuiAgents ?? base.disabledTuiAgents
+    ),
     voice: {
       ...(base.voice ?? defaults.voice),
       ...updates.voice

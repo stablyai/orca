@@ -111,6 +111,28 @@ describe('agent_started schema', () => {
   })
 })
 
+describe('agent_prompt_sent schema', () => {
+  it('accepts a hook-confirmed prompt-send payload with cohort context', () => {
+    const parsed = eventSchemas.agent_prompt_sent.safeParse({
+      agent_kind: 'codex',
+      launch_source: 'unknown',
+      request_kind: 'followup',
+      nth_repo_added: 1
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects prompt text via .strict()', () => {
+    const parsed = eventSchemas.agent_prompt_sent.safeParse({
+      agent_kind: 'claude-code',
+      launch_source: 'unknown',
+      request_kind: 'followup',
+      prompt: 'please inspect /Users/alice/private-repo'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
 describe('agent_hook_unattributed schema', () => {
   it('accepts the two bounded attribution failure reasons', () => {
     for (const reason of ['empty_pane_key', 'unknown_tab_id'] as const) {

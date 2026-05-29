@@ -4,7 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
 import { useComposerState } from '@/hooks/useComposerState'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import { pickQuickWorkspaceAgent } from '@/lib/quick-workspace-agent-selection'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -131,18 +132,28 @@ function QuickTabBody({
   )
   const preferredQuickAgent = useMemo<TuiAgent | null>(() => {
     const pref = settings?.defaultTuiAgent
-    if (pref === 'blank') {
-      // Why: 'blank' is the explicit "no agent" preference — the quick agent
-      // model already uses null to mean "blank terminal", so translate here.
-      return null
-    }
-    if (pref) {
-      return pref
-    }
-    const detected = cardProps.detectedAgentIds
-    return AGENT_CATALOG.find((agent) => detected === null || detected.has(agent.id))?.id ?? null
-  }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent])
+    // Why: detection can still be pending when quick-create submits; keep the
+    // prior catalog fallback while filtering disabled agents out of that choice.
+    return pickQuickWorkspaceAgent(pref, cardProps.detectedAgentIds, settings?.disabledTuiAgents)
+  }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent, settings?.disabledTuiAgents])
   const quickAgent = quickAgentOverride === undefined ? preferredQuickAgent : quickAgentOverride
+
+  useEffect(() => {
+    if (
+      quickAgentOverride === undefined ||
+      quickAgentOverride === null ||
+      (isTuiAgentEnabled(quickAgentOverride, settings?.disabledTuiAgents) &&
+        (cardProps.detectedAgentIds === null || cardProps.detectedAgentIds.has(quickAgentOverride)))
+    ) {
+      return
+    }
+    setQuickAgentOverride(preferredQuickAgent)
+  }, [
+    cardProps.detectedAgentIds,
+    preferredQuickAgent,
+    quickAgentOverride,
+    settings?.disabledTuiAgents
+  ])
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
     setQuickAgentOverride(agent)

@@ -1812,6 +1812,9 @@ export type GlobalSettings = {
    *  - 'blank': blank terminal (no agent launched)
    *  - TuiAgent: a specific agent id */
   defaultTuiAgent: TuiAgent | 'blank' | null
+  /** Agents hidden from future picker and automatic launch choices. Detection
+   *  remains a raw PATH capability snapshot. */
+  disabledTuiAgents: TuiAgent[]
   /** Why: worktree deletion is destructive (git worktree remove + rm -rf of the
    *  working directory), so Orca shows a confirmation dialog by default. Users
    *  who delete frequently can opt into skipping the dialog via a "Don't ask
@@ -1907,6 +1910,9 @@ export type GlobalSettings = {
    *  and agent-completion events. Opt-in while the signal/noise balance is
    *  being tested. */
   experimentalTerminalAttention: boolean
+  /** Experimental: compact worktree cards by hiding a redundant metadata row
+   *  when the title and branch already say the same thing. */
+  experimentalCompactWorktreeCards: boolean
   /** Experimental: when creating a worktree, automatically symlink a
    *  user-configured set of files/folders from the primary checkout (e.g.
    *  `.env`, `node_modules`) into the new worktree. Opt-in while the

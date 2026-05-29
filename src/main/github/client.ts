@@ -805,10 +805,12 @@ async function listRecentWorkItems(
   issueOwnerRepo: OwnerRepo | null,
   prOwnerRepo: OwnerRepo | null,
   limit: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  noCache?: boolean
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
   const requiresExplicitRepo = Boolean(connectionId)
+  const restCacheArgs = noCache ? [] : ['--cache', '120s']
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   if (issueOwnerRepo || prOwnerRepo || requiresExplicitRepo) {
     // Why: allSettled so a 403 on upstream issues doesn't zero out the origin
@@ -819,8 +821,7 @@ async function listRecentWorkItems(
         ? ghExecFileAsync(
             [
               'api',
-              '--cache',
-              '120s',
+              ...restCacheArgs,
               `repos/${issueOwnerRepo.owner}/${issueOwnerRepo.repo}/issues?per_page=${limit}&state=open&sort=updated&direction=desc`
             ],
             ghOptions
@@ -844,8 +845,7 @@ async function listRecentWorkItems(
         ? ghExecFileAsync(
             [
               'api',
-              '--cache',
-              '120s',
+              ...restCacheArgs,
               `repos/${prOwnerRepo.owner}/${prOwnerRepo.repo}/pulls?per_page=${limit}&state=open&sort=updated&direction=desc`
             ],
             ghOptions
@@ -1053,7 +1053,8 @@ export async function listWorkItems(
   query?: string,
   before?: string,
   preference?: IssueSourcePreference,
-  connectionId?: string | null
+  connectionId?: string | null,
+  noCache?: boolean
 ): Promise<ListWorkItemsResult<MainWorkItem>> {
   // Why: resolve the raw upstream candidate alongside the preference-aware
   // issue source. The selector needs to know whether an upstream remote
@@ -1074,7 +1075,14 @@ export async function listWorkItems(
     // catch-all here would make an auth/network failure indistinguishable from
     // an empty result and silently under-report per-repo failures.
     const partial = !trimmedQuery
-      ? await listRecentWorkItems(repoPath, issueOwnerRepo, prOwnerRepo, limit, connectionId)
+      ? await listRecentWorkItems(
+          repoPath,
+          issueOwnerRepo,
+          prOwnerRepo,
+          limit,
+          connectionId,
+          noCache
+        )
       : await listQueriedWorkItems(
           repoPath,
           issueOwnerRepo,

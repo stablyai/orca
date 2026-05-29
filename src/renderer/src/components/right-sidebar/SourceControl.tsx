@@ -109,6 +109,7 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
@@ -550,12 +551,14 @@ export function shouldRenderCommitArea(
 
 export function pickDefaultSourceControlAgent(
   defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detectedAgents: TuiAgent[]
+  detectedAgents: TuiAgent[],
+  disabledAgents?: TuiAgent[]
 ): TuiAgent | null {
-  if (defaultAgent && defaultAgent !== 'blank' && detectedAgents.includes(defaultAgent)) {
+  const enabledAgents = filterEnabledTuiAgents(detectedAgents, disabledAgents)
+  if (defaultAgent && defaultAgent !== 'blank' && enabledAgents.includes(defaultAgent)) {
     return defaultAgent
   }
-  return AGENT_CATALOG.find((entry) => detectedAgents.includes(entry.id))?.id ?? null
+  return AGENT_CATALOG.find((entry) => enabledAgents.includes(entry.id))?.id ?? null
 }
 
 function getConflictOperationPromptLabel(conflictOperation: GitConflictOperation): string {
@@ -1170,8 +1173,13 @@ function SourceControlInner(): React.JSX.Element {
     return settings ? normalized : { ...normalized, enabled: false }
   }, [settings])
   const effectiveCommitMessageAgentId = useMemo(
-    () => resolveCommitMessageAgentChoice(sourceControlAi.agentId, settings?.defaultTuiAgent),
-    [sourceControlAi.agentId, settings?.defaultTuiAgent]
+    () =>
+      resolveCommitMessageAgentChoice(
+        sourceControlAi.agentId,
+        settings?.defaultTuiAgent,
+        settings?.disabledTuiAgents
+      ),
+    [sourceControlAi.agentId, settings?.defaultTuiAgent, settings?.disabledTuiAgents]
   )
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
@@ -1622,9 +1630,13 @@ function SourceControlInner(): React.JSX.Element {
         typeof connectionId === 'string'
           ? await store.ensureRemoteDetectedAgents(connectionId)
           : await store.ensureDetectedAgents()
-      const agent = pickDefaultSourceControlAgent(store.settings?.defaultTuiAgent, detectedAgents)
+      const agent = pickDefaultSourceControlAgent(
+        store.settings?.defaultTuiAgent,
+        detectedAgents,
+        store.settings?.disabledTuiAgents
+      )
       if (!agent) {
-        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        toast.error('No enabled AI agents. Configure agents in Settings.')
         return
       }
 
@@ -1691,9 +1703,13 @@ function SourceControlInner(): React.JSX.Element {
         typeof connectionId === 'string'
           ? await store.ensureRemoteDetectedAgents(connectionId)
           : await store.ensureDetectedAgents()
-      const agent = pickDefaultSourceControlAgent(store.settings?.defaultTuiAgent, detectedAgents)
+      const agent = pickDefaultSourceControlAgent(
+        store.settings?.defaultTuiAgent,
+        detectedAgents,
+        store.settings?.disabledTuiAgents
+      )
       if (!agent) {
-        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        toast.error('No enabled AI agents. Configure agents in Settings.')
         return false
       }
 

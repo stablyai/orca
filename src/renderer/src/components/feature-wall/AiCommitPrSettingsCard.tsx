@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react'
+import { useCallback, useState, type JSX } from 'react'
 import { Terminal } from 'lucide-react'
 import type { CommitMessageAiSettings, GlobalSettings, TuiAgent } from '../../../../shared/types'
 import {
@@ -97,18 +97,23 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
   // onboarding that puts menus behind the z-[100] fullscreen tour layer, so
   // portal into the active tour/dialog surface instead.
   const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
-  useEffect(() => {
-    const el = document.querySelector<HTMLElement>(
-      '[data-onboarding-overlay], [data-slot="dialog-content"]'
+  const setSelectPortalHost = useCallback((node: HTMLDivElement | null) => {
+    // Why: select menus must portal into the active tour/dialog surface so
+    // body-level portals do not render behind the fullscreen onboarding layer.
+    setSelectPortalRoot(
+      node?.closest<HTMLElement>('[data-onboarding-overlay], [data-slot="dialog-content"]') ?? node
     )
-    setSelectPortalRoot(el)
   }, [])
   if (!settings) {
     return null
   }
 
   const config = readCommitMessageAiSettings(settings)
-  const resolvedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+  const resolvedAgentId = resolveCommitMessageAgentChoice(
+    config.agentId,
+    settings.defaultTuiAgent,
+    settings.disabledTuiAgents
+  )
   const isCustom = isCustomAgentId(resolvedAgentId)
   const activeCapability =
     resolvedAgentId && !isCustomAgentId(resolvedAgentId)
@@ -152,7 +157,11 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
     }
     // Why: this compact tour card must behave like Settings > Git: first
     // enable seeds the agent/model from the default agent when possible.
-    const seedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+    const seedAgentId = resolveCommitMessageAgentChoice(
+      config.agentId,
+      settings.defaultTuiAgent,
+      settings.disabledTuiAgents
+    )
     if (!seedAgentId) {
       writeConfig({ enabled: true, agentId: null })
       return
@@ -246,7 +255,7 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-muted/20 p-3.5">
+    <div ref={setSelectPortalHost} className="rounded-xl border border-border bg-muted/20 p-3.5">
       <div className="space-y-2.5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">

@@ -6,6 +6,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Trash2 } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { BaseRefPicker } from './BaseRefPicker'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
 import { McpConfigSection } from './McpConfigSection'
@@ -107,6 +108,8 @@ export function RepositoryPane({
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Symlinks')
   const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Source Control AI')
+  const removeProjectLabel =
+    confirmingRemove === repo.id ? 'Confirm Remove Project' : 'Remove Project'
 
   const hooksSection =
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
@@ -129,9 +132,9 @@ export function RepositoryPane({
   // most-edited surface and should beat MCP/symlinks/sparse-presets.
   const visibleSections = [
     forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, identityEntries) ? (
-      <section key="identity" className="space-y-8">
+      <section key="identity" className="relative space-y-8">
         <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
+          <div className="space-y-1 pr-12">
             <h3 className="text-sm font-semibold">Identity</h3>
             <p className="text-xs text-muted-foreground">
               Project-specific display details for the sidebar and tabs.
@@ -149,18 +152,26 @@ export function RepositoryPane({
             title="Remove Project"
             description="Remove this project from Orca."
             keywords={[repo.displayName, 'delete', 'project', 'repository']}
+            className="absolute top-0 right-0 z-10 w-auto max-w-none"
             forceVisible={forceFullPaneForRepoMatch}
           >
-            <Button
-              variant={confirmingRemove === repo.id ? 'destructive' : 'outline'}
-              size="sm"
-              onClick={() => handleRemoveProject(repo.id)}
-              onBlur={() => setConfirmingRemove(null)}
-              className="gap-2"
-            >
-              <Trash2 className="size-3.5" />
-              {confirmingRemove === repo.id ? 'Confirm Remove' : 'Remove Project'}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={confirmingRemove === repo.id ? 'destructive' : 'outline'}
+                  size="icon-sm"
+                  onClick={() => handleRemoveProject(repo.id)}
+                  onBlur={() => setConfirmingRemove(null)}
+                  aria-label={removeProjectLabel}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {removeProjectLabel}
+              </TooltipContent>
+            </Tooltip>
           </SearchableSetting>
         </div>
 

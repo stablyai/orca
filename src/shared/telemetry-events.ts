@@ -282,6 +282,14 @@ const agentStartedSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+const agentPromptSentSchema = z
+  .object({
+    agent_kind: agentKindSchema,
+    launch_source: launchSourceSchema,
+    request_kind: requestKindSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
 
 // Enum-only by design for both fields. `error_message` and `error_stack` are
 // deliberately absent — `.strict()` rejects either key if a call site ever
@@ -1018,6 +1026,7 @@ export const eventSchemas = {
   setup_script_prompt_action: setupScriptPromptActionSchema,
 
   agent_started: agentStartedSchema,
+  agent_prompt_sent: agentPromptSentSchema,
   agent_error: agentErrorSchema,
   agent_hook_install_failed: agentHookInstallFailedSchema,
   agent_hook_unattributed: agentHookUnattributedSchema,
@@ -1108,6 +1117,7 @@ type _CohortExtendedRoster =
   | 'setup_script_prompt_shown'
   | 'setup_script_prompt_action'
   | 'agent_started'
+  | 'agent_prompt_sent'
   | 'agent_error'
 // Why: `z.object({}).strict()` infers a string index signature, which would
 // make every key appear present. Ignore index-signature-only keys here so

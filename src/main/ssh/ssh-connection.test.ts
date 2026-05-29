@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-let eventHandlers: Map<string, (...args: unknown[]) => void>
+let eventHandlers: Map<string, Set<(...args: unknown[]) => void>>
 let connectBehavior: 'ready' | 'error' = 'ready'
 let connectErrorMessage = ''
 let destroyErrorMessage = ''
@@ -19,6 +19,12 @@ type MockSshClient = {
   lastConnectConfig?: unknown
 }
 let clientInstances: MockSshClient[] = []
+
+function emitSshEvent(event: string, ...args: unknown[]): void {
+  for (const handler of eventHandlers?.get(event) ?? []) {
+    handler(...args)
+  }
+}
 
 vi.mock('ssh2', () => {
   class MockBaseAgent {}
@@ -34,10 +40,14 @@ vi.mock('ssh2', () => {
       clientInstances.push(this)
     }
     on(event: string, handler: (...args: unknown[]) => void) {
-      eventHandlers?.set(event, handler)
+      const handlers = eventHandlers?.get(event) ?? new Set<(...args: unknown[]) => void>()
+      handlers.add(handler)
+      eventHandlers?.set(event, handlers)
     }
     off(event: string, handler: (...args: unknown[]) => void) {
-      if (eventHandlers?.get(event) === handler) {
+      const handlers = eventHandlers?.get(event)
+      handlers?.delete(handler)
+      if (handlers?.size === 0) {
         eventHandlers.delete(event)
       }
     }
@@ -46,17 +56,17 @@ vi.mock('ssh2', () => {
       setTimeout(() => {
         const next = connectSequence.shift()
         if (next instanceof Error) {
-          eventHandlers?.get('error')?.(next)
+          emitSshEvent('error', next)
           return
         }
         if (next === 'ready') {
-          eventHandlers?.get('ready')?.()
+          emitSshEvent('ready')
           return
         }
         if (connectBehavior === 'error') {
-          eventHandlers?.get('error')?.(new Error(connectErrorMessage))
+          emitSshEvent('error', new Error(connectErrorMessage))
         } else {
-          eventHandlers?.get('ready')?.()
+          emitSshEvent('ready')
         }
       }, 0)
     }
@@ -65,9 +75,8 @@ vi.mock('ssh2', () => {
       if (!destroyErrorMessage) {
         return
       }
-      const handler = eventHandlers?.get('error')
-      if (handler) {
-        handler(new Error(destroyErrorMessage))
+      if (eventHandlers?.has('error')) {
+        emitSshEvent('error', new Error(destroyErrorMessage))
         return
       }
       throw new Error(destroyErrorMessage)

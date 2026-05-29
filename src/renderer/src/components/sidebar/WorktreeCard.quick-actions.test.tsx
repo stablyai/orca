@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type { GlobalSettings, Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
 import type WorktreeCardComponent from './WorktreeCard'
 
 const fetchHostedReviewForBranch = vi.fn()
@@ -13,6 +13,7 @@ let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'unread']
 let tabsByWorktree: Record<string, { id: string }[]> = {}
 let ptyIdsByTabId: Record<string, string[]> = {}
 let browserTabsByWorktree: Record<string, { id: string }[]> = {}
+let settings: Partial<GlobalSettings> | null = null
 let WorktreeCard: typeof WorktreeCardComponent
 
 vi.mock('@/store', () => ({
@@ -26,7 +27,7 @@ vi.mock('@/store', () => ({
       issueCache: {},
       openModal,
       remoteBranchConflictByWorktreeId: {},
-      settings: null,
+      settings,
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map(),
       browserTabsByWorktree,
@@ -52,7 +53,8 @@ vi.mock('./use-worktree-activity-status', () => ({
 }))
 
 vi.mock('./CacheTimer', () => ({
-  default: () => null
+  default: () => null,
+  usePromptCacheCountdownStartedAt: () => null
 }))
 
 vi.mock('./WorktreeCardAgents', () => ({
@@ -114,6 +116,7 @@ describe('WorktreeCard quick actions', () => {
     tabsByWorktree = {}
     ptyIdsByTabId = {}
     browserTabsByWorktree = {}
+    settings = null
   })
 
   it('marks the unread toggle as a workspace-board-preserving action', () => {
@@ -123,6 +126,103 @@ describe('WorktreeCard quick actions', () => {
 
     expect(markup).toContain('aria-label="Mark as read"')
     expect(markup).toContain('data-workspace-board-preserve-open=""')
+  })
+
+  it('keeps the branch row by default when it repeats the workspace title', () => {
+    worktreeCardProperties = []
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: 'quick-action', branch: 'quick-action' })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('quick-action')
+    expect(markup).toContain('text-[11px] text-muted-foreground truncate leading-none')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('tabindex="0"')
+  })
+
+  it('hides the repeated branch row only when compact cards are enabled', () => {
+    worktreeCardProperties = []
+    settings = { experimentalCompactWorktreeCards: true }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: 'quick-action', branch: 'quick-action' })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('tabindex="0"')
+  })
+
+  it('keeps the branch row when the workspace has a custom title', () => {
+    worktreeCardProperties = []
+    settings = { experimentalCompactWorktreeCards: true }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: 'Custom workspace', branch: 'quick-action' })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('Custom workspace')
+    expect(markup).toContain('quick-action')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('text-[11px] text-muted-foreground truncate leading-none')
+  })
+
+  it('uses the pre-compact unread lane and primary badge when compact cards are disabled', () => {
+    worktreeCardProperties = ['status', 'unread']
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'main',
+          branch: 'main',
+          isMainWorktree: true
+        })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('primary')
+    expect(markup).not.toContain('aria-label="Primary worktree"')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('moves unread and primary into the title row when compact cards are enabled', () => {
+    worktreeCardProperties = ['status', 'unread']
+    settings = { experimentalCompactWorktreeCards: true }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'main',
+          branch: 'main',
+          isMainWorktree: true
+        })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('aria-label="Primary worktree"')
+    expect(markup).not.toContain('>primary<')
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
   })
 
   it('shows delete as the top-right quick action for an inactive workspace', () => {

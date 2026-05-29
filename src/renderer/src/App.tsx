@@ -428,6 +428,14 @@ function App(): React.JSX.Element {
   const featureTipsPromptedThisSessionRef = useRef(false)
   const featureTipsSuppressedByOnboardingThisSessionRef = useRef(false)
   const [onboardingSettingsDetour, setOnboardingSettingsDetour] = useState(false)
+  const shouldRenderOnboarding = onboarding !== null && shouldShowOnboarding(onboarding)
+  const onboardingSettingsDetourActive =
+    onboardingSettingsDetour && activeView === 'settings' && shouldRenderOnboarding
+  if (onboardingSettingsDetour && !onboardingSettingsDetourActive) {
+    // Why: the settings detour is valid only while Settings is onscreen; clear
+    // it during render so onboarding can resume without a follow-up Effect pass.
+    setOnboardingSettingsDetour(false)
+  }
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -496,12 +504,6 @@ function App(): React.JSX.Element {
     persistedUIReady,
     settings
   ])
-
-  useEffect(() => {
-    if (activeView !== 'settings' || !shouldShowOnboarding(onboarding)) {
-      setOnboardingSettingsDetour(false)
-    }
-  }, [activeView, onboarding])
 
   const beginOnboardingSettingsDetour = useCallback(() => {
     setOnboardingSettingsDetour(true)
@@ -1728,7 +1730,7 @@ function App(): React.JSX.Element {
           <SshPassphraseDialog />
           <DeleteWorktreeDialog />
           <CrashReportDialog />
-          {onboarding && shouldShowOnboarding(onboarding) && !onboardingSettingsDetour ? (
+          {onboarding && shouldRenderOnboarding && !onboardingSettingsDetourActive ? (
             <Suspense fallback={null}>
               <OnboardingFlow
                 onboarding={onboarding}

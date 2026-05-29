@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -83,8 +83,12 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
   const [macroLabel, setMacroLabel] = useState('')
   const [macroText, setMacroText] = useState('')
   const [macroEnter, setMacroEnter] = useState(true)
+  const [previousVisible, setPreviousVisible] = useState(visible)
 
-  useEffect(() => {
+  // Why: reset before the opening commit so the drawer does not flash the last
+  // custom-key draft; keep close state unchanged for the slide-out animation.
+  if (visible !== previousVisible) {
+    setPreviousVisible(visible)
     if (visible) {
       setStep('choose-type')
       setShortcutKey('c')
@@ -93,7 +97,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
       setMacroText('')
       setMacroEnter(true)
     }
-  }, [visible])
+  }
 
   const addKey = useCallback(
     async (key: Omit<CustomKey, 'id'>) => {

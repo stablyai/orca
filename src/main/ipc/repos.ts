@@ -17,6 +17,7 @@ import type {
 } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { normalizeRepoBadgeColor } from '../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../shared/repo-icon'
 import { normalizeRepoSourceControlAiOverrides } from '../../shared/source-control-ai'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
@@ -953,6 +954,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           delete updates.repoIcon
         } else {
           updates.repoIcon = repoIcon
+        }
+      }
+      if ('badgeColor' in updates) {
+        const badgeColor = normalizeRepoBadgeColor(updates.badgeColor)
+        if (!badgeColor) {
+          delete updates.badgeColor
+        } else {
+          updates.badgeColor = badgeColor
         }
       }
       if (

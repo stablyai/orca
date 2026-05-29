@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -251,10 +252,13 @@ export default function AutomationsPage(): React.JSX.Element {
   const setSelectedId = useAppStore((s) => s.setSelectedAutomationId)
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
+  const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
   const defaultAgent =
-    settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
+    settings?.defaultTuiAgent &&
+    settings.defaultTuiAgent !== 'blank' &&
+    isTuiAgentEnabled(settings.defaultTuiAgent, settings.disabledTuiAgents)
       ? settings.defaultTuiAgent
-      : AGENTS[0]
+      : (enabledAgents[0] ?? AGENTS[0])
 
   const [automations, setAutomations] = useState<Automation[]>([])
   const [runs, setRuns] = useState<AutomationRun[]>([])
@@ -859,6 +863,14 @@ export default function AutomationsPage(): React.JSX.Element {
     }
     if (draft.preset === 'custom' && !isValidAutomationSchedule(draft.customSchedule)) {
       toast.error('Enter a valid 5-field cron expression before saving.')
+      return
+    }
+    if (
+      editingAutomationId === null &&
+      !isHermesSave &&
+      !isTuiAgentEnabled(draft.agentId, settings?.disabledTuiAgents)
+    ) {
+      toast.error('Choose an enabled agent before saving.')
       return
     }
     setIsSaving(true)

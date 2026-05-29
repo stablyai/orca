@@ -206,7 +206,7 @@ export type IGitProvider = {
   removeWorktree(
     worktreePath: string,
     force?: boolean,
-    options?: { deleteBranch?: boolean }
+    options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
   ): Promise<void>
   renameCurrentBranch?(worktreePath: string, newBranch: string): Promise<void>
   isGitRepo(path: string): boolean

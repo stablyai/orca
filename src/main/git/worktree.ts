@@ -432,7 +432,10 @@ export async function addSparseWorktree(
       }
       try {
         await removeWorktree(repoPath, worktreePath, true, {
-          deleteBranch: !options.checkoutExistingBranch
+          deleteBranch: !options.checkoutExistingBranch,
+          // Why: rolling back a failed creation — the just-created branch has no
+          // user commits, so force-delete it rather than preserving an orphan.
+          forceBranchDelete: !options.checkoutExistingBranch
         })
       } catch {
         wrapped.cleanupFailed = true
@@ -452,7 +455,11 @@ export async function removeWorktree(
   repoPath: string,
   worktreePath: string,
   force = false,
-  options: { deleteBranch?: boolean } = {}
+  // Why: forceBranchDelete is for cleaning up a worktree this code just created
+  // (e.g. rollback of a failed creation) where the fresh branch has no user work
+  // and must be removed outright. User-initiated deletes leave it false so unmerged
+  // commits are preserved.
+  options: { deleteBranch?: boolean; forceBranchDelete?: boolean } = {}
 ): Promise<void> {
   const worktreesBeforeRemoval = await listWorktrees(repoPath)
   const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
@@ -490,10 +497,17 @@ export async function removeWorktree(
     // Why: `git worktree remove` only detaches the filesystem entry. Orca also
     // drops the now-unused local branch here so delete-worktree does not leave
     // behind orphaned feature branches unless another worktree still points at it.
-    await gitExecFileAsync(['branch', '-D', branchName], { cwd: repoPath })
+    // Use `-d` (not `-D`): Git refuses to delete a branch with commits not merged
+    // into its upstream or HEAD, so unpublished work is preserved instead of
+    // force-deleted. forceBranchDelete opts into `-D` for failed-creation rollback,
+    // where the fresh branch has no user work to protect.
+    const deleteFlag = options.forceBranchDelete ? '-D' : '-d'
+    await gitExecFileAsync(['branch', deleteFlag, branchName], { cwd: repoPath })
   } catch (error) {
+    // Expected when the branch still has unmerged/unpublished commits: keep it.
+    // Deleting a worktree must never silently discard commits.
     console.warn(
-      `[git] Failed to delete local branch "${branchName}" after removing worktree`,
+      `[git] Preserved local branch "${branchName}" after removing worktree (not fully merged)`,
       error
     )
   }

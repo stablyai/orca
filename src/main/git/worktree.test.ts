@@ -18,7 +18,7 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
-import { addSparseWorktree, addWorktree, parseWorktreeList } from './worktree'
+import { addSparseWorktree, addWorktree, parseWorktreeList, removeWorktree } from './worktree'
 
 describe('parseWorktreeList', () => {
   it('parses regular and bare worktree blocks from porcelain output', () => {
@@ -829,7 +829,7 @@ describe('addWorktree', () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: afterPrune }) // worktree list after prune
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -D
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -D (rollback force-deletes the fresh branch)
 
     await expect(
       addSparseWorktree('/repo', '/repo-feature', 'feature/test', ['src'], 'origin/main')
@@ -841,9 +841,55 @@ describe('addWorktree', () => {
       '--unset-all',
       'branch.feature/test.base'
     ])
+    // Why: rolling back a failed creation force-deletes the just-created branch
+    // (`-D`) — it has no user commits to protect, unlike a user-initiated delete.
     expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
       'branch',
       '-D',
+      'feature/test'
+    ])
+  })
+})
+
+describe('removeWorktree', () => {
+  const beforeRemoval =
+    'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
+  const afterPrune = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileSyncMock.mockReset()
+    translateWslOutputPathsMock.mockClear()
+  })
+
+  it('uses safe `branch -d` and preserves a branch with unmerged commits', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: afterPrune }) // list after prune
+    // Git refuses to delete an unmerged branch with `-d`.
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not fully merged')) // branch -d
+
+    // Should not throw — the unmerged branch is preserved, not force-deleted.
+    await expect(removeWorktree('/repo', '/repo-feature', false)).resolves.toBeUndefined()
+
+    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0])
+    expect(calls).toContainEqual(['branch', '-d', 'feature/test'])
+    expect(calls).not.toContainEqual(['branch', '-D', 'feature/test'])
+  })
+
+  it('deletes the branch when `branch -d` succeeds (fully merged)', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: afterPrune }) // list after prune
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d succeeds
+
+    await removeWorktree('/repo', '/repo-feature', false)
+
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
+      'branch',
+      '-d',
       'feature/test'
     ])
   })

@@ -10,7 +10,7 @@ const testState = vi.hoisted(() => ({
   unsubscribe: vi.fn(),
   subscribeToPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
-  sendRuntimePtyInput: vi.fn(),
+  sendRuntimePtyInputVerified: vi.fn(),
   subscribeToRuntimeTerminalData: vi.fn()
 }))
 
@@ -26,7 +26,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId,
-  sendRuntimePtyInput: testState.sendRuntimePtyInput
+  sendRuntimePtyInputVerified: testState.sendRuntimePtyInputVerified
 }))
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({
@@ -58,7 +58,8 @@ describe('pasteDraftWhenAgentReady', () => {
     )
     testState.isRemoteRuntimePtyId.mockReset()
     testState.isRemoteRuntimePtyId.mockReturnValue(false)
-    testState.sendRuntimePtyInput.mockReset()
+    testState.sendRuntimePtyInputVerified.mockReset()
+    testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
     testState.subscribeToRuntimeTerminalData.mockReset()
   })
 
@@ -77,16 +78,20 @@ describe('pasteDraftWhenAgentReady', () => {
 
     testState.ptyObserver?.(CODEX_COMPOSER_PROMPT_RENDER)
     await flushMicrotasks()
-    expect(testState.sendRuntimePtyInput).not.toHaveBeenCalled()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
     await flushMicrotasks()
-    expect(testState.sendRuntimePtyInput).not.toHaveBeenCalled()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
 
     testState.ptyObserver?.(CODEX_COMPOSER_PROMPT_RENDER)
 
     await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInput).toHaveBeenCalledWith({}, 'pty-1', PASTED_ISSUE_URL)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -103,7 +108,11 @@ describe('pasteDraftWhenAgentReady', () => {
     )
 
     await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInput).toHaveBeenCalledWith({}, 'pty-1', PASTED_ISSUE_URL)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
   })
 
   it('keeps the render-quiet wait for agents without the Codex ready signal', async () => {
@@ -116,15 +125,19 @@ describe('pasteDraftWhenAgentReady', () => {
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
     await flushMicrotasks()
-    expect(testState.sendRuntimePtyInput).not.toHaveBeenCalled()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1499)
-    expect(testState.sendRuntimePtyInput).not.toHaveBeenCalled()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1)
 
     await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInput).toHaveBeenCalledWith({}, 'pty-1', PASTED_ISSUE_URL)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
   })
 
   it('does not paste for agents that already use native draft prefill', async () => {
@@ -137,7 +150,7 @@ describe('pasteDraftWhenAgentReady', () => {
     ).resolves.toBe(false)
 
     expect(testState.subscribeToPtyData).not.toHaveBeenCalled()
-    expect(testState.sendRuntimePtyInput).not.toHaveBeenCalled()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
   })
 
   it('can force paste and submit for native-prefill agents', async () => {
@@ -154,7 +167,39 @@ describe('pasteDraftWhenAgentReady', () => {
     await vi.advanceTimersByTimeAsync(1500)
 
     await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInput).toHaveBeenCalledWith({}, 'pty-1', `${PASTED_ISSUE_URL}\r`)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      `${PASTED_ISSUE_URL}\r`
+    )
+  })
+
+  it('reports false when verified input delivery fails', async () => {
+    testState.sendRuntimePtyInputVerified.mockResolvedValue(false)
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'codex'
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
+
+    await expect(promise).resolves.toBe(false)
+  })
+
+  it('reports false when verified input delivery rejects', async () => {
+    testState.sendRuntimePtyInputVerified.mockRejectedValue(new Error('runtime timeout'))
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'codex'
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
+
+    await expect(promise).resolves.toBe(false)
   })
 })
 

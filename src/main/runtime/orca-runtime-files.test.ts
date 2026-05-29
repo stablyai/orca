@@ -321,7 +321,7 @@ describe('RuntimeFileCommands', () => {
   })
 
   it('tracks native Parcel watcher unsubscribe work so shutdown can await it', async () => {
-    const store = { getRepo: vi.fn(() => undefined) }
+    const { commands } = createRuntimeFileCommands()
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
     let resolveUnsubscribe: () => void = () => {}
@@ -332,18 +332,6 @@ describe('RuntimeFileCommands', () => {
         })
     )
     subscribeParcelWatcherMock.mockResolvedValue({ unsubscribe: unsubscribeMock })
-
-    const commands = new RuntimeFileCommands({
-      getRuntimeId: () => 'runtime-1',
-      requireStore: () => store,
-      resolveWorktreeSelector: vi.fn(async () => ({
-        id: 'wt-1',
-        repoId: 'repo-1',
-        path: '/repo'
-      })),
-      resolveRuntimeGitTarget: vi.fn(),
-      openFile: vi.fn()
-    } as never)
 
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', vi.fn())
     unsubscribe()

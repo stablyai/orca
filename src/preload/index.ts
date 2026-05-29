@@ -266,9 +266,19 @@ let cachedNotificationSound: {
   audio: HTMLAudioElement
 } | null = null
 let isNotificationSoundPlaying = false
+// Why: audio.play() can reject before ended/error fires; keep a cleanup hook
+// so failed or replaced plays do not accumulate listeners on the cached Audio.
+let cleanupNotificationSoundPlayback: (() => void) | null = null
+
+function clearNotificationSoundPlaybackState(): void {
+  cleanupNotificationSoundPlayback?.()
+  cleanupNotificationSoundPlayback = null
+  isNotificationSoundPlaying = false
+}
 
 function disposeCachedNotificationSound(): void {
   if (cachedNotificationSound) {
+    clearNotificationSoundPlaybackState()
     cachedNotificationSound.audio.pause()
     cachedNotificationSound.audio.src = ''
     URL.revokeObjectURL(cachedNotificationSound.blobUrl)
@@ -989,6 +999,7 @@ const api = {
       limit?: number
       query?: string
       before?: string
+      noCache?: boolean
     }): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> =>
       ipcRenderer.invoke('gh:listWorkItems', args),
 
@@ -1548,11 +1559,21 @@ const api = {
           audio.volume = Math.min(1, Math.max(0, options.volume / 100))
         }
         isNotificationSoundPlaying = true
+        cleanupNotificationSoundPlayback?.()
         const release = (): void => {
+          cleanup()
+          if (cleanupNotificationSoundPlayback === cleanup) {
+            cleanupNotificationSoundPlayback = null
+          }
           isNotificationSoundPlaying = false
         }
-        audio.addEventListener('ended', release, { once: true })
-        audio.addEventListener('error', release, { once: true })
+        const cleanup = (): void => {
+          audio.removeEventListener('ended', release)
+          audio.removeEventListener('error', release)
+        }
+        cleanupNotificationSoundPlayback = cleanup
+        audio.addEventListener('ended', release)
+        audio.addEventListener('error', release)
         try {
           await audio.play()
         } catch {
@@ -1561,7 +1582,7 @@ const api = {
         }
         return { played: true }
       } catch {
-        isNotificationSoundPlaying = false
+        clearNotificationSoundPlaybackState()
         return { played: false, reason: 'playback-failed' }
       }
     }

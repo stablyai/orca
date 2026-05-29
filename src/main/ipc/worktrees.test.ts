@@ -1470,7 +1470,10 @@ describe('registerWorktreeHandlers', () => {
       ['config', '--local', '--unset-all', 'branch.sparse-dashboard.base'],
       '/remote/repo/../sparse-dashboard'
     )
-    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/repo/../sparse-dashboard', true)
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/repo/../sparse-dashboard', true, {
+      deleteBranch: true,
+      forceBranchDelete: true
+    })
   })
 
   it('does not create an SSH worktree when remote-tracking base refresh fails', async () => {

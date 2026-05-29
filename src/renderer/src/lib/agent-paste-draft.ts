@@ -4,7 +4,6 @@ import { useAppStore } from '@/store'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-dispatcher'
 import {
   isRemoteRuntimePtyId,
-  sendRuntimePtyInput,
   sendRuntimePtyInputVerified
 } from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
@@ -95,12 +94,15 @@ export async function pasteDraftWhenAgentReady(args: {
     return false
   }
 
-  sendRuntimePtyInput(
-    useAppStore.getState().settings,
-    ptyId,
-    `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}${submit ? '\r' : ''}`
-  )
-  return true
+  try {
+    return await sendRuntimePtyInputVerified(
+      useAppStore.getState().settings,
+      ptyId,
+      `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}${submit ? '\r' : ''}`
+    )
+  } catch {
+    return false
+  }
 }
 
 export async function submitPromptToAgentTab(args: {

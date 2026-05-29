@@ -1,18 +1,17 @@
 import { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from '../../../../shared/constants'
+import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 
 const PROJECT_GROUP_HEADER_KEY_PREFIX = 'repo:'
 
 export function resolveRepoHeaderColor(badgeColor: string | null | undefined): string {
-  const normalizedBadgeColor = badgeColor?.trim().toLowerCase()
+  const normalizedBadgeColor = normalizeRepoBadgeColor(badgeColor)
   if (!normalizedBadgeColor) {
     return DEFAULT_REPO_BADGE_COLOR
   }
 
-  // Why: persisted repo colors are rendered as inline CSS here, so only the
-  // documented palette should reach the sidebar.
-  return (
-    REPO_COLORS.find((repoColor) => repoColor === normalizedBadgeColor) ?? DEFAULT_REPO_BADGE_COLOR
-  )
+  // Why: persisted repo colors are rendered as inline CSS here, so only
+  // normalized hex values from the palette or custom picker reach the sidebar.
+  return REPO_COLORS.find((repoColor) => repoColor === normalizedBadgeColor) ?? normalizedBadgeColor
 }
 
 export function resolveProjectGroupHeaderColor(args: {
