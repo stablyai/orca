@@ -27,6 +27,9 @@ export function ExperimentalPane({
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
     EXPERIMENTAL_SEARCH_ENTRY.terminalAttention
   ])
+  const showCompactWorktreeCards = matchesSettingsSearch(searchQuery, [
+    EXPERIMENTAL_SEARCH_ENTRY.compactWorktreeCards
+  ])
   const showWorktreeSymlinks = matchesSettingsSearch(searchQuery, [
     EXPERIMENTAL_SEARCH_ENTRY.symlinks
   ])
@@ -142,6 +145,47 @@ export function ExperimentalPane({
               <span
                 className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
                   settings.experimentalTerminalAttention ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+        </SearchableSetting>
+      ) : null}
+
+      {showCompactWorktreeCards ? (
+        <SearchableSetting
+          title="Compact worktree cards"
+          description="Hide redundant second lines in the worktree sidebar."
+          keywords={EXPERIMENTAL_SEARCH_ENTRY.compactWorktreeCards.keywords}
+          className="space-y-3 py-2"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>Compact worktree cards</Label>
+              <p className="text-xs text-muted-foreground">
+                Collapses a card only when its second line would be empty or repeat the title. Cards
+                with a different branch, repo badge, folder badge, cache timer, or conflict state
+                keep the second line.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.experimentalCompactWorktreeCards}
+              onClick={() =>
+                updateSettings({
+                  experimentalCompactWorktreeCards: !settings.experimentalCompactWorktreeCards
+                })
+              }
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                settings.experimentalCompactWorktreeCards
+                  ? 'bg-foreground'
+                  : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
+                  settings.experimentalCompactWorktreeCards ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />
             </button>

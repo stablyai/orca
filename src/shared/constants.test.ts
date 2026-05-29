@@ -35,6 +35,10 @@ describe('getDefaultSettings', () => {
   it('keeps Source Control groups in the current order by default', () => {
     expect(getDefaultSettings('/tmp').sourceControlGroupOrder).toBe('changes-first')
   })
+
+  it('keeps compact worktree cards experimental and disabled by default', () => {
+    expect(getDefaultSettings('/tmp').experimentalCompactWorktreeCards).toBe(false)
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {
