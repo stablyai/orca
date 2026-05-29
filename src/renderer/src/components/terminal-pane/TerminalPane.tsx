@@ -1484,6 +1484,7 @@ export default function TerminalPane({
     managerRef,
     paneTransportsRef,
     paneCwdRef,
+    tabId,
     worktreeId,
     fallbackCwd: cwd ?? '',
     toggleExpandPane,
@@ -1702,6 +1703,7 @@ export default function TerminalPane({
         }
         onToggleExpand={contextMenu.onToggleExpand}
         onSetTitle={contextMenu.onSetTitle}
+        onCopyPaneId={contextMenu.onCopyPaneId}
       />
       <TerminalQuickCommandDialog
         open={quickCommandEditorOpen}
