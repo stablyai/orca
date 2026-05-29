@@ -260,29 +260,35 @@ export function useAutomationDispatchEvents(): void {
           }
           completionMarked = true
           cleanupRunObservers()
-          await markDispatchResult({
-            runId: run.id,
-            status: 'completed',
-            workspaceId: worktree.id,
-            workspaceDisplayName: worktree.displayName,
-            outputSnapshot: getOutputSnapshot(),
-            precheckResult,
-            error: null
-          })
-          closeBackgroundAutomationTab()
+          try {
+            await markDispatchResult({
+              runId: run.id,
+              status: 'completed',
+              workspaceId: worktree.id,
+              workspaceDisplayName: worktree.displayName,
+              outputSnapshot: getOutputSnapshot(),
+              precheckResult,
+              error: null
+            })
+          } finally {
+            closeBackgroundAutomationTab()
+          }
         }
         const markExitResult = async (code: number): Promise<void> => {
           cleanupRunObservers()
-          await markDispatchResult({
-            runId: run.id,
-            status: code === 0 ? 'completed' : 'dispatch_failed',
-            workspaceId: worktree.id,
-            workspaceDisplayName: worktree.displayName,
-            outputSnapshot: getOutputSnapshot(),
-            precheckResult,
-            error: code === 0 ? null : `Automation process exited with code ${code}.`
-          })
-          closeBackgroundAutomationTab()
+          try {
+            await markDispatchResult({
+              runId: run.id,
+              status: code === 0 ? 'completed' : 'dispatch_failed',
+              workspaceId: worktree.id,
+              workspaceDisplayName: worktree.displayName,
+              outputSnapshot: getOutputSnapshot(),
+              precheckResult,
+              error: code === 0 ? null : `Automation process exited with code ${code}.`
+            })
+          } finally {
+            closeBackgroundAutomationTab()
+          }
         }
         const handleAgentDone = (): void => {
           if (completionMarked) {
