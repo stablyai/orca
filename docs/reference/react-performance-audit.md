@@ -47,12 +47,14 @@ Initial inventory:
 
 ## Coverage Ledger
 
+Current count after low-risk PRs #3038, #3041, #3042, and #3044: 966 Effect hook call sites.
+
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Renderer app shell             | `src/renderer/src/App.tsx`, root components                                                              | Inventory complete, manual review pending     | Check global listeners, beforeunload, media-query, sidebar resize, active-tab repair.                                              |
 | Terminal / PTY                 | `components/Terminal.tsx`, `components/terminal-pane/**`, `components/terminal/**`                       | Inventory complete, manual review pending     | High-risk area: xterm lifecycle, scrollback, remote/mobile parity, focus, WebGL, resize.                                           |
 | Browser pane                   | `components/browser-pane/**`                                                                             | Inventory complete, manual review in progress | Highest Effect density: 62 sites in `BrowserPane.tsx`. Check driver sync, address bar derived state, find state, webview lifetime. |
-| Editor / markdown / Monaco     | `components/editor/**`                                                                                   | Inventory complete, manual review pending     | 117 area Effects. Check editor model cleanup, preview scroll restore, search debounce, generated decorations.                      |
+| Editor / markdown / Monaco     | `components/editor/**`                                                                                   | Inventory complete, manual review in progress | 117 area Effects. Check editor model cleanup, preview scroll restore, search debounce, generated decorations.                      |
 | Sidebar / worktrees            | `components/sidebar/**`                                                                                  | Inventory complete, manual review in progress | Check worktree list state repair, drag/drop global listeners, kanban pointer flows, inline rename.                                 |
 | Right sidebar / source control | `components/right-sidebar/**`                                                                            | Inventory complete, manual review pending     | Check polling, PR checks, file explorer watch/reveal, source-control local resets. Git provider compatibility required.            |
 | Settings                       | `components/settings/**`                                                                                 | Inventory complete, manual review pending     | 81 area Effects. Many draft-mirror candidates; keep SSH and cross-platform settings behavior intact.                               |
@@ -81,6 +83,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR I         | Feature wall/onboarding demos                         | Animation/demo Effects can often move to event handlers or tighter custom hooks.                         | `components/feature-wall/**`, `components/onboarding/**`                                                                 | Low to medium  |
 | PR J         | GitHub filter controls                                | Extra render pass from mirroring parsed reviewer qualifier into local mode state.                        | `PRFilterDropdowns.tsx` covered by #3041                                                                                 | Low            |
 | PR K         | Sidebar project filter                                | Extra render pass from mirroring the first filtered repo into command selection state.                   | `SidebarFilter.tsx` covered by #3042                                                                                     | Low            |
+| PR L         | Diff note edit draft                                  | Extra render pass from mirroring saved note body into edit draft while not editing.                      | `DiffCommentCard.tsx` covered by #3044                                                                                   | Low            |
 
 ## Merge Risk Scale
 
@@ -94,9 +97,10 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 
 | PR    | Branch                               | Area                                                                          | Risk | Status | Evidence                                                                                                     |
 | ----- | ------------------------------------ | ----------------------------------------------------------------------------- | ---- | ------ | ------------------------------------------------------------------------------------------------------------ |
-| #3038 | `nwparker/react-perf`                | Audit ledger plus browser address bar top-suggestion mirror Effect removal    | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/browser-pane/BrowserAddressBar.tsx`; `pnpm run typecheck:web`. |
-| #3041 | `nwparker/react-perf-pr-filter`      | PR reviewer filter mode derived from parsed query plus explicit user override | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/github/PRFilterDropdowns.tsx`; `pnpm run typecheck:web`.       |
-| #3042 | `nwparker/react-perf-sidebar-filter` | Sidebar project filter command selection derived from filtered repos          | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/sidebar/SidebarFilter.tsx`; `pnpm run typecheck:web`.          |
+| #3038 | `nwparker/react-perf`                | Audit ledger plus browser address bar top-suggestion mirror Effect removal    | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/browser-pane/BrowserAddressBar.tsx`; `pnpm run typecheck:web`. |
+| #3041 | `nwparker/react-perf-pr-filter`      | PR reviewer filter mode derived from parsed query plus explicit user override | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/github/PRFilterDropdowns.tsx`; `pnpm run typecheck:web`.       |
+| #3042 | `nwparker/react-perf-sidebar-filter` | Sidebar project filter command selection derived from filtered repos          | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/SidebarFilter.tsx`; `pnpm run typecheck:web`.          |
+| #3044 | `nwparker/react-perf-low-risk-2`     | Diff note card removes saved-body-to-draft mirror Effect                      | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/diff-comments/DiffCommentCard.tsx`; `pnpm run typecheck:web`.  |
 
 ## Reproduction Commands
 
