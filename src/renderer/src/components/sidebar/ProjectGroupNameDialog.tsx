@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
+import React, { useCallback, useId, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -34,14 +34,18 @@ export function ProjectGroupNameDialog({
   const inputId = useId()
   const [name, setName] = useState(initialName)
   const [submitting, setSubmitting] = useState(false)
+  const [previousOpenState, setPreviousOpenState] = useState({ open, initialName })
   const trimmedName = name.trim()
 
-  useEffect(() => {
+  // Why: the input should mount already seeded and selectable for the active
+  // group; Effect-based hydration shows one frame with the prior draft.
+  if (open !== previousOpenState.open || initialName !== previousOpenState.initialName) {
+    setPreviousOpenState({ open, initialName })
     if (open) {
       setName(initialName)
       setSubmitting(false)
     }
-  }, [initialName, open])
+  }
 
   const handleSubmit = useCallback(
     async (event?: React.FormEvent<HTMLFormElement>) => {
