@@ -415,6 +415,37 @@ describe('GitHandler', () => {
       await expect(fs.access(path.join(tmpDir, 'new.txt'))).rejects.toThrow()
     })
 
+    it('treats untracked discard paths with Git glob characters as literal paths', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, '.gitignore'), 'ignored.log\n')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, '*.log'), 'selected')
+      writeFileSync(path.join(tmpDir, 'keep.log'), 'unrelated')
+      writeFileSync(path.join(tmpDir, 'ignored.log'), 'ignored')
+
+      await dispatcher.callRequest('git.discard', { worktreePath: tmpDir, filePath: '*.log' })
+
+      await expect(fs.access(path.join(tmpDir, '*.log'))).rejects.toThrow()
+      await expect(fs.access(path.join(tmpDir, 'keep.log'))).resolves.toBeUndefined()
+      await expect(fs.access(path.join(tmpDir, 'ignored.log'))).resolves.toBeUndefined()
+    })
+
+    it('treats tracked discard paths with Git glob characters as literal paths', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, '*.log'), 'selected')
+      writeFileSync(path.join(tmpDir, 'keep.log'), 'keep')
+      gitCommit(tmpDir, 'track log fixtures')
+      writeFileSync(path.join(tmpDir, '*.log'), 'selected modified')
+      writeFileSync(path.join(tmpDir, 'keep.log'), 'keep modified')
+
+      await dispatcher.callRequest('git.discard', { worktreePath: tmpDir, filePath: '*.log' })
+
+      await expect(fs.readFile(path.join(tmpDir, '*.log'), 'utf-8')).resolves.toBe('selected')
+      await expect(fs.readFile(path.join(tmpDir, 'keep.log'), 'utf-8')).resolves.toBe(
+        'keep modified'
+      )
+    })
+
     it('bulk discards tracked and untracked files', async () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'a.txt'), 'a')
