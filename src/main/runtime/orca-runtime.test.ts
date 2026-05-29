@@ -445,6 +445,36 @@ const TEST_WORKTREE_PATH = '/tmp/worktree-a'
 const TEST_WORKTREE_ID = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
+function antigravityReadyScreen(model = 'Gemini 3.5 Flash (High)'): string {
+  return [
+    'Antigravity CLI 1.0.3',
+    'user@example.com (Antigravity Business)',
+    model,
+    '~/orca/workspaces/orca/agy-dispatch-issue',
+    '>'
+  ].join('\n')
+}
+
+function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High)'): string {
+  return [
+    'Antigravity CLI 1.0.3',
+    'user@example.com',
+    '~/orca/workspaces/orca/agy-dispatch-issue',
+    '',
+    '',
+    '',
+    '',
+    '>',
+    '',
+    '? for shortcuts',
+    `\t\t  ${model}`,
+    '~/orca/workspaces/orca/agy-dispatch-issue',
+    '',
+    model,
+    ' (Antigravity Business)'
+  ].join('\n')
+}
+
 // Why: these runtime feature tests only need message-queue semantics; using
 // SQLite here makes them fail on unrelated better-sqlite3 native ABI drift.
 class InMemoryOrchestrationMessages {
@@ -3005,6 +3035,91 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('resolves tui-idle from an Antigravity ready prompt preview', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.onPtyData('pty-bg', antigravityReadyScreen('Gemini 4 Experimental (High)'), Date.now())
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      status: 'running'
+    })
+  })
+
+  it('resolves tui-idle from an Antigravity prompt before the model line', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        'Do you trust this workspace directory?\n',
+        'Press t to trust\n',
+        antigravityPromptBeforeModelReadyScreen('Gemini 3.5 Flash (High)')
+      ].join(''),
+      Date.now()
+    )
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running'
+    })
+  })
+
+  it('resolves live-leaf tui-idle from an Antigravity ready prompt preview', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1',
+          paneTitle: null
+        }
+      ]
+    })
+    runtime.onPtyData('pty-1', antigravityReadyScreen(), Date.now())
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle: terminal.handle,
+      condition: 'tui-idle',
+      status: 'running'
+    })
+  })
+
   it('resolves tui-idle from a Codex ready prompt even when stale startup lines remain', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -3028,6 +3143,36 @@ describe('OrcaRuntimeService', () => {
           'Run /review on my current changes gpt-5.5 high ~/orca/workspaces/orca/cli-debug',
           'Run /review on my current changes gpt-5.5 high ~/orca/workspaces/orca/cli-debug\n'
         ].join('')
+      ].join(''),
+      Date.now()
+    )
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running'
+    })
+  })
+
+  it('resolves tui-idle when a stale Codex prompt is followed by Antigravity readiness', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        'Do you trust this workspace directory?\n',
+        'Press t to trust\n',
+        antigravityReadyScreen(),
+        '\n'
       ].join(''),
       Date.now()
     )
@@ -4011,6 +4156,229 @@ describe('OrcaRuntimeService', () => {
     )
 
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
+  })
+
+  it('recognizes runtime-created Antigravity PTY handles from the ready prompt', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'agy',
+      title: 'worker'
+    })
+
+    runtime.onPtyData('pty-bg', antigravityReadyScreen(), 100)
+
+    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
+  })
+
+  it('recognizes Antigravity ready tails with the prompt before the model line', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'agy',
+      title: 'worker'
+    })
+
+    runtime.onPtyData('pty-bg', antigravityPromptBeforeModelReadyScreen(), 100)
+
+    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
+  })
+
+  it('recognizes live leaf Antigravity terminals from the ready prompt', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1',
+          paneTitle: null
+        }
+      ]
+    })
+    runtime.onPtyData('pty-1', antigravityReadyScreen(), 100)
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(true)
+  })
+
+  it('does not recognize partial Antigravity startup output as an agent', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'agy',
+      title: 'worker'
+    })
+
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        'Antigravity CLI 1.0.3',
+        'user@example.com (Antigravity Business)',
+        'Gemini 3.5 Flash (High)'
+      ].join('\n'),
+      100
+    )
+
+    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
+  })
+
+  it('rejects a later Antigravity header with a prompt but no model line', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'agy',
+      title: 'worker'
+    })
+
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        antigravityReadyScreen(),
+        '\nAntigravity CLI 1.0.4\n',
+        'user@example.com (Antigravity Business)\n',
+        '~/orca/workspaces/orca/agy-dispatch-issue\n',
+        '>\n'
+      ].join(''),
+      100
+    )
+
+    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
+  })
+
+  it('uses the latest Antigravity header when checking readiness', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'agy',
+      title: 'worker'
+    })
+
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        antigravityReadyScreen(),
+        '\nAntigravity CLI 1.0.4\n',
+        'user@example.com (Antigravity Business)\n',
+        'Gemini 4 Experimental (High)\n',
+        'Do you trust this workspace directory?\n'
+      ].join(''),
+      100
+    )
+
+    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
+  })
+
+  it('recognizes Antigravity prompts written as the current partial line', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'agy',
+      title: 'worker'
+    })
+
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        'Antigravity CLI 1.0.3\n',
+        'user@example.com (Antigravity Business)\n',
+        'Gemini 3.5 Flash (High)\n',
+        '~/orca/workspaces/orca/agy-dispatch-issue\n'
+      ].join(''),
+      100
+    )
+    runtime.onPtyData('pty-bg', '   >   ', 101)
+
+    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
+  })
+
+  it('does not classify agy workspace paths or titles without the ready prompt', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: '/tmp/agy-workspace',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1',
+          paneTitle: '/tmp/agy-workspace'
+        }
+      ]
+    })
+    runtime.onPtyData('pty-1', 'cd /tmp/agy-workspace\n', 100)
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
   })
 
   it('keeps mobile terminal surfaces visible while their leaf handle is pending', async () => {

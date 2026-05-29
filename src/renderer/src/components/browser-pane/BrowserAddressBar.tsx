@@ -62,7 +62,7 @@ export default function BrowserAddressBar({
   inputRef
 }: BrowserAddressBarProps): React.ReactElement {
   const [open, setOpen] = useState(false)
-  const [selectedValue, setSelectedValue] = useState('')
+  const [selectedValueOverride, setSelectedValueOverride] = useState<string | null>(null)
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
@@ -137,6 +137,12 @@ export default function BrowserAddressBar({
     return [topAction, ...historySuggestions].slice(0, MAX_SUGGESTIONS)
   }, [browserUrlHistory, value, searchEngine, browserKagiSessionLink])
 
+  const selectedValue =
+    selectedValueOverride &&
+    suggestions.some((suggestion) => suggestion.url === selectedValueOverride)
+      ? selectedValueOverride
+      : (suggestions[0]?.url ?? '')
+
   const handleFocus = useCallback(() => {
     if (closingRef.current) {
       return
@@ -170,6 +176,7 @@ export default function BrowserAddressBar({
     (url: string) => {
       closingRef.current = true
       setOpen(false)
+      setSelectedValueOverride(null)
       onNavigate(url)
       setTimeout(() => {
         closingRef.current = false
@@ -182,7 +189,7 @@ export default function BrowserAddressBar({
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.key === 'Escape') {
         setOpen(false)
-        setSelectedValue('')
+        setSelectedValueOverride(null)
         return
       }
 
@@ -192,21 +199,17 @@ export default function BrowserAddressBar({
 
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        setSelectedValue((prev) => {
-          const idx = suggestions.findIndex((s) => s.url === prev)
-          const next = idx < suggestions.length - 1 ? idx + 1 : 0
-          return suggestions[next].url
-        })
+        const idx = suggestions.findIndex((s) => s.url === selectedValue)
+        const next = idx < suggestions.length - 1 ? idx + 1 : 0
+        setSelectedValueOverride(suggestions[next].url)
         return
       }
 
       if (event.key === 'ArrowUp') {
         event.preventDefault()
-        setSelectedValue((prev) => {
-          const idx = suggestions.findIndex((s) => s.url === prev)
-          const next = idx > 0 ? idx - 1 : suggestions.length - 1
-          return suggestions[next].url
-        })
+        const idx = suggestions.findIndex((s) => s.url === selectedValue)
+        const next = idx > 0 ? idx - 1 : suggestions.length - 1
+        setSelectedValueOverride(suggestions[next].url)
         return
       }
 
@@ -235,13 +238,6 @@ export default function BrowserAddressBar({
     }
   }, [open, suggestions.length, inputRef])
 
-  // Why: auto-select the top suggestion so Enter navigates to the best match
-  // without an extra ArrowDown. Fall back to clearing selection when nothing
-  // matches so stale highlights don't persist.
-  useEffect(() => {
-    setSelectedValue(suggestions[0]?.url ?? '')
-  }, [suggestions])
-
   return (
     <Popover
       open={open}
@@ -269,7 +265,6 @@ export default function BrowserAddressBar({
           <Input
             ref={inputRef}
             value={value}
-            onChange={(event) => onChange(event.target.value)}
             onFocus={handleFocus}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
@@ -278,6 +273,12 @@ export default function BrowserAddressBar({
             spellCheck={false}
             autoCapitalize="none"
             autoCorrect="off"
+            onChange={(event) => {
+              // Why: typing creates a new suggestion list, so keyboard selection
+              // should return to the derived top match instead of a stale row.
+              setSelectedValueOverride(null)
+              onChange(event.target.value)
+            }}
             role="combobox"
             aria-expanded={open}
             aria-controls="browser-history-listbox"
@@ -297,7 +298,11 @@ export default function BrowserAddressBar({
             e.preventDefault()
           }}
         >
-          <Command shouldFilter={false} value={selectedValue} onValueChange={setSelectedValue}>
+          <Command
+            shouldFilter={false}
+            value={selectedValue}
+            onValueChange={setSelectedValueOverride}
+          >
             <CommandList id="browser-history-listbox" role="listbox">
               <CommandGroup>
                 {suggestions.map((entry) => (

@@ -104,15 +104,15 @@ export function useWorkspaceKanbanCardPointerDrag({
   const dragTargetChangeRef = useRef(onDragTargetChange)
   const pinDragTargetChangeRef = useRef(onPinDragTargetChange)
 
-  useEffect(() => {
-    selectedWorktreeIdsRef.current = selectedWorktreeIds
-    selectedWorktreesRef.current = selectedWorktrees
-    dropWorktreesInStatusRef.current = onDropWorktreesInStatus
-    shouldShowDropIndicatorRef.current = onShouldShowDropIndicator
-    pinWorktreesRef.current = onPinWorktrees
-    dragTargetChangeRef.current = onDragTargetChange
-    pinDragTargetChangeRef.current = onPinDragTargetChange
-  })
+  // Why: document-level pointer handlers stay stable during drags, but their
+  // selection/drop refs must reflect the latest board state before events run.
+  selectedWorktreeIdsRef.current = selectedWorktreeIds
+  selectedWorktreesRef.current = selectedWorktrees
+  dropWorktreesInStatusRef.current = onDropWorktreesInStatus
+  shouldShowDropIndicatorRef.current = onShouldShowDropIndicator
+  pinWorktreesRef.current = onPinWorktrees
+  dragTargetChangeRef.current = onDragTargetChange
+  pinDragTargetChangeRef.current = onPinDragTargetChange
 
   const clearDragTarget = useCallback(() => {
     dragTargetChangeRef.current(null)

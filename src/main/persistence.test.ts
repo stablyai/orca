@@ -1606,6 +1606,26 @@ describe('Store', () => {
     expect(store.getRepo('r1')!.repoIcon).toBeUndefined()
   })
 
+  it('updateRepo normalizes custom repo badge colors before storing', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', { badgeColor: ' ABCDEF ' })
+
+    expect(updated!.badgeColor).toBe('#abcdef')
+    expect(store.getRepo('r1')!.badgeColor).toBe('#abcdef')
+  })
+
+  it('updateRepo ignores invalid repo badge colors without clearing the existing color', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ badgeColor: '#123456' }))
+
+    const updated = store.updateRepo('r1', { badgeColor: 'blue' })
+
+    expect(updated!.badgeColor).toBe('#123456')
+    expect(store.getRepo('r1')!.badgeColor).toBe('#123456')
+  })
+
   it('getRepo does not expose invalid persisted repo icons', async () => {
     const store = await createStore()
     store.addRepo(

@@ -310,6 +310,28 @@ describe('RelayDispatcher', () => {
     await vi.advanceTimersByTimeAsync(0)
   })
 
+  it('aborts in-flight request contexts on dispose', async () => {
+    let observedSignal: AbortSignal | undefined
+    let resolveHandler!: () => void
+    dispatcher.onRequest(
+      'slow.method',
+      (_params, context) =>
+        new Promise((resolve) => {
+          observedSignal = context.signal
+          resolveHandler = () => resolve(null)
+        })
+    )
+
+    const req: JsonRpcRequest = { jsonrpc: '2.0', id: 101, method: 'slow.method' }
+    dispatcher.feed(encodeJsonRpcFrame(req, 1, 0))
+    await vi.advanceTimersByTimeAsync(0)
+    dispatcher.dispose()
+
+    expect(observedSignal?.aborted).toBe(true)
+    resolveHandler()
+    await vi.advanceTimersByTimeAsync(0)
+  })
+
   it('notifies listeners when the primary client is invalidated', () => {
     const listener = vi.fn()
     dispatcher.onClientDetached(listener)

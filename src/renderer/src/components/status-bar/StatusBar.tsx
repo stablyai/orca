@@ -150,11 +150,12 @@ function ClaudeSwitcherMenu({
     })
   }, [loadAccounts, open, claudeAccountSyncKey])
 
-  useEffect(() => {
-    if (!open) {
+  const handleOpenChange = useCallback((nextOpen: boolean): void => {
+    setOpen(nextOpen)
+    if (!nextOpen) {
       setAccountsExpanded(false)
     }
-  }, [open])
+  }, [])
 
   useEffect(() => {
     if (accountsExpanded) {
@@ -201,7 +202,7 @@ function ClaudeSwitcherMenu({
       iconOnly={iconOnly}
       ariaLabel="Open Claude details and account switcher"
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
     >
       <DropdownMenuLabel>Claude Account</DropdownMenuLabel>
       <DropdownMenuItem
@@ -540,11 +541,12 @@ function CodexSwitcherMenu({
     }
   }
 
-  useEffect(() => {
-    if (!open) {
+  const handleOpenChange = useCallback((nextOpen: boolean): void => {
+    setOpen(nextOpen)
+    if (!nextOpen) {
       setAccountsExpanded(false)
     }
-  }, [open])
+  }, [])
 
   useEffect(() => {
     if (accountsExpanded) {
@@ -578,7 +580,7 @@ function CodexSwitcherMenu({
       iconOnly={iconOnly}
       ariaLabel="Open Codex details and account switcher"
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
     >
       <DropdownMenuLabel>Codex Account</DropdownMenuLabel>
       <DropdownMenuItem

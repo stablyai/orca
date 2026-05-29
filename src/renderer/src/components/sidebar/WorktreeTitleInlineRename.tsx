@@ -46,12 +46,6 @@ export function WorktreeTitleInlineRename({
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (!editing) {
-      setValue(displayName)
-    }
-  }, [displayName, editing])
-
-  useEffect(() => {
     onEditingChange?.(editing)
     return () => {
       if (editing) {
