@@ -16,6 +16,7 @@ import {
   ServerOff,
   Sparkles,
   Star,
+  StickyNote,
   Trash2,
   Workflow
 } from 'lucide-react'
@@ -1323,6 +1324,18 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 {detailsAndPorts}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Why: surface the worktree comment inline on the card face for
+             at-a-glance context (previously visible only on hover). One
+             truncated line keeps the row a fixed height regardless of
+             comment length — avoiding the variable-height virtualizer jank
+             that led to the revert of #431 (commit 474db0ef). */}
+        {metaComment && metaComment.trim().length > 0 && (
+          <div className="flex min-w-0 items-center gap-1 text-[11px] leading-none text-muted-foreground">
+            <StickyNote className="size-2.5 shrink-0 text-muted-foreground/70" />
+            <span className="min-w-0 truncate">{metaComment.trim().replace(/\s+/g, ' ')}</span>
           </div>
         )}
 

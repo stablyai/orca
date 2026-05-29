@@ -214,7 +214,10 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('data-slot="badge"')
     expect(markup).not.toContain('Loading issue')
     expect(markup).not.toContain('Loading PR')
-    expect(markup).not.toContain('Reviewer handoff note')
+    // The comment now renders as a single truncated line on the card face
+    // (previously hover-only); the meta badges stay icon-only.
+    expect(markup).toContain('Reviewer handoff note')
+    expect(markup.indexOf('Workspace notes')).toBeLessThan(markup.indexOf('Linked issue #123'))
   })
 
   it('keeps issue, Linear issue, PR, and notes metadata out of compact cards', async () => {
