@@ -401,7 +401,7 @@ export class SshGitProvider implements IGitProvider {
   async removeWorktree(
     worktreePath: string,
     force?: boolean,
-    options?: { deleteBranch?: boolean }
+    options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
   ): Promise<void> {
     await this.mux.request('git.removeWorktree', { worktreePath, force, ...options })
   }

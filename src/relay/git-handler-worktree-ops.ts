@@ -125,6 +125,7 @@ export async function removeWorktreeOp(
   const worktreePath = params.worktreePath as string
   const force = params.force as boolean | undefined
   const deleteBranch = params.deleteBranch !== false
+  const forceBranchDelete = params.forceBranchDelete === true
 
   let repoPath = worktreePath
   try {
@@ -173,8 +174,8 @@ export async function removeWorktreeOp(
     // Why: use `-d` (not `-D`) to mirror the local removeWorktree fix — Git
     // refuses to delete a branch with commits not merged into its upstream or
     // HEAD, so unpublished work on a remote worktree is preserved rather than
-    // force-deleted.
-    await git(['branch', '-d', branchName], repoPath)
+    // force-deleted. forceBranchDelete is reserved for failed create rollback.
+    await git(['branch', forceBranchDelete ? '-D' : '-d', branchName], repoPath)
   } catch (error) {
     // Expected when the branch still has unmerged/unpublished commits: keep it.
     console.warn(

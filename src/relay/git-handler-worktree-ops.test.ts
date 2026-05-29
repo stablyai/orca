@@ -191,6 +191,38 @@ describe('removeWorktreeOp', () => {
     expect(git).not.toHaveBeenCalledWith(['branch', '-D', 'feature/test'], expect.any(String))
   })
 
+  it('force-deletes the just-created branch during failed sparse setup rollback', async () => {
+    let listCount = 0
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        listCount += 1
+        return {
+          stdout:
+            listCount === 1
+              ? worktreeList(
+                  { path: '/repo', branch: 'main' },
+                  { path: '/repo-feature', branch: 'feature/test' }
+                )
+              : worktreeList({ path: '/repo', branch: 'main' }),
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await removeWorktreeOp(git, {
+      worktreePath: '/repo-feature',
+      force: true,
+      forceBranchDelete: true
+    })
+
+    expect(git).toHaveBeenCalledWith(['branch', '-D', 'feature/test'], expect.any(String))
+    expect(git).not.toHaveBeenCalledWith(['branch', '-d', 'feature/test'], expect.any(String))
+  })
+
   it('skips branch deletion entirely when deleteBranch is false', async () => {
     const calls: string[] = []
     const git = vi.fn<GitExec>(async (args, cwd) => {
