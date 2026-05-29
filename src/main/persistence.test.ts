@@ -1659,6 +1659,28 @@ describe('Store', () => {
     expect(reloaded.getRepo('r1')!.issueSourcePreference).toBe('upstream')
   })
 
+  it('updateRepo persists default Docker isolation across reloads', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', { defaultIsolation: 'docker' })
+
+    expect(updated!.defaultIsolation).toBe('docker')
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.defaultIsolation).toBe('docker')
+  })
+
+  it('updateRepo ignores malformed default isolation values', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ defaultIsolation: 'host' }))
+
+    const updated = store.updateRepo('r1', { defaultIsolation: 'container' as never })
+
+    expect(updated!.defaultIsolation).toBe('host')
+    expect(store.getRepo('r1')!.defaultIsolation).toBe('host')
+  })
+
   it('updateRepo with issueSourcePreference=undefined clears the preference', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ issueSourcePreference: 'origin' }))

@@ -5,11 +5,15 @@ import { detectDockerEngine } from '../docker/docker-engine-detect'
 import { buildDockerImage } from '../docker/docker-image-build'
 import { DockerEngineClient } from '../docker/docker-engine-client'
 import type { DockerEngineInfo } from '../docker/types'
+import { listRepoWorktrees } from '../repo-worktrees'
+import { areWorktreePathsEqual } from './worktree-logic'
 import type { DockerBuildProgress, DockerEngineStatus, WorktreeIsolation } from '../../shared/types'
+import { splitWorktreeId } from '../../shared/worktree-id'
 
 const ENGINE_STATUS_CACHE_MS = 30_000
 const SSH_DOCKER_ISOLATION_ERROR =
   'Docker isolation is not yet supported for SSH repositories. Use a local repo or remove the SSH connection.'
+const INVALID_WORKTREE_ERROR = 'Docker image builds must target a known worktree for this repo.'
 
 type DockerIpcStore = Pick<Store, 'getRepo' | 'setWorktreeMeta'>
 
@@ -17,6 +21,7 @@ type DockerIpcDependencies = {
   detectEngine?: () => DockerEngineInfo
   buildImage?: typeof buildDockerImage
   createEngineClient?: () => DockerEngineClient
+  listWorktrees?: typeof listRepoWorktrees
   now?: () => number
 }
 
@@ -39,6 +44,7 @@ export function registerDockerIpcHandlers(
   const detectEngine = dependencies.detectEngine ?? detectDockerEngine
   const createEngineClient = dependencies.createEngineClient ?? (() => new DockerEngineClient())
   const buildImage = dependencies.buildImage ?? buildDockerImage
+  const listWorktrees = dependencies.listWorktrees ?? listRepoWorktrees
 
   ipcMain.handle('docker:engine-status', () => {
     const timestamp = now()
@@ -68,6 +74,21 @@ export function registerDockerIpcHandlers(
       if (repo.connectionId) {
         return { error: SSH_DOCKER_ISOLATION_ERROR }
       }
+      const parsedWorktreeId = splitWorktreeId(args.worktreeId)
+      if (
+        !parsedWorktreeId ||
+        parsedWorktreeId.repoId !== args.repoId ||
+        !parsedWorktreeId.worktreePath
+      ) {
+        return { error: INVALID_WORKTREE_ERROR }
+      }
+      const worktrees = await listWorktrees(repo)
+      const targetWorktree = worktrees.find((worktree) =>
+        areWorktreePathsEqual(worktree.path, parsedWorktreeId.worktreePath)
+      )
+      if (!targetWorktree) {
+        return { error: INVALID_WORKTREE_ERROR }
+      }
 
       const engineStatus = detectEngine()
       if (!engineStatus.available) {
@@ -84,7 +105,7 @@ export function registerDockerIpcHandlers(
         sendBuildProgress(mainWindow, { worktreeId: args.worktreeId, phase: 'pull', percent: 5 })
         sendBuildProgress(mainWindow, { worktreeId: args.worktreeId, phase: 'build', percent: 25 })
         const image = await buildImage({
-          repoPath: repo.path,
+          repoPath: targetWorktree.path,
           repoIdentity: repo.id,
           engine: createEngineClient()
         })

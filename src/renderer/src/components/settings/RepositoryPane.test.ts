@@ -24,6 +24,8 @@ describe('RepositoryPane search entries', () => {
   it('keeps renamed hook sections reachable through settings search', () => {
     const entries = getRepositoryPaneSearchEntries(repo)
 
+    expect(matchesSettingsSearch('default isolation', entries)).toBe(true)
+    expect(matchesSettingsSearch('docker', entries)).toBe(true)
     expect(matchesSettingsSearch('setup script', entries)).toBe(true)
     expect(matchesSettingsSearch('archive script', entries)).toBe(true)
     expect(matchesSettingsSearch('setup command', entries)).toBe(true)
@@ -37,6 +39,35 @@ describe('RepositoryPane search entries', () => {
     expect(matchesRepositoryIdentitySearch('example repo', repo)).toBe(true)
     expect(matchesRepositoryIdentitySearch('/tmp/repo', repo)).toBe(true)
     expect(matchesRepositoryIdentitySearch('setup script', repo)).toBe(false)
+  })
+
+  it('hides default isolation for SSH repositories', () => {
+    const entries = getRepositoryPaneSearchEntries({ ...repo, connectionId: 'ssh-1' })
+
+    expect(entries.map((entry) => entry.title)).not.toContain('Default Isolation')
+  })
+
+  it('renders host and Docker defaults for local git repositories', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(RepositoryPane, {
+          repo: { ...repo, defaultIsolation: 'docker' },
+          yamlHooks: null,
+          hasHooksFile: false,
+          hooksInspectionReady: true,
+          mayNeedUpdate: false,
+          updateRepo: vi.fn(),
+          removeProject: vi.fn()
+        })
+      )
+    )
+
+    expect(html).toContain('Default isolation for new worktrees')
+    expect(html).toContain('Host')
+    expect(html).toContain('Docker')
+    expect(html).toContain('aria-pressed="true"')
   })
 
   it('renders full hook controls when search matches the project name', () => {

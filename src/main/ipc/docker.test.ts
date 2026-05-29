@@ -81,6 +81,15 @@ describe('registerDockerIpcHandlers', () => {
 
   it('builds an image and emits progress for the target worktree', async () => {
     const store = makeStore()
+    const listWorktrees = vi.fn().mockResolvedValue([
+      {
+        path: '/repo/wt',
+        head: 'abc123',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
     const buildImage = vi.fn().mockResolvedValue({
       id: 'image-1',
       cacheKey: 'cache-1',
@@ -90,7 +99,8 @@ describe('registerDockerIpcHandlers', () => {
     registerDockerIpcHandlers(mainWindow as never, store as never, {
       detectEngine: () => availableEngine,
       buildImage,
-      createEngineClient: () => ({ buildImage: vi.fn() }) as never
+      createEngineClient: () => ({ buildImage: vi.fn() }) as never,
+      listWorktrees
     })
 
     const result = await handlers.get('docker:build-image')!(null, {
@@ -101,7 +111,7 @@ describe('registerDockerIpcHandlers', () => {
     expect(result).toEqual(expect.objectContaining({ id: 'image-1' }))
     expect(buildImage).toHaveBeenCalledWith(
       expect.objectContaining({
-        repoPath: '/repo',
+        repoPath: '/repo/wt',
         repoIdentity: 'repo-1'
       })
     )
@@ -113,6 +123,73 @@ describe('registerDockerIpcHandlers', () => {
       'docker:build-progress',
       expect.objectContaining({ worktreeId: 'repo-1::/repo/wt', phase: 'ready', percent: 100 })
     )
+  })
+
+  it('rejects image builds when Docker is unavailable and emits failed progress', async () => {
+    const listWorktrees = vi.fn().mockResolvedValue([
+      {
+        path: '/repo/wt',
+        head: 'abc123',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const buildImage = vi.fn()
+    registerDockerIpcHandlers(mainWindow as never, makeStore() as never, {
+      detectEngine: () => ({
+        available: false,
+        flavor: 'docker-engine-linux',
+        socketPath: '',
+        reason: 'Docker daemon is not running'
+      }),
+      buildImage,
+      listWorktrees
+    })
+
+    await expect(
+      handlers.get('docker:build-image')!(null, {
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/repo/wt'
+      })
+    ).rejects.toThrow('Docker daemon is not running')
+
+    expect(buildImage).not.toHaveBeenCalled()
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('docker:build-progress', {
+      worktreeId: 'repo-1::/repo/wt',
+      phase: 'failed',
+      error: 'Docker daemon is not running'
+    })
+  })
+
+  it('rejects image builds when the worktree id is not known for the repo', async () => {
+    const buildImage = vi.fn()
+    const detectEngine = vi.fn().mockReturnValue(availableEngine)
+    registerDockerIpcHandlers(mainWindow as never, makeStore() as never, {
+      detectEngine,
+      buildImage,
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/repo/other',
+          head: 'abc123',
+          branch: 'other',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    })
+
+    const result = await handlers.get('docker:build-image')!(null, {
+      repoId: 'repo-1',
+      worktreeId: 'repo-1::/repo/wt'
+    })
+
+    expect(result).toEqual({
+      error: 'Docker image builds must target a known worktree for this repo.'
+    })
+    expect(detectEngine).not.toHaveBeenCalled()
+    expect(buildImage).not.toHaveBeenCalled()
+    expect(mainWindow.webContents.send).not.toHaveBeenCalled()
   })
 
   it('rejects Docker image builds for SSH repositories', async () => {

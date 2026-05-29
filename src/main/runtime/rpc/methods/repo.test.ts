@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: repo RPC coverage stays in one file so dispatcher setup and schema assertions remain colocated. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -223,6 +224,33 @@ describe('repo RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: { repo: { id: 'repo-1', issueSourcePreference: 'origin' } }
+    })
+  })
+
+  it('persists default isolation updates from remote clients', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/repo',
+        defaultIsolation: 'docker'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { defaultIsolation: 'docker' }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      defaultIsolation: 'docker'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', defaultIsolation: 'docker' } }
     })
   })
 
