@@ -31,6 +31,23 @@ export type LayoutGroupKind = (typeof LAYOUT_GROUP_KINDS)[number]
 
 const LayoutGroupKindSchema = z.enum(LAYOUT_GROUP_KINDS)
 
+const MAX_LAYOUT_GROUPS = 24
+const MAX_LAYOUT_GROUP_NAME_LENGTH = 64
+const UNSAFE_LAYOUT_GROUP_NAMES = new Set(['__proto__', 'prototype', 'constructor'])
+
+// Why: group names come from untrusted repo config and become object-map
+// keys plus CLI arguments, so keep them bounded and prototype-safe.
+const LayoutGroupNameSchema = z
+  .string()
+  .min(1)
+  .max(MAX_LAYOUT_GROUP_NAME_LENGTH)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, {
+    message: 'Group names may contain only letters, numbers, underscores, and hyphens'
+  })
+  .refine((name) => !UNSAFE_LAYOUT_GROUP_NAMES.has(name), {
+    message: 'Group name is reserved'
+  })
+
 const LayoutGroupSchema = z.object({
   position: LayoutGroupPositionSchema,
   kind: LayoutGroupKindSchema.optional()
@@ -89,9 +106,9 @@ export type LayoutRuleKey = (typeof LAYOUT_RULE_KEYS)[number]
  * rule key written by newer config).
  */
 const LayoutRulesSchema = z.object({
-  'new-editor-tab': z.string().min(1).optional(),
-  'new-terminal': z.string().min(1).optional(),
-  'new-browser-tab': z.string().min(1).optional()
+  'new-editor-tab': LayoutGroupNameSchema.optional(),
+  'new-terminal': LayoutGroupNameSchema.optional(),
+  'new-browser-tab': LayoutGroupNameSchema.optional()
 })
 
 export type LayoutRules = Partial<Record<LayoutRuleKey, string>>
@@ -103,7 +120,12 @@ export type LayoutRules = Partial<Record<LayoutRuleKey, string>>
  */
 export const LayoutConfigSchema = z
   .object({
-    groups: z.record(z.string().min(1), LayoutGroupSchema).optional(),
+    groups: z
+      .record(LayoutGroupNameSchema, LayoutGroupSchema)
+      .refine((groups) => Object.keys(groups).length <= MAX_LAYOUT_GROUPS, {
+        message: `Layout may declare at most ${MAX_LAYOUT_GROUPS} groups`
+      })
+      .optional(),
     rules: LayoutRulesSchema.optional()
   })
   .refine(

@@ -22,6 +22,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '../../runtime/web-runtime-session'
+import { getGroupKindForUuid } from '@/lib/layout-rules'
 
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
@@ -75,6 +76,7 @@ export function useTabGroupWorkspaceModel({
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (state) => state.openNewTerminalTabInActiveWorkspace
   )
+  const openFile = useAppStore((state) => state.openFile)
   const closeFile = useAppStore((state) => state.closeFile)
   const pinFile = useAppStore((state) => state.pinFile)
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)

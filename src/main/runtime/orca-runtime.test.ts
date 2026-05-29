@@ -212,7 +212,6 @@ vi.mock('../hooks', () => ({
   getEffectiveSetupRunPolicy: vi.fn().mockReturnValue('auto'),
   hasHooksFile: vi.fn().mockReturnValue(false),
   hasUnrecognizedOrcaYamlKeys: vi.fn().mockReturnValue(false),
-  loadHooks: vi.fn().mockReturnValue(null),
   loadLayoutConfig: vi.fn().mockReturnValue(null),
   loadLayoutConfigFromReader: vi.fn().mockResolvedValue(null),
   parseOrcaYaml: vi.fn().mockReturnValue(null),

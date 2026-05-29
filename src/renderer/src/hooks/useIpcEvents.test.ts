@@ -168,6 +168,8 @@ describe('useIpcEvents browser tab create routing', () => {
       clearTabPtyId: vi.fn(),
       settings: { terminalFontSize: 13 },
       activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-active' },
+      layoutConfigByWorktree: {},
+      layoutGroupIdByName: {},
       browserTabsByWorktree: {
         'wt-1': [{ id: 'workspace-active', activePageId: 'page-active', pageIds: ['page-active'] }]
       },
@@ -217,7 +219,8 @@ describe('useIpcEvents browser tab create routing', () => {
     vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
     vi.doMock('@/lib/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
-      ensureWorktreeHasInitialTerminal: vi.fn()
+      ensureWorktreeHasInitialTerminal: vi.fn(),
+      seedLayoutFromStore: vi.fn()
     }))
     vi.doMock('@/components/sidebar/visible-worktrees', () => ({ getVisibleWorktreeIds: () => [] }))
     vi.doMock('@/lib/editor-font-zoom', () => ({
@@ -255,6 +258,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onLayoutConfig: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
           replyTerminalCreate: () => {},
@@ -2475,6 +2479,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onLayoutConfig: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
           replyTerminalCreate: () => {},

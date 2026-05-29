@@ -125,7 +125,9 @@ export type SeedStoreActions = {
 // the activation auto-spawn terminal). User-modified layouts pass
 // through untouched.
 export type LateReseedActions = SeedStoreActions & {
-  getTabsForWorktree: (worktreeId: string) => { id: string; pendingActivationSpawn?: boolean }[]
+  getTabsForWorktree: (
+    worktreeId: string
+  ) => { id: string; pendingActivationSpawn?: boolean | number }[]
   closeTab: (tabId: string) => void
   closeEmptyGroup: (worktreeId: string, groupId: string) => boolean
   recreateInitialTerminal: (worktreeId: string) => void

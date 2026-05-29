@@ -61,6 +61,32 @@ describe('LayoutConfigSchema', () => {
     })
     expect(result.success).toBe(false)
   })
+
+  it('rejects prototype-polluting group names from untrusted yaml', () => {
+    for (const groupName of ['__proto__', 'prototype', 'constructor']) {
+      const result = LayoutConfigSchema.safeParse({
+        groups: { [groupName]: { position: 'center' } },
+        rules: { 'new-terminal': groupName }
+      })
+      expect(result.success).toBe(false)
+    }
+  })
+
+  it('bounds group count and keeps group names CLI-safe', () => {
+    const tooManyGroups = Object.fromEntries(
+      Array.from({ length: 25 }, (_, index) => [`group${index}`, { position: 'center' }])
+    )
+    expect(LayoutConfigSchema.safeParse({ groups: tooManyGroups }).success).toBe(false)
+    expect(
+      LayoutConfigSchema.safeParse({ groups: { 'bad.name': { position: 'center' } } }).success
+    ).toBe(false)
+    expect(
+      LayoutConfigSchema.safeParse({
+        groups: { editor: { position: 'center' } },
+        rules: { 'new-editor-tab': 'bad.name' }
+      }).success
+    ).toBe(false)
+  })
 })
 
 describe('classifyPosition', () => {

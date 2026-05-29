@@ -19,8 +19,6 @@ import {
   BellOff,
   CircleX,
   LayoutGrid,
-  Link,
-  MessageSquare,
   Moon,
   Pencil,
   Pin,
