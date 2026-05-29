@@ -23,10 +23,11 @@ type Props = {
 }
 
 function makeInstalledId(publisher: string, name: string): string {
-  return `${publisher}-${name}`
+  const id = `${publisher}-${name}`
     .toLowerCase()
     .replace(/[^a-z0-9.-]+/g, '-')
     .replace(/^-+|-+$/g, '')
+  return id === 'default' ? 'user-default' : id
 }
 
 export function IconThemeMarketplaceDialog({
@@ -159,7 +160,7 @@ export function IconThemeMarketplaceDialog({
 
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
 
-        <div className="max-h-[420px] space-y-1 overflow-y-auto rounded-md border border-border/50 p-1">
+        <div className="scrollbar-sleek max-h-[420px] space-y-1 overflow-y-auto rounded-md border border-border/50 p-1">
           {loading && results.length === 0 ? (
             <p className="px-3 py-6 text-center text-xs text-muted-foreground">Searching…</p>
           ) : results.length === 0 ? (

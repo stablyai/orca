@@ -22,7 +22,8 @@
 import { rebuild } from '@electron/rebuild'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, globSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { platform as osPlatform } from 'node:os'
 import { resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
@@ -44,6 +45,8 @@ if (ignoreModules.length > 0) {
 const NATIVE_MODULES = ['better-sqlite3', 'node-pty', 'cpu-features']
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
 const forceRebuild = process.env.ORCA_FORCE_NATIVE_REBUILD === '1'
+
+ensureElectronPackageInstalled()
 
 if (!forceRebuild) {
   // Why: Windows cannot unlink a loaded .node DLL, so avoid @electron/rebuild
@@ -121,6 +124,159 @@ try {
     }
   }
   process.exit(1)
+}
+
+function ensureElectronPackageInstalled() {
+  try {
+    require('electron')
+    return
+  } catch (/** @type {any} */ err) {
+    if (!isElectronPackageInstallError(err)) {
+      throw err
+    }
+  }
+
+  // Why: CI has observed Electron's postinstall exiting cleanly without
+  // writing path.txt; use our strict installer instead of Electron's install.js
+  // so partial extracts and poisoned caches are rejected before native rebuild.
+  console.log('[rebuild] Electron package binary is missing; installing Electron package binary.')
+  resetPartialElectronInstall()
+  try {
+    runElectronPackageBinaryInstall()
+  } catch (/** @type {any} */ err) {
+    console.error('[rebuild] Electron install retry failed:', err?.message ?? err)
+    logElectronInstallDiagnostics()
+    if (continuePostinstallWithoutElectron()) {
+      process.exit(0)
+    }
+    process.exit(1)
+  }
+
+  try {
+    require('electron')
+  } catch (/** @type {any} */ err) {
+    if (!repairElectronPathFile()) {
+      logElectronInstallDiagnostics()
+      if (continuePostinstallWithoutElectron()) {
+        process.exit(0)
+      }
+      console.error(
+        '[rebuild] Electron package is still unavailable after retry:',
+        err?.message ?? err
+      )
+      process.exit(1)
+    }
+    try {
+      require('electron')
+    } catch (/** @type {any} */ retryErr) {
+      console.error(
+        '[rebuild] Electron package is still unavailable after repairing path.txt:',
+        retryErr?.message ?? retryErr
+      )
+      process.exit(1)
+    }
+  }
+}
+
+function runElectronPackageBinaryInstall() {
+  const env = { ...process.env }
+  delete env.ELECTRON_SKIP_BINARY_DOWNLOAD
+  delete env.npm_config_electron_skip_binary_download
+
+  const result = spawnSync(
+    process.execPath,
+    ['config/scripts/install-electron-package-binary.mjs'],
+    {
+      cwd: projectDir,
+      env,
+      stdio: 'inherit'
+    }
+  )
+
+  if (result.error) {
+    throw result.error
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `config/scripts/install-electron-package-binary.mjs exited with status ${result.status}`
+    )
+  }
+}
+
+function resetPartialElectronInstall() {
+  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+  // Why: Electron's installer can leave a partial dist/ tree behind after
+  // skipped or interrupted postinstall runs; retry from a clean target.
+  rmSync(resolve(electronPackageDir, 'dist'), { recursive: true, force: true })
+  rmSync(resolve(electronPackageDir, 'path.txt'), { force: true })
+}
+
+function continuePostinstallWithoutElectron() {
+  if (!isPostinstall() || process.env.ORCA_STRICT_ELECTRON_INSTALL === '1') {
+    return false
+  }
+  console.error(
+    '[rebuild] Continuing postinstall because Electron binary installation failed. ' +
+      'Electron-consuming package scripts and release jobs run ' +
+      'config/scripts/ensure-native-runtime.mjs --runtime=electron before launching Electron.'
+  )
+  return true
+}
+
+function repairElectronPathFile() {
+  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+  const platformPath = getElectronPlatformPath()
+  const electronPath = process.env.ELECTRON_OVERRIDE_DIST_PATH
+    ? resolve(process.env.ELECTRON_OVERRIDE_DIST_PATH, platformPath)
+    : resolve(electronPackageDir, 'dist', platformPath)
+  if (!existsSync(electronPath)) {
+    return false
+  }
+
+  // Why: Electron's install script has exited successfully in CI after
+  // extraction without leaving path.txt. The package main only needs this file
+  // to point at the already-extracted executable.
+  writeFileSync(resolve(electronPackageDir, 'path.txt'), platformPath)
+  console.log(`[rebuild] Repaired Electron path.txt -> ${platformPath}`)
+  return true
+}
+
+function logElectronInstallDiagnostics() {
+  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+  const electronDistDir = resolve(electronPackageDir, 'dist')
+  const pathFile = resolve(electronPackageDir, 'path.txt')
+  console.error('[rebuild] Electron install diagnostics:')
+  console.error(`  packageDir=${electronPackageDir} exists=${existsSync(electronPackageDir)}`)
+  console.error(`  distDir=${electronDistDir} exists=${existsSync(electronDistDir)}`)
+  console.error(`  pathFile=${pathFile} exists=${existsSync(pathFile)}`)
+  if (existsSync(electronDistDir)) {
+    console.error(`  distEntries=${safeReaddir(electronDistDir).join(', ')}`)
+  }
+}
+
+function safeReaddir(targetPath) {
+  try {
+    return readdirSync(targetPath).slice(0, 20)
+  } catch {
+    return []
+  }
+}
+
+function getElectronPlatformPath() {
+  const targetPlatform = process.env.npm_config_platform || osPlatform()
+  switch (targetPlatform) {
+    case 'mas':
+    case 'darwin':
+      return 'Electron.app/Contents/MacOS/Electron'
+    case 'freebsd':
+    case 'openbsd':
+    case 'linux':
+      return 'electron'
+    case 'win32':
+      return 'electron.exe'
+    default:
+      throw new Error(`Electron builds are not available on platform: ${targetPlatform}`)
+  }
 }
 
 function probeElectronNativeModules(moduleNames) {
@@ -215,6 +371,10 @@ function isWindowsNativeLockError(error) {
 
 function isPostinstall() {
   return process.env.npm_lifecycle_event === 'postinstall'
+}
+
+function isElectronPackageInstallError(error) {
+  return /Electron failed to install correctly/i.test(formatError(error))
 }
 
 function formatError(error) {

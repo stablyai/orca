@@ -3,6 +3,7 @@
    per-partition permission/download policies. Splitting further would scatter the
    security boundary across modules. */
 import { app, session } from 'electron'
+import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import {
   copyFileSync,
@@ -374,6 +375,7 @@ class BrowserSessionRegistry {
     // lingering after the user deletes an imported or isolated session profile.
     try {
       const sess = session.fromPartition(profile.partition)
+      this.clearSessionPolicies(profile.partition, sess)
       await sess.clearStorageData()
       await sess.clearCache()
     } catch {
@@ -449,6 +451,13 @@ class BrowserSessionRegistry {
   // session partitions would silently allow permissions and downloads that the
   // shared partition correctly denies.
   private readonly configuredPartitions = new Set<string>()
+  private readonly handleWillDownload = (
+    _event: Electron.Event,
+    item: Electron.DownloadItem,
+    webContents: Electron.WebContents
+  ): void => {
+    browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
+  }
 
   private setupSessionPolicies(partition: string): void {
     if (this.configuredPartitions.has(partition)) {
@@ -518,9 +527,19 @@ class BrowserSessionRegistry {
     sess.setDisplayMediaRequestHandler((_request, callback) => {
       callback({ video: undefined, audio: undefined })
     })
-    sess.on('will-download', (_event, item, webContents) => {
-      browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
-    })
+    sess.removeListener('will-download', this.handleWillDownload)
+    sess.on('will-download', this.handleWillDownload)
+  }
+
+  private clearSessionPolicies(partition: string, sess: Session): void {
+    // Why: isolated/imported browser partitions can be deleted while the
+    // Electron Session object survives; clear policy callbacks and listener
+    // bookkeeping so removed profiles do not leave retained closures behind.
+    this.configuredPartitions.delete(partition)
+    sess.removeListener('will-download', this.handleWillDownload)
+    sess.setPermissionRequestHandler(null)
+    sess.setPermissionCheckHandler(null)
+    sess.setDisplayMediaRequestHandler(null)
   }
 }
 

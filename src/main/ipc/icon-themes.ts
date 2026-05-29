@@ -73,6 +73,12 @@ export type MarketplaceExtension = {
 
 const USER_THEMES_DIRNAME = 'icon-themes'
 const OPEN_VSX_BASE = 'https://open-vsx.org/api'
+const ALLOWED_DOWNLOAD_HOSTS = new Set([
+  'open-vsx.org',
+  'www.open-vsx.org',
+  'openvsx.eclipsecontent.org'
+])
+const RESERVED_ICON_THEME_IDS = new Set(['default'])
 
 function userThemesDir(): string {
   return join(app.getPath('userData'), USER_THEMES_DIRNAME)
@@ -88,6 +94,18 @@ function sanitizeId(input: string): string {
   )
 }
 
+function sanitizeUserThemeId(input: string): string {
+  const id = sanitizeId(input)
+  return RESERVED_ICON_THEME_IDS.has(id) ? `user-${id}` : id
+}
+
+function isContainedIn(child: string, parent: string): boolean {
+  const resolved = resolve(child)
+  const base = resolve(parent)
+  const sep = base.includes('\\') ? '\\' : '/'
+  return resolved.startsWith(base + sep) || resolved === base
+}
+
 class NotAFileIconThemeError extends Error {
   constructor(kind: string) {
     super(
@@ -95,6 +113,13 @@ class NotAFileIconThemeError extends Error {
         'Only VS Code file icon themes (with iconDefinitions) are supported.'
     )
     this.name = 'NotAFileIconThemeError'
+  }
+}
+
+class IconThemePathEscapeError extends Error {
+  constructor() {
+    super('Icon theme path escapes the selected folder.')
+    this.name = 'IconThemePathEscapeError'
   }
 }
 
@@ -108,7 +133,11 @@ async function findThemeJson(folder: string): Promise<string | null> {
       const parsed = JSON.parse(raw) as VscodePackageJson
       const themes = parsed.contributes?.iconThemes
       if (themes && themes.length > 0 && themes[0].path) {
-        return resolve(dirname(pkgCandidate), themes[0].path)
+        const themePath = resolve(dirname(pkgCandidate), themes[0].path)
+        if (!isContainedIn(themePath, folder)) {
+          throw new IconThemePathEscapeError()
+        }
+        return themePath
       }
       // Why: product icon themes (UI icons, not file icons) have a different
       // contributes key. Detect early so the user gets a clear error instead
@@ -117,7 +146,7 @@ async function findThemeJson(folder: string): Promise<string | null> {
         throw new NotAFileIconThemeError('product icon')
       }
     } catch (err) {
-      if (err instanceof NotAFileIconThemeError) {
+      if (err instanceof NotAFileIconThemeError || err instanceof IconThemePathEscapeError) {
         throw err
       }
       /* fallthrough */
@@ -152,13 +181,6 @@ async function findThemeJson(folder: string): Promise<string | null> {
   return null
 }
 
-function isContainedIn(child: string, parent: string): boolean {
-  const resolved = resolve(child)
-  const base = resolve(parent)
-  const sep = base.includes('\\') ? '\\' : '/'
-  return resolved.startsWith(base + sep) || resolved === base
-}
-
 const FONT_MIME: Record<string, string> = {
   woff: 'font/woff',
   woff2: 'font/woff2',
@@ -168,7 +190,8 @@ const FONT_MIME: Record<string, string> = {
 
 async function inlineFonts(
   jsonPath: string,
-  json: VscodeIconThemeJson
+  json: VscodeIconThemeJson,
+  assetRoot: string
 ): Promise<VscodeFont[] | undefined> {
   if (!json.fonts?.length) {
     return undefined
@@ -182,7 +205,9 @@ async function inlineFonts(
         continue
       }
       const absolute = resolve(baseDir, src.path)
-      if (!isContainedIn(absolute, baseDir)) {
+      // Why: VS Code theme JSON often sits under build/ while font assets
+      // live in sibling folders. The import root is the security boundary.
+      if (!isContainedIn(absolute, assetRoot)) {
         continue
       }
       try {
@@ -205,7 +230,8 @@ async function inlineFonts(
 
 async function inlineSvgs(
   jsonPath: string,
-  json: VscodeIconThemeJson
+  json: VscodeIconThemeJson,
+  assetRoot: string
 ): Promise<VscodeIconThemeJson> {
   const baseDir = dirname(jsonPath)
   const definitions = json.iconDefinitions ?? {}
@@ -225,7 +251,9 @@ async function inlineSvgs(
       continue
     }
     const absolute = resolve(baseDir, def.iconPath)
-    if (!isContainedIn(absolute, baseDir)) {
+    // Why: VS Code theme JSON often sits under build/ while SVG assets
+    // live in sibling folders. The import root is the security boundary.
+    if (!isContainedIn(absolute, assetRoot)) {
       next[key] = { ...def, iconPath: undefined }
       continue
     }
@@ -242,7 +270,7 @@ async function inlineSvgs(
     }
     next[key] = { ...def, iconPath: dataUri }
   }
-  const fonts = await inlineFonts(jsonPath, json)
+  const fonts = await inlineFonts(jsonPath, json, assetRoot)
   return { ...json, iconDefinitions: next, ...(fonts ? { fonts } : {}) }
 }
 
@@ -295,10 +323,10 @@ async function importFromFolder(
   if (!parsed.iconDefinitions || typeof parsed.iconDefinitions !== 'object') {
     throw new Error('JSON is not a valid VS Code icon theme (missing `iconDefinitions`).')
   }
-  const resolvedJson = await inlineSvgs(jsonPath, parsed)
+  const resolvedJson = await inlineSvgs(jsonPath, parsed, folderPath)
   const folderBase =
     options.sourceFolderName ?? (relative(dirname(folderPath), folderPath) || folderPath)
-  const id = sanitizeId(options.id ?? folderBase)
+  const id = sanitizeUserThemeId(options.id ?? folderBase)
   const stored: StoredUserIconTheme = { id, sourceFolderName: folderBase, json: resolvedJson }
   await persistTheme(stored)
   return stored
@@ -309,9 +337,17 @@ async function importFromFolder(
 const FETCH_TIMEOUT_MS = 30_000
 const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
 
+function assertAllowedOpenVsxUrl(url: string): void {
+  const parsed = new URL(url)
+  if (parsed.protocol !== 'https:' || !ALLOWED_DOWNLOAD_HOSTS.has(parsed.hostname)) {
+    throw new Error('Download blocked: only HTTPS from Open VSX or its official CDN is allowed.')
+  }
+}
+
 function fetchBuffer(url: string): Promise<Buffer> {
+  assertAllowedOpenVsxUrl(url)
   return new Promise((resolvePromise, reject) => {
-    const request = net.request({ url, method: 'GET', redirect: 'follow' })
+    const request = net.request({ url, method: 'GET', redirect: 'manual' })
     const chunks: Buffer[] = []
     let totalBytes = 0
     let settled = false
@@ -330,6 +366,14 @@ function fetchBuffer(url: string): Promise<Buffer> {
       clearTimeout(timer)
       fn()
     }
+    request.on('redirect', (_statusCode, _method, redirectUrl) => {
+      try {
+        assertAllowedOpenVsxUrl(redirectUrl)
+        request.followRedirect()
+      } catch {
+        settle(() => reject(new Error('Download blocked: redirect leaves Open VSX.')))
+      }
+    })
     request.on('response', (response) => {
       if ((response.statusCode ?? 0) >= 400) {
         settle(() => reject(new Error(`HTTP ${response.statusCode} for ${url}`)))
@@ -394,11 +438,11 @@ async function isFileIconTheme(publisher: string, name: string): Promise<boolean
       `${OPEN_VSX_BASE}/${encodeURIComponent(publisher)}/${encodeURIComponent(name)}`
     )
     const tags = detail.tags ?? []
-    if (tags.includes('icon-theme')) {
-      return true
-    }
     if (tags.includes('product-icon-theme')) {
       return false
+    }
+    if (tags.includes('icon-theme')) {
+      return true
     }
     const combined = `${publisher} ${name}`.toLowerCase()
     return combined.includes('icon')
@@ -451,18 +495,13 @@ async function searchMarketplace(query: string): Promise<MarketplaceExtension[]>
   return results
 }
 
-const ALLOWED_DOWNLOAD_HOSTS = new Set(['open-vsx.org', 'www.open-vsx.org'])
-
 async function installFromMarketplace(args: {
   publisher: string
   name: string
   downloadUrl: string
   displayName?: string
 }): Promise<StoredUserIconTheme> {
-  const parsed = new URL(args.downloadUrl)
-  if (parsed.protocol !== 'https:' || !ALLOWED_DOWNLOAD_HOSTS.has(parsed.hostname)) {
-    throw new Error(`Download blocked: only HTTPS from open-vsx.org is allowed.`)
-  }
+  assertAllowedOpenVsxUrl(args.downloadUrl)
   const vsixBuffer = await fetchBuffer(args.downloadUrl)
   // Extract the vsix (a ZIP) into a per-extension folder inside userData so we
   // can resolve `iconPath` references against real on-disk SVGs. We keep the
@@ -485,7 +524,7 @@ async function installFromMarketplace(args: {
         await writeFile(target, entry.getData())
       }
     }
-    const id = sanitizeId(`${args.publisher}-${args.name}`)
+    const id = sanitizeUserThemeId(`${args.publisher}-${args.name}`)
     const sourceFolderName = args.displayName ?? `${args.publisher}.${args.name}`
     return await importFromFolder(extractRoot, { id, sourceFolderName })
   } finally {

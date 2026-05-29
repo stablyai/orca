@@ -48,6 +48,7 @@ export type CreateHostedReviewInput = {
   body?: string
   draft?: boolean
   worktreePath?: string
+  useTemplate?: boolean
 }
 
 export type CreateHostedReviewArgs = CreateHostedReviewInput & {

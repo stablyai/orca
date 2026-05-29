@@ -98,6 +98,10 @@ export function registerLinearHandlers(): void {
         workspaceId?: string
         parentIssueId?: string
         projectId?: string | null
+        stateId?: string
+        priority?: number
+        assigneeId?: string | null
+        labelIds?: string[]
       }
     ) => {
       if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {
@@ -106,6 +110,19 @@ export function registerLinearHandlers(): void {
       if (typeof args?.title !== 'string' || !args.title.trim()) {
         return { ok: false, error: 'Title is required' }
       }
+      if (
+        args.priority !== undefined &&
+        (!Number.isInteger(args.priority) || args.priority < 0 || args.priority > 4)
+      ) {
+        return { ok: false, error: 'Invalid priority' }
+      }
+      if (
+        args.labelIds !== undefined &&
+        (!Array.isArray(args.labelIds) ||
+          !args.labelIds.every((id) => typeof id === 'string' && id.trim()))
+      ) {
+        return { ok: false, error: 'Invalid label IDs' }
+      }
       return createIssue(
         args.teamId.trim(),
         args.title.trim(),
@@ -113,7 +130,11 @@ export function registerLinearHandlers(): void {
         normalizeWorkspaceId(args.workspaceId),
         {
           parentId: typeof args.parentIssueId === 'string' ? args.parentIssueId.trim() : undefined,
-          projectId: typeof args.projectId === 'string' ? args.projectId.trim() : null
+          projectId: typeof args.projectId === 'string' ? args.projectId.trim() : null,
+          stateId: typeof args.stateId === 'string' ? args.stateId.trim() : undefined,
+          priority: typeof args.priority === 'number' ? args.priority : undefined,
+          assigneeId: typeof args.assigneeId === 'string' ? args.assigneeId.trim() : null,
+          labelIds: Array.isArray(args.labelIds) ? args.labelIds.map((id) => id.trim()) : undefined
         }
       )
     }
@@ -141,6 +162,12 @@ export function registerLinearHandlers(): void {
       const u = args.updates
       if (u.stateId !== undefined && (typeof u.stateId !== 'string' || !u.stateId.trim())) {
         return { ok: false, error: 'Invalid state ID' }
+      }
+      if (u.title !== undefined && (typeof u.title !== 'string' || !u.title.trim())) {
+        return { ok: false, error: 'Title is required' }
+      }
+      if (u.description !== undefined && typeof u.description !== 'string') {
+        return { ok: false, error: 'Description must be a string' }
       }
       if (
         u.priority !== undefined &&

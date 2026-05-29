@@ -44,9 +44,10 @@ export type WorktreeSlice = {
    * their PTYs, and the resulting `updateTabPtyId`/`clearTabPtyId` calls
    * are all side-effects of the click — not real activity. On first
    * activation we tag every terminal tab with `pendingActivationSpawn` so
-   * the bump is suppressed. After the first activation we do NOT re-tag,
-   * so subsequent events on the worktree (codex restart, new pane spawn,
-   * agent output) count normally. Session-only; never persisted.
+   * the bump is suppressed. Split-layout tabs may carry a numeric count so
+   * every click-driven pane remount is suppressed. After the first activation
+   * we do NOT re-tag, so subsequent events on the worktree (codex restart,
+   * new pane spawn, agent output) count normally. Session-only; never persisted.
    */
   everActivatedWorktreeIds: Set<string>
   /**

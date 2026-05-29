@@ -25,12 +25,10 @@ import {
 // (approvals flow through inline UI), so Orca cannot surface a waiting state
 // for Gemini — that is an upstream limitation, not an Orca bug.
 //
-// PreToolUse surfaces the current tool name + input preview (e.g.
-// `read_file: src/foo.ts`) so long-running tool calls aren't a silent gap
-// between BeforeAgent and AfterAgent. PostToolUse is intentionally omitted —
-// AfterTool already signals "back to working" and the tool name from
-// PreToolUse is what we show; PostToolUse would be a redundant fire.
-const GEMINI_EVENTS = ['BeforeAgent', 'AfterAgent', 'AfterTool', 'PreToolUse'] as const
+// Gemini's native pre-tool event is BeforeTool, not Claude/Codex's PreToolUse.
+// Keep installing the pre-tool status hook, but sweep stale PreToolUse entries
+// below so current Gemini CLI no longer warns about an invalid event bucket.
+const GEMINI_EVENTS = ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool'] as const
 
 function getConfigPath(): string {
   return join(homedir(), '.gemini', 'settings.json')
@@ -175,6 +173,27 @@ export class GeminiHookService {
     // accumulate duplicate hook entries pointing at defunct scripts.
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
 
+    const managedEvents = new Set<string>(GEMINI_EVENTS)
+
+    // Why: when Orca stops subscribing to an event, install() must sweep the
+    // old managed entry out of any leftover event bucket. Otherwise a stale
+    // hook such as PreToolUse survives forever in ~/.gemini/settings.json and
+    // continues firing even though the current build no longer wants it.
+    for (const [eventName, definitions] of Object.entries(nextHooks)) {
+      if (managedEvents.has(eventName)) {
+        continue
+      }
+      if (!Array.isArray(definitions)) {
+        continue
+      }
+      const cleaned = removeManagedCommands(definitions, isManagedCommand)
+      if (cleaned.length === 0) {
+        delete nextHooks[eventName]
+      } else {
+        nextHooks[eventName] = cleaned
+      }
+    }
+
     for (const eventName of GEMINI_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
@@ -213,6 +232,24 @@ export class GeminiHookService {
       const command = wrapPosixHookCommand(remoteScriptPath)
       const nextHooks = { ...config.hooks }
       const isManagedCommand = createManagedCommandMatcher('gemini-hook.sh')
+      const managedEvents = new Set<string>(GEMINI_EVENTS)
+
+      // Why: remote installs must sweep legacy managed event buckets too.
+      // Otherwise stale PreToolUse entries keep warning in SSH Gemini sessions.
+      for (const [eventName, definitions] of Object.entries(nextHooks)) {
+        if (managedEvents.has(eventName)) {
+          continue
+        }
+        if (!Array.isArray(definitions)) {
+          continue
+        }
+        const cleaned = removeManagedCommands(definitions, isManagedCommand)
+        if (cleaned.length === 0) {
+          delete nextHooks[eventName]
+        } else {
+          nextHooks[eventName] = cleaned
+        }
+      }
 
       for (const eventName of GEMINI_EVENTS) {
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []

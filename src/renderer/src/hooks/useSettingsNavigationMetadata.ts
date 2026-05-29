@@ -164,7 +164,7 @@ export function buildSettingsNavigationMetadata({
     {
       id: 'file-explorer',
       title: 'File Explorer',
-      description: 'Icon themes and color customization for the file tree.',
+      description: 'Icon themes and sizing for the file tree.',
       icon: FolderTree,
       searchEntries: FILE_EXPLORER_PANE_SEARCH_ENTRIES,
       group: 'interface'

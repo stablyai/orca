@@ -64,13 +64,13 @@ jobs:
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
     steps:
       - name: Checkout ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
 
@@ -388,7 +388,14 @@ jobs:
           if [[ "$EVENT_NAME" == "schedule" ]]; then
             commit_message="$commit_message [rc-slot:$SLOT]"
           fi
-          git commit -m "$commit_message"
+          if git diff --cached --quiet; then
+            # Why: a failed cut can push the version bump to main before the
+            # release is published. Re-cutting then needs a fresh taggable
+            # release commit even though package.json is already at VERSION.
+            git commit --allow-empty -m "$commit_message"
+          else
+            git commit -m "$commit_message"
+          fi
           git tag -a "v$VERSION" -m "v$VERSION"
           echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
@@ -417,7 +424,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
@@ -461,19 +468,19 @@ jobs:
         include:
           - os: macos-15
             platform: mac
-            release_command: ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
             eb_cache_path: |
               ~/Library/Caches/electron
               ~/Library/Caches/electron-builder
           - os: windows-latest
             platform: win
-            release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
+            release_command: 'node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always'
             eb_cache_path: |
               ~\AppData\Local\electron\Cache
               ~\AppData\Local\electron-builder\Cache
           - os: ubuntu-latest
             platform: linux
-            release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux --publish always
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux --publish always
             eb_cache_path: |
               ~/.cache/electron
               ~/.cache/electron-builder
@@ -485,18 +492,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
           cache: pnpm
@@ -519,7 +526,7 @@ jobs:
       # Cache the Electron binary + electron-builder tool downloads (notarytool,
       # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.
       - name: Cache electron-builder downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ matrix.eb_cache_path }}
           key: electron-builder-${{ matrix.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -531,7 +538,7 @@ jobs:
       # occasionally returns 504s that fail the whole release. Retry on
       # failure so transient network errors don't require a manual re-run.
       - name: Install dependencies
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -622,7 +629,7 @@ jobs:
       # don't require a manual re-run.
       - name: Publish release artifacts (macOS)
         if: matrix.platform == 'mac'
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 45
           max_attempts: 3
@@ -638,7 +645,7 @@ jobs:
 
       - name: Publish release artifacts
         if: matrix.platform != 'mac'
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 30
           max_attempts: 3
@@ -698,10 +705,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
 

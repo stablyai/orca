@@ -62,6 +62,7 @@ export function FloatingWorkspacePane({
     if (!path) {
       return
     }
+    useAppStore.getState().recordFeatureInteraction('floating-workspace')
     updateSettings({ floatingTerminalCwd: path })
   }
 
@@ -96,11 +97,14 @@ export function FloatingWorkspacePane({
           label="Enable Floating Workspace"
           description="Shows the floating workspace button and panel."
           checked={settings.floatingTerminalEnabled}
-          onChange={() =>
+          onChange={() => {
+            if (!settings.floatingTerminalEnabled) {
+              useAppStore.getState().recordFeatureInteraction('floating-workspace')
+            }
             updateSettings({
               floatingTerminalEnabled: !settings.floatingTerminalEnabled
             })
-          }
+          }}
         />
 
         <SettingsRow
@@ -142,6 +146,7 @@ export function FloatingWorkspacePane({
                 updateSettings({
                   floatingTerminalTriggerLocation: value as FloatingTerminalTriggerLocation
                 })
+                useAppStore.getState().recordFeatureInteraction('floating-workspace')
               }}
             >
               <ToggleGroupItem value="floating-button">Floating Button</ToggleGroupItem>

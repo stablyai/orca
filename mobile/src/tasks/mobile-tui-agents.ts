@@ -131,19 +131,46 @@ export function isMobileTuiAgent(value: unknown): value is TuiAgent {
   return MOBILE_TUI_AGENT_AUTO_PICK_ORDER.includes(value as TuiAgent)
 }
 
+export function normalizeDisabledMobileTuiAgents(value: unknown): TuiAgent[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const seen = new Set<TuiAgent>()
+  for (const item of value) {
+    if (isMobileTuiAgent(item)) {
+      seen.add(item)
+    }
+  }
+  return [...seen]
+}
+
+export function isMobileTuiAgentEnabled(agent: TuiAgent, disabled?: unknown): boolean {
+  return !normalizeDisabledMobileTuiAgents(disabled).includes(agent)
+}
+
+export function filterEnabledMobileTuiAgents<T extends TuiAgent>(
+  agents: Iterable<T>,
+  disabled?: unknown
+): T[] {
+  const disabledSet = new Set(normalizeDisabledMobileTuiAgents(disabled))
+  return [...agents].filter((agent) => !disabledSet.has(agent))
+}
+
 export function pickMobileTuiAgent(
   preferred: TuiAgent | 'blank' | null | undefined,
-  detected: Iterable<TuiAgent>
+  detected: Iterable<TuiAgent>,
+  disabled?: unknown
 ): TuiAgent | null {
   if (preferred === 'blank') {
     return null
   }
+  const disabledSet = new Set(normalizeDisabledMobileTuiAgents(disabled))
   const detectedSet = detected instanceof Set ? detected : new Set(detected)
-  if (preferred && detectedSet.has(preferred)) {
+  if (preferred && detectedSet.has(preferred) && !disabledSet.has(preferred)) {
     return preferred
   }
   for (const agent of MOBILE_TUI_AGENT_AUTO_PICK_ORDER) {
-    if (detectedSet.has(agent)) {
+    if (detectedSet.has(agent) && !disabledSet.has(agent)) {
       return agent
     }
   }

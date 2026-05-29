@@ -5,6 +5,7 @@ import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalPaneLayoutNode } from '../../../../shared/types'
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
 
@@ -42,6 +43,57 @@ function hasLivePtyForNotification(
   // list is between renderer hydration states; the pane-key PTY binding is the
   // live terminal source in that path.
   return hasLivePtyForWorktree(state, worktreeId) || hasLivePtyForPaneKey(state, paneKey)
+}
+
+function layoutContainsLeaf(
+  node: TerminalPaneLayoutNode | null | undefined,
+  leafId: string
+): boolean {
+  if (!node) {
+    return false
+  }
+  if (node.type === 'leaf') {
+    return node.leafId === leafId
+  }
+  return layoutContainsLeaf(node.first, leafId) || layoutContainsLeaf(node.second, leafId)
+}
+
+function isCurrentLivePaneKey(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktreeId: string,
+  paneKey: string
+): boolean {
+  const parsed = parsePaneKey(paneKey)
+  if (!parsed) {
+    return false
+  }
+
+  const tabExistsInAnotherWorktree = Object.entries(state.tabsByWorktree).some(
+    ([candidateWorktreeId, tabs]) =>
+      candidateWorktreeId !== worktreeId && tabs.some((tab) => tab.id === parsed.tabId)
+  )
+  if (tabExistsInAnotherWorktree) {
+    return false
+  }
+
+  const livePtyIds = state.ptyIdsByTabId[parsed.tabId] ?? []
+  if (livePtyIds.length === 0) {
+    return false
+  }
+
+  const layout = state.terminalLayoutsByTabId?.[parsed.tabId]
+  if (!layout) {
+    return true
+  }
+
+  if (!layoutContainsLeaf(layout.root, parsed.leafId)) {
+    return false
+  }
+
+  const leafPtyId = layout.ptyIdsByLeafId?.[parsed.leafId]
+  // Why: layout hydration can briefly know the leaf before restoring its PTY
+  // binding; the tab-level live PTY list remains the liveness source then.
+  return leafPtyId === undefined || livePtyIds.includes(leafPtyId)
 }
 
 function getPaneKeyTabId(paneKey: string): string | null {
@@ -156,6 +208,30 @@ export function dispatchTerminalNotification(
   // them, rather than trying to cancel each one individually.
   if (!hasLivePtyForNotification(state, worktreeId, event.paneKey)) {
     return
+  }
+
+  if (event.source === 'agent-task-complete') {
+    const terminalAttentionEnabled = state.settings?.experimentalTerminalAttention === true
+    let tabId: string | null = null
+    if (event.paneKey) {
+      tabId = getPaneKeyTabId(event.paneKey)
+      // Why: delayed completion hooks from a closed split pane can arrive while
+      // another pane in the tab is still live; stale leaf completions must not
+      // create unread state or OS notifications.
+      if (!tabId || !isCurrentLivePaneKey(state, worktreeId, event.paneKey)) {
+        return
+      }
+    }
+
+    if (terminalAttentionEnabled && tabId && event.paneKey) {
+      state.markWorktreeUnread(worktreeId)
+      state.markTerminalTabUnread(tabId)
+      state.markTerminalPaneUnread(event.paneKey)
+    } else if (state.activeWorktreeId !== worktreeId) {
+      // Why: when pane attention is disabled, agent completion still preserves
+      // the existing background-workspace unread signal for Dock/sidebar state.
+      state.markWorktreeUnread(worktreeId)
+    }
   }
 
   // Why: prefer worktree.repoId over string-parsing the worktreeId. The

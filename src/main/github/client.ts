@@ -29,10 +29,12 @@ import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
   sortWorkItemsByUpdatedAt
 } from '../../shared/work-items'
-import { mkdtemp, rm, writeFile } from 'fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { getPRConflictSummary } from './conflict-summary'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import {
   execFileAsync,
   ghExecFileAsync,
@@ -803,10 +805,12 @@ async function listRecentWorkItems(
   issueOwnerRepo: OwnerRepo | null,
   prOwnerRepo: OwnerRepo | null,
   limit: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  noCache?: boolean
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
   const requiresExplicitRepo = Boolean(connectionId)
+  const restCacheArgs = noCache ? [] : ['--cache', '120s']
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   if (issueOwnerRepo || prOwnerRepo || requiresExplicitRepo) {
     // Why: allSettled so a 403 on upstream issues doesn't zero out the origin
@@ -817,8 +821,7 @@ async function listRecentWorkItems(
         ? ghExecFileAsync(
             [
               'api',
-              '--cache',
-              '120s',
+              ...restCacheArgs,
               `repos/${issueOwnerRepo.owner}/${issueOwnerRepo.repo}/issues?per_page=${limit}&state=open&sort=updated&direction=desc`
             ],
             ghOptions
@@ -842,8 +845,7 @@ async function listRecentWorkItems(
         ? ghExecFileAsync(
             [
               'api',
-              '--cache',
-              '120s',
+              ...restCacheArgs,
               `repos/${prOwnerRepo.owner}/${prOwnerRepo.repo}/pulls?per_page=${limit}&state=open&sort=updated&direction=desc`
             ],
             ghOptions
@@ -1051,7 +1053,8 @@ export async function listWorkItems(
   query?: string,
   before?: string,
   preference?: IssueSourcePreference,
-  connectionId?: string | null
+  connectionId?: string | null,
+  noCache?: boolean
 ): Promise<ListWorkItemsResult<MainWorkItem>> {
   // Why: resolve the raw upstream candidate alongside the preference-aware
   // issue source. The selector needs to know whether an upstream remote
@@ -1072,7 +1075,14 @@ export async function listWorkItems(
     // catch-all here would make an auth/network failure indistinguishable from
     // an empty result and silently under-report per-repo failures.
     const partial = !trimmedQuery
-      ? await listRecentWorkItems(repoPath, issueOwnerRepo, prOwnerRepo, limit, connectionId)
+      ? await listRecentWorkItems(
+          repoPath,
+          issueOwnerRepo,
+          prOwnerRepo,
+          limit,
+          connectionId,
+          noCache
+        )
       : await listQueriedWorkItems(
           repoPath,
           issueOwnerRepo,
@@ -1391,6 +1401,41 @@ async function findOpenPRByHeadBase(args: {
   return { number: list[0].number, url: list[0].url }
 }
 
+async function readPullRequestTemplate(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<string> {
+  const relativeCandidates = [
+    '.github/pull_request_template.md',
+    '.github/PULL_REQUEST_TEMPLATE.md',
+    'pull_request_template.md',
+    'PULL_REQUEST_TEMPLATE.md',
+    'docs/pull_request_template.md',
+    'docs/PULL_REQUEST_TEMPLATE.md'
+  ]
+  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
+  if (connectionId && !remoteProvider) {
+    return ''
+  }
+  for (const relativeCandidate of relativeCandidates) {
+    try {
+      if (remoteProvider) {
+        const result = await remoteProvider.readFile(
+          joinWorktreeRelativePath(repoPath, relativeCandidate)
+        )
+        if (result.isBinary) {
+          continue
+        }
+        return result.content
+      }
+      return await readFile(join(repoPath, relativeCandidate), 'utf8')
+    } catch {
+      // Try the next conventional PR template path.
+    }
+  }
+  return ''
+}
+
 export async function createGitHubPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
@@ -1435,7 +1480,11 @@ export async function createGitHubPullRequest(
   await acquire()
   const bodyPath = join(tempDir, 'body.md')
   try {
-    await writeFile(bodyPath, input.body ?? '', 'utf8')
+    const body =
+      input.useTemplate && !input.body?.trim()
+        ? await readPullRequestTemplate(repoPath, connectionId)
+        : (input.body ?? '')
+    await writeFile(bodyPath, body, 'utf8')
     const createArgs = [
       'pr',
       'create',

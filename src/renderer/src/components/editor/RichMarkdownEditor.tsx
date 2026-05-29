@@ -499,7 +499,7 @@ export default function RichMarkdownEditor({
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
-  const markDiffCommentsSent = useAppStore((s) => s.markDiffCommentsSent)
+  const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const allDiffComments = useAppStore((s): DiffComment[] | undefined => {
     for (const list of Object.values(s.worktreesByRepo)) {
       const worktree = list.find((candidate) => candidate.id === worktreeId)
@@ -590,10 +590,6 @@ export default function RichMarkdownEditor({
   const unsentMarkdownReviewNotes = useMemo(
     () => markdownReviewNotes.filter((note) => !note.sentAt),
     [markdownReviewNotes]
-  )
-  const unsentMarkdownReviewNoteIds = useMemo(
-    () => unsentMarkdownReviewNotes.map((note) => note.id),
-    [unsentMarkdownReviewNotes]
   )
   const unsentMarkdownReviewPrompt = useMemo(
     () => formatMarkdownReviewNotes(unsentMarkdownReviewNotes, markdownReviewContent),
@@ -1595,7 +1591,7 @@ export default function RichMarkdownEditor({
                   promptDelivery="submit-after-ready"
                   launchSource="notes_send"
                   onPromptDelivered={() =>
-                    void markDiffCommentsSent(worktreeId, unsentMarkdownReviewNoteIds)
+                    void clearDeliveredDiffComments(worktreeId, unsentMarkdownReviewNotes)
                   }
                 />
               </DropdownMenuContent>
@@ -1646,7 +1642,9 @@ export default function RichMarkdownEditor({
                           promptDelivery="submit-after-ready"
                           launchSource="notes_send"
                           onPromptDelivered={() =>
-                            void markDiffCommentsSent(worktreeId, [comment.id])
+                            void clearDeliveredDiffComments(worktreeId, [
+                              comment as MarkdownReviewNote
+                            ])
                           }
                         />
                       </DropdownMenuContent>

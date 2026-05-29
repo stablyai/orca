@@ -65,15 +65,16 @@ export function OnboardingInlineCommandTerminal({
 
   useEffect(() => {
     const tab = createTab(worktreeId, undefined, undefined, {
-      activate: false
+      activate: false,
+      recordInteraction: false
     })
     setActiveTabForWorktree(worktreeId, tab.id)
-    setTabCustomTitle(tab.id, title)
+    setTabCustomTitle(tab.id, title, { recordInteraction: false })
     setTabId(tab.id)
     return () => {
       // Why: inline setup panels can disappear after detection succeeds; close
       // the backing tab so installer shells do not keep running invisibly.
-      closeTab(tab.id)
+      closeTab(tab.id, { recordInteraction: false })
     }
   }, [closeTab, createTab, setActiveTabForWorktree, setTabCustomTitle, title, worktreeId])
 
@@ -241,8 +242,8 @@ export function OnboardingInlineCommandTerminal({
               cwd={cwd}
               isActive
               isVisible
-              onPtyExit={() => closeTab(tabId)}
-              onCloseTab={() => closeTab(tabId)}
+              onPtyExit={() => closeTab(tabId, { recordInteraction: false })}
+              onCloseTab={() => closeTab(tabId, { recordInteraction: false })}
             />
           ) : (
             <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">

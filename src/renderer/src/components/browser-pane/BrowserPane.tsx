@@ -83,6 +83,7 @@ import {
   registeredWebContentsIds,
   webviewRegistry
 } from './webview-registry'
+import { useBrowserAutomationVisiblePageIds } from './browser-automation-visibility'
 import type {
   BrowserDownloadRequestedEvent,
   BrowserDownloadProgressEvent,
@@ -137,6 +138,7 @@ import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrameMetadata
 } from '../../../../shared/browser-screencast-protocol'
+import { withBrowserPaneUiRuntimeRpcSource } from '../../../../shared/runtime-rpc-feature-interaction-source'
 import {
   formatByteCount,
   formatDownloadFinishedNotice,
@@ -784,6 +786,20 @@ export default function BrowserPane({
   const setBrowserPageUrl = useAppStore((s) => s.setBrowserPageUrl)
   const runtimeEnvironmentActive = Boolean(activeRuntimeEnvironmentId?.trim())
   const activeBrowserPageId = activeBrowserPage?.id ?? null
+  const browserPageIds = useMemo(() => browserPages.map((page) => page.id), [browserPages])
+  const automationVisiblePageIds = useBrowserAutomationVisiblePageIds(browserPageIds)
+  const renderedBrowserPages = useMemo(() => {
+    const pages: BrowserPageState[] = []
+    if (activeBrowserPage) {
+      pages.push(activeBrowserPage)
+    }
+    for (const page of browserPages) {
+      if (page.id !== activeBrowserPage?.id && automationVisiblePageIds.has(page.id)) {
+        pages.push(page)
+      }
+    }
+    return pages
+  }, [activeBrowserPage, automationVisiblePageIds, browserPages])
   const [activeBrowserDriver, setActiveBrowserDriver] = useState<BrowserDriverState>({
     kind: 'idle'
   })
@@ -834,19 +850,22 @@ export default function BrowserPane({
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col">
-      {activeBrowserPage ? (
+      {renderedBrowserPages.length > 0 ? (
         <div className="relative flex min-h-0 flex-1">
-          <BrowserPagePane
-            key={activeBrowserPage.id}
-            browserTab={activeBrowserPage}
-            workspaceId={browserTab.id}
-            worktreeId={browserTab.worktreeId}
-            sessionProfileId={browserTab.sessionProfileId ?? null}
-            isActive={isActive}
-            inputLocked={activeBrowserDriver.kind === 'mobile'}
-            onUpdatePageState={updateBrowserPageState}
-            onSetUrl={setBrowserPageUrl}
-          />
+          {renderedBrowserPages.map((page) => (
+            <BrowserPagePane
+              key={page.id}
+              browserTab={page}
+              workspaceId={browserTab.id}
+              worktreeId={browserTab.worktreeId}
+              sessionProfileId={browserTab.sessionProfileId ?? null}
+              isActive={isActive && page.id === activeBrowserPage?.id}
+              isAutomationVisible={automationVisiblePageIds.has(page.id)}
+              inputLocked={activeBrowserDriver.kind === 'mobile'}
+              onUpdatePageState={updateBrowserPageState}
+              onSetUrl={setBrowserPageUrl}
+            />
+          ))}
           <BrowserMobileDriverOverlay
             driver={activeBrowserDriver}
             onTakeBack={reclaimActiveBrowserForDesktop}
@@ -1060,7 +1079,7 @@ function RemoteBrowserPagePane({
           deviceScaleFactor: getRemoteBrowserDeviceScaleFactor(),
           mobile: false
         },
-        { timeoutMs: 15_000 }
+        { timeoutMs: 15_000, suppressFeatureInteraction: true }
       )
       try {
         // Why: the streamed bitmap can include the host compositor surface,
@@ -1073,7 +1092,7 @@ function RemoteBrowserPagePane({
             page: pageId,
             expression: 'JSON.stringify({ width: window.innerWidth, height: window.innerHeight })'
           },
-          { timeoutMs: 15_000 }
+          { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         remoteCssViewportSizeRef.current = readRemoteCssViewportSize(viewport) ?? size
       } catch {
@@ -1285,7 +1304,7 @@ function RemoteBrowserPagePane({
         { kind: 'environment', environmentId: removedHandle.environmentId },
         'browser.tabClose',
         { worktree: `id:${worktreeId}`, page: removedHandle.remotePageId },
-        { timeoutMs: 15_000 }
+        { timeoutMs: 15_000, suppressFeatureInteraction: true }
       ).catch(() => {})
     }
   }, [activeRuntimeEnvironmentId, browserTab.id, worktreeId])
@@ -1392,14 +1411,14 @@ function RemoteBrowserPagePane({
           target,
           'browser.tabCreate',
           { worktree: `id:${worktreeId}`, url: initialUrl },
-          { timeoutMs: 30_000 }
+          { timeoutMs: 30_000, suppressFeatureInteraction: true }
         )
         if (!isCurrentRemoteOperationToken(token)) {
           void callRuntimeRpc(
             target,
             'browser.tabClose',
             { worktree: `id:${worktreeId}`, page: created.browserPageId },
-            { timeoutMs: 15_000 }
+            { timeoutMs: 15_000, suppressFeatureInteraction: true }
           ).catch(() => {})
           return null
         }
@@ -1458,7 +1477,7 @@ function RemoteBrowserPagePane({
         { kind: 'environment', environmentId: token.environmentId },
         'browser.tabShow',
         { worktree: `id:${worktreeId}`, page: token.remotePageId },
-        { timeoutMs: 15_000 }
+        { timeoutMs: 15_000, suppressFeatureInteraction: true }
       )
       return shown.tab
     },
@@ -1619,7 +1638,7 @@ function RemoteBrowserPagePane({
           {
             selector: target.environmentId,
             method: 'browser.screencast',
-            params: {
+            params: withBrowserPaneUiRuntimeRpcSource({
               worktree: `id:${worktreeId}`,
               page: pageId,
               format: 'jpeg',
@@ -1630,7 +1649,7 @@ function RemoteBrowserPagePane({
               viewportHeight: viewportSize?.height,
               deviceScaleFactor: getRemoteBrowserDeviceScaleFactor(),
               everyNthFrame: 2
-            },
+            }),
             timeoutMs: 15_000
           },
           {
@@ -1892,7 +1911,7 @@ function RemoteBrowserPagePane({
             : { worktree: `id:${worktreeId}`, page: pageId }
         const result = await callRuntimeRpc<
           BrowserGotoResult | BrowserBackResult | BrowserReloadResult
-        >(target, method, params, { timeoutMs: 30_000 })
+        >(target, method, params, { timeoutMs: 30_000, suppressFeatureInteraction: true })
         if (isCurrentRemoteOperationToken(pageToken)) {
           applyRemoteTabInfo(result)
         }
@@ -1988,13 +2007,13 @@ function RemoteBrowserPagePane({
           target,
           'browser.mouseMove',
           { ...params, x: point.x, y: point.y },
-          { timeoutMs: 15_000 }
+          { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         await callRuntimeRpc(
           target,
           'browser.mouseDown',
           { ...params, button },
-          { timeoutMs: 15_000 }
+          { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
       } catch (error) {
         if (isCurrentRemoteOperationToken(operationToken)) {
@@ -2035,13 +2054,13 @@ function RemoteBrowserPagePane({
           target,
           'browser.mouseMove',
           { ...params, x: point.x, y: point.y },
-          { timeoutMs: 15_000 }
+          { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         await callRuntimeRpc(
           target,
           'browser.mouseUp',
           { ...params, button },
-          { timeoutMs: 15_000 }
+          { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         scheduleRemoteTabInfoRefresh(operationToken, 250)
       } catch (error) {
@@ -2089,7 +2108,7 @@ function RemoteBrowserPagePane({
             page: pageId,
             expression: buildRemoteContextMenuExpression(point.x, point.y)
           },
-          { timeoutMs: 15_000 }
+          { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         const parsed = readRemoteContextMenuResult(result)
         if (parsed) {
@@ -2137,7 +2156,12 @@ function RemoteBrowserPagePane({
         return
       }
       try {
-        await callRuntimeRpc(target, 'browser.keypress', { ...params, key }, { timeoutMs: 15_000 })
+        await callRuntimeRpc(
+          target,
+          'browser.keypress',
+          { ...params, key },
+          { timeoutMs: 15_000, suppressFeatureInteraction: true }
+        )
         if (key === 'Enter' || key === 'Meta+r' || key === 'Control+r') {
           scheduleRemoteTabInfoRefresh(operationToken, 400)
         }
@@ -2176,7 +2200,7 @@ function RemoteBrowserPagePane({
             target,
             'browser.mouseMove',
             { ...params, x: point.x, y: point.y },
-            { timeoutMs: 15_000 }
+            { timeoutMs: 15_000, suppressFeatureInteraction: true }
           )
           await callRuntimeRpc(
             target,
@@ -2186,7 +2210,7 @@ function RemoteBrowserPagePane({
               dx,
               dy
             },
-            { timeoutMs: 15_000 }
+            { timeoutMs: 15_000, suppressFeatureInteraction: true }
           )
           scheduleRemoteTabInfoRefresh(operationToken, 400)
         } catch (error) {
@@ -2502,6 +2526,7 @@ function BrowserPagePane({
   worktreeId,
   sessionProfileId,
   isActive,
+  isAutomationVisible,
   inputLocked,
   onUpdatePageState,
   onSetUrl
@@ -2511,10 +2536,12 @@ function BrowserPagePane({
   worktreeId: string
   sessionProfileId: string | null
   isActive: boolean
+  isAutomationVisible: boolean
   inputLocked: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: (tabId: string, url: string) => void
 }): React.JSX.Element {
+  const isPaintable = isActive || isAutomationVisible
   const containerRef = useRef<HTMLDivElement | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
@@ -2593,6 +2620,7 @@ function BrowserPagePane({
   const addBrowserPageAnnotation = useAppStore((s) => s.addBrowserPageAnnotation)
   const deleteBrowserPageAnnotation = useAppStore((s) => s.deleteBrowserPageAnnotation)
   const clearBrowserPageAnnotations = useAppStore((s) => s.clearBrowserPageAnnotations)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const clearBrowserPageAnnotationsRef = useRef(clearBrowserPageAnnotations)
   clearBrowserPageAnnotationsRef.current = clearBrowserPageAnnotations
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
@@ -3706,6 +3734,10 @@ function BrowserPagePane({
 
   const startGrabIntent = useCallback(
     (nextIntent: GrabIntent): void => {
+      recordFeatureInteraction('browser-grab')
+      if (nextIntent === 'annotate') {
+        recordFeatureInteraction('browser-annotations')
+      }
       setGrabIntent(nextIntent)
       if (nextIntent === 'copy') {
         setPendingAnnotationPayload(null)
@@ -3716,7 +3748,7 @@ function BrowserPagePane({
         grab.toggle()
       }
     },
-    [grab, grabIntent]
+    [grab, grabIntent, recordFeatureInteraction]
   )
 
   // CmdOrCtrl+C toggles grab mode
@@ -3798,11 +3830,13 @@ function BrowserPagePane({
         if (key === 'c') {
           const text = formatGrabPayloadAsText(payload)
           void window.api.ui.writeClipboardText(text)
+          recordFeatureInteraction('browser-grab')
           showGrabToast('Copied', 'success', payload)
         } else {
           const dataUrl = payload.screenshot?.dataUrl
           if (dataUrl?.startsWith('data:image/png;base64,')) {
             void window.api.ui.writeClipboardImage(dataUrl)
+            recordFeatureInteraction('browser-grab')
             showGrabToast('Screenshotted', 'success', payload)
           } else {
             showGrabToast('No screenshot available', 'error', payload)
@@ -3856,7 +3890,7 @@ function BrowserPagePane({
         })()
       }
     },
-    [grab, grabIntent, showGrabToast]
+    [grab, grabIntent, recordFeatureInteraction, showGrabToast]
   )
 
   useEffect(() => {
@@ -3909,9 +3943,10 @@ function BrowserPagePane({
     }
     const text = formatGrabPayloadAsText(payload)
     void window.api.ui.writeClipboardText(text)
+    recordFeatureInteraction('browser-grab')
     showGrabToast('Copied', 'success', payload)
     grab.rearm()
-  }, [grab, showGrabToast])
+  }, [grab, recordFeatureInteraction, showGrabToast])
 
   const handleGrabCopyScreenshot = useCallback(() => {
     grabMenuActionTakenRef.current = true
@@ -3924,9 +3959,10 @@ function BrowserPagePane({
       return
     }
     void window.api.ui.writeClipboardImage(dataUrl)
+    recordFeatureInteraction('browser-grab')
     showGrabToast('Screenshotted', 'success', payload)
     grab.rearm()
-  }, [grab, showGrabToast])
+  }, [grab, recordFeatureInteraction, showGrabToast])
 
   const handleAddBrowserAnnotation = useCallback(
     (comment: string, intent: BrowserAnnotationIntent): void => {
@@ -3945,10 +3981,18 @@ function BrowserPagePane({
       })
       setPendingAnnotationPayload(null)
       setBrowserAnnotationTrayOpen(true)
+      recordFeatureInteraction('browser-annotations')
       showGrabToast('Annotation added', 'success', payload)
       grab.rearm()
     },
-    [addBrowserPageAnnotation, browserTab.id, grab, pendingAnnotationPayload, showGrabToast]
+    [
+      addBrowserPageAnnotation,
+      browserTab.id,
+      grab,
+      pendingAnnotationPayload,
+      recordFeatureInteraction,
+      showGrabToast
+    ]
   )
 
   const handleCancelPendingBrowserAnnotation = useCallback((): void => {
@@ -3963,16 +4007,29 @@ function BrowserPagePane({
       return
     }
     void window.api.ui.writeClipboardText(browserAnnotationsPrompt)
+    recordFeatureInteraction('browser-annotations')
     clearTimeout(annotationCopyTimerRef.current)
     setBrowserAnnotationsCopied(true)
     annotationCopyTimerRef.current = setTimeout(() => setBrowserAnnotationsCopied(false), 1400)
-  }, [browserAnnotationsPrompt])
+  }, [browserAnnotationsPrompt, recordFeatureInteraction])
 
   const handleClearBrowserAnnotations = useCallback((): void => {
+    if (browserAnnotationsRef.current.length === 0) {
+      return
+    }
     clearTimeout(annotationCopyTimerRef.current)
     setBrowserAnnotationsCopied(false)
     clearBrowserPageAnnotations(browserTab.id)
-  }, [browserTab.id, clearBrowserPageAnnotations])
+    recordFeatureInteraction('browser-annotations')
+  }, [browserTab.id, clearBrowserPageAnnotations, recordFeatureInteraction])
+
+  const handleDeleteBrowserAnnotation = useCallback(
+    (annotationId: string): void => {
+      deleteBrowserPageAnnotation(browserTab.id, annotationId)
+      recordFeatureInteraction('browser-annotations')
+    },
+    [browserTab.id, deleteBrowserPageAnnotation, recordFeatureInteraction]
+  )
 
   const navigateToUrl = useCallback(
     (url: string): void => {
@@ -4171,8 +4228,16 @@ function BrowserPagePane({
     <div
       className={cn(
         'absolute inset-0 flex min-h-0 flex-1 flex-col',
-        isActive ? 'z-10' : 'pointer-events-none hidden'
+        isActive
+          ? 'z-10'
+          : isPaintable
+            ? 'pointer-events-none z-0 opacity-0'
+            : 'pointer-events-none hidden'
       )}
+      // Why: automation-visible webviews must remain mounted and paintable, but
+      // their hidden toolbar and guest content cannot stay keyboard-focusable.
+      inert={!isActive}
+      aria-hidden={!isActive}
     >
       {/* IPC-driven context menu — rendered in a Portal so position: fixed is
           relative to the viewport, not affected by ancestor backdrop-filter or
@@ -4798,7 +4863,7 @@ function BrowserPagePane({
                     size="icon-xs"
                     variant="ghost"
                     className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
-                    onClick={() => deleteBrowserPageAnnotation(browserTab.id, annotation.id)}
+                    onClick={() => handleDeleteBrowserAnnotation(annotation.id)}
                     aria-label={`Delete annotation ${index + 1}`}
                   >
                     <Trash2 className="size-3" />

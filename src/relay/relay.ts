@@ -42,7 +42,10 @@ import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-relay'
-import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import {
+  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
+} from '../shared/ssh-types'
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
@@ -302,6 +305,23 @@ async function main(): Promise<void> {
 
   const _workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
   void _workspaceSessionHandler
+
+  function configureRelayGraceTime(params: Record<string, unknown>): { graceTimeMs: number } {
+    const seconds = Number(params.graceTimeSeconds)
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      // Why: the host sends 0 before system sleep so live remote PTYs survive
+      // longer than the ordinary disconnect grace window.
+      ptyHandler.setGraceTimeMs(Math.floor(seconds) * 1000)
+    }
+    return { graceTimeMs: ptyHandler.configuredGraceTimeMs }
+  }
+
+  dispatcher.onNotification(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, (params) => {
+    configureRelayGraceTime(params)
+  })
+  dispatcher.onRequest(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, async (params) =>
+    configureRelayGraceTime(params)
+  )
 
   // ── Agent-hook server ─────────────────────────────────────────────
   // Why: hosts a loopback HTTP receiver inside the relay process so agent

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: daemon server RPC, auth, stream batching, and shutdown behavior share one socket/client harness; splitting would duplicate setup. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { connect, type Socket } from 'net'
+import { connect, type Server, type Socket } from 'net'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, rmSync, readFileSync } from 'fs'
@@ -44,6 +44,7 @@ function createMockSubprocess(): SubprocessHandle & {
 }
 
 type DaemonServerPrivate = {
+  server: Server | null
   clients: Map<
     string,
     {
@@ -97,6 +98,13 @@ describe('DaemonServer', () => {
       expect(token.length).toBeGreaterThan(0)
     })
 
+    it('removes the startup error listener after listening', async () => {
+      await startServer()
+
+      const daemon = server as unknown as DaemonServerPrivate
+      expect(daemon.server?.listenerCount('error')).toBe(0)
+    })
+
     it('accepts client connections', async () => {
       await startServer()
       const c = await connectClient()
@@ -143,6 +151,15 @@ describe('DaemonServer', () => {
       const result = await c.request<{ pong: boolean }>('ping', undefined)
 
       expect(result).toEqual({ pong: true })
+    })
+
+    it('handles systemResolverHealth', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      const result = await c.request<{ health: unknown }>('systemResolverHealth', undefined)
+
+      expect(['healthy', 'unhealthy', 'unknown']).toContain(result.health)
     })
 
     it('handles write (fire-and-forget)', async () => {

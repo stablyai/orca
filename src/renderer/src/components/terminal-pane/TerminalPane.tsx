@@ -74,6 +74,7 @@ import {
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -314,8 +315,14 @@ export default function TerminalPane({
   const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
   const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
   const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
+  const markTerminalPaneUnread = useAppStore((store) => store.markTerminalPaneUnread)
   const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
   const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
+  const clearTerminalPaneUnread = useAppStore((store) => store.clearTerminalPaneUnread)
+  const unreadTerminalPanes = useAppStore((store) => store.unreadTerminalPanes)
+  const terminalAttentionEnabled = useAppStore(
+    (store) => store.settings?.experimentalTerminalAttention === true
+  )
   const openSpacePage = useAppStore((store) => store.openSpacePage)
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
@@ -700,8 +707,10 @@ export default function TerminalPane({
     updateTabPtyId,
     markWorktreeUnread,
     markTerminalTabUnread,
+    markTerminalPaneUnread,
     clearWorktreeUnread,
     clearTerminalTabUnread,
+    clearTerminalPaneUnread,
     dispatchNotification,
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
@@ -903,8 +912,10 @@ export default function TerminalPane({
         updateTabPtyId,
         markWorktreeUnread,
         markTerminalTabUnread,
+        markTerminalPaneUnread,
         clearWorktreeUnread,
         clearTerminalTabUnread,
+        clearTerminalPaneUnread,
         dispatchNotification,
         setCacheTimerStartedAt,
         syncPanePtyLayoutBinding
@@ -920,8 +931,10 @@ export default function TerminalPane({
       dispatchNotification,
       markWorktreeUnread,
       markTerminalTabUnread,
+      markTerminalPaneUnread,
       clearWorktreeUnread,
       clearTerminalTabUnread,
+      clearTerminalPaneUnread,
       onPtyExitRef,
       setCacheTimerStartedAt,
       setRuntimePaneTitle,
@@ -1063,36 +1076,17 @@ export default function TerminalPane({
       return
     }
 
-    // Shared helper: try text first (fast path, single IPC call for the
-    // common case), then check for a clipboard image only when text is empty
-    // — which is the image-only clipboard scenario this fix targets.
     const pasteFromClipboard = (pane: ManagedPane): void => {
-      void window.api.ui
-        .readClipboardText()
-        .then((text) => {
-          if (text) {
-            pasteTerminalText(pane.terminal, text)
-            return
-          }
-          // Why: clipboard has no text — check for an image. This is the
-          // image-only clipboard case (e.g. screenshot) where Chromium's paste
-          // event would never fire on a textarea. We save the image to a temp
-          // file owned by the terminal host and paste that path.
-          const connectionId = getConnectionId(worktreeId) ?? null
-          return window.api.ui
-            .saveClipboardImageAsTempFile({ connectionId })
-            .then((filePath) => {
-              if (filePath) {
-                pasteTerminalText(pane.terminal, filePath)
-              }
-            })
-            .catch((error: unknown) => {
-              setTerminalError(formatClipboardImagePasteError(error))
-            })
-        })
-        .catch(() => {
-          /* ignore clipboard failures */
-        })
+      const connectionId = getConnectionId(worktreeId) ?? null
+      void pasteTerminalClipboard({
+        readClipboardText: window.api.ui.readClipboardText,
+        saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+        connectionId,
+        pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
+        onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
+      }).catch(() => {
+        /* ignore clipboard failures */
+      })
     }
 
     const isMac = navigator.userAgent.includes('Mac')
@@ -1182,7 +1176,7 @@ export default function TerminalPane({
   }, [isActive, worktreeId, keybindings])
 
   // Why: a click inside the terminal container is a deliberate interaction
-  // with the pane — dismiss the bell indicator for this tab and worktree
+  // with the pane — dismiss the attention indicator for this tab and worktree
   // (ghostty "show until interact" semantics). onData already covers
   // keystrokes; pointerdown covers the mouse path, including right-click
   // and middle-click paste, which also count as engagement with the pane.
@@ -1202,15 +1196,36 @@ export default function TerminalPane({
     if (!container) {
       return
     }
-    const onPointerDown = (): void => {
+    const onPointerDown = (event: PointerEvent): void => {
       clearTerminalTabUnread(tabId)
       clearWorktreeUnread(worktreeId)
+      const paneElement =
+        event.target instanceof Element ? event.target.closest('.pane[data-leaf-id]') : null
+      const leafId = paneElement?.getAttribute('data-leaf-id')
+      if (leafId) {
+        clearTerminalPaneUnread(makePaneKey(tabId, leafId))
+      }
     }
     container.addEventListener('pointerdown', onPointerDown, { capture: true })
     return () => {
       container.removeEventListener('pointerdown', onPointerDown, { capture: true })
     }
-  }, [tabId, worktreeId, clearTerminalTabUnread, clearWorktreeUnread])
+  }, [tabId, worktreeId, clearTerminalTabUnread, clearTerminalPaneUnread, clearWorktreeUnread])
+
+  useLayoutEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    for (const pane of manager.getPanes()) {
+      const paneKey = makePaneKey(tabId, pane.leafId)
+      if (terminalAttentionEnabled && unreadTerminalPanes[paneKey]) {
+        pane.container.setAttribute('data-terminal-attention', '')
+      } else {
+        pane.container.removeAttribute('data-terminal-attention')
+      }
+    }
+  }, [tabId, paneCount, terminalAttentionEnabled, unreadTerminalPanes])
 
   // Sync the data-has-title attribute on pane containers when titles change,
   // and reflow terminals so safeFit() sees the correct available height.

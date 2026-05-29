@@ -18,7 +18,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { Repo } from '../../../../shared/types'
 
-type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'setup'
+type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup'
 type RepoKind = 'git' | 'folder'
 
 export function useCreateRepo(

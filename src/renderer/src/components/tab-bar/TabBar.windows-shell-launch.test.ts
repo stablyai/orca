@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const appStoreSnapshot: {
+  activeTabId: string | null
+  activeTabType: 'terminal' | 'editor' | 'browser' | null
+} = {
+  activeTabId: null,
+  activeTabType: null
+}
+
 const useAppStoreMock = vi.fn(
   (
     selector: (state: {
+      activeTabId: string | null
+      activeTabType: 'terminal' | 'editor' | 'browser' | null
       gitStatusByWorktree: Record<string, never[]>
       settings: {
         terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
@@ -11,6 +21,8 @@ const useAppStoreMock = vi.fn(
     }) => unknown
   ) =>
     selector({
+      activeTabId: appStoreSnapshot.activeTabId,
+      activeTabType: appStoreSnapshot.activeTabType,
       gitStatusByWorktree: {},
       settings: {
         terminalWindowsShell: 'powershell.exe',
@@ -54,8 +66,20 @@ vi.mock('@dnd-kit/sortable', () => ({
   }
 }))
 
+const useAppStoreExport = (selector: Parameters<typeof useAppStoreMock>[0]): unknown =>
+  useAppStoreMock(selector)
+useAppStoreExport.getState = vi.fn(() => ({
+  activeTabId: appStoreSnapshot.activeTabId,
+  activeTabType: appStoreSnapshot.activeTabType,
+  gitStatusByWorktree: {},
+  settings: {
+    terminalWindowsShell: 'powershell.exe',
+    terminalWindowsPowerShellImplementation: 'pwsh.exe'
+  }
+}))
+
 vi.mock('../../store', () => ({
-  useAppStore: (selector: Parameters<typeof useAppStoreMock>[0]) => useAppStoreMock(selector)
+  useAppStore: useAppStoreExport
 }))
 
 vi.mock('../right-sidebar/status-display', () => ({
@@ -198,6 +222,8 @@ describe('TabBar PowerShell launch wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
+    appStoreSnapshot.activeTabId = null
+    appStoreSnapshot.activeTabType = null
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
   })
 

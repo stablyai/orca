@@ -11,9 +11,11 @@ const MAX_RATIO = 0.85
 
 function ResizeHandle({
   direction,
+  onResizeStart,
   onRatioChange
 }: {
   direction: 'horizontal' | 'vertical'
+  onResizeStart: () => void
   onRatioChange: (ratio: number) => void
 }): React.JSX.Element {
   const isHorizontal = direction === 'horizontal'
@@ -27,6 +29,7 @@ function ResizeHandle({
       if (!container) {
         return
       }
+      onResizeStart()
       setDragging(true)
       handle.setPointerCapture(event.pointerId)
 
@@ -69,7 +72,7 @@ function ResizeHandle({
       handle.addEventListener('pointercancel', onPointerCancel)
       handle.addEventListener('lostpointercapture', onLostPointerCapture)
     },
-    [isHorizontal, onRatioChange]
+    [isHorizontal, onRatioChange, onResizeStart]
   )
 
   return (
@@ -112,6 +115,7 @@ function SplitNode({
   hoveredTabInsertion: HoveredTabInsertion | null
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   if (node.type === 'leaf') {
     return (
@@ -164,6 +168,7 @@ function SplitNode({
       </div>
       <ResizeHandle
         direction={node.direction}
+        onResizeStart={() => recordFeatureInteraction('terminal-panes')}
         onRatioChange={(nextRatio) => setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)}
       />
       <div className="flex min-w-0 min-h-0 overflow-hidden" style={{ flex: `${1 - ratio} 1 0%` }}>

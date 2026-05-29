@@ -14,6 +14,7 @@ import {
   FolderPlus,
   Globe,
   ListCollapse,
+  Link,
   Loader2,
   Pencil,
   Search,
@@ -421,10 +422,14 @@ export function FileExplorerRow({
           ) : (
             <>
               <span className="shrink-0" style={ICON_STYLE} />
-              <ResolvedIcon
-                className={cn('shrink-0', iconThemeMonochrome && 'text-[var(--fe-icon-file)]')}
-                style={ICON_STYLE}
-              />
+              {node.isSymlink ? (
+                <Link className="shrink-0 text-[var(--fe-icon-file)]" style={ICON_STYLE} />
+              ) : (
+                <ResolvedIcon
+                  className={cn('shrink-0', iconThemeMonochrome && 'text-[var(--fe-icon-file)]')}
+                  style={ICON_STYLE}
+                />
+              )}
             </>
           )}
           <span

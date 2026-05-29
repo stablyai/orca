@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 export type WorktreeTitleRenameCommit = { kind: 'cancel' } | { kind: 'save'; displayName: string }
@@ -43,12 +44,6 @@ export function WorktreeTitleInlineRename({
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(displayName)
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    if (!editing) {
-      setValue(displayName)
-    }
-  }, [displayName, editing])
 
   useEffect(() => {
     onEditingChange?.(editing)
@@ -173,19 +168,29 @@ export function WorktreeTitleInlineRename({
     )
   }
 
-  return (
+  const title = (
     <span
       className={cn(
-        'block min-w-0 truncate leading-tight text-foreground',
+        'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
         showUnreadEmphasis ? 'font-semibold' : 'font-normal',
         className
       )}
       data-worktree-title-inline-rename=""
       onDoubleClick={startRename}
+      tabIndex={disabled ? undefined : 0}
     >
       {/* Why: visible text alone misses the unread state for assistive tech. */}
       {showUnreadEmphasis && <span className="sr-only">Unread: </span>}
       {displayName}
     </span>
+  )
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{title}</TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>
+        {displayName}
+      </TooltipContent>
+    </Tooltip>
   )
 }

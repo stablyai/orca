@@ -18,6 +18,9 @@ import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
+// Why: match the right sidebar's 4px resize target; a 1px seam is too hard to acquire.
+export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
+  'absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-ring/20 active:bg-ring/30'
 
 type SidebarProps = {
   worktreeScrollOffsetRef: React.MutableRefObject<number>
@@ -88,7 +91,7 @@ function Sidebar({
         {sidebarOpen && (
           <div
             data-sidebar-resize-handle=""
-            className="absolute top-0 right-0 z-10 h-full w-px cursor-col-resize transition-colors hover:bg-ring/20 active:bg-ring/30"
+            className={WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME}
             onMouseDown={onResizeStart}
           />
         )}

@@ -8,6 +8,7 @@ import type {
   GitWorktreeInfo,
   Repo,
   TabGroupLayoutNode,
+  TerminalColorOverrides,
   TerminalLayoutSnapshot,
   Worktree,
   WorktreeLineage,
@@ -104,9 +105,15 @@ export type RuntimeMobileSessionTerminalTab = {
   parentTabId: string
   leafId: string
   ptyId?: string | null
+  terminalTheme?: RuntimeMobileTerminalTheme
   agentStatus?: AgentStatusEntry | null
   parentLayout?: TerminalLayoutSnapshot
   isActive: boolean
+}
+
+export type RuntimeMobileTerminalTheme = {
+  mode: 'dark' | 'light'
+  theme: TerminalColorOverrides
 }
 
 export type RuntimeMobileSessionMarkdownTab = {

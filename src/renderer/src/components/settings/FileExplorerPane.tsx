@@ -17,6 +17,7 @@ import {
 } from '@/lib/icon-themes'
 import { FileExplorerPreview } from './FileExplorerPreview'
 import { IconThemeMarketplaceDialog } from './IconThemeMarketplaceDialog'
+import { ICON_ENTRIES, PREVIEW_ENTRIES } from './file-explorer-search'
 
 export { FILE_EXPLORER_PANE_SEARCH_ENTRIES } from './file-explorer-search'
 
@@ -181,6 +182,7 @@ export function FileExplorerPane({
             <Button
               variant="outline"
               size="icon-sm"
+              aria-label="Decrease file explorer size"
               onClick={() =>
                 updateSettings({
                   fileExplorerIconSize: Math.max(ICON_SIZE_MIN, iconSize - 1)
@@ -196,6 +198,7 @@ export function FileExplorerPane({
             <Button
               variant="outline"
               size="icon-sm"
+              aria-label="Increase file explorer size"
               onClick={() =>
                 updateSettings({
                   fileExplorerIconSize: Math.min(ICON_SIZE_MAX, iconSize + 1)

@@ -17,9 +17,14 @@ import {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle
 } from './pty-dispatcher'
-import type { PtyTransport, IpcPtyTransportOptions, PtyConnectResult } from './pty-dispatcher'
+import type {
+  PtyTransport,
+  IpcPtyTransportOptions,
+  PtyConnectResult,
+  PtyDataMeta
+} from './pty-dispatcher'
 import { createBellDetector } from './bell-detector'
-import { createAgentStatusOscProcessor } from './agent-status-osc'
+import { createAgentStatusOscProcessor, type ProcessedAgentStatusChunk } from './agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 // Re-export public API so existing consumers keep working.
@@ -40,6 +45,7 @@ export { extractLastOscTitle } from '../../../../shared/agent-detection'
 
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 const STALE_TITLE_TIMEOUT = 3000 // ms before stale working title is cleared
+const MAX_PTY_SIDE_EFFECTS_PER_DRAIN = 64
 
 // Why: onAgentStatus callback added to IpcPtyTransportOptions in pty-dispatcher
 // so the OSC 9999 status payloads can be forwarded to the store.
@@ -61,6 +67,14 @@ type ProcessPtyOutputOptions = {
   suppressAttentionEvents?: boolean
 }
 
+type PendingPtySideEffect = {
+  payloads: ProcessedAgentStatusChunk['payloads']
+  titles: string[]
+  scannedForTitles: boolean
+  containsBell: boolean
+  suppressAttentionEvents: boolean
+}
+
 export function createPtyOutputProcessor({
   onTitleChange,
   onBell,
@@ -72,7 +86,8 @@ export function createPtyOutputProcessor({
   processData: (
     data: string,
     callbacks: PtyOutputCallbacks,
-    options?: ProcessPtyOutputOptions
+    options?: ProcessPtyOutputOptions,
+    meta?: PtyDataMeta
   ) => void
   clearAccumulatedState: () => void
   clearStaleTitleTimer: () => void
@@ -84,11 +99,8 @@ export function createPtyOutputProcessor({
   let lastEmittedTitle: string | null = null
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
   let sideEffectDrainTimer: ReturnType<typeof setTimeout> | null = null
-  const pendingSideEffects: {
-    data: string
-    payloads: ReturnType<typeof processAgentStatusChunk>['payloads']
-    suppressAttentionEvents: boolean
-  }[] = []
+  let pendingSideEffects: PendingPtySideEffect[] = []
+  let pendingSideEffectIndex = 0
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -130,18 +142,99 @@ export function createPtyOutputProcessor({
     }
   }
 
-  function schedulePtySideEffects(
-    data: string,
-    payloads: ReturnType<typeof processAgentStatusChunk>['payloads'],
-    suppressAttentionEvents: boolean
-  ): void {
-    pendingSideEffects.push({ data, payloads, suppressAttentionEvents })
+  function scheduleSideEffectDrain(): void {
     if (sideEffectDrainTimer !== null) {
       return
     }
     // Why: xterm.write() buffers parsing onto its own timer. Defer Orca's
     // title/status/BEL store work so live terminal rendering gets the next turn.
     sideEffectDrainTimer = setTimeout(drainPtySideEffects, 0)
+  }
+
+  function enqueuePtySideEffect(next: PendingPtySideEffect): void {
+    const prior = pendingSideEffects.at(-1)
+    if (
+      prior &&
+      prior.titles.length === 0 &&
+      prior.payloads.length === 0 &&
+      !prior.containsBell &&
+      prior.suppressAttentionEvents === next.suppressAttentionEvents &&
+      next.titles.length === 0 &&
+      next.payloads.length === 0 &&
+      !next.containsBell
+    ) {
+      prior.scannedForTitles ||= next.scannedForTitles
+      return
+    }
+    pendingSideEffects.push(next)
+  }
+
+  function schedulePtySideEffects(
+    data: string,
+    payloads: ReturnType<typeof processAgentStatusChunk>['payloads'],
+    suppressAttentionEvents: boolean
+  ): void {
+    const scannedForTitles = Boolean(onTitleChange && data.length > 0)
+    const titles = scannedForTitles ? extractAllOscTitles(data) : []
+    const deliveredPayloads =
+      onAgentStatus && !suppressAttentionEvents && payloads.length > 0 ? payloads : []
+    const containsBell = Boolean(
+      onBell && !suppressAttentionEvents && bellDetector.chunkContainsBell(data)
+    )
+    if (!scannedForTitles && deliveredPayloads.length === 0 && !containsBell) {
+      return
+    }
+
+    // Why: keep only compact derived side-effect facts here. Retaining raw
+    // PTY chunks duplicates the terminal scheduler backlog while timers are
+    // throttled in a backgrounded Electron window.
+    if (deliveredPayloads.length === 0 && titles.length === 0) {
+      enqueuePtySideEffect({
+        payloads: [],
+        titles: [],
+        scannedForTitles,
+        containsBell,
+        suppressAttentionEvents
+      })
+    } else {
+      for (const payload of deliveredPayloads) {
+        enqueuePtySideEffect({
+          payloads: [payload],
+          titles: [],
+          scannedForTitles: false,
+          containsBell: false,
+          suppressAttentionEvents
+        })
+      }
+      if (titles.length === 0 && scannedForTitles) {
+        enqueuePtySideEffect({
+          payloads: [],
+          titles: [],
+          scannedForTitles: true,
+          containsBell: false,
+          suppressAttentionEvents
+        })
+      }
+      for (const title of titles) {
+        enqueuePtySideEffect({
+          payloads: [],
+          titles: [title],
+          scannedForTitles,
+          containsBell: false,
+          suppressAttentionEvents
+        })
+      }
+      if (containsBell) {
+        enqueuePtySideEffect({
+          payloads: [],
+          titles: [],
+          scannedForTitles: false,
+          containsBell: true,
+          suppressAttentionEvents
+        })
+      }
+    }
+    scheduleSideEffectDrain()
   }
 
   function clearSideEffectDrainTimer(): void {
@@ -151,31 +244,65 @@ export function createPtyOutputProcessor({
     }
   }
 
-  function drainPtySideEffects(): void {
+  function compactPendingSideEffectsIfNeeded(force = false): void {
+    if (pendingSideEffectIndex === 0) {
+      return
+    }
+    if (pendingSideEffectIndex >= pendingSideEffects.length) {
+      pendingSideEffects = []
+      pendingSideEffectIndex = 0
+      return
+    }
+    if (force || pendingSideEffectIndex >= MAX_PTY_SIDE_EFFECTS_PER_DRAIN * 4) {
+      pendingSideEffects = pendingSideEffects.slice(pendingSideEffectIndex)
+      pendingSideEffectIndex = 0
+    }
+  }
+
+  function applyPtySideEffect(next: PendingPtySideEffect): void {
+    if (onAgentStatus) {
+      for (const payload of next.payloads) {
+        onAgentStatus(payload)
+      }
+    }
+    processObservedTitles(next.titles, next.scannedForTitles, next.suppressAttentionEvents)
+    if (onBell && next.containsBell) {
+      onBell()
+    }
+  }
+
+  function drainPtySideEffects(options: { flushAll?: boolean } = {}): void {
     sideEffectDrainTimer = null
-    while (pendingSideEffects.length > 0) {
-      const next = pendingSideEffects.shift()
+    const maxEffects = options.flushAll ? Number.POSITIVE_INFINITY : MAX_PTY_SIDE_EFFECTS_PER_DRAIN
+    let processed = 0
+    while (pendingSideEffectIndex < pendingSideEffects.length && processed < maxEffects) {
+      const next = pendingSideEffects[pendingSideEffectIndex]
       if (!next) {
-        continue
+        break
       }
-      if (onAgentStatus && !next.suppressAttentionEvents) {
-        for (const payload of next.payloads) {
-          onAgentStatus(payload)
-        }
-      }
-      processObservedTitles(next.data, next.suppressAttentionEvents)
-      if (onBell && bellDetector.chunkContainsBell(next.data) && !next.suppressAttentionEvents) {
-        onBell()
-      }
+      pendingSideEffectIndex += 1
+      processed += 1
+      applyPtySideEffect(next)
+    }
+    compactPendingSideEffectsIfNeeded(options.flushAll === true)
+    if (pendingSideEffectIndex < pendingSideEffects.length) {
+      // Why: long-idle agent CLIs can queue thousands of OSC title/status
+      // facts while Chromium throttles timers. Bound each callback so cursor
+      // blink, paint, and terminal input get chances to run between batches.
+      scheduleSideEffectDrain()
     }
   }
 
   function flushPendingSideEffects(): void {
     clearSideEffectDrainTimer()
-    drainPtySideEffects()
+    drainPtySideEffects({ flushAll: true })
   }
 
-  function processObservedTitles(data: string, suppressAgentTracker: boolean): void {
+  function processObservedTitles(
+    titles: string[],
+    scannedForTitles: boolean,
+    suppressAgentTracker: boolean
+  ): void {
     if (!onTitleChange) {
       return
     }
@@ -183,13 +310,13 @@ export function createPtyOutputProcessor({
     // the last one. node-pty + the main-process 8ms batch window commonly
     // coalesce multiple title updates into a single IPC payload; processing
     // titles in order preserves working-to-idle transitions.
-    const titles = extractAllOscTitles(data)
     if (titles.length > 0) {
       clearStaleTitleTimer()
       for (const title of titles) {
         applyObservedTerminalTitle(title, suppressAgentTracker)
       }
     } else if (
+      scannedForTitles &&
       !suppressAgentTracker &&
       lastEmittedTitle &&
       detectAgentStatusFromTitle(lastEmittedTitle) === 'working'
@@ -210,8 +337,10 @@ export function createPtyOutputProcessor({
   function processData(
     data: string,
     callbacks: PtyOutputCallbacks,
-    options: ProcessPtyOutputOptions = {}
+    options: ProcessPtyOutputOptions = {},
+    meta?: PtyDataMeta
   ): void {
+    const rawLength = meta?.rawLength ?? data.length
     const suppressAttentionEvents = options.suppressAttentionEvents === true
     // Why: OSC 9999 is a renderer-only control protocol. Parse it before
     // xterm sees the bytes, and keep parser state across chunks so partial
@@ -225,7 +354,11 @@ export function createPtyOutputProcessor({
     if (options.replayingBufferedData && callbacks.onReplayData) {
       callbacks.onReplayData(data)
     } else {
-      callbacks.onData?.(data)
+      if (meta) {
+        callbacks.onData?.(data, { ...meta, rawLength })
+      } else {
+        callbacks.onData?.(data)
+      }
     }
     schedulePtySideEffects(data, processed.payloads, suppressAttentionEvents)
   }
@@ -233,6 +366,7 @@ export function createPtyOutputProcessor({
   function clearAccumulatedState(): void {
     clearSideEffectDrainTimer()
     pendingSideEffects.length = 0
+    pendingSideEffectIndex = 0
     clearStaleTitleTimer()
     agentTracker?.reset()
     bellDetector.reset()
@@ -321,11 +455,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         storedCallbacks.onData?.(data)
       }
     })
-    ptyDataHandlers.set(id, (data) => {
-      outputProcessor.processData(data, storedCallbacks, {
-        replayingBufferedData,
-        suppressAttentionEvents
-      })
+    ptyDataHandlers.set(id, (data, meta) => {
+      outputProcessor.processData(
+        data,
+        storedCallbacks,
+        {
+          replayingBufferedData,
+          suppressAttentionEvents
+        },
+        meta
+      )
     })
   }
 

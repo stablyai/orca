@@ -41,7 +41,7 @@ describe('runQuickCommandInNewTab', () => {
     mockState = createStoreState()
   })
 
-  it('queues multiline quick commands for terminal-paste delivery', () => {
+  it('flattens multiline quick commands before queuing', () => {
     const result = runQuickCommandInNewTab({
       command: {
         id: 'build',
@@ -55,13 +55,12 @@ describe('runQuickCommandInNewTab', () => {
 
     expect(result).toEqual({ tabId: 'tab-new' })
     expect(mockState.queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
-      command: 'cd packages\nbun run build\ncd ..',
-      delivery: 'terminal-paste'
+      command: 'cd packages; bun run build; cd ..'
     })
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith('group-1', 'build')
   })
 
-  it('keeps single-line quick commands on the standard startup path', () => {
+  it('keeps single-line quick commands unchanged', () => {
     runQuickCommandInNewTab({
       command: {
         id: 'status',

@@ -461,12 +461,11 @@ async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
  * `upstream/main`). The picker would otherwise structurally deny the
  * correct answer for fork contributors — see docs/upstream-base-ref-design.md.
  *
- * Why two remote globs for a single-segment query: `git for-each-ref`
- * uses fnmatch-style globs where `*` does NOT cross `/`. A single
- * `refs/remotes/*\/*<q>*` pattern only matches when `<q>` appears in the
- * branch-name segment, so typing `upstream` (a remote name) would return
- * nothing. The extra `refs/remotes/*<q>*\/*` glob matches when the query
- * appears in the remote-name segment, making remote-name filtering work.
+ * Why paired leaf/ancestor globs for a single-segment query: `git for-each-ref`
+ * uses fnmatch-style globs where `*` does NOT cross `/`. Slash-named branch
+ * refs need an ancestor-segment glob for `user` in `user/feature`, a leaf glob
+ * for `feature`, and the same remote-side shape so typing a remote name like
+ * `upstream` keeps working.
  *
  * Why the multi-segment branch: the picker displays results as
  * `upstream/main`, so users naturally retype that format. With a single
@@ -491,13 +490,18 @@ export function buildSearchBaseRefsArgv(normalizedQuery: string): string[] {
   const tokens = normalizedQuery.split('/').filter((t) => t.length > 0)
   if (tokens.length <= 1) {
     const q = tokens[0] ?? ''
-    // Why three globs for a single-segment query: `git for-each-ref`
-    // uses fnmatch-style globs where `*` does NOT cross `/`. A single
-    // `refs/remotes/*\/*<q>*` only matches when `<q>` is in the branch
-    // segment, so typing `upstream` (a remote name) returns nothing.
-    // The extra `refs/remotes/*<q>*\/*` matches when the query lives in
-    // the remote segment, making remote-name filtering work.
-    return [...base, `refs/remotes/*${q}*/*`, `refs/remotes/*/*${q}*`, `refs/heads/*${q}*`]
+    // Why `**`, not `*`: git for-each-ref globs are fnmatch-style where a
+    // single `*` does NOT cross `/`. Slash-named branches (`user/feature`)
+    // are the norm, so match both leaf and ancestor branch-name segments.
+    // The remote ancestor glob also preserves remote-name queries like
+    // `upstream` while `**/` keeps flat names like `main` working.
+    return [
+      ...base,
+      `refs/heads/**/*${q}*`,
+      `refs/heads/**/*${q}*/**`,
+      `refs/remotes/**/*${q}*`,
+      `refs/remotes/**/*${q}*/**`
+    ]
   }
   // Why: multi-token queries like `upstream/main` map one `*token*` per
   // ref segment, so each token is matched within a single git ref

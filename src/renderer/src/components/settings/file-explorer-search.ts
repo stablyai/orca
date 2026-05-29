@@ -1,6 +1,6 @@
 import type { SettingsSearchEntry } from './settings-search'
 
-const ICON_ENTRIES: SettingsSearchEntry[] = [
+export const ICON_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Icon Theme',
     description: 'Choose which icon set the file explorer uses.',
@@ -13,7 +13,7 @@ const ICON_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
-const PREVIEW_ENTRIES: SettingsSearchEntry[] = [
+export const PREVIEW_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Preview',
     description: 'Live preview of the active file explorer theme.',

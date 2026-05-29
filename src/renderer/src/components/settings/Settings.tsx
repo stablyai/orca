@@ -14,8 +14,8 @@ import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { GeneralPane } from './GeneralPane'
 import { BrowserPane } from './BrowserPane'
 import { AppearancePane } from './AppearancePane'
-import { FileExplorerPane } from './FileExplorerPane'
-import { InputPane } from './InputPane'
+import { FileExplorerPane, FILE_EXPLORER_PANE_SEARCH_ENTRIES } from './FileExplorerPane'
+import { InputPane, INPUT_PANE_SEARCH_ENTRIES } from './InputPane'
 import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
@@ -46,6 +46,7 @@ import { SettingsSidebar } from './SettingsSidebar'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch } from './settings-search'
 import { cn } from '@/lib/utils'
+import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -151,7 +152,7 @@ function Settings(): React.JSX.Element {
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
   const repos = useAppStore((s) => s.repos)
   const updateRepo = useAppStore((s) => s.updateRepo)
-  const removeRepo = useAppStore((s) => s.removeRepo)
+  const removeProject = useAppStore((s) => s.removeProject)
   const settingsNavigationTarget = useAppStore((s) => s.settingsNavigationTarget)
   const clearSettingsTarget = useAppStore((s) => s.clearSettingsTarget)
   const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
@@ -208,8 +209,8 @@ function Settings(): React.JSX.Element {
       return true
     }
     const shouldDiscard = await confirm({
-      title: 'Discard unsaved commit prompt changes?',
-      description: 'You have unsaved AI commit prompt changes. Leaving will discard them.',
+      title: 'Discard unsaved Source Control AI prompt changes?',
+      description: 'You have unsaved Source Control AI prompt changes. Leaving will discard them.',
       confirmLabel: 'Discard',
       confirmVariant: 'destructive'
     })
@@ -258,7 +259,7 @@ function Settings(): React.JSX.Element {
         return
       }
       // Why: nested dialogs and menus own Escape before Settings page-level
-      // navigation, including the unsaved commit prompt confirmation dialog.
+      // navigation, including the unsaved Source Control AI prompt confirmation dialog.
       if (hasVisibleOverlay()) {
         return
       }
@@ -296,6 +297,9 @@ function Settings(): React.JSX.Element {
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+      if (isIntentionalAppRestartInProgress()) {
+        return
+      }
       if (!hasUnsavedCommitPromptChanges) {
         return
       }
@@ -676,7 +680,12 @@ function Settings(): React.JSX.Element {
     .filter((section) => section.id.startsWith('repo-'))
     .map((section) => {
       const repo = repos.find((entry) => entry.id === section.id.replace('repo-', ''))
-      return { ...section, badgeColor: repo?.badgeColor, isRemote: !!repo?.connectionId }
+      return {
+        ...section,
+        badgeColor: repo?.badgeColor,
+        isRemote: !!repo?.connectionId,
+        repoIcon: repo?.repoIcon
+      }
     })
   const isSectionMounted = (sectionId: string): boolean => neededSectionIds.has(sectionId)
   const isFocusedShortcutsPane =
@@ -706,7 +715,7 @@ function Settings(): React.JSX.Element {
         >
           <div
             className={cn(
-              'flex w-full max-w-4xl flex-col gap-10 px-8 pt-10',
+              'mx-auto flex w-full max-w-4xl flex-col gap-10 px-8 pt-10',
               isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24'
             )}
           >
@@ -762,7 +771,7 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="git"
                   title="Git & Source Control"
-                  description="Branch naming, base refs, attribution, and AI commit messages."
+                  description="Branch naming, base refs, attribution, and Source Control AI."
                   searchEntries={getSectionSearchEntries('git')}
                   forceVisible={hasUnsavedCommitPromptChanges}
                 >
@@ -808,7 +817,7 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="file-explorer"
                   title="File Explorer"
-                  description="Icon themes and color customization for the file tree."
+                  description="Icon themes and sizing for the file tree."
                   searchEntries={FILE_EXPLORER_PANE_SEARCH_ENTRIES}
                 >
                   {isSectionMounted('file-explorer') ? (
@@ -1116,7 +1125,7 @@ function Settings(): React.JSX.Element {
                           hooksInspectionReady={Boolean(repoHooksState)}
                           mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
                           updateRepo={updateRepo}
-                          removeRepo={removeRepo}
+                          removeProject={removeProject}
                         />
                       ) : null}
                     </SettingsSection>
