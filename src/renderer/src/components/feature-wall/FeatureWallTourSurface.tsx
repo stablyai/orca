@@ -110,22 +110,6 @@ export function FeatureWallTourSurface({
     getDepthSummary: completion.getTourDepthSummary
   })
 
-  useEffect(() => {
-    if (!agentsSteps.some((s) => s.id === agentsStepId)) {
-      setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
-    }
-  }, [agentsSteps, agentsStepId])
-  useEffect(() => {
-    if (!workbenchSteps.some((s) => s.id === workbenchStepId)) {
-      setWorkbenchStepId(workbenchSteps[0]?.id ?? 'terminal')
-    }
-  }, [workbenchSteps, workbenchStepId])
-  useEffect(() => {
-    if (!reviewSteps.some((s) => s.id === reviewStepId)) {
-      setReviewStepId(reviewSteps[0]?.id ?? 'notes')
-    }
-  }, [reviewSteps, reviewStepId])
-
   const agentsActiveStep =
     selected.id === 'agents-orchestration'
       ? (agentsSteps.find((s) => s.id === agentsStepId) ?? agentsSteps[0] ?? null)
