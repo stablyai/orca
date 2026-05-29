@@ -66,7 +66,10 @@ describe('CLI remote WebSocket transport', () => {
       deviceToken: runtime.deviceToken,
       publicKeyB64: runtime.publicKeyB64
     }
-    const barePayload = encodePairingOffer(offer).split('#')[1]!
+    const pairingUrl = encodePairingOffer(offer)
+    const barePayload = new URLSearchParams(pairingUrl.slice(pairingUrl.indexOf('?') + 1)).get(
+      'code'
+    )!
 
     const client = new RuntimeClient('/tmp/unused', 5_000, barePayload)
     const status = await client.getCliStatus()
