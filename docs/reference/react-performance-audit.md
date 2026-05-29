@@ -47,7 +47,7 @@ Initial inventory:
 
 ## Coverage Ledger
 
-Current count after low-risk PRs #3038, #3041, #3042, and #3044: 966 Effect hook call sites.
+Current count after low-risk PRs #3038, #3041, #3042, #3044, and #3051: 964 Effect hook call sites.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -60,7 +60,7 @@ Current count after low-risk PRs #3038, #3041, #3042, and #3044: 966 Effect hook
 | Settings                       | `components/settings/**`                                                                                 | Inventory complete, manual review pending     | 81 area Effects. Many draft-mirror candidates; keep SSH and cross-platform settings behavior intact.                               |
 | Issue, PR, task pages          | `TaskPage.tsx`, `PullRequestPage.tsx`, `GitHubItemDialog.tsx`, `GitLabItemDialog.tsx`, Linear components | Inventory complete, manual review in progress | Large files with many Effects. Separate GitHub, GitLab, Linear, and generic review behavior.                                       |
 | Onboarding / feature wall      | `components/onboarding/**`, `components/feature-wall/**`                                                 | Inventory complete, manual review pending     | Lower merge risk for pure visual/demo state, but avoid changing telemetry semantics.                                               |
-| Status, dashboard, activity    | `components/status-bar/**`, `components/dashboard/**`, `components/activity/**`                          | Inventory complete, manual review pending     | Check interval sharing, retained agent state, activity terminal portals.                                                           |
+| Status, dashboard, activity    | `components/status-bar/**`, `components/dashboard/**`, `components/activity/**`                          | Inventory complete, manual review in progress | Status-bar account menu close reset covered by #3051. Check interval sharing, retained agent state, activity terminal portals.      |
 | Mobile app routes              | `mobile/app/**`                                                                                          | Inventory complete, manual review pending     | 79 Effects, including large `tasks.tsx` and session route. Remote-client parity required.                                          |
 | Mobile shared source           | `mobile/src/**`                                                                                          | Inventory complete, manual review pending     | Browser pane, transport client context, dictation hook, bottom drawer, new worktree modal.                                         |
 | Expo two-way audio hook        | `mobile/packages/expo-two-way-audio/src/hooks.ts`                                                        | Inventory complete, manual review pending     | Single Effect plus `useSyncExternalStore`; verify native subscription cleanup.                                                     |
@@ -84,6 +84,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR J         | GitHub filter controls                                | Extra render pass from mirroring parsed reviewer qualifier into local mode state.                        | `PRFilterDropdowns.tsx` covered by #3041                                                                                 | Low            |
 | PR K         | Sidebar project filter                                | Extra render pass from mirroring the first filtered repo into command selection state.                   | `SidebarFilter.tsx` covered by #3042                                                                                     | Low            |
 | PR L         | Diff note edit draft                                  | Extra render pass from mirroring saved note body into edit draft while not editing.                      | `DiffCommentCard.tsx` covered by #3044                                                                                   | Low            |
+| PR M         | Status-bar account menus                              | Extra render pass from closing Claude/Codex account submenus in Effects after the provider menu closes.  | `StatusBar.tsx` covered by #3051                                                                                         | Low            |
 
 ## Merge Risk Scale
 
@@ -101,6 +102,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3041 | `nwparker/react-perf-pr-filter`      | PR reviewer filter mode derived from parsed query plus explicit user override | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/github/PRFilterDropdowns.tsx`; `pnpm run typecheck:web`.       |
 | #3042 | `nwparker/react-perf-sidebar-filter` | Sidebar project filter command selection derived from filtered repos          | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/SidebarFilter.tsx`; `pnpm run typecheck:web`.          |
 | #3044 | `nwparker/react-perf-low-risk-2`     | Diff note card removes saved-body-to-draft mirror Effect                      | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/diff-comments/DiffCommentCard.tsx`; `pnpm run typecheck:web`.  |
+| #3051 | `nwparker/react-perf-low-risk-3`     | Status-bar account submenus collapse in provider menu open-change handlers    | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/status-bar/StatusBar.tsx`; `pnpm run typecheck:web`.           |
 
 ## Reproduction Commands
 
