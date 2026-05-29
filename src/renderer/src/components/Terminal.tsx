@@ -75,6 +75,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import {
   createFloatingWorkspaceTerminalTab,
+  handleEmptyFloatingWorkspacePanelCloseShortcut,
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
@@ -1189,6 +1190,10 @@ function Terminal(): React.JSX.Element | null {
         e.preventDefault()
         notifyTerminalCapture('tab.newMarkdown')
         void handleNewFile()
+        return
+      }
+
+      if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
         return
       }
 
