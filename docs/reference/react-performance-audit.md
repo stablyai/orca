@@ -47,7 +47,7 @@ Initial inventory:
 
 ## Coverage Ledger
 
-Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, and #3058: 955 Effect hook call sites.
+Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, and #3059: 954 Effect hook call sites.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -91,6 +91,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR Q         | Repo combobox mount-open state                        | Mount-only auto-open path uses an Effect and ref guard instead of initializing state from the prop.       | `RepoCombobox.tsx` covered by #3055                                                                                      | Low            |
 | PR R         | Quick Open query reset                                | Extra render pass from clearing the Quick Open input after the dialog opens.                             | `QuickOpen.tsx` covered by #3056                                                                                         | Low            |
 | PR S         | Project group dialog open resets                      | Extra render pass from seeding name/delete dialog local state after the dialog opens.                    | `ProjectGroupNameDialog.tsx`, `ProjectGroupDeleteDialog.tsx` covered by #3058                                            | Low            |
+| PR T         | Onboarding agent fallback disclosure                  | Extra render pass from opening the fallback agent list when a selected agent first appears there.         | `AgentStep.tsx` covered by #3059                                                                                         | Low            |
 
 ## Merge Risk Scale
 
@@ -114,7 +115,8 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3054 | `nwparker/react-perf-low-risk-6`     | Feature-wall tour removes static substep id repair Effects                    | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx`; `pnpm run typecheck:web`. |
 | #3055 | `nwparker/react-perf-low-risk-7`     | Repo combobox initializes mount-open state without an Effect                  | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/repo/RepoCombobox.tsx`; `pnpm run typecheck:web`.              |
 | #3056 | `nwparker/react-perf-low-risk-8`     | Quick Open clears its query on the open edge without a reset Effect           | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/QuickOpen.tsx`; `pnpm run typecheck:web`.                      |
-| #3058 | `nwparker/react-perf-project-group-dialogs` | Project group dialogs reset local open-state during render              | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/sidebar/ProjectGroupDeleteDialog.tsx src/renderer/src/components/sidebar/ProjectGroupNameDialog.tsx`; `pnpm run typecheck:web`. |
+| #3058 | `nwparker/react-perf-project-group-dialogs` | Project group dialogs reset local open-state during render              | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/ProjectGroupDeleteDialog.tsx src/renderer/src/components/sidebar/ProjectGroupNameDialog.tsx`; `pnpm run typecheck:web`. |
+| #3059 | `nwparker/react-perf-agent-step-latch` | Onboarding agent fallback disclosure latch updates during render        | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/onboarding/AgentStep.tsx`; `pnpm run typecheck:web`.           |
 
 ## Reproduction Commands
 
