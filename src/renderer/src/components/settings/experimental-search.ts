@@ -63,6 +63,23 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'env',
       'node_modules'
     ]
+  },
+  {
+    title: 'Unified new tab launcher',
+    description:
+      'Adds a searchable New Tab launcher for terminals, detected agents, URLs, and files.',
+    keywords: [
+      'experimental',
+      'new tab',
+      'launcher',
+      'plus',
+      'terminal',
+      'agents',
+      'claude',
+      'codex',
+      'url',
+      'file'
+    ]
   }
 ]
 
@@ -81,5 +98,6 @@ export const EXPERIMENTAL_SEARCH_ENTRY = {
   pet: findEntry('Pet'),
   activity: findEntry('Agents View'),
   terminalAttention: findEntry('Terminal attention'),
-  symlinks: findEntry('Symlinks on worktrees')
+  symlinks: findEntry('Symlinks on worktrees'),
+  unifiedNewTabLauncher: findEntry('Unified new tab launcher')
 } as const

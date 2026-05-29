@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { FilePlus, FileText, Globe, Loader2, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { useRuntimeFileListForWorktree } from '../quick-open-file-list'
 import {
@@ -9,19 +10,30 @@ import {
   type TabEntryActionClassification,
   type TabEntryOption
 } from './tab-create-entry-action'
+import {
+  findMatchingTabAgentLaunchOptions,
+  type TabAgentLaunchOption
+} from './tab-agent-launch-options'
+import type { TuiAgent } from '../../../../shared/types'
 
 type TabBarCreateEntryProps = {
+  agentOptions?: readonly TabAgentLaunchOption[]
   groupId: string
   menuOpen: boolean
   onDidOpenEntry?: () => void
+  onLaunchAgent?: (agent: TuiAgent) => void
+  onOpenDefaultTerminal?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   worktreeId: string
 }
 
 export default function TabBarCreateEntry({
+  agentOptions = [],
   groupId,
   menuOpen,
   onDidOpenEntry,
+  onLaunchAgent,
+  onOpenDefaultTerminal,
   onOpenEntry,
   worktreeId
 }: TabBarCreateEntryProps): React.JSX.Element {
@@ -44,6 +56,10 @@ export default function TabBarCreateEntry({
   }, [menuOpen])
 
   const options = useMemo(() => getTabEntryOptions(query, fileList), [fileList, query])
+  const matchingAgentOptions = useMemo(
+    () => findMatchingTabAgentLaunchOptions(query, agentOptions),
+    [agentOptions, query]
+  )
 
   useEffect(() => {
     setSelectedIndex(0)
@@ -51,7 +67,16 @@ export default function TabBarCreateEntry({
 
   const disabled = !onOpenEntry
   const hasQuery = query.trim().length > 0
-  const activeOptions = options.filter(isActiveEntryOption)
+  const activeOptions: ActiveOption[] = [
+    ...matchingAgentOptions.map((option) => ({
+      kind: 'agent' as const,
+      option
+    })),
+    ...options.filter(isActiveEntryOption).map((option) => ({
+      kind: 'entry' as const,
+      option
+    }))
+  ]
   const activeSelectedIndex = Math.min(selectedIndex, Math.max(activeOptions.length - 1, 0))
   const selectedActiveOption = activeOptions[activeSelectedIndex]
   const statusOption = options.find(
@@ -62,13 +87,23 @@ export default function TabBarCreateEntry({
       ? statusOption.classification.message
       : 'URL, file, or new file'
 
-  const submitOption = (classification?: TabEntryActionClassification) => {
+  const submitOption = (option?: ActiveOption) => {
     if (disabled || pending) {
       return
     }
-    const selectedClassification = classification ?? selectedActiveOption?.classification ?? null
-    if (!selectedClassification) {
+    const selectedOption = option ?? selectedActiveOption ?? null
+    if (!selectedOption) {
+      if (!hasQuery && onOpenDefaultTerminal) {
+        onOpenDefaultTerminal()
+        onDidOpenEntry?.()
+        return
+      }
       setError(statusMessage)
+      return
+    }
+    if (selectedOption.kind === 'agent') {
+      onLaunchAgent?.(selectedOption.option.agent)
+      onDidOpenEntry?.()
       return
     }
     setPending(true)
@@ -78,7 +113,7 @@ export default function TabBarCreateEntry({
       worktreeId,
       groupId,
       fileList,
-      classification: selectedClassification
+      classification: selectedOption.option.classification
     })
       .then(() => {
         onDidOpenEntry?.()
@@ -140,10 +175,10 @@ export default function TabBarCreateEntry({
           ) : activeOptions.length > 0 ? (
             activeOptions.map((option, index) => (
               <EntryActionRow
-                key={option.id}
-                classification={option.classification}
+                key={getActiveOptionId(option)}
+                option={option}
                 selected={index === activeSelectedIndex}
-                onClick={() => submitOption(option.classification)}
+                onClick={() => submitOption(option)}
               />
             ))
           ) : (
@@ -159,8 +194,22 @@ type ActiveEntryOption = TabEntryOption & {
   classification: TabEntryActionClassification
 }
 
+type ActiveOption =
+  | {
+      kind: 'agent'
+      option: TabAgentLaunchOption
+    }
+  | {
+      kind: 'entry'
+      option: ActiveEntryOption
+    }
+
 function isActiveEntryOption(option: TabEntryOption): option is ActiveEntryOption {
   return option.classification.kind !== 'empty' && option.classification.kind !== 'blocked'
+}
+
+function getActiveOptionId(option: ActiveOption): string {
+  return option.kind === 'agent' ? `agent:${option.option.agent}` : option.option.id
 }
 
 function EntryStatusRow({
@@ -179,15 +228,15 @@ function EntryStatusRow({
 }
 
 function EntryActionRow({
-  classification,
   onClick,
+  option,
   selected
 }: {
-  classification: TabEntryActionClassification
   onClick: () => void
+  option: ActiveOption
   selected: boolean
 }): React.JSX.Element {
-  const { detail, icon: Icon, label } = getActionPresentation(classification)
+  const presentation = getActionPresentation(option)
 
   return (
     <button
@@ -200,26 +249,46 @@ function EntryActionRow({
       )}
       onClick={onClick}
     >
-      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
-      <span className="shrink-0 font-medium">{label}</span>
+      {presentation.icon}
+      <span className="shrink-0 font-medium">{presentation.label}</span>
       <span className="text-muted-foreground/70" aria-hidden="true">
         ·
       </span>
-      <span className="min-w-0 truncate">{detail}</span>
+      <span className="min-w-0 truncate">{presentation.detail}</span>
     </button>
   )
 }
 
-function getActionPresentation(classification: TabEntryActionClassification): {
+function getActionPresentation(option: ActiveOption): {
   detail: string
-  icon: typeof FilePlus
+  icon: React.ReactNode
   label: string
 } {
+  if (option.kind === 'agent') {
+    return {
+      detail: option.option.label,
+      icon: <AgentIcon agent={option.option.agent} size={14} />,
+      label: 'Launch agent'
+    }
+  }
+  const { classification } = option.option
   if (classification.kind === 'explicit-url' || classification.kind === 'host-url') {
-    return { detail: classification.url, icon: Globe, label: 'Open URL' }
+    return {
+      detail: classification.url,
+      icon: <Globe className="size-3.5 shrink-0" aria-hidden="true" />,
+      label: 'Open URL'
+    }
   }
   if (classification.kind === 'existing-file') {
-    return { detail: classification.relativePath, icon: FileText, label: 'Open file' }
+    return {
+      detail: classification.relativePath,
+      icon: <FileText className="size-3.5 shrink-0" aria-hidden="true" />,
+      label: 'Open file'
+    }
   }
-  return { detail: classification.relativePath, icon: FilePlus, label: 'Create file' }
+  return {
+    detail: classification.relativePath,
+    icon: <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />,
+    label: 'Create file'
+  }
 }

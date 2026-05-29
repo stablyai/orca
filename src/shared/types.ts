@@ -1913,6 +1913,9 @@ export type GlobalSettings = {
    *  configuration surface and edge cases (conflicts with existing paths,
    *  cleanup on worktree delete) are still being worked out. */
   experimentalWorktreeSymlinks: boolean
+  /** Experimental: replaces the New Tab menu's static preview row with a
+   *  command-style launcher for terminals, detected agents, URLs, and files. */
+  experimentalUnifiedNewTabLauncher: boolean
   /** Active non-local runtime environment for client-routed RPC. `null`
    *  preserves the current local desktop behavior. */
   activeRuntimeEnvironmentId?: string | null
