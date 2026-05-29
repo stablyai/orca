@@ -2020,6 +2020,9 @@ export default function MobileTasksScreen() {
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
+  // Why: async task loads use this ref as a stale-client guard; update it
+  // before commit so a just-rendered load path does not see the old client.
+  clientRef.current = client
   const reposRef = useRef<RepoSummary[]>([])
   const loadGenerationRef = useRef(0)
   const taskResumeRef = useRef<TaskResumeState>({})
@@ -2533,10 +2536,6 @@ export default function MobileTasksScreen() {
     }
     return [...logins].sort().join(',')
   }, [projectRowDetail, projectRowItem?.content.assignees])
-
-  useEffect(() => {
-    clientRef.current = client
-  }, [client])
 
   const persistTaskResumeState = useCallback(
     (updates: Partial<TaskResumeState>) => {
