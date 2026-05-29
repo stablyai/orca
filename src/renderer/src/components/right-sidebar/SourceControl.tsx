@@ -181,7 +181,7 @@ import { getRepositorySourceControlAiSectionId } from '@/components/settings/rep
 import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
 import {
   buildSourceControlDisplaySectionsFromSplit,
-  getConflictReviewEntries,
+  getSourceControlSectionViewAction,
   resolveSourceControlGroupOrder,
   splitPinnedSourceControlConflicts,
   SOURCE_CONTROL_AREAS,
@@ -4181,8 +4181,7 @@ function SourceControlInner(): React.JSX.Element {
                 const { id, area, items } = section
                 const isCollapsed = collapsedSections.has(id)
                 const actionItems = id === 'conflicts' ? items : actionGrouped[area]
-                const conflictReviewEntries =
-                  id === 'conflicts' ? getConflictReviewEntries(items) : []
+                const sectionViewAction = getSourceControlSectionViewAction(section)
                 // Why: "Stage all"/"Unstage all" operate on the *unfiltered*
                 // group for the area — acting on just the filter-visible subset
                 // would surprise users who don't realize a filter is active.
@@ -4260,7 +4259,7 @@ function SourceControlInner(): React.JSX.Element {
                               />
                             )}
                           </div>
-                          {id === 'conflicts' && conflictReviewEntries.length > 0 ? (
+                          {sectionViewAction?.kind === 'conflict-review' ? (
                             <Button
                               type="button"
                               variant="ghost"
@@ -4272,7 +4271,7 @@ function SourceControlInner(): React.JSX.Element {
                                   openConflictReview(
                                     activeWorktreeId,
                                     worktreePath,
-                                    conflictReviewEntries,
+                                    sectionViewAction.entries,
                                     'live-summary'
                                   )
                                 }
@@ -4280,7 +4279,7 @@ function SourceControlInner(): React.JSX.Element {
                             >
                               Review all
                             </Button>
-                          ) : id === 'conflicts' ? null : (
+                          ) : sectionViewAction?.kind === 'combined-diff' ? (
                             <Button
                               type="button"
                               variant="ghost"
@@ -4289,13 +4288,18 @@ function SourceControlInner(): React.JSX.Element {
                               onClick={(e) => {
                                 e.stopPropagation()
                                 if (activeWorktreeId && worktreePath) {
-                                  openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
+                                  openAllDiffs(
+                                    activeWorktreeId,
+                                    worktreePath,
+                                    undefined,
+                                    sectionViewAction.area
+                                  )
                                 }
                               }}
                             >
                               View all
                             </Button>
-                          )}
+                          ) : null}
                         </>
                       }
                     />

@@ -19,6 +19,10 @@ export type SourceControlConflictReviewEntry = {
   conflictKind: NonNullable<GitStatusEntry['conflictKind']>
 }
 
+export type SourceControlSectionViewAction =
+  | { kind: 'conflict-review'; entries: SourceControlConflictReviewEntry[] }
+  | { kind: 'combined-diff'; area: SourceControlSectionArea }
+
 const ORDER_BY_PRESET: Record<SourceControlGroupOrder, readonly SourceControlSectionArea[]> = {
   'changes-first': ['unstaged', 'staged', 'untracked'],
   'staged-first': ['staged', 'unstaged', 'untracked'],
@@ -46,6 +50,16 @@ export function getConflictReviewEntries(
       path: entry.path,
       conflictKind: entry.conflictKind!
     }))
+}
+
+export function getSourceControlSectionViewAction(
+  section: SourceControlDisplaySection
+): SourceControlSectionViewAction | null {
+  if (section.id === 'conflicts') {
+    const entries = getConflictReviewEntries(section.items)
+    return entries.length > 0 ? { kind: 'conflict-review', entries } : null
+  }
+  return { kind: 'combined-diff', area: section.area }
 }
 
 export type SplitSourceControlGroups = {

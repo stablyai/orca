@@ -3,6 +3,7 @@ import type { GitStatusEntry } from '../../../../shared/types'
 import {
   buildSourceControlDisplaySections,
   getConflictReviewEntries,
+  getSourceControlSectionViewAction,
   resolveSourceControlGroupOrder,
   splitPinnedSourceControlConflicts,
   type SourceControlEntryGroups
@@ -58,6 +59,32 @@ describe('buildSourceControlDisplaySections', () => {
     expect(sections.map((section) => section.id)).toEqual(['staged', 'unstaged', 'untracked'])
   })
 
+  it('keeps conflicts pinned before the configured normal order', () => {
+    const sections = buildSourceControlDisplaySections(
+      groups({
+        staged: [entry({ area: 'staged', path: 'staged.ts' })],
+        unstaged: [
+          entry({
+            area: 'unstaged',
+            path: 'conflict.ts',
+            conflictKind: 'both_modified',
+            conflictStatus: 'unresolved'
+          }),
+          entry({ area: 'unstaged', path: 'changed.ts' })
+        ],
+        untracked: [entry({ area: 'untracked', path: 'new.ts', status: 'untracked' })]
+      }),
+      resolveSourceControlGroupOrder('staged-first')
+    )
+
+    expect(sections.map((section) => section.id)).toEqual([
+      'conflicts',
+      'staged',
+      'unstaged',
+      'untracked'
+    ])
+  })
+
   it('pins conflict rows and removes them from the normal Changes section', () => {
     const unresolved = entry({
       area: 'unstaged',
@@ -102,5 +129,49 @@ describe('buildSourceControlDisplaySections', () => {
         })
       ])
     ).toEqual([{ path: 'conflict.ts', conflictKind: 'both_modified' }])
+  })
+
+  it('routes the pinned Conflicts section to conflict review', () => {
+    const sections = buildSourceControlDisplaySections(
+      groups({
+        unstaged: [
+          entry({
+            area: 'unstaged',
+            path: 'conflict.ts',
+            conflictKind: 'both_modified',
+            conflictStatus: 'unresolved'
+          }),
+          entry({ area: 'unstaged', path: 'normal.ts' })
+        ]
+      }),
+      resolveSourceControlGroupOrder('changes-first')
+    )
+
+    expect(getSourceControlSectionViewAction(sections[0]!)).toEqual({
+      kind: 'conflict-review',
+      entries: [{ path: 'conflict.ts', conflictKind: 'both_modified' }]
+    })
+    expect(getSourceControlSectionViewAction(sections[1]!)).toEqual({
+      kind: 'combined-diff',
+      area: 'unstaged'
+    })
+  })
+
+  it('does not route locally resolved-only conflict sections to review', () => {
+    const sections = buildSourceControlDisplaySections(
+      groups({
+        unstaged: [
+          entry({
+            area: 'unstaged',
+            path: 'resolved.ts',
+            conflictKind: 'both_modified',
+            conflictStatus: 'resolved_locally'
+          })
+        ]
+      }),
+      resolveSourceControlGroupOrder('changes-first')
+    )
+
+    expect(getSourceControlSectionViewAction(sections[0]!)).toBeNull()
   })
 })
