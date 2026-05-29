@@ -66,7 +66,7 @@ export function useFeatureWallCompletion(
         : false)
 
   const [hasUsageAccount, setHasUsageAccount] = useState(false)
-  const persistedCompletion = usePersistedFeatureWallCompletion(isOpen)
+  const persistedCompletion = usePersistedFeatureWallCompletion()
   const {
     visitedWorkflows,
     visitedAgentSteps,
