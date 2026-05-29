@@ -778,7 +778,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
              so an un-renamed single-line worktree collapses to one row instead of
              leaving an empty band. The PR/ports indicators now live on the title row. */}
         {hasMetaRow && (
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0" data-worktree-card-meta-row="">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
               {repo && !hideRepoBadge && (
                 <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
