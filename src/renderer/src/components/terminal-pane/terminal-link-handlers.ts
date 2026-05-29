@@ -236,7 +236,7 @@ function getTerminalScreenElement(terminal: Terminal): HTMLElement | null {
   return terminal.element?.querySelector('.xterm-screen') ?? null
 }
 
-function getBufferPositionForTerminalMouseEvent(
+export function getBufferPositionForTerminalMouseEvent(
   terminal: Terminal,
   event: MouseEvent
 ): { x: number; y: number } | null {

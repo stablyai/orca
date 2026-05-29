@@ -21,15 +21,38 @@ type FileLinkHitTestDeps = {
   openWithSystemDefault?: boolean
 }
 
-export function openFilePathLinkAtBufferPosition(
+export type ResolvedTerminalFileLink = {
+  absolutePath: string
+  line: number | null
+  column: number | null
+}
+
+/** A terminal file link resolved at a right-click position, plus whether it
+ *  points at a local file (remote/SSH runtime paths can't use the local OS). */
+export type TerminalFileLinkMenuTarget = ResolvedTerminalFileLink & {
+  isLocal: boolean
+  runtimeEnvironmentId: string | null
+}
+
+/** Resolves the file link under a terminal MouseEvent without opening it.
+ *  Returns null when the click is not over a known file path. */
+export type TerminalFileLinkResolver = (
+  paneId: number,
+  event: MouseEvent
+) => TerminalFileLinkMenuTarget | null
+
+// Why: shared by the ⌘-click open path and the right-click context menu, which
+// needs the resolved path without triggering an open. Returns the best match at
+// the buffer position using the same caching/length preference as opening.
+export function resolveFilePathLinkAtBufferPosition(
   buffer: { getLine(y: number): IBufferLine | undefined },
   position: { x: number; y: number },
   terminalColumns: number,
   deps: FileLinkHitTestDeps
-): boolean {
+): ResolvedTerminalFileLink | null {
   const logicalLines = buildCandidateLogicalLinesForBufferPosition(buffer, position.y)
   if (logicalLines.length === 0) {
-    return false
+    return null
   }
 
   for (const logicalLine of logicalLines) {
@@ -86,15 +109,25 @@ export function openFilePathLinkAtBufferPosition(
     const uncachedMatch = matches.find((match) => match.cachedExists !== false)
     const match = cachedMatch ?? knownWorktreeRootMatch ?? uncachedMatch
     if (match) {
-      openDetectedFilePath(match.absolutePath, match.line, match.column, {
-        ...deps,
-        openWithSystemDefault: deps.openWithSystemDefault === true
-      })
-      return true
+      return { absolutePath: match.absolutePath, line: match.line, column: match.column }
     }
   }
 
-  return false
+  return null
+}
+
+export function openFilePathLinkAtBufferPosition(
+  buffer: { getLine(y: number): IBufferLine | undefined },
+  position: { x: number; y: number },
+  terminalColumns: number,
+  deps: FileLinkHitTestDeps
+): boolean {
+  const match = resolveFilePathLinkAtBufferPosition(buffer, position, terminalColumns, deps)
+  if (!match) {
+    return false
+  }
+  openDetectedFilePath(match.absolutePath, match.line, match.column, deps)
+  return true
 }
 
 export function buildCandidateLogicalLinesForBufferPosition(
