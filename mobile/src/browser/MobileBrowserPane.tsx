@@ -209,21 +209,12 @@ export function MobileBrowserPane({
     }
   }, [addressFocused, tab.url])
 
-  useEffect(() => {
-    frameMetadataRef.current = frameMetadata
-  }, [frameMetadata])
-
-  useEffect(() => {
-    layoutRef.current = layout
-  }, [layout])
-
-  useEffect(() => {
-    dialogRef.current = dialog
-  }, [dialog])
-
-  useEffect(() => {
-    zoomRef.current = zoom
-  }, [zoom])
+  // Why: gesture and stream handlers read these refs before passive Effects
+  // flush. Assigning during render keeps them current without extra commits.
+  frameMetadataRef.current = frameMetadata
+  layoutRef.current = layout
+  dialogRef.current = dialog
+  zoomRef.current = zoom
 
   useEffect(() => {
     lastZoomResetUrlRef.current = tab.url || 'about:blank'
