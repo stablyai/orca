@@ -999,6 +999,9 @@ function SourceControlInner(): React.JSX.Element {
   )
   const [diffCommentsExpanded, setDiffCommentsExpanded] = useState(false)
   const [diffCommentsCopied, setDiffCommentsCopied] = useState(false)
+  // Why: copy feedback is event-scoped; the copy handler owns the reset timer
+  // instead of repairing copied state in a follow-up Effect.
+  const diffCommentsCopiedResetTimerRef = useRef<number | null>(null)
   const [pendingDiffCommentsClear, setPendingDiffCommentsClear] =
     useState<PendingDiffCommentsClear | null>(null)
   const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
@@ -1009,22 +1012,19 @@ function SourceControlInner(): React.JSX.Element {
     }
     try {
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
+      if (diffCommentsCopiedResetTimerRef.current !== null) {
+        window.clearTimeout(diffCommentsCopiedResetTimerRef.current)
+      }
       setDiffCommentsCopied(true)
+      diffCommentsCopiedResetTimerRef.current = window.setTimeout(() => {
+        setDiffCommentsCopied(false)
+        diffCommentsCopiedResetTimerRef.current = null
+      }, 1500)
     } catch {
       // Why: swallow — clipboard write can fail when the window isn't focused.
       // No dedicated error surface is warranted for a best-effort copy action.
     }
   }, [diffCommentsForActive, diffCommentsPrompt])
-
-  // Why: auto-dismiss the "copied" indicator so the button returns to its
-  // default icon after a brief confirmation window.
-  useEffect(() => {
-    if (!diffCommentsCopied) {
-      return
-    }
-    const handle = window.setTimeout(() => setDiffCommentsCopied(false), 1500)
-    return () => window.clearTimeout(handle)
-  }, [diffCommentsCopied])
 
   const pendingDiffCommentsClearCount = useMemo(() => {
     if (!pendingDiffCommentsClear || pendingDiffCommentsClear.worktreeId !== activeWorktreeId) {
@@ -5797,22 +5797,21 @@ function DiffCommentsInlineList({
   }, [comments])
 
   const [copiedId, setCopiedId] = useState<string | null>(null)
-
-  // Why: auto-dismiss the per-row "copied" indicator so the button returns to
-  // its default icon after a brief confirmation window. Matches the top-level
-  // Copy button's behavior.
-  useEffect(() => {
-    if (!copiedId) {
-      return
-    }
-    const handle = window.setTimeout(() => setCopiedId(null), 1500)
-    return () => window.clearTimeout(handle)
-  }, [copiedId])
+  // Why: per-row copy feedback follows the same event-scoped reset as the
+  // top-level Copy Notes action.
+  const copiedResetTimerRef = useRef<number | null>(null)
 
   const handleCopyOne = useCallback(async (c: DiffComment): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(formatDiffComment(c))
+      if (copiedResetTimerRef.current !== null) {
+        window.clearTimeout(copiedResetTimerRef.current)
+      }
       setCopiedId(c.id)
+      copiedResetTimerRef.current = window.setTimeout(() => {
+        setCopiedId(null)
+        copiedResetTimerRef.current = null
+      }, 1500)
     } catch {
       // Why: swallow — clipboard write can fail when the window isn't focused.
     }
