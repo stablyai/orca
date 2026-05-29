@@ -6,6 +6,7 @@ const MAX_OUTSIDE_EDGE_PX = 48
 const MAX_SCROLL_SPEED_PX_PER_SECOND = 960
 const MAX_FRAME_MS = 32
 const DROP_BOUNDS_PADDING_PX = 8
+const EMPTY_PREVIEW_OFFSETS: ReadonlyMap<string, number> = new Map()
 
 export type WorktreeSidebarDragPoint = {
   clientX: number
@@ -118,7 +119,8 @@ export function getWorktreeSidebarBoundaryDrop(args: {
 
 export function getWorktreeSidebarDragRectsForGroup(
   container: HTMLElement,
-  groupKey: string
+  groupKey: string,
+  previewOffsetsByWorktreeId: ReadonlyMap<string, number> = EMPTY_PREVIEW_OFFSETS
 ): WorktreeSidebarDragRect[] {
   const containerRect = container.getBoundingClientRect()
   const rects: WorktreeSidebarDragRect[] = []
@@ -133,11 +135,14 @@ export function getWorktreeSidebarDragRectsForGroup(
       return
     }
     const rect = element.getBoundingClientRect()
+    // Why: drop previews move rows with transforms; hit-testing must use the
+    // stable slot geometry or the insertion line can feed back on itself.
+    const previewOffset = previewOffsetsByWorktreeId.get(worktreeId) ?? 0
     rects.push({
       worktreeId,
       groupIndex,
-      top: rect.top - containerRect.top + container.scrollTop,
-      bottom: rect.bottom - containerRect.top + container.scrollTop
+      top: rect.top - containerRect.top + container.scrollTop - previewOffset,
+      bottom: rect.bottom - containerRect.top + container.scrollTop - previewOffset
     })
   })
   rects.sort((a, b) => a.top - b.top)

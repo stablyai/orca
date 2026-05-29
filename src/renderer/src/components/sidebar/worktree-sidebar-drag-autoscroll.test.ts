@@ -26,120 +26,34 @@ const SESSION: WorktreeSidebarDragSession = {
 
 describe('getWorktreeSidebarDragAutoscroll', () => {
   it('scrolls up near the top edge', () => {
-    expect(
-      getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 80, clientY: 112 },
-        containerRect: CONTAINER_RECT,
-        scrollTop: 200,
-        scrollHeight: 1000,
-        clientHeight: 400,
-        elapsedMs: 16
-      })?.scrollTop
-    ).toBeCloseTo(187.93, 2)
+    expect(getAutoscroll({ clientX: 80, clientY: 112 })?.scrollTop).toBeCloseTo(187.93, 2)
   })
 
   it('scrolls down near the bottom edge', () => {
-    expect(
-      getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 80, clientY: 488 },
-        containerRect: CONTAINER_RECT,
-        scrollTop: 200,
-        scrollHeight: 1000,
-        clientHeight: 400,
-        elapsedMs: 16
-      })?.scrollTop
-    ).toBeCloseTo(212.07, 2)
+    expect(getAutoscroll({ clientX: 80, clientY: 488 })?.scrollTop).toBeCloseTo(212.07, 2)
   })
 
   it('does nothing away from the vertical edge zones', () => {
-    expect(
-      getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 80, clientY: 300 },
-        containerRect: CONTAINER_RECT,
-        scrollTop: 200,
-        scrollHeight: 1000,
-        clientHeight: 400,
-        elapsedMs: 16
-      })
-    ).toBeNull()
+    expect(getAutoscroll({ clientX: 80, clientY: 300 })).toBeNull()
   })
 
   it('does nothing when the pointer is outside horizontally', () => {
-    expect(
-      getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 4, clientY: 488 },
-        containerRect: CONTAINER_RECT,
-        scrollTop: 200,
-        scrollHeight: 1000,
-        clientHeight: 400,
-        elapsedMs: 16
-      })
-    ).toBeNull()
+    expect(getAutoscroll({ clientX: 4, clientY: 488 })).toBeNull()
   })
 
   it('does not write past scroll bounds', () => {
-    expect(
-      getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 80, clientY: 100 },
-        containerRect: CONTAINER_RECT,
-        scrollTop: 0,
-        scrollHeight: 1000,
-        clientHeight: 400,
-        elapsedMs: 16
-      })
-    ).toBeNull()
-    expect(
-      getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 80, clientY: 500 },
-        containerRect: CONTAINER_RECT,
-        scrollTop: 600,
-        scrollHeight: 1000,
-        clientHeight: 400,
-        elapsedMs: 16
-      })
-    ).toBeNull()
+    expect(getAutoscroll({ clientX: 80, clientY: 100 }, { scrollTop: 0 })).toBeNull()
+    expect(getAutoscroll({ clientX: 80, clientY: 500 }, { scrollTop: 600 })).toBeNull()
   })
 
   it('allows capped scrolling slightly beyond the vertical edge', () => {
-    expect(
-      getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 80, clientY: 530 },
-        containerRect: CONTAINER_RECT,
-        scrollTop: 200,
-        scrollHeight: 1000,
-        clientHeight: 400,
-        elapsedMs: 16
-      })?.scrollTop
-    ).toBeCloseTo(215.36, 2)
-    expect(
-      getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 80, clientY: 560 },
-        containerRect: CONTAINER_RECT,
-        scrollTop: 200,
-        scrollHeight: 1000,
-        clientHeight: 400,
-        elapsedMs: 16
-      })
-    ).toBeNull()
+    expect(getAutoscroll({ clientX: 80, clientY: 530 })?.scrollTop).toBeCloseTo(215.36, 2)
+    expect(getAutoscroll({ clientX: 80, clientY: 560 })).toBeNull()
   })
 
   it('scales by elapsed frame time and clamps delayed frames', () => {
-    const normal = getWorktreeSidebarDragAutoscroll({
-      point: { clientX: 80, clientY: 500 },
-      containerRect: CONTAINER_RECT,
-      scrollTop: 200,
-      scrollHeight: 1000,
-      clientHeight: 400,
-      elapsedMs: 16
-    })
-    const delayed = getWorktreeSidebarDragAutoscroll({
-      point: { clientX: 80, clientY: 500 },
-      containerRect: CONTAINER_RECT,
-      scrollTop: 200,
-      scrollHeight: 1000,
-      clientHeight: 400,
-      elapsedMs: 200
-    })
+    const normal = getAutoscroll({ clientX: 80, clientY: 500 })
+    const delayed = getAutoscroll({ clientX: 80, clientY: 500 }, { elapsedMs: 200 })
 
     expect(normal?.scrollTop).toBeCloseTo(215.36, 2)
     expect(delayed?.scrollTop).toBeCloseTo(230.72, 2)
@@ -170,22 +84,16 @@ describe('getWorktreeSidebarBoundaryDrop', () => {
   })
 
   it('still rejects gaps that are not the real group edge', () => {
-    expect(
-      getWorktreeSidebarBoundaryDrop({
-        localY: 70,
-        firstRect: { worktreeId: 'b', groupIndex: 1, top: 100, bottom: 140 },
-        lastRect: { worktreeId: 'c', groupIndex: 2, top: 200, bottom: 240 },
-        sourceGroupSize: 4
-      })
-    ).toEqual({ kind: 'outside' })
-    expect(
-      getWorktreeSidebarBoundaryDrop({
-        localY: 270,
-        firstRect: { worktreeId: 'b', groupIndex: 1, top: 100, bottom: 140 },
-        lastRect: { worktreeId: 'c', groupIndex: 2, top: 200, bottom: 240 },
-        sourceGroupSize: 4
-      })
-    ).toEqual({ kind: 'outside' })
+    for (const localY of [70, 270]) {
+      expect(
+        getWorktreeSidebarBoundaryDrop({
+          localY,
+          firstRect: { worktreeId: 'b', groupIndex: 1, top: 100, bottom: 140 },
+          lastRect: { worktreeId: 'c', groupIndex: 2, top: 200, bottom: 240 },
+          sourceGroupSize: 4
+        })
+      ).toEqual({ kind: 'outside' })
+    }
   })
 
   it('keeps normal in-range hover handling unchanged', () => {
@@ -211,6 +119,29 @@ describe('getWorktreeSidebarDragRectsForGroup', () => {
     expect(getWorktreeSidebarDragRectsForGroup(container, 'repo:one')).toEqual([
       { worktreeId: 'b', groupIndex: 1, top: 40, bottom: 80 },
       { worktreeId: 'a', groupIndex: 0, top: 90, bottom: 130 }
+    ])
+  })
+
+  it('subtracts active preview offsets so transformed rows do not perturb hit testing', () => {
+    const container = makeContainer([
+      makeDragElement('a', 'repo:one', '0', 96, 136),
+      makeDragElement('b', 'repo:one', '1', 90, 130),
+      makeDragElement('c', 'repo:one', '2', 142, 182)
+    ])
+
+    expect(
+      getWorktreeSidebarDragRectsForGroup(
+        container,
+        'repo:one',
+        new Map([
+          ['a', 56],
+          ['c', -20]
+        ])
+      )
+    ).toEqual([
+      { worktreeId: 'a', groupIndex: 0, top: -10, bottom: 30 },
+      { worktreeId: 'b', groupIndex: 1, top: 40, bottom: 80 },
+      { worktreeId: 'c', groupIndex: 2, top: 112, bottom: 152 }
     ])
   })
 })
@@ -289,6 +220,21 @@ function makeContainer(elements: readonly ReturnType<typeof makeDragElement>[]):
     getBoundingClientRect: () => ({ top: 100 }),
     querySelectorAll: () => elements
   } as unknown as HTMLElement
+}
+
+function getAutoscroll(
+  point: { clientX: number; clientY: number },
+  overrides: Partial<Parameters<typeof getWorktreeSidebarDragAutoscroll>[0]> = {}
+) {
+  return getWorktreeSidebarDragAutoscroll({
+    point,
+    containerRect: CONTAINER_RECT,
+    scrollTop: 200,
+    scrollHeight: 1000,
+    clientHeight: 400,
+    elapsedMs: 16,
+    ...overrides
+  })
 }
 
 function makeDragElement(
