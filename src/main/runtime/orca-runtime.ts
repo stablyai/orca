@@ -4791,7 +4791,7 @@ export class OrcaRuntimeService {
       if (
         condition === 'tui-idle' &&
         (this.getAdoptedPtyExplicitIdleStatus(pty.pty) === 'idle' ||
-          isCodexReadyPromptPreview(ptyWaitText))
+          isKnownReadyPromptPreview(ptyWaitText))
       ) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
@@ -4849,7 +4849,7 @@ export class OrcaRuntimeService {
             this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else if (
             this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
-            isCodexReadyPromptPreview(livePtyWaitText)
+            isKnownReadyPromptPreview(livePtyWaitText)
           ) {
             this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else {
@@ -4882,7 +4882,7 @@ export class OrcaRuntimeService {
       const fastPathTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
       if (
         (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-        isCodexReadyPromptPreview(leafWaitText)
+        isKnownReadyPromptPreview(leafWaitText)
       ) {
         return buildTerminalWaitResult(handle, condition, leaf)
       }
@@ -4954,13 +4954,13 @@ export class OrcaRuntimeService {
             // the first waiter consumes the status and all later ones see null.
             this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
           } else {
-            // Why: renderer-synced previews can show Codex's ready prompt even
+            // Why: renderer-synced previews can show a known ready prompt even
             // while the last OSC title is still "working"; keep polling the
             // preview/title until the waiter resolves or hits its timeout.
             const fastPathTitle = live.leaf.paneTitle ?? this.tabs.get(live.leaf.tabId)?.title
             if (
               (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-              isCodexReadyPromptPreview(liveLeafWaitText)
+              isKnownReadyPromptPreview(liveLeafWaitText)
             ) {
               this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
             } else {
@@ -11067,9 +11067,9 @@ export class OrcaRuntimeService {
   // presence, but the runtime may not see PTY data for daemon-hosted terminals
   // (the daemon adapter stubs getForegroundProcess). This checks three signals
   // in order: (1) lastAgentStatus from PTY data OSC titles, (2) the renderer-
-  // synced tab title (which reflects OSC titles from the xterm instance), and
-  // (3) the PTY foreground process. Returns true if any signal indicates a
-  // non-shell agent is running.
+  // synced tab title (which reflects OSC titles from the xterm instance), (3)
+  // retained ready-tail text, and (4) the PTY foreground process. Returns true
+  // if any signal indicates a non-shell agent is running.
   async isTerminalRunningAgent(handle: string): Promise<boolean> {
     try {
       const pty = this.getLivePtyForHandle(handle)
@@ -11089,7 +11089,7 @@ export class OrcaRuntimeService {
         return true
       }
       const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-      if (isCodexReadyPromptPreview(waitText)) {
+      if (isKnownReadyPromptPreview(waitText)) {
         return true
       }
       if (!leaf.ptyId || !this.ptyController) {
@@ -11114,7 +11114,7 @@ export class OrcaRuntimeService {
       return true
     }
     const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    if (isCodexReadyPromptPreview(waitText)) {
+    if (isKnownReadyPromptPreview(waitText)) {
       return true
     }
     if (!this.ptyController) {
@@ -11558,7 +11558,7 @@ export class OrcaRuntimeService {
           )
           return
         }
-        if (isCodexReadyPromptPreview(leafWaitText)) {
+        if (isKnownReadyPromptPreview(leafWaitText)) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
             waiter.pollInterval = null
@@ -11615,7 +11615,7 @@ export class OrcaRuntimeService {
         // Use that live xterm title as the same readiness signal as leaf handles.
         if (
           this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
-          isCodexReadyPromptPreview(ptyWaitText)
+          isKnownReadyPromptPreview(ptyWaitText)
         ) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
@@ -12416,7 +12416,7 @@ function buildTerminalWaitText(lines: string[], partialLine: string, preview: st
     .filter(Boolean)
     .join('\n')
   // Why: the user-facing preview is intentionally short, but wait readiness
-  // needs the retained terminal tail so Codex headers are not truncated away.
+  // needs the retained terminal tail so known ready headers are not truncated away.
   return waitText.length > 0 ? waitText : preview
 }
 
@@ -12694,9 +12694,9 @@ function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
   return null
 }
 
-function isCodexReadyPromptPreview(preview: string): boolean {
+function isKnownReadyPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()
-  const readyIndex = findCodexReadyPromptIndex(normalized)
+  const readyIndex = findKnownReadyPromptIndex(normalized)
   if (readyIndex === null) {
     return false
   }
@@ -12713,13 +12713,21 @@ function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBl
   if (blockedSignal === null) {
     return null
   }
-  const readyIndex = findCodexReadyPromptIndex(normalized)
-  // Why: retained terminal tails can include stale startup modals. If Codex's
-  // ready header appears after that modal, the latest signal is ready.
+  const readyIndex = findKnownReadyPromptIndex(normalized)
+  // Why: retained terminal tails can include stale startup modals. If a known
+  // ready prompt appears after that modal, the latest signal is ready.
   if (readyIndex !== null && readyIndex > blockedSignal.index) {
     return null
   }
   return blockedSignal.reason
+}
+
+function findKnownReadyPromptIndex(normalized: string): number | null {
+  const indexes = [
+    findCodexReadyPromptIndex(normalized),
+    findAntigravityReadyPromptIndex(normalized)
+  ].filter((index): index is number => index !== null)
+  return indexes.length > 0 ? Math.max(...indexes) : null
 }
 
 function findCodexReadyPromptIndex(normalized: string): number | null {
@@ -12731,6 +12739,34 @@ function findCodexReadyPromptIndex(normalized: string): number | null {
   // Why: current Codex prints permissions only in YOLO mode. The stable ready
   // header is OpenAI Codex + model + directory.
   return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
+}
+
+function findAntigravityReadyPromptIndex(normalized: string): number | null {
+  const headerIndex = normalized.lastIndexOf('antigravity cli')
+  if (headerIndex === -1) {
+    return null
+  }
+  const readySegment = normalized.slice(headerIndex)
+  const lines = readySegment.split('\n')
+  let offset = 0
+  let modelIndex: number | null = null
+  let promptIndex: number | null = null
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    const lineIndex = headerIndex + offset
+    if (lineIndex > headerIndex && trimmed.length > 0) {
+      if (modelIndex === null && trimmed.startsWith('gemini')) {
+        modelIndex = lineIndex + line.indexOf(trimmed)
+      }
+      if (promptIndex === null && trimmed === '>') {
+        promptIndex = lineIndex + line.indexOf('>')
+      }
+    }
+    offset += line.length + 1
+  }
+
+  return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
 }
 
 function findTerminalWaitBlockedSignal(
