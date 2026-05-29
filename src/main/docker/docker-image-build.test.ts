@@ -61,7 +61,14 @@ describe('docker-image-build', () => {
     })
     expect(engine.commands[0]).toMatchObject({
       command: 'image.build',
-      options: { contextPath: repoPath, dockerfileContent: expect.stringContaining('FROM ubuntu') }
+      options: {
+        contextPath: repoPath,
+        dockerfileContent: expect.stringContaining('FROM ubuntu'),
+        labels: {
+          'dev.orca.managed': 'true',
+          'dev.orca.repo': 'stablyai/orca'
+        }
+      }
     })
   })
 

@@ -16,6 +16,8 @@ export type DockerTarget = {
   containerId: string
   image: DockerImageHandle
   workdir: string
+  hostWorktreePath?: string
+  hostPlatform?: NodeJS.Platform
 }
 
 export type DockerEngineFlavor =

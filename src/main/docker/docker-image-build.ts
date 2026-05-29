@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /workspace
 `
 const DEFAULT_DOCKERFILE_PATH = 'auto-generated:orca-default'
+export const ORCA_DOCKER_MANAGED_LABEL = 'dev.orca.managed'
+export const ORCA_DOCKER_REPO_LABEL = 'dev.orca.repo'
 
 export type ResolveDockerfileResult = {
   dockerfilePath: string
@@ -66,6 +68,10 @@ export async function buildDockerImage(
     dockerfilePath: dockerfile.dockerfilePath,
     dockerfileContent: dockerfile.isGenerated ? dockerfile.content : undefined,
     tag,
+    labels: {
+      [ORCA_DOCKER_MANAGED_LABEL]: 'true',
+      [ORCA_DOCKER_REPO_LABEL]: options.repoIdentity ?? options.repoPath
+    },
     timeoutMs: options.timeoutMs
   })
 

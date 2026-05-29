@@ -49,7 +49,14 @@ describe('docker-container-lifecycle', () => {
     ])
     expect(engine.commands[1]).toMatchObject({
       command: 'container.create',
-      options: { mounts: [{ source: worktreePath, target: '/workspace' }] }
+      options: {
+        mounts: [{ source: worktreePath, target: '/workspace' }],
+        labels: {
+          'dev.orca.managed': 'true',
+          'dev.orca.kind': 'worktree',
+          'dev.orca.repo': 'repo-1'
+        }
+      }
     })
   })
 
@@ -91,6 +98,27 @@ describe('docker-container-lifecycle', () => {
       state: 'terminated'
     })
     expect(engine.commands.map((command) => command.command)).toContain('container.rm')
+  })
+
+  it('refuses to clean up containers without Orca ownership labels', async () => {
+    engine.containers.set('user-container', {
+      id: 'user-container',
+      imageId: 'sha256:user',
+      running: true
+    })
+
+    await expect(attachDockerContainer(engine, 'user-container')).rejects.toThrow(
+      'not managed by Orca'
+    )
+    await expect(
+      terminateDockerContainer(engine, {
+        id: 'user-container',
+        imageId: 'sha256:user',
+        startedAt: 1,
+        state: 'running'
+      })
+    ).rejects.toThrow('not managed by Orca')
+    expect(engine.commands.map((command) => command.command)).not.toContain('container.rm')
   })
 
   it('surfaces build failures before creating a container', async () => {

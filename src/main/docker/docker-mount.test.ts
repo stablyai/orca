@@ -40,4 +40,14 @@ describe('docker-mount', () => {
       '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo'
     )
   })
+
+  it('rejects unsafe container mount targets', () => {
+    expect(() =>
+      resolveDockerBindMount({
+        hostPath: '/home/me/repo',
+        platform: 'linux',
+        containerPath: '/'
+      })
+    ).toThrow('must not be the container root')
+  })
 })

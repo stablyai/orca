@@ -83,4 +83,16 @@ describe('DockerPtyProvider', () => {
       sessionExpired: true
     })
   })
+
+  it('forwards signals and removes sessions on shutdown', async () => {
+    const { id } = await provider.spawn({ cols: 80, rows: 24 })
+    const session = engine.sessions.get(id)!
+    const sendSignal = vi.spyOn(session, 'sendSignal')
+
+    await provider.sendSignal(id, 'SIGINT')
+    await provider.shutdown(id, { immediate: true })
+
+    expect(sendSignal).toHaveBeenCalledWith('SIGINT')
+    await expect(provider.hasChildProcesses(id)).resolves.toBe(false)
+  })
 })

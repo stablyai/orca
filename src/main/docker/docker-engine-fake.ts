@@ -23,6 +23,7 @@ type FakeContainer = {
   id: string
   imageId: string
   running: boolean
+  labels?: Record<string, string>
 }
 
 export class DockerEngineFake implements DockerEngineClientLike {
@@ -36,6 +37,7 @@ export class DockerEngineFake implements DockerEngineClientLike {
   private containerCounter = 0
   private sessionCounter = 0
   private execResults: DockerExecResult[] = []
+  private execErrors: Error[] = []
 
   enqueueExecResult(result: Partial<DockerExecResult> & { stdout?: string }): void {
     this.execResults.push({
@@ -43,6 +45,10 @@ export class DockerEngineFake implements DockerEngineClientLike {
       stderr: result.stderr ?? '',
       exitCode: result.exitCode ?? 0
     })
+  }
+
+  enqueueExecError(error: Error): void {
+    this.execErrors.push(error)
   }
 
   async buildImage(options: DockerBuildImageOptions): Promise<{ imageId: string }> {
@@ -67,7 +73,12 @@ export class DockerEngineFake implements DockerEngineClientLike {
     this.commands.push({ command: 'container.create', options })
     this.containerCounter += 1
     const id = `container-${this.containerCounter}`
-    this.containers.set(id, { id, imageId: options.imageId, running: false })
+    this.containers.set(id, {
+      id,
+      imageId: options.imageId,
+      running: false,
+      labels: options.labels
+    })
     return { id }
   }
 
@@ -80,7 +91,12 @@ export class DockerEngineFake implements DockerEngineClientLike {
     container.running = true
   }
 
-  async inspectContainer(id: string): Promise<{ id: string; imageId: string; running: boolean }> {
+  async inspectContainer(id: string): Promise<{
+    id: string
+    imageId: string
+    running: boolean
+    labels?: Record<string, string>
+  }> {
     this.commands.push({ command: 'container.inspect', id })
     const container = this.containers.get(id)
     if (!container) {
@@ -95,6 +111,10 @@ export class DockerEngineFake implements DockerEngineClientLike {
       const error = this.nextExecError
       this.nextExecError = null
       throw error
+    }
+    const queuedError = this.execErrors.shift()
+    if (queuedError) {
+      throw queuedError
     }
     return this.execResults.shift() ?? { stdout: '', stderr: '', exitCode: 0 }
   }
