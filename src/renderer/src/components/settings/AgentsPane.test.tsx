@@ -7,7 +7,13 @@ import { useAppStore } from '../../store'
 import { AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
 import { getAgentAwakeDescription } from './agent-awake-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
-import { AgentStatusHooksSetting, AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
+import {
+  AgentAvailabilityControl,
+  AgentStatusHooksSetting,
+  AgentsPane,
+  AGENTS_PANE_SEARCH_ENTRIES,
+  buildAgentEnabledSettingsUpdate
+} from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
 
 type ReactElementLike = {
@@ -148,5 +154,76 @@ describe('AgentsPane', () => {
     expect(matchesSettingsSearch('hooks', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
     expect(matchesSettingsSearch('waiting', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
     expect(matchesSettingsSearch('codex', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+  })
+
+  it('includes enable and hide search metadata for agent visibility', () => {
+    expect(matchesSettingsSearch('disable', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('hide', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+  })
+
+  it('renders per-agent availability as labeled status choices with explicit row copy', () => {
+    const markup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      disabledTuiAgents: ['claude']
+    })
+
+    expect(markup).toContain('aria-label="Claude availability"')
+    expect(markup).toContain('Enabled')
+    expect(markup).toContain('Disabled')
+    expect(markup).toContain('Hidden from launch and default choices.')
+    expect(markup).not.toContain('aria-label="Enable Claude"')
+    expect(markup).not.toContain('aria-label="Disable Claude"')
+  })
+
+  it('only toggles agent availability when the segmented value changes', () => {
+    const onToggleEnabled = vi.fn()
+    const control = AgentAvailabilityControl({
+      label: 'Claude',
+      isEnabled: true,
+      onToggleEnabled
+    })
+    const props = control.props as {
+      value: 'enabled' | 'disabled'
+      onChange: (value: 'enabled' | 'disabled') => void
+      ariaLabel: string
+    }
+
+    expect(props.value).toBe('enabled')
+    expect(props.ariaLabel).toBe('Claude availability')
+
+    props.onChange('enabled')
+    expect(onToggleEnabled).not.toHaveBeenCalled()
+
+    props.onChange('disabled')
+    expect(onToggleEnabled).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the default agent when disabling that agent', () => {
+    expect(
+      buildAgentEnabledSettingsUpdate(
+        {
+          defaultTuiAgent: 'claude',
+          disabledTuiAgents: []
+        },
+        'claude'
+      )
+    ).toEqual({
+      disabledTuiAgents: ['claude'],
+      defaultTuiAgent: null
+    })
+  })
+
+  it('keeps the default setting untouched when re-enabling an agent', () => {
+    expect(
+      buildAgentEnabledSettingsUpdate(
+        {
+          defaultTuiAgent: null,
+          disabledTuiAgents: ['claude']
+        },
+        'claude'
+      )
+    ).toEqual({
+      disabledTuiAgents: []
+    })
   })
 })

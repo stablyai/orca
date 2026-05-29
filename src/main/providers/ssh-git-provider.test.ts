@@ -647,6 +647,14 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('renameCurrentBranch sends the narrow branch-rename request', async () => {
+    await provider.renameCurrentBranch('/home/user/feat', 'you/fix-auth')
+    expect(mux.request).toHaveBeenCalledWith('git.renameCurrentBranch', {
+      worktreePath: '/home/user/feat',
+      newBranch: 'you/fix-auth'
+    })
+  })
+
   it('isGitRepo always returns true for remote paths', () => {
     expect(provider.isGitRepo('/any/path')).toBe(true)
   })

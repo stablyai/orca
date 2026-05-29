@@ -157,25 +157,6 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       _event,
       args: NotificationDispatchRequest
     ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
-      // Why: mobile push is independent of desktop notification guards.
-      // The user's phone should receive the notification even when the desktop
-      // window is focused (suppressWhenFocused), Electron notifications aren't
-      // supported, or the desktop is in cooldown. The mobile client decides
-      // independently whether to show based on its own app state.
-      if (runtime) {
-        const opts = buildNotificationOptions(args)
-        runtime.dispatchMobileNotification({
-          source: args.source,
-          title: opts.title,
-          body: opts.body,
-          worktreeId: args.worktreeId
-        })
-      }
-
-      if (!Notification.isSupported()) {
-        return { delivered: false, reason: 'not-supported' }
-      }
-
       const settings = store.getSettings().notifications
       if (!settings.enabled) {
         return { delivered: false, reason: 'disabled' }
@@ -223,6 +204,23 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       }
 
       const notificationOptions = buildNotificationOptions(args)
+
+      // Why: paired mobile clients should follow the same user-facing
+      // notification gates as desktop delivery, while still working on hosts
+      // where Electron native notifications are unavailable.
+      if (runtime && args.source !== 'test') {
+        runtime.dispatchMobileNotification({
+          source: args.source,
+          title: notificationOptions.title,
+          body: notificationOptions.body,
+          worktreeId: args.worktreeId
+        })
+      }
+
+      if (!Notification.isSupported()) {
+        return { delivered: false, reason: 'not-supported' }
+      }
+
       if (getEffectiveNotificationSoundId(settings) !== 'system') {
         notificationOptions.silent = true
       } else if (process.platform === 'darwin') {

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Fs from 'fs'
 import type * as FsPromises from 'fs/promises'
@@ -5,6 +6,7 @@ import type * as FilesystemAuth from '../ipc/filesystem-auth'
 
 const {
   lstatMock,
+  readdirMock,
   renameMock,
   resolveAuthorizedPathMock,
   statMock,
@@ -12,6 +14,7 @@ const {
   watchMock
 } = vi.hoisted(() => ({
   lstatMock: vi.fn(),
+  readdirMock: vi.fn(),
   renameMock: vi.fn(),
   resolveAuthorizedPathMock: vi.fn(),
   statMock: vi.fn(),
@@ -32,6 +35,7 @@ vi.mock('fs/promises', async () => {
   return {
     ...actual,
     lstat: lstatMock,
+    readdir: readdirMock,
     rename: renameMock,
     stat: statMock
   }
@@ -56,6 +60,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 
 function enoent(): Error {
   return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
@@ -65,9 +70,17 @@ function mockStats(dev: number, ino: number) {
   return { dev, ino, isDirectory: () => false }
 }
 
+function dirEntry(args: { name: string; directory?: boolean; symlink?: boolean }) {
+  return {
+    name: args.name,
+    isDirectory: () => args.directory ?? false,
+    isSymbolicLink: () => args.symlink ?? false
+  }
+}
+
 function createRuntimeFileCommands() {
   const store = {
-    getRepo: vi.fn(() => undefined)
+    getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
   }
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
@@ -89,11 +102,13 @@ describe('RuntimeFileCommands', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     lstatMock.mockReset()
+    readdirMock.mockReset()
     renameMock.mockReset()
     resolveAuthorizedPathMock.mockReset()
     statMock.mockReset()
     subscribeParcelWatcherMock.mockReset()
     watchMock.mockReset()
+    readdirMock.mockResolvedValue([])
     lstatMock.mockRejectedValue(enoent())
     renameMock.mockResolvedValue(undefined)
     Object.defineProperty(process, 'platform', {
@@ -135,6 +150,23 @@ describe('RuntimeFileCommands', () => {
       kind: 'markdown',
       opened: true
     })
+  })
+
+  it('does not follow symlinks when reading runtime-local file explorer dirs', async () => {
+    const { commands } = createRuntimeFileCommands()
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    readdirMock.mockResolvedValue([
+      dirEntry({ name: 'README.md' }),
+      dirEntry({ name: 'linked-docs', directory: true, symlink: true })
+    ])
+
+    const result = await commands.readFileExplorerDir('id:wt-1', '')
+
+    expect(result).toEqual([
+      { name: 'linked-docs', isDirectory: false, isSymlink: true },
+      { name: 'README.md', isDirectory: false, isSymlink: false }
+    ])
+    expect(statMock).not.toHaveBeenCalledWith('/repo/linked-docs')
   })
 
   it('renames a runtime-local file when destination does not exist', async () => {
@@ -212,6 +244,30 @@ describe('RuntimeFileCommands', () => {
       commands.renameFileExplorerPath('id:wt-1', 'src/README.md', 'docs/readme.md')
     ).rejects.toThrow("A file or folder named 'readme.md' already exists in this location")
 
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('routes runtime remote rename through the SSH no-clobber provider method', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ renameNoClobber } as never)
+    const { commands, store } = createRuntimeFileCommands()
+    store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
+    await commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')
+
+    expect(renameNoClobber).toHaveBeenCalledWith('/repo/old.ts', '/repo/new.ts')
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('propagates runtime remote no-clobber rename failures', async () => {
+    const renameNoClobber = vi.fn().mockRejectedValue(new Error('destination exists'))
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ renameNoClobber } as never)
+    const { commands, store } = createRuntimeFileCommands()
+    store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
+    await expect(commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')).rejects.toThrow(
+      'destination exists'
+    )
     expect(renameMock).not.toHaveBeenCalled()
   })
 

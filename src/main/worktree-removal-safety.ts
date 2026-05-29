@@ -1,17 +1,47 @@
-import { lstat } from 'fs/promises'
+import { lstat, readFile } from 'fs/promises'
 import { homedir } from 'os'
 import { posix, win32 } from 'path'
-import type { GitWorktreeInfo } from '../shared/types'
+import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
+import type { GitWorktreeInfo, OrcaWorkspaceLayout, Repo, WorktreeMeta } from '../shared/types'
+import { matchesStrongOrcaCreatePath } from '../shared/worktree-ownership'
 import { areWorktreePathsEqual } from './ipc/worktree-logic'
+import {
+  gitFileProvesOrphanedWorktreeDirectory,
+  type ReadPath,
+  type StatPath
+} from './worktree-orphan-gitdir-proof'
 
 type PathOps = typeof posix
 
-function looksLikeWindowsPath(pathValue: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
-}
+const ORCA_CREATION_SOURCES = new Set<NonNullable<WorktreeMeta['orcaCreationSource']>>([
+  'desktop',
+  'runtime',
+  'cli',
+  'ssh'
+])
+const ORCA_OWNED_PROVENANCE_META_KEYS = [
+  'orcaCreatedAt',
+  'orcaCreationSource',
+  'orcaCreationWorkspaceLayout'
+] as const
+type UnregisteredOrcaCleanupMeta = Pick<
+  WorktreeMeta,
+  | 'orcaCreatedAt'
+  | 'orcaCreationSource'
+  | 'createdAt'
+  | 'createdWithAgent'
+  | 'pushTarget'
+  | 'sparseBaseRef'
+  | 'sparsePresetId'
+  | 'preserveBranchOnDelete'
+>
+
+export const ORPHANED_WORKTREE_DIRECTORY_MESSAGE =
+  'Worktree is no longer registered with Git but its directory remains.'
 
 function getPathOps(...paths: string[]): PathOps {
-  return paths.some(looksLikeWindowsPath) ? win32 : posix
+  // Why: forward-slash UNC roots need win32 ops; POSIX joins collapse `//Server` to `/Server`.
+  return paths.some(isWindowsAbsolutePathLike) ? win32 : posix
 }
 
 function containsPath(parentPath: string, childPath: string, pathOps: PathOps): boolean {
@@ -97,18 +127,76 @@ export function assertWorktreeDoesNotContainRegisteredWorktree(
 
 export async function canSafelyRemoveOrphanedWorktreeDirectory(
   worktreePath: string,
-  repoPath: string
+  repoPath: string,
+  statPath: StatPath = lstat,
+  readPath: ReadPath = (path) => readFile(path, 'utf8')
 ): Promise<boolean> {
   if (isDangerousWorktreeRemovalPath(worktreePath, repoPath)) {
     return false
   }
 
-  try {
-    const gitEntry = await lstat(getPathOps(worktreePath).join(worktreePath, '.git'))
-    return gitEntry.isFile() || gitEntry.isDirectory() || gitEntry.isSymbolicLink()
-  } catch {
-    return false
+  const pathOps = getPathOps(worktreePath, repoPath)
+  const gitFilePath = pathOps.join(worktreePath, '.git')
+  return gitFileProvesOrphanedWorktreeDirectory({
+    gitFilePath,
+    worktreePath,
+    repoPath,
+    pathOps,
+    statPath,
+    readPath
+  })
+}
+
+export function canCleanupUnregisteredOrcaWorktreeDirectory(args: {
+  meta: UnregisteredOrcaCleanupMeta | null | undefined
+  worktreePath: string
+  repo: Pick<Repo, 'path'>
+  knownOrcaLayouts: readonly OrcaWorkspaceLayout[]
+}): boolean {
+  if (hasCurrentOrcaCreationProvenance(args.meta)) {
+    return true
   }
+
+  if (hasLegacyOrcaCreationEvidence(args.meta)) {
+    return true
+  }
+
+  // Why: profiles created before explicit provenance can still contain Orca
+  // workspaces at the repo-specific workspaceDir/<repo>/<name> path shape.
+  return matchesStrongOrcaCreatePath(args.worktreePath, args.knownOrcaLayouts, args.repo)
+}
+
+function hasCurrentOrcaCreationProvenance(
+  meta: Pick<WorktreeMeta, 'orcaCreatedAt' | 'orcaCreationSource'> | null | undefined
+): boolean {
+  return (
+    typeof meta?.orcaCreatedAt === 'number' &&
+    !!meta.orcaCreationSource &&
+    ORCA_CREATION_SOURCES.has(meta.orcaCreationSource)
+  )
+}
+
+function hasLegacyOrcaCreationEvidence(
+  meta: UnregisteredOrcaCleanupMeta | null | undefined
+): boolean {
+  return Boolean(
+    meta?.createdAt ||
+    meta?.createdWithAgent ||
+    meta?.pushTarget ||
+    meta?.sparseBaseRef ||
+    meta?.sparsePresetId ||
+    meta?.preserveBranchOnDelete
+  )
+}
+
+export function stripOrcaProvenanceMetaUpdates(
+  updates: Partial<WorktreeMeta> | null | undefined
+): Partial<WorktreeMeta> {
+  const sanitized = { ...updates }
+  for (const key of ORCA_OWNED_PROVENANCE_META_KEYS) {
+    delete sanitized[key]
+  }
+  return sanitized
 }
 
 function isMissingPathError(error: unknown): boolean {

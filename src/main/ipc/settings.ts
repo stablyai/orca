@@ -1,4 +1,4 @@
-import { ipcMain, nativeTheme } from 'electron'
+import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
 import type { GlobalSettings, PersistedState } from '../../shared/types'
 import { listSystemFontFamilies } from '../system-fonts'
@@ -29,11 +29,21 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
+  store.onSettingsChanged((updates, _settings, originWebContentsId) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      const isOrigin =
+        originWebContentsId !== undefined && window.webContents.id === originWebContentsId
+      if (!window.isDestroyed() && !isOrigin) {
+        window.webContents.send('settings:changed', updates)
+      }
+    }
+  })
+
   ipcMain.handle('settings:get', () => {
     return store.getSettings()
   })
 
-  ipcMain.handle('settings:set', async (_event, args: Partial<GlobalSettings>) => {
+  ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
     const sanitizedArgs = { ...args }
     // Why: Floating Workspace grants are trusted only when written by the
     // main-process directory picker, never by renderer-provided settings IPC.
@@ -52,7 +62,10 @@ export function registerSettingsHandlers(
     // (e.g. blur after a no-op edit), and a `settings_changed` event for a
     // no-op flip would inflate the experimental-feature-adoption signal.
     const before = store.getSettings()
-    const result = store.updateSettings(sanitizedArgs)
+    const result = store.updateSettings(sanitizedArgs, {
+      notifyListeners: true,
+      originWebContentsId: event.sender.id
+    })
     if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
       agentAwakeService?.setEnabled(result.keepComputerAwakeWhileAgentsRun)
     }

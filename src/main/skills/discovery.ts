@@ -262,16 +262,16 @@ export function buildSkillDiscoverySources(
     )
   ]
 
-  const repoPaths = new Set<string>()
+  const projectPaths = new Set<string>()
   for (const repo of args.repos ?? []) {
     if (repo.connectionId) {
       continue
     }
-    repoPaths.add(repo.path)
+    projectPaths.add(repo.path)
   }
-  repoPaths.add(cwd)
+  projectPaths.add(cwd)
 
-  for (const repoPath of repoPaths) {
+  for (const repoPath of projectPaths) {
     const label = `Repo ${basename(repoPath)}`
     roots.push(
       source(

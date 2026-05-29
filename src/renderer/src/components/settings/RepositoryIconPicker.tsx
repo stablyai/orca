@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Github, Image, Link2, RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../shared/types'
-import type { RepoIcon } from '../../../../shared/repo-icon'
+import { faviconUrlFromWebsite, type RepoIcon } from '../../../../shared/repo-icon'
 import { REPO_COLORS } from '../../../../shared/constants'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -16,23 +16,6 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 
 const EMOJI_OPTIONS = ['🚀', '✨', '💻', '🧠', '📦', '🔧', '🎨', '🌐', '📊', '🔒', '⚡', '✅']
 
-function faviconUrlFromWebsite(rawUrl: string): string | null {
-  const trimmed = rawUrl.trim()
-  if (!trimmed) {
-    return null
-  }
-
-  try {
-    const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
-    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) {
-      return null
-    }
-    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64`
-  } catch {
-    return null
-  }
-}
-
 export function RepositoryIconPicker({
   repo,
   updateRepo
@@ -45,8 +28,11 @@ export function RepositoryIconPicker({
   const activeRuntimeEnvironmentId = useAppStore(
     (state) => state.settings?.activeRuntimeEnvironmentId ?? null
   )
-  const selectedLucideName = repo.repoIcon?.type === 'lucide' ? repo.repoIcon.name : 'Folder'
+  const selectedLucideName =
+    repo.repoIcon?.type === 'lucide' ? repo.repoIcon.name : repo.repoIcon == null ? 'Folder' : null
   const selectedEmoji = repo.repoIcon?.type === 'emoji' ? repo.repoIcon.emoji : ''
+  const initialTab =
+    repo.repoIcon?.type === 'image' ? 'image' : repo.repoIcon?.type === 'emoji' ? 'emoji' : 'icon'
   const runtimeTarget = useMemo(
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
     [activeRuntimeEnvironmentId]
@@ -167,7 +153,7 @@ export function RepositoryIconPicker({
         ))}
       </div>
 
-      <Tabs defaultValue="icon" className="gap-3">
+      <Tabs defaultValue={initialTab} className="gap-3">
         <TabsList variant="line" className="h-8">
           <TabsTrigger value="icon" className="h-7 text-xs">
             Icon

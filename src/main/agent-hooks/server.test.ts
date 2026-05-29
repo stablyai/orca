@@ -973,6 +973,30 @@ describe('AgentHookServer listener replay', () => {
     expect(rendererListener).not.toHaveBeenCalled()
   })
 
+  it('marks listener replay callbacks as replayed', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'cached task', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+
+    const listener = vi.fn()
+    server.setListener(listener)
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paneKey: PANE,
+        isReplay: true,
+        payload: expect.objectContaining({ state: 'working', prompt: 'cached task' })
+      })
+    )
+  })
+
   it('unsubscribes status-change listeners without removing the remaining listeners', () => {
     const server = new AgentHookServer()
     const removed = vi.fn()
@@ -2631,11 +2655,11 @@ describe('Codex hook normalization', () => {
 })
 
 describe('Gemini hook normalization', () => {
-  it('PreToolUse surfaces toolName + toolInput', () => {
+  it('BeforeTool surfaces toolName + toolInput', () => {
     const result = _internals.normalizeHookPayload(
       'gemini',
       buildBody({
-        hook_event_name: 'PreToolUse',
+        hook_event_name: 'BeforeTool',
         tool_name: 'read_file',
         tool_input: { path: '/src/index.ts' }
       }),
@@ -2650,7 +2674,7 @@ describe('Gemini hook normalization', () => {
     const result = _internals.normalizeHookPayload(
       'gemini',
       buildBody({
-        hook_event_name: 'PreToolUse',
+        hook_event_name: 'BeforeTool',
         tool_name: 'run_shell_command',
         args: { command: 'git status' }
       }),
@@ -2664,7 +2688,7 @@ describe('Gemini hook normalization', () => {
     _internals.normalizeHookPayload(
       'gemini',
       buildBody({
-        hook_event_name: 'PreToolUse',
+        hook_event_name: 'BeforeTool',
         tool_name: 'read_file',
         tool_input: { path: '/stale.ts' }
       }),

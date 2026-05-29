@@ -24,6 +24,9 @@ export class CdpWsProxy {
     return new Promise<string>((resolve, reject) => {
       this.httpServer = createServer((req, res) => this.handleHttpRequest(req, res))
       this.wss = new WebSocketServer({ server: this.httpServer })
+      const onListenError = (error: Error): void => {
+        reject(error)
+      }
       this.wss.on('connection', (ws) => {
         if (this.client) {
           this.client.close()
@@ -37,6 +40,7 @@ export class CdpWsProxy {
         })
       })
       this.httpServer.listen(0, '127.0.0.1', () => {
+        this.httpServer?.removeListener('error', onListenError)
         const addr = this.httpServer!.address()
         if (typeof addr === 'object' && addr) {
           this.port = addr.port
@@ -45,7 +49,7 @@ export class CdpWsProxy {
           reject(new Error('Failed to bind proxy server'))
         }
       })
-      this.httpServer.on('error', reject)
+      this.httpServer.once('error', onListenError)
     })
   }
 

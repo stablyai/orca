@@ -86,11 +86,12 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
 
     linkService.setViewer(viewer)
 
-    eventBus.on('scalechanging', (evt: { scale: number }) => {
+    const handleScaleChanging = (evt: { scale: number }): void => {
       if (!cancelled) {
         setScale(evt.scale)
       }
-    })
+    }
+    eventBus.on('scalechanging', handleScaleChanging)
 
     const loadingTask = pdfjsLib.getDocument({ data: bytes })
 
@@ -128,6 +129,9 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
       // renders, clears the find controller, and dispatches pagesdestroy.
       // The runtime accepts null but the types only declare PDFDocumentProxy.
       viewer.setDocument(null as unknown as pdfjsLib.PDFDocumentProxy)
+      // Why: pdf.js EventBus retains callbacks by event name; unregister the
+      // scale listener so repeated PDF opens do not retain stale component state.
+      eventBus.off('scalechanging', handleScaleChanging)
       eventBusRef.current = null
       findControllerRef.current = null
       pdfViewerRef.current = null

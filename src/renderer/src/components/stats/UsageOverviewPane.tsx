@@ -262,6 +262,7 @@ export function UsageOverviewPane(): React.JSX.Element {
   const enableClaudeUsage = useAppStore((state) => state.enableClaudeUsage)
   const enableCodexUsage = useAppStore((state) => state.enableCodexUsage)
   const enableOpenCodeUsage = useAppStore((state) => state.enableOpenCodeUsage)
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useEffect(() => {
     void fetchClaudeUsage()
@@ -353,13 +354,33 @@ export function UsageOverviewPane(): React.JSX.Element {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => void enableClaudeUsage()}>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    recordFeatureInteraction('usage-tracking')
+                    void enableClaudeUsage()
+                  }}
+                >
                   Enable Claude
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => void enableCodexUsage()}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    recordFeatureInteraction('usage-tracking')
+                    void enableCodexUsage()
+                  }}
+                >
                   Enable Codex
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => void enableOpenCodeUsage()}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    recordFeatureInteraction('usage-tracking')
+                    void enableOpenCodeUsage()
+                  }}
+                >
                   Enable OpenCode
                 </Button>
               </div>
@@ -425,6 +446,7 @@ export function UsageOverviewPane(): React.JSX.Element {
               provider={provider}
               totalTokens={overview.totalTokens}
               onEnable={() => {
+                recordFeatureInteraction('usage-tracking')
                 if (provider.id === 'claude') {
                   void enableClaudeUsage()
                 } else if (provider.id === 'codex') {

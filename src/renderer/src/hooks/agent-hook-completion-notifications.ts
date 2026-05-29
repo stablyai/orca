@@ -57,6 +57,12 @@ function getPtyIdForPaneKey(paneKey: string): string | null {
     if (leafPtyId && tabPtyIds.includes(leafPtyId)) {
       return leafPtyId
     }
+    if (!layout?.root) {
+      // Why: inactive worktree switches can temporarily preserve only tab-level
+      // PTY liveness; do not drop hook completions just because layout metadata
+      // is at the empty snapshot.
+      return tabPtyIds[0] ?? null
+    }
     // Why: switching worktrees can unmount the terminal pane and clear the
     // leaf binding before the hook completion arrives, while the tab PTY is
     // still live. Keep closed leaves suppressed by requiring the leaf in layout.

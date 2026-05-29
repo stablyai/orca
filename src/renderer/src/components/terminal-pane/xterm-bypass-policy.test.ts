@@ -34,6 +34,15 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(true)
   })
 
+  it('matches Cmd+C by produced logical key rather than physical key', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyJ', metaKey: true }), opts)
+    ).toBe(true)
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'j', code: 'KeyC', metaKey: true }), opts)
+    ).toBe(false)
+  })
+
   it('does NOT bubble other Cmd chords — Orca window handlers intercept them before xterm', () => {
     // Why: this policy is narrowly scoped to Cmd+C, the one clipboard chord
     // Orca does not intercept at the window level. Cmd+V, Cmd+F, Cmd+D, Cmd+K,
@@ -54,8 +63,7 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
 
   it('bubbles already-handled Cmd app shortcuts so kitty does not also write to shell', () => {
     // Why: some window-level shortcuts call preventDefault without stopping
-    // propagation. VS Code returns false for resolved Meta keybindings for the
-    // same kitty reason: app shortcuts must not also become terminal input.
+    // propagation. App shortcuts must not also become terminal input.
     expect(
       shouldBypassXtermKeyboardEvent(
         event({ key: 'b', code: 'KeyB', defaultPrevented: true, metaKey: true }),
@@ -161,6 +169,21 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
     ).toBe(true)
   })
 
+  it('matches Ctrl+Shift+C by produced logical key rather than physical key', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(
+        event({ key: 'C', code: 'KeyJ', ctrlKey: true, shiftKey: true }),
+        noSel
+      )
+    ).toBe(true)
+    expect(
+      shouldBypassXtermKeyboardEvent(
+        event({ key: 'J', code: 'KeyC', ctrlKey: true, shiftKey: true }),
+        noSel
+      )
+    ).toBe(false)
+  })
+
   it('bubbles Ctrl+C only when there is a selection (otherwise SIGINT)', () => {
     // Why: bare Ctrl+C without a selection must reach the shell as SIGINT.
     // With a selection, terminals like Windows Terminal copy instead.
@@ -169,6 +192,18 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
     ).toBe(true)
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', ctrlKey: true }), noSel)
+    ).toBe(false)
+  })
+
+  it('matches Ctrl+C with selection by produced logical key rather than physical key', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyJ', ctrlKey: true }), withSel)
+    ).toBe(true)
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'j', code: 'KeyC', ctrlKey: true }), withSel)
+    ).toBe(false)
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyJ', ctrlKey: true }), noSel)
     ).toBe(false)
   })
 
@@ -182,6 +217,15 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
         noSel
       )
     ).toBe(true)
+  })
+
+  it('matches paste by produced logical key rather than physical key', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'v', code: 'KeyK', ctrlKey: true }), noSel)
+    ).toBe(true)
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'k', code: 'KeyV', ctrlKey: true }), noSel)
+    ).toBe(false)
   })
 
   it('bubbles Shift+Insert (X11/Linux paste convention)', () => {

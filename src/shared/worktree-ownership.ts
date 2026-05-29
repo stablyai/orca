@@ -178,9 +178,9 @@ function hasStrongOrcaMetadata(meta: WorktreeMeta | undefined): boolean {
   )
 }
 
-function matchesStrongOrcaCreatePath(
+export function matchesStrongOrcaCreatePath(
   worktreePath: string,
-  knownOrcaLayouts: OrcaWorkspaceLayout[],
+  knownOrcaLayouts: readonly OrcaWorkspaceLayout[],
   repo: Pick<Repo, 'path'>
 ): boolean {
   const repoName = getRuntimePathBasename(repo.path).replace(/\.git$/i, '')

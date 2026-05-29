@@ -32,6 +32,22 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
+    title: 'Terminal attention',
+    description: 'Persistent pane highlight for terminal bell and agent-completion events.',
+    keywords: [
+      'experimental',
+      'terminal',
+      'attention',
+      'highlight',
+      'pane',
+      'bell',
+      'notification',
+      'agent',
+      'completion',
+      'unread'
+    ]
+  },
+  {
     title: 'Symlinks on worktrees',
     description:
       'Automatically symlink configured files or folders into newly created worktrees so shared state (envs, caches, installs) stays connected.',
@@ -64,5 +80,6 @@ function findEntry(title: string): SettingsSearchEntry {
 export const EXPERIMENTAL_SEARCH_ENTRY = {
   pet: findEntry('Pet'),
   activity: findEntry('Agents View'),
+  terminalAttention: findEntry('Terminal attention'),
   symlinks: findEntry('Symlinks on worktrees')
 } as const

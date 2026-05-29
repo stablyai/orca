@@ -20,9 +20,25 @@ function buildAtomFeed(tags: string[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?><feed>${entries}</feed>`
 }
 
-function respondWithAtom(tags: string[], missingManifestTags: string[] = []): void {
+function buildManifest(tag: string): string {
+  const version = tag.replace(/^v/i, '')
+  return [
+    `version: ${version}`,
+    'files:',
+    `  - url: Orca-${version}-arm64-mac.zip`,
+    '    sha512: test',
+    `path: Orca-${version}-arm64-mac.zip`
+  ].join('\n')
+}
+
+function respondWithAtom(
+  tags: string[],
+  missingManifestTags: string[] = [],
+  missingAssetTags: string[] = []
+): void {
   const missingManifests = new Set(missingManifestTags)
-  netFetchMock.mockImplementation((url: string) => {
+  const missingAssets = new Set(missingAssetTags)
+  netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
     if (url === 'https://github.com/stablyai/orca/releases.atom') {
       return Promise.resolve({
         ok: true,
@@ -30,13 +46,25 @@ function respondWithAtom(tags: string[], missingManifestTags: string[] = []): vo
       })
     }
 
-    const match = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
-    if (!match) {
-      return Promise.resolve({ ok: false, text: () => Promise.resolve('') })
+    const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
+    if (manifestMatch) {
+      const tag = decodeURIComponent(manifestMatch[1])
+      return Promise.resolve({
+        ok: !missingManifests.has(tag),
+        text: () => Promise.resolve(buildManifest(tag))
+      })
+    }
+
+    const assetMatch = url.match(/\/releases\/download\/([^/]+)\/(.+)$/)
+    if (assetMatch && init?.method === 'HEAD') {
+      return Promise.resolve({
+        ok: !missingAssets.has(decodeURIComponent(assetMatch[1])),
+        text: () => Promise.resolve('')
+      })
     }
 
     return Promise.resolve({
-      ok: !missingManifests.has(decodeURIComponent(match[1])),
+      ok: false,
       text: () => Promise.resolve('')
     })
   })
@@ -83,8 +111,9 @@ describe('fetchNewerReleaseTag', () => {
     async (platform, manifestName) => {
       setPlatformForTest(platform)
       const manifestUrls: string[] = []
+      const assetUrls: string[] = []
 
-      netFetchMock.mockImplementation((url: string) => {
+      netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
         if (url === 'https://github.com/stablyai/orca/releases.atom') {
           return Promise.resolve({
             ok: true,
@@ -92,7 +121,17 @@ describe('fetchNewerReleaseTag', () => {
           })
         }
 
-        manifestUrls.push(url)
+        if (url.endsWith(manifestName)) {
+          manifestUrls.push(url)
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(buildManifest('v1.4.1'))
+          })
+        }
+
+        if (init?.method === 'HEAD') {
+          assetUrls.push(url)
+        }
         return Promise.resolve({
           ok: true,
           text: () => Promise.resolve('')
@@ -104,6 +143,9 @@ describe('fetchNewerReleaseTag', () => {
       expect(await fetchNewerReleaseTag('1.4.0')).toBe('v1.4.1')
       expect(manifestUrls).toEqual([
         `https://github.com/stablyai/orca/releases/download/v1.4.1/${manifestName}`
+      ])
+      expect(assetUrls).toEqual([
+        'https://github.com/stablyai/orca/releases/download/v1.4.1/Orca-1.4.1-arm64-mac.zip'
       ])
     }
   )
@@ -151,15 +193,43 @@ describe('fetchNewerReleaseTag', () => {
     expect(await fetchNewerReleaseTags('1.3.51-rc.6', 2)).toEqual(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
   })
 
-  it('skips feed tags whose platform updater manifest is missing', async () => {
+  it('reports not-ready with last-good when newer platform updater manifests are missing', async () => {
     respondWithAtom(
       ['v1.4.1-rc.4', 'v1.4.1-rc.3', 'v1.4.1-rc.2', 'v1.4.1-rc.1'],
       ['v1.4.1-rc.4', 'v1.4.1-rc.3']
     )
 
-    const { fetchNewerReleaseTags } = await import('./updater-prerelease-feed')
+    const { fetchNewerReleaseTag, fetchNewerReleaseTagsWithReadiness } =
+      await import('./updater-prerelease-feed')
 
-    expect(await fetchNewerReleaseTags('1.4.1-rc.1', 2)).toEqual(['v1.4.1-rc.2', 'v1.4.1-rc.1'])
+    expect(await fetchNewerReleaseTag('1.4.1-rc.1')).toBeNull()
+    expect(await fetchNewerReleaseTagsWithReadiness('1.4.1-rc.1', 2)).toEqual({
+      tags: [],
+      state: 'not-ready',
+      lastGoodTag: 'v1.4.1-rc.2'
+    })
+  })
+
+  it('reports not-ready with last-good when newer manifest assets are not reachable yet', async () => {
+    respondWithAtom(['v1.4.3', 'v1.4.2', 'v1.4.1'], [], ['v1.4.3'])
+
+    const { fetchNewerReleaseTag, fetchNewerReleaseTagsWithReadiness } =
+      await import('./updater-prerelease-feed')
+
+    expect(await fetchNewerReleaseTag('1.4.0')).toBeNull()
+    expect(await fetchNewerReleaseTagsWithReadiness('1.4.0', 1)).toEqual({
+      tags: [],
+      state: 'not-ready',
+      lastGoodTag: 'v1.4.2'
+    })
+  })
+
+  it('returns null when the only newer tag has a manifest but its asset still 404s', async () => {
+    respondWithAtom(['v1.4.27'], [], ['v1.4.27'])
+
+    const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
+
+    expect(await fetchNewerReleaseTag('1.4.26')).toBeNull()
   })
 
   it('does not return the current tag as the primary update when newer manifests are missing', async () => {

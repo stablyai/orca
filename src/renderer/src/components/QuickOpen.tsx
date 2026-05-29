@@ -15,46 +15,7 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-
-/**
- * Simple fuzzy match: checks if all characters in the query appear in order
- * within the target string (case-insensitive). Returns a score (lower = better)
- * or -1 if no match.
- */
-function fuzzyMatch(query: string, target: string): number {
-  const q = query.toLowerCase()
-  const t = target.toLowerCase()
-  let qi = 0
-  let score = 0
-  let lastMatchIdx = -1
-
-  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-    if (t[ti] === q[qi]) {
-      // Bonus for consecutive matches
-      const gap = lastMatchIdx === -1 ? 0 : ti - lastMatchIdx - 1
-      score += gap
-      // Bonus for matching after separator (/ or .)
-      if (ti > 0 && (t[ti - 1] === '/' || t[ti - 1] === '.' || t[ti - 1] === '-')) {
-        score -= 5 // reward
-      }
-      lastMatchIdx = ti
-      qi++
-    }
-  }
-
-  if (qi < q.length) {
-    return -1 // not all chars matched
-  }
-
-  // Prefer matches where query appears in the filename (last segment)
-  const lastSlash = target.lastIndexOf('/')
-  const filename = target.slice(lastSlash + 1).toLowerCase()
-  if (filename.includes(q)) {
-    score -= 100 // strong reward for filename match
-  }
-
-  return score
-}
+import { prepareQuickOpenFiles, rankQuickOpenFiles } from '@/components/quick-open-search'
 
 /**
  * Parses the install-ripgrep guidance message produced by the relay's
@@ -296,23 +257,11 @@ export default function QuickOpen(): React.JSX.Element | null {
     }
   }, [visible, activeWorktreeId, worktreePath, connectionId, excludePathsKey, filesRequestKey])
 
-  // Filter files by fuzzy match
-  const filtered = useMemo(() => {
-    const normalizedQuery = deferredQuery.trim()
-    if (!normalizedQuery) {
-      // Show first 50 files when no query
-      return files.slice(0, 50).map((f) => ({ path: f, score: 0 }))
-    }
-    const results: { path: string; score: number }[] = []
-    for (const f of files) {
-      const score = fuzzyMatch(normalizedQuery, f)
-      if (score !== -1) {
-        results.push({ path: f, score })
-      }
-    }
-    results.sort((a, b) => a.score - b.score)
-    return results.slice(0, 50)
-  }, [deferredQuery, files])
+  const indexedFiles = useMemo(() => prepareQuickOpenFiles(files), [files])
+  const filtered = useMemo(
+    () => rankQuickOpenFiles(deferredQuery, indexedFiles),
+    [deferredQuery, indexedFiles]
+  )
 
   const handleSelect = useCallback(
     (relativePath: string) => {

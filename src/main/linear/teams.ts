@@ -5,6 +5,7 @@ import type {
   LinearMember,
   LinearWorkspaceSelection
 } from '../../shared/types'
+import { buildLinearTeamUrl } from '../../shared/linear-links'
 import { acquire, release, getClients, isAuthError, clearToken } from './client'
 
 export async function listTeams(
@@ -25,7 +26,12 @@ export async function listTeams(
           workspaceId: entry.workspace.id,
           workspaceName: entry.workspace.organizationName,
           name: t.name,
-          key: t.key
+          key: t.key,
+          url:
+            buildLinearTeamUrl({
+              organizationUrlKey: entry.workspace.organizationUrlKey,
+              teamKey: t.key
+            }) ?? undefined
         }))
       } catch (error) {
         if (isAuthError(error)) {

@@ -214,7 +214,12 @@ const markdownPreviewSanitizeSchema = {
       ['className', /^language-[\w-]+$/, 'math-inline', 'math-display']
     ],
     div: [...(defaultSchema.attributes?.div ?? []), ['className', /^language-[\w-]+$/], 'align'],
-    details: [...(defaultSchema.attributes?.details ?? []), 'open'],
+    details: [
+      ...(defaultSchema.attributes?.details ?? []),
+      'open',
+      ['className', 'orca-details'],
+      ['dataOrcaToggle', 'heading-1']
+    ],
     h1: [...(defaultSchema.attributes?.h1 ?? []), 'id'],
     h2: [...(defaultSchema.attributes?.h2 ?? []), 'id'],
     h3: [...(defaultSchema.attributes?.h3 ?? []), 'id'],

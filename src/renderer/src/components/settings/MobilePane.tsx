@@ -91,6 +91,7 @@ export function MobilePane(): React.JSX.Element {
           ...(opts.rotate ? { rotate: true } : {})
         })
         if (result.available) {
+          useAppStore.getState().recordFeatureInteraction('mobile-pairing')
           setQrDataUrl(result.qrDataUrl)
           setPairingUrl(result.pairingUrl)
           setEndpoint(result.endpoint)

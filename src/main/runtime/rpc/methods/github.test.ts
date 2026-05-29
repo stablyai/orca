@@ -47,10 +47,15 @@ describe('github RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('github.listWorkItems', { repo: 'repo-1', limit: 10, query: 'is:pr' })
+      makeRequest('github.listWorkItems', {
+        repo: 'repo-1',
+        limit: 10,
+        query: 'is:pr',
+        noCache: true
+      })
     )
 
-    expect(runtime.listRepoWorkItems).toHaveBeenCalledWith('repo-1', 10, 'is:pr', undefined)
+    expect(runtime.listRepoWorkItems).toHaveBeenCalledWith('repo-1', 10, 'is:pr', undefined, true)
     expect(response).toMatchObject({ ok: true, result: { items: [] } })
   })
 
