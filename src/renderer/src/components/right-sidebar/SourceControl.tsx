@@ -178,6 +178,10 @@ import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../share
 import { getRuntimeGitScope } from '@/runtime/runtime-git-client'
 import { getRepositorySourceControlAiSectionId } from '@/components/settings/repository-settings-targets'
 import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
+import {
+  resolveCommitFailureDialogState,
+  type CommitFailureDialogState
+} from './commit-failure-dialog-state'
 
 export type SourceControlScope = 'all' | 'uncommitted'
 type AbortConflictOperation = Extract<GitConflictOperation, 'merge' | 'rebase'>
@@ -5219,12 +5223,18 @@ export function CommitArea({
     [commitError, commitFailureSummary]
   )
   const commitFailureIdentity = `${worktreeId ?? 'no-worktree'}:${commitError ?? ''}`
-  const [commitFailureDialogState, setCommitFailureDialogState] = useState<{
-    identity: string
-    open: boolean
-  }>({ identity: commitFailureIdentity, open: false })
+  const [commitFailureDialogState, setCommitFailureDialogState] =
+    useState<CommitFailureDialogState>({ identity: commitFailureIdentity, open: false })
+  const resolvedCommitFailureDialogState = resolveCommitFailureDialogState(
+    commitFailureDialogState,
+    commitFailureIdentity
+  )
+  if (resolvedCommitFailureDialogState !== commitFailureDialogState) {
+    setCommitFailureDialogState(resolvedCommitFailureDialogState)
+  }
   const isCommitFailureDialogOpen =
-    commitFailureDialogState.open && commitFailureDialogState.identity === commitFailureIdentity
+    resolvedCommitFailureDialogState.open &&
+    resolvedCommitFailureDialogState.identity === commitFailureIdentity
   const setCommitFailureDialogOpen = useCallback(
     (open: boolean) => {
       setCommitFailureDialogState({ identity: commitFailureIdentity, open })
@@ -5241,14 +5251,6 @@ export function CommitArea({
   const handleCommitFailureAgentPromptDelivered = useCallback(() => {
     setCommitFailureDialogOpen(false)
   }, [setCommitFailureDialogOpen])
-
-  useEffect(() => {
-    setCommitFailureDialogState((current) =>
-      current.identity === commitFailureIdentity
-        ? current
-        : { identity: commitFailureIdentity, open: false }
-    )
-  }, [commitFailureIdentity])
 
   // Why: most primary-kind labels are anchored by a directional icon so
   // the affirmative Commit (✓) reads distinctly from the remote-state
