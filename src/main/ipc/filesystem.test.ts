@@ -269,6 +269,39 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
+  it('keeps SSH filesystem and git requests on SSH even with stale Docker metadata', async () => {
+    const sshFilesystemProvider = {
+      readDir: vi.fn().mockResolvedValue([{ name: 'remote.ts', isDirectory: false }])
+    }
+    const sshGitProvider = {
+      getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    }
+    getSshFilesystemProviderMock.mockReturnValue(sshFilesystemProvider)
+    getSshGitProviderMock.mockReturnValue(sshGitProvider)
+    const storeWithDockerMeta = {
+      ...store,
+      getWorktreeMeta: vi.fn(() => ({ isolation: 'docker' }))
+    }
+
+    registerFilesystemHandlers(storeWithDockerMeta as never)
+
+    await handlers.get('fs:readDir')!(null, {
+      dirPath: '/remote/repo',
+      connectionId: 'ssh-1',
+      worktreeId: 'repo-ssh::/remote/repo'
+    })
+    await handlers.get('git:status')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1',
+      worktreeId: 'repo-ssh::/remote/repo'
+    })
+
+    expect(sshFilesystemProvider.readDir).toHaveBeenCalledWith('/remote/repo')
+    expect(sshGitProvider.getStatus).toHaveBeenCalledWith('/remote/repo', {
+      includeIgnored: false
+    })
+  })
+
   it('rejects readFile when the real path escapes allowed roots', async () => {
     const linkPath = path.resolve('/workspace/repo/link.txt')
     realpathMock.mockImplementation(async (targetPath: string) => {

@@ -140,9 +140,31 @@ export function registerDockerIpcHandlers(
 
   ipcMain.handle(
     'docker:set-worktree-isolation',
-    (_event, args: { worktreeId: string; isolation: WorktreeIsolation }) => {
+    async (_event, args: { worktreeId: string; isolation: WorktreeIsolation }) => {
       if (args.isolation !== 'host' && args.isolation !== 'docker') {
         throw new Error(`Invalid isolation: ${String(args.isolation)}`)
+      }
+      if (args.isolation === 'docker') {
+        const parsedWorktreeId = splitWorktreeId(args.worktreeId)
+        if (!parsedWorktreeId?.worktreePath) {
+          return { error: INVALID_WORKTREE_ERROR }
+        }
+        const repo = store.getRepo(parsedWorktreeId.repoId)
+        if (!repo) {
+          throw new Error(`Repo not found: ${parsedWorktreeId.repoId}`)
+        }
+        // Why: a forged renderer IPC call must not mark an SSH worktree for
+        // local Docker routing even if the visible toggle is disabled.
+        if (repo.connectionId) {
+          return { error: SSH_DOCKER_ISOLATION_ERROR }
+        }
+        const worktrees = await listWorktrees(repo)
+        const targetWorktree = worktrees.find((worktree) =>
+          areWorktreePathsEqual(worktree.path, parsedWorktreeId.worktreePath)
+        )
+        if (!targetWorktree) {
+          return { error: INVALID_WORKTREE_ERROR }
+        }
       }
       return store.setWorktreeMeta(args.worktreeId, { isolation: args.isolation })
     }

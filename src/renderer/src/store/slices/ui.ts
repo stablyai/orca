@@ -456,6 +456,7 @@ export type UISlice = {
       | 'floating-workspace'
       | 'terminal'
       | 'quick-commands'
+      | 'docker-images'
       | 'notifications'
       | 'computer-use'
       | 'developer-permissions'

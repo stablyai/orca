@@ -217,19 +217,45 @@ describe('registerDockerIpcHandlers', () => {
     expect(mainWindow.webContents.send).not.toHaveBeenCalled()
   })
 
-  it('persists worktree isolation in the settings store', () => {
+  it('persists worktree isolation in the settings store', async () => {
     const store = makeStore()
-    registerDockerIpcHandlers(mainWindow as never, store as never)
+    registerDockerIpcHandlers(mainWindow as never, store as never, {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/repo/wt',
+          head: 'abc123',
+          branch: 'feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    })
 
     const result = handlers.get('docker:set-worktree-isolation')!(null, {
       worktreeId: 'repo-1::/repo/wt',
       isolation: 'docker'
     })
 
+    await expect(result).resolves.toEqual({ isolation: 'docker' })
     expect(store.setWorktreeMeta).toHaveBeenCalledWith('repo-1::/repo/wt', {
       isolation: 'docker'
     })
-    expect(result).toEqual({ isolation: 'docker' })
+  })
+
+  it('does not persist Docker isolation for SSH repositories', async () => {
+    const store = makeStore({ connectionId: 'ssh-1', path: '/remote/repo' })
+    registerDockerIpcHandlers(mainWindow as never, store as never)
+
+    await expect(
+      handlers.get('docker:set-worktree-isolation')!(null, {
+        worktreeId: 'repo-1::/remote/repo',
+        isolation: 'docker'
+      })
+    ).resolves.toEqual({
+      error:
+        'Docker isolation is not yet supported for SSH repositories. Use a local repo or remove the SSH connection.'
+    })
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
   })
 
   it('lists Orca cached Docker images', async () => {
@@ -241,9 +267,9 @@ describe('registerDockerIpcHandlers', () => {
       id: 'sha256:image-1',
       repoTags: ['orca-worktree:cache-key-12345678901234'],
       labels: {
-        orca: 'true',
-        'orca.cache-key': 'cache-key-12345678901234567890',
-        'orca.dockerfile-path': '/repo/.devcontainer/Dockerfile'
+        'dev.orca.managed': 'true',
+        'dev.orca.cache-key': 'cache-key-12345678901234567890',
+        'dev.orca.dockerfile-path': '/repo/.devcontainer/Dockerfile'
       },
       sizeBytes: 1234
     })
@@ -262,7 +288,7 @@ describe('registerDockerIpcHandlers', () => {
     ])
     expect(engine.commands[0]).toEqual({
       command: 'image.list',
-      options: { label: 'orca' }
+      options: { label: 'dev.orca.managed' }
     })
   })
 
@@ -272,8 +298,8 @@ describe('registerDockerIpcHandlers', () => {
       id: 'sha256:image-1',
       repoTags: ['orca-worktree:cache-key-12345678901234'],
       labels: {
-        orca: 'true',
-        'orca.cache-key': 'cache-key-12345678901234567890'
+        'dev.orca.managed': 'true',
+        'dev.orca.cache-key': 'cache-key-12345678901234567890'
       },
       sizeBytes: 1234
     })

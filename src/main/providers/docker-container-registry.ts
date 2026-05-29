@@ -6,6 +6,7 @@ import {
 } from '../docker/docker-container-lifecycle'
 import { DEFAULT_CONTAINER_WORKDIR } from '../docker/docker-mount'
 import type { DockerContainerHandle, DockerTarget } from '../docker/types'
+import { splitWorktreeId } from '../../shared/worktree-id'
 
 type DockerContainerEntry = SpawnDockerContainerResult & {
   target: DockerTarget
@@ -73,10 +74,11 @@ export class DockerContainerRegistry {
   }
 
   private async spawnEntry(worktreeId: string, repoPath: string): Promise<DockerContainerEntry> {
+    const repoIdentity = splitWorktreeId(worktreeId)?.repoId ?? worktreeId
     const spawned = await spawnDockerContainer({
       repoPath,
       worktreePath: repoPath,
-      repoIdentity: worktreeId,
+      repoIdentity,
       engine: this.engine,
       workdir: DEFAULT_CONTAINER_WORKDIR
     })
@@ -85,7 +87,9 @@ export class DockerContainerRegistry {
       target: {
         containerId: spawned.container.id,
         image: spawned.image,
-        workdir: DEFAULT_CONTAINER_WORKDIR
+        workdir: DEFAULT_CONTAINER_WORKDIR,
+        hostWorktreePath: repoPath,
+        hostPlatform: process.platform
       }
     }
     this.entries.set(worktreeId, entry)

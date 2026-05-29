@@ -327,13 +327,14 @@ export function registerFilesystemHandlers(
   }
 
   const getDockerFilesystemProvider = async (
-    worktreeId: string | undefined
+    worktreeId: string | undefined,
+    connectionId?: string
   ): Promise<{
     provider: DockerFilesystemProvider
     target: DockerTarget
     hostWorktreePath: string
   } | null> => {
-    if (!worktreeId || isolationLookup.getIsolation(worktreeId) !== 'docker') {
+    if (connectionId || !worktreeId || isolationLookup.getIsolation(worktreeId) !== 'docker') {
       return null
     }
     const { target, hostWorktreePath } = await getDockerTarget(worktreeId)
@@ -345,13 +346,14 @@ export function registerFilesystemHandlers(
   }
 
   const getDockerGitProvider = async (
-    worktreeId: string | undefined
+    worktreeId: string | undefined,
+    connectionId?: string
   ): Promise<{
     provider: DockerGitProvider
     target: DockerTarget
     hostWorktreePath: string
   } | null> => {
-    if (!worktreeId || isolationLookup.getIsolation(worktreeId) !== 'docker') {
+    if (connectionId || !worktreeId || isolationLookup.getIsolation(worktreeId) !== 'docker') {
       return null
     }
     const { target, hostWorktreePath } = await getDockerTarget(worktreeId)
@@ -387,7 +389,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { dirPath: string; connectionId?: string; worktreeId?: string }
     ): Promise<DirEntry[]> => {
-      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         return dockerRoute.provider.readDir(toContainerPath(args.dirPath, dockerRoute))
       }
@@ -421,7 +423,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { filePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }> => {
-      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         return dockerRoute.provider.readFile(toContainerPath(args.filePath, dockerRoute))
       }
@@ -474,7 +476,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { rootPath: string; connectionId?: string; worktreeId?: string }
     ): Promise<MarkdownDocument[]> => {
-      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         const rootPath = toContainerPath(args.rootPath, dockerRoute)
         const relativePaths = await dockerRoute.provider.listFiles(rootPath)
@@ -497,7 +499,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { filePath: string; content: string; connectionId?: string; worktreeId?: string }
     ): Promise<void> => {
-      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         return dockerRoute.provider.writeFile(
           toContainerPath(args.filePath, dockerRoute),
@@ -531,7 +533,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { targetPath: string; connectionId?: string; recursive?: boolean; worktreeId?: string }
     ): Promise<void> => {
-      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         return dockerRoute.provider.deletePath(
           toContainerPath(args.targetPath, dockerRoute),
@@ -576,7 +578,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { filePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<{ size: number; isDirectory: boolean; mtime: number }> => {
-      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         const s = await dockerRoute.provider.stat(toContainerPath(args.filePath, dockerRoute))
         return { size: s.size, isDirectory: s.type === 'directory', mtime: s.mtime }
@@ -603,7 +605,7 @@ export function registerFilesystemHandlers(
       event,
       args: SearchOptions & { connectionId?: string; worktreeId?: string }
     ): Promise<SearchResult> => {
-      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         const result = await dockerRoute.provider.search({
           ...args,
@@ -726,7 +728,7 @@ export function registerFilesystemHandlers(
         worktreeId?: string
       }
     ): Promise<string[]> => {
-      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId)
+      const dockerRoute = await getDockerFilesystemProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         return dockerRoute.provider.listFiles(toContainerPath(args.rootPath, dockerRoute), {
           excludePaths: args.excludePaths?.map((entry) => toContainerPath(entry, dockerRoute))
@@ -763,7 +765,7 @@ export function registerFilesystemHandlers(
       }
     ): Promise<GitStatusResult> => {
       const options = { includeIgnored: args.includeIgnored ?? false }
-      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      const dockerRoute = await getDockerGitProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         return dockerRoute.provider.getStatus(dockerRoute.target.workdir, options)
       }
@@ -827,7 +829,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<GitConflictOperation> => {
-      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      const dockerRoute = await getDockerGitProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         return dockerRoute.provider.detectConflictOperation(dockerRoute.target.workdir)
       }
@@ -886,7 +888,7 @@ export function registerFilesystemHandlers(
         worktreeId?: string
       }
     ): Promise<GitDiffResult> => {
-      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      const dockerRoute = await getDockerGitProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         const filePath = validateGitRelativeFilePath(dockerRoute.hostWorktreePath, args.filePath)
         return dockerRoute.provider.getDiff(
@@ -1188,7 +1190,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; baseRef: string; connectionId?: string; worktreeId?: string }
     ): Promise<GitBranchCompareResult> => {
-      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      const dockerRoute = await getDockerGitProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         return dockerRoute.provider.getBranchCompare(dockerRoute.target.workdir, args.baseRef)
       }
@@ -1366,7 +1368,7 @@ export function registerFilesystemHandlers(
         worktreeId?: string
       }
     ): Promise<GitDiffResult> => {
-      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      const dockerRoute = await getDockerGitProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         const filePath = validateGitRelativeFilePath(dockerRoute.hostWorktreePath, args.filePath)
         const oldPath = args.oldPath
@@ -1472,7 +1474,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<void> => {
-      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      const dockerRoute = await getDockerGitProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         const filePath = validateGitRelativeFilePath(dockerRoute.hostWorktreePath, args.filePath)
         return dockerRoute.provider.stageFile(dockerRoute.target.workdir, filePath)
@@ -1496,7 +1498,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<void> => {
-      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      const dockerRoute = await getDockerGitProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         const filePath = validateGitRelativeFilePath(dockerRoute.hostWorktreePath, args.filePath)
         return dockerRoute.provider.unstageFile(dockerRoute.target.workdir, filePath)
@@ -1520,7 +1522,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string; worktreeId?: string }
     ): Promise<void> => {
-      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      const dockerRoute = await getDockerGitProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         const filePath = validateGitRelativeFilePath(dockerRoute.hostWorktreePath, args.filePath)
         return dockerRoute.provider.discardChanges(dockerRoute.target.workdir, filePath)
@@ -1568,7 +1570,7 @@ export function registerFilesystemHandlers(
         worktreeId?: string
       }
     ): Promise<void> => {
-      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      const dockerRoute = await getDockerGitProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         const filePaths = args.filePaths.map((p) =>
           validateGitRelativeFilePath(dockerRoute.hostWorktreePath, p)
@@ -1599,7 +1601,7 @@ export function registerFilesystemHandlers(
         worktreeId?: string
       }
     ): Promise<void> => {
-      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      const dockerRoute = await getDockerGitProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         const filePaths = args.filePaths.map((p) =>
           validateGitRelativeFilePath(dockerRoute.hostWorktreePath, p)
@@ -1631,7 +1633,7 @@ export function registerFilesystemHandlers(
         worktreeId?: string
       }
     ): Promise<string | null> => {
-      const dockerRoute = await getDockerGitProvider(args.worktreeId)
+      const dockerRoute = await getDockerGitProvider(args.worktreeId, args.connectionId)
       if (dockerRoute) {
         const relativePath = validateGitRelativeFilePath(
           dockerRoute.hostWorktreePath,

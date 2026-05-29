@@ -134,6 +134,10 @@ type PtyProviderRoute = {
   containerWorkdir?: string
 }
 
+function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
+  return typeof (value as { then?: unknown }).then === 'function'
+}
+
 export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListener): () => void {
   paneKeyTeardownListeners.add(listener)
   return () => paneKeyTeardownListeners.delete(listener)
@@ -890,11 +894,11 @@ export function registerPtyHandlers(
   activeDockerContainerRegistry = dockerDispatch?.registry ?? dockerContainerRegistry
   const isolationLookup = store ? new WorktreeIsolationLookup(store) : null
 
-  const resolveProviderRoute = async (args: {
+  const resolveProviderRoute = (args: {
     worktreeId?: string
     cwd?: string
     connectionId?: string | null
-  }): Promise<PtyProviderRoute> => {
+  }): PtyProviderRoute | Promise<PtyProviderRoute> => {
     if (
       !args.connectionId &&
       args.worktreeId &&
@@ -904,22 +908,25 @@ export function registerPtyHandlers(
       if (!hostWorktreePath) {
         throw new Error(`Cannot resolve worktree path for Docker worktree "${args.worktreeId}"`)
       }
-      const target = await activeDockerContainerRegistry.getOrCreateTarget(
-        args.worktreeId,
-        hostWorktreePath
-      )
-      let provider = dockerPtyProviders.get(args.worktreeId)
-      if (!provider) {
-        provider = new DockerPtyProvider(target, activeDockerContainerRegistry.getEngineClient())
-        dockerPtyProviders.set(args.worktreeId, provider)
-      }
-      return {
-        provider,
-        ownerConnectionId: getDockerOwnerKey(args.worktreeId),
-        isolation: 'docker',
-        hostWorktreePath,
-        containerWorkdir: target.workdir
-      }
+      return activeDockerContainerRegistry
+        .getOrCreateTarget(args.worktreeId, hostWorktreePath)
+        .then((target) => {
+          let provider = dockerPtyProviders.get(args.worktreeId!)
+          if (!provider) {
+            provider = new DockerPtyProvider(
+              target,
+              activeDockerContainerRegistry.getEngineClient()
+            )
+            dockerPtyProviders.set(args.worktreeId!, provider)
+          }
+          return {
+            provider,
+            ownerConnectionId: getDockerOwnerKey(args.worktreeId!),
+            isolation: 'docker',
+            hostWorktreePath,
+            containerWorkdir: target.workdir
+          }
+        })
     }
 
     return {
@@ -1359,7 +1366,8 @@ export function registerPtyHandlers(
   // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
   runtime?.setPtyController({
     spawn: async (args) => {
-      const route = await resolveProviderRoute(args)
+      const routeResult = resolveProviderRoute(args)
+      const route = isPromiseLike(routeResult) ? await routeResult : routeResult
       const provider = route.provider
       const isDockerSpawn = route.isolation === 'docker'
       if (isDockerSpawn && args.worktreeId) {
@@ -1669,7 +1677,8 @@ export function registerPtyHandlers(
         }
       }
     ) => {
-      const route = await resolveProviderRoute(args)
+      const routeResult = resolveProviderRoute(args)
+      const route = isPromiseLike(routeResult) ? await routeResult : routeResult
       const provider = route.provider
       const isDockerSpawn = route.isolation === 'docker'
       if (isDockerSpawn && args.worktreeId) {

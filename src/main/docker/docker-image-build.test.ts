@@ -81,6 +81,18 @@ describe('docker-image-build', () => {
     expect(a).not.toBe(b)
   })
 
+  it('changes the cache key when the Dockerfile content changes', () => {
+    const a = computeDockerImageCacheKey({
+      dockerfileContent: 'FROM node:24\n',
+      repoIdentity: 'stablyai/orca'
+    })
+    const b = computeDockerImageCacheKey({
+      dockerfileContent: 'FROM node:24\nRUN npm install\n',
+      repoIdentity: 'stablyai/orca'
+    })
+    expect(a).not.toBe(b)
+  })
+
   it('surfaces image build failures', async () => {
     const engine = new DockerEngineFake()
     engine.nextBuildError = new Error('build failed')

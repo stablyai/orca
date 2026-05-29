@@ -142,6 +142,7 @@ vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
   clearMigrationUnsupportedPtysForPaneKey: clearMigrationUnsupportedPtysForPaneKeyMock
 }))
 import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { DockerEngineFake } from '../docker/docker-engine-fake'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import {
   registerPtyHandlers,
@@ -3173,6 +3174,114 @@ describe('registerPtyHandlers', () => {
       })
     ).toBe(false)
     expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes isolated worktree spawns through the Docker PTY provider', async () => {
+    const engine = new DockerEngineFake()
+    const registry = {
+      getOrCreateTarget: vi.fn().mockResolvedValue({
+        containerId: 'container-1',
+        workdir: '/workspace',
+        image: {
+          id: 'sha256:image',
+          cacheKey: 'cache-key',
+          dockerfilePath: 'Dockerfile',
+          builtAt: 1
+        }
+      }),
+      getEngineClient: () => engine,
+      terminateContainer: vi.fn(async () => undefined)
+    }
+    const store = {
+      getWorktreeMeta: vi.fn((worktreeId: string) =>
+        worktreeId === 'repo-1::/repo/wt' ? { isolation: 'docker' } : undefined
+      )
+    }
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      store as never,
+      { registry: registry as never }
+    )
+
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/repo/wt/subdir',
+      command: 'claude "prompt with spaces"',
+      worktreeId: 'repo-1::/repo/wt'
+    })) as { id: string }
+
+    expect(result.id).toBe('session-1')
+    expect(registry.getOrCreateTarget).toHaveBeenCalledWith('repo-1::/repo/wt', '/repo/wt')
+    expect(engine.commands[0]).toMatchObject({
+      command: 'container.exec.spawn',
+      options: {
+        containerId: 'container-1',
+        cwd: '/workspace/subdir',
+        args: ['/bin/sh', '-c', 'claude "prompt with spaces"']
+      }
+    })
+    expect(registerPtyMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps SSH spawns on the SSH provider even when worktree metadata says Docker', async () => {
+    const engine = new DockerEngineFake()
+    const registry = {
+      getOrCreateTarget: vi.fn(),
+      getEngineClient: () => engine,
+      terminateContainer: vi.fn(async () => undefined)
+    }
+    const sshSpawn = vi.fn(async () => ({ id: 'ssh-pty' }))
+    registerSshPtyProvider('ssh-1', {
+      spawn: sshSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      getWorktreeMeta: vi.fn(() => ({ isolation: 'docker' })),
+      upsertSshRemotePtyLease: vi.fn()
+    }
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      store as never,
+      { registry: registry as never }
+    )
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/remote/repo',
+      connectionId: 'ssh-1',
+      worktreeId: 'repo-1::/remote/repo'
+    })
+
+    expect(sshSpawn).toHaveBeenCalled()
+    expect(registry.getOrCreateTarget).not.toHaveBeenCalled()
   })
 
   it('upgrades legacy numeric pane keys when the spawn metadata proves the stable leaf', async () => {

@@ -21,14 +21,22 @@ describe('DockerContainerRegistry', () => {
   })
 
   it('creates and caches a running container per worktree', async () => {
-    const first = await registry.getOrCreateContainer('wt-1', repoPath)
-    const second = await registry.getOrCreateContainer('wt-1', repoPath)
+    const first = await registry.getOrCreateContainer('repo-1::/repo/wt', repoPath)
+    const second = await registry.getOrCreateContainer('repo-1::/repo/wt', repoPath)
 
     expect(second.id).toBe(first.id)
     expect(engine.commands.filter((command) => command.command === 'image.build')).toHaveLength(1)
     expect(
       engine.commands.filter((command) => command.command === 'container.create')
     ).toHaveLength(1)
+    expect(engine.commands[0]).toMatchObject({
+      command: 'image.build',
+      options: {
+        labels: expect.objectContaining({
+          'dev.orca.repo': 'repo-1'
+        })
+      }
+    })
   })
 
   it('deduplicates concurrent creates for the same worktree', async () => {
