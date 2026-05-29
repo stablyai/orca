@@ -42,11 +42,13 @@ export default function RepoCombobox({
   // Why: controlled cmdk selection so hovering the footer (which lives outside
   // the cmdk tree) can clear the list's highlighted item — otherwise cmdk keeps
   // the last-hovered repo visually selected while the mouse is on the footer.
-  const [commandValue, setCommandValue] = useState('')
+  const [commandValue, setCommandValue] = useState(() => (autoOpenOnMount ? value : ''))
   const addRepo = useAppStore((s) => s.addRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const [isAdding, setIsAdding] = useState(false)
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
+  const inputRef = React.useRef<HTMLInputElement | null>(null)
+  const focusFrameRef = React.useRef<number | null>(null)
 
   const selectedRepo = useMemo(
     () => repos.find((repo) => repo.id === value) ?? null,
@@ -54,15 +56,13 @@ export default function RepoCombobox({
   )
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
 
-  React.useEffect(() => {
-    if (!open) {
-      return
+  const focusSearchInput = useCallback(() => {
+    if (focusFrameRef.current !== null) {
+      cancelAnimationFrame(focusFrameRef.current)
     }
-    setCommandValue(value)
-    const frame = requestAnimationFrame(() => {
-      const repoSearchInput = document.querySelector<HTMLInputElement>(
-        '[data-repo-combobox-root="true"] [data-slot="command-input"]'
-      )
+    focusFrameRef.current = requestAnimationFrame(() => {
+      focusFrameRef.current = null
+      const repoSearchInput = inputRef.current
       if (!repoSearchInput) {
         return
       }
@@ -73,18 +73,26 @@ export default function RepoCombobox({
       const end = repoSearchInput.value.length
       repoSearchInput.setSelectionRange(end, end)
     })
-    return () => cancelAnimationFrame(frame)
-  }, [open, value])
-
-  const handleOpenChange = useCallback((nextOpen: boolean) => {
-    setOpen(nextOpen)
-    // Why: the create-worktree dialog delays its own field reset until after
-    // close animation, so the repo picker must clear its local filter here or a
-    // stale query can reopen to an apparently missing repo list.
-    if (!nextOpen) {
-      setQuery('')
-    }
   }, [])
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen)
+      if (nextOpen) {
+        setCommandValue(value)
+        return
+      }
+      if (focusFrameRef.current !== null) {
+        cancelAnimationFrame(focusFrameRef.current)
+        focusFrameRef.current = null
+      }
+      // Why: the create-worktree dialog delays its own field reset until after
+      // close animation, so the repo picker must clear its local filter here or a
+      // stale query can reopen to an apparently missing repo list.
+      setQuery('')
+    },
+    [value]
+  )
 
   const handleSelect = useCallback(
     (repoId: string) => {
@@ -108,6 +116,7 @@ export default function RepoCombobox({
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
+        setCommandValue(value)
         setOpen(true)
         return
       }
@@ -119,11 +128,12 @@ export default function RepoCombobox({
       // the PopoverTrigger) instead of leaking into the query as a stray char.
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
+        setCommandValue(value)
         setQuery(event.key)
         setOpen(true)
       }
     },
-    [open]
+    [open, value]
   )
 
   const handleAddFolder = useCallback(async () => {
@@ -187,10 +197,14 @@ export default function RepoCombobox({
           align="start"
           className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
           data-repo-combobox-root="true"
-          onOpenAutoFocus={(event) => event.preventDefault()}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            focusSearchInput()
+          }}
         >
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
+              ref={inputRef}
               placeholder="Search projects/folders..."
               value={query}
               onValueChange={setQuery}
