@@ -60,6 +60,7 @@ import {
   getResourceUsageRuntimePaneTitlesByTabId,
   getResourceUsageTabsByWorktree
 } from './resource-usage-open-slices'
+import { resolveResourceUsageSpaceScanReady } from './resource-usage-space-scan-ready'
 
 const POLL_MS = 2_000
 const SESSIONS_POLL_MS = 10_000
@@ -723,37 +724,23 @@ export function ResourceUsageStatusSegment({
 
   // Why: Space scans can finish after the user backs out of the full page or
   // closes this popover; the status-bar trigger becomes the handoff point.
-  useEffect(() => {
-    if (runtimeEnvironmentActive) {
-      setSpaceScanReady(false)
-      previousSpaceScanningRef.current = false
-      return
-    }
-    const scannedAt = workspaceSpaceScannedAt
-    const wasScanning = previousSpaceScanningRef.current
-    const scanCompleted =
-      wasScanning &&
-      !workspaceSpaceScanning &&
-      scannedAt !== null &&
-      scannedAt !== lastSeenSpaceScanAtRef.current
-
-    if (scanCompleted) {
-      lastSeenSpaceScanAtRef.current = scannedAt
-      setSpaceScanReady(!open && activeView !== 'space')
-    } else if (spaceScanReady && (open || activeView === 'space')) {
-      setSpaceScanReady(false)
-      lastSeenSpaceScanAtRef.current = scannedAt
-    }
-
-    previousSpaceScanningRef.current = workspaceSpaceScanning
-  }, [
-    activeView,
-    open,
+  const nextSpaceScanReady = resolveResourceUsageSpaceScanReady({
+    snapshot: {
+      ready: spaceScanReady,
+      previousScanning: previousSpaceScanningRef.current,
+      lastSeenScannedAt: lastSeenSpaceScanAtRef.current
+    },
     runtimeEnvironmentActive,
-    spaceScanReady,
-    workspaceSpaceScannedAt,
-    workspaceSpaceScanning
-  ])
+    open,
+    activeView,
+    scannedAt: workspaceSpaceScannedAt,
+    scanning: workspaceSpaceScanning
+  })
+  previousSpaceScanningRef.current = nextSpaceScanReady.previousScanning
+  lastSeenSpaceScanAtRef.current = nextSpaceScanReady.lastSeenScannedAt
+  if (nextSpaceScanReady.ready !== spaceScanReady) {
+    setSpaceScanReady(nextSpaceScanReady.ready)
+  }
 
   // Poll memory + sessions when popover is open. Sessions also poll in the
   // background at a slower rate so the badge count stays reasonably fresh
