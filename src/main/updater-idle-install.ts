@@ -40,6 +40,7 @@ type IdleInstallControllerDeps = {
 export class IdleInstallController {
   private armed = false
   private graceTimer: ReturnType<typeof setTimeout> | null = null
+  private staleCheckTimer: ReturnType<typeof setTimeout> | null = null
   private decoration: IdleInstallDecoration | null = null
   private readonly deps: IdleInstallControllerDeps
   private readonly now: () => number
@@ -74,6 +75,7 @@ export class IdleInstallController {
     }
     this.armed = false
     this.clearGraceTimer()
+    this.clearStaleCheckTimer()
     this.setDecoration(null)
   }
 
@@ -108,11 +110,13 @@ export class IdleInstallController {
   private evaluate(): void {
     if (!this.armed) {
       this.clearGraceTimer()
+      this.clearStaleCheckTimer()
       this.setDecoration(null)
       return
     }
 
-    const activeAgentCount = this.countActiveAgents()
+    const activeAgents = this.getActiveAgentActivity()
+    const activeAgentCount = activeAgents.count
     const downloaded = this.deps.getStatus().state === 'downloaded'
 
     if (activeAgentCount > 0) {
@@ -123,9 +127,11 @@ export class IdleInstallController {
         phase: downloaded ? 'waiting-for-idle' : 'downloading',
         activeAgentCount
       })
+      this.scheduleStaleCheck(activeAgents.nextStaleInMs)
       return
     }
 
+    this.clearStaleCheckTimer()
     if (!downloaded) {
       // Idle, but the payload isn't ready yet — wait for the download to finish.
       this.clearGraceTimer()
@@ -150,7 +156,7 @@ export class IdleInstallController {
     }
     // Re-check both gates: an agent may have started working, or the download
     // may have been invalidated, during the grace window.
-    if (this.countActiveAgents() > 0 || this.deps.getStatus().state !== 'downloaded') {
+    if (this.getActiveAgentActivity().count > 0 || this.deps.getStatus().state !== 'downloaded') {
       this.evaluate()
       return
     }
@@ -159,20 +165,30 @@ export class IdleInstallController {
     this.deps.install()
   }
 
-  private countActiveAgents(): number {
+  private getActiveAgentActivity(): { count: number; nextStaleInMs: number | null } {
     const now = this.now()
     // Why: mirrors AgentAwakeService's wake-eligibility predicate. Only agents
     // observed working in THIS runtime, with a fresh hook event, count — a
     // hydrated row or a long-silent (crashed) agent must not block the restart.
-    return this.deps
-      .getActiveAgentSnapshot()
-      .filter(
-        (entry) =>
-          entry.observedInCurrentRuntime &&
-          entry.state === 'working' &&
-          Number.isFinite(entry.receivedAt) &&
-          now - entry.receivedAt <= this.staleAfterMs
-      ).length
+    let count = 0
+    let nextStaleInMs: number | null = null
+    for (const entry of this.deps.getActiveAgentSnapshot()) {
+      if (
+        !entry.observedInCurrentRuntime ||
+        entry.state !== 'working' ||
+        !Number.isFinite(entry.receivedAt)
+      ) {
+        continue
+      }
+      const ageMs = now - entry.receivedAt
+      if (ageMs > this.staleAfterMs) {
+        continue
+      }
+      count += 1
+      const staleInMs = Math.max(0, this.staleAfterMs - ageMs + 1)
+      nextStaleInMs = nextStaleInMs === null ? staleInMs : Math.min(nextStaleInMs, staleInMs)
+    }
+    return { count, nextStaleInMs }
   }
 
   private setDecoration(next: IdleInstallDecoration | null): void {
@@ -189,5 +205,27 @@ export class IdleInstallController {
     }
     clearTimeout(this.graceTimer)
     this.graceTimer = null
+  }
+
+  private scheduleStaleCheck(delayMs: number | null): void {
+    this.clearStaleCheckTimer()
+    if (delayMs === null) {
+      return
+    }
+    // Why: a crashed agent may never emit a final "done" hook; re-evaluate at
+    // the freshness boundary so stale working rows cannot block forever.
+    this.staleCheckTimer = setTimeout(() => {
+      this.staleCheckTimer = null
+      this.evaluate()
+    }, delayMs)
+    this.staleCheckTimer.unref?.()
+  }
+
+  private clearStaleCheckTimer(): void {
+    if (!this.staleCheckTimer) {
+      return
+    }
+    clearTimeout(this.staleCheckTimer)
+    this.staleCheckTimer = null
   }
 }

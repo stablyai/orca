@@ -421,8 +421,10 @@ export function UpdateCard() {
 
   // ── Dynamic aria-label ────────────────────────────────────────────
 
-  const ariaLabel =
-    status.state === 'checking'
+  const hasIdleInstall = 'idleInstall' in status && Boolean(status.idleInstall)
+  const ariaLabel = hasIdleInstall
+    ? 'Update scheduled'
+    : status.state === 'checking'
       ? 'Checking for updates'
       : status.state === 'not-available'
         ? "You're on the latest version"

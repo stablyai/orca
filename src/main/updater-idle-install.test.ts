@@ -18,7 +18,12 @@ function workingAgent(
 }
 
 function createHarness(
-  initialStatus: UpdateStatus = { state: 'available', version: '1.4.30', changelog: null }
+  initialStatus: UpdateStatus = { state: 'available', version: '1.4.30', changelog: null },
+  options: {
+    now?: () => number
+    graceMs?: number
+    staleAfterMs?: number
+  } = {}
 ) {
   const download = vi.fn()
   const install = vi.fn()
@@ -32,7 +37,9 @@ function createHarness(
     getStatus: () => status,
     getActiveAgentSnapshot: () => agents,
     onDecorationChange,
-    now: () => NOW
+    now: options.now ?? (() => NOW),
+    graceMs: options.graceMs,
+    staleAfterMs: options.staleAfterMs
   })
 
   return {
@@ -130,6 +137,29 @@ describe('IdleInstallController', () => {
 
     expect(h.controller.getDecoration()).toEqual({ phase: 'grace', activeAgentCount: 0 })
     vi.advanceTimersByTime(IDLE_INSTALL_GRACE_MS)
+    expect(h.install).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-evaluates when a working agent becomes stale without a final hook', () => {
+    let now = NOW
+    const staleAfterMs = 1_000
+    const graceMs = 50
+    const h = createHarness(undefined, {
+      now: () => now,
+      graceMs,
+      staleAfterMs
+    })
+    h.setAgents([workingAgent({ receivedAt: NOW })])
+    h.controller.arm()
+    h.setStatus({ state: 'downloaded', version: '1.4.30' })
+
+    expect(h.controller.getDecoration()).toEqual({ phase: 'waiting-for-idle', activeAgentCount: 1 })
+
+    now = NOW + staleAfterMs + 1
+    vi.advanceTimersByTime(staleAfterMs + 1)
+    expect(h.controller.getDecoration()).toEqual({ phase: 'grace', activeAgentCount: 0 })
+
+    vi.advanceTimersByTime(graceMs)
     expect(h.install).toHaveBeenCalledTimes(1)
   })
 
