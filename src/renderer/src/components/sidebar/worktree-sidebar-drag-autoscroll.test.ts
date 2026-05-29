@@ -122,26 +122,15 @@ describe('getWorktreeSidebarDragRectsForGroup', () => {
     ])
   })
 
-  it('subtracts active preview offsets so transformed rows do not perturb hit testing', () => {
+  it('anchors rects to virtual row slots so animated transforms do not perturb hit testing', () => {
     const container = makeContainer([
-      makeDragElement('a', 'repo:one', '0', 96, 136),
-      makeDragElement('b', 'repo:one', '1', 90, 130),
-      makeDragElement('c', 'repo:one', '2', 142, 182)
+      makeDragElement('a', 'repo:one', '0', 320, 360, { start: 240, top: 310 }),
+      makeDragElement('b', 'repo:one', '1', 380, 420, { start: 298, top: 368 })
     ])
 
-    expect(
-      getWorktreeSidebarDragRectsForGroup(
-        container,
-        'repo:one',
-        new Map([
-          ['a', 56],
-          ['c', -20]
-        ])
-      )
-    ).toEqual([
-      { worktreeId: 'a', groupIndex: 0, top: -10, bottom: 30 },
-      { worktreeId: 'b', groupIndex: 1, top: 40, bottom: 80 },
-      { worktreeId: 'c', groupIndex: 2, top: 112, bottom: 152 }
+    expect(getWorktreeSidebarDragRectsForGroup(container, 'repo:one')).toEqual([
+      { worktreeId: 'a', groupIndex: 0, top: 250, bottom: 290 },
+      { worktreeId: 'b', groupIndex: 1, top: 310, bottom: 350 }
     ])
   })
 })
@@ -242,15 +231,25 @@ function makeDragElement(
   groupKey: string,
   groupIndex: string,
   top: number,
-  bottom: number
+  bottom: number,
+  virtualRow?: { start: number; top: number }
 ): HTMLElement {
   const attributes = new Map([
     ['data-worktree-drag-id', worktreeId],
     ['data-worktree-drag-group-key', groupKey],
     ['data-worktree-drag-group-index', groupIndex]
   ])
+  const virtualRowElement = virtualRow
+    ? ({
+        getAttribute: (name: string) =>
+          name === 'data-worktree-virtual-row-start' ? String(virtualRow.start) : null,
+        getBoundingClientRect: () => ({ top: virtualRow.top })
+      } as unknown as HTMLElement)
+    : null
   return {
     getAttribute: (name: string) => attributes.get(name) ?? null,
-    getBoundingClientRect: () => ({ top, bottom })
+    getBoundingClientRect: () => ({ top, bottom, height: bottom - top }),
+    closest: (selector: string) =>
+      selector === '[data-worktree-virtual-row]' ? virtualRowElement : null
   } as unknown as HTMLElement
 }

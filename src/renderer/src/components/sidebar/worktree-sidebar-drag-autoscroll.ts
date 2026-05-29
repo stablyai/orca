@@ -6,7 +6,6 @@ const MAX_OUTSIDE_EDGE_PX = 48
 const MAX_SCROLL_SPEED_PX_PER_SECOND = 960
 const MAX_FRAME_MS = 32
 const DROP_BOUNDS_PADDING_PX = 8
-const EMPTY_PREVIEW_OFFSETS: ReadonlyMap<string, number> = new Map()
 
 export type WorktreeSidebarDragPoint = {
   clientX: number
@@ -119,8 +118,7 @@ export function getWorktreeSidebarBoundaryDrop(args: {
 
 export function getWorktreeSidebarDragRectsForGroup(
   container: HTMLElement,
-  groupKey: string,
-  previewOffsetsByWorktreeId: ReadonlyMap<string, number> = EMPTY_PREVIEW_OFFSETS
+  groupKey: string
 ): WorktreeSidebarDragRect[] {
   const containerRect = container.getBoundingClientRect()
   const rects: WorktreeSidebarDragRect[] = []
@@ -135,18 +133,35 @@ export function getWorktreeSidebarDragRectsForGroup(
       return
     }
     const rect = element.getBoundingClientRect()
-    // Why: drop previews move rows with transforms; hit-testing must use the
-    // stable slot geometry or the insertion line can feed back on itself.
-    const previewOffset = previewOffsetsByWorktreeId.get(worktreeId) ?? 0
+    const virtualRow = element.closest<HTMLElement>('[data-worktree-virtual-row]')
+    const virtualRowStart = getWorktreeVirtualRowStart(virtualRow)
+    const top =
+      virtualRow && virtualRowStart !== null
+        ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
+        : rect.top - containerRect.top + container.scrollTop
     rects.push({
       worktreeId,
       groupIndex,
-      top: rect.top - containerRect.top + container.scrollTop - previewOffset,
-      bottom: rect.bottom - containerRect.top + container.scrollTop - previewOffset
+      // Why: drop previews animate via row transforms. Anchor hit-testing to
+      // the virtual row's static slot so animated offsets cannot perturb it.
+      top,
+      bottom: top + rect.height
     })
   })
   rects.sort((a, b) => a.top - b.top)
   return rects
+}
+
+function getWorktreeVirtualRowStart(virtualRow: HTMLElement | null): number | null {
+  if (!virtualRow) {
+    return null
+  }
+  const rawStart = virtualRow.getAttribute('data-worktree-virtual-row-start')
+  if (rawStart === null) {
+    return null
+  }
+  const start = Number(rawStart)
+  return Number.isFinite(start) ? start : null
 }
 
 export function refreshWorktreeSidebarDragSession(args: {

@@ -637,9 +637,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
-  const worktreeDragPreviewOffsetsRef = useRef<ReadonlyMap<string, number>>(
-    EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS
-  )
   const worktreePointerAutoscrollFrameIdRef = useRef<number | null>(null)
   const worktreePointerAutoscrollLastFrameTimeRef = useRef<number | null>(null)
   const worktreeNativeAutoscrollFrameIdRef = useRef<number | null>(null)
@@ -727,7 +724,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     () => getWorktreeDragIndexes(worktreeDragUnitGroups),
     [worktreeDragUnitGroups]
   )
-  worktreeDragPreviewOffsetsRef.current = worktreeDragState.previewOffsetsByWorktreeId
   const refreshWorktreeDragSession = useCallback((): boolean => {
     const session = worktreeDragSessionRef.current
     const container = scrollRef.current
@@ -739,11 +735,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       session,
       groups: worktreeDragGroups,
       unitGroups: worktreeDragUnitGroups,
-      rects: getWorktreeSidebarDragRectsForGroup(
-        container,
-        session.sourceGroupKey,
-        worktreeDragPreviewOffsetsRef.current
-      )
+      rects: getWorktreeSidebarDragRectsForGroup(container, session.sourceGroupKey)
     })
     worktreeDragSessionRef.current = refreshedSession
     return refreshedSession !== null
@@ -2818,6 +2810,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   role="presentation"
                   data-worktree-virtual-row
                   data-worktree-virtual-row-key={String(vItem.key)}
+                  data-worktree-virtual-row-start={vItem.start}
                   data-index={vItem.index}
                   ref={measureVirtualRowElement}
                   className={cn(
@@ -2858,6 +2851,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 role="presentation"
                 data-worktree-virtual-row
                 data-worktree-virtual-row-key={String(vItem.key)}
+                data-worktree-virtual-row-start={vItem.start}
                 data-index={vItem.index}
                 ref={measureVirtualRowElement}
                 data-workspace-status-drop-target={itemWorkspaceStatus ? '' : undefined}
