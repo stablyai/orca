@@ -118,7 +118,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3056 | `nwparker/react-perf-low-risk-8`     | Quick Open clears its query on the open edge without a reset Effect           | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/QuickOpen.tsx`; `pnpm run typecheck:web`.                      |
 | #3058 | `nwparker/react-perf-project-group-dialogs` | Project group dialogs reset local open-state during render              | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/sidebar/ProjectGroupDeleteDialog.tsx src/renderer/src/components/sidebar/ProjectGroupNameDialog.tsx`; `pnpm run typecheck:web`. |
 | #3059 | `nwparker/react-perf-agent-step-latch` | Onboarding agent fallback disclosure latch updates during render        | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/onboarding/AgentStep.tsx`; `pnpm run typecheck:web`.           |
-| #3060 | `nwparker/react-perf-feature-tour-resets` | Feature-wall tour reset state moves into workflow/close transitions | Low  | Open   | `pnpm exec oxlint src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx`; `pnpm run typecheck:web`. |
+| #3060 | `nwparker/react-perf-feature-tour-resets` | Feature-wall tour reset state moves into workflow/close transitions | Low  | Merged | `pnpm exec oxlint src/renderer/src/components/feature-wall/FeatureWallTourSurface.tsx`; `pnpm run typecheck:web`. |
 
 ## Reproduction Commands
 
