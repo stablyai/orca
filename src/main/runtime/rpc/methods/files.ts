@@ -30,18 +30,19 @@ const FileTreePath = WorktreeSelector.extend({
     .pipe(z.string())
 })
 
+// Why: write content must be a real string. Coercing a missing/non-string value
+// to '' silently truncated the target file to empty instead of erroring. An
+// explicit '' is still accepted (writing an empty file is legitimate).
 const FileWrite = FileOpen.extend({
   content: z
     .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string())
+    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
 })
 
 const FileWriteBase64 = FileOpen.extend({
   contentBase64: z
     .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string())
+    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
 })
 
 const FileWriteBase64Chunk = FileWriteBase64.extend({

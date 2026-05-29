@@ -52,7 +52,8 @@ vi.mock('./use-worktree-activity-status', () => ({
 }))
 
 vi.mock('./CacheTimer', () => ({
-  default: () => null
+  default: () => null,
+  usePromptCacheCountdownStartedAt: () => null
 }))
 
 vi.mock('./WorktreeCardAgents', () => ({
@@ -123,6 +124,41 @@ describe('WorktreeCard quick actions', () => {
 
     expect(markup).toContain('aria-label="Mark as read"')
     expect(markup).toContain('data-workspace-board-preserve-open=""')
+  })
+
+  it('hides the branch row when it repeats the workspace title', () => {
+    worktreeCardProperties = []
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: 'quick-action', branch: 'quick-action' })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).not.toContain('text-[11px] text-muted-foreground truncate leading-none')
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('tabindex="0"')
+  })
+
+  it('keeps the branch row when the workspace has a custom title', () => {
+    worktreeCardProperties = []
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: 'Custom workspace', branch: 'quick-action' })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('Custom workspace')
+    expect(markup).toContain('quick-action')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('text-[11px] text-muted-foreground truncate leading-none')
   })
 
   it('shows delete as the top-right quick action for an inactive workspace', () => {

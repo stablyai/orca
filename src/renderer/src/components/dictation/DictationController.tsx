@@ -17,6 +17,7 @@ export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
   const setDictationState = useAppStore((s) => s.setDictationState)
   const setPartialTranscript = useAppStore((s) => s.setPartialTranscript)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
   const {
@@ -149,6 +150,7 @@ export function DictationController() {
 
       dictationStateRef.current = 'listening'
       setDictationState('listening')
+      recordFeatureInteraction('voice-dictation')
     } catch (err) {
       if (dictationRunRef.current !== runId) {
         return
@@ -201,7 +203,8 @@ export function DictationController() {
     discardBufferedAudio,
     stopCapture,
     finishDictationSession,
-    setPartialTranscript
+    setPartialTranscript,
+    recordFeatureInteraction
   ])
 
   const stopDictation = useCallback(async () => {

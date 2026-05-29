@@ -69,10 +69,10 @@ export async function resolveCurrentWorktreeSelector(
   }
 
   // Why: users expect "active/current" to mean the enclosing managed worktree
-  // even from nested subdirectories. The CLI resolves that shell-local concept
-  // to the deepest matching worktree root, then hands the runtime a normal
-  // path selector so selector semantics stay centralized in one layer.
-  return buildCurrentWorktreeSelector(enclosingWorktree.path)
+  // even from nested subdirectories. Resolve to the concrete runtime id here:
+  // duplicate repo registrations can expose the same Git worktree path, and a
+  // path selector would throw selector_ambiguous after losing the repo id.
+  return `id:${enclosingWorktree.id}`
 }
 
 export async function getOptionalWorktreeSelector(

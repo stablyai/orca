@@ -652,7 +652,7 @@ describe('registerNotificationHandlers', () => {
     )
   })
 
-  it('uses rich formatter output for mobile notifications before desktop guards', () => {
+  it('uses rich formatter output for mobile notifications before the native support guard', () => {
     notificationIsSupportedMock.mockReturnValue(false)
     const dispatchMobileNotification = vi.fn()
     registerNotificationHandlers(
@@ -692,6 +692,145 @@ describe('registerNotificationHandlers', () => {
       worktreeId: 'repo::wt1'
     })
     expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
+  it('does not dispatch mobile notifications when notifications are disabled', () => {
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: false,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+
+    const handler = getDispatchHandler()
+    expect(handler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1' })).toEqual({
+      delivered: false,
+      reason: 'disabled'
+    })
+
+    expect(dispatchMobileNotification).not.toHaveBeenCalled()
+  })
+
+  it('does not dispatch mobile notifications when the source is disabled', () => {
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: false,
+            terminalBell: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+
+    const handler = getDispatchHandler()
+    expect(handler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1' })).toEqual({
+      delivered: false,
+      reason: 'source-disabled'
+    })
+
+    expect(dispatchMobileNotification).not.toHaveBeenCalled()
+  })
+
+  it('does not dispatch mobile notifications for focused active-worktree notifications', () => {
+    getAllWindowsMock.mockReturnValue([
+      {
+        isDestroyed: () => false,
+        isFocused: () => true
+      } as never
+    ])
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: true
+          }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        { source: 'agent-task-complete', worktreeId: 'repo::wt1', isActiveWorktree: true }
+      )
+    ).toEqual({
+      delivered: false,
+      reason: 'suppressed-focus'
+    })
+
+    expect(dispatchMobileNotification).not.toHaveBeenCalled()
+  })
+
+  it('does not dispatch mobile notifications for cooldown-suppressed bursts', () => {
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+
+    const handler = getDispatchHandler()
+    expect(handler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1' })).toEqual({
+      delivered: true
+    })
+    expect(handler({}, { source: 'terminal-bell', worktreeId: 'repo::wt1' })).toEqual({
+      delivered: false,
+      reason: 'cooldown'
+    })
+
+    expect(dispatchMobileNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'agent-task-complete', worktreeId: 'repo::wt1' })
+    )
+  })
+
+  it('does not forward explicit desktop test notifications to mobile clients', () => {
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+
+    const handler = getDispatchHandler()
+    expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
+
+    expect(dispatchMobileNotification).not.toHaveBeenCalled()
   })
 
   it('silences the native notification when a custom sound is configured', () => {

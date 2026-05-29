@@ -38,6 +38,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 const isWindows = navigator.userAgent.includes('Windows')
+const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
+const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
 type GitStatusEntries = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree'][string]
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 
@@ -166,6 +168,78 @@ function TabBarInner({
   // clicks, so it misses webview clicks entirely. Listening for window blur
   // catches the moment focus leaves the renderer (including into a webview).
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const pendingNewTabMenuFocusRef = useRef<(() => void) | null>(null)
+  const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)
+  const pendingNewTabMenuFocusRetryRef = useRef<number | null>(null)
+  const clearPendingNewTabMenuFocusAnimation = (): void => {
+    if (pendingNewTabMenuFocusAnimationRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(pendingNewTabMenuFocusAnimationRef.current)
+    pendingNewTabMenuFocusAnimationRef.current = null
+  }
+  const clearPendingNewTabMenuFocusRetry = (): void => {
+    if (pendingNewTabMenuFocusRetryRef.current === null) {
+      return
+    }
+    window.clearTimeout(pendingNewTabMenuFocusRetryRef.current)
+    pendingNewTabMenuFocusRetryRef.current = null
+  }
+  const focusNewActiveTerminalWhenReady = (
+    previousActiveTabId: string | null,
+    expiresAt: number
+  ): void => {
+    const state = useAppStore.getState()
+    if (
+      state.activeTabType === 'terminal' &&
+      state.activeTabId &&
+      state.activeTabId !== previousActiveTabId
+    ) {
+      focusTerminalTabSurface(state.activeTabId)
+      return
+    }
+    if (Date.now() >= expiresAt) {
+      return
+    }
+    pendingNewTabMenuFocusRetryRef.current = window.setTimeout(() => {
+      pendingNewTabMenuFocusRetryRef.current = null
+      focusNewActiveTerminalWhenReady(previousActiveTabId, expiresAt)
+    }, NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS)
+  }
+  const queueNewActiveTerminalFocusAfterNewTabMenuClose = (): void => {
+    const previousActiveTabId = useAppStore.getState().activeTabId
+    pendingNewTabMenuFocusRef.current = () => {
+      // Why: paired web/SSH runtime tab creation is async; wait for the host
+      // snapshot to publish the newly active terminal instead of focusing the
+      // pre-existing active tab.
+      focusNewActiveTerminalWhenReady(
+        previousActiveTabId,
+        Date.now() + NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS
+      )
+    }
+  }
+  const queueTerminalTabFocusAfterNewTabMenuClose = (tabId: string): void => {
+    pendingNewTabMenuFocusRef.current = () => focusTerminalTabSurface(tabId)
+  }
+  const runPendingNewTabMenuFocusAfterClose = (): void => {
+    const pendingFocus = pendingNewTabMenuFocusRef.current
+    pendingNewTabMenuFocusRef.current = null
+    clearPendingNewTabMenuFocusAnimation()
+    clearPendingNewTabMenuFocusRetry()
+    if (pendingFocus) {
+      pendingNewTabMenuFocusAnimationRef.current = requestAnimationFrame(() => {
+        pendingNewTabMenuFocusAnimationRef.current = null
+        pendingFocus()
+      })
+    }
+  }
+  useEffect(
+    () => () => {
+      clearPendingNewTabMenuFocusAnimation()
+      clearPendingNewTabMenuFocusRetry()
+    },
+    []
+  )
   useEffect(() => {
     if (!newTabMenuOpen) {
       return
@@ -463,11 +537,11 @@ function TabBarInner({
           sideOffset={6}
           className="min-w-[11rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
           onCloseAutoFocus={(e) => {
-            // Why: selecting "New Terminal" activates a freshly-mounted xterm on
-            // the next frame. Radix's default focus restore sends focus back to
-            // the "+" trigger after close, which steals it from the new tab and
-            // makes the terminal look unfocused until the user clicks again.
+            // Why: terminal-producing menu actions activate a freshly-mounted
+            // xterm. Radix's default focus restore sends focus back to the "+"
+            // trigger after close, stealing it from the new terminal.
             e.preventDefault()
+            runPendingNewTabMenuFocusAfterClose()
           }}
         >
           {isWindows && onNewTerminalWithShell ? (
@@ -510,6 +584,7 @@ function TabBarInner({
                       // picked PowerShell 7+ in advanced settings, launching the
                       // "PowerShell" menu item must preserve that implementation
                       // instead of forcing inbox powershell.exe.
+                      queueNewActiveTerminalFocusAfterNewTabMenuClose()
                       onNewTerminalWithShell(
                         resolveWindowsShellLaunchTarget(
                           entry.shell,
@@ -532,6 +607,7 @@ function TabBarInner({
           ) : (
             <DropdownMenuItem
               onSelect={() => {
+                queueNewActiveTerminalFocusAfterNewTabMenuClose()
                 onNewTerminalTab()
               }}
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -576,7 +652,7 @@ function TabBarInner({
               <QuickLaunchAgentMenuItems
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
-                onFocusTerminal={focusTerminalTabSurface}
+                onFocusTerminal={queueTerminalTabFocusAfterNewTabMenuClose}
               />
             </>
           ) : null}

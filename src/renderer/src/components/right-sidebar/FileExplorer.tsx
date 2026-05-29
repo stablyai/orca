@@ -53,8 +53,10 @@ function FileExplorerInner(): React.JSX.Element {
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
   const openModal = useAppStore((s) => s.openModal)
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
 
   const worktreePath = activeWorktree?.path ?? null
+  const visibleWorktreePath = rightSidebarOpen ? worktreePath : null
   const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
@@ -71,6 +73,8 @@ function FileExplorerInner(): React.JSX.Element {
     rootCache,
     rootError,
     loadDir,
+    statPath,
+    markPathAsDirectory,
     refreshTree,
     refreshDir,
     resetAndLoad
@@ -159,13 +163,15 @@ function FileExplorerInner(): React.JSX.Element {
   })
 
   useEffect(() => {
-    if (!worktreePath) {
+    if (!visibleWorktreePath) {
       return
     }
+    // Why: the sidebar remains mounted while closed to preserve caches, but
+    // loading the hidden tree would probe every clicked workspace on macOS.
     resetSelection()
     resetAndLoad()
     clearFileExplorerUndoHistory()
-  }, [worktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visibleWorktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Why: on app startup the file explorer loads before SSH providers are
   // registered, so readDir fails for remote worktrees. When the SSH
@@ -176,24 +182,25 @@ function FileExplorerInner(): React.JSX.Element {
   useEffect(() => {
     if (sshConnectedGeneration > sshGenRef.current) {
       sshGenRef.current = sshConnectedGeneration
-      if (worktreePath && rootError) {
+      if (visibleWorktreePath && rootError) {
         resetAndLoad()
       }
     }
-  }, [sshConnectedGeneration]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sshConnectedGeneration, visibleWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => clearFlashTimeout, [clearFlashTimeout])
 
   useEffect(() => {
+    if (!visibleWorktreePath) {
+      return
+    }
     for (const dirPath of expanded) {
       if (!dirCache[dirPath]?.children.length && !dirCache[dirPath]?.loading) {
-        const depth = worktreePath
-          ? splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-          : 0
+        const depth = splitPathSegments(dirPath.slice(visibleWorktreePath.length + 1)).length - 1
         void loadDir(dirPath, depth)
       }
     }
-  }, [expanded]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [expanded, visibleWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const {
     inlineInput,
@@ -212,7 +219,7 @@ function FileExplorerInner(): React.JSX.Element {
   })
 
   useFileExplorerWatch({
-    worktreePath,
+    worktreePath: visibleWorktreePath,
     activeWorktreeId,
     dirCache,
     setDirCache,
@@ -309,6 +316,9 @@ function FileExplorerInner(): React.JSX.Element {
     openFile,
     pinFile,
     toggleDir,
+    loadDir,
+    statPath,
+    markPathAsDirectory,
     setSelectedPath: setSingleSelectedPath,
     scrollRef
   })

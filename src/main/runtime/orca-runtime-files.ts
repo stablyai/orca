@@ -53,7 +53,7 @@ import {
   getSshFilesystemProvider,
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-filesystem-dispatch'
-import { assertFileExplorerRenameDestinationAvailable } from '../file-explorer-rename-collision'
+import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
@@ -241,7 +241,7 @@ export class RuntimeFileCommands {
         const entryPath = join(dirPath, entry.name)
         return {
           name: entry.name,
-          isDirectory: await isRuntimeDirectoryEntry(entryPath),
+          isDirectory: await isRuntimeDirectoryEntry(entry, entryPath),
           isSymlink: entry.isSymbolicLink()
         }
       })
@@ -543,14 +543,14 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      await provider.rename(oldTarget.path, newTarget.path)
+      await provider.renameNoClobber(oldTarget.path, newTarget.path)
       return { ok: true }
     }
 
     const store = this.host.requireStore()
     const oldPath = await resolveAuthorizedPath(oldTarget.path, store, { preserveSymlink: true })
     const newPath = await resolveAuthorizedPath(newTarget.path, store, { preserveSymlink: true })
-    await assertFileExplorerRenameDestinationAvailable(oldPath, newPath)
+    await assertNoClobberRenameDestinationAvailable(oldPath, newPath)
     await rename(oldPath, newPath)
     return { ok: true }
   }
@@ -884,12 +884,20 @@ function basenameFromRelativePath(relativePath: string): string {
   return normalized.slice(normalized.lastIndexOf('/') + 1)
 }
 
-async function isRuntimeDirectoryEntry(entryPath: string): Promise<boolean> {
-  try {
-    return (await stat(entryPath)).isDirectory()
-  } catch {
+async function isRuntimeDirectoryEntry(
+  entry: { isDirectory(): boolean; isSymbolicLink(): boolean },
+  _entryPath: string
+): Promise<boolean> {
+  // Why: runtime-backed file explorer listings are still passive UI reads.
+  // Do not stat symlink targets here; explicit open/expand can resolve them.
+  if (entry.isSymbolicLink()) {
+    void _entryPath
     return false
   }
+  if (entry.isDirectory()) {
+    return true
+  }
+  return false
 }
 
 function isBinaryBuffer(buffer: Buffer): boolean {

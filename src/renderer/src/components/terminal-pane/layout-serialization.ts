@@ -42,8 +42,9 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
 //   1000/1002/1003/1006 — mouse reporting variants
 //   1004                — focus event reporting (the actual bug source)
 //   2004                — bracketed paste
-export const POST_REPLAY_MODE_RESET =
-  '\x1b[0 q\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
+export const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
+
+export const POST_REPLAY_MODE_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l`
 
 // Why: daemon snapshot restore reattaches to a live session, so we avoid the
 // full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still
@@ -63,7 +64,7 @@ export const POST_REPLAY_MODE_RESET =
 //   1004 — focus event reporting: preserving `?1004h` makes restored shells
 //          ring BEL on pane focus/blur (shells like zsh treat `\e[I`/`\e[O`
 //          as unbound key input).
-export const POST_REPLAY_REATTACH_RESET = '\x1b[0 q\x1b[?25h\x1b[?1004l'
+export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h\x1b[?1004l`
 
 // Cross-platform monospace fallback chain ensures the terminal always has a
 // usable font regardless of OS.  macOS-only fonts like SF Mono and Menlo are

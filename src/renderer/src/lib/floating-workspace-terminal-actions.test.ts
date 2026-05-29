@@ -213,6 +213,40 @@ describe('isFloatingWorkspacePanelShortcut', () => {
     )
   })
 
+  it('claims shortcuts by produced logical key rather than physical key', () => {
+    expect(
+      isFloatingWorkspacePanelShortcut(
+        shortcutSurfaceEvent({ key: 'w', code: 'Comma', metaKey: true }),
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      isFloatingWorkspacePanelShortcut(
+        shortcutSurfaceEvent({ key: ',', code: 'KeyW', metaKey: true }),
+        'darwin'
+      )
+    ).toBe(false)
+  })
+
+  it('honors customized tab shortcuts for the floating panel surface', () => {
+    expect(
+      isFloatingWorkspacePanelShortcut(
+        shortcutSurfaceEvent({ key: 'n', code: 'KeyN', ctrlKey: true }),
+        'linux',
+        null,
+        { 'tab.newTerminal': ['Ctrl+N'] }
+      )
+    ).toBe(true)
+    expect(
+      isFloatingWorkspacePanelShortcut(
+        shortcutSurfaceEvent({ key: 't', code: 'KeyT', ctrlKey: true }),
+        'linux',
+        null,
+        { 'tab.newTerminal': ['Ctrl+N'] }
+      )
+    ).toBe(false)
+  })
+
   it('does not claim shortcuts with Alt or the wrong platform modifier', () => {
     expect(
       isFloatingWorkspacePanelShortcut(shortcutSurfaceEvent({ key: 't', metaKey: true }), false)

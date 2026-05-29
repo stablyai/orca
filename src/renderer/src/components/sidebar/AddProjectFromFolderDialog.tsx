@@ -13,10 +13,14 @@ import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { track } from '@/lib/telemetry'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { SetupStep } from './AddRepoSetupStep'
+import { getProjectAddedPrimaryBranchName, SetupStep } from './AddRepoSetupStep'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
+import {
+  effectiveExternalWorktreeVisibility,
+  isLegacyRepoForExternalWorktreeVisibility
+} from '../../../../shared/worktree-ownership'
 
 const NON_GIT_REPO_ERROR = 'Not a valid git repository'
 
@@ -26,10 +30,13 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   const closeModal = useAppStore((s) => s.closeModal)
   const openModal = useAppStore((s) => s.openModal)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
+  const updateRepo = useAppStore((s) => s.updateRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
+  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
 
   const [addedRepo, setAddedRepo] = useState<Repo | null>(null)
   const [isAdding, setIsAdding] = useState(false)
@@ -40,14 +47,35 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   const connectionId = typeof modalData.connectionId === 'string' ? modalData.connectionId : ''
   const repoId = addedRepo?.id ?? ''
 
+  const worktrees = useMemo(() => {
+    return worktreesByRepo[repoId] ?? []
+  }, [repoId, worktreesByRepo])
+  const detectedResult = repoId ? detectedWorktreesByRepo[repoId] : undefined
+  const hiddenWorktreeCount =
+    detectedResult?.authoritative === true
+      ? detectedResult.worktrees.filter(
+          (worktree) => !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
+        ).length
+      : 0
+  const otherWorktreesVisible = addedRepo
+    ? effectiveExternalWorktreeVisibility(
+        addedRepo,
+        isLegacyRepoForExternalWorktreeVisibility(addedRepo)
+      ) === 'show'
+    : false
   const sortedWorktrees = useMemo(() => {
-    return [...(worktreesByRepo[repoId] ?? [])].sort((a, b) => {
+    return [...worktrees].sort((a, b) => {
       if (a.lastActivityAt !== b.lastActivityAt) {
         return b.lastActivityAt - a.lastActivityAt
       }
       return a.displayName.localeCompare(b.displayName)
     })
-  }, [repoId, worktreesByRepo])
+  }, [worktrees])
+  const primaryWorktree = useMemo(
+    () => sortedWorktrees.find((worktree) => worktree.isMainWorktree) ?? null,
+    [sortedWorktrees]
+  )
+  const primaryBranchName = getProjectAddedPrimaryBranchName(primaryWorktree)
 
   useEffect(() => {
     if (!isOpen) {
@@ -118,28 +146,51 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     }
   }, [addRepoPath, connectionId, fetchWorktrees, folderPath, isAdding, openNonGitConfirmation])
 
-  const handleOpenWorktree = useCallback(
-    (worktree: Worktree) => {
-      track('add_repo_setup_step_action', { action: 'open_existing' })
-      activateAndRevealWorktree(worktree.id)
-      closeModal()
-    },
-    [closeModal]
-  )
+  const handleStartPrimaryWorktree = useCallback(() => {
+    if (!primaryWorktree) {
+      return
+    }
+    track('add_repo_setup_step_action', { action: 'open_primary' })
+    closeModal()
+    if (useAppStore.getState().hideDefaultBranchWorkspace) {
+      setHideDefaultBranchWorkspace(false)
+    }
+    activateAndRevealWorktree(primaryWorktree.id)
+  }, [closeModal, primaryWorktree, setHideDefaultBranchWorkspace])
 
-  const handleCreateWorktree = useCallback(() => {
+  const handleUseExistingWorktrees = useCallback(async () => {
     if (!repoId) {
       return
     }
-    track('add_repo_setup_step_action', { action: 'create_worktree' })
+    track('add_repo_setup_step_action', { action: 'open_existing' })
+    if (!otherWorktreesVisible) {
+      const updated = await updateRepo(repoId, { externalWorktreeVisibility: 'show' })
+      if (updated && addedRepo) {
+        setAddedRepo({ ...addedRepo, externalWorktreeVisibility: 'show' })
+      }
+    }
     closeModal()
-    setTimeout(() => {
-      openModal('new-workspace-composer', {
-        initialRepoId: repoId,
-        telemetrySource: 'sidebar'
-      })
-    }, 150)
-  }, [closeModal, openModal, repoId])
+    await fetchWorktrees(repoId)
+    finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
+  }, [addedRepo, closeModal, fetchWorktrees, otherWorktreesVisible, repoId, updateRepo])
+
+  const handleCreateWorktree = useCallback(
+    (name?: string) => {
+      if (!repoId) {
+        return
+      }
+      track('add_repo_setup_step_action', { action: 'create_worktree' })
+      closeModal()
+      setTimeout(() => {
+        openModal('new-workspace-composer', {
+          initialRepoId: repoId,
+          ...(name ? { prefilledName: name } : {}),
+          telemetrySource: 'sidebar'
+        })
+      }, 150)
+    },
+    [closeModal, openModal, repoId]
+  )
 
   const handleConfigureRepo = useCallback(() => {
     if (!repoId) {
@@ -181,11 +232,12 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         {addedRepo ? (
           <SetupStep
             repoName={addedRepo.displayName}
-            sortedWorktrees={sortedWorktrees}
-            onOpenWorktree={handleOpenWorktree}
+            hiddenWorktreeCount={hiddenWorktreeCount}
+            primaryBranchName={primaryBranchName}
+            onStartPrimaryWorktree={handleStartPrimaryWorktree}
+            onUseExistingWorktrees={() => void handleUseExistingWorktrees()}
             onCreateWorktree={handleCreateWorktree}
             onConfigureRepo={handleConfigureRepo}
-            onSkip={handleSkip}
           />
         ) : (
           <>

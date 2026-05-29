@@ -49,7 +49,11 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'command',
       'override',
       'install',
-      'detected'
+      'detected',
+      'enable',
+      'disable',
+      'hide',
+      'show'
     ]
   },
   {

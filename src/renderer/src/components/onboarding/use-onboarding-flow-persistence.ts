@@ -1,7 +1,9 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { track } from '@/lib/telemetry'
+import { useAppStore } from '@/store'
 import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
+import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
 import {
@@ -138,6 +140,15 @@ type PersistCurrentStepDeps = {
   setError: (msg: string | null) => void
 }
 
+const ONBOARDING_FEATURE_INTERACTIONS: Record<
+  keyof OnboardingFeatureSetupSelection,
+  FeatureInteractionId
+> = {
+  browserUse: 'agent-browser-setup',
+  computerUse: 'computer-use-setup',
+  orchestration: 'agent-orchestration-setup'
+}
+
 export type PersistCurrentStepResult = {
   ok: boolean
   featureSetupResult?: OnboardingFeatureSetupResult
@@ -196,6 +207,7 @@ export function usePersistCurrentStep({
               terminalBell: true
             }
           })
+          useAppStore.getState().recordFeatureInteraction('notifications')
           onOnboardingChange(await persistStep(3))
           return { ok: true }
         }
@@ -210,6 +222,15 @@ export function usePersistCurrentStep({
             ...onboardingFeatureSetupRunTelemetry(featureSetupSelection, setupResult)
           })
           if (hasSelectedOnboardingFeatureSetup(featureSetupSelection)) {
+            const recordFeatureInteraction = useAppStore.getState().recordFeatureInteraction
+            for (const [id, selected] of Object.entries(featureSetupSelection) as [
+              keyof OnboardingFeatureSetupSelection,
+              boolean
+            ][]) {
+              if (selected) {
+                recordFeatureInteraction(ONBOARDING_FEATURE_INTERACTIONS[id])
+              }
+            }
             const firstWarning = setupResult.warnings[0]
             if (firstWarning) {
               toast.warning('Some feature setup needs attention', {

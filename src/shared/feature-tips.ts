@@ -1,3 +1,9 @@
+import {
+  hasFeatureInteraction,
+  type FeatureInteractionId,
+  type FeatureInteractionState
+} from './feature-interactions'
+
 export type FeatureTipId = 'voice-dictation'
 
 export type FeatureTipPriority = 'new' | 'unseen'
@@ -12,10 +18,13 @@ export type FeatureTip = {
   description: string
   action: FeatureTipAction
   ctaLabel: string
+  /** Feature interactions that mean this tip is no longer useful to show. */
+  completedByFeatureInteractions?: readonly FeatureInteractionId[]
 }
 
 export type CompletedFeatureTipState = {
   voiceDictationEnabled: boolean
+  featureInteractions?: FeatureInteractionState
 }
 
 export const FEATURE_TIPS = [
@@ -27,7 +36,8 @@ export const FEATURE_TIPS = [
     description:
       'Speak into any focused pane and Orca will transcribe it. Press the dictation shortcut to start and stop.',
     action: 'enable-voice',
-    ctaLabel: 'Set Up Voice'
+    ctaLabel: 'Set Up Voice',
+    completedByFeatureInteractions: ['voice-dictation']
   }
 ] as const satisfies readonly FeatureTip[]
 
@@ -55,6 +65,15 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
   const completedIds = new Set<FeatureTipId>()
   if (state.voiceDictationEnabled) {
     completedIds.add('voice-dictation')
+  }
+  for (const tip of FEATURE_TIPS) {
+    if (
+      tip.completedByFeatureInteractions?.some((id) =>
+        hasFeatureInteraction(state.featureInteractions, id)
+      )
+    ) {
+      completedIds.add(tip.id)
+    }
   }
   return completedIds
 }

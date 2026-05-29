@@ -99,8 +99,33 @@ const CommitMessageAiSettings = z.object({
   customAgentCommand: z.string()
 })
 
+const SourceControlAiSettings = CommitMessageAiSettings.omit({ customPrompt: true }).extend({
+  instructionsByOperation: z.record(z.string(), z.string()).optional(),
+  modelOverridesByOperation: z
+    .record(
+      z.string(),
+      z.object({
+        selectedModelByAgent: z.record(z.string(), z.string()).optional(),
+        selectedModelByAgentByHost: z
+          .record(z.string(), z.record(z.string(), z.string()))
+          .optional(),
+        selectedThinkingByModel: z.record(z.string(), z.string()).optional()
+      })
+    )
+    .optional(),
+  prCreationDefaults: z
+    .object({
+      draft: z.boolean().optional(),
+      useTemplate: z.boolean().optional(),
+      generateDetailsOnOpen: z.boolean().optional(),
+      openAfterCreate: z.boolean().optional()
+    })
+    .optional()
+})
+
 export const GitGenerateCommitMessage = WorktreeSelector.extend({
   commitMessageAi: CommitMessageAiSettings.optional(),
+  sourceControlAi: SourceControlAiSettings.optional(),
   agentCmdOverrides: z.record(z.string(), z.string()).optional(),
   enableGitHubAttribution: z.boolean().optional(),
   commitMessageDiscoveryHostKey: z.string().optional()

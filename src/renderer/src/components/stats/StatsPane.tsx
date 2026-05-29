@@ -63,14 +63,16 @@ function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element
 export function StatsPane(): React.JSX.Element {
   const summary = useAppStore((s) => s.statsSummary)
   const fetchStatsSummary = useAppStore((s) => s.fetchStatsSummary)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [activeUsageTab, setActiveUsageTab] = useState<UsageTab>('overview')
   const activeUsageOption =
     USAGE_ANALYTICS_OPTIONS.find((option) => option.id === activeUsageTab) ??
     USAGE_ANALYTICS_OPTIONS[0]
 
   useEffect(() => {
+    recordFeatureInteraction('usage-tracking')
     void fetchStatsSummary()
-  }, [fetchStatsSummary])
+  }, [fetchStatsSummary, recordFeatureInteraction])
 
   return (
     <div className="space-y-5">

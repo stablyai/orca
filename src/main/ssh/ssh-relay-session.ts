@@ -110,6 +110,20 @@ export class SshRelaySession {
     ) => void
   ) {}
 
+  refreshEnvironment(
+    getMainWindow: () => BrowserWindow | null,
+    store: Store,
+    portForwardManager: SshPortForwardManager,
+    runtime?: OrcaRuntimeService,
+    onDetectedPortsChanged?: (targetId: string, ports: DetectedPort[], platform: string) => void
+  ): void {
+    this.getMainWindow = getMainWindow
+    this.store = store
+    this.portForwardManager = portForwardManager
+    this.runtime = runtime
+    this.onDetectedPortsChanged = onDetectedPortsChanged
+  }
+
   setOnRelayLost(cb: (targetId: string) => void): void {
     this._onRelayLost = cb
   }
@@ -783,10 +797,9 @@ export class SshRelaySession {
   }
 
   private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
-    const getWin = this.getMainWindow
     ptyProvider.onData((payload) => {
       const seq = this.runtime?.onPtyData(payload.id, payload.data, Date.now())
-      const win = getWin()
+      const win = this.getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('pty:data', {
           ...payload,
@@ -795,7 +808,7 @@ export class SshRelaySession {
       }
     })
     ptyProvider.onReplay((payload) => {
-      const win = getWin()
+      const win = this.getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('pty:replay', payload)
       }
@@ -806,7 +819,7 @@ export class SshRelaySession {
       deletePtyOwnership(payload.id)
       this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
       this.runtime?.onPtyExit(payload.id, payload.code)
-      const win = getWin()
+      const win = this.getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('pty:exit', payload)
       }

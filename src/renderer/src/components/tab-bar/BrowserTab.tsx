@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
@@ -47,6 +48,46 @@ export function getBrowserTabLabel(tab: BrowserTabState): string {
 
 function isBlankBrowserTab(tab: BrowserTabState): boolean {
   return tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank'
+}
+
+type FailedFavicon = {
+  tabId: string
+  faviconUrl: string
+}
+
+function BrowserTabFavicon({
+  tabId,
+  faviconUrl
+}: {
+  tabId: string
+  faviconUrl: string | null
+}): React.JSX.Element {
+  const displayFaviconUrl = faviconUrl?.trim() ? faviconUrl : null
+  const [failedFavicon, setFailedFavicon] = useState<FailedFavicon | null>(null)
+
+  useEffect(() => {
+    setFailedFavicon(null)
+  }, [tabId, displayFaviconUrl])
+
+  const currentFaviconFailed =
+    failedFavicon?.tabId === tabId && failedFavicon.faviconUrl === displayFaviconUrl
+
+  if (displayFaviconUrl && !currentFaviconFailed) {
+    return (
+      <img
+        src={displayFaviconUrl}
+        alt=""
+        aria-hidden
+        draggable={false}
+        // Why: transparent dark/light-mode favicons can disappear against tab
+        // chrome; a token-colored 1px shadow keeps the 12px mark legible.
+        className="size-3 mr-1 shrink-0 rounded-sm object-contain drop-shadow-[0_0_1px_var(--foreground)]"
+        onError={() => setFailedFavicon({ tabId, faviconUrl: displayFaviconUrl })}
+      />
+    )
+  }
+
+  return <Globe className="size-3 mr-1 shrink-0 text-blue-500" />
 }
 
 export default function BrowserTab({
@@ -92,6 +133,7 @@ export default function BrowserTab({
   } catch {
     // invalid URL — leave disabled
   }
+  const tabLabel = getBrowserTabLabel(tab)
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -113,6 +155,65 @@ export default function BrowserTab({
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
+  const tabRoot = (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
+        isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+      }`}
+      onPointerDown={(e) => {
+        if (e.button !== 0) {
+          return
+        }
+        onActivate()
+        listeners?.onPointerDown?.(e)
+      }}
+      onMouseDown={(e) => {
+        if (e.button === 1) {
+          e.preventDefault()
+        }
+      }}
+      onMouseUp={preventMiddleButtonDefault}
+      onAuxClick={(e) => {
+        if (e.button === 1) {
+          e.preventDefault()
+          e.stopPropagation()
+          onClose()
+        }
+      }}
+    >
+      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {/* Why: the browser tab icon is the only non-terminal, non-editor
+          surface in the tab strip. Coloring the Globe blue (matching the
+          in-app browser's identity and the default tab insertion bar)
+          gives it a distinct, recognizable anchor so users can spot
+          browser tabs at a glance even when the strip is saturated. We
+          keep full color on both active and inactive tabs — dimming to
+          muted-foreground made the icon read as "disabled" in practice. */}
+      <BrowserTabFavicon tabId={tab.id} faviconUrl={tab.faviconUrl} />
+      <span className="truncate max-w-[100px] mr-1">{tabLabel}</span>
+      {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
+        <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
+      )}
+      <button
+        className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
+          isActive
+            ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
+        }`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
+          onClose()
+        }}
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  )
+
   return (
     <>
       <div
@@ -123,62 +224,20 @@ export default function BrowserTab({
           setMenuOpen(true)
         }}
       >
-        <div
-          ref={setNodeRef}
-          {...attributes}
-          {...listeners}
-          className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
-            isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-          }`}
-          onPointerDown={(e) => {
-            if (e.button !== 0) {
-              return
-            }
-            onActivate()
-            listeners?.onPointerDown?.(e)
-          }}
-          onMouseDown={(e) => {
-            if (e.button === 1) {
-              e.preventDefault()
-            }
-          }}
-          onMouseUp={preventMiddleButtonDefault}
-          onAuxClick={(e) => {
-            if (e.button === 1) {
-              e.preventDefault()
-              e.stopPropagation()
-              onClose()
-            }
-          }}
-        >
-          {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
-          {/* Why: the browser tab icon is the only non-terminal, non-editor
-              surface in the tab strip. Coloring the Globe blue (matching the
-              in-app browser's identity and the default tab insertion bar)
-              gives it a distinct, recognizable anchor so users can spot
-              browser tabs at a glance even when the strip is saturated. We
-              keep full color on both active and inactive tabs — dimming to
-              muted-foreground made the icon read as "disabled" in practice. */}
-          <Globe className="w-3 h-3 mr-1 shrink-0 text-blue-500" />
-          <span className="truncate max-w-[100px] mr-1">{getBrowserTabLabel(tab)}</span>
-          {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
-            <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
-          )}
-          <button
-            className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-              isActive
-                ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
-            }`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              onClose()
-            }}
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
+        {menuOpen ? (
+          tabRoot
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>{tabRoot}</TooltipTrigger>
+            <TooltipContent
+              side="bottom"
+              sideOffset={6}
+              className="max-w-80 whitespace-normal break-words text-left"
+            >
+              {tabLabel}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>

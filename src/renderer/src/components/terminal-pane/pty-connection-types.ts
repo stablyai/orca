@@ -9,8 +9,8 @@ export type PtyConnectionDeps = {
   cwd?: string
   startup?: {
     command: string
-    /** Renderer-delivered startup input. Used when terminal paste semantics
-     *  matter, such as multiline quick commands. */
+    /** Renderer-delivered startup input for callers that need xterm paste
+     *  semantics before the submit Enter. */
     delivery?: 'terminal-paste'
     env?: Record<string, string>
     /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
@@ -35,8 +35,10 @@ export type PtyConnectionDeps = {
   updateTabPtyId: (tabId: string, ptyId: string) => void
   markWorktreeUnread: (worktreeId: string) => void
   markTerminalTabUnread: (tabId: string) => void
+  markTerminalPaneUnread: (paneKey: string) => void
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
+  clearTerminalPaneUnread: (paneKey: string) => void
   // Why: the renderer dispatches two notification sources — BEL from the PTY
   // byte stream and agent-task-complete on the working→idle title transition.
   // shared/types.ts keeps a wider NotificationEventSource union because the

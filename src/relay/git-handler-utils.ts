@@ -7,6 +7,8 @@
  */
 import * as path from 'path'
 import { existsSync } from 'fs'
+import { isBinaryBuffer } from '../shared/binary-buffer'
+import type { GitLineStats } from '../shared/git-uncommitted-line-stats'
 
 export function parseBranchStatusChar(char: string): string {
   switch (char) {
@@ -100,51 +102,9 @@ export function parseUnmergedEntry(
 /**
  * Parse `git diff --name-status` output into structured change entries.
  */
-export type BranchDiffLineStats = {
-  added?: number
-  removed?: number
-}
-
-function parseNumstatCount(value: string): number | undefined {
-  if (value === '-') {
-    return undefined
-  }
-  const count = Number.parseInt(value, 10)
-  return Number.isFinite(count) ? count : undefined
-}
-
-function normalizeNumstatPath(path: string): string {
-  const bracedRename = /^(.*)\{(.+) => (.+)\}(.*)$/.exec(path)
-  if (bracedRename) {
-    return `${bracedRename[1]}${bracedRename[3]}${bracedRename[4]}`
-  }
-  const renameMarker = ' => '
-  const markerIndex = path.lastIndexOf(renameMarker)
-  return markerIndex === -1 ? path : path.slice(markerIndex + renameMarker.length)
-}
-
-export function parseBranchDiffNumstat(stdout: string): Map<string, BranchDiffLineStats> {
-  const stats = new Map<string, BranchDiffLineStats>()
-  for (const line of stdout.split(/\r?\n/)) {
-    if (!line) {
-      continue
-    }
-    const parts = line.split('\t')
-    const rawPath = parts.slice(2).join('\t')
-    if (!rawPath) {
-      continue
-    }
-    stats.set(normalizeNumstatPath(rawPath), {
-      added: parseNumstatCount(parts[0] ?? ''),
-      removed: parseNumstatCount(parts[1] ?? '')
-    })
-  }
-  return stats
-}
-
 export function parseBranchDiff(
   stdout: string,
-  statsByPath: Map<string, BranchDiffLineStats> = new Map()
+  statsByPath: Map<string, GitLineStats> = new Map()
 ): Record<string, unknown>[] {
   const entries: Record<string, unknown>[] = []
   for (const line of stdout.split(/\r?\n/)) {
@@ -213,16 +173,6 @@ export function parseWorktreeList(output: string): Record<string, unknown>[] {
 }
 
 // ─── Binary / blob helpers ───────────────────────────────────────────
-
-export function isBinaryBuffer(buffer: Buffer): boolean {
-  const len = Math.min(buffer.length, 8192)
-  for (let i = 0; i < len; i++) {
-    if (buffer[i] === 0) {
-      return true
-    }
-  }
-  return false
-}
 
 export const PREVIEWABLE_MIME: Record<string, string> = {
   '.png': 'image/png',

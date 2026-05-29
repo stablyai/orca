@@ -48,6 +48,53 @@ describe('terminal bracketed paste policy', () => {
     expect(observedIgnoreValues).toEqual([false])
   })
 
+  it('forces bracketed paste behavior when requested after Ctrl+C', () => {
+    const terminal = createTerminal(true)
+    const observedIgnoreValues: (boolean | undefined)[] = []
+    terminal.paste.mockImplementation(() => {
+      observedIgnoreValues.push(terminal.options.ignoreBracketedPasteMode)
+    })
+
+    markTerminalBracketedPasteInterrupted(terminal)
+    pasteTerminalText(terminal, '/tmp/orca-paste-1760000000000-id.png', {
+      forceBracketedPaste: true
+    })
+
+    expect(terminal.paste).toHaveBeenCalledWith(
+      '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
+    )
+    expect(observedIgnoreValues).toEqual([true])
+    expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
+  })
+
+  it('forces bracketed paste behavior even when terminal mode is off', () => {
+    const terminal = createTerminal(false)
+    const observedIgnoreValues: (boolean | undefined)[] = []
+    terminal.paste.mockImplementation(() => {
+      observedIgnoreValues.push(terminal.options.ignoreBracketedPasteMode)
+    })
+
+    pasteTerminalText(terminal, '/tmp/orca-paste-1760000000000-id.png', {
+      forceBracketedPaste: true
+    })
+
+    expect(terminal.paste).toHaveBeenCalledWith(
+      '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
+    )
+    expect(observedIgnoreValues).toEqual([true])
+    expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
+  })
+
+  it('renders embedded escape bytes inert when forcing bracketed paste', () => {
+    const terminal = createTerminal(false)
+
+    pasteTerminalText(terminal, '/tmp/before\x1b[201~after.png', {
+      forceBracketedPaste: true
+    })
+
+    expect(terminal.paste).toHaveBeenCalledWith('\x1b[200~/tmp/before\u241b[201~after.png\x1b[201~')
+  })
+
   it('does not change paste behavior when Ctrl+C happened outside bracketed paste mode', () => {
     const terminal = createTerminal(false)
     const observedIgnoreValues: (boolean | undefined)[] = []

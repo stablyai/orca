@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: daemon server RPC, auth, stream batching, and shutdown behavior share one socket/client harness; splitting would duplicate setup. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { connect, type Socket } from 'net'
+import { connect, type Server, type Socket } from 'net'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, rmSync, readFileSync } from 'fs'
@@ -44,6 +44,7 @@ function createMockSubprocess(): SubprocessHandle & {
 }
 
 type DaemonServerPrivate = {
+  server: Server | null
   clients: Map<
     string,
     {
@@ -95,6 +96,13 @@ describe('DaemonServer', () => {
 
       const token = readFileSync(tokenPath, 'utf-8')
       expect(token.length).toBeGreaterThan(0)
+    })
+
+    it('removes the startup error listener after listening', async () => {
+      await startServer()
+
+      const daemon = server as unknown as DaemonServerPrivate
+      expect(daemon.server?.listenerCount('error')).toBe(0)
     })
 
     it('accepts client connections', async () => {

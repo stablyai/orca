@@ -128,6 +128,7 @@ function ClaudeSwitcherMenu({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
   const claudeAccountSyncKey = useAppStore((s) => {
@@ -168,6 +169,7 @@ function ClaudeSwitcherMenu({
     setIsSwitching(true)
     try {
       const next = await window.api.claudeAccounts.select({ accountId })
+      recordFeatureInteraction('claude-account-switching')
       setAccounts(next)
       await fetchSettings()
       setAccountsExpanded(false)
@@ -483,6 +485,7 @@ function CodexSwitcherMenu({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
   const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
   const codexAccountSyncKey = useAppStore((s) => {
@@ -516,6 +519,7 @@ function CodexSwitcherMenu({
     setIsSwitching(true)
     try {
       const next = await window.api.codexAccounts.select({ accountId })
+      recordFeatureInteraction('codex-account-switching')
       setAccounts(next)
       await fetchSettings()
       if (previousActiveAccountId !== next.activeAccountId) {
@@ -671,8 +675,17 @@ function ProviderDetailsMenu({
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
 }): React.JSX.Element {
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+
+  const handleOpenChange = (nextOpen: boolean): void => {
+    if (nextOpen) {
+      recordFeatureInteraction('usage-tracking')
+    }
+    onOpenChange?.(nextOpen)
+  }
+
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -726,6 +739,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
   const floatingTerminalTriggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
@@ -953,7 +967,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           {isStatusBarItemAvailable('claude', detectedAgentIds) && (
             <DropdownMenuCheckboxItem
               checked={statusBarItems.includes('claude')}
-              onCheckedChange={() => toggleStatusBarItem('claude')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('claude')
+              }}
             >
               <ClaudeIcon size={14} />
               Claude Usage
@@ -962,7 +979,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           {isStatusBarItemAvailable('codex', detectedAgentIds) && (
             <DropdownMenuCheckboxItem
               checked={statusBarItems.includes('codex')}
-              onCheckedChange={() => toggleStatusBarItem('codex')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('codex')
+              }}
             >
               <OpenAIIcon size={14} />
               Codex Usage
@@ -971,7 +991,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           {isStatusBarItemAvailable('gemini', detectedAgentIds) && (
             <DropdownMenuCheckboxItem
               checked={statusBarItems.includes('gemini')}
-              onCheckedChange={() => toggleStatusBarItem('gemini')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('gemini')
+              }}
             >
               <GeminiIcon size={14} />
               Gemini Usage
@@ -979,28 +1002,40 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           )}
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('opencode-go')}
-            onCheckedChange={() => toggleStatusBarItem('opencode-go')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('opencode-go')
+            }}
           >
             <OpenCodeGoIcon size={14} />
             OpenCode Go Usage
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}
-            onCheckedChange={() => toggleStatusBarItem('ssh')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('ssh')
+              toggleStatusBarItem('ssh')
+            }}
           >
             <Server className="size-3.5" />
             SSH Status
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('resource-usage')}
-            onCheckedChange={() => toggleStatusBarItem('resource-usage')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('resource-manager')
+              toggleStatusBarItem('resource-usage')
+            }}
           >
             <Activity className="size-3.5" />
             Resource Manager
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ports')}
-            onCheckedChange={() => toggleStatusBarItem('ports')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('ports')
+              toggleStatusBarItem('ports')
+            }}
           >
             <Plug className="size-3.5" />
             Ports

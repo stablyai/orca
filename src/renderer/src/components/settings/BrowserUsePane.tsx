@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: Browser Use setup keeps enablement, CLI registration, skill install, cookie import, examples, and interaction tracking in one pane so the three-step setup state stays coherent. */
 import { useEffect, useState } from 'react'
 import { Import, Loader2, MousePointerClick } from 'lucide-react'
 import { toast } from 'sonner'
@@ -69,6 +70,9 @@ export function BrowserUseSetup({
   const toggleBrowserUse = (value: boolean): void => {
     setBrowserUseEnabled(value)
     localStorage.setItem(BROWSER_USE_ENABLED_STORAGE_KEY, value ? '1' : '0')
+    if (value) {
+      useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
+    }
   }
 
   const refreshCli = async (): Promise<void> => {
@@ -323,6 +327,7 @@ export function BrowserUseSetup({
             disabled={!cliEnabled}
             preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
             onBeforeOpenTerminal={async () => {
+              useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
               await ensureOrcaCliAvailableForAgentSkillTerminal({ onStatusChange: setCliStatus })
             }}
             onRecheck={refreshSkill}

@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../shared/types'
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 
 export type RuntimeClientTarget = { kind: 'local' } | { kind: 'environment'; environmentId: string }
@@ -44,21 +45,32 @@ export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  options: { timeoutMs?: number } = {}
+  options: { timeoutMs?: number; suppressFeatureInteraction?: boolean } = {}
 ): Promise<TResult> {
   if (target.kind === 'environment' && method !== 'status.get') {
     await ensureRuntimeEnvironmentCompatible(target.environmentId, options.timeoutMs)
   }
+  const nextParams = addFeatureInteractionSource(params, options)
   const response =
     target.kind === 'local'
-      ? await window.api.runtime.call({ method, params })
+      ? await window.api.runtime.call({ method, params: nextParams })
       : await window.api.runtimeEnvironments.call({
           selector: target.environmentId,
           method,
-          params,
+          params: nextParams,
           timeoutMs: options.timeoutMs
         })
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+}
+
+function addFeatureInteractionSource(
+  params: unknown,
+  options: { suppressFeatureInteraction?: boolean }
+): unknown {
+  if (!options.suppressFeatureInteraction) {
+    return params
+  }
+  return withBrowserPaneUiRuntimeRpcSource(params)
 }
 
 async function ensureRuntimeEnvironmentCompatible(

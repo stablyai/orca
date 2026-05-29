@@ -7,6 +7,11 @@ import { useAppStore } from '../../store'
 
 export default function WorkspaceSpacePage(): React.JSX.Element {
   const closeSpacePage = useAppStore((state) => state.closeSpacePage)
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
+
+  useEffect(() => {
+    recordFeatureInteraction('workspace-cleanup')
+  }, [recordFeatureInteraction])
 
   useEffect(() => {
     const hasVisibleOverlay = (): boolean =>

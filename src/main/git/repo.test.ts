@@ -109,6 +109,43 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(results).toContain('local-only')
   })
 
+  // Why: a single-word query must match a term in ANY segment of a slashed
+  // branch name (`user/feature`), not just the leaf. fnmatch `*` does not
+  // cross `/`, so the glob must use `**` to span ref segments.
+  it('finds a local slashed branch when the query lands in a deep segment', async () => {
+    git(tmpDir, ['branch', 'feature/login'])
+
+    const results = await searchBaseRefs(tmpDir, 'login')
+
+    expect(results).toContain('feature/login')
+  })
+
+  it('finds a local slashed branch when the query lands in an ancestor segment', async () => {
+    git(tmpDir, ['branch', 'feature/login'])
+
+    const results = await searchBaseRefs(tmpDir, 'feature')
+
+    expect(results).toContain('feature/login')
+  })
+
+  it('finds a remote slashed branch when the query lands in a deep segment', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/feature/login', sha)
+
+    const results = await searchBaseRefs(tmpDir, 'login')
+
+    expect(results).toContain('origin/feature/login')
+  })
+
+  it('finds a remote slashed branch when the query lands in an ancestor segment', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/feature/login', sha)
+
+    const results = await searchBaseRefs(tmpDir, 'feature')
+
+    expect(results).toContain('origin/feature/login')
+  })
+
   it('returns the local branch name for a remote ref with slashes', async () => {
     const sha = getHeadSha(tmpDir)
     git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])

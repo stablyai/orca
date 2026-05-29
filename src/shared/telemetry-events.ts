@@ -18,6 +18,16 @@ import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
 import { FEATURE_WALL_EXIT_ACTIONS, FEATURE_WALL_TOUR_DEPTH_STEPS } from './feature-wall-tour-depth'
 import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
+import {
+  NESTED_REPO_COUNT_BUCKETS,
+  NESTED_REPO_IMPORT_ACTIONS,
+  NESTED_REPO_IMPORT_OUTCOMES,
+  NESTED_REPO_SCAN_RESULTS,
+  NESTED_REPO_TELEMETRY_MAX_REPO_COUNT,
+  NESTED_REPO_TELEMETRY_RUNTIME_KINDS,
+  NESTED_REPO_TELEMETRY_SURFACES,
+  bucketNestedRepoTelemetryCount
+} from './nested-repo-telemetry'
 
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
 import { ONBOARDING_FINAL_STEP } from './constants'
@@ -227,6 +237,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalMobile',
   'experimentalPet',
   'experimentalActivity',
+  'experimentalTerminalAttention',
   'experimentalWorktreeSymlinks',
   'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
@@ -580,6 +591,103 @@ void _onboardingChecklistItemSyncCheck
 // `'cohort' in schema.shape`, so there is no parallel hand-maintained list.
 const cohortSchema = z.enum(['fresh_install', 'upgrade_backfill']).optional()
 
+const nestedRepoTelemetrySurfaceSchema = z.enum(NESTED_REPO_TELEMETRY_SURFACES)
+const nestedRepoTelemetryRuntimeKindSchema = z.enum(NESTED_REPO_TELEMETRY_RUNTIME_KINDS)
+const nestedRepoCountSchema = z.number().int().min(0).max(NESTED_REPO_TELEMETRY_MAX_REPO_COUNT)
+const nestedRepoCountBucketSchema = z.enum(NESTED_REPO_COUNT_BUCKETS)
+const nestedRepoScanResultSchema = z.enum(NESTED_REPO_SCAN_RESULTS)
+const nestedRepoImportActionSchema = z.enum(NESTED_REPO_IMPORT_ACTIONS)
+const nestedRepoImportOutcomeSchema = z.enum(NESTED_REPO_IMPORT_OUTCOMES)
+const nestedRepoScanPathKindSchema = z.enum(['git_repo', 'non_git_folder'])
+const nestedRepoImportModeSchema = z.enum(['group', 'separate'])
+const nestedRepoAttemptIdSchema = z.string().uuid()
+
+function validateNestedRepoCountBucket(
+  props: Record<string, unknown>,
+  countKey: string,
+  bucketKey: string,
+  ctx: z.RefinementCtx
+): void {
+  const count = props[countKey]
+  const bucket = props[bucketKey]
+  if (typeof count !== 'number' || typeof bucket !== 'string') {
+    return
+  }
+  if (bucketNestedRepoTelemetryCount(count) !== bucket) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [bucketKey],
+      message: `${bucketKey} must match ${countKey}`
+    })
+  }
+}
+
+function validateNestedRepoCountBuckets(
+  props: Record<string, unknown>,
+  ctx: z.RefinementCtx
+): void {
+  validateNestedRepoCountBucket(props, 'found_count', 'found_count_bucket', ctx)
+  validateNestedRepoCountBucket(props, 'selected_count', 'selected_count_bucket', ctx)
+  validateNestedRepoCountBucket(props, 'imported_count', 'imported_count_bucket', ctx)
+  validateNestedRepoCountBucket(props, 'already_known_count', 'already_known_count_bucket', ctx)
+  validateNestedRepoCountBucket(props, 'failed_count', 'failed_count_bucket', ctx)
+}
+
+const nestedRepoTelemetryBaseSchema = {
+  // Why: high-cardinality by design, but random and non-persistent. It lets
+  // dashboards count scan -> action -> result attempts without path-derived IDs.
+  attempt_id: nestedRepoAttemptIdSchema,
+  surface: nestedRepoTelemetrySurfaceSchema,
+  runtime_kind: nestedRepoTelemetryRuntimeKindSchema,
+  nth_repo_added: nthRepoAddedSchema
+} as const
+
+const addRepoNestedScanResultSchema = z
+  .object({
+    ...nestedRepoTelemetryBaseSchema,
+    result: nestedRepoScanResultSchema,
+    selected_path_kind: nestedRepoScanPathKindSchema.optional(),
+    found_count: nestedRepoCountSchema,
+    found_count_bucket: nestedRepoCountBucketSchema,
+    truncated: z.boolean(),
+    timed_out: z.boolean()
+  })
+  .strict()
+  .superRefine(validateNestedRepoCountBuckets)
+
+const addRepoNestedImportActionSchema = z
+  .object({
+    ...nestedRepoTelemetryBaseSchema,
+    action: nestedRepoImportActionSchema,
+    found_count: nestedRepoCountSchema,
+    found_count_bucket: nestedRepoCountBucketSchema,
+    selected_count: nestedRepoCountSchema,
+    selected_count_bucket: nestedRepoCountBucketSchema,
+    all_selected: z.boolean()
+  })
+  .strict()
+  .superRefine(validateNestedRepoCountBuckets)
+
+const addRepoNestedImportResultSchema = z
+  .object({
+    ...nestedRepoTelemetryBaseSchema,
+    mode: nestedRepoImportModeSchema,
+    outcome: nestedRepoImportOutcomeSchema,
+    found_count: nestedRepoCountSchema,
+    found_count_bucket: nestedRepoCountBucketSchema,
+    selected_count: nestedRepoCountSchema,
+    selected_count_bucket: nestedRepoCountBucketSchema,
+    imported_count: nestedRepoCountSchema,
+    imported_count_bucket: nestedRepoCountBucketSchema,
+    already_known_count: nestedRepoCountSchema,
+    already_known_count_bucket: nestedRepoCountBucketSchema,
+    failed_count: nestedRepoCountSchema,
+    failed_count_bucket: nestedRepoCountBucketSchema,
+    all_selected: z.boolean()
+  })
+  .strict()
+  .superRefine(validateNestedRepoCountBuckets)
+
 // `'button' | 'keyboard'` records whether the user advanced via a footer
 // button click, Cmd/Ctrl+Enter, or an equivalent keyboard exit like Escape.
 // The uniform shape lets keyboard skip/dismiss paths arrive without a
@@ -900,6 +1008,9 @@ export const eventSchemas = {
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
   add_repo_existing_workspaces_detected: addRepoExistingWorkspacesDetectedSchema,
+  add_repo_nested_scan_result: addRepoNestedScanResultSchema,
+  add_repo_nested_import_action: addRepoNestedImportActionSchema,
+  add_repo_nested_import_result: addRepoNestedImportResultSchema,
   workspace_created: workspaceCreatedSchema,
   workspace_create_failed: workspaceCreateFailedSchema,
   setup_script_prompt_shown: setupScriptPromptShownSchema,
@@ -988,6 +1099,9 @@ type _CohortExtendedRoster =
   | 'repo_added'
   | 'add_repo_setup_step_action'
   | 'add_repo_existing_workspaces_detected'
+  | 'add_repo_nested_scan_result'
+  | 'add_repo_nested_import_action'
+  | 'add_repo_nested_import_result'
   | 'workspace_created'
   | 'workspace_create_failed'
   | 'setup_script_prompt_shown'
