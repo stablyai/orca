@@ -47,13 +47,13 @@ Initial inventory:
 
 ## Coverage Ledger
 
-Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, #3060, #3062, #3063, #3064, #3065, #3066, #3067, #3068, #3069, #3083, and #3087: 933 Effect hook call sites.
+Current count after low-risk PRs #3038, #3041, #3042, #3044, #3051, #3052, #3053, #3054, #3055, #3056, #3058, #3059, #3060, #3062, #3063, #3064, #3065, #3066, #3067, #3068, #3069, #3083, #3087, and #3091: 932 Effect hook call sites.
 
-Open medium-risk PRs #3070, #3073, #3077, and #3089 each project to 932 Effect hook call sites on the current merged baseline; open medium-risk PR #3079 projects to 923; open high-risk PR #3075 projects to 929; and open high-risk PR #3081 projects to 925. These are not counted in the merged baseline until reviewed and merged.
+Open medium-risk PRs #3070, #3073, #3077, and #3089 each project to 931 Effect hook call sites on the current merged baseline; open medium-risk PR #3079 projects to 922; open high-risk PR #3075 projects to 928; and open high-risk PR #3081 projects to 924. These are not counted in the merged baseline until reviewed and merged.
 
 | Area                           | Files / signal                                                                                           | Scan status                                   | Notes                                                                                                                              |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Renderer app shell             | `src/renderer/src/App.tsx`, root components                                                              | Inventory complete, manual review pending     | Check global listeners, beforeunload, media-query, sidebar resize, active-tab repair.                                              |
+| Renderer app shell             | `src/renderer/src/App.tsx`, root components                                                              | Inventory complete, manual review in progress | Confirmation dialog active request mirror covered by #3091. Continue checking global listeners, beforeunload, media-query, sidebar resize, active-tab repair. |
 | Terminal / PTY                 | `components/Terminal.tsx`, `components/terminal-pane/**`, `components/terminal/**`                       | Inventory complete, manual review pending     | High-risk area: xterm lifecycle, scrollback, remote/mobile parity, focus, WebGL, resize.                                           |
 | Browser pane                   | `components/browser-pane/**`                                                                             | Inventory complete, manual review in progress | Highest Effect density: 62 sites in `BrowserPane.tsx`. Browser ref mirrors covered by #3081; continue with driver sync, address bar derived state, find state, webview lifetime. |
 | Editor / markdown / Monaco     | `components/editor/**`                                                                                   | Inventory complete, manual review in progress | Untitled rename reset covered by #3083. Check editor model cleanup, preview scroll restore, search debounce, generated decorations. |
@@ -112,6 +112,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | PR AJ        | Untitled markdown rename draft reset                  | Save-as dialog draft fields reset in an Effect after open instead of before the first open paint.           | `UntitledFileRenameDialog.tsx` covered by #3083                                                                          | Low            |
 | PR AK        | Onboarding/feature-wall select portal roots           | Two mount Effects query the active overlay/dialog root only to keep select menus above fullscreen surfaces. | `NotificationStep.tsx`, `AiCommitPrSettingsCard.tsx` covered by #3087                                                    | Low            |
 | PR AL        | Orca hook trust dialog checkbox reset                 | The "always trust" checkbox resets after open, leaving one possible paint with the previous decision.       | `OrcaYamlTrustDialog.tsx` covered by #3089                                                                               | Medium         |
+| PR AM        | Confirmation dialog active request mirror             | Active confirmation request was mirrored into local state/ref in an Effect, adding a render pass per request. | `confirmation-dialog.tsx` covered by #3091                                                                               | Low            |
 
 ## Merge Risk Scale
 
@@ -155,6 +156,7 @@ These are candidate batches, not final conclusions. Each item needs code inspect
 | #3083 | `nwparker/react-perf-untitled-rename-dialog` | Untitled markdown rename dialog draft reset moves out of an Effect | Low | Merged | `pnpm exec oxlint src/renderer/src/components/editor/UntitledFileRenameDialog.tsx`; `pnpm run typecheck:web`. |
 | #3087 | `nwparker/react-perf-tour-select-portals` | Onboarding/feature-wall select portal roots move out of Effects | Low | Merged | `pnpm exec oxlint src/renderer/src/components/feature-wall/AiCommitPrSettingsCard.tsx src/renderer/src/components/onboarding/NotificationStep.tsx`; `pnpm run typecheck:web`. |
 | #3089 | `nwparker/react-perf-orca-yaml-trust-reset` | Orca hook trust checkbox reset moves out of an Effect | Medium | Open   | `pnpm exec oxlint src/renderer/src/components/sidebar/OrcaYamlTrustDialog.tsx`; `pnpm run typecheck:web`. |
+| #3091 | `nwparker/react-perf-confirmation-dialog` | Confirmation dialog active request mirror moves out of an Effect | Low | Merged | `pnpm exec oxlint src/renderer/src/components/confirmation-dialog.tsx`; `pnpm run typecheck:web`; `git diff --check`; AST Effect count 933 -> 932. |
 
 ## Reproduction Commands
 
