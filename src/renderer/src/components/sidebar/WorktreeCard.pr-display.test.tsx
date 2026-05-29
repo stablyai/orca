@@ -269,6 +269,39 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Reviewer handoff note')
   })
 
+  it('normalizes multi-line comments into one inline preview row', async () => {
+    worktreeCardProperties = ['comment']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ comment: '  First line\n\n  second\tline  ' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('First line second line')
+    expect(markup).toContain('class="min-w-0 truncate"')
+    expect(markup).not.toContain('First line\n')
+  })
+
+  it('does not render a blank inline comment row for whitespace-only notes', async () => {
+    worktreeCardProperties = ['comment']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ comment: ' \n\t ' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('Workspace notes')
+    expect(markup).not.toContain('class="min-w-0 truncate"')
+  })
+
   it('hides live port metadata when the Ports card property is disabled', async () => {
     const worktree = makeWorktree()
     workspacePortScan = {
