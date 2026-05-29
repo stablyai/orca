@@ -216,6 +216,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
+  const skipNextCloseAutoFocusRef = useRef(false)
   const activeContextWorktrees = menuOpen ? contextWorktrees : selectedWorktrees
   const isMultiContext = activeContextWorktrees.length > 1
   const sleepableWorktrees = useMemo(
@@ -455,6 +456,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     // that focus restore can scroll the virtual list away from the row the
     // user just acted on.
     event.preventDefault()
+    if (skipNextCloseAutoFocusRef.current) {
+      skipNextCloseAutoFocusRef.current = false
+      return
+    }
     const sidebar = scopeRef.current?.closest('[data-worktree-sidebar]')
     if (sidebar instanceof HTMLElement) {
       sidebar.focus({ preventScroll: true })
@@ -523,12 +528,16 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                     onFocusTerminal={focusTerminalTabSurface}
                     launchSource="sidebar"
                     onBeforeLaunch={() => {
+                      // Why: the newly-created terminal owns the next focus
+                      // handoff. Let focusTerminalTabSurface win instead of
+                      // sending focus back to the sidebar as the menu closes.
+                      skipNextCloseAutoFocusRef.current = true
                       // Why: the context menu can fire from a row whose
                       // workspace is not currently active. Activate first so
                       // the new tab and the focusTerminalTabSurface handoff
                       // land on the freshly-mounted pane rather than silently
                       // appending behind a different workspace.
-                      activateAndRevealWorktree(worktree.id)
+                      activateAndRevealWorktree(worktree.id, { skipInitialTerminal: true })
                     }}
                   />
                 </DropdownMenuSubContent>

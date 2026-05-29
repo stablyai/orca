@@ -138,6 +138,54 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id, { behavior: 'auto' })
   })
 
+  it('can skip the initial terminal when the caller creates its own tab', () => {
+    const worktree = makeWorktree()
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/workspace/repo',
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      activeRepoId: 'repo-1',
+      activeView: 'terminal',
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      activeFileIdByWorktree: {},
+      activeBrowserTabIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      activeTabIdByWorktree: {},
+      tabBarOrderByWorktree: {},
+      pendingStartupByTabId: {},
+      settings: {
+        agentCmdOverrides: {},
+        setupScriptLaunchMode: 'new-tab'
+      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn(),
+      revealWorktreeInSidebar: vi.fn()
+    })
+
+    const result = activateAndRevealWorktree(worktree.id, { skipInitialTerminal: true })
+    const state = useAppStore.getState()
+
+    expect(result).toEqual({ primaryTabId: null })
+    expect(state.activeWorktreeId).toBe(worktree.id)
+    expect(state.tabsByWorktree[worktree.id]).toBeUndefined()
+    expect(state.pendingStartupByTabId).toEqual({})
+  })
+
   it('asks the host runtime to activate the worktree in the paired web client', async () => {
     const worktree = makeWorktree()
     const callRuntimeEnvironment = vi.fn().mockResolvedValue({

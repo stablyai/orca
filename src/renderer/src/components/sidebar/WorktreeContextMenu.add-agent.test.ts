@@ -229,7 +229,9 @@ describe('WorktreeContextMenu Add Agent submenu', () => {
 
     const onBeforeLaunch = quickLaunch?.props?.onBeforeLaunch as (() => void) | undefined
     onBeforeLaunch?.()
-    expect(activateAndRevealWorktreeMock).toHaveBeenCalledWith(worktree.id)
+    expect(activateAndRevealWorktreeMock).toHaveBeenCalledWith(worktree.id, {
+      skipInitialTerminal: true
+    })
   })
 
   it('hides Add Agent when the context menu targets multiple workspaces', () => {

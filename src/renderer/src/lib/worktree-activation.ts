@@ -136,6 +136,8 @@ export function activateAndRevealWorktree(
     setup?: WorktreeSetupLaunch
     issueCommand?: IssueCommandLaunch
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
+    /** Used by explicit new-tab launchers that create their own surface after activation. */
+    skipInitialTerminal?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -182,13 +184,15 @@ export function activateAndRevealWorktree(
   }
 
   // 4. Ensure a focusable surface exists for externally-created worktrees
-  const primaryTabId = ensureWorktreeHasInitialTerminal(
-    useAppStore.getState(),
-    worktreeId,
-    opts?.startup ?? buildCreatedAgentReopenStartup(wt),
-    opts?.setup,
-    opts?.issueCommand
-  )
+  const primaryTabId = opts?.skipInitialTerminal
+    ? null
+    : ensureWorktreeHasInitialTerminal(
+        useAppStore.getState(),
+        worktreeId,
+        opts?.startup ?? buildCreatedAgentReopenStartup(wt),
+        opts?.setup,
+        opts?.issueCommand
+      )
 
   // 5. Clear sidebar filters that would hide the target worktree
   // Why: revealWorktreeInSidebar relies on the worktree card being rendered
