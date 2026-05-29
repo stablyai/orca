@@ -47,6 +47,7 @@ import {
 } from './markdown-preview-links'
 import {
   createMarkdownDocumentIndex,
+  getMarkdownDocLinkAnchor,
   parseMarkdownDocLinkHref,
   remarkMarkdownDocLinks,
   resolveMarkdownDocLink
@@ -94,7 +95,10 @@ type MarkdownPreviewProps = {
   showTableOfContents?: boolean
   onCloseTableOfContents?: () => void
   markdownDocuments?: MarkdownDocument[]
-  onOpenDocument?: (document: MarkdownDocument) => void | Promise<void>
+  onOpenDocument?: (
+    document: MarkdownDocument,
+    options?: { anchor?: string | null }
+  ) => void | Promise<void>
   markdownAnnotationsEnabled?: boolean
 }
 
@@ -876,7 +880,9 @@ export default function MarkdownPreview({
           const handleDocLinkClick = (event: React.MouseEvent<HTMLAnchorElement>): void => {
             event.preventDefault()
             if (resolvedDocument && onOpenDocument) {
-              void onOpenDocument(resolvedDocument)
+              void onOpenDocument(resolvedDocument, {
+                anchor: getMarkdownDocLinkAnchor(docLinkTarget)
+              })
             }
           }
 
