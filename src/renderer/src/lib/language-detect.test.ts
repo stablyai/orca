@@ -13,4 +13,9 @@ describe('detectLanguage', () => {
   it('maps .astro files to the custom astro language id', () => {
     expect(detectLanguage('src/routes/index.astro')).toBe('astro')
   })
+
+  it('maps Windows Batch files to the custom batch language id', () => {
+    expect(detectLanguage('scripts/setup.bat')).toBe('batch')
+    expect(detectLanguage('C:\\repo\\scripts\\bootstrap.CMD')).toBe('batch')
+  })
 })

@@ -8,6 +8,7 @@ import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
+import { registerBatchLanguage } from './monaco-languages/register-batch'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
@@ -72,6 +73,7 @@ monacoTS.javascriptDefaults.setCompilerOptions({
 registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
+registerBatchLanguage(monaco)
 installMonacoDiffEditorDisposalGuard(monaco)
 
 // Configure Monaco to use the locally bundled editor instead of CDN
