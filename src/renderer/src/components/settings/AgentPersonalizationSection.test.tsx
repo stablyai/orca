@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/types'
+import { PERSONALIZATION_PROMPT_MAX_CHARS } from '../../../../shared/agent-personalization'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { AgentPersonalizationSection } from './AgentPersonalizationSection'
 
@@ -74,6 +75,7 @@ describe('AgentPersonalizationSection', () => {
         claude: 'Keep changes scoped.'
       }
     })
+    expect(textarea.props.maxLength).toBe(PERSONALIZATION_PROMPT_MAX_CHARS)
   })
 
   it('removes a per-agent prompt override when the edited value trims to blank', () => {
@@ -92,5 +94,28 @@ describe('AgentPersonalizationSection', () => {
     expect(updateSettings).toHaveBeenCalledWith({
       agentPersonalizationPrompts: {}
     })
+  })
+
+  it('limits shared prompt edits before persisting them', () => {
+    const updateSettings = vi.fn()
+    const element = AgentPersonalizationSection({
+      settings: buildSettings(),
+      updateSettings,
+      detectedAgents
+    })
+
+    const textarea = findTextareaByPlaceholder(
+      element,
+      'Example: Keep changes small, add tests for behavior changes, and call out security-sensitive assumptions.'
+    )
+    const value = 'a'.repeat(PERSONALIZATION_PROMPT_MAX_CHARS + 5)
+    ;(textarea.props.onChange as (event: { target: { value: string } }) => void)({
+      target: { value }
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      personalizationPrompt: 'a'.repeat(PERSONALIZATION_PROMPT_MAX_CHARS)
+    })
+    expect(textarea.props['aria-describedby']).toContain('agent-personalization-shared-count')
   })
 })

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: startup-plan cases cover every shipped prompt injection mode in one table-adjacent suite so agent contract drift is reviewed together. */
 import { describe, expect, it } from 'vitest'
 import {
   buildAgentDraftLaunchPlan,

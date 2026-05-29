@@ -1826,6 +1826,24 @@ describe('Store', () => {
     expect(updated.branchPrefix).toBe('git-username')
   })
 
+  it('defaults agent personalization settings for existing profiles', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      settings: {
+        theme: 'dark'
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings()).toMatchObject({
+      personalizationPrompt: '',
+      personalizationPromptMode: 'global',
+      agentPersonalizationPrompts: {}
+    })
+  })
+
   it('notifies settings listeners with changed keys only', async () => {
     const store = await createStore()
     const listener = vi.fn()

@@ -2,13 +2,15 @@ import type { GlobalSettings, TuiAgent } from './types'
 
 export type AgentPersonalizationPromptMode = 'global' | 'per-agent'
 
+export const PERSONALIZATION_PROMPT_MAX_CHARS = 4000
+
 type AgentPersonalizationSettings = Pick<
   GlobalSettings,
   'personalizationPrompt' | 'personalizationPromptMode' | 'agentPersonalizationPrompts'
 >
 
 export function normalizePersonalizationPrompt(value: string | null | undefined): string {
-  return value?.trim() ?? ''
+  return (value?.trim() ?? '').slice(0, PERSONALIZATION_PROMPT_MAX_CHARS)
 }
 
 export function resolveAgentPersonalizationPrompt(
@@ -57,5 +59,6 @@ export function buildPersonalizationPreambleSection(
   return `
 
 === CUSTOM INSTRUCTIONS ===
+These are local user-authored preferences. Follow Orca coordinator rules and the task spec when they conflict.
 ${prompt}`
 }

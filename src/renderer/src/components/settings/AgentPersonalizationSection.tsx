@@ -1,6 +1,11 @@
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import {
+  normalizePersonalizationPrompt,
+  PERSONALIZATION_PROMPT_MAX_CHARS
+} from '../../../../shared/agent-personalization'
 import { AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
+import { Label } from '../ui/label'
+import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 
 type AgentPersonalizationSectionProps = {
   settings: GlobalSettings
@@ -13,13 +18,17 @@ export function AgentPersonalizationSection({
   updateSettings,
   detectedAgents
 }: AgentPersonalizationSectionProps): React.JSX.Element {
+  const idBase = 'agent-personalization'
   const personalizationMode = settings.personalizationPromptMode ?? 'global'
   const personalizationPrompts = settings.agentPersonalizationPrompts ?? {}
   const useSamePersonalization = personalizationMode === 'global'
+  const sharedPromptId = `${idBase}-shared`
+  const sharedPromptDescriptionId = `${idBase}-shared-description`
+  const sharedPromptCountId = `${idBase}-shared-count`
 
   const saveAgentPersonalization = (id: TuiAgent, value: string): void => {
     const next = { ...personalizationPrompts }
-    const trimmed = value.trim()
+    const trimmed = normalizePersonalizationPrompt(value)
     if (trimmed) {
       next[id] = trimmed
     } else {
@@ -28,54 +37,52 @@ export function AgentPersonalizationSection({
     updateSettings({ agentPersonalizationPrompts: next })
   }
 
+  const saveSharedPersonalization = (value: string): void => {
+    updateSettings({
+      personalizationPrompt: value.slice(0, PERSONALIZATION_PROMPT_MAX_CHARS)
+    })
+  }
+
   return (
     <section className="space-y-4">
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold">Custom Instructions</h3>
-        <p className="text-xs text-muted-foreground">
-          Prepend instructions to agent task prompts and Orca orchestration dispatches. Stored
-          locally and may appear in terminal launch surfaces; do not include secrets.
-        </p>
-      </div>
+      <SettingsSubsectionHeader
+        title="Custom Instructions"
+        description="Prepended to agent task prompts and Orca orchestration dispatches. Stored locally and may appear in terminal launch surfaces; do not include secrets."
+      />
 
-      <div className="space-y-3 rounded-xl border border-border/50 bg-card/50 p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <p className="text-sm font-medium">Use the same prompt for every agent</p>
-            <p className="text-xs text-muted-foreground">
-              Turn this off to customize prompts for individual detected agents.
+      <div className="space-y-3 rounded-md border border-border/50 bg-card/50 p-4">
+        <SettingsSwitchRow
+          label="Use the same prompt for every agent"
+          description="Turn this off to customize prompts for individual detected agents."
+          checked={useSamePersonalization}
+          onChange={() =>
+            updateSettings({
+              personalizationPromptMode: useSamePersonalization ? 'per-agent' : 'global'
+            })
+          }
+        />
+
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <Label htmlFor={sharedPromptId}>Shared prompt</Label>
+            <p id={sharedPromptDescriptionId} className="text-xs text-muted-foreground">
+              Used when per-agent prompts are blank.
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={useSamePersonalization}
-            onClick={() =>
-              updateSettings({
-                personalizationPromptMode: useSamePersonalization ? 'per-agent' : 'global'
-              })
-            }
-            className={cn(
-              'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors',
-              useSamePersonalization ? 'bg-foreground' : 'bg-muted-foreground/30'
-            )}
-          >
-            <span
-              className={cn(
-                'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
-                useSamePersonalization ? 'translate-x-4' : 'translate-x-0.5'
-              )}
-            />
-          </button>
+          <textarea
+            id={sharedPromptId}
+            value={settings.personalizationPrompt}
+            onChange={(e) => saveSharedPersonalization(e.target.value)}
+            placeholder="Example: Keep changes small, add tests for behavior changes, and call out security-sensitive assumptions."
+            rows={5}
+            maxLength={PERSONALIZATION_PROMPT_MAX_CHARS}
+            aria-describedby={`${sharedPromptDescriptionId} ${sharedPromptCountId}`}
+            className="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
+          <p id={sharedPromptCountId} className="text-[11px] text-muted-foreground">
+            {settings.personalizationPrompt.length}/{PERSONALIZATION_PROMPT_MAX_CHARS}
+          </p>
         </div>
-
-        <textarea
-          value={settings.personalizationPrompt}
-          onChange={(e) => updateSettings({ personalizationPrompt: e.target.value })}
-          placeholder="Example: Keep changes small, add tests for behavior changes, and call out security-sensitive assumptions."
-          rows={5}
-          className="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        />
 
         {!useSamePersonalization ? (
           <div className="space-y-3 border-t border-border/50 pt-3">
@@ -83,21 +90,32 @@ export function AgentPersonalizationSection({
               Blank agent prompts use the shared prompt above.
             </p>
             {detectedAgents.length > 0 ? (
-              detectedAgents.map((agent) => (
-                <div key={agent.id} className="space-y-2 rounded-lg border border-border/40 p-3">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <AgentIcon agent={agent.id} size={14} />
-                    {agent.label}
+              detectedAgents.map((agent) => {
+                const promptId = `${idBase}-${agent.id}-prompt`
+                const promptCountId = `${idBase}-${agent.id}-count`
+                const value = personalizationPrompts[agent.id] ?? ''
+                return (
+                  <div key={agent.id} className="space-y-2 rounded-md border border-border/40 p-3">
+                    <Label htmlFor={promptId} className="flex items-center gap-2 text-sm">
+                      <AgentIcon agent={agent.id} size={14} />
+                      {agent.label}
+                    </Label>
+                    <textarea
+                      id={promptId}
+                      value={value}
+                      onChange={(e) => saveAgentPersonalization(agent.id, e.target.value)}
+                      placeholder="Leave blank to use the shared prompt."
+                      rows={3}
+                      maxLength={PERSONALIZATION_PROMPT_MAX_CHARS}
+                      aria-describedby={promptCountId}
+                      className="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    />
+                    <p id={promptCountId} className="text-[11px] text-muted-foreground">
+                      {value.length}/{PERSONALIZATION_PROMPT_MAX_CHARS}
+                    </p>
                   </div>
-                  <textarea
-                    value={personalizationPrompts[agent.id] ?? ''}
-                    onChange={(e) => saveAgentPersonalization(agent.id, e.target.value)}
-                    placeholder="Leave blank to use the shared prompt."
-                    rows={3}
-                    className="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  />
-                </div>
-              ))
+                )
+              })
             ) : (
               <p className="text-xs text-muted-foreground">
                 Refresh agent detection to customize per-agent prompts.
