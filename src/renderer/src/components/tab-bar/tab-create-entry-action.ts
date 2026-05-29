@@ -14,14 +14,21 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 import type { RuntimeFileListState } from '../quick-open-file-list'
-import { classifyTabEntryQuery } from './tab-create-entry-classifier'
+import {
+  classifyTabEntryQuery,
+  type TabEntryActionClassification
+} from './tab-create-entry-classifier'
 export {
   classifyTabEntryQuery,
+  getTabEntryOptions,
   validateNewTabEntryRelativePath,
-  type TabEntryClassification
+  type TabEntryActionClassification,
+  type TabEntryClassification,
+  type TabEntryOption
 } from './tab-create-entry-classifier'
 
 export type TabCreateEntryArgs = {
+  classification?: TabEntryActionClassification
   query: string
   worktreeId: string
   groupId: string
@@ -56,6 +63,7 @@ type OpenTabEntryWithOperationsArgs = {
   worktreePath: string
   runtimeContext: RuntimeFileOperationArgs
   activeRuntimeEnvironmentId: string | null
+  classification?: TabEntryActionClassification
   operations: TabEntryOperations
 }
 
@@ -123,6 +131,7 @@ async function openExistingFile(args: {
 
 export async function openTabEntryWithOperations({
   activeRuntimeEnvironmentId,
+  classification: selectedClassification,
   fileList,
   groupId,
   operations,
@@ -131,7 +140,7 @@ export async function openTabEntryWithOperations({
   worktreeId,
   worktreePath
 }: OpenTabEntryWithOperationsArgs): Promise<void> {
-  const classification = classifyTabEntryQuery(query, fileList)
+  const classification = selectedClassification ?? classifyTabEntryQuery(query, fileList)
   if (classification.kind === 'empty' || classification.kind === 'blocked') {
     throw new Error(classification.message)
   }
@@ -214,6 +223,7 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
     worktreePath: worktree.path,
     runtimeContext,
     activeRuntimeEnvironmentId: state.settings?.activeRuntimeEnvironmentId?.trim() ?? null,
+    classification: args.classification,
     operations: {
       createBrowserTab: state.createBrowserTab,
       createRuntimePath,

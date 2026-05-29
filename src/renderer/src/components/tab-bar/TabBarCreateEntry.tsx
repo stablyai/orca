@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { FilePlus, FileText, Globe, Loader2 } from 'lucide-react'
+import { FilePlus, FileText, Globe, Loader2, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import { useRuntimeFileListForWorktree } from '../quick-open-file-list'
-import { classifyTabEntryQuery, type TabCreateEntryArgs } from './tab-create-entry-action'
+import {
+  getTabEntryOptions,
+  type TabCreateEntryArgs,
+  type TabEntryActionClassification,
+  type TabEntryOption
+} from './tab-create-entry-action'
 
 type TabBarCreateEntryProps = {
   groupId: string
@@ -22,6 +28,7 @@ export default function TabBarCreateEntry({
   const [query, setQuery] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileList = useRuntimeFileListForWorktree({ enabled: menuOpen, worktreeId })
 
@@ -30,58 +37,76 @@ export default function TabBarCreateEntry({
       setQuery('')
       setPending(false)
       setError(null)
+      setSelectedIndex(0)
       return
     }
     requestAnimationFrame(() => inputRef.current?.focus())
   }, [menuOpen])
 
-  const classification = useMemo(() => classifyTabEntryQuery(query, fileList), [fileList, query])
+  const options = useMemo(() => getTabEntryOptions(query, fileList), [fileList, query])
 
-  const preview = useMemo(() => {
-    if (!query.trim()) {
-      return { icon: FilePlus, text: 'URL or file path' }
-    }
-    if (classification.kind === 'explicit-url' || classification.kind === 'host-url') {
-      return { icon: Globe, text: classification.url }
-    }
-    if (classification.kind === 'existing-file') {
-      return { icon: FileText, text: `Open ${classification.relativePath}` }
-    }
-    if (classification.kind === 'new-file') {
-      return { icon: FilePlus, text: `Create ${classification.relativePath}` }
-    }
-    return { icon: fileList.loading ? Loader2 : FilePlus, text: classification.message }
-  }, [classification, fileList.loading, query])
+  useEffect(() => {
+    setSelectedIndex(0)
+  }, [query])
 
-  const PreviewIcon = preview.icon
   const disabled = !onOpenEntry
+  const activeOptions = options.filter(isActiveEntryOption)
+  const activeSelectedIndex = Math.min(selectedIndex, Math.max(activeOptions.length - 1, 0))
+  const selectedActiveOption = activeOptions[activeSelectedIndex]
+  const statusOption = options.find(
+    (option) => option.classification.kind === 'empty' || option.classification.kind === 'blocked'
+  )
+  const statusMessage =
+    statusOption?.classification.kind === 'empty' || statusOption?.classification.kind === 'blocked'
+      ? statusOption.classification.message
+      : 'URL, file, or new file'
+
+  const submitOption = (classification?: TabEntryActionClassification) => {
+    if (disabled || pending) {
+      return
+    }
+    const selectedClassification = classification ?? selectedActiveOption?.classification ?? null
+    if (!selectedClassification) {
+      setError(statusMessage)
+      return
+    }
+    setPending(true)
+    setError(null)
+    void onOpenEntry({
+      query,
+      worktreeId,
+      groupId,
+      fileList,
+      classification: selectedClassification
+    })
+      .then(() => {
+        onDidOpenEntry?.()
+      })
+      .catch((caught) => {
+        setError(caught instanceof Error ? caught.message : String(caught))
+      })
+      .finally(() => {
+        setPending(false)
+      })
+  }
 
   return (
     <form
       className="px-1 pb-1"
       onSubmit={(event) => {
         event.preventDefault()
-        if (disabled || pending) {
-          return
-        }
-        if (classification.kind === 'empty' || classification.kind === 'blocked') {
-          setError(classification.message)
-          return
-        }
-        setPending(true)
-        setError(null)
-        void onOpenEntry({ query, worktreeId, groupId, fileList })
-          .then(() => {
-            onDidOpenEntry?.()
-          })
-          .catch((caught) => {
-            setError(caught instanceof Error ? caught.message : String(caught))
-          })
-          .finally(() => {
-            setPending(false)
-          })
+        submitOption()
       }}
       onKeyDown={(event) => {
+        if (activeOptions.length > 1 && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+          event.preventDefault()
+          event.stopPropagation()
+          setSelectedIndex((current) => {
+            const delta = event.key === 'ArrowDown' ? 1 : -1
+            return (current + delta + activeOptions.length) % activeOptions.length
+          })
+          return
+        }
         if (event.key !== 'Escape') {
           event.stopPropagation()
         }
@@ -96,18 +121,97 @@ export default function TabBarCreateEntry({
           setError(null)
         }}
         disabled={disabled}
-        aria-label="Open URL or file"
+        aria-label="Open URL, file, or new file"
         aria-invalid={error ? true : undefined}
-        placeholder="URL or file path"
+        placeholder="URL, file, or new file"
         className="h-8 rounded-[7px] px-2 text-[12px]"
       />
-      <div className="mt-1 flex min-h-5 items-center gap-1.5 px-1 text-[11px] leading-5 text-muted-foreground">
-        <PreviewIcon
-          className={`size-3.5 shrink-0 ${preview.icon === Loader2 ? 'animate-spin' : ''}`}
-          aria-hidden="true"
-        />
-        <span className="truncate">{error ?? preview.text}</span>
+      <div className="mt-1 space-y-0.5">
+        {error ? (
+          <EntryStatusRow message={error} />
+        ) : activeOptions.length > 0 ? (
+          activeOptions.map((option, index) => (
+            <EntryActionRow
+              key={option.id}
+              classification={option.classification}
+              selected={index === activeSelectedIndex}
+              onClick={() => submitOption(option.classification)}
+            />
+          ))
+        ) : (
+          <EntryStatusRow loading={fileList.loading} message={statusMessage} />
+        )}
       </div>
     </form>
   )
+}
+
+type ActiveEntryOption = TabEntryOption & {
+  classification: TabEntryActionClassification
+}
+
+function isActiveEntryOption(option: TabEntryOption): option is ActiveEntryOption {
+  return option.classification.kind !== 'empty' && option.classification.kind !== 'blocked'
+}
+
+function EntryStatusRow({
+  loading = false,
+  message
+}: {
+  loading?: boolean
+  message: string
+}): React.JSX.Element {
+  const Icon = loading ? Loader2 : Search
+  return (
+    <div className="flex min-h-6 items-center gap-1.5 rounded-[7px] px-1 text-[11px] leading-5 text-muted-foreground">
+      <Icon className={cn('size-3.5 shrink-0', loading && 'animate-spin')} aria-hidden="true" />
+      <span className="truncate">{message}</span>
+    </div>
+  )
+}
+
+function EntryActionRow({
+  classification,
+  onClick,
+  selected
+}: {
+  classification: TabEntryActionClassification
+  onClick: () => void
+  selected: boolean
+}): React.JSX.Element {
+  const { detail, icon: Icon, label } = getActionPresentation(classification)
+
+  return (
+    <button
+      type="button"
+      className={cn(
+        'flex h-6 w-full items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none',
+        selected
+          ? 'bg-black/8 text-accent-foreground dark:bg-white/14'
+          : 'text-muted-foreground hover:bg-black/8 hover:text-accent-foreground dark:hover:bg-white/14'
+      )}
+      onClick={onClick}
+    >
+      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="shrink-0 font-medium">{label}</span>
+      <span className="text-muted-foreground/70" aria-hidden="true">
+        ·
+      </span>
+      <span className="min-w-0 truncate">{detail}</span>
+    </button>
+  )
+}
+
+function getActionPresentation(classification: TabEntryActionClassification): {
+  detail: string
+  icon: typeof FilePlus
+  label: string
+} {
+  if (classification.kind === 'explicit-url' || classification.kind === 'host-url') {
+    return { detail: classification.url, icon: Globe, label: 'Open URL' }
+  }
+  if (classification.kind === 'existing-file') {
+    return { detail: classification.relativePath, icon: FileText, label: 'Open file' }
+  }
+  return { detail: classification.relativePath, icon: FilePlus, label: 'Create file' }
 }

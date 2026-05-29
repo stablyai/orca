@@ -23,36 +23,93 @@ const HOST_FILE_EXTENSIONS = new Set([
 export type TabEntryClassification =
   | { kind: 'empty'; message: string }
   | { kind: 'explicit-url'; url: string }
-  | { kind: 'existing-file'; relativePath: string }
+  | {
+      kind: 'existing-file'
+      matchKind: 'exact-path' | 'exact-basename' | 'fuzzy'
+      relativePath: string
+    }
   | { kind: 'host-url'; url: string }
   | { kind: 'new-file'; relativePath: string }
   | { kind: 'blocked'; message: string }
+
+export type TabEntryActionClassification = Exclude<
+  TabEntryClassification,
+  { kind: 'blocked' | 'empty' }
+>
+
+export type TabEntryOption = {
+  classification: TabEntryClassification
+  id: string
+}
 
 function normalizeFileMatchQuery(query: string): string {
   return query.trim().replace(/\\/g, '/')
 }
 
-function findExistingFileMatch(
-  query: string,
-  indexedFiles: readonly QuickOpenIndexedFile[]
-): string | null {
-  const normalizedQuery = normalizeFileMatchQuery(query)
-  if (!normalizedQuery) {
-    return null
-  }
-  const lowerQuery = normalizedQuery.toLowerCase()
-  const exactPath = indexedFiles.find((file) => file.lowerPath === lowerQuery)
-  if (exactPath) {
-    return exactPath.path
-  }
-  const exactBasename = indexedFiles.find((file) => file.lowerFilename === lowerQuery)
-  if (exactBasename) {
-    return exactBasename.path
-  }
-  return rankQuickOpenFiles(normalizedQuery, indexedFiles, 1)[0]?.path ?? null
+function hasPathSeparator(query: string): boolean {
+  return /[\\/]/.test(query)
 }
 
-function classifyExplicitUrl(query: string): TabEntryClassification | null {
+function hasFilenameExtension(query: string): boolean {
+  return /(?:^|[\\/])[^\\/]+\.[^\\/]+$/.test(query.trim())
+}
+
+function isLikelyNewFileIntent(query: string): boolean {
+  return hasPathSeparator(query) || hasFilenameExtension(query)
+}
+
+function dedupeMatches(matches: ExistingFileMatch[]): ExistingFileMatch[] {
+  const seen = new Set<string>()
+  return matches.filter((match) => {
+    if (seen.has(match.relativePath)) {
+      return false
+    }
+    seen.add(match.relativePath)
+    return true
+  })
+}
+
+type ExistingFileMatch = Extract<TabEntryActionClassification, { kind: 'existing-file' }>
+
+function findExistingFileMatches(
+  query: string,
+  indexedFiles: readonly QuickOpenIndexedFile[],
+  limit: number
+): ExistingFileMatch[] {
+  const normalizedQuery = normalizeFileMatchQuery(query)
+  if (!normalizedQuery || limit <= 0) {
+    return []
+  }
+  const lowerQuery = normalizedQuery.toLowerCase()
+  const exactPathMatches = indexedFiles
+    .filter((file) => file.lowerPath === lowerQuery)
+    .map((file) => ({
+      kind: 'existing-file' as const,
+      matchKind: 'exact-path' as const,
+      relativePath: file.path
+    }))
+  const exactBasenameMatches = indexedFiles
+    .filter((file) => file.lowerFilename === lowerQuery)
+    .map((file) => ({
+      kind: 'existing-file' as const,
+      matchKind: 'exact-basename' as const,
+      relativePath: file.path
+    }))
+  const fuzzyMatches = rankQuickOpenFiles(normalizedQuery, indexedFiles, limit).map((file) => ({
+    kind: 'existing-file' as const,
+    matchKind: 'fuzzy' as const,
+    relativePath: file.path
+  }))
+
+  return dedupeMatches([...exactPathMatches, ...exactBasenameMatches, ...fuzzyMatches]).slice(
+    0,
+    limit
+  )
+}
+
+function classifyExplicitUrl(
+  query: string
+): Extract<TabEntryClassification, { kind: 'blocked' | 'explicit-url' }> | null {
   let url: URL
   try {
     url = new URL(query)
@@ -65,7 +122,9 @@ function classifyExplicitUrl(query: string): TabEntryClassification | null {
   return { kind: 'explicit-url', url: url.href }
 }
 
-function classifyHostLikeUrl(query: string): TabEntryClassification | null {
+function classifyHostLikeUrl(
+  query: string
+): Extract<TabEntryActionClassification, { kind: 'host-url' }> | null {
   if (/[\\/]/.test(query) || /\s/.test(query)) {
     return null
   }
@@ -133,39 +192,101 @@ export function classifyTabEntryQuery(
   query: string,
   fileList: RuntimeFileListState
 ): TabEntryClassification {
+  return (
+    getTabEntryOptions(query, fileList, 1)[0]?.classification ?? {
+      kind: 'empty',
+      message: 'Enter a URL or file path.'
+    }
+  )
+}
+
+export function getTabEntryOptions(
+  query: string,
+  fileList: RuntimeFileListState,
+  limit = 4
+): TabEntryOption[] {
   const trimmed = query.trim()
   if (!trimmed) {
-    return { kind: 'empty', message: 'Enter a URL or file path.' }
+    return [{ id: 'empty', classification: { kind: 'empty', message: 'URL, file, or new file' } }]
   }
 
   const explicitUrl = classifyExplicitUrl(trimmed)
   if (explicitUrl) {
-    return explicitUrl
+    return [
+      {
+        id: explicitUrl.kind === 'blocked' ? 'invalid-url' : `url:${explicitUrl.url}`,
+        classification: explicitUrl
+      }
+    ]
   }
 
   if (fileList.loading) {
-    return { kind: 'blocked', message: 'Loading files...' }
+    return [{ id: 'loading', classification: { kind: 'blocked', message: 'Loading files...' } }]
   }
   if (fileList.loadError) {
-    return { kind: 'blocked', message: fileList.loadError }
+    return [{ id: 'load-error', classification: { kind: 'blocked', message: fileList.loadError } }]
   }
 
-  const existingFile = findExistingFileMatch(trimmed, prepareQuickOpenFiles(fileList.files))
-  if (existingFile) {
-    return { kind: 'existing-file', relativePath: existingFile }
+  const existingFiles = findExistingFileMatches(
+    trimmed,
+    prepareQuickOpenFiles(fileList.files),
+    Math.max(limit, 1)
+  )
+  const exactExistingFiles = existingFiles.filter((file) => file.matchKind !== 'fuzzy')
+  const fuzzyExistingFiles = existingFiles.filter((file) => file.matchKind === 'fuzzy')
+
+  let newFile: TabEntryActionClassification | null = null
+  try {
+    newFile = { kind: 'new-file', relativePath: validateNewTabEntryRelativePath(trimmed) }
+  } catch {
+    newFile = null
   }
 
   const hostUrl = classifyHostLikeUrl(trimmed)
-  if (hostUrl) {
-    return hostUrl
+
+  const options: TabEntryActionClassification[] = []
+  if (exactExistingFiles.length > 0) {
+    options.push(...exactExistingFiles)
+    if (hostUrl) {
+      options.push(hostUrl)
+    }
+  } else if (hostUrl) {
+    options.push(hostUrl)
+    options.push(...fuzzyExistingFiles)
+  } else if (newFile && isLikelyNewFileIntent(trimmed)) {
+    options.push(newFile, ...fuzzyExistingFiles)
+  } else {
+    options.push(...fuzzyExistingFiles)
+    if (newFile) {
+      options.push(newFile)
+    }
+  }
+
+  if (options.length > 0) {
+    return options.slice(0, limit).map((classification) => ({
+      id:
+        classification.kind === 'existing-file'
+          ? `${classification.kind}:${classification.relativePath}`
+          : classification.kind === 'new-file'
+            ? `${classification.kind}:${classification.relativePath}`
+            : `${classification.kind}:${classification.url}`,
+      classification
+    }))
   }
 
   try {
-    return { kind: 'new-file', relativePath: validateNewTabEntryRelativePath(trimmed) }
+    validateNewTabEntryRelativePath(trimmed)
   } catch (error) {
-    return {
-      kind: 'blocked',
-      message: error instanceof Error ? error.message : String(error)
-    }
+    return [
+      {
+        id: 'invalid-path',
+        classification: {
+          kind: 'blocked',
+          message: error instanceof Error ? error.message : String(error)
+        }
+      }
+    ]
   }
+
+  return [{ id: 'blocked', classification: { kind: 'blocked', message: 'No action available.' } }]
 }

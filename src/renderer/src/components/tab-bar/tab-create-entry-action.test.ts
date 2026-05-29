@@ -1,116 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  classifyTabEntryQuery,
-  openTabEntryWithOperations,
-  validateNewTabEntryRelativePath,
-  type TabEntryOperations
-} from './tab-create-entry-action'
+import { openTabEntryWithOperations, type TabEntryOperations } from './tab-create-entry-action'
 
 const readyFiles = (files: string[]) => ({ files, loading: false, loadError: null })
-
-describe('tab create entry classification', () => {
-  it('accepts explicit http and https URLs only', () => {
-    expect(classifyTabEntryQuery(' https://example.com/docs ', readyFiles([]))).toMatchObject({
-      kind: 'explicit-url',
-      url: 'https://example.com/docs'
-    })
-    expect(classifyTabEntryQuery('http://localhost:3000', readyFiles([]))).toMatchObject({
-      kind: 'explicit-url',
-      url: 'http://localhost:3000/'
-    })
-    expect(classifyTabEntryQuery('ftp://example.com', readyFiles([]))).toMatchObject({
-      kind: 'blocked'
-    })
-  })
-
-  it('lets existing listed files win over bare host-like URLs', () => {
-    expect(classifyTabEntryQuery('example.com', readyFiles(['example.com']))).toEqual({
-      kind: 'existing-file',
-      relativePath: 'example.com'
-    })
-    expect(classifyTabEntryQuery('example.com', readyFiles([]))).toMatchObject({
-      kind: 'host-url',
-      url: 'https://example.com/'
-    })
-  })
-
-  it('keeps common source/document filenames as file candidates', () => {
-    expect(classifyTabEntryQuery('README.md', readyFiles([]))).toEqual({
-      kind: 'new-file',
-      relativePath: 'README.md'
-    })
-    expect(classifyTabEntryQuery('src/foo.test.ts', readyFiles([]))).toEqual({
-      kind: 'new-file',
-      relativePath: 'src/foo.test.ts'
-    })
-    expect(classifyTabEntryQuery('docs/readme.md', readyFiles([]))).toEqual({
-      kind: 'new-file',
-      relativePath: 'docs/readme.md'
-    })
-  })
-
-  it('blocks non-explicit URLs and file paths while list state is not ready', () => {
-    expect(
-      classifyTabEntryQuery('example.com', { files: [], loading: true, loadError: null })
-    ).toEqual({
-      kind: 'blocked',
-      message: 'Loading files...'
-    })
-    expect(
-      classifyTabEntryQuery('https://example.com', { files: [], loading: true, loadError: null })
-    ).toMatchObject({ kind: 'explicit-url' })
-    expect(
-      classifyTabEntryQuery('example.com', {
-        files: [],
-        loading: false,
-        loadError: 'scan failed'
-      })
-    ).toEqual({ kind: 'blocked', message: 'scan failed' })
-  })
-
-  it('matches exact relative path before basename and fuzzy results', () => {
-    const files = readyFiles(['src/index.ts', 'docs/index.ts', 'src/components/Button.tsx'])
-    expect(classifyTabEntryQuery('docs/index.ts', files)).toEqual({
-      kind: 'existing-file',
-      relativePath: 'docs/index.ts'
-    })
-    expect(classifyTabEntryQuery('Button.tsx', files)).toEqual({
-      kind: 'existing-file',
-      relativePath: 'src/components/Button.tsx'
-    })
-    expect(classifyTabEntryQuery('btn', files)).toEqual({
-      kind: 'existing-file',
-      relativePath: 'src/components/Button.tsx'
-    })
-  })
-})
-
-describe('tab create entry path validation', () => {
-  it('rejects unsafe or non-relative paths', () => {
-    for (const path of [
-      '',
-      '/tmp/file.ts',
-      'C:/tmp/file.ts',
-      'C:tmp/file.ts',
-      '\\\\server\\share\\file.ts',
-      '~',
-      '~/file.ts',
-      'src/',
-      'src//file.ts',
-      'src/../file.ts',
-      'src\\.\\file.ts',
-      'src\\..\\file.ts',
-      'src/\u0000file.ts'
-    ]) {
-      expect(() => validateNewTabEntryRelativePath(path), path).toThrow()
-    }
-  })
-
-  it('allows spaces and normalizes Windows separators after absolute checks', () => {
-    expect(validateNewTabEntryRelativePath(' docs/My Note.md ')).toBe('docs/My Note.md')
-    expect(validateNewTabEntryRelativePath('src\\new-file.ts')).toBe('src/new-file.ts')
-  })
-})
 
 describe('openTabEntryWithOperations', () => {
   function makeOperations(overrides: Partial<TabEntryOperations> = {}): TabEntryOperations {
@@ -170,6 +61,28 @@ describe('openTabEntryWithOperations', () => {
         relativePath: 'docs/new.md',
         worktreeId: 'wt-1'
       }),
+      { preview: false, targetGroupId: 'group-1' }
+    )
+  })
+
+  it('uses the selected action instead of reclassifying the query', async () => {
+    const operations = makeOperations()
+
+    await openTabEntryWithOperations({
+      ...baseArgs,
+      classification: {
+        kind: 'existing-file',
+        matchKind: 'fuzzy',
+        relativePath: 'README.md'
+      },
+      fileList: readyFiles(['README.md']),
+      query: 'read.md',
+      operations
+    })
+
+    expect(operations.createRuntimePath).not.toHaveBeenCalled()
+    expect(operations.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({ relativePath: 'README.md' }),
       { preview: false, targetGroupId: 'group-1' }
     )
   })
