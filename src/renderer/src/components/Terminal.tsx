@@ -85,6 +85,7 @@ import {
 } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -738,6 +739,10 @@ function Terminal(): React.JSX.Element | null {
     openNewBrowserTabInActiveWorkspace
   ])
 
+  const handleOpenEntry = useCallback(async (args: TabCreateEntryArgs) => {
+    await openTabBarEntry(args)
+  }, [])
+
   const handleDuplicateBrowserTab = useCallback(
     (browserTabId: string) => {
       if (!activeWorktreeId) {
@@ -1140,7 +1145,7 @@ function Terminal(): React.JSX.Element | null {
       }
 
       // Cmd/Ctrl+Shift+T — reopen closed browser tab when browser is active,
-      // otherwise reopen the most recently closed editor tab (VS Code–style).
+      // otherwise reopen the most recently closed editor tab.
       if (!e.repeat && matchShortcut('tab.reopenClosed')) {
         e.preventDefault()
         notifyTerminalCapture('tab.reopenClosed')
@@ -1232,7 +1237,7 @@ function Terminal(): React.JSX.Element | null {
       // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs (scoped to the
       // active tab type). Cmd/Ctrl+Alt+] and Cmd/Ctrl+Alt+[ cycles across
       // every tab type as an escape hatch from the type-scoped default, and
-      // mirrors Safari/Chrome's tab-switch chord on macOS.
+      // matches the platform tab-switch chord on macOS.
       // Why: use e.code instead of e.key because on macOS, Shift+[ reports '{'
       // as the key value (the shifted character), not '['. Option+[ also
       // composes to dead-key / punctuation on many layouts, so matching on
@@ -1448,7 +1453,7 @@ function Terminal(): React.JSX.Element | null {
       <EditorAutosaveController />
 
       {/* Why: once split groups are enabled, each group owns its own tab strip
-          inline like VS Code. The old titlebar portal stays only as a fallback
+          inline. The old titlebar portal stays only as a fallback
           before the root-group layout has been established. */}
       {activeWorktreeId &&
         !effectiveActiveLayout &&
@@ -1465,6 +1470,7 @@ function Terminal(): React.JSX.Element | null {
             onNewTerminalTab={() => handleNewTab()}
             onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
+            onOpenEntry={handleOpenEntry}
             onNewFileTab={handleNewFile}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}

@@ -23,6 +23,7 @@ import { reconcileTabOrder } from './reconcile-order'
 import type { HoveredTabInsertion, TabDragItemData } from '../tab-group/useTabDragSplit'
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
+import TabBarCreateEntry from './TabBarCreateEntry'
 import { ShellIcon } from './shell-icons'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -36,6 +37,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import type { TabCreateEntryArgs } from './tab-create-entry-action'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
@@ -57,6 +59,7 @@ type TabBarProps = {
   /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
+  onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   terminalOnly?: boolean
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
@@ -122,6 +125,7 @@ function TabBarInner({
   onNewTerminalTab,
   onNewTerminalWithShell,
   onNewBrowserTab,
+  onOpenEntry,
   terminalOnly = false,
   showAgentLaunchItems = true,
   onNewFileTab,
@@ -544,6 +548,18 @@ function TabBarInner({
             runPendingNewTabMenuFocusAfterClose()
           }}
         >
+          {!terminalOnly && onOpenEntry ? (
+            <>
+              <TabBarCreateEntry
+                worktreeId={worktreeId}
+                groupId={resolvedGroupId}
+                menuOpen={newTabMenuOpen}
+                onOpenEntry={onOpenEntry}
+                onDidOpenEntry={() => setNewTabMenuOpen(false)}
+              />
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           {isWindows && onNewTerminalWithShell ? (
             // Why: previously the Windows path nested shell choices under a
             // Radix submenu. In practice the submenu frequently failed to open
