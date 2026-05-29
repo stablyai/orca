@@ -1210,6 +1210,31 @@ function App(): React.JSX.Element {
         return
       }
 
+      // Why: rename the active terminal tab. Cmd+R is free in the app/terminal
+      // focus zone because the browser pane owns its own Cmd+R reload and that
+      // focus never reaches this renderer-window handler. Only terminal tabs
+      // have an inline title editor, so other active tab types fall through.
+      if (matchShortcut('tab.rename')) {
+        const store = useAppStore.getState()
+        if (store.activeTabType === 'terminal' && store.activeTabId) {
+          e.preventDefault()
+          notifyTerminalCapture('tab.rename')
+          store.setRenamingTabId(store.activeTabId)
+          return
+        }
+      }
+
+      // Why: open the active worktree's inline title editor. Reveal it first so
+      // its card is mounted even when sidebar filters would otherwise hide it.
+      if (matchShortcut('workspace.rename') && activeWorktreeId) {
+        e.preventDefault()
+        notifyTerminalCapture('workspace.rename')
+        const store = useAppStore.getState()
+        store.revealWorktreeInSidebar(activeWorktreeId)
+        store.setRenamingWorktreeId(activeWorktreeId)
+        return
+      }
+
       // Why: Cmd/Ctrl+N is handled via the main-process before-input-event
       // allowlist (see window-shortcut-policy.ts / useIpcEvents.ts) so it works
       // globally — including when focus lives inside the markdown rich editor

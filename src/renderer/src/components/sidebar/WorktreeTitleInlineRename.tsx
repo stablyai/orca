@@ -27,6 +27,11 @@ type WorktreeTitleInlineRenameProps = {
   inputClassName?: string
   onEditingChange?: (editing: boolean) => void
   onRename: (displayName: string) => Promise<void> | void
+  // Why: lets a parent (e.g. the workspace.rename shortcut via WorktreeCard)
+  // open the editor imperatively. The parent clears its trigger in
+  // onBeginEditingConsumed so the request fires exactly once.
+  beginEditing?: boolean
+  onBeginEditingConsumed?: () => void
 }
 
 export function WorktreeTitleInlineRename({
@@ -37,7 +42,9 @@ export function WorktreeTitleInlineRename({
   editingClassName,
   inputClassName,
   onEditingChange,
-  onRename
+  onRename,
+  beginEditing = false,
+  onBeginEditingConsumed
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   const savingRef = useRef(false)
@@ -63,6 +70,21 @@ export function WorktreeTitleInlineRename({
     // Why: double-click rename should make replacing the workspace title a one-keystroke action.
     input?.select()
   }, [editing])
+
+  // Why: open the editor when a parent requests it (the workspace.rename
+  // shortcut). Always consume the request so the parent's trigger can't linger;
+  // skip the actual open when disabled or already editing.
+  useEffect(() => {
+    if (!beginEditing) {
+      return
+    }
+    onBeginEditingConsumed?.()
+    if (disabled || editing) {
+      return
+    }
+    setValue(displayName)
+    setEditing(true)
+  }, [beginEditing, disabled, editing, displayName, onBeginEditingConsumed])
 
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()

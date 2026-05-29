@@ -2451,3 +2451,15 @@ describe('markWorktreeVisited', () => {
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ 'repo1::/hidden': 100 })
   })
 })
+
+describe('setRenamingWorktreeId', () => {
+  it('sets and clears the workspace rename signal', () => {
+    const store = createTestStore()
+
+    expect(store.getState().renamingWorktreeId).toBeNull()
+    store.getState().setRenamingWorktreeId('repo1::/feature')
+    expect(store.getState().renamingWorktreeId).toBe('repo1::/feature')
+    store.getState().setRenamingWorktreeId(null)
+    expect(store.getState().renamingWorktreeId).toBeNull()
+  })
+})

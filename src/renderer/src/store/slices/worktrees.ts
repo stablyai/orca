@@ -630,6 +630,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   detectedWorktreesByRepo: {},
   worktreeLineageById: {},
   activeWorktreeId: null,
+  renamingWorktreeId: null,
   deleteStateByWorktreeId: {},
   baseStatusByWorktreeId: {},
   remoteBranchConflictByWorktreeId: {},
@@ -1725,6 +1726,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       }
     })
+  },
+
+  setRenamingWorktreeId: (worktreeId) => {
+    set({ renamingWorktreeId: worktreeId })
   },
 
   setActiveWorktree: (worktreeId) => {

@@ -82,6 +82,8 @@ export default function SortableTab({
   // map in TabBar would invalidate every SortableTab on every bell event
   // because the slice returns a fresh object reference on each mark/clear.
   const hasUnreadActivity = useAppStore((s) => s.unreadTerminalTabs[tab.id] === true)
+  const renamingTabId = useAppStore((s) => s.renamingTabId)
+  const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
 
   // Why: createTab stamps the shell used at creation time, so changing the
   // default shell later does not repaint existing tabs as a different shell.
@@ -149,6 +151,17 @@ export default function SortableTab({
     })
     return () => cancelAnimationFrame(frame)
   }, [isEditing])
+
+  // Why: the tab.rename shortcut can't reach this component's local editing
+  // state directly, so it sets renamingTabId in the store; the matching tab
+  // opens its editor and immediately clears the flag so it fires once.
+  useEffect(() => {
+    if (renamingTabId !== tab.id) {
+      return
+    }
+    handleRenameOpen()
+    setRenamingTabId(null)
+  }, [renamingTabId, tab.id, handleRenameOpen, setRenamingTabId])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)

@@ -152,6 +152,20 @@ describe('keybindings', () => {
     })
   })
 
+  it('defines macOS-only rename shortcuts that stay conflict-free', () => {
+    expect(getEffectiveKeybindingsForAction('tab.rename', 'darwin')).toEqual(['Mod+R'])
+    expect(getEffectiveKeybindingsForAction('tab.rename', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('tab.rename', 'win32')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('workspace.rename', 'darwin')).toEqual(['Mod+Alt+R'])
+    expect(getEffectiveKeybindingsForAction('workspace.rename', 'linux')).toEqual([])
+    expect(formatKeybindingList(['Mod+Alt+R'], 'darwin')).toBe('⌘⌥R')
+
+    // Why: tab.rename (Mod+R) intentionally shares its binding with
+    // browser.reload, but the two live in different scopes (tabs vs browser),
+    // so customizing tab.rename to its default must not flag a conflict.
+    expect(findKeybindingConflicts('darwin', { 'tab.rename': ['Mod+R'] })).toEqual([])
+  })
+
   it('keeps equalize pane sizes unassigned until users customize it', () => {
     expect(getEffectiveKeybindingsForAction('terminal.equalizePaneSizes', 'darwin')).toEqual([])
     expect(

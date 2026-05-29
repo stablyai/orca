@@ -110,6 +110,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
+  const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const settings = useAppStore((s) => s.settings)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
@@ -713,6 +715,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
               editingClassName="flex-1"
               onEditingChange={setTitleRenaming}
               onRename={handleRenameTitle}
+              beginEditing={renamingWorktreeId === worktree.id}
+              onBeginEditingConsumed={() => setRenamingWorktreeId(null)}
             />
 
             {!compactCards && worktree.isMainWorktree && !isFolder && (
