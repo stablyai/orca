@@ -5,6 +5,7 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
+import { subscribeDockerBuildProgress } from './docker-build-progress-subscription'
 import type { AppIdentity } from '../shared/app-identity'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
@@ -677,12 +678,8 @@ const api = {
       isolation: 'host' | 'docker'
     }): Promise<unknown> => ipcRenderer.invoke('docker:set-worktree-isolation', args),
 
-    onBuildProgress: (callback: (data: DockerBuildProgress) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: DockerBuildProgress) =>
-        callback(data)
-      ipcRenderer.on('docker:build-progress', listener)
-      return () => ipcRenderer.removeListener('docker:build-progress', listener)
-    }
+    onBuildProgress: (callback: (data: DockerBuildProgress) => void): (() => void) =>
+      subscribeDockerBuildProgress(ipcRenderer, callback)
   },
 
   workspaceCleanup: {

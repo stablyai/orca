@@ -13,8 +13,8 @@ describe('getIsolateToggleView', () => {
       disabled: false,
       active: false,
       building: false,
-      tooltip: 'Run agents in an isolated container',
-      label: 'Run agents in an isolated container'
+      tooltip: 'Build image and enable Docker isolation',
+      label: 'Build image and enable Docker isolation'
     })
   })
 

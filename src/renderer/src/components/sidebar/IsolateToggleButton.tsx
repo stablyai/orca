@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import { Box, LoaderCircle, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
@@ -55,7 +55,7 @@ export function getIsolateToggleView(input: {
       disabled: true,
       active,
       building: true,
-      tooltip: 'Run agents in an isolated container',
+      tooltip: 'Build image and enable Docker isolation',
       label: formatBuildProgress(input.progress)
     }
   }
@@ -63,8 +63,8 @@ export function getIsolateToggleView(input: {
     disabled: false,
     active,
     building: false,
-    tooltip: 'Run agents in an isolated container',
-    label: active ? 'Docker isolation on' : 'Run agents in an isolated container'
+    tooltip: active ? 'Docker isolation on' : 'Build image and enable Docker isolation',
+    label: active ? 'Docker isolation on' : 'Build image and enable Docker isolation'
   }
 }
 
@@ -90,6 +90,34 @@ export default function IsolateToggleButton({
   const setIsolation = useAppStore((s) => s.setIsolation)
   const [engineStatus, setEngineStatus] = useState<DockerEngineStatus | null>(null)
   const [progress, setProgress] = useState<DockerBuildProgress | null>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  const refreshEngineStatus = useCallback(() => {
+    window.api.docker
+      .engineStatus()
+      .then((status) => {
+        if (!mountedRef.current) {
+          return
+        }
+        setEngineStatus(status)
+      })
+      .catch((error) => {
+        if (!mountedRef.current) {
+          return
+        }
+        setEngineStatus({
+          available: false,
+          flavor: 'docker-engine-linux',
+          reason: error instanceof Error ? error.message : String(error)
+        })
+      })
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -147,7 +175,10 @@ export default function IsolateToggleButton({
       }
       try {
         setProgress({ worktreeId, phase: 'pull' })
-        await window.api.docker.buildImage({ repoId: worktree.repoId, worktreeId })
+        const result = await window.api.docker.buildImage({ repoId: worktree.repoId, worktreeId })
+        if (hasDockerBuildError(result)) {
+          throw new Error(result.error)
+        }
         await setIsolation(worktreeId, 'docker')
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -166,14 +197,18 @@ export default function IsolateToggleButton({
         <button
           type="button"
           onClick={handleClick}
-          disabled={view.disabled}
+          onPointerEnter={refreshEngineStatus}
+          onFocus={refreshEngineStatus}
+          aria-disabled={view.disabled}
           aria-label={view.label}
           aria-pressed={view.active}
           className={cn(
             'inline-flex size-4 shrink-0 items-center justify-center rounded transition-colors',
-            'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-            view.disabled ? 'cursor-not-allowed text-muted-foreground/35' : 'hover:bg-accent/80',
-            view.active ? 'text-emerald-500' : 'text-muted-foreground/60'
+            'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
+            view.disabled
+              ? 'cursor-not-allowed text-muted-foreground/35'
+              : 'hover:bg-sidebar-accent',
+            view.active ? 'text-foreground' : 'text-muted-foreground/60'
           )}
         >
           <Icon className={cn('size-3.5', view.building && 'animate-spin')} />
@@ -198,4 +233,13 @@ function findWorktree(
     }
   }
   return undefined
+}
+
+function hasDockerBuildError(result: unknown): result is { error: string } {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    'error' in result &&
+    typeof (result as { error?: unknown }).error === 'string'
+  )
 }
