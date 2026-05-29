@@ -32,7 +32,15 @@ describe('DockerGitProvider', () => {
     expect(engine.commands[0]).toMatchObject({
       command: 'container.exec',
       options: {
-        args: ['git', 'status', '--porcelain=v2', '--untracked-files=all'],
+        args: [
+          'git',
+          '-c',
+          'core.quotePath=false',
+          'status',
+          '--porcelain=v2',
+          '--branch',
+          '--untracked-files=all'
+        ],
         cwd: '/workspace'
       }
     })
@@ -75,16 +83,18 @@ describe('DockerGitProvider', () => {
       'container.exec'
     ])
     expect(engine.commands[0]).toMatchObject({
-      options: { args: ['git', 'show', 'HEAD:src/app.ts'] }
+      options: { args: ['git', 'show', '--no-textconv', '--end-of-options', 'HEAD:src/app.ts'] }
     })
     expect(engine.commands[1]).toMatchObject({
-      options: { args: ['git', 'show', ':src/app.ts'] }
+      options: { args: ['git', 'show', '--no-textconv', '--end-of-options', ':src/app.ts'] }
     })
   })
 
   it('returns original and modified contents for unstaged diffs', async () => {
     engine.enqueueExecResult({ stdout: 'index content\n' })
-    engine.enqueueExecResult({ stdout: 'working content\n' })
+    engine.enqueueExecResult({
+      stdout: JSON.stringify({ content: 'working content\n', isBinary: false })
+    })
 
     const result = await provider.getDiff('/workspace', 'src/app.ts', false)
 
@@ -93,16 +103,19 @@ describe('DockerGitProvider', () => {
       modifiedContent: 'working content\n'
     })
     expect(engine.commands[0]).toMatchObject({
-      options: { args: ['git', 'show', ':src/app.ts'] }
+      options: { args: ['git', 'show', '--no-textconv', '--end-of-options', ':src/app.ts'] }
     })
     expect(engine.commands[1]).toMatchObject({
-      options: { args: ['cat', '--', 'src/app.ts'] }
+      options: { args: ['node', '-e', expect.any(String), 'src/app.ts', String(10 * 1024 * 1024)] }
     })
   })
 
   it('returns empty original content and working-tree content for untracked diffs', async () => {
-    engine.enqueueExecResult({ stdout: '' })
-    engine.enqueueExecResult({ stdout: 'new file\n' })
+    engine.enqueueExecError(new Error('not in index'))
+    engine.enqueueExecError(new Error('not in head'))
+    engine.enqueueExecResult({
+      stdout: JSON.stringify({ content: 'new file\n', isBinary: false })
+    })
 
     const result = await provider.getDiff('/workspace', 'src/new.ts', false)
 
@@ -135,9 +148,11 @@ describe('DockerGitProvider', () => {
   })
 
   it('preserves the new path when parsing renamed branch entries', async () => {
-    engine.enqueueExecResult({ stdout: 'base-sha\n' })
-    engine.enqueueExecResult({ stdout: 'R100\tsrc/old.ts\tsrc/new.ts\n' })
     engine.enqueueExecResult({ stdout: 'head-sha\n' })
+    engine.enqueueExecResult({ stdout: 'base-sha\n' })
+    engine.enqueueExecResult({ stdout: 'merge-sha\n' })
+    engine.enqueueExecResult({ stdout: 'R100\tsrc/old.ts\tsrc/new.ts\n' })
+    engine.enqueueExecResult({ stdout: '1\n' })
 
     const result = await provider.getBranchCompare('/workspace', 'origin/main')
 
@@ -166,10 +181,12 @@ describe('DockerGitProvider', () => {
       }
     ])
     expect(engine.commands[0]).toMatchObject({
-      options: { args: ['git', 'show', 'base-sha:src/old.ts'] }
+      options: {
+        args: ['git', 'show', '--no-textconv', '--end-of-options', 'base-sha:src/old.ts']
+      }
     })
     expect(engine.commands[1]).toMatchObject({
-      options: { args: ['git', 'show', 'HEAD:src/new.ts'] }
+      options: { args: ['git', 'show', '--no-textconv', '--end-of-options', 'HEAD:src/new.ts'] }
     })
   })
 
@@ -191,6 +208,42 @@ describe('DockerGitProvider', () => {
     await expect(provider.isGitRepoAsync('/workspace')).resolves.toEqual({
       isRepo: true,
       rootPath: '/workspace'
+    })
+  })
+
+  it('translates trusted host worktree paths into container paths', async () => {
+    provider = new DockerGitProvider(
+      {
+        containerId: 'container-1',
+        workdir: '/workspace',
+        hostWorktreePath: '/Users/me/repo',
+        hostPlatform: 'darwin',
+        image: { id: 'sha256:image', cacheKey: 'key', dockerfilePath: 'Dockerfile', builtAt: 1 }
+      },
+      engine
+    )
+
+    await provider.stageFile('/Users/me/repo', '/Users/me/repo/src/app.ts')
+
+    expect(engine.commands[0]).toMatchObject({
+      options: { cwd: '/workspace', args: ['git', 'add', '--', 'src/app.ts'] }
+    })
+  })
+
+  it('rejects git path traversal before executing docker', async () => {
+    await expect(provider.stageFile('/workspace', '../outside.txt')).rejects.toThrow(
+      'resolves outside'
+    )
+    expect(engine.commands).toHaveLength(0)
+  })
+
+  it('marks git diffs as binary when blob output contains binary bytes', async () => {
+    engine.enqueueExecResult({ stdout: 'left\0binary' })
+    engine.enqueueExecResult({ stdout: 'right text' })
+
+    await expect(provider.getDiff('/workspace', 'image.bin', true)).resolves.toMatchObject({
+      kind: 'binary',
+      originalIsBinary: true
     })
   })
 

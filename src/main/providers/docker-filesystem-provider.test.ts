@@ -43,6 +43,41 @@ describe('DockerFilesystemProvider', () => {
     })
   })
 
+  it('writes binary content through stdin instead of argv', async () => {
+    await provider.writeFileBase64('/workspace/a.bin', Buffer.from([0, 1, 2]).toString('base64'))
+
+    expect(engine.commands[0]).toMatchObject({
+      command: 'container.exec',
+      options: { input: 'AAEC' }
+    })
+  })
+
+  it('translates trusted host paths into container paths', async () => {
+    provider = new DockerFilesystemProvider(
+      {
+        containerId: 'container-1',
+        workdir: '/workspace',
+        hostWorktreePath: '/Users/me/repo',
+        hostPlatform: 'darwin',
+        image: { id: 'sha256:image', cacheKey: 'key', dockerfilePath: 'Dockerfile', builtAt: 1 }
+      },
+      engine
+    )
+    engine.enqueueExecResult({ stdout: JSON.stringify({ size: 1, type: 'file', mtime: 2 }) })
+
+    await provider.stat('/Users/me/repo/src/app.ts')
+
+    expect(engine.commands[0]).toMatchObject({
+      options: { args: ['node', '-e', expect.any(String), '/workspace/src/app.ts'] }
+    })
+  })
+
+  it('rejects paths outside the container workdir before docker exec', async () => {
+    await expect(provider.readFile('/etc/passwd')).rejects.toThrow('resolves outside')
+    await expect(provider.writeFile('../outside.txt', 'x')).rejects.toThrow('resolves outside')
+    expect(engine.commands).toHaveLength(0)
+  })
+
   it('returns stat, search, and file list results from JSON stdout', async () => {
     engine.enqueueExecResult({ stdout: JSON.stringify({ size: 1, type: 'file', mtime: 2 }) })
     engine.enqueueExecResult({
@@ -57,6 +92,18 @@ describe('DockerFilesystemProvider', () => {
       }
     )
     await expect(provider.listFiles('/workspace')).resolves.toEqual(['src/index.ts'])
+    expect(engine.commands[1]).toMatchObject({
+      options: {
+        args: [
+          'node',
+          '-e',
+          expect.any(String),
+          expect.stringContaining('"maxResults":2000'),
+          String(5 * 1024 * 1024),
+          '10000'
+        ]
+      }
+    })
   })
 
   it('registers and unregisters watches without a real daemon watcher', async () => {

@@ -84,12 +84,15 @@ export class DockerPtyProvider implements IPtyProvider {
     this.sessions.get(id)?.resize(cols, rows)
   }
 
-  async shutdown(id: string, immediate: boolean): Promise<void> {
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean } = {}
+  ): Promise<void> {
     const session = this.sessions.get(id)
     if (!session) {
       return
     }
-    await session.shutdown(immediate)
+    await session.shutdown(opts.immediate === true)
     this.sessions.delete(id)
   }
 
