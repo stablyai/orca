@@ -35,6 +35,7 @@ import type {
   OnboardingState,
   FloatingTerminalCwdRequest,
   MarkdownDocument,
+  MassCodeVaultAuthorizationResult,
   SearchResult,
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
@@ -457,7 +458,13 @@ const api = {
     pickFloatingMarkdownDocument: (): Promise<MarkdownDocument | null> =>
       ipcRenderer.invoke('app:pickFloatingMarkdownDocument'),
     pickFloatingWorkspaceDirectory: (): Promise<string | null> =>
-      ipcRenderer.invoke('app:pickFloatingWorkspaceDirectory')
+      ipcRenderer.invoke('app:pickFloatingWorkspaceDirectory'),
+    detectMassCodeVault: (): Promise<MassCodeVaultAuthorizationResult> =>
+      ipcRenderer.invoke('app:detectMassCodeVault'),
+    authorizeMassCodeVault: (args: {
+      vaultPath: string
+    }): Promise<MassCodeVaultAuthorizationResult> =>
+      ipcRenderer.invoke('app:authorizeMassCodeVault', args)
   },
 
   wsl: {

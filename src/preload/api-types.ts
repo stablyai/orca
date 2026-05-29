@@ -70,6 +70,7 @@ import type {
   LinearProjectSummary,
   LinearTeam,
   MarkdownDocument,
+  MassCodeVaultAuthorizationResult,
   FloatingTerminalCwdRequest,
   GitHubIssueUpdate,
   GitHubPRRefreshCandidate,
@@ -607,6 +608,10 @@ export type AppApi = {
   /** Opens a native directory picker and authorizes the selected directory
    *  for Floating Workspace markdown file creation. */
   pickFloatingWorkspaceDirectory: () => Promise<string | null>
+  /** Detects and authorizes a local massCode Markdown vault when it is safe. */
+  detectMassCodeVault: () => Promise<MassCodeVaultAuthorizationResult>
+  /** Authorizes a user-selected massCode Markdown vault after validating its shape. */
+  authorizeMassCodeVault: (args: { vaultPath: string }) => Promise<MassCodeVaultAuthorizationResult>
 }
 
 export type PreloadApi = {
