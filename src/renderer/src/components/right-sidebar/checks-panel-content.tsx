@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: co-locating all checks-panel sub-components (checks list,
 conflict sections, threaded PR comments) keeps the shared icon/color maps in one place. */
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CircleCheck,
   CircleX,
@@ -356,16 +356,28 @@ export function ChecksList({
 
 function CopyButton({ text }: { text: string }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+  const copiedResetTimerRef = useRef<number | null>(null)
+
+  const clearCopiedResetTimer = useCallback((): void => {
+    if (copiedResetTimerRef.current !== null) {
+      window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = null
+    }
+  }, [])
 
   const handleCopy = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
       void window.api.ui.writeClipboardText(text).then(() => {
+        clearCopiedResetTimer()
         setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
+        copiedResetTimerRef.current = window.setTimeout(() => {
+          copiedResetTimerRef.current = null
+          setCopied(false)
+        }, 1500)
       })
     },
-    [text]
+    [clearCopiedResetTimer, text]
   )
 
   return (
@@ -390,12 +402,19 @@ function ResolveButton({
 }): React.JSX.Element {
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    if (!loading) {
+      return
+    }
+    const timeout = window.setTimeout(() => setLoading(false), 300)
+    return () => window.clearTimeout(timeout)
+  }, [loading])
+
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
       setLoading(true)
       onResolve(threadId, !isResolved)
-      setTimeout(() => setLoading(false), 300)
     },
     [threadId, isResolved, onResolve]
   )

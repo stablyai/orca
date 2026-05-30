@@ -6134,6 +6134,118 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.searchRepoRefs('id:repo-1', 'main', -5)).rejects.toThrow('invalid_limit')
   })
 
+  it('returns capped SSH refs for empty runtime repo searches', async () => {
+    const remoteRepo = {
+      id: 'remote-repo',
+      path: '/home/user/repo',
+      displayName: 'remote',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: () => remoteRepo
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation((argv: string[]) => {
+        if (argv[0] === 'remote') {
+          return Promise.resolve({ stdout: 'origin\nupstream\n', stderr: '' })
+        }
+        return Promise.resolve({
+          stdout: [
+            'refs/remotes/origin/main\0origin/main',
+            'refs/remotes/upstream/feature-x\0upstream/feature-x',
+            'refs/remotes/upstream/HEAD\0upstream/HEAD',
+            'refs/heads/local-only\0local-only'
+          ].join('\n'),
+          stderr: ''
+        })
+      })
+    }
+    registerSshGitProvider('ssh-1', provider as never)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const result = await runtime.searchRepoRefs('id:remote-repo', '', 2)
+
+    expect(result).toEqual({
+      refs: ['origin/main', 'upstream/feature-x'],
+      refDetails: [
+        { refName: 'origin/main', localBranchName: 'main' },
+        { refName: 'upstream/feature-x', localBranchName: 'feature-x' }
+      ],
+      truncated: true
+    })
+    expect(provider.exec).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        '--exclude=refs/remotes/**/HEAD',
+        '--count=12',
+        'refs/heads/**/**',
+        'refs/heads/**/**/**',
+        'refs/remotes/**/**',
+        'refs/remotes/**/**/**'
+      ]),
+      '/home/user/repo'
+    )
+    expect(provider.exec).toHaveBeenCalledWith(['remote'], '/home/user/repo')
+  })
+
+  it('retries runtime SSH ref searches without --exclude for older git hosts', async () => {
+    const remoteRepo = {
+      id: 'remote-repo',
+      path: '/home/user/repo',
+      displayName: 'remote',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: () => remoteRepo
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation((argv: string[]) => {
+        if (argv[0] === 'remote') {
+          return Promise.resolve({ stdout: 'origin\n', stderr: '' })
+        }
+        if (argv.includes('--exclude=refs/remotes/**/HEAD')) {
+          return Promise.reject(
+            Object.assign(new Error("unknown option `exclude'"), {
+              stderr: "error: unknown option `exclude'"
+            })
+          )
+        }
+        return Promise.resolve({
+          stdout: [
+            'refs/remotes/origin/main\0origin/main',
+            'refs/remotes/origin/HEAD\0origin/HEAD',
+            'refs/remotes/origin/feature-x\0origin/feature-x'
+          ].join('\n'),
+          stderr: ''
+        })
+      })
+    }
+    registerSshGitProvider('ssh-1', provider as never)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const result = await runtime.searchRepoRefs('id:remote-repo', '', 1)
+
+    expect(result).toEqual({
+      refs: ['origin/main'],
+      refDetails: [{ refName: 'origin/main', localBranchName: 'main' }],
+      truncated: true
+    })
+    const forEachRefCalls = provider.exec.mock.calls.filter(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )
+    expect(forEachRefCalls).toHaveLength(2)
+    expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(forEachRefCalls[1][0]).toContain('--count=108')
+  })
+
   it('resolves SSH worktrees when manually updating lineage', async () => {
     const remoteRepo = {
       id: 'remote-repo',

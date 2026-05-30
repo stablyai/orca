@@ -52,6 +52,7 @@ export function WslCliRegistration({
 
   const isEnabled = status?.state === 'installed'
   const isSupported = status?.supported ?? false
+  const commandName = status?.commandName ?? 'orca-ide'
 
   const handleInstall = async (): Promise<void> => {
     setBusyAction('install')
@@ -59,9 +60,11 @@ export function WslCliRegistration({
       const next = await window.api.cli.installWsl()
       setStatus(next)
       setDialogOpen(false)
-      toast.success('Registered `orca` in WSL.')
+      toast.success(`Registered \`${next.commandName}\` in WSL.`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to register `orca` in WSL.')
+      toast.error(
+        error instanceof Error ? error.message : `Failed to register \`${commandName}\` in WSL.`
+      )
     } finally {
       setBusyAction(null)
     }
@@ -73,9 +76,11 @@ export function WslCliRegistration({
       const next = await window.api.cli.removeWsl()
       setStatus(next)
       setDialogOpen(false)
-      toast.success('Removed `orca` from WSL.')
+      toast.success(`Removed \`${next.commandName}\` from WSL.`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to remove `orca` from WSL.')
+      toast.error(
+        error instanceof Error ? error.message : `Failed to remove \`${commandName}\` from WSL.`
+      )
     } finally {
       setBusyAction(null)
     }
@@ -90,7 +95,7 @@ export function WslCliRegistration({
             <p className="text-xs text-muted-foreground">
               {loading
                 ? 'Checking WSL CLI registration...'
-                : (status?.detail ?? 'Register `orca` in ~/.local/bin inside WSL.')}
+                : (status?.detail ?? 'Register `orca-ide` in ~/.local/bin inside WSL.')}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -148,12 +153,14 @@ export function WslCliRegistration({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {isEnabled ? 'Remove `orca` from WSL?' : 'Register `orca` in WSL?'}
+              {isEnabled
+                ? `Remove \`${commandName}\` from WSL?`
+                : `Register \`${commandName}\` in WSL?`}
             </DialogTitle>
             <DialogDescription>
               {isEnabled
                 ? 'This removes the WSL shell command. Orca itself remains installed on Windows.'
-                : `Orca will register ${status?.commandPath ?? '`orca`'} so the command works from WSL terminals.`}
+                : `Orca will register ${status?.commandPath ?? commandName} so the command works from WSL terminals.`}
             </DialogDescription>
           </DialogHeader>
           {status?.commandPath ? (

@@ -3304,17 +3304,19 @@ const WorktreeList = React.memo(function WorktreeList({
   const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
 
-  useEffect(() => {
-    setSelectedWorktreeIds((previous) => {
-      const pruned = pruneWorktreeSelection(previous, selectionAnchorId, renderedWorktreeIds)
-      if (pruned.anchorId !== selectionAnchorId) {
-        setSelectionAnchorId(pruned.anchorId)
-      }
-      return areWorktreeSelectionsEqual(previous, pruned.selectedIds)
-        ? previous
-        : pruned.selectedIds
-    })
-  }, [renderedWorktreeIds, selectionAnchorId])
+  const prunedSelection = pruneWorktreeSelection(
+    selectedWorktreeIds,
+    selectionAnchorId,
+    renderedWorktreeIds
+  )
+  // Why: filters/grouping can hide selected cards. Prune during render so
+  // context menus and child rows never see stale ids for unrendered worktrees.
+  if (!areWorktreeSelectionsEqual(selectedWorktreeIds, prunedSelection.selectedIds)) {
+    setSelectedWorktreeIds(prunedSelection.selectedIds)
+  }
+  if (selectionAnchorId !== prunedSelection.anchorId) {
+    setSelectionAnchorId(prunedSelection.anchorId)
+  }
 
   const selectedWorktrees = useMemo(() => {
     if (selectedWorktreeIds.size === 0) {

@@ -1774,16 +1774,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           .flat()
           .map((worktree) => worktree.id)
       )
-      // Why: SSH repos' worktrees are discovered at runtime via the relay, not
-      // persisted in orca-data.json. On restart, worktreesByRepo for SSH repos
-      // may still be empty when hydration runs (the SSH connection and worktree
-      // fetch race with session hydration). Accept session worktree IDs whose
-      // SSH-backed repo exists in the repos list — they will be populated once
-      // SSH reconnects. Without this, tabs for SSH worktrees are silently
-      // dropped during hydration and the session save overwrites the good data.
-      // Only SSH repos need this: local worktrees are persisted and a missing
-      // local worktree genuinely means it was deleted.
-      const sshRepoIds = new Set(s.repos.filter((r) => r.connectionId).map((r) => r.id))
+      const knownRepoIds = new Set(s.repos.map((r) => r.id))
+      const repoIdsWithLoadedWorktrees = new Set(
+        Object.entries(s.worktreesByRepo)
+          .filter(([, worktrees]) => worktrees.length > 0)
+          .map(([repoId]) => repoId)
+      )
+      const repoIdsWithAuthoritativeDetectedWorktrees = new Set(
+        Object.entries(s.detectedWorktreesByRepo)
+          .filter(([, detected]) => detected.authoritative)
+          .map(([repoId]) => repoId)
+      )
       // Why: the Floating Workspace is intentionally not a repo worktree, but
       // its tabs still use the normal terminal session pipeline so daemon PTYs
       // can survive app restart just like workspace terminals.
@@ -1791,7 +1792,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       for (const worktreeId of Object.keys(session.tabsByWorktree)) {
         if (!validWorktreeIds.has(worktreeId)) {
           const repoId = getRepoIdFromWorktreeId(worktreeId)
-          if (sshRepoIds.has(repoId)) {
+          // Why (#1158): an empty/missing list can mean degraded hydration; a
+          // non-empty repo list is authoritative for deleted-worktree cleanup.
+          if (
+            knownRepoIds.has(repoId) &&
+            !repoIdsWithLoadedWorktrees.has(repoId) &&
+            !repoIdsWithAuthoritativeDetectedWorktrees.has(repoId)
+          ) {
             validWorktreeIds.add(worktreeId)
           }
         }
@@ -1941,6 +1948,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // placeholder entries from the session's tabsByWorktree so the sidebar
       // shows them immediately. The placeholders will be replaced with full
       // data once SSH reconnects and fetchWorktrees runs.
+      // Why: only SSH needs placeholders; local metadata should come from the
+      // next successful fetch so the sidebar does not render synthetic entries.
+      const sshRepoIds = new Set(s.repos.filter((r) => r.connectionId).map((r) => r.id))
       const worktreesByRepo = { ...s.worktreesByRepo }
       for (const worktreeId of Object.keys(tabsByWorktree)) {
         const repoId = getRepoIdFromWorktreeId(worktreeId)

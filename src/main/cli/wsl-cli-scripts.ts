@@ -44,7 +44,9 @@ try {
 }
 
 export function getBridgePathFromCommandPath(commandPath: string): string {
-  return `${commandPath.replace(/\/\.local\/bin\/orca$/, '/.local/share/orca')}/orca-wsl-bridge.ps1`
+  // Why: both the current Linux command and the legacy pre-rename command
+  // share one WSL bridge under ~/.local/share/orca.
+  return `${commandPath.replace(/\/\.local\/bin\/(?:orca|orca-ide)$/, '/.local/share/orca')}/orca-wsl-bridge.ps1`
 }
 
 export function buildSafeReplaceGuard(path: string, managedMarker: string): string {

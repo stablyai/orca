@@ -305,7 +305,7 @@ function getOpenCodePluginSource(): string {
     '      if (!part || part.type !== "text" || !part.text) return;',
     '      const role = messageRoleById.get(part.messageID);',
     '      if (!role) return;',
-    '      await post("MessagePart", { role, text: part.text });',
+    '      await post("MessagePart", { role, text: part.text, messageID: part.messageID });',
     '      return;',
     '    }',
     '',

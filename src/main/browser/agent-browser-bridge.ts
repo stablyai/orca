@@ -1119,19 +1119,33 @@ export class AgentBrowserBridge {
       }
       wc.reload()
       await new Promise<void>((resolve) => {
-        const onFinish = (): void => {
+        let settled = false
+        let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+
+        const finish = (): void => {
+          if (settled) {
+            return
+          }
+          settled = true
           wc.removeListener('did-finish-load', onFinish)
           wc.removeListener('did-fail-load', onFail)
+          if (fallbackTimer) {
+            clearTimeout(fallbackTimer)
+            fallbackTimer = null
+          }
           resolve()
         }
-        const onFail = (): void => {
-          wc.removeListener('did-finish-load', onFinish)
-          wc.removeListener('did-fail-load', onFail)
-          resolve()
-        }
+        const onFinish = (): void => finish()
+        const onFail = (): void => finish()
+
         wc.on('did-finish-load', onFinish)
         wc.on('did-fail-load', onFail)
-        setTimeout(onFinish, 10_000)
+        // Why: successful reloads must clear the fallback timer; otherwise each
+        // reload retains the webContents and listeners until the 10s timeout fires.
+        fallbackTimer = setTimeout(finish, 10_000)
+        if (typeof fallbackTimer.unref === 'function') {
+          fallbackTimer.unref()
+        }
       })
       return { url: wc.getURL(), title: wc.getTitle() }
     })

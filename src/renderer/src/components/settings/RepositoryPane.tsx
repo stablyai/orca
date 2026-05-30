@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { Button } from '../ui/button'
@@ -55,9 +55,17 @@ export function RepositoryPane({
   const symlinksEnabled = useAppStore((state) => state.settings?.experimentalWorktreeSymlinks)
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
+  const copiedTemplateResetTimerRef = useRef<number | null>(null)
   // Why: searching a project name is navigation to that project, not a
   // request to hide every child row that does not repeat the project name.
   const forceFullPaneForRepoMatch = matchesRepositoryIdentitySearch(searchQuery, repo)
+
+  const clearCopiedTemplateResetTimer = (): void => {
+    if (copiedTemplateResetTimerRef.current !== null) {
+      window.clearTimeout(copiedTemplateResetTimerRef.current)
+      copiedTemplateResetTimerRef.current = null
+    }
+  }
 
   const handleRemoveProject = (repoId: string) => {
     if (confirmingRemove === repoId) {
@@ -83,8 +91,12 @@ export function RepositoryPane({
     pnpm worktree:setup
   archive: |
     echo "Cleaning up before archive"`)
+    clearCopiedTemplateResetTimer()
     setCopiedTemplate(true)
-    window.setTimeout(() => setCopiedTemplate(false), 1500)
+    copiedTemplateResetTimerRef.current = window.setTimeout(() => {
+      copiedTemplateResetTimerRef.current = null
+      setCopiedTemplate(false)
+    }, 1500)
   }
 
   const allEntries = getRepositoryPaneSearchEntries(repo)

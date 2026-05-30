@@ -505,7 +505,9 @@ describe('ClaudeAccountService credential capture', () => {
     await service.removeAccount('account-1')
 
     expect(rateLimits.evictInactiveClaudeCache).toHaveBeenCalledWith('account-1')
-    expect(rateLimits.refreshForClaudeAccountChange).toHaveBeenCalledWith()
+    expect(rateLimits.refreshForClaudeAccountChange).toHaveBeenCalledWith('account-1', {
+      runtime: 'host'
+    })
     expect(settings).toMatchObject({
       claudeManagedAccounts: [],
       activeClaudeManagedAccountId: null
@@ -576,7 +578,229 @@ describe('ClaudeAccountService credential capture', () => {
     await service.reauthenticateAccount('account-1')
 
     expect(rateLimits.evictInactiveClaudeCache).toHaveBeenCalledWith('account-1')
-    expect(rateLimits.refreshForClaudeAccountChange).toHaveBeenCalledWith()
+    expect(rateLimits.refreshForClaudeAccountChange).toHaveBeenCalledWith(undefined, {
+      runtime: 'host'
+    })
     expect(settings.claudeManagedAccounts[0].email).toBe('new@example.com')
+  })
+
+  it('selects a WSL account without changing the Windows active account', async () => {
+    setPlatform('linux')
+    tempDir = '/tmp/orca-claude-service-test'
+    rmSync(tempDir, { recursive: true, force: true })
+    const hostAuthPath = join(tempDir, 'claude-accounts', 'host-account', 'auth')
+    const wslAuthPath = join(tempDir, 'claude-accounts', 'wsl-account', 'auth')
+    mkdirSync(hostAuthPath, { recursive: true })
+    mkdirSync(wslAuthPath, { recursive: true })
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'host-account',
+          email: 'host@example.com',
+          managedAuthPath: hostAuthPath,
+          managedAuthRuntime: 'host',
+          wslDistro: null,
+          wslLinuxAuthPath: null,
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'wsl-account',
+          email: 'wsl@example.com',
+          managedAuthPath: wslAuthPath,
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxAuthPath: '/home/jin/.local/share/orca/claude-accounts/wsl-account/auth',
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: 'host-account',
+      activeClaudeManagedAccountIdsByRuntime: { host: 'host-account', wsl: { Ubuntu: null } }
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+
+    const snapshot = await service.selectAccountForTarget('wsl-account', {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+
+    expect(settings.activeClaudeManagedAccountId).toBe('host-account')
+    expect(settings.activeClaudeManagedAccountIdsByRuntime).toEqual({
+      host: 'host-account',
+      wsl: { Ubuntu: 'wsl-account' }
+    })
+    expect(snapshot.activeAccountIdsByRuntime).toEqual({
+      host: 'host-account',
+      wsl: { Ubuntu: 'wsl-account' }
+    })
+    expect(runtimeAuth.syncForCurrentSelection).toHaveBeenCalledWith({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+    expect(rateLimits.refreshForClaudeAccountChange).toHaveBeenCalledWith(null, {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+  })
+
+  it('rejects selecting a WSL account for the Windows target', async () => {
+    setPlatform('linux')
+    tempDir = '/tmp/orca-claude-service-test'
+    rmSync(tempDir, { recursive: true, force: true })
+    const wslAuthPath = join(tempDir, 'claude-accounts', 'wsl-account', 'auth')
+    mkdirSync(wslAuthPath, { recursive: true })
+    const settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'wsl-account',
+          email: 'wsl@example.com',
+          managedAuthPath: wslAuthPath,
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxAuthPath: '/home/jin/.local/share/orca/claude-accounts/wsl-account/auth',
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn()
+    }
+    const runtimeAuth = {
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+
+    await expect(
+      service.selectAccountForTarget('wsl-account', { runtime: 'host' })
+    ).rejects.toThrow('different runtime')
+    expect(runtimeAuth.syncForCurrentSelection).not.toHaveBeenCalled()
+    expect(rateLimits.refreshForClaudeAccountChange).not.toHaveBeenCalled()
+  })
+
+  it('removes a WSL account without clearing the Windows active account', async () => {
+    setPlatform('linux')
+    tempDir = '/tmp/orca-claude-service-test'
+    rmSync(tempDir, { recursive: true, force: true })
+    const hostAuthPath = join(tempDir, 'claude-accounts', 'host-account', 'auth')
+    const wslAuthPath = join(tempDir, 'claude-accounts', 'wsl-account', 'auth')
+    mkdirSync(hostAuthPath, { recursive: true })
+    mkdirSync(wslAuthPath, { recursive: true })
+    writeFileSync(join(wslAuthPath, '.orca-managed-claude-auth'), 'wsl-account\n', 'utf-8')
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'host-account',
+          email: 'host@example.com',
+          managedAuthPath: hostAuthPath,
+          managedAuthRuntime: 'host',
+          wslDistro: null,
+          wslLinuxAuthPath: null,
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'wsl-account',
+          email: 'wsl@example.com',
+          managedAuthPath: wslAuthPath,
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxAuthPath: '/home/jin/.local/share/orca/claude-accounts/wsl-account/auth',
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: 'host-account',
+      activeClaudeManagedAccountIdsByRuntime: {
+        host: 'host-account',
+        wsl: { Ubuntu: 'wsl-account' }
+      }
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+
+    await service.removeAccount('wsl-account')
+
+    expect(settings.activeClaudeManagedAccountId).toBe('host-account')
+    expect(settings.activeClaudeManagedAccountIdsByRuntime).toEqual({
+      host: 'host-account',
+      wsl: { Ubuntu: null }
+    })
+    expect(rateLimits.evictInactiveClaudeCache).toHaveBeenCalledWith('wsl-account')
+    expect(rateLimits.refreshForClaudeAccountChange).toHaveBeenCalledWith('wsl-account', {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
   })
 })

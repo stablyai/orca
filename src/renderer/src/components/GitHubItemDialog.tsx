@@ -61,6 +61,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
@@ -107,6 +108,7 @@ import {
   getGitHubPRReviewerRows,
   normalizeGitHubReviewerLogins
 } from '@/components/github-pr-reviewer-display'
+import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { getConnectionId } from '@/lib/connection-context'
@@ -363,31 +365,6 @@ function getStateTone(item: GitHubWorkItem): string {
     return 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300'
   }
   return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-}
-
-function getPRMergeTooltip(item: GitHubWorkItem): string {
-  if (item.state === 'merged') {
-    return 'This pull request is already merged'
-  }
-  if (item.state === 'closed') {
-    return 'This pull request is closed'
-  }
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge status is unavailable for this PR'
-  }
-  if (item.mergeable === 'CONFLICTING') {
-    return 'GitHub reports merge conflicts'
-  }
-  if (item.mergeStateStatus === 'BEHIND') {
-    return 'Update the branch before merging'
-  }
-  if (item.mergeStateStatus === 'BLOCKED') {
-    return 'GitHub reports this pull request is blocked'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'GitHub says this PR can merge'
-  }
-  return 'GitHub has not reported a final merge status'
 }
 
 function WorkItemStateBadge({
@@ -2830,14 +2807,10 @@ function PRActionsPanel({
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const confirm = useConfirmationDialog()
   const actionItem = { ...item, state: localState }
+  const mergePresentation = presentGitHubPRMergeState(actionItem)
   const canMutateState = localState !== 'merged' && (!!repoPath || !!projectOrigin)
   const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
-  const mergeDisabled =
-    !repoPath ||
-    mergePending ||
-    localState === 'closed' ||
-    localState === 'merged' ||
-    item.mergeable === 'CONFLICTING'
+  const mergeDisabled = !repoPath || mergePending || !mergePresentation.directMergeAvailable
 
   const patchProjectRowIfNeeded = useCallback(
     (state: GitHubWorkItem['state']) => {
@@ -2916,7 +2889,8 @@ function PRActionsPanel({
         repoPath,
         repoId: repoId ?? undefined,
         prNumber: item.number,
-        method
+        method,
+        prRepo: item.prRepo ?? null
       })
       if (!result.ok) {
         toast.error(result.error)
@@ -2927,6 +2901,33 @@ function PRActionsPanel({
       onMutated()
     } catch {
       toast.error('Failed to merge pull request')
+    } finally {
+      setMergePending(false)
+    }
+  }
+
+  const handleAutoMerge = async (): Promise<void> => {
+    if (!repoPath || !mergePresentation.autoMergeAction) {
+      return
+    }
+    const enabled = mergePresentation.autoMergeAction.kind === 'enable'
+    setMergePending(true)
+    try {
+      const result = await window.api.gh.setPRAutoMerge({
+        repoPath,
+        repoId: repoId ?? undefined,
+        prNumber: item.number,
+        enabled,
+        prRepo: item.prRepo ?? null
+      })
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(enabled ? 'Auto-merge enabled' : 'Auto-merge disabled')
+      onMutated()
+    } catch {
+      toast.error(enabled ? 'Failed to enable auto-merge' : 'Failed to disable auto-merge')
     } finally {
       setMergePending(false)
     }
@@ -2960,16 +2961,27 @@ function PRActionsPanel({
                   ) : (
                     <GitMerge className="size-3.5" />
                   )}
-                  Merge
+                  {mergePresentation.autoMergeAction?.label ??
+                    (mergePresentation.directMergeAvailable ? 'Merge' : mergePresentation.label)}
                   <ChevronDown className="size-3 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {!repoPath ? 'Merge requires a registered local repo' : getPRMergeTooltip(actionItem)}
+              {!repoPath ? 'Merge requires a registered local repo' : mergePresentation.tooltip}
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="start" className="w-52">
+            {mergePresentation.autoMergeAction && (
+              <DropdownMenuItem
+                disabled={!repoPath || mergePending}
+                onSelect={() => void handleAutoMerge()}
+              >
+                <GitMerge className="size-4" />
+                {mergePresentation.autoMergeAction.label}
+              </DropdownMenuItem>
+            )}
+            {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
             <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('squash')}>
               <GitMerge className="size-4" />
               Squash and merge
@@ -5173,7 +5185,9 @@ export default function GitHubItemDialog({
     }
     let cancelled = false
     let count = 0
+    let frameId: number | null = null
     const tick = (): void => {
+      frameId = null
       if (cancelled) {
         return
       }
@@ -5181,12 +5195,15 @@ export default function GitHubItemDialog({
         document.body.style.pointerEvents = ''
       }
       if (count++ < 5) {
-        requestAnimationFrame(tick)
+        frameId = requestAnimationFrame(tick)
       }
     }
     tick()
     return () => {
       cancelled = true
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+      }
     }
   }, [workItem])
 
