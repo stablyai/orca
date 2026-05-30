@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseArgs } from './args'
+import { parseArgs, supportsBrowserPageFlag, validateCommandAndFlags } from './args'
+import { COMMAND_SPECS } from './specs'
 
 describe('parseArgs', () => {
   it('keeps an empty string as a flag value', () => {
@@ -36,5 +37,28 @@ describe('parseArgs', () => {
     expect(parsed.commandPath).toEqual(['tab', 'create'])
     expect(parsed.flags.get('json')).toBe(true)
     expect(parsed.flags.get('url')).toBe('https://example.com')
+  })
+})
+
+describe('validateCommandAndFlags', () => {
+  it('does not allow the browser page flag on issue commands', () => {
+    expect(supportsBrowserPageFlag(['issue', 'create'])).toBe(false)
+
+    const parsed = parseArgs([
+      'issue',
+      'create',
+      '--provider',
+      'github',
+      '--repo',
+      'id:repo-1',
+      '--title',
+      'Bug',
+      '--page',
+      'main'
+    ])
+
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, parsed)).toThrow(
+      'Unknown flag --page for command: issue create'
+    )
   })
 })

@@ -142,7 +142,9 @@ import type {
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult,
   BrowserTabInfo,
-  BrowserScreencastResult
+  BrowserScreencastResult,
+  RuntimeIssueCreateRequest,
+  RuntimeIssueCreateResult
 } from '../../shared/runtime-types'
 import type { AutomationService } from '../automations/service'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
@@ -6901,6 +6903,72 @@ export class OrcaRuntimeService {
       } catch (error) {
         console.warn('[runtime] Could not update remote .gitignore to exclude .orca', error)
       }
+    }
+  }
+
+  async createIssue(params: RuntimeIssueCreateRequest): Promise<RuntimeIssueCreateResult> {
+    if (params.provider !== 'github' && params.provider !== 'linear') {
+      throw new Error('Unsupported issue provider')
+    }
+    const title = typeof params.title === 'string' ? params.title.trim() : ''
+    if (!title) {
+      throw new Error('Title is required')
+    }
+    const body = typeof params.body === 'string' ? params.body.trim() : ''
+    if (!body) {
+      throw new Error('Body is required')
+    }
+
+    if (params.provider === 'github') {
+      const selector = params.repo?.trim()
+      if (!selector) {
+        throw new Error('GitHub issue creation requires --repo')
+      }
+      if (params.team?.trim()) {
+        throw new Error('GitHub issue creation uses --repo, not --team')
+      }
+      const repo = await this.resolveRepoSelector(selector)
+      if (isFolderRepo(repo)) {
+        throw new Error('GitHub issue creation requires a git repo.')
+      }
+      const result = await createIssue(
+        repo.path,
+        title,
+        body,
+        repo.issueSourcePreference,
+        repo.connectionId ?? null
+      )
+      if (!result.ok) {
+        throw new Error(result.error)
+      }
+      return {
+        provider: 'github',
+        number: result.number,
+        url: result.url,
+        repo: {
+          id: repo.id,
+          path: repo.path,
+          displayName: repo.displayName
+        }
+      }
+    }
+
+    const teamId = params.team?.trim()
+    if (!teamId) {
+      throw new Error('Linear issue creation requires --team')
+    }
+    if (params.repo?.trim()) {
+      throw new Error('Linear issue creation uses --team, not --repo')
+    }
+    const result = await createLinearIssue(teamId, title, body)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    return {
+      provider: 'linear',
+      id: result.id,
+      identifier: result.identifier,
+      url: result.url
     }
   }
 

@@ -891,6 +891,223 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('creates GitHub issues through the runtime', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_issue', {
+        provider: 'github',
+        number: 42,
+        url: 'https://github.com/o/r/issues/42',
+        repo: { id: 'repo-1', path: '/repo', displayName: 'repo' }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'issue',
+        'create',
+        '--provider',
+        'github',
+        '--repo',
+        'id:repo-1',
+        '--title',
+        'Bug',
+        '--body',
+        'Steps',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('issue.create', {
+      provider: 'github',
+      repo: 'id:repo-1',
+      team: undefined,
+      title: 'Bug',
+      body: 'Steps'
+    })
+    expect(JSON.parse(logSpy.mock.calls.flat().join('\n'))).toMatchObject({
+      ok: true,
+      result: { provider: 'github', number: 42 }
+    })
+    expect(logSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('creates Linear issues through the runtime', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_issue', {
+        provider: 'linear',
+        id: 'lin-1',
+        identifier: 'ENG-42',
+        url: 'https://linear.app/team/issue/ENG-42'
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'issue',
+        'create',
+        '--provider',
+        'linear',
+        '--team',
+        'team-1',
+        '--title',
+        'Follow up',
+        '--body',
+        'Context',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('issue.create', {
+      provider: 'linear',
+      repo: undefined,
+      team: 'team-1',
+      title: 'Follow up',
+      body: 'Context'
+    })
+  })
+
+  it('prints issue creation text output', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_issue', {
+        provider: 'linear',
+        id: 'lin-1',
+        identifier: 'ENG-42',
+        url: 'https://linear.app/team/issue/ENG-42'
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'issue',
+        'create',
+        '--provider',
+        'linear',
+        '--team',
+        'team-1',
+        '--title',
+        'Follow up',
+        '--body',
+        'Context'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(logSpy.mock.calls.flat().join('\n')).toBe(
+      'Created Linear issue ENG-42\nhttps://linear.app/team/issue/ENG-42'
+    )
+  })
+
+  it.each([
+    {
+      name: 'unsupported provider',
+      argv: [
+        'issue',
+        'create',
+        '--provider',
+        'gitlab',
+        '--repo',
+        'id:repo-1',
+        '--title',
+        'Bug',
+        '--body',
+        'Steps'
+      ],
+      message: 'Unsupported issue provider "gitlab". Use github or linear.'
+    },
+    {
+      name: 'missing GitHub target',
+      argv: ['issue', 'create', '--provider', 'github', '--title', 'Bug', '--body', 'Steps'],
+      message: 'GitHub issue creation requires --repo'
+    },
+    {
+      name: 'missing Linear target',
+      argv: ['issue', 'create', '--provider', 'linear', '--title', 'Bug', '--body', 'Steps'],
+      message: 'Linear issue creation requires --team'
+    },
+    {
+      name: 'missing title',
+      argv: ['issue', 'create', '--provider', 'github', '--repo', 'id:repo-1', '--body', 'Steps'],
+      message: 'Missing required --title'
+    },
+    {
+      name: 'missing body',
+      argv: ['issue', 'create', '--provider', 'github', '--repo', 'id:repo-1', '--title', 'Bug'],
+      message: 'Missing required --body'
+    },
+    {
+      name: 'GitHub with Linear target',
+      argv: [
+        'issue',
+        'create',
+        '--provider',
+        'github',
+        '--repo',
+        'id:repo-1',
+        '--team',
+        'team-1',
+        '--title',
+        'Bug',
+        '--body',
+        'Steps'
+      ],
+      message: 'GitHub issue creation uses --repo, not --team'
+    }
+  ])('rejects issue create before runtime calls for $name', async ({ argv, message }) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(argv, '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(message)
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('shows issue command group help without treating it as an unknown command', async () => {
+    const priorExitCode = process.exitCode
+    process.exitCode = undefined
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['issue', '--help'], '/tmp/repo')
+
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(callMock).not.toHaveBeenCalled()
+    expect(output).toContain('orca issue')
+    expect(output).toContain('create             Create a GitHub or Linear issue')
+    expect(process.exitCode).toBeUndefined()
+
+    process.exitCode = priorExitCode
+  })
+
+  it('shows issue create help without runtime calls', async () => {
+    const priorExitCode = process.exitCode
+    process.exitCode = undefined
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['issue', 'create', '--help'], '/tmp/repo')
+
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(callMock).not.toHaveBeenCalled()
+    expect(output).toContain(
+      'orca issue create --provider github --repo <selector> --title <title> --body <text>'
+    )
+    expect(output).toContain('Issue provider or automation agent id')
+    expect(process.exitCode).toBeUndefined()
+
+    process.exitCode = priorExitCode
+  })
+
   it('passes explicit focus through terminal.create', async () => {
     queueFixtures(
       callMock,
