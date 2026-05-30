@@ -43,7 +43,7 @@ export function statusColor(status: SshConnectionStatus): string {
     case 'reconnection-failed':
     case 'error':
       return 'bg-red-500'
-    default:
+    case 'disconnected':
       return 'bg-muted-foreground/40'
   }
 }

@@ -1532,7 +1532,9 @@ function mapPRFileStatus(status: GitHubPRFile['status']): GitBranchChangeEntry['
       return 'renamed'
     case 'copied':
       return 'copied'
-    default:
+    case 'changed':
+    case 'modified':
+    case 'unchanged':
       return 'modified'
   }
 }

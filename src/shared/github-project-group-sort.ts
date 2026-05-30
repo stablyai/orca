@@ -87,8 +87,6 @@ function deriveStringValue(value: GitHubProjectRow['fieldValuesByFieldId'][strin
       return value.labels.map((l) => l.name).join(', ')
     case 'users':
       return value.users.map((u) => u.login).join(', ')
-    default:
-      return ''
   }
 }
 

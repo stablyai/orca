@@ -62,7 +62,11 @@ function historyFilename(shell: ShellKind): string | null {
     case 'bash':
       return 'bash_history'
     // Phase 2: fish and PowerShell use different mechanisms
-    default:
+    case 'fish':
+    case 'pwsh':
+    case 'powershell':
+    case 'cmd':
+    case 'unknown':
       return null
   }
 }

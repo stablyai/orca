@@ -11,7 +11,8 @@
   "main": "./out/main/index.js",
   "scripts": {
     "format": "oxfmt --write .",
-    "lint": "oxlint && node config/scripts/check-styled-scrollbars.mjs",
+    "lint": "oxlint && pnpm run lint:switch-exhaustiveness && node config/scripts/check-styled-scrollbars.mjs",
+    "lint:switch-exhaustiveness": "oxlint --type-aware --config config/oxlint-switch-exhaustiveness.json src/main src/preload src/shared src/relay src/cli src/renderer/src config tests --quiet",
     "prepare": "husky",
     "test": "node config/scripts/ensure-native-runtime.mjs --runtime=node && vitest run --config config/vitest.config.ts",
     "check:styled-scrollbars": "node config/scripts/check-styled-scrollbars.mjs",
@@ -157,6 +158,7 @@
     "lint-staged": "^16.4.0",
     "oxfmt": "^0.52.0",
     "oxlint": "^1.67.0",
+    "oxlint-tsgolint": "0.23.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-grab": "^0.1.33",

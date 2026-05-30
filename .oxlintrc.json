@@ -39,7 +39,10 @@
     "typescript/prefer-function-type": "error",
     "typescript/prefer-includes": "error",
     "typescript/prefer-optional-chain": "error",
-    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/switch-exhaustiveness-check": [
+      "error",
+      { "allowDefaultCaseForExhaustiveSwitch": false }
+    ],
     "curly": "error",
     "no-unneeded-ternary": "error",
     "no-useless-return": "error",

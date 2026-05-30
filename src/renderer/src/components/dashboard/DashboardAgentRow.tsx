@@ -22,9 +22,8 @@ function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
     case 'done':
     case 'idle':
       return state
-    default:
-      return 'idle'
   }
+  return 'idle'
 }
 
 function formatTimeAgo(ts: number, now: number): string {
