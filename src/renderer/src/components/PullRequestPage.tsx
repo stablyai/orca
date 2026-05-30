@@ -68,6 +68,7 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 import { setWithLRU } from '@/lib/scroll-cache'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
@@ -2878,7 +2879,7 @@ function ConversationTab({
                     setBodyEditing(false)
                     return
                   }
-                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                  if (isScreenSubmitShortcut(event)) {
                     event.preventDefault()
                     void handleSaveBody()
                   }
@@ -3302,7 +3303,7 @@ function CommentReplyForm({
             onCancel()
             return
           }
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          if (isScreenSubmitShortcut(e)) {
             e.preventDefault()
             void submit()
           }
@@ -4995,7 +4996,7 @@ function GHCommentComposer({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      if (isScreenSubmitShortcut(e)) {
         e.preventDefault()
         handleSubmit()
       }

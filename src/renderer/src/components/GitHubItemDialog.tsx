@@ -66,6 +66,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { cn } from '@/lib/utils'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -2749,7 +2750,7 @@ function ConversationTab({
                     setBodyEditing(false)
                     return
                   }
-                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                  if (isScreenSubmitShortcut(event)) {
                     event.preventDefault()
                     void handleSaveBody()
                   }
@@ -3173,7 +3174,7 @@ function CommentReplyForm({
             onCancel()
             return
           }
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          if (isScreenSubmitShortcut(e)) {
             e.preventDefault()
             void submit()
           }
@@ -5100,7 +5101,7 @@ function GHCommentComposer({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      if (isScreenSubmitShortcut(e)) {
         e.preventDefault()
         handleSubmit()
       }
