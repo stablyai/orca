@@ -8,6 +8,7 @@ import { BROWSER_CORE_METHODS } from './browser-core'
 import { BROWSER_EXTRA_METHODS } from './browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser-screencast'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import { SETTINGS_METHODS } from './settings'
 import { NOTIFICATION_METHODS } from './notifications'
 import { STATS_METHODS } from './stats'
 import { ACCOUNT_METHODS } from './accounts'
@@ -40,6 +41,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...BROWSER_SCREENCAST_METHODS,
   ...BROWSER_EXTRA_METHODS,
   ...ORCHESTRATION_METHODS,
+  ...SETTINGS_METHODS,
   ...NOTIFICATION_METHODS,
   ...STATS_METHODS,
   ...ACCOUNT_METHODS,

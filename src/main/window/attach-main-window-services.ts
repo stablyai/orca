@@ -1,11 +1,13 @@
 /* eslint-disable max-lines -- Why: this file is the central main-window IPC wiring point; splitting it during the mobile release compatibility rebase would increase release risk. */
 import { randomUUID } from 'node:crypto'
 
-import { app, ipcMain, session } from 'electron'
-import type { BrowserWindow, Session } from 'electron'
+import { app, dialog, ipcMain } from 'electron'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/types'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
+import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { upsertSitePermissionRule } from '../../shared/browser-permissions'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
@@ -137,71 +139,40 @@ export function attachMainWindowServices(
     }
   )
 
-  const browserSession = session.fromPartition(ORCA_BROWSER_PARTITION)
-  browserSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
-    // Why: the in-app browser is for dev previews and lightweight browsing, not
-    // trusted desktop-app privileges. Denying by default keeps arbitrary sites
-    // from silently escalating into camera/mic/notification prompts inside Orca.
-    // Why `media` is allowed through: camera/mic are still gated by macOS TCC
-    // at the app-process level, so granting here only *permits* Chromium to
-    // use whatever the OS has already authorized for Orca. Denying at this
-    // layer would make pages inside the in-app browser throw NotAllowedError
-    // even after the user granted Camera/Microphone via Settings → Permissions
-    // or System Settings — the bug #1273 partially addressed.
-    if (permission === 'media') {
-      void requestSystemMediaAccess(
-        details as Electron.MediaAccessPermissionRequest | undefined
-      ).then(
-        (granted) => {
-          if (!granted) {
-            browserManager.notifyPermissionDenied({
-              guestWebContentsId: webContents.id,
-              permission,
-              rawUrl: webContents.getURL()
-            })
-          }
-          callback(granted)
-        },
-        (error: unknown) => {
-          console.error('[permissions] Browser media access failed:', error)
-          browserManager.notifyPermissionDenied({
-            guestWebContentsId: webContents.id,
-            permission,
-            rawUrl: webContents.getURL()
-          })
-          callback(false)
-        }
-      )
-      return
-    }
-    const allowed = permission === 'fullscreen'
-    if (!allowed) {
-      browserManager.notifyPermissionDenied({
-        guestWebContentsId: webContents.id,
-        permission,
-        rawUrl: webContents.getURL()
+  browserSessionRegistry.setPermissionContext({
+    getSettings: () => store.getSettings(),
+    promptPermission: async ({ origin, permission, profileId }) => {
+      if (mainWindow.isDestroyed()) {
+        return { action: 'deny' }
+      }
+      const profileLabel = browserSessionRegistry.getProfile(profileId)?.label ?? 'Default'
+      const result = await dialog.showMessageBox(mainWindow, {
+        type: 'question',
+        buttons: ['Deny once', 'Allow once', 'Allow and remember', 'Deny and remember'],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Browser permission request',
+        message: `${origin} wants to use ${permission}`,
+        detail: `Browser profile: ${profileLabel}\nMode: ${store.getSettings().browserInteractionMode}`,
+        noLink: true
       })
+      const action = result.response === 1 || result.response === 2 ? 'allow' : 'deny'
+      const remember = result.response === 2 || result.response === 3
+      if (remember && !mainWindow.isDestroyed()) {
+        const current = store.getSettings()
+        store.updateSettings({
+          browserSitePermissionRules: upsertSitePermissionRule(current.browserSitePermissionRules, {
+            profileId,
+            origin,
+            permission,
+            action
+          })
+        })
+      }
+      return { action }
     }
-    callback(allowed)
   })
-  browserSession.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
-    if (permission === 'fullscreen') {
-      return true
-    }
-    if (permission === 'media') {
-      return hasSystemMediaAccess(details?.mediaType)
-    }
-    return false
-  })
-  browserSession.setDisplayMediaRequestHandler((_request, callback) => {
-    // Why: arbitrary sites inside Orca should never be able to capture the
-    // desktop or application windows until there is explicit product UX for
-    // selecting a source and surfacing that choice to the user.
-    // Why: pass undefined (not null) to satisfy Electron's typed callback
-    // signature while still denying the request.
-    callback({ video: undefined, audio: undefined })
-  })
-  registerBrowserDownloadHandler(browserSession)
+  browserSessionRegistry.applyPermissionPolicies(ORCA_BROWSER_PARTITION)
 
   mainWindow.on('closed', () => {
     // Why: parked browser webviews can outlive the visible tab body until the
@@ -210,24 +181,6 @@ export function attachMainWindowServices(
     // or hot-reload cycles.
     browserManager.unregisterAll()
   })
-}
-
-function handleBrowserWillDownload(
-  _event: Electron.Event,
-  item: Electron.DownloadItem,
-  webContents: Electron.WebContents
-): void {
-  // Why: browser-tab downloads need explicit product UX before arbitrary sites
-  // can write files through Orca. Pause the item and route it through
-  // BrowserManager so the user must explicitly accept the save path first.
-  browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
-}
-
-function registerBrowserDownloadHandler(browserSession: Session): void {
-  // Why: browser sessions are process-persistent while main windows can be
-  // recreated; replace the named handler so re-attach does not stack listeners.
-  browserSession.removeListener('will-download', handleBrowserWillDownload)
-  browserSession.on('will-download', handleBrowserWillDownload)
 }
 
 function registerAppReloadHandler(

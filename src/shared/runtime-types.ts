@@ -3,8 +3,12 @@ import type { AgentStatusEntry } from './agent-status-types'
 import type {
   BaseRefSearchResult,
   BrowserCookieImportResult,
+  BrowserInteractionMode,
+  BrowserPermissionAction,
+  BrowserPermissionNoticePolicy,
   BrowserSessionProfile,
   BrowserSessionProfileSource,
+  BrowserSitePermissionRule,
   GitWorktreeInfo,
   Repo,
   TabGroupLayoutNode,
@@ -74,6 +78,25 @@ export type CliStatusResult = {
   graph: {
     state: RuntimeGraphStatus | 'not_running' | 'starting'
   }
+}
+
+export type RuntimeSettingsResult = {
+  key: 'browserInteractionMode' | 'browserPermissionNoticePolicy'
+  value: BrowserInteractionMode | BrowserPermissionNoticePolicy
+}
+
+export type BrowserPermissionRuleListResult = {
+  mode: BrowserInteractionMode
+  noticePolicy: BrowserPermissionNoticePolicy
+  rules: BrowserSitePermissionRule[]
+}
+
+export type BrowserPermissionRuleMutationResult = {
+  profileId: string
+  origin: string
+  permission: string
+  action?: BrowserPermissionAction
+  rules: BrowserSitePermissionRule[]
 }
 
 export type RuntimeSyncedTab = {

@@ -37,6 +37,9 @@ import type {
   GitWorktreeInfo,
   GitHubOwnerRepo,
   GlobalSettings,
+  BrowserInteractionMode,
+  BrowserPermissionAction,
+  BrowserPermissionNoticePolicy,
   PersistedUIState,
   Repo,
   StatsSummary,
@@ -91,6 +94,12 @@ import {
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION
 } from '../../shared/protocol-version'
+import {
+  isSupportedBrowserPermission,
+  normalizePermissionOrigin,
+  normalizeProfileId,
+  upsertSitePermissionRule
+} from '../../shared/browser-permissions'
 import type {
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
@@ -141,6 +150,9 @@ import type {
   RuntimeTerminalDriverState,
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult,
+  RuntimeSettingsResult,
+  BrowserPermissionRuleListResult,
+  BrowserPermissionRuleMutationResult,
   BrowserTabInfo,
   BrowserScreencastResult
 } from '../../shared/runtime-types'
@@ -467,6 +479,9 @@ type RuntimeStore = {
     defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
     githubProjects?: GlobalSettings['githubProjects']
     gitlabProjects?: GlobalSettings['gitlabProjects']
+    browserInteractionMode?: BrowserInteractionMode
+    browserPermissionNoticePolicy?: BrowserPermissionNoticePolicy
+    browserSitePermissionRules?: GlobalSettings['browserSitePermissionRules']
     experimentalWorktreeSymlinks?: boolean
     mobileAutoRestoreFitMs?: number | null
     voice?: VoiceSettings
@@ -478,6 +493,12 @@ type RuntimeStore = {
     updates: Partial<GlobalSettings>,
     options?: { notifyListeners?: boolean; originWebContentsId?: number }
   ) => unknown
+}
+
+function getDefaultBrowserPermissionSetting(
+  key: 'browserInteractionMode' | 'browserPermissionNoticePolicy'
+): BrowserInteractionMode | BrowserPermissionNoticePolicy {
+  return key === 'browserInteractionMode' ? 'agent' : 'important-only'
 }
 
 export type RuntimeAutomationCreateInput = Omit<
@@ -1385,6 +1406,8 @@ export class OrcaRuntimeService {
     | 'defaultRepoSelection'
     | 'defaultLinearTeamSelection'
     | 'githubProjects'
+    | 'browserInteractionMode'
+    | 'browserPermissionNoticePolicy'
   > {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
@@ -1400,7 +1423,9 @@ export class OrcaRuntimeService {
       visibleTaskProviders: settings.visibleTaskProviders ?? ['github', 'gitlab', 'linear'],
       defaultRepoSelection: settings.defaultRepoSelection ?? null,
       defaultLinearTeamSelection: settings.defaultLinearTeamSelection ?? null,
-      githubProjects: settings.githubProjects
+      githubProjects: settings.githubProjects,
+      browserInteractionMode: settings.browserInteractionMode ?? 'agent',
+      browserPermissionNoticePolicy: settings.browserPermissionNoticePolicy ?? 'important-only'
     }
   }
 
@@ -1428,6 +1453,8 @@ export class OrcaRuntimeService {
     | 'defaultRepoSelection'
     | 'defaultLinearTeamSelection'
     | 'githubProjects'
+    | 'browserInteractionMode'
+    | 'browserPermissionNoticePolicy'
   > {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
@@ -5138,6 +5165,127 @@ export class OrcaRuntimeService {
 
   listRepos(): Repo[] {
     return this.store?.getRepos() ?? []
+  }
+
+  settingsGet(
+    key: 'browserInteractionMode' | 'browserPermissionNoticePolicy'
+  ): RuntimeSettingsResult {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const settings = this.store.getSettings()
+    return {
+      key,
+      value: settings[key] ?? getDefaultBrowserPermissionSetting(key)
+    }
+  }
+
+  settingsSet(
+    key: 'browserInteractionMode' | 'browserPermissionNoticePolicy',
+    value: BrowserInteractionMode | BrowserPermissionNoticePolicy
+  ): RuntimeSettingsResult {
+    if (!this.store?.updateSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    const updates: Partial<GlobalSettings> =
+      key === 'browserInteractionMode'
+        ? { browserInteractionMode: value as BrowserInteractionMode }
+        : { browserPermissionNoticePolicy: value as BrowserPermissionNoticePolicy }
+    this.store.updateSettings(updates)
+    const settings = this.store.getSettings()
+    return {
+      key,
+      value: settings[key] ?? getDefaultBrowserPermissionSetting(key)
+    }
+  }
+
+  browserPermissionsList(
+    args: { profileId?: string | null } = {}
+  ): BrowserPermissionRuleListResult {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const settings = this.store.getSettings()
+    const profileId = args.profileId ? normalizeProfileId(args.profileId) : null
+    const rules = settings.browserSitePermissionRules ?? []
+    return {
+      mode: settings.browserInteractionMode ?? 'agent',
+      noticePolicy: settings.browserPermissionNoticePolicy ?? 'important-only',
+      rules: profileId
+        ? rules.filter((rule) => normalizeProfileId(rule.profileId) === profileId)
+        : rules
+    }
+  }
+
+  browserPermissionsSet(args: {
+    origin: string
+    permission: string
+    action: BrowserPermissionAction
+    profileId?: string | null
+  }): BrowserPermissionRuleMutationResult {
+    if (!this.store?.updateSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    const origin = normalizePermissionOrigin(args.origin)
+    if (!origin) {
+      throw new Error('invalid_browser_permission_origin')
+    }
+    if (!isSupportedBrowserPermission(args.permission)) {
+      throw new Error('invalid_browser_permission_name')
+    }
+    if (!['allow', 'deny', 'prompt'].includes(args.action)) {
+      throw new Error('invalid_browser_permission_action')
+    }
+    const profileId = normalizeProfileId(args.profileId)
+    const settings = this.store.getSettings()
+    const rules = upsertSitePermissionRule(settings.browserSitePermissionRules ?? [], {
+      profileId,
+      origin,
+      permission: args.permission,
+      action: args.action
+    })
+    this.store.updateSettings({ browserSitePermissionRules: rules })
+    return {
+      profileId,
+      origin,
+      permission: args.permission,
+      action: args.action,
+      rules
+    }
+  }
+
+  browserPermissionsRemove(args: {
+    origin: string
+    permission: string
+    profileId?: string | null
+  }): BrowserPermissionRuleMutationResult {
+    if (!this.store?.updateSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    const origin = normalizePermissionOrigin(args.origin)
+    if (!origin) {
+      throw new Error('invalid_browser_permission_origin')
+    }
+    if (!isSupportedBrowserPermission(args.permission)) {
+      throw new Error('invalid_browser_permission_name')
+    }
+    const profileId = normalizeProfileId(args.profileId)
+    const settings = this.store.getSettings()
+    const rules = (settings.browserSitePermissionRules ?? []).filter(
+      (rule) =>
+        !(
+          normalizePermissionOrigin(rule.origin) === origin &&
+          normalizeProfileId(rule.profileId) === profileId &&
+          rule.permission === args.permission
+        )
+    )
+    this.store.updateSettings({ browserSitePermissionRules: rules })
+    return {
+      profileId,
+      origin,
+      permission: args.permission,
+      rules
+    }
   }
 
   listProjectGroups(): ProjectGroup[] {

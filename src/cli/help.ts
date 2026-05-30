@@ -93,6 +93,15 @@ Computer Use:
   computer paste-text       Paste text through the native clipboard path
   computer set-value        Set the value of a settable app element
 
+Browser Settings:
+  settings get              Read a browser permission setting
+  settings set              Update a browser permission setting
+  browser-permissions list  List remembered browser permission rules
+  browser-permissions allow Remember an allow rule for a site permission
+  browser-permissions deny  Remember a deny rule for a site permission
+  browser-permissions prompt Remember a prompt rule for a site permission
+  browser-permissions remove Remove a remembered site permission rule
+
 Browser Automation:
   tab create                Create a new browser tab (navigates to --url)
   tab list                  List open browser tabs
@@ -361,17 +370,19 @@ export function formatFlagHelp(flag: string): string {
     interrupt: '--interrupt            Send as an interrupt-style input when supported',
     issue: '--issue <number|null>  Linked GitHub issue number',
     json: '--json                 Emit machine-readable JSON',
-    key: '--key <key>            Key or combo to press, e.g. Escape or CmdOrCtrl+L',
+    key: '--key <key>            Setting key, object key, or key combo',
     limit: '--limit <n>            Maximum number of rows to return',
     mode: '--mode <mode>          Mode such as edit, diff, or both',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
     name: '--name <name>          Name for the new worktree or automation',
     'no-parent': '--no-parent            Force no parent lineage for unrelated work',
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
+    origin: '--origin <url>         Site origin or URL, normalized to http(s) origin',
     pages: '--pages <n>           Number of scroll pages',
     'parent-worktree':
       '--parent-worktree <selector> Parent selector; create infers the caller/current worktree by default',
     path: '--path <path>          Path argument for the command',
+    permission: '--permission <name>    Browser permission name',
     query: '--query <text>        Search text for matching refs',
     ref: '--ref <ref>            Base ref to persist for the repo',
     repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',
@@ -409,13 +420,13 @@ export function formatFlagHelp(flag: string): string {
     // Browser automation flags
     element: '--element <ref>        Element ref from snapshot (e.g. e3)',
     url: '--url <url>            URL to navigate to',
-    value: '--value <text>         Value to fill or select',
+    value: '--value <text>         Setting value, form value, or option',
     input: '--input <text>         Text to type at current focus',
     expression: '--expression <js>     JavaScript expression to evaluate',
     amount: '--amount <pixels>      Scroll distance in pixels',
     index: '--index <n>            Tab index to switch to',
     page: '--page <id>            Stable browser page id from `orca tab list --json`',
-    profile: '--profile <id>        Browser profile id',
+    profile: '--profile <id>         Browser profile id',
     'show-profile': '--show-profile        Include tab profile in text output',
     format: '--format <png|jpeg>    Screenshot image format'
   }
