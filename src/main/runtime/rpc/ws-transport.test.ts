@@ -316,6 +316,27 @@ describe('WebSocketTransport', () => {
     await transport.stop()
   })
 
+  it('does not wait for an unresponsive client close handshake during stop', async () => {
+    const { transport } = await createTransport()
+    await transport.start()
+    const ws = await connectWs(transport)
+    const underlying = (ws as unknown as { _socket: { pause: () => void } })._socket
+    underlying.pause()
+
+    const stopPromise = transport.stop()
+    const outcome = await Promise.race([
+      stopPromise.then(() => 'stopped' as const),
+      new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 100))
+    ])
+
+    if (outcome === 'pending') {
+      ws.terminate()
+      await stopPromise
+    }
+
+    expect(outcome).toBe('stopped')
+  })
+
   it('falls back to OS-assigned port when preferred port is in use', async () => {
     const { transport: first } = await createTransport()
     await first.start()

@@ -17,6 +17,7 @@ import { tmpdir } from 'os'
 import type {
   PersistedState,
   Repo,
+  TerminalPaneLayoutNode,
   TerminalTab,
   WorktreeLineage,
   WorkspaceSessionState
@@ -216,6 +217,19 @@ function makeSessionWithBrowserHistory(count: number): WorkspaceSessionState {
       lastVisitedAt: 1_700_000_000_000 - index,
       visitCount: 1
     }))
+  }
+}
+
+function makeBalancedLegacyPaneLayout(start: number, end: number): TerminalPaneLayoutNode {
+  if (end - start === 1) {
+    return { type: 'leaf', leafId: `pane:${start + 1}` }
+  }
+  const midpoint = Math.floor((start + end) / 2)
+  return {
+    type: 'split',
+    direction: 'horizontal',
+    first: makeBalancedLegacyPaneLayout(start, midpoint),
+    second: makeBalancedLegacyPaneLayout(midpoint, end)
   }
 }
 
@@ -3607,6 +3621,62 @@ describe('Store', () => {
         ])
       })
     )
+  })
+
+  it('loads legacy pane aliases from very large persisted split layouts', async () => {
+    const leafCount = 130_000
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {
+        activeRepoId: 'r1',
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [
+            {
+              id: 'tab1',
+              worktreeId: 'wt1',
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'large-pty'
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: makeBalancedLegacyPaneLayout(0, leafCount),
+            activeLeafId: 'pane:1',
+            expandedLeafId: null
+          }
+        }
+      }
+    })
+
+    const store = await createStore()
+    store.flush()
+
+    const persisted = readDataFile() as PersistedState
+    const aliasEntries = persisted.legacyPaneKeyAliasEntries
+    expect(aliasEntries).toHaveLength(leafCount + 1)
+    expect(
+      aliasEntries.some((entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === 'tab1:0')
+    ).toBe(true)
+    expect(
+      aliasEntries.some((entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === 'tab1:1')
+    ).toBe(true)
+    expect(
+      aliasEntries.some(
+        (entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === `tab1:${leafCount}`
+      )
+    ).toBe(true)
   })
 
   it('converts unambiguous dev migration rows into persisted aliases', async () => {

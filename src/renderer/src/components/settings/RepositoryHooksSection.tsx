@@ -99,16 +99,15 @@ const ENV_VARS: readonly { name: string; description: string }[] = [
   {
     name: '$ORCA_ROOT_PATH',
     description:
-      "The main repo's path on disk - useful for copying files (e.g. .env) into the worktree."
+      'Path to the main repo checkout. Useful for copying shared files, like .env, into a worktree.'
   },
   {
     name: '$ORCA_WORKTREE_PATH',
-    description:
-      "The new worktree's path - where setup commands run and where files should be copied to."
+    description: 'Path to the worktree being created. Setup commands run from this directory.'
   },
   {
     name: '$ORCA_WORKSPACE_NAME',
-    description: 'The workspace (branch) name for this worktree.'
+    description: 'Name of the workspace, usually based on the branch name.'
   }
 ]
 
@@ -338,7 +337,7 @@ function EnvVarChips(): React.JSX.Element {
                   {name}
                 </code>
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6} className="max-w-72">
+              <TooltipContent side="top" sideOffset={6} className="max-w-80 text-left text-wrap">
                 {description}
               </TooltipContent>
             </Tooltip>

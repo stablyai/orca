@@ -2,7 +2,6 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { promisify } from 'node:util'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
@@ -10,7 +9,8 @@ import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailable } from '../pwsh'
-import { isWslAvailable } from '../wsl'
+import { isWslAvailable, listWslDistros } from '../wsl'
+import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { authorizeExternalPath } from './filesystem-auth'
 import {
@@ -20,7 +20,7 @@ import {
 } from './floating-workspace-directory'
 import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
 
-const execFileAsync = promisify(execFile)
+const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
 
 type RegisterAppHandlersOptions = {
   onBeforeRelaunch?: () => void
@@ -100,6 +100,52 @@ function resolveDevFeatureWallAssetDir(): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
+function readKeyboardInputSourceId(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let child: ReturnType<typeof execFile> | undefined
+    const timer = setTimeout(() => {
+      if (settled) {
+        return
+      }
+      settled = true
+      child?.kill()
+      reject(new Error('Keyboard input source probe timed out'))
+    }, KEYBOARD_INPUT_SOURCE_TIMEOUT_MS)
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      callback()
+    }
+
+    // Why: execFile's timeout only signals `defaults`; if the callback
+    // never arrives, window-focus keyboard probes would remain pending.
+    try {
+      child = execFile(
+        '/usr/bin/defaults',
+        ['read', 'com.apple.HIToolbox', 'AppleCurrentKeyboardLayoutInputSourceID'],
+        // Why: short timeout so a wedged defaults binary (corporate-managed
+        // config, sandbox policy, ...) never holds the handle indefinitely.
+        // Fall through to the fingerprint on timeout.
+        { encoding: 'utf8', timeout: KEYBOARD_INPUT_SOURCE_TIMEOUT_MS },
+        (error, stdout) => {
+          if (error) {
+            settle(() => reject(error))
+            return
+          }
+          settle(() => resolve(String(stdout)))
+        }
+      )
+    } catch (error) {
+      settle(() => reject(error))
+    }
+  })
+}
+
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
@@ -117,7 +163,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
+  ipcMain.handle('wsl:listDistros', (): string[] => listWslDistros())
   ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())
+  ipcMain.handle('gitBash:isAvailable', (): boolean => isGitBashAvailable())
 
   // Why: ABC, Polish Pro, US Extended, ABC Extended, and every CJK Roman
   // IME all report a US-QWERTY base layer to navigator.keyboard.getLayoutMap()
@@ -131,7 +179,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   // have no equivalent and return null so the fingerprint stays the only
   // signal.
   //
-  // Why `defaults read` (via execFileSync) and not systemPreferences
+  // Why `defaults read` and not systemPreferences
   // .getUserDefault: getUserDefault only reads from NSGlobalDomain and the
   // current app's own domain. The keyboard layout ID lives in the
   // `com.apple.HIToolbox` domain, which getUserDefault cannot reach —
@@ -147,14 +195,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
       // The probe re-runs on every window focus-in (see option-as-alt-probe.ts),
       // and a blocking execFileSync would briefly stall unrelated IPC each
       // time the user Alt-Tabbed back into the app.
-      const { stdout } = await execFileAsync(
-        '/usr/bin/defaults',
-        ['read', 'com.apple.HIToolbox', 'AppleCurrentKeyboardLayoutInputSourceID'],
-        // Why: short timeout so a wedged defaults binary (corporate-managed
-        // config, sandbox policy, …) never holds the handle indefinitely.
-        // Fall through to the fingerprint on timeout.
-        { encoding: 'utf8', timeout: 500 }
-      )
+      const stdout = await readKeyboardInputSourceId()
       const trimmed = stdout.trim()
       return trimmed.length > 0 ? trimmed : null
     } catch {

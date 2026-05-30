@@ -33,6 +33,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import {
+  fastForwardRuntimeGit,
   fetchRuntimeGit,
   getRuntimeGitUpstreamStatus,
   pullRuntimeGit,
@@ -205,6 +206,36 @@ export type PendingEditorReveal = {
   matchLength: number
 }
 
+const pendingEditorLineRevealFrameIds = new Set<number>()
+
+function cancelPendingEditorLineRevealFrames(): void {
+  if (typeof cancelAnimationFrame === 'function') {
+    for (const frameId of pendingEditorLineRevealFrameIds) {
+      cancelAnimationFrame(frameId)
+    }
+  }
+  pendingEditorLineRevealFrameIds.clear()
+}
+
+function trackEditorLineRevealFrameId(frameId: number): void {
+  pendingEditorLineRevealFrameIds.add(frameId)
+}
+
+function requestTrackedEditorLineRevealFrame(callback: FrameRequestCallback): void {
+  let completed = false
+  let frameId: number | undefined
+  frameId = requestAnimationFrame((timestamp) => {
+    completed = true
+    if (frameId !== undefined) {
+      pendingEditorLineRevealFrameIds.delete(frameId)
+    }
+    callback(timestamp)
+  })
+  if (!completed) {
+    trackEditorLineRevealFrameId(frameId)
+  }
+}
+
 function scheduleEditorLineReveal(
   get: () => AppState,
   filePath: string,
@@ -214,9 +245,10 @@ function scheduleEditorLineReveal(
 ): void {
   // Why: openFile can replace a preview and remount Monaco asynchronously; the
   // reveal must land after that remount or the old editor can clear it.
+  cancelPendingEditorLineRevealFrames()
   get().setPendingEditorReveal(null)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  requestTrackedEditorLineRevealFrame(() => {
+    requestTrackedEditorLineRevealFrame(() => {
       get().setPendingEditorReveal({
         filePath,
         fileId,
@@ -430,6 +462,12 @@ export type EditorSlice = {
     options?: { forceWithLease?: boolean }
   ) => Promise<void>
   pullBranch: (
+    worktreeId: string,
+    worktreePath: string,
+    connectionId?: string,
+    pushTarget?: GitPushTarget
+  ) => Promise<void>
+  fastForwardBranch: (
     worktreeId: string,
     worktreePath: string,
     connectionId?: string,
@@ -864,6 +902,7 @@ export function resolveRemoteOperationErrorMessage(
     isPush?: boolean
     isSync?: boolean
     isFetch?: boolean
+    isFastForward?: boolean
     isRebase?: boolean
   }
 ): string {
@@ -918,7 +957,30 @@ export function resolveRemoteOperationErrorMessage(
     if (options?.isRebase) {
       return 'Rebase blocked — commit or stash your local changes first.'
     }
+    if (options?.isFastForward) {
+      return 'Fast-forward blocked — commit or stash your local changes first.'
+    }
     return 'Pull blocked — commit or stash your local changes first.'
+  }
+
+  if (/Pull would overwrite local changes/i.test(error.message)) {
+    if (options?.isRebase) {
+      return 'Rebase blocked — commit or stash your local changes first.'
+    }
+    if (options?.isFastForward) {
+      return 'Fast-forward blocked — commit or stash your local changes first.'
+    }
+    return 'Pull blocked — commit or stash your local changes first.'
+  }
+
+  if (/Pull would overwrite untracked files/i.test(error.message)) {
+    if (options?.isRebase) {
+      return 'Rebase blocked — move, remove, or add untracked files first.'
+    }
+    if (options?.isFastForward) {
+      return 'Fast-forward blocked — move, remove, or add untracked files first.'
+    }
+    return 'Pull blocked — move, remove, or add untracked files first.'
   }
 
   if (options?.publish) {
@@ -958,6 +1020,13 @@ export function resolveRemoteOperationErrorMessage(
       extractPublishFailureDetail(error.message) ??
       truncateDetail(stripCredentialsFromMessage(error.message))
     return `Fetch failed. ${detail}`
+  }
+
+  if (options?.isFastForward) {
+    const detail =
+      extractPublishFailureDetail(error.message) ??
+      truncateDetail(stripCredentialsFromMessage(error.message))
+    return `Fast-forward failed. ${detail}`
   }
 
   if (options?.isRebase) {
@@ -2804,6 +2873,25 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       )
     } catch (error) {
       toast.error(resolveRemoteOperationErrorMessage(error))
+      throw error
+    } finally {
+      get().endRemoteOperation()
+    }
+    void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget)
+    const refreshGitHubForWorktree = get().refreshGitHubForWorktree
+    if (typeof refreshGitHubForWorktree === 'function') {
+      refreshGitHubForWorktree(worktreeId)
+    }
+  },
+  fastForwardBranch: async (worktreeId, worktreePath, connectionId, pushTarget) => {
+    get().beginRemoteOperation('fast_forward')
+    try {
+      await fastForwardRuntimeGit(
+        { settings: get().settings, worktreeId, worktreePath, connectionId },
+        pushTarget
+      )
+    } catch (error) {
+      toast.error(resolveRemoteOperationErrorMessage(error, { isFastForward: true }))
       throw error
     } finally {
       get().endRemoteOperation()

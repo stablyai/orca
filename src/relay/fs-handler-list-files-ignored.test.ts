@@ -12,6 +12,7 @@ import { EventEmitter } from 'events'
 import type { ChildProcess } from 'child_process'
 import { listFilesWithGit } from './fs-handler-git-fallback'
 import { listFilesWithRg } from './fs-handler-list-files'
+import { searchWithRg } from './fs-handler-utils'
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
@@ -127,5 +128,104 @@ describe('relay quick open ignored file listing', () => {
     }, 10)
 
     await expect(promise).rejects.toThrow('git ls-files killed by SIGTERM')
+  })
+
+  it('git fallback rejects when a timed-out child does not emit close', async () => {
+    vi.useFakeTimers()
+    try {
+      const primaryProc = createMockProcess()
+      const ignoredProc = createMockProcess()
+      let callIndex = 0
+
+      spawnMock.mockImplementation(() => {
+        callIndex++
+        return callIndex === 1 ? primaryProc : ignoredProc
+      })
+
+      const promise = listFilesWithGit('/remote/root')
+      const outcomePromise = promise.then(
+        () => 'resolved',
+        (err: Error) => `rejected:${err.message}`
+      )
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toContain('git ls-files timed out')
+      expect(primaryProc.kill).toHaveBeenCalled()
+      expect(ignoredProc.kill).toHaveBeenCalled()
+      expect((primaryProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((primaryProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(primaryProc.listenerCount('error')).toBe(0)
+      expect(primaryProc.listenerCount('close')).toBe(0)
+      expect((ignoredProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((ignoredProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(ignoredProc.listenerCount('error')).toBe(0)
+      expect(ignoredProc.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rg file listing rejects and detaches when a timed-out child does not emit close', async () => {
+    vi.useFakeTimers()
+    try {
+      const primaryProc = createMockProcess()
+      const ignoredProc = createMockProcess()
+      let callIndex = 0
+
+      spawnMock.mockImplementation(() => {
+        callIndex++
+        return callIndex === 1 ? primaryProc : ignoredProc
+      })
+
+      const promise = listFilesWithRg('/remote/root')
+      const outcomePromise = promise.then(
+        () => 'resolved',
+        (err: Error) => `rejected:${err.message}`
+      )
+
+      await vi.advanceTimersByTimeAsync(25_000)
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toBe('rejected:rg list timed out')
+      expect(primaryProc.kill).toHaveBeenCalled()
+      expect(ignoredProc.kill).toHaveBeenCalled()
+      expect((primaryProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((primaryProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(primaryProc.listenerCount('error')).toBe(0)
+      expect(primaryProc.listenerCount('close')).toBe(0)
+      expect((ignoredProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((ignoredProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(ignoredProc.listenerCount('error')).toBe(0)
+      expect(ignoredProc.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rg search settles and detaches when a timed-out child does not emit close', async () => {
+    vi.useFakeTimers()
+    try {
+      const proc = createMockProcess()
+      spawnMock.mockReturnValue(proc)
+
+      const promise = searchWithRg('/remote/root', 'ok', { maxResults: 100 })
+      const outcomePromise = promise.then((result) =>
+        result.truncated ? `truncated:${result.totalMatches}` : 'not-truncated'
+      )
+
+      await vi.runOnlyPendingTimersAsync()
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toBe('truncated:0')
+      expect(proc.kill).toHaveBeenCalled()
+      expect((proc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((proc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(proc.listenerCount('error')).toBe(0)
+      expect(proc.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

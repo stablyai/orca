@@ -6,15 +6,29 @@ import { getConnectionId } from '@/lib/connection-context'
 import { listRuntimeMarkdownDocuments, statRuntimePath } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
-import { createMarkdownDocumentIndex, resolveMarkdownDocLink } from './markdown-doc-links'
+import {
+  createMarkdownDocumentIndex,
+  getMarkdownDocLinkAnchor,
+  resolveMarkdownDocLink
+} from './markdown-doc-links'
+
+type OpenMarkdownDocumentOptions = {
+  anchor?: string | null
+}
 
 type UseMarkdownDocumentsResult = {
   markdownDocuments: MarkdownDocument[]
-  openMarkdownDocument: (document: MarkdownDocument) => Promise<void>
+  openMarkdownDocument: (
+    document: MarkdownDocument,
+    options?: OpenMarkdownDocumentOptions
+  ) => Promise<void>
   onOpenDocLink: (target: string) => void
   previewProps: {
     markdownDocuments: MarkdownDocument[]
-    onOpenDocument: (document: MarkdownDocument) => Promise<void>
+    onOpenDocument: (
+      document: MarkdownDocument,
+      options?: OpenMarkdownDocumentOptions
+    ) => Promise<void>
   }
   mdSave: (content: string) => Promise<void>
 }
@@ -28,6 +42,7 @@ export function useMarkdownDocuments(
   const worktreeId = activeFile.worktreeId
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const openFile = useAppStore((s) => s.openFile)
+  const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const [markdownDocumentsByWorktree, setMarkdownDocumentsByWorktree] = useState<
     Record<string, MarkdownDocument[]>
   >({})
@@ -81,7 +96,10 @@ export function useMarkdownDocuments(
   }, [activeFile.runtimeEnvironmentId, connectionId, worktreeId, worktreePath])
 
   const openMarkdownDocument = useCallback(
-    async (document: MarkdownDocument): Promise<void> => {
+    async (
+      document: MarkdownDocument,
+      options: OpenMarkdownDocumentOptions = {}
+    ): Promise<void> => {
       if (!worktreeId || !worktreePath) {
         return
       }
@@ -107,6 +125,22 @@ export function useMarkdownDocuments(
         return
       }
 
+      if (options.anchor) {
+        // Why: heading fragments are preview anchors, not filesystem paths.
+        // Opening preview preserves Obsidian-style [[note#Heading]] navigation.
+        openMarkdownPreview(
+          {
+            filePath: document.filePath,
+            relativePath: document.relativePath,
+            worktreeId,
+            language: 'markdown',
+            runtimeEnvironmentId: activeFile.runtimeEnvironmentId
+          },
+          { anchor: options.anchor }
+        )
+        return
+      }
+
       openFile({
         filePath: document.filePath,
         relativePath: document.relativePath,
@@ -120,6 +154,7 @@ export function useMarkdownDocuments(
       activeFile.runtimeEnvironmentId,
       connectionId,
       openFile,
+      openMarkdownPreview,
       refreshMarkdownDocuments,
       worktreeId,
       worktreePath
@@ -157,7 +192,9 @@ export function useMarkdownDocuments(
     (target: string) => {
       const resolution = resolveMarkdownDocLink(target, docIndex)
       if (resolution.status === 'resolved') {
-        void openMarkdownDocument(resolution.document)
+        void openMarkdownDocument(resolution.document, {
+          anchor: getMarkdownDocLinkAnchor(target)
+        })
       }
     },
     [docIndex, openMarkdownDocument]

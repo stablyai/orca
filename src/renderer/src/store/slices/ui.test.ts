@@ -10,6 +10,7 @@ import type {
 } from '../../../../shared/types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
+import { createSettingsSearchState } from './settings-search-state'
 import type { AppState } from '../types'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
 
@@ -28,6 +29,7 @@ function createUIStore(): StoreApi<AppState> {
     worktreesByRepo: {},
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
+    ...createSettingsSearchState(args[0]),
     ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
   })) as unknown as StoreApi<AppState>
@@ -589,6 +591,29 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().worktreeCardProperties).toEqual(expected)
     expect(setUI).toHaveBeenCalledWith({ worktreeCardProperties: expected })
   })
+
+  it('persists the agent activity display mode', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setAgentActivityDisplayMode('full')
+
+    expect(store.getState().agentActivityDisplayMode).toBe('full')
+    expect(setUI).toHaveBeenCalledWith({ agentActivityDisplayMode: 'full' })
+  })
+
+  it('normalizes invalid persisted agent activity display modes', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentActivityDisplayMode: 'bogus' as PersistedUIState['agentActivityDisplayMode']
+      })
+    )
+
+    expect(store.getState().agentActivityDisplayMode).toBe('compact')
+  })
 })
 
 describe('createUISlice settings navigation', () => {
@@ -656,6 +681,17 @@ describe('createUISlice settings navigation', () => {
     store.getState().closeSettingsPage()
 
     expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('clears transient settings search when opening settings', () => {
+    const store = createUIStore()
+
+    store.setState({ settingsSearchInputQuery: 'terminal', settingsSearchQuery: 'terminal' })
+    store.getState().openSettingsPage()
+
+    expect(store.getState().activeView).toBe('settings')
+    expect(store.getState().settingsSearchInputQuery).toBe('')
+    expect(store.getState().settingsSearchQuery).toBe('')
   })
 })
 
@@ -960,6 +996,36 @@ describe('createUISlice feature interactions', () => {
 })
 
 describe('createUISlice space navigation', () => {
+  it('records Space page opens as workspace cleanup interactions', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const now = 1_700_000_000_000
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+
+    try {
+      const store = createUIStore()
+      store.getState().hydratePersistedUI(makePersistedUI())
+      setMock.mockClear()
+
+      store.getState().openSpacePage()
+
+      const expected: FeatureInteractionState = {
+        'workspace-cleanup': { firstInteractedAt: now, interactionCount: 1 }
+      }
+      expect(store.getState().featureInteractions).toEqual(expected)
+      expect(setMock).toHaveBeenCalledWith({ featureInteractions: expected })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('returns to the tasks page after opening Space from an in-progress draft', () => {
     const store = createUIStore()
 

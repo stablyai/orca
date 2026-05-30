@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionLogEntry } from '../transport/types'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -36,14 +36,6 @@ function formatTime(ts: number, baseTs: number): string {
 export function ConnectionLog({ entries, title }: Props) {
   const scrollRef = useRef<ScrollView | null>(null)
 
-  // Why: keep the latest entry visible while logs grow during a slow
-  // connect. Skip on empty so the title row doesn't jump.
-  useEffect(() => {
-    if (entries.length === 0) return
-    const id = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 16)
-    return () => clearTimeout(id)
-  }, [entries.length])
-
   if (entries.length === 0) return null
   const baseTs = entries[0]!.ts
 
@@ -55,6 +47,7 @@ export function ConnectionLog({ entries, title }: Props) {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
       >
         {entries.map((entry) => (
           <View key={entry.id} style={styles.row}>

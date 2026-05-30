@@ -97,7 +97,7 @@ async function walkJsonlFiles(dirPath: string): Promise<string[]> {
   for (const entry of entries) {
     const fullPath = join(dirPath, entry.name)
     if (entry.isDirectory()) {
-      files.push(...(await walkJsonlFiles(fullPath)))
+      appendDiscoveredFiles(files, await walkJsonlFiles(fullPath))
       continue
     }
     if (entry.isFile() && entry.name.endsWith('.jsonl')) {
@@ -106,6 +106,14 @@ async function walkJsonlFiles(dirPath: string): Promise<string[]> {
   }
 
   return files
+}
+
+function appendDiscoveredFiles(target: string[], source: readonly string[]): void {
+  // Why: large session directories can exceed V8's argument limit if child
+  // file arrays are spread into push().
+  for (const filePath of source) {
+    target.push(filePath)
+  }
 }
 
 export function getCodexSessionsDirectory(): string {
@@ -127,7 +135,7 @@ export async function listCodexSessionFiles(): Promise<string[]> {
   const files: string[] = []
   for (const dirPath of getCodexSessionDirectories()) {
     try {
-      files.push(...(await walkJsonlFiles(dirPath)))
+      appendDiscoveredFiles(files, await walkJsonlFiles(dirPath))
     } catch {
       // Missing or unreadable history in one home should not hide the other.
     }

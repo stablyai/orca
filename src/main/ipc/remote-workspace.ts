@@ -28,6 +28,7 @@ const SNAPSHOT_SCHEMA_VERSION = 1
 
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
 const latestSnapshotByTargetId = new Map<string, RemoteWorkspaceSnapshot>()
+const remoteWorkspacePatchTailByTargetId = new Map<string, Promise<void>>()
 let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
 
 function emptyRemoteSession(): RemoteWorkspaceSession {
@@ -220,6 +221,106 @@ async function getRemoteSnapshot(target: SshTarget): Promise<RemoteWorkspaceSnap
   }
 }
 
+async function queueRemoteWorkspacePatch<T>(
+  targetId: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  const previous = remoteWorkspacePatchTailByTargetId.get(targetId) ?? Promise.resolve()
+  let release!: () => void
+  const tail = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const queued = previous.catch(() => {}).then(() => tail)
+  remoteWorkspacePatchTailByTargetId.set(targetId, queued)
+
+  await previous.catch(() => {})
+  try {
+    return await operation()
+  } finally {
+    release()
+    if (remoteWorkspacePatchTailByTargetId.get(targetId) === queued) {
+      remoteWorkspacePatchTailByTargetId.delete(targetId)
+    }
+  }
+}
+
+async function patchRemoteWorkspaceSession(
+  target: SshTarget,
+  session: RemoteWorkspaceSession
+): Promise<RemoteWorkspacePatchResult | null> {
+  const mux = getActiveMultiplexer(target.id)
+  if (!mux) {
+    return null
+  }
+  const namespace = getRemoteWorkspaceNamespace(target)
+  const current =
+    latestSnapshotByTargetId.get(target.id) ?? (await getRemoteSnapshot(target)) ?? undefined
+  if (current && remoteWorkspaceSessionMatchesSnapshot(current, session)) {
+    // Why: a pulled workspace snapshot rehydrates local state and can trigger
+    // session persistence. Identical target sessions must stay a local no-op or
+    // two clients will echo revisions indefinitely.
+    return { ok: true, snapshot: current }
+  }
+
+  const requestPatch = async (
+    baseRevision: number | undefined
+  ): Promise<RemoteWorkspacePatchResult> => {
+    try {
+      return (await mux.request('workspace.patch', {
+        namespace,
+        baseRevision: baseRevision ?? 0,
+        clientId: CLIENT_ID,
+        patch: { kind: 'replace-session', session }
+      })) as RemoteWorkspacePatchResult
+    } catch (err) {
+      return (err as { code?: unknown })?.code === -32601
+        ? {
+            ok: false,
+            reason: 'unavailable',
+            message: 'Remote workspace sync is unavailable on this relay'
+          }
+        : {
+            ok: false,
+            reason: 'unavailable',
+            message: err instanceof Error ? err.message : 'Remote workspace sync failed'
+          }
+    }
+  }
+
+  const result = await requestPatch(current?.revision)
+  if (result.ok) {
+    latestSnapshotByTargetId.set(target.id, result.snapshot)
+    return result
+  }
+  if (result.snapshot) {
+    latestSnapshotByTargetId.set(target.id, result.snapshot)
+  }
+
+  if (
+    result.reason === 'stale-revision' &&
+    current &&
+    result.snapshot &&
+    result.snapshot.revision < current.revision
+  ) {
+    if (remoteWorkspaceSessionMatchesSnapshot(result.snapshot, session)) {
+      return { ok: true, snapshot: result.snapshot }
+    }
+    // Why: a relay reset can legitimately move the remote snapshot revision
+    // backwards while this process still has the old cached revision. Retrying
+    // only for backwards revisions restores the blank-slate target without
+    // overwriting a newer snapshot from another device.
+    const retry = await requestPatch(result.snapshot.revision)
+    if (retry.ok) {
+      latestSnapshotByTargetId.set(target.id, retry.snapshot)
+    } else if (retry.snapshot) {
+      latestSnapshotByTargetId.set(target.id, retry.snapshot)
+    }
+    return retry
+  }
+
+  return result
+}
+
 export function handleRemoteWorkspaceNotification(
   targetId: string,
   method: string,
@@ -287,48 +388,13 @@ export function registerRemoteWorkspaceHandlers(
 
       const results: { targetId: string; result: RemoteWorkspacePatchResult }[] = []
       for (const target of targets) {
-        const mux = getActiveMultiplexer(target.id)
-        if (!mux) {
-          continue
-        }
-        const namespace = getRemoteWorkspaceNamespace(target)
-        const current =
-          latestSnapshotByTargetId.get(target.id) ?? (await getRemoteSnapshot(target)) ?? undefined
         const session = exportSessionForTarget(store, target.id, args.session)
-        let result: RemoteWorkspacePatchResult
-        if (current && remoteWorkspaceSessionMatchesSnapshot(current, session)) {
-          // Why: a pulled workspace snapshot rehydrates local state and can
-          // trigger session persistence. Identical target sessions must be a
-          // local no-op or two clients will echo revisions indefinitely.
-          result = { ok: true, snapshot: current }
+        const result = await queueRemoteWorkspacePatch(target.id, () =>
+          patchRemoteWorkspaceSession(target, session)
+        )
+        if (result) {
           results.push({ targetId: target.id, result })
-          continue
         }
-        try {
-          result = (await mux.request('workspace.patch', {
-            namespace,
-            baseRevision: current?.revision ?? 0,
-            clientId: CLIENT_ID,
-            patch: { kind: 'replace-session', session }
-          })) as RemoteWorkspacePatchResult
-        } catch (err) {
-          result =
-            (err as { code?: unknown })?.code === -32601
-              ? {
-                  ok: false,
-                  reason: 'unavailable',
-                  message: 'Remote workspace sync is unavailable on this relay'
-                }
-              : {
-                  ok: false,
-                  reason: 'unavailable',
-                  message: err instanceof Error ? err.message : 'Remote workspace sync failed'
-                }
-        }
-        if (result.ok) {
-          latestSnapshotByTargetId.set(target.id, result.snapshot)
-        }
-        results.push({ targetId: target.id, result })
       }
       return results
     }

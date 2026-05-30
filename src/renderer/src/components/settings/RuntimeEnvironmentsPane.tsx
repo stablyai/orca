@@ -2,8 +2,9 @@
    server selection, saved server mutation, and confirmation dialogs together so
    the state transitions stay auditable. */
 import { Loader2, Plus, RefreshCw, Share2, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { Button } from '../ui/button'
@@ -54,6 +55,7 @@ export function RuntimeEnvironmentsPane({
   const [removeError, setRemoveError] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [pairingCode, setPairingCode] = useState('')
+  const mountedRef = useMountedRef()
   const activeValue =
     settings.activeRuntimeEnvironmentId ??
     (allowLocalRuntime ? LOCAL_RUNTIME_VALUE : NO_RUNTIME_VALUE)
@@ -63,20 +65,29 @@ export function RuntimeEnvironmentsPane({
     ? RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
     : WEB_RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
 
-  const loadEnvironments = async (): Promise<void> => {
-    setIsLoading(true)
-    try {
-      setEnvironments(await window.api.runtimeEnvironments.list())
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to load runtime environments.')
-    } finally {
-      setIsLoading(false)
+  const loadEnvironments = useCallback(async (): Promise<void> => {
+    if (mountedRef.current) {
+      setIsLoading(true)
     }
-  }
+    try {
+      const nextEnvironments = await window.api.runtimeEnvironments.list()
+      if (mountedRef.current) {
+        setEnvironments(nextEnvironments)
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to load runtime environments.')
+      }
+    } finally {
+      if (mountedRef.current) {
+        setIsLoading(false)
+      }
+    }
+  }, [mountedRef])
 
   useEffect(() => {
     void loadEnvironments()
-  }, [])
+  }, [loadEnvironments])
 
   const closeAddServerForm = (): void => {
     if (isSaving) {
@@ -113,8 +124,10 @@ export function RuntimeEnvironmentsPane({
         name: trimmedName,
         pairingCode: trimmedPairingCode
       })
-      setName('')
-      setPairingCode('')
+      if (mountedRef.current) {
+        setName('')
+        setPairingCode('')
+      }
       await loadEnvironments()
       if (!allowLocalRuntime) {
         const switched = await switchRuntimeEnvironment(result.environment.id)
@@ -123,15 +136,25 @@ export function RuntimeEnvironmentsPane({
           await loadEnvironments()
           return
         }
-        toast.success(`Connected to ${result.environment.name}.`)
+        if (mountedRef.current) {
+          toast.success(`Connected to ${result.environment.name}.`)
+        }
       } else {
-        toast.success(`Saved ${result.environment.name}. Use Active Server to switch when ready.`)
+        if (mountedRef.current) {
+          toast.success(`Saved ${result.environment.name}. Use Active Server to switch when ready.`)
+        }
       }
-      setAddServerFormOpen(false)
+      if (mountedRef.current) {
+        setAddServerFormOpen(false)
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save runtime environment.')
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to save runtime environment.')
+      }
     } finally {
-      setIsSaving(false)
+      if (mountedRef.current) {
+        setIsSaving(false)
+      }
     }
   }
 
@@ -144,31 +167,41 @@ export function RuntimeEnvironmentsPane({
       if (settings.activeRuntimeEnvironmentId === environment.id) {
         const switched = await switchRuntimeEnvironment(null)
         if (!switched) {
-          setRemoveError(
-            allowLocalRuntime
-              ? 'Could not switch to Local desktop. Fix the issue and try again.'
-              : 'Could not disconnect from this server. Fix the issue and try again.'
-          )
+          if (mountedRef.current) {
+            setRemoveError(
+              allowLocalRuntime
+                ? 'Could not switch to Local desktop. Fix the issue and try again.'
+                : 'Could not disconnect from this server. Fix the issue and try again.'
+            )
+          }
           return false
         }
         if (!allowLocalRuntime) {
           await loadEnvironments()
-          toast.success(`Removed ${environment.name}.`)
+          if (mountedRef.current) {
+            toast.success(`Removed ${environment.name}.`)
+          }
           return true
         }
       }
       await window.api.runtimeEnvironments.remove({ selector: environment.id })
       await loadEnvironments()
-      toast.success(`Removed ${environment.name}.`)
+      if (mountedRef.current) {
+        toast.success(`Removed ${environment.name}.`)
+      }
       return true
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to remove runtime environment.'
-      setRemoveError(message)
-      toast.error(message)
+      if (mountedRef.current) {
+        setRemoveError(message)
+        toast.error(message)
+      }
       return false
     } finally {
-      setRemovingId(null)
+      if (mountedRef.current) {
+        setRemovingId(null)
+      }
     }
   }
 
@@ -183,18 +216,26 @@ export function RuntimeEnvironmentsPane({
         allowLocalRuntime && value === LOCAL_RUNTIME_VALUE ? null : value
       )
       if (switched) {
-        toast.success(`Switched to ${getEnvironmentLabel(value)}.`)
+        if (mountedRef.current) {
+          toast.success(`Switched to ${getEnvironmentLabel(value)}.`)
+        }
         return true
       }
-      setSwitchError('Could not switch servers. Fix the issue and try again.')
+      if (mountedRef.current) {
+        setSwitchError('Could not switch servers. Fix the issue and try again.')
+      }
       return false
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to switch servers.'
-      setSwitchError(message)
-      toast.error(message)
+      if (mountedRef.current) {
+        setSwitchError(message)
+        toast.error(message)
+      }
       return false
     } finally {
-      setSwitchingValue(null)
+      if (mountedRef.current) {
+        setSwitchingValue(null)
+      }
     }
   }
 
@@ -316,7 +357,7 @@ export function RuntimeEnvironmentsPane({
                   aria-describedby="runtime-server-pairing-code-help"
                   value={pairingCode}
                   onChange={(event) => setPairingCode(event.target.value)}
-                  placeholder="orca://pair#..."
+                  placeholder="orca://pair?code=..."
                   className="h-8 min-w-0 font-mono text-xs"
                 />
                 <p id="runtime-server-pairing-code-help" className="text-xs text-muted-foreground">
@@ -457,7 +498,7 @@ export function RuntimeEnvironmentsPane({
                   return
                 }
                 void switchToValue(value).then((switched) => {
-                  if (switched) {
+                  if (switched && mountedRef.current) {
                     setPendingSwitchValue(null)
                   }
                 })
@@ -519,7 +560,7 @@ export function RuntimeEnvironmentsPane({
                   return
                 }
                 void removeEnvironment(environment).then((removed) => {
-                  if (removed) {
+                  if (removed && mountedRef.current) {
                     setPendingRemove(null)
                   }
                 })

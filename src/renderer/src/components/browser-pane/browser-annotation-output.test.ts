@@ -110,6 +110,26 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     expect(markdown).toContain('**Classes:** `` primary `generated` ``')
   })
 
+  it('formats page snippets with many backtick runs', () => {
+    const annotation = makeAnnotation()
+    const manyBacktickRuns = Array.from({ length: 130_000 }, () => '`').join(' ')
+
+    expect(() =>
+      formatBrowserAnnotationsAsMarkdown([
+        makeAnnotation({
+          payload: {
+            ...annotation.payload,
+            target: {
+              ...annotation.payload.target,
+              selector: `button[data-label="${manyBacktickRuns}"]`,
+              htmlSnippet: `<button>${manyBacktickRuns}</button>`
+            }
+          }
+        })
+      ])
+    ).not.toThrow()
+  })
+
   it('collapses page-controlled newlines before putting text in headings and lists', () => {
     const annotation = makeAnnotation()
     const markdown = formatBrowserAnnotationsAsMarkdown([

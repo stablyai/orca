@@ -5,7 +5,9 @@ import { isTuiAgent } from './tui-agent-config'
 // automatic fallback priority when the user has not chosen a default agent.
 export const TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
+  'openclaude',
   'codex',
+  'openclaude',
   'grok',
   'copilot',
   'opencode',

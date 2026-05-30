@@ -4,6 +4,7 @@ import type { SparsePreset } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { cn } from '@/lib/utils'
 import { parseSparsePresetDirectories } from '@/lib/sparse-preset-draft'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -59,6 +60,7 @@ export function SparsePresetSettingsSection({
   const [draft, setDraft] = useState<SparsePresetDraft | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
+  const mountedRef = useMountedRef()
 
   useEffect(() => {
     if (presets === undefined) {
@@ -119,11 +121,13 @@ export function SparsePresetSettingsSection({
         name: trimmedName,
         directories: parsedDirectories.directories
       })
-      if (saved) {
+      if (saved && mountedRef.current) {
         setDraft(null)
       }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 

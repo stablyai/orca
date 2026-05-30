@@ -1119,9 +1119,17 @@ function decodeSafariBinaryCookies(buffer: Buffer): ValidatedCookie[] {
   for (const pageSize of pageSizes) {
     const page = buffer.subarray(cursor, cursor + pageSize)
     cursor += pageSize
-    cookies.push(...decodeSafariPage(page))
+    appendSafariCookies(cookies, decodeSafariPage(page))
   }
   return cookies
+}
+
+function appendSafariCookies(target: ValidatedCookie[], cookies: readonly ValidatedCookie[]): void {
+  // Why: Safari binary cookie pages can contain generated-size cookie lists;
+  // spreading a decoded page into push can exceed JavaScript's argument limit.
+  for (const cookie of cookies) {
+    target.push(cookie)
+  }
 }
 
 function decodeSafariPage(page: Buffer): ValidatedCookie[] {

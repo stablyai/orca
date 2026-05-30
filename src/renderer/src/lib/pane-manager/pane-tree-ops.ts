@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: split-tree DOM reparent, promote, and equalize rules need one consistent owner. */
 import type {
   DropZone,
   ManagedPane,
@@ -5,7 +6,7 @@ import type {
   PaneStyleOptions,
   ScrollState
 } from './pane-manager-types'
-import { createDivider } from './pane-divider'
+import { createDivider, disposeDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
 import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
@@ -22,6 +23,8 @@ type TreeOpsCallbacks = {
   safeFit: (pane: ManagedPane) => void
   refitPanesUnder: (el: HTMLElement) => void
   onLayoutChanged?: () => void
+  isDestroyed?: () => boolean
+  requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
 }
 
 function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
@@ -216,7 +219,13 @@ export function insertPaneNextTo(
     split.appendChild(source.container)
   }
 
-  requestAnimationFrame(() => {
+  const requestReparentFrame =
+    callbacks.requestPaneReparentFrame ??
+    ((callback: FrameRequestCallback) => requestAnimationFrame(callback))
+  requestReparentFrame(() => {
+    if (callbacks.isDestroyed?.()) {
+      return
+    }
     if (sourceHadWebgl && source.gpuRenderingEnabled && !source.webglDisabledAfterContextLoss) {
       attachWebgl(source)
     }
@@ -281,6 +290,7 @@ export function removeDividers(parent: HTMLElement): void {
       child instanceof HTMLElement && child.classList.contains('pane-divider')
   )
   for (const d of dividers) {
+    disposeDivider(d)
     d.remove()
   }
 }

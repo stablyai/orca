@@ -60,6 +60,10 @@ class FakeElement {
     this.listeners.get(type)?.delete(listener)
   }
 
+  listenerCount(type: string): number {
+    return this.listeners.get(type)?.size ?? 0
+  }
+
   dispatchPointer(type: string, event: Partial<PointerEvent>): void {
     for (const listener of this.listeners.get(type) ?? []) {
       listener(event as PointerEvent)
@@ -217,5 +221,46 @@ describe('attachPaneDrag', () => {
     expect(onDragActiveChange).toHaveBeenLastCalledWith(false)
     expect(detachPaneFromTree).not.toHaveBeenCalled()
     expect(insertPaneNextTo).not.toHaveBeenCalled()
+  })
+
+  it('returns cleanup that removes handle listeners and cancels active drag capture', () => {
+    const handle = new FakeElement()
+    const root = new FakeElement(['pane-manager-root'])
+    const sourceContainer = new FakeElement(['pane'])
+    const targetContainer = new FakeElement(['pane'])
+    const sourcePane = createPane(1, sourceContainer)
+    const targetPane = createPane(2, targetContainer)
+    const panes = new Map<number, ManagedPaneInternal>([
+      [sourcePane.id, sourcePane],
+      [targetPane.id, targetPane]
+    ])
+    const state = createDragReorderState()
+
+    const cleanup = attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
+      getPanes: () => panes,
+      getRoot: () => root as unknown as HTMLElement,
+      getStyleOptions: () => ({}),
+      isDestroyed: () => false,
+      safeFit: vi.fn(),
+      applyPaneOpacity: vi.fn(),
+      applyDividerStyles: vi.fn(),
+      refitPanesUnder: vi.fn()
+    })
+
+    expect(handle.listenerCount('pointerdown')).toBe(1)
+    handle.dispatchPointer('pointerdown', pointerEvent({ pointerId: 1 }))
+    expect(state.cleanupActiveDrag).toBeTypeOf('function')
+    expect(handle.hasPointerCapture(1)).toBe(true)
+
+    cleanup()
+
+    expect(handle.listenerCount('pointerdown')).toBe(0)
+    expect(handle.listenerCount('pointermove')).toBe(0)
+    expect(handle.listenerCount('pointerup')).toBe(0)
+    expect(handle.listenerCount('pointercancel')).toBe(0)
+    expect(handle.listenerCount('lostpointercapture')).toBe(0)
+    expect(handle.hasPointerCapture(1)).toBe(false)
+    expect(state.cleanupActiveDrag).toBeNull()
+    expect(window.removeEventListener).toHaveBeenCalledWith('blur', expect.any(Function), true)
   })
 })

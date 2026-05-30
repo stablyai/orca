@@ -7,7 +7,7 @@ export type WorkspaceSshGate = {
   error: string | null
 }
 
-export function isWorkspaceSshConnectInProgress(status: SshConnectionStatus | null): boolean {
+function isWorkspaceSshConnectInProgress(status: SshConnectionStatus | null): boolean {
   return status === 'connecting' || status === 'deploying-relay' || status === 'reconnecting'
 }
 

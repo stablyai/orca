@@ -16,6 +16,7 @@ import {
 } from '../ui/select'
 import { BellRing, Bot, FileAudio, Siren, Upload, Volume2 } from 'lucide-react'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 export { NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './notifications-search'
 
@@ -142,6 +143,7 @@ export function NotificationsPane({
 }: NotificationsPaneProps): React.JSX.Element {
   const notificationSettings = settings.notifications
   const notificationSettingsRef = useRef(notificationSettings)
+  const mountedRef = useMountedRef()
   const [isPickingSound, setIsPickingSound] = useState(false)
 
   const updateNotificationSettings = async (
@@ -203,7 +205,9 @@ export function NotificationsPane({
         await previewSound('custom')
       }
     } finally {
-      setIsPickingSound(false)
+      if (mountedRef.current) {
+        setIsPickingSound(false)
+      }
     }
   }
 

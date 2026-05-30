@@ -12,6 +12,14 @@ export function _resetBitbucketRepoRefCache(): void {
   repoRefCache.clear()
 }
 
+function decodeSegment(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
 function parseBitbucketPath(pathname: string): BitbucketRepoRef | null {
   const withoutSuffix = pathname.replace(/\.git$/i, '')
   const parts = withoutSuffix
@@ -27,8 +35,8 @@ function parseBitbucketPath(pathname: string): BitbucketRepoRef | null {
     return null
   }
   return {
-    workspace: decodeURIComponent(workspace),
-    repoSlug: decodeURIComponent(repoSlug)
+    workspace: decodeSegment(workspace),
+    repoSlug: decodeSegment(repoSlug)
   }
 }
 

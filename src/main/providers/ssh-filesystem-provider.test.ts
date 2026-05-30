@@ -117,6 +117,7 @@ describe('SshFilesystemProvider', () => {
       const written: Buffer[] = []
       const writeStream = {
         on: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
+        off: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
         end: vi.fn((buffer: Buffer) => {
           written.push(buffer)
           const closeHandler = writeStream.on.mock.calls.find(([event]) => event === 'close')?.[1]
@@ -141,6 +142,7 @@ describe('SshFilesystemProvider', () => {
     it('can append decoded chunks through SFTP', async () => {
       const writeStream = {
         on: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
+        off: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
         end: vi.fn((_buffer: Buffer) => {
           const closeHandler = writeStream.on.mock.calls.find(([event]) => event === 'close')?.[1]
           closeHandler?.()

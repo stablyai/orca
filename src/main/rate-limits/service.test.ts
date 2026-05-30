@@ -230,6 +230,225 @@ describe('RateLimitService', () => {
     expect(state.opencodeGo?.session?.usedPercent).toBe(40)
   })
 
+  it('passes the selected WSL Codex home into active account rate-limit fetches', async () => {
+    const service = new RateLimitService()
+    const wslCodexHome =
+      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+    const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
+    const resolver = vi.fn((target) => (target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome))
+    service.setCodexHomePathResolver(resolver)
+
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refreshForCodexAccountChange(null, { runtime: 'wsl', wslDistro: 'Ubuntu' })
+
+    expect(resolver).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(fetchCodexRateLimits).toHaveBeenCalledWith(
+      expect.objectContaining({ codexHomePath: wslCodexHome })
+    )
+  })
+
+  it('uses the initialized WSL target for active Codex rate-limit fetches', async () => {
+    const service = new RateLimitService()
+    const wslCodexHome =
+      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+    const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
+    const resolver = vi.fn((target) => (target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome))
+    service.setCodexHomePathResolver(resolver)
+    service.setCodexFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+
+    expect(resolver).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(fetchCodexRateLimits).toHaveBeenCalledWith(
+      expect.objectContaining({ codexHomePath: wslCodexHome })
+    )
+  })
+
+  it('does not fetch host Codex usage when WSL home resolution fails', async () => {
+    const service = new RateLimitService()
+    const resolver = vi.fn(() => null)
+    service.setCodexHomePathResolver(resolver)
+    service.setCodexFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+
+    await service.refresh()
+
+    expect(resolver).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(fetchCodexRateLimits).not.toHaveBeenCalled()
+    expect(service.getState().codex).toMatchObject({
+      provider: 'codex',
+      status: 'error',
+      error: 'WSL Codex home unavailable for Ubuntu'
+    })
+  })
+
+  it('uses the initialized WSL target for active Claude rate-limit fetches', async () => {
+    const service = new RateLimitService()
+    const resolver = vi.fn(async (target) => ({
+      configDir:
+        target?.runtime === 'wsl'
+          ? '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.claude'
+          : 'C:\\Users\\jin\\.claude',
+      runtime: target?.runtime ?? 'host',
+      wslDistro: target?.wslDistro ?? null,
+      wslLinuxConfigDir: target?.runtime === 'wsl' ? '/home/jin/.claude' : null,
+      envPatch: target?.runtime === 'wsl' ? { CLAUDE_CONFIG_DIR: '/home/jin/.claude' } : {},
+      stripAuthEnv: target?.runtime === 'wsl',
+      provenance: target?.runtime === 'wsl' ? 'managed:wsl-account:wsl:Ubuntu' : 'system'
+    }))
+    service.setClaudeAuthPreparationResolver(resolver)
+    service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+
+    expect(resolver).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
+      authPreparation: expect.objectContaining({
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu',
+        wslLinuxConfigDir: '/home/jin/.claude',
+        stripAuthEnv: true
+      })
+    })
+    expect(service.getState().claudeTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+  })
+
+  it('does not cache host Codex usage under an outgoing WSL account', async () => {
+    const service = new RateLimitService()
+    const wslCodexHome =
+      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+    const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
+    service.setCodexHomePathResolver((target) =>
+      target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome
+    )
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+      .mockResolvedValueOnce(okProvider('codex', 40, Date.now()))
+
+    await service.refresh()
+    await service.refreshForCodexAccountChange('wsl-account-1', {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+
+    expect(service.getState().inactiveCodexAccounts).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ accountId: 'wsl-account-1' })])
+    )
+  })
+
+  it('does not cache host Claude usage under an outgoing WSL account', async () => {
+    const service = new RateLimitService()
+    service.setInactiveClaudeAccountsResolver(() => [
+      { id: 'wsl-account-1', managedAuthPath: '/tmp/account-1/auth' }
+    ])
+    service.setClaudeAuthPreparationResolver(async (target) => ({
+      configDir:
+        target?.runtime === 'wsl'
+          ? '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.claude'
+          : 'C:\\Users\\jin\\.claude',
+      runtime: target?.runtime ?? 'host',
+      wslDistro: target?.wslDistro ?? null,
+      wslLinuxConfigDir: target?.runtime === 'wsl' ? '/home/jin/.claude' : null,
+      envPatch: {},
+      stripAuthEnv: target?.runtime === 'wsl',
+      provenance: target?.runtime === 'wsl' ? 'managed:wsl-account-1:wsl:Ubuntu' : 'system'
+    }))
+
+    vi.mocked(fetchClaudeRateLimits)
+      .mockResolvedValueOnce(okProvider('claude', 20, Date.now()))
+      .mockResolvedValueOnce(okProvider('claude', 40, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+    await service.refreshForClaudeAccountChange('wsl-account-1', {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+
+    expect(service.getState().inactiveClaudeAccounts).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ accountId: 'wsl-account-1' })])
+    )
+  })
+
+  it('passes WSL Codex managed homes into inactive account rate-limit fetches', async () => {
+    const service = new RateLimitService()
+    const wslCodexHome =
+      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+    service.setInactiveCodexAccountsResolver(() => [
+      { id: 'account-1', managedHomePath: wslCodexHome }
+    ])
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 33, Date.now()))
+
+    await service.fetchInactiveCodexAccountsOnOpen()
+
+    expect(fetchCodexRateLimits).toHaveBeenCalledWith({
+      codexHomePath: wslCodexHome,
+      allowPtyFallback: false
+    })
+    expect(service.getState().inactiveCodexAccounts).toEqual([
+      {
+        accountId: 'account-1',
+        claude: expect.objectContaining({
+          session: expect.objectContaining({ usedPercent: 33 })
+        }),
+        updatedAt: expect.any(Number),
+        isFetching: false
+      }
+    ])
+  })
+
+  it('does not start overlapping inactive Codex preview fetches', async () => {
+    const service = new RateLimitService()
+    const accountFetch = deferred<ProviderRateLimits>()
+    service.setInactiveCodexAccountsResolver(() => [
+      { id: 'account-1', managedHomePath: '/tmp/account-1/home' }
+    ])
+    vi.mocked(fetchCodexRateLimits).mockReturnValueOnce(accountFetch.promise)
+
+    const firstFetch = service.fetchInactiveCodexAccountsOnOpen()
+    await Promise.resolve()
+    await service.fetchInactiveCodexAccountsOnOpen()
+
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+
+    accountFetch.resolve(okProvider('codex', 50, Date.now()))
+    await firstFetch
+  })
+
+  it('does not recache an inactive Codex account that becomes active during fetch-on-open', async () => {
+    const service = new RateLimitService()
+    const accountFetch = deferred<ProviderRateLimits>()
+    let inactiveAccounts = [{ id: 'account-b', managedHomePath: '/tmp/account-b/home' }]
+    service.setInactiveCodexAccountsResolver(() => inactiveAccounts)
+    service.setCodexHomePathResolver(() => '/tmp/account-b/home')
+    vi.mocked(fetchCodexRateLimits)
+      .mockReturnValueOnce(accountFetch.promise)
+      .mockResolvedValueOnce(okProvider('codex', 7, Date.now()))
+
+    const fetchOnOpen = service.fetchInactiveCodexAccountsOnOpen()
+    await Promise.resolve()
+    expect(service.getState().inactiveCodexAccounts).toEqual([
+      { accountId: 'account-b', claude: null, updatedAt: 0, isFetching: true }
+    ])
+
+    inactiveAccounts = []
+    await service.refreshForCodexAccountChange('account-a')
+    accountFetch.resolve(okProvider('codex', 42, Date.now()))
+    await fetchOnOpen
+
+    expect(service.getState().inactiveCodexAccounts).toEqual([])
+  })
+
   it('preserves Gemini buckets through getState after fetch', async () => {
     const service = new RateLimitService()
 

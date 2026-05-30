@@ -14,6 +14,7 @@ import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-select
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
 import { syncContentOnMount, syncContentUpdate } from './monaco-content-sync'
+import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync,
@@ -371,13 +372,36 @@ export default function MonacoEditor({
           propsRef.current.onSave(value)
         }
       )
+      const searchInFilesAction = editorInstance.addAction({
+        id: 'orca.searchInFiles',
+        label: 'Search in Files',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 2,
+        run: () => {
+          if (!worktreeId) {
+            return
+          }
+          const query = getMonacoCodebaseSearchQuery(
+            editorInstance.getModel(),
+            editorInstance.getSelection(),
+            editorInstance.getPosition()
+          )
+          if (!query) {
+            return
+          }
+          const state = useAppStore.getState()
+          state.seedFileSearchQuery(worktreeId, query)
+          state.setRightSidebarTab('search')
+          state.setRightSidebarOpen(true)
+        }
+      })
 
       // Track cursor line for "copy path to line" feature
       const pos = editorInstance.getPosition()
       if (pos) {
         setEditorCursorLine(filePath, pos.lineNumber)
       }
-      editorInstance.onDidChangeCursorPosition((e) => {
+      const cursorPositionSub = editorInstance.onDidChangeCursorPosition((e) => {
         setEditorCursorLine(filePath, e.position.lineNumber)
         setWithLRU(cursorPositionCache, viewStateKey, {
           lineNumber: e.position.lineNumber,
@@ -385,25 +409,11 @@ export default function MonacoEditor({
         })
       })
 
-      editorInstance.onDidDispose(() => {
-        cleanupSaveShortcut()
-        autoHeightSub?.dispose()
-        if (autoHeightFrame !== null) {
-          window.cancelAnimationFrame(autoHeightFrame)
-          autoHeightFrame = null
-        }
-        conflictDecorationsRef.current?.clear()
-        conflictDecorationsRef.current = null
-        editorRef.current = null
-        setMountedEditor(null)
-        setCommentPopover(null)
-      })
-
       // Why: Writing to the Map at 60fps (every scroll frame) is unnecessary since
       // we only need the final position when the user stops scrolling or switches
       // tabs. A trailing throttle of ~150ms captures the resting position while
       // avoiding excessive writes.
-      editorInstance.onDidScrollChange((e) => {
+      const scrollStateSub = editorInstance.onDidScrollChange((e) => {
         if (scrollThrottleTimerRef.current !== null) {
           clearTimeout(scrollThrottleTimerRef.current)
         }
@@ -415,7 +425,7 @@ export default function MonacoEditor({
 
       // Intercept right-click on line number gutter to show Radix context menu
       // (same approach as VSCode: custom menu instead of Monaco's built-in one)
-      editorInstance.onMouseDown((e) => {
+      const gutterMouseDownSub = editorInstance.onMouseDown((e) => {
         if (
           e.event.rightButton &&
           e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS
@@ -428,6 +438,26 @@ export default function MonacoEditor({
           setGutterMenuPoint({ x: e.event.posx, y: e.event.posy })
           setGutterMenuOpen(true)
         }
+      })
+
+      editorInstance.onDidDispose(() => {
+        // Why: keep editor-owned UI subscriptions symmetrical with the
+        // shortcut/decorator cleanup when Monaco tears this instance down.
+        cursorPositionSub.dispose()
+        scrollStateSub.dispose()
+        gutterMouseDownSub.dispose()
+        cleanupSaveShortcut()
+        searchInFilesAction.dispose()
+        autoHeightSub?.dispose()
+        if (autoHeightFrame !== null) {
+          window.cancelAnimationFrame(autoHeightFrame)
+          autoHeightFrame = null
+        }
+        conflictDecorationsRef.current?.clear()
+        conflictDecorationsRef.current = null
+        editorRef.current = null
+        setMountedEditor(null)
+        setCommentPopover(null)
       })
 
       // If there's a pending reveal at mount time, execute it now
@@ -473,7 +503,8 @@ export default function MonacoEditor({
       setEditorCursorLine,
       updateMarkdownCompletionDocuments,
       viewStateKey,
-      autoHeight
+      autoHeight,
+      worktreeId
     ]
   )
 

@@ -22,6 +22,8 @@ type DownloadHandle = {
 
 type ProgressCallback = (modelId: string, progress: number) => void
 
+const DOWNLOAD_IDLE_TIMEOUT_MS = 120_000
+
 export class ModelManager {
   private modelsDir: string
   private activeDownloads = new Map<string, DownloadHandle>()
@@ -250,7 +252,43 @@ export class ModelManager {
         return
       }
 
-      let request: ReturnType<typeof httpsGet>
+      let settled = false
+      let request: ReturnType<typeof httpsGet> | null = null
+      const cleanupRequestListeners = (): void => {
+        const activeRequest = request
+        if (!activeRequest) {
+          return
+        }
+        activeRequest.off('error', onRequestError)
+        activeRequest.off('timeout', onRequestTimeout)
+        request = null
+      }
+      const resolveOnce = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanupRequestListeners()
+        resolve()
+      }
+      const rejectOnce = (error: Error): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanupRequestListeners()
+        reject(error)
+      }
+      const onRequestError = (error: Error): void => rejectOnce(error)
+      const onRequestTimeout = (): void => {
+        const activeRequest = request
+        rejectOnce(
+          new Error(
+            `Model download timed out after ${DOWNLOAD_IDLE_TIMEOUT_MS / 1000} seconds without network activity`
+          )
+        )
+        activeRequest?.destroy()
+      }
       const onResponse = (response: IncomingMessage): void => {
         if (
           response.statusCode === 301 ||
@@ -262,12 +300,12 @@ export class ModelManager {
           const redirectUrl = response.headers.location
           if (!redirectUrl) {
             response.resume()
-            reject(new Error('Redirect without location'))
+            rejectOnce(new Error('Redirect without location'))
             return
           }
           if (redirectCount >= 5) {
             response.resume()
-            reject(new Error('Too many redirects'))
+            rejectOnce(new Error('Too many redirects'))
             return
           }
           let resolvedRedirect: URL
@@ -275,12 +313,12 @@ export class ModelManager {
             resolvedRedirect = new URL(redirectUrl, parsedUrl)
           } catch {
             response.resume()
-            reject(new Error('Invalid redirect URL'))
+            rejectOnce(new Error('Invalid redirect URL'))
             return
           }
           if (resolvedRedirect.protocol !== 'https:') {
             response.resume()
-            reject(new Error('Model download redirect must use HTTPS'))
+            rejectOnce(new Error('Model download redirect must use HTTPS'))
             return
           }
           response.resume()
@@ -293,14 +331,14 @@ export class ModelManager {
             signal,
             redirectCount + 1
           )
-            .then(resolve)
-            .catch(reject)
+            .then(resolveOnce)
+            .catch(rejectOnce)
           return
         }
 
         if (response.statusCode !== 200) {
           response.resume()
-          reject(new Error(`HTTP ${response.statusCode}`))
+          rejectOnce(new Error(`HTTP ${response.statusCode}`))
           return
         }
 
@@ -309,9 +347,12 @@ export class ModelManager {
 
         const fileStream = createWriteStream(dest)
 
-        response.on('data', (chunk: Buffer) => {
+        const cleanupResponseProgressListener = (): void => {
+          response.off('data', onResponseData)
+        }
+        const onResponseData = (chunk: Buffer): void => {
           if (isAborted()) {
-            request.destroy(new Error('Aborted'))
+            request?.destroy(new Error('Aborted'))
             response.destroy()
             fileStream.destroy()
             return
@@ -319,24 +360,33 @@ export class ModelManager {
           downloaded += chunk.length
           const progress = Math.min(0.9, downloaded / totalSize)
           this.updateState(modelId, 'downloading', progress)
-        })
+        }
 
+        response.on('data', onResponseData)
         pipeline(response, fileStream)
           .then(() => {
+            cleanupResponseProgressListener()
             if (isAborted()) {
-              reject(new Error('Aborted'))
+              rejectOnce(new Error('Aborted'))
             } else {
-              resolve()
+              resolveOnce()
             }
           })
-          .catch(reject)
+          .catch((error: Error) => {
+            cleanupResponseProgressListener()
+            rejectOnce(error)
+          })
       }
 
       request = signal
         ? httpsGet(parsedUrl, { signal }, onResponse)
         : httpsGet(parsedUrl, onResponse)
 
-      request.on('error', reject)
+      // Why: cancellation only helps after the user presses cancel; a peer
+      // that accepts the socket and goes silent must not leave the model stuck
+      // in "downloading" forever.
+      request.setTimeout(DOWNLOAD_IDLE_TIMEOUT_MS, onRequestTimeout)
+      request.on('error', onRequestError)
     })
   }
 
@@ -344,19 +394,49 @@ export class ModelManager {
     return new Promise((resolve, reject) => {
       const hash = createHash('sha256')
       const stream = createReadStream(archivePath)
+      let settled = false
 
-      stream.on('data', (chunk) => hash.update(chunk))
-      stream.on('error', reject)
-      stream.on('end', () => {
+      const cleanup = (): void => {
+        stream.off('data', onData)
+        stream.off('error', onError)
+        stream.off('end', onEnd)
+      }
+      const settleResolve = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        resolve()
+      }
+      const settleReject = (error: Error): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(error)
+      }
+      const onData = (chunk: Buffer): void => {
+        hash.update(chunk)
+      }
+      const onError = (error: Error): void => {
+        settleReject(error)
+      }
+      const onEnd = (): void => {
         const actualSha256 = hash.digest('hex')
         if (actualSha256 !== expectedSha256.toLowerCase()) {
           // Why: these archives feed native model parsers; filename checks do
           // not protect against compromised or redirected release assets.
-          reject(new Error('Downloaded model archive failed integrity verification'))
+          settleReject(new Error('Downloaded model archive failed integrity verification'))
           return
         }
-        resolve()
-      })
+        settleResolve()
+      }
+
+      stream.on('data', onData)
+      stream.on('error', onError)
+      stream.on('end', onEnd)
     })
   }
 

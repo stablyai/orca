@@ -478,8 +478,39 @@ async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
  * Why shared: the local path and the SSH relay path must send the exact
  * same argv so results cannot diverge between transports.
  */
-export function buildSearchBaseRefsArgv(normalizedQuery: string): string[] {
-  const base = ['for-each-ref', '--format=%(refname)%00%(refname:short)', '--sort=-committerdate']
+const REF_SEARCH_CANDIDATE_MULTIPLIER = 4
+const REF_SEARCH_LEGACY_HEADROOM = 100
+
+function getRefSearchCandidateCount(limit: number, excludesRemoteHead: boolean): number {
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error('invalid_limit')
+  }
+  const baseCount = limit * REF_SEARCH_CANDIDATE_MULTIPLIER
+  return excludesRemoteHead ? baseCount : baseCount + REF_SEARCH_LEGACY_HEADROOM
+}
+
+export function buildSearchBaseRefsArgv(
+  normalizedQuery: string,
+  limit: number,
+  options: { excludeRemoteHead?: boolean } = {}
+): string[] {
+  const excludeRemoteHead = options.excludeRemoteHead ?? true
+  const candidateCount = getRefSearchCandidateCount(limit, excludeRemoteHead)
+  const base = [
+    'for-each-ref',
+    '--format=%(refname)%00%(refname:short)',
+    '--sort=-committerdate',
+    ...(excludeRemoteHead
+      ? [
+          // Why: exclude remote HEAD pseudo-refs before --count so the bounded
+          // candidate window is spent on refs the picker can actually display.
+          '--exclude=refs/remotes/**/HEAD'
+        ]
+      : []),
+    // Why: empty Branch-tab searches use broad globs; cap git output before
+    // execFile/SSH buffers capture every ref in very large repositories.
+    `--count=${candidateCount}`
+  ]
   // Why: split on `/` so display-format queries (`upstream/main`) route
   // each token to one git ref segment. Filter empty tokens so trailing
   // (`upstream/`), leading (`/main`), or doubled (`upstream//main`)
@@ -510,6 +541,18 @@ export function buildSearchBaseRefsArgv(normalizedQuery: string): string[] {
   // branch is what makes re-typing a visible result actually find it.
   const segmented = tokens.map((token) => `*${token}*`).join('/')
   return [...base, `refs/remotes/${segmented}`, `refs/heads/${segmented}`]
+}
+
+export function isForEachRefExcludeUnsupportedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  const maybe = error as { message?: unknown; stderr?: unknown; stdout?: unknown }
+  const text = [maybe.message, maybe.stderr, maybe.stdout]
+    .filter((value): value is string => typeof value === 'string')
+    .join('\n')
+    .toLowerCase()
+  return text.includes('unknown option') && text.includes('exclude')
 }
 
 /**
@@ -578,20 +621,32 @@ export async function searchBaseRefDetails(
   query: string,
   limit = 25
 ): Promise<BaseRefSearchResult[]> {
-  const normalizedQuery = normalizeRefSearchQuery(query)
-  if (!normalizedQuery) {
+  if (!Number.isInteger(limit) || limit <= 0) {
     return []
   }
+  const normalizedQuery = normalizeRefSearchQuery(query)
 
   try {
     // Why: argv (including the two-remote-glob rationale) lives in
     // buildSearchBaseRefsArgv so the SSH sibling cannot drift.
-    const [{ stdout }, remotes] = await Promise.all([
-      gitExecFileAsync(buildSearchBaseRefsArgv(normalizedQuery), { cwd: path }),
-      listRemoteNames(path)
-    ])
+    const remotesPromise = listRemoteNames(path)
+    let result: { stdout: string }
+    try {
+      result = await gitExecFileAsync(buildSearchBaseRefsArgv(normalizedQuery, limit), {
+        cwd: path
+      })
+    } catch (err) {
+      if (!isForEachRefExcludeUnsupportedError(err)) {
+        throw err
+      }
+      result = await gitExecFileAsync(
+        buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
+        { cwd: path }
+      )
+    }
+    const remotes = await remotesPromise
 
-    return parseAndFilterSearchRefDetails(stdout, limit, remotes)
+    return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
   } catch (err) {
     // Why: surface the failure for diagnostics; callers treat `[]` as "no
     // matches", but silently swallowing the error makes a missing result

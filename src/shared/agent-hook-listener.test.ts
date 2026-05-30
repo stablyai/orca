@@ -1,4 +1,6 @@
 /* eslint-disable max-lines -- Why: this fixture keeps cross-agent hook normalization and cache behavior together so regressions in shared listener state are visible. */
+import { EventEmitter } from 'node:events'
+import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
@@ -7,9 +9,11 @@ import {
   createHookListenerState,
   getEndpointFileName,
   hasPendingAgentResultText,
+  HOOK_REQUEST_MAX_BYTES,
   isShellSafeEndpointValue,
   normalizeHookPayload,
   parseFormEncodedBody,
+  readRequestBody,
   resolveHookSource,
   writeEndpointFile,
   type HookListenerState
@@ -18,6 +22,26 @@ import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+
+type FakeIncomingMessage = EventEmitter & {
+  headers: IncomingHttpHeaders
+  destroy: ReturnType<typeof vi.fn>
+}
+
+function createReadableRequest(headers: IncomingHttpHeaders = {}): FakeIncomingMessage {
+  const req = new EventEmitter() as FakeIncomingMessage
+  req.headers = headers
+  req.destroy = vi.fn(() => req.emit('close'))
+  return req
+}
+
+function expectRequestParserListenersReleased(req: FakeIncomingMessage): void {
+  expect(req.listenerCount('data')).toBe(0)
+  expect(req.listenerCount('end')).toBe(0)
+  expect(req.listenerCount('close')).toBe(0)
+  expect(req.listenerCount('error')).toBe(1)
+  expect(() => req.emit('error', new Error('late request error'))).not.toThrow()
+}
 
 describe('shared agent-hook-listener', () => {
   let state: HookListenerState
@@ -34,6 +58,28 @@ describe('shared agent-hook-listener', () => {
     const decoded = parseFormEncodedBody('paneKey=tab-1%3A0&worktreeId=foo')
     expect(decoded.paneKey).toBe('tab-1:0')
     expect(decoded.worktreeId).toBe('foo')
+  })
+
+  it('releases request parser listeners after reading a JSON body', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+
+    req.emit('data', Buffer.from('{"ok":true}'))
+    req.emit('end')
+
+    await expect(body).resolves.toEqual({ ok: true })
+    expectRequestParserListenersReleased(req)
+  })
+
+  it('releases request parser listeners after rejecting an oversized body', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+
+    req.emit('data', Buffer.alloc(HOOK_REQUEST_MAX_BYTES + 1))
+
+    await expect(body).rejects.toThrow('payload too large')
+    expect(req.destroy).toHaveBeenCalledTimes(1)
+    expectRequestParserListenersReleased(req)
   })
 
   it('routes pathnames to a known source or null', () => {
@@ -196,6 +242,52 @@ describe('shared agent-hook-listener', () => {
         toolName: 'shell_command',
         toolInput: 'pwd'
       })
+      expect(tool?.hasExplicitPrompt).toBe(true)
+      expect(tool?.promptInteractionKey).toMatch(/^command-code-transcript-[a-f0-9]{12}-/)
+
+      const directPrompt = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            prompt: 'Direct command prompt'
+          }
+        },
+        'production'
+      )
+      expect(directPrompt?.hasExplicitPrompt).toBe(true)
+
+      const directPromptWithTranscript = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            prompt: 'Run pwd and report it',
+            transcript_path: transcriptPath
+          }
+        },
+        'production'
+      )
+      expect(directPromptWithTranscript?.hasExplicitPrompt).toBe(true)
+      expect(directPromptWithTranscript?.promptInteractionKey).toBe(tool?.promptInteractionKey)
+
+      const statusMessage = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            message: 'Preparing tool call'
+          }
+        },
+        'production'
+      )
+      expect(statusMessage?.hasExplicitPrompt).toBe(false)
 
       const done = normalizeHookPayload(
         state,
@@ -219,6 +311,25 @@ describe('shared agent-hook-listener', () => {
         agentType: 'command-code',
         lastAssistantMessage: 'The output is /tmp/project.'
       })
+      expect(done?.promptInteractionKey).toBe(tool?.promptInteractionKey)
+
+      const cachedOnly = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'Stop'
+          }
+        },
+        'production'
+      )
+      expect(cachedOnly?.payload.prompt).toBe('Run pwd and report it')
+      expect(cachedOnly?.hasExplicitPrompt).toBe(false)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -236,6 +347,40 @@ describe('shared agent-hook-listener', () => {
     )
     expect(event).not.toBeNull()
     expect(event!.payload.prompt).toBe('hi')
+  })
+
+  it('normalizes a Claude-compatible StopFailure to done without copying provider error text', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'say hi' }
+      },
+      'production'
+    )
+
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'StopFailure',
+          error: 'invalid_request',
+          error_details: 'model is not supported',
+          last_assistant_message: 'API Error: model is not supported'
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'say hi',
+      agentType: 'claude'
+    })
+    expect(event?.payload.lastAssistantMessage).toBeUndefined()
   })
 
   it('rejects oversized paneKey', () => {
@@ -376,6 +521,7 @@ describe('shared agent-hook-listener', () => {
         prompt: 'Fix the failing test',
         agentType: 'antigravity'
       })
+      expect(started?.hasExplicitPrompt).toBe(true)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }

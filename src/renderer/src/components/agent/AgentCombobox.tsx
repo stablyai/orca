@@ -154,10 +154,17 @@ export default function AgentCombobox({
     return 'blank terminal'.includes(q) || 'terminal'.startsWith(q)
   }, [query])
 
-  const focusSearchInput = useCallback(() => {
+  const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
       cancelAnimationFrame(focusFrameRef.current)
+      focusFrameRef.current = null
     }
+  }, [])
+
+  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+
+  const focusSearchInput = useCallback(() => {
+    cancelFocusFrame()
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       const searchInput = inputRef.current
@@ -171,7 +178,7 @@ export default function AgentCombobox({
       const end = searchInput.value.length
       searchInput.setSelectionRange(end, end)
     })
-  }, [])
+  }, [cancelFocusFrame])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -180,13 +187,10 @@ export default function AgentCombobox({
         setCommandValue(value ?? BLANK_VALUE)
         return
       }
-      if (focusFrameRef.current !== null) {
-        cancelAnimationFrame(focusFrameRef.current)
-        focusFrameRef.current = null
-      }
+      cancelFocusFrame()
       setQuery('')
     },
-    [value]
+    [cancelFocusFrame, value]
   )
 
   const handleSelect = useCallback(

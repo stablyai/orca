@@ -157,6 +157,40 @@ describe('AgentBrowserBridge', () => {
     expect(clickCall![1]).not.toContain('--cdp')
   })
 
+  it('continues when stale agent-browser session close hangs during session creation', async () => {
+    vi.useFakeTimers()
+    try {
+      const closeKill = vi.fn()
+      execFileMock.mockImplementation(
+        (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+          if (args.includes('close')) {
+            return { kill: closeKill }
+          }
+          if (args.includes('snapshot')) {
+            cb(null, JSON.stringify({ success: true, data: { snapshot: 'ready' } }), '')
+            return { kill: vi.fn() }
+          }
+          throw new Error(`unexpected agent-browser args ${args.join(' ')}`)
+        }
+      )
+
+      const promise = bridge.snapshot()
+      let settled = false
+      void promise.finally(() => {
+        settled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(3_000)
+      await Promise.resolve()
+
+      expect(settled).toBe(true)
+      await expect(promise).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'ready' })
+      expect(closeKill).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // ── --json always appended ──
 
   it('always appends --json to commands', async () => {
@@ -468,6 +502,51 @@ describe('AgentBrowserBridge', () => {
 
     await expect(snapshot).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'tree' })
     expect(lifecycleEvents).toEqual(['acquire-100', 'command-snapshot', 'restore-100'])
+  })
+
+  it('clears reload fallback timer after the load event settles', async () => {
+    vi.useFakeTimers()
+    try {
+      succeedWith(null)
+      const wc = {
+        ...mockWebContents(100, 'https://reloaded.example', 'Reloaded'),
+        reload: vi.fn(),
+        on: vi.fn(),
+        removeListener: vi.fn()
+      }
+      webContentsFromIdMock.mockReturnValue(wc)
+
+      const result = bridge.reload()
+
+      await vi.waitFor(() => {
+        expect(wc.on).toHaveBeenCalledWith('did-finish-load', expect.any(Function))
+      })
+
+      const finishListener = wc.on.mock.calls.find(([event]) => event === 'did-finish-load')?.[1] as
+        | (() => void)
+        | undefined
+      const failListener = wc.on.mock.calls.find(([event]) => event === 'did-fail-load')?.[1] as
+        | (() => void)
+        | undefined
+      expect(finishListener).toBeDefined()
+      expect(failListener).toBeDefined()
+      expect(vi.getTimerCount()).toBe(1)
+
+      finishListener!()
+
+      await expect(result).resolves.toEqual({
+        url: 'https://reloaded.example',
+        title: 'Reloaded'
+      })
+      expect(wc.removeListener).toHaveBeenCalledWith('did-finish-load', finishListener)
+      expect(wc.removeListener).toHaveBeenCalledWith('did-fail-load', failListener)
+      expect(vi.getTimerCount()).toBe(0)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(wc.removeListener).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('serializes screenshot visibility prep across sessions', async () => {

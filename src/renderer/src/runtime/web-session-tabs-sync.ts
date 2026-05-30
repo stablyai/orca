@@ -363,7 +363,8 @@ function buildMirroredTerminalTabs(
         customTitle: existing?.customTitle ?? null,
         color: existing?.color ?? null,
         sortOrder: sortOffset + index,
-        createdAt: existing?.createdAt ?? now + index
+        createdAt: existing?.createdAt ?? now + index,
+        ...(activeSurface.launchAgent ? { launchAgent: activeSurface.launchAgent } : {})
       },
       hostTabId: parentTabId,
       ptyIds,
@@ -1131,6 +1132,7 @@ function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.createdAt === b.createdAt &&
     a.generation === b.generation &&
     a.shellOverride === b.shellOverride &&
+    a.launchAgent === b.launchAgent &&
     a.pendingActivationSpawn === b.pendingActivationSpawn
   )
 }
