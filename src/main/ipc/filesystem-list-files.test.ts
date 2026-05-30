@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: one Quick Open file-list suite covers both rg and git fallback process lifecycles. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const { spawnMock, resolveAuthorizedPathMock, checkRgAvailableMock } = vi.hoisted(() => ({
@@ -165,6 +166,44 @@ describe('filesystem-list-files', () => {
     await expect(promise).resolves.toEqual(['src/index.ts'])
   })
 
+  it('settles and detaches rg scans that ignore timeout kills', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const p1 = createMockProcess()
+      const p2 = createMockProcess()
+
+      spawnMock.mockImplementation((_cmd, args: string[]) => {
+        if (isIgnoredRgPass(args)) {
+          return p2
+        }
+        return p1
+      })
+
+      const storeMock = {} as unknown as Store
+      const promise = listQuickOpenFiles('/mock/root', storeMock)
+
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      ;(p1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\npartial')
+      const rejection = expect(promise).rejects.toThrow('rg list timed out')
+
+      await vi.advanceTimersByTimeAsync(10000)
+
+      await rejection
+      expect(p1.kill).toHaveBeenCalled()
+      expect(p2.kill).toHaveBeenCalled()
+      expect((p1.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((p1.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(p1.listenerCount('error')).toBe(0)
+      expect(p1.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('filters out .next, .cache, .stably, .vscode, .idea', async () => {
     const p1 = createMockProcess()
     const p2 = createMockProcess()
@@ -277,6 +316,46 @@ describe('filesystem-list-files', () => {
       const result = await promise
 
       expect(result).toEqual(['.github/workflows/ci.yml', 'valid.ts'])
+    })
+
+    it('settles and detaches git fallback scans that ignore timeout kills', async () => {
+      checkRgAvailableMock.mockResolvedValue(false)
+      vi.useFakeTimers()
+
+      try {
+        const gitP1 = createMockProcess()
+        const gitP2 = createMockProcess()
+        let callIndex = 0
+
+        spawnMock.mockImplementation((cmd: string) => {
+          if (cmd === 'git') {
+            callIndex++
+            return callIndex === 1 ? gitP1 : gitP2
+          }
+          return createMockProcess()
+        })
+
+        const storeMock = {} as unknown as Store
+        const promise = listQuickOpenFiles('/mock/root', storeMock)
+
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\npartial')
+
+        await vi.advanceTimersByTimeAsync(10000)
+
+        await expect(promise).resolves.toEqual(['src/index.ts'])
+        expect(gitP1.kill).toHaveBeenCalled()
+        expect(gitP2.kill).toHaveBeenCalled()
+        expect((gitP1.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+        expect((gitP1.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+        expect(gitP1.listenerCount('error')).toBe(0)
+        expect(gitP1.listenerCount('close')).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('does not fall back to git when rg is available', async () => {

@@ -55,7 +55,7 @@ import type {
   RuntimeMobileMarkdownRequest,
   RuntimeMobileMarkdownResponse
 } from '../shared/mobile-markdown-document'
-import type { RateLimitState } from '../shared/rate-limit-types'
+import type { RateLimitRuntimeTarget, RateLimitState } from '../shared/rate-limit-types'
 import type {
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
@@ -120,6 +120,7 @@ import type {
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { RefreshAgentsResult } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import type { AppStarSource } from '../shared/gh-star-source'
 import type {
   Automation,
   AutomationCreateInput,
@@ -145,26 +146,19 @@ import {
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
 } from '../shared/updater-renderer-events'
+import {
+  NATIVE_FILE_DROP_TARGET,
+  ORCA_INTERNAL_FILE_DRAG_TYPE,
+  hasNativeFileDragTypes,
+  resolveNativeFileDropPath,
+  type NativeDropResolution,
+  type NativeFileDropPayload,
+  type NativeFileDropPathEntry
+} from '../shared/native-file-drop'
 import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
 import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
 import type { HostedReviewForBranchArgs } from '../shared/hosted-review'
 import type { CrashReportSubmitArgs, CrashReportSubmitResult } from '../shared/crash-reporting'
-
-type NativeDropResolution =
-  | { target: 'editor' }
-  | { target: 'terminal'; tabId?: string }
-  | { target: 'composer' }
-  | { target: 'file-explorer'; destinationDir: string }
-  // Why: returned when the explorer marker was found but no destinationDir
-  // could be resolved. The caller must suppress the drop entirely instead of
-  // falling back to 'editor' — fail-closed behavior per design §7.1.
-  | { target: 'rejected' }
-
-type NativeFileDropPayload =
-  | { paths: string[]; target: 'editor' }
-  | { paths: string[]; target: 'terminal'; tabId?: string }
-  | { paths: string[]; target: 'composer' }
-  | { paths: string[]; target: 'file-explorer'; destinationDir: string }
 
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
@@ -297,43 +291,17 @@ function disposeCachedNotificationSound(): void {
  * "inside this folder".
  */
 function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
-  const path = event.composedPath()
-  let foundExplorer = false
-  let destinationDir: string | undefined
-
-  for (const entry of path) {
-    if (!(entry instanceof HTMLElement)) {
-      continue
-    }
-
-    const target = entry.dataset.nativeFileDropTarget
-    if (target === 'terminal') {
-      return { target, tabId: entry.dataset.terminalTabId }
-    }
-    if (target === 'editor' || target === 'composer') {
-      return { target }
-    }
-    if (target === 'file-explorer') {
-      foundExplorer = true
-    }
-
-    // Pick the nearest (innermost) destination directory marker
-    if (destinationDir === undefined && entry.dataset.nativeFileDropDir) {
-      destinationDir = entry.dataset.nativeFileDropDir
+  const pathEntries: NativeFileDropPathEntry[] = []
+  for (const entry of event.composedPath()) {
+    if (entry instanceof HTMLElement) {
+      pathEntries.push({
+        nativeFileDropTarget: entry.dataset.nativeFileDropTarget,
+        nativeFileDropDir: entry.dataset.nativeFileDropDir,
+        terminalTabId: entry.dataset.terminalTabId
+      })
     }
   }
-
-  if (foundExplorer) {
-    // Why: routing must fail closed for explorer drops. If preload sees the
-    // explorer target marker but cannot resolve a destinationDir, it rejects
-    // the gesture and emits no fallback editor drop event.
-    if (!destinationDir) {
-      return { target: 'rejected' }
-    }
-    return { target: 'file-explorer', destinationDir }
-  }
-
-  return null
+  return resolveNativeFileDropPath(pathEntries)
 }
 
 // ---------------------------------------------------------------------------
@@ -346,7 +314,7 @@ document.addEventListener(
   (e) => {
     // Let in-app drags (e.g. file explorer drag-to-move) through to React handlers
     // so they can set their own dropEffect. Only override for native OS file drops.
-    if (e.dataTransfer?.types.includes('text/x-orca-file-path')) {
+    if (e.dataTransfer && !hasNativeFileDragTypes(e.dataTransfer.types)) {
       return
     }
     e.preventDefault()
@@ -361,7 +329,7 @@ document.addEventListener(
   'drop',
   (e) => {
     // Let in-app drags (e.g. file explorer → terminal) through to React handlers
-    if (e.dataTransfer?.types.includes('text/x-orca-file-path')) {
+    if (e.dataTransfer?.types.includes(ORCA_INTERNAL_FILE_DRAG_TYPE)) {
       return
     }
 
@@ -397,20 +365,20 @@ document.addEventListener(
     // The preload layer already has the full FileList. Re-emitting one IPC
     // message per path and asking the renderer to reconstruct the gesture via
     // timing would be both fragile and slower under large drops.
-    if (resolution?.target === 'file-explorer') {
+    if (resolution?.target === NATIVE_FILE_DROP_TARGET.fileExplorer) {
       ipcRenderer.send('terminal:file-dropped-from-preload', {
         paths,
-        target: 'file-explorer',
+        target: NATIVE_FILE_DROP_TARGET.fileExplorer,
         destinationDir: resolution.destinationDir
       })
     } else {
       // Why: falls back to 'editor' so drops on surfaces without an explicit
-      // marker (sidebar, editor body, etc.) preserve the prior open-in-editor
-      // behavior instead of being silently discarded.
+      // marker preserve the prior open-in-editor behavior instead of being
+      // silently discarded.
       ipcRenderer.send('terminal:file-dropped-from-preload', {
         paths,
-        target: resolution?.target ?? 'editor',
-        ...(resolution?.target === 'terminal' && resolution.tabId
+        target: resolution?.target ?? NATIVE_FILE_DROP_TARGET.editor,
+        ...(resolution?.target === NATIVE_FILE_DROP_TARGET.terminal && resolution.tabId
           ? { tabId: resolution.tabId }
           : {})
       })
@@ -461,7 +429,8 @@ const api = {
   },
 
   wsl: {
-    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable')
+    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable'),
+    listDistros: (): Promise<string[]> => ipcRenderer.invoke('wsl:listDistros')
   },
 
   pwsh: {
@@ -1072,6 +1041,15 @@ const api = {
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:mergePR', args),
 
+    setPRAutoMerge: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      enabled: boolean
+      prRepo?: { owner: string; repo: string } | null
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:setPRAutoMerge', args),
+
     updatePRState: (args: {
       repoPath: string
       repoId?: string
@@ -1163,7 +1141,8 @@ const api = {
     },
 
     checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
-    starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca'),
+    starOrca: (source: AppStarSource): Promise<boolean> =>
+      ipcRenderer.invoke('gh:starOrca', source),
 
     // Why: rate_limit is exempt from rate-limit accounting, but we still pass
     // `force` through so callers can bust the 30s in-process cache after a
@@ -1412,24 +1391,32 @@ const api = {
 
   codexAccounts: {
     list: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:list'),
-    add: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:add'),
+    add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('codexAccounts:add', args),
     reauthenticate: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:reauthenticate', args),
     remove: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:remove', args),
-    select: (args: { accountId: string | null }): Promise<unknown> =>
-      ipcRenderer.invoke('codexAccounts:select', args)
+    select: (args: {
+      accountId: string | null
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:select', args)
   },
 
   claudeAccounts: {
     list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
-    add: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:add'),
+    add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:add', args),
     reauthenticate: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeAccounts:reauthenticate', args),
     remove: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeAccounts:remove', args),
-    select: (args: { accountId: string | null }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeAccounts:select', args)
+    select: (args: {
+      accountId: string | null
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:select', args)
   },
 
   cli: {
@@ -1445,12 +1432,15 @@ const api = {
   agentHooks: {
     claudeStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:claudeStatus'),
+    openClaudeStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:openClaudeStatus'),
     codexStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:codexStatus'),
     geminiStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:geminiStatus'),
     antigravityStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:antigravityStatus'),
+    ampStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:ampStatus'),
     cursorStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:cursorStatus'),
     droidStatus: (): Promise<AgentHookInstallStatus> =>
@@ -1495,10 +1485,12 @@ const api = {
       }
       linear: { connected: boolean }
     }> => ipcRenderer.invoke('preflight:check', args),
-    detectAgents: (args?: { wslDistro?: string | null }): Promise<string[]> =>
+    detectAgents: (args?: { wslDistro?: string | null; wslDefault?: boolean }): Promise<string[]> =>
       ipcRenderer.invoke('preflight:detectAgents', args),
-    refreshAgents: (args?: { wslDistro?: string | null }): Promise<RefreshAgentsResult> =>
-      ipcRenderer.invoke('preflight:refreshAgents', args),
+    refreshAgents: (args?: {
+      wslDistro?: string | null
+      wslDefault?: boolean
+    }): Promise<RefreshAgentsResult> => ipcRenderer.invoke('preflight:refreshAgents', args),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
       ipcRenderer.invoke('preflight:detectRemoteAgents', args)
   },
@@ -2260,6 +2252,11 @@ const api = {
       connectionId?: string
       pushTarget?: GitPushTarget
     }): Promise<void> => ipcRenderer.invoke('git:pull', args),
+    fastForward: (args: {
+      worktreePath: string
+      connectionId?: string
+      pushTarget?: GitPushTarget
+    }): Promise<void> => ipcRenderer.invoke('git:fastForward', args),
     rebaseFromBase: (args: {
       worktreePath: string
       baseRef: string
@@ -3056,6 +3053,10 @@ const api = {
   rateLimits: {
     get: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:get'),
     refresh: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refresh'),
+    refreshCodexForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
+      ipcRenderer.invoke('rateLimits:refreshCodexForTarget', target),
+    refreshClaudeForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
+      ipcRenderer.invoke('rateLimits:refreshClaudeForTarget', target),
     setPollingInterval: (ms: number): Promise<void> =>
       ipcRenderer.invoke('rateLimits:setPollingInterval', ms),
     fetchInactiveClaudeAccounts: (): Promise<void> =>

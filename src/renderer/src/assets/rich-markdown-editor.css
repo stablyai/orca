@@ -73,6 +73,27 @@
   -webkit-box-decoration-break: clone;
 }
 
+.rich-markdown-annotation-selection-active {
+  animation: rich-markdown-source-attention 900ms ease-out;
+}
+
+@keyframes rich-markdown-source-attention {
+  0% {
+    background: color-mix(in srgb, var(--annotation-highlight) 44%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--annotation-highlight) 16%, transparent);
+  }
+
+  42% {
+    background: color-mix(in srgb, var(--annotation-highlight) 34%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--annotation-highlight) 12%, transparent);
+  }
+
+  100% {
+    background: color-mix(in srgb, var(--annotation-highlight) 22%, transparent);
+    box-shadow: none;
+  }
+}
+
 .rich-markdown-editor-shell.has-rich-markdown-review-notes .rich-markdown-editor {
   padding-right: min(360px, 34%);
 }
@@ -129,7 +150,6 @@
   position: absolute;
   top: 0;
   right: 16px;
-  bottom: 0;
   width: min(300px, 30%);
   pointer-events: none;
   z-index: 30;
@@ -140,6 +160,36 @@
   right: 0;
   width: 100%;
   pointer-events: auto;
+}
+
+.rich-markdown-review-note-card.is-active > .orca-diff-comment-card {
+  border-color: color-mix(in srgb, var(--foreground) 32%, transparent);
+  background: color-mix(in srgb, var(--foreground) 8%, var(--editor-surface));
+}
+
+.rich-markdown-review-note-card.is-attention > .orca-diff-comment-card {
+  animation: rich-markdown-note-attention 900ms ease-out;
+}
+
+@keyframes rich-markdown-note-attention {
+  0% {
+    transform: translateX(0);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--ring) 55%, transparent),
+      0 0 0 8px color-mix(in srgb, var(--ring) 16%, transparent);
+  }
+
+  35% {
+    transform: translateX(-3px);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--ring) 45%, transparent),
+      0 0 0 5px color-mix(in srgb, var(--ring) 12%, transparent);
+  }
+
+  100% {
+    transform: translateX(0);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 15%, transparent);
+  }
 }
 
 .rich-markdown-review-note-send {

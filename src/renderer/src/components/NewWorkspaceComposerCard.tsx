@@ -252,6 +252,7 @@ export default function NewWorkspaceComposerCard({
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
   const selectedRepoName = React.useMemo(() => {
     const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
@@ -272,14 +273,26 @@ export default function NewWorkspaceComposerCard({
     [updateSettings]
   )
 
+  const cancelNameInputFocusFrame = React.useCallback((): void => {
+    if (nameInputFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(nameInputFocusFrameRef.current)
+    nameInputFocusFrameRef.current = null
+  }, [])
+
+  React.useEffect(() => cancelNameInputFocusFrame, [cancelNameInputFocusFrame])
+
   const focusNameInput = React.useCallback(() => {
     // Why: after the repo picker commits a choice, moving focus to the name
     // field keeps the keyboard flow progressing through the form instead of
     // trapping the user in the repo popover interaction.
-    requestAnimationFrame(() => {
+    cancelNameInputFocusFrame()
+    nameInputFocusFrameRef.current = requestAnimationFrame(() => {
+      nameInputFocusFrameRef.current = null
       nameInputRef?.current?.focus()
     })
-  }, [nameInputRef])
+  }, [cancelNameInputFocusFrame, nameInputRef])
 
   const visibleQuickAgents = React.useMemo(() => {
     const enabledIds = new Set(

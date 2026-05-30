@@ -1,3 +1,5 @@
+/* oxlint-disable max-lines -- Why: permission setup, status probes, and TCC
+reset share the helper-app identity contract and platform guards. */
 import { execFileSync, spawn, spawnSync } from 'child_process'
 import { mkdtemp, readFile, rm, stat } from 'fs/promises'
 import { tmpdir } from 'os'
@@ -233,30 +235,57 @@ function launchPermissionStatusHelper(helperAppPath: string, statusPath: string)
 
     launch.stdout?.setEncoding('utf8')
     launch.stderr?.setEncoding('utf8')
-    launch.stdout?.on('data', (chunk) => {
+    const onStdoutData = (chunk: string): void => {
       stdout += chunk
-    })
-    launch.stderr?.on('data', (chunk) => {
+    }
+    const onStderrData = (chunk: string): void => {
       stderr += chunk
-    })
-    launch.on('error', () => {
-      reject(
+    }
+    let settled = false
+    const removeListeners = (): void => {
+      launch.stdout?.off('data', onStdoutData)
+      launch.stderr?.off('data', onStderrData)
+      launch.off('error', onError)
+      launch.off('close', onClose)
+    }
+    const settleResolve = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      removeListeners()
+      resolve()
+    }
+    const settleReject = (error: Error): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      removeListeners()
+      reject(error)
+    }
+    const onError = (): void => {
+      settleReject(
         new RuntimeClientError(
           'accessibility_error',
           'Could not check permissions: failed to launch helper'
         )
       )
-    })
-    launch.on('close', (status) => {
+    }
+    const onClose = (status: number | null): void => {
       if (status === 0) {
-        resolve()
+        settleResolve()
         return
       }
       const detail = stderr.trim() || stdout.trim() || `exit ${status ?? 'unknown'}`
-      reject(
+      settleReject(
         new RuntimeClientError('accessibility_error', `Could not check permissions: ${detail}`)
       )
-    })
+    }
+    launch.stdout?.on('data', onStdoutData)
+    launch.stderr?.on('data', onStderrData)
+    launch.on('error', onError)
+    launch.on('close', onClose)
   })
 }
 

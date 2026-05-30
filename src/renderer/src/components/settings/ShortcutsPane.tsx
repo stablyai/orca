@@ -33,6 +33,7 @@ import { ShortcutRowsList } from './ShortcutRowsList'
 import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
 import { TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY } from './shortcuts-search'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 type ShortcutGroup = {
   title: string
@@ -130,6 +131,7 @@ export function ShortcutsPane(): React.JSX.Element {
   const setKeybindingOverride = useAppStore((state) => state.setKeybindingOverride)
   const resetKeybindingOverride = useAppStore((state) => state.resetKeybindingOverride)
   const disableKeybindingAction = useAppStore((state) => state.disableKeybindingAction)
+  const mountedRef = useMountedRef()
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
   const [shortcutQuery, setShortcutQuery] = useState('')
@@ -267,10 +269,12 @@ export function ShortcutsPane(): React.JSX.Element {
         : setKeybindingOverride(actionId, normalizedResult))
       return true
     } catch (error) {
-      setErrors((prev) => ({
-        ...prev,
-        [actionId]: error instanceof Error ? error.message : 'Failed to save shortcut.'
-      }))
+      if (mountedRef.current) {
+        setErrors((prev) => ({
+          ...prev,
+          [actionId]: error instanceof Error ? error.message : 'Failed to save shortcut.'
+        }))
+      }
       return false
     }
   }
@@ -287,7 +291,7 @@ export function ShortcutsPane(): React.JSX.Element {
 
     // Why: the visual editor records one chord at a time; users can still
     // manage multi-binding arrays directly in keybindings.json.
-    if (await saveBindings(actionId, [captured.value])) {
+    if ((await saveBindings(actionId, [captured.value])) && mountedRef.current) {
       setRecordingActionId(null)
     }
   }
@@ -299,10 +303,12 @@ export function ShortcutsPane(): React.JSX.Element {
         ? setKeybindingOverride(actionId, getEffectiveKeybindingsForAction(actionId, platform, {}))
         : resetKeybindingOverride(actionId))
     } catch (error) {
-      setErrors((prev) => ({
-        ...prev,
-        [actionId]: error instanceof Error ? error.message : 'Failed to reset shortcut.'
-      }))
+      if (mountedRef.current) {
+        setErrors((prev) => ({
+          ...prev,
+          [actionId]: error instanceof Error ? error.message : 'Failed to reset shortcut.'
+        }))
+      }
     }
   }
 
@@ -311,10 +317,12 @@ export function ShortcutsPane(): React.JSX.Element {
     try {
       await disableKeybindingAction(actionId)
     } catch (error) {
-      setErrors((prev) => ({
-        ...prev,
-        [actionId]: error instanceof Error ? error.message : 'Failed to disable shortcut.'
-      }))
+      if (mountedRef.current) {
+        setErrors((prev) => ({
+          ...prev,
+          [actionId]: error instanceof Error ? error.message : 'Failed to disable shortcut.'
+        }))
+      }
     }
   }
 

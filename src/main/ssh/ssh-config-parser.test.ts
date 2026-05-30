@@ -6,6 +6,16 @@ vi.mock('os', () => ({
   homedir: () => '/home/testuser'
 }))
 
+const LARGE_HOST_ALIAS_COUNT = 150_000
+
+function buildHostAliases(count: number): string {
+  const aliases: string[] = []
+  for (let index = 0; index < count; index += 1) {
+    aliases.push(`generated-${index}`)
+  }
+  return aliases.join(' ')
+}
+
 describe('parseSshConfig', () => {
   it('parses a basic host block', () => {
     const config = `
@@ -170,6 +180,31 @@ Host staging stage *.example.com
       { host: 'staging', hostname: 'staging.example.com' },
       { host: 'stage', hostname: 'staging.example.com' }
     ])
+  })
+
+  it('parses large concrete alias lists on one Host line', () => {
+    const config = [
+      `Host ${buildHostAliases(LARGE_HOST_ALIAS_COUNT)}`,
+      '  HostName generated.example.com',
+      'Host after',
+      '  HostName after.example.com'
+    ].join('\n')
+
+    const hosts = parseSshConfig(config)
+
+    expect(hosts).toHaveLength(LARGE_HOST_ALIAS_COUNT + 1)
+    expect(hosts[0]).toEqual({
+      host: 'generated-0',
+      hostname: 'generated.example.com'
+    })
+    expect(hosts[LARGE_HOST_ALIAS_COUNT - 1]).toEqual({
+      host: `generated-${LARGE_HOST_ALIAS_COUNT - 1}`,
+      hostname: 'generated.example.com'
+    })
+    expect(hosts.at(-1)).toEqual({
+      host: 'after',
+      hostname: 'after.example.com'
+    })
   })
 
   it('applies identity agent settings to every concrete alias on a multi-pattern Host line', () => {

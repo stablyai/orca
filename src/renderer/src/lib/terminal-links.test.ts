@@ -109,6 +109,15 @@ describe('terminal path helpers', () => {
         displayText: './My Folder'
       })
     })
+
+    it('handles large spaced path lists without quadratic overlap scans', () => {
+      const line = Array.from({ length: 20_000 }, () => '/tmp/Foo Bar/file').join(', ')
+
+      const links = extractTerminalFileLinks(line)
+
+      expect(links).toHaveLength(20_000)
+      expect(links[0].pathText).toBe('/tmp/Foo Bar/file')
+    }, 5_000)
   })
 
   it('supports Windows cwd resolution for terminal file links', () => {

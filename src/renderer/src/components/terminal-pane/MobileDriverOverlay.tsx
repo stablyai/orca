@@ -3,6 +3,10 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { DriverState } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldFocusMobileDriverAction } from './mobile-driver-overlay-focus'
+import {
+  createMobileDriverOverlayCollapseState,
+  getMobileDriverOverlayCollapseState
+} from './mobile-driver-overlay-collapse'
 
 type Props = {
   driver: DriverState
@@ -25,7 +29,9 @@ export function MobileDriverOverlay({
   const isHeldAtPhoneFit = !isMobileDriving && hasFitOverride
   const driverClientId = driver.kind === 'mobile' ? driver.clientId : null
 
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapseState, setCollapseState] = useState(() =>
+    createMobileDriverOverlayCollapseState(driverClientId)
+  )
   const [actionPending, setActionPending] = useState(false)
   const mountedRef = useRef(true)
 
@@ -36,13 +42,12 @@ export function MobileDriverOverlay({
     []
   )
 
-  // Re-expand on driver flip so a new mobile actor is loud, not silent.
-  useEffect(() => {
-    if (!isMobileDriving) {
-      return
-    }
-    setCollapsed(false)
-  }, [isMobileDriving, driverClientId])
+  const currentCollapseState = getMobileDriverOverlayCollapseState(collapseState, driverClientId)
+  // Why: a new mobile actor must be loud even if the prior driver was collapsed.
+  if (currentCollapseState !== collapseState) {
+    setCollapseState(currentCollapseState)
+  }
+  const collapsed = currentCollapseState.collapsed
 
   if (!isMobileDriving && !isHeldAtPhoneFit) {
     return null
@@ -82,7 +87,7 @@ export function MobileDriverOverlay({
       <LockChip
         actionPending={actionPending}
         onAction={handleAction}
-        onExpand={() => setCollapsed(false)}
+        onExpand={() => setCollapseState(createMobileDriverOverlayCollapseState(driverClientId))}
         rootClassName={rootClassName}
       />
     )
@@ -96,7 +101,7 @@ export function MobileDriverOverlay({
       actionLabel="Take back"
       actionPending={actionPending}
       onAction={handleAction}
-      onCollapse={() => setCollapsed(true)}
+      onCollapse={() => setCollapseState({ driverClientId, collapsed: true })}
       tone="driving"
       rootClassName={rootClassName}
     />

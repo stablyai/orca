@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import { Info } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
@@ -67,10 +67,10 @@ import {
 } from './settings-load-performance'
 
 const SETTINGS_NAV_GROUPS = [
+  { id: 'capabilities', title: 'AI Capabilities' },
   { id: 'setup', title: 'Set Up' },
   { id: 'workflows', title: 'Workflows' },
   { id: 'interface', title: 'Interface' },
-  { id: 'capabilities', title: 'AI Capabilities' },
   { id: 'remote', title: 'Remote Access' },
   { id: 'safety', title: 'Safety' },
   { id: 'experimental', title: 'Experimental' }
@@ -128,6 +128,15 @@ function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | nu
   const targetTop = targetRect.top - containerRect.top + container.scrollTop
   const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
   container.scrollTo({ top: Math.min(Math.max(0, targetTop - 16), maxScrollTop) })
+}
+
+function cancelPendingSettingsSubsectionScrollFrame(
+  frameRef: MutableRefObject<number | null>
+): void {
+  if (frameRef.current !== null) {
+    cancelAnimationFrame(frameRef.current)
+    frameRef.current = null
+  }
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -199,9 +208,22 @@ function Settings(): React.JSX.Element {
   const terminalFontsLoadedRef = useRef(false)
   const pendingNavSectionRef = useRef<string | null>(null)
   const pendingScrollTargetRef = useRef<string | null>(null)
+  const pendingSubsectionScrollFrameRef = useRef<number | null>(null)
   const repoHooksRequestSeqRef = useRef(0)
   const repoHooksRuntimeIdentityRef = useRef<string>('local')
   const shortcutsEscapeConfirmUntilRef = useRef(0)
+
+  const setSettingsRootNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      if (node) {
+        return
+      }
+      // Why: the settings search is a transient in-page filter. Leaving it behind makes the next
+      // visit look partially broken because whole sections stay hidden before the user types again.
+      setSettingsSearchQuery('')
+    },
+    [setSettingsSearchQuery]
+  )
 
   const confirmDiscardCommitPromptChanges = useCallback(async (): Promise<boolean> => {
     if (!hasUnsavedCommitPromptChanges) {
@@ -329,15 +351,6 @@ function Settings(): React.JSX.Element {
     return () => document.removeEventListener('keydown', handleFindShortcut)
   }, [keybindings])
 
-  useEffect(
-    () => () => {
-      // Why: the settings search is a transient in-page filter. Leaving it behind makes the next
-      // visit look partially broken because whole sections stay hidden before the user types again.
-      setSettingsSearchQuery('')
-    },
-    [setSettingsSearchQuery]
-  )
-
   useEffect(() => {
     if (!settings || !settingsNavigationTarget) {
       return
@@ -420,7 +433,11 @@ function Settings(): React.JSX.Element {
     [activeSectionId, mountedSectionIds, navSections, settingsSearchQuery, visibleSectionIds]
   )
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
-    isWindows && neededSectionIds.has('terminal')
+    isWindows &&
+      (neededSectionIds.has('terminal') ||
+        neededSectionIds.has('accounts') ||
+        neededSectionIds.has('agents')),
+    true
   )
 
   useEffect(() => {
@@ -559,6 +576,10 @@ function Settings(): React.JSX.Element {
   }, [neededRepoIds, repos, runtimeTargetIdentity])
 
   useEffect(() => {
+    return () => cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
+  }, [])
+
+  useEffect(() => {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
 
@@ -591,7 +612,19 @@ function Settings(): React.JSX.Element {
           scrollSubsectionIntoView(scrollTargetId, contentScrollRef.current)
         }
         scrollToSubsection()
-        requestAnimationFrame(scrollToSubsection)
+        cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
+        let completed = false
+        let frameId: number | undefined
+        frameId = requestAnimationFrame(() => {
+          completed = true
+          if (pendingSubsectionScrollFrameRef.current === frameId) {
+            pendingSubsectionScrollFrameRef.current = null
+          }
+          scrollToSubsection()
+        })
+        if (!completed) {
+          pendingSubsectionScrollFrameRef.current = frameId
+        }
       }
       setActiveSectionId(pendingNavSectionId)
       pendingNavSectionRef.current = null
@@ -664,8 +697,13 @@ function Settings(): React.JSX.Element {
 
   if (!settings) {
     return (
-      <div className="flex flex-1 items-center justify-center text-muted-foreground">
-        Loading settings...
+      <div
+        ref={setSettingsRootNode}
+        className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background"
+      >
+        <div className="flex flex-1 items-center justify-center text-muted-foreground">
+          Loading settings...
+        </div>
       </div>
     )
   }
@@ -691,7 +729,10 @@ function Settings(): React.JSX.Element {
     activeSectionId === 'shortcuts' && settingsSearchQuery.trim() === ''
 
   return (
-    <div className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background">
+    <div
+      ref={setSettingsRootNode}
+      className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background"
+    >
       <SettingsSidebar
         activeSectionId={activeSectionId}
         generalGroups={generalNavGroups}
@@ -725,24 +766,19 @@ function Settings(): React.JSX.Element {
             ) : (
               <ActiveSettingsSectionProvider value={activeSectionId}>
                 <SettingsSection
-                  id="general"
-                  title="General"
-                  description="Workspace defaults, app setup, and maintenance."
-                  searchEntries={getSectionSearchEntries('general')}
-                >
-                  {isSectionMounted('general') ? (
-                    <GeneralPane settings={settings} updateSettings={updateSettings} />
-                  ) : null}
-                </SettingsSection>
-
-                <SettingsSection
                   id="agents"
                   title="Agents"
                   description="Manage AI agents, set a default, and customize commands."
                   searchEntries={getSectionSearchEntries('agents')}
                 >
                   {isSectionMounted('agents') ? (
-                    <AgentsPane settings={settings} updateSettings={updateSettings} />
+                    <AgentsPane
+                      settings={settings}
+                      updateSettings={updateSettings}
+                      wslAvailable={windowsTerminalCapabilities.wslAvailable}
+                      wslDistros={windowsTerminalCapabilities.wslDistros}
+                      wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                    />
                   ) : null}
                 </SettingsSection>
 
@@ -754,7 +790,82 @@ function Settings(): React.JSX.Element {
                   searchEntries={getSectionSearchEntries('accounts')}
                 >
                   {isSectionMounted('accounts') ? (
-                    <AccountsPane settings={settings} updateSettings={updateSettings} />
+                    <AccountsPane
+                      settings={settings}
+                      updateSettings={updateSettings}
+                      wslAvailable={windowsTerminalCapabilities.wslAvailable}
+                      wslDistros={windowsTerminalCapabilities.wslDistros}
+                      wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                    />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="orchestration"
+                  title="Orchestration"
+                  description="Coordinate multiple coding agents through Orca."
+                  searchEntries={getSectionSearchEntries('orchestration')}
+                >
+                  {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
+                </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <>
+                    <SettingsSection
+                      id="computer-use"
+                      title="Computer Use"
+                      badge="Beta"
+                      badgeAccessory={
+                        showComputerUsePreviewTooltip ? (
+                          <TooltipProvider delayDuration={250}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="text-muted-foreground transition-colors hover:text-foreground"
+                                  aria-label={`${computerUsePlatform} Computer Use preview details`}
+                                >
+                                  <Info className="size-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" sideOffset={6} className="max-w-72">
+                                <span>
+                                  {computerUsePlatform} Computer Use is an early preview. Some apps
+                                  and desktop environments may behave inconsistently.
+                                </span>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : null
+                      }
+                      description="Enable agents to control any app on your computer."
+                      searchEntries={getSectionSearchEntries('computer-use')}
+                    >
+                      {isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
+                    </SettingsSection>
+
+                    <SettingsSection
+                      id="voice"
+                      title="Voice"
+                      badge="Beta"
+                      description="Local speech-to-text dictation with on-device models."
+                      searchEntries={getSectionSearchEntries('voice')}
+                    >
+                      {isSectionMounted('voice') ? (
+                        <VoicePane settings={settings} updateSettings={updateSettings} />
+                      ) : null}
+                    </SettingsSection>
+                  </>
+                ) : null}
+
+                <SettingsSection
+                  id="general"
+                  title="General"
+                  description="Workspace defaults, app setup, and maintenance."
+                  searchEntries={getSectionSearchEntries('general')}
+                >
+                  {isSectionMounted('general') ? (
+                    <GeneralPane settings={settings} updateSettings={updateSettings} />
                   ) : null}
                 </SettingsSection>
 
@@ -842,6 +953,8 @@ function Settings(): React.JSX.Element {
                       setScrollbackMode={setScrollbackMode}
                       ghostty={ghostty}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
+                      wslDistros={windowsTerminalCapabilities.wslDistros}
+                      wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
                       pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
                     />
                   ) : null}
@@ -942,64 +1055,6 @@ function Settings(): React.JSX.Element {
                 >
                   {isSectionMounted('stats') ? <StatsPane /> : null}
                 </SettingsSection>
-
-                <SettingsSection
-                  id="orchestration"
-                  title="Orchestration"
-                  description="Coordinate multiple coding agents through Orca."
-                  searchEntries={getSectionSearchEntries('orchestration')}
-                >
-                  {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
-                </SettingsSection>
-
-                {showDesktopOnlySettings ? (
-                  <>
-                    <SettingsSection
-                      id="computer-use"
-                      title="Computer Use"
-                      badge="Beta"
-                      badgeAccessory={
-                        showComputerUsePreviewTooltip ? (
-                          <TooltipProvider delayDuration={250}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="text-muted-foreground transition-colors hover:text-foreground"
-                                  aria-label={`${computerUsePlatform} Computer Use preview details`}
-                                >
-                                  <Info className="size-3.5" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" sideOffset={6} className="max-w-72">
-                                <span>
-                                  {computerUsePlatform} Computer Use is an early preview. Some apps
-                                  and desktop environments may behave inconsistently.
-                                </span>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ) : null
-                      }
-                      description="Enable agents to control any app on your computer."
-                      searchEntries={getSectionSearchEntries('computer-use')}
-                    >
-                      {isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
-                    </SettingsSection>
-
-                    <SettingsSection
-                      id="voice"
-                      title="Voice"
-                      badge="Beta"
-                      description="Local speech-to-text dictation with on-device models."
-                      searchEntries={getSectionSearchEntries('voice')}
-                    >
-                      {isSectionMounted('voice') ? (
-                        <VoicePane settings={settings} updateSettings={updateSettings} />
-                      ) : null}
-                    </SettingsSection>
-                  </>
-                ) : null}
 
                 <SettingsSection
                   id="servers"

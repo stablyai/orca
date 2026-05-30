@@ -131,7 +131,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       'wsl.exe',
       '/home/alice/repo/subdir',
       'C:\\Users\\alice',
-      { distro: 'Ubuntu' }
+      { distro: 'Ubuntu', treatPosixCwdAsWsl: true }
     )
 
     expect(result.shellArgs).toEqual([

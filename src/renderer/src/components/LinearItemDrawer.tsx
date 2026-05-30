@@ -953,6 +953,13 @@ export function LinearIssueCommentFooter({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useRef(true)
+
+  const handleFooterRef = useCallback((node: HTMLDivElement | null): void => {
+    // Why: comment submission can resolve after the footer unmounts; the root
+    // ref keeps that completion from writing stale local state without an Effect.
+    mountedRef.current = node !== null
+  }, [])
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
@@ -972,6 +979,9 @@ export function LinearIssueCommentFooter({
     try {
       const result = await linearAddIssueComment(settings, issueId, trimmed, workspaceId)
       const typed = result as { ok: boolean; id?: string; error?: string }
+      if (!mountedRef.current) {
+        return
+      }
       if (typed.ok) {
         setBody('')
         onCommentAdded({
@@ -983,9 +993,13 @@ export function LinearIssueCommentFooter({
         toast.error(typed.error ?? 'Failed to add comment')
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }, [body, issueId, onCommentAdded, settings, workspaceId])
 
@@ -1001,7 +1015,10 @@ export function LinearIssueCommentFooter({
 
   if (variant === 'linear-page') {
     return (
-      <div className="rounded-xl border border-border/70 bg-background shadow-xs">
+      <div
+        ref={handleFooterRef}
+        className="rounded-xl border border-border/70 bg-background shadow-xs"
+      >
         <textarea
           ref={textareaRef}
           value={body}
@@ -1036,7 +1053,10 @@ export function LinearIssueCommentFooter({
   }
 
   return (
-    <div className="flex items-end gap-2 border-t border-border/60 bg-background/40 px-4 py-3">
+    <div
+      ref={handleFooterRef}
+      className="flex items-end gap-2 border-t border-border/60 bg-background/40 px-4 py-3"
+    >
       <textarea
         ref={textareaRef}
         value={body}
@@ -1179,7 +1199,9 @@ export default function LinearItemDrawer({
     }
     let cancelled = false
     let count = 0
+    let frameId: number | null = null
     const tick = (): void => {
+      frameId = null
       if (cancelled) {
         return
       }
@@ -1187,12 +1209,15 @@ export default function LinearItemDrawer({
         document.body.style.pointerEvents = ''
       }
       if (count++ < 5) {
-        requestAnimationFrame(tick)
+        frameId = requestAnimationFrame(tick)
       }
     }
     tick()
     return () => {
       cancelled = true
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+      }
     }
   }, [issue?.id])
 

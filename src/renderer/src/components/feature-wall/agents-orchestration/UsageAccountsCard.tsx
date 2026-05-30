@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { ClaudeIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import { cn } from '@/lib/utils'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -85,6 +86,7 @@ export function UsageAccountsCard(props: {
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const rateLimits = useAppStore((s) => s.rateLimits)
   const fetchRateLimits = useAppStore((s) => s.fetchRateLimits)
+  const mountedRef = useMountedRef()
 
   const [claudeAccounts, setClaudeAccounts] = useState<ClaudeRateLimitAccountsState>({
     accounts: [],
@@ -144,16 +146,26 @@ export function UsageAccountsCard(props: {
     setClaudeAction('adding')
     try {
       const next = await window.api.claudeAccounts.add()
-      setClaudeAccounts(next)
+      if (mountedRef.current) {
+        setClaudeAccounts(next)
+      }
       await fetchSettings()
-      await onAccountStateChange?.()
-      toast.success('Claude account added.')
+      if (mountedRef.current) {
+        await onAccountStateChange?.()
+        if (mountedRef.current) {
+          toast.success('Claude account added.')
+        }
+      }
     } catch (error) {
-      toast.error('Claude sign-in failed.', {
-        description: String((error as Error)?.message ?? error)
-      })
+      if (mountedRef.current) {
+        toast.error('Claude sign-in failed.', {
+          description: String((error as Error)?.message ?? error)
+        })
+      }
     } finally {
-      setClaudeAction('idle')
+      if (mountedRef.current) {
+        setClaudeAction('idle')
+      }
     }
   }
 
@@ -164,16 +176,26 @@ export function UsageAccountsCard(props: {
     setCodexAction('adding')
     try {
       const next = await window.api.codexAccounts.add()
-      setCodexAccounts(next)
+      if (mountedRef.current) {
+        setCodexAccounts(next)
+      }
       await fetchSettings()
-      await onAccountStateChange?.()
-      toast.success('Codex account added.')
+      if (mountedRef.current) {
+        await onAccountStateChange?.()
+        if (mountedRef.current) {
+          toast.success('Codex account added.')
+        }
+      }
     } catch (error) {
-      toast.error('Codex sign-in failed.', {
-        description: String((error as Error)?.message ?? error)
-      })
+      if (mountedRef.current) {
+        toast.error('Codex sign-in failed.', {
+          description: String((error as Error)?.message ?? error)
+        })
+      }
     } finally {
-      setCodexAction('idle')
+      if (mountedRef.current) {
+        setCodexAction('idle')
+      }
     }
   }
 

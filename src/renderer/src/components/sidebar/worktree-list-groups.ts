@@ -473,7 +473,11 @@ export function buildRows(
         return a[1].label.localeCompare(b[1].label)
       })
     }
-    orderedGroups.push(...entries)
+    // Why: large imported repo sets can have one group per repo; spreading
+    // those entries into push can exceed V8's argument limit.
+    for (const entry of entries) {
+      orderedGroups.push(entry)
+    }
   }
 
   const appendOrderedGroups = (

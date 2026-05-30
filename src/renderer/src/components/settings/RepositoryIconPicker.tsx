@@ -15,6 +15,7 @@ import { RepoIconGlyph, REPO_LUCIDE_ICON_OPTIONS } from '../repo/repo-icon'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 const EMOJI_OPTIONS = ['🚀', '✨', '💻', '🧠', '📦', '🔧', '🎨', '🌐', '📊', '🔒', '⚡', '✅']
 
@@ -27,6 +28,7 @@ export function RepositoryIconPicker({
 }): React.JSX.Element {
   const [website, setWebsite] = useState('')
   const [loadingGitHub, setLoadingGitHub] = useState(false)
+  const mountedRef = useMountedRef()
   const activeRuntimeEnvironmentId = useAppStore(
     (state) => state.settings?.activeRuntimeEnvironmentId ?? null
   )
@@ -61,7 +63,7 @@ export function RepositoryIconPicker({
   const handleUploadImage = async () => {
     try {
       const result = await window.api.shell.pickRepoIconImage()
-      if (!result) {
+      if (!result || !mountedRef.current) {
         return
       }
       setIcon({
@@ -99,7 +101,12 @@ export function RepositoryIconPicker({
             )
           : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
       if (!slug) {
-        toast.error('No GitHub remote found for this repo.')
+        if (mountedRef.current) {
+          toast.error('No GitHub remote found for this repo.')
+        }
+        return
+      }
+      if (!mountedRef.current) {
         return
       }
       setIcon({
@@ -109,9 +116,13 @@ export function RepositoryIconPicker({
         label: `${slug.owner}/${slug.repo}`
       })
     } catch {
-      toast.error('Failed to resolve the GitHub repo.')
+      if (mountedRef.current) {
+        toast.error('Failed to resolve the GitHub repo.')
+      }
     } finally {
-      setLoadingGitHub(false)
+      if (mountedRef.current) {
+        setLoadingGitHub(false)
+      }
     }
   }
 

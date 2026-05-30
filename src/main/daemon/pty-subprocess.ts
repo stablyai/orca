@@ -19,9 +19,10 @@ import {
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
 import { isPwshAvailable } from '../pwsh'
-import { isHostCodexHomeForWsl } from '../pty/codex-home-wsl-env'
+import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { parseWslPath } from '../wsl'
+import { addWslEnvKeys } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
@@ -38,6 +39,7 @@ export type PtySubprocessOptions = {
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
    *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
   shellOverride?: string
+  terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
 }
 
@@ -79,6 +81,13 @@ function removeInheritedDevAgentHookEndpoint(
     // needed by hooks whose runners scrub token-like env vars before exec.
     delete env.ORCA_AGENT_HOOK_ENDPOINT
   }
+}
+
+function getWslContextFromPreferredDistro(
+  distro: string | null | undefined
+): { distro: string } | undefined {
+  const trimmed = distro?.trim()
+  return trimmed ? { distro: trimmed } : undefined
 }
 
 function removeInheritedElectronRunAsNode(env: Record<string, string>): void {
@@ -165,6 +174,14 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
   return formatted
 }
 
+function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
+  const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
+  if (!trimmed || trimmed === 'xterm-256color') {
+    return null
+  }
+  return trimmed.split(/[\\/]/).pop() || null
+}
+
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
@@ -205,13 +222,18 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   const cwdWslInfo = process.platform === 'win32' ? parseWslPath(opts.cwd ?? '') : null
   const sessionWslContext =
     process.platform === 'win32' ? getWslContextFromSessionId(opts.sessionId) : undefined
+  const preferredWslContext =
+    process.platform === 'win32'
+      ? getWslContextFromPreferredDistro(opts.terminalWindowsWslDistro)
+      : undefined
   // Why: WSL worktree cwd is the repo's execution environment. Older persisted
   // tabs can carry a PowerShell/cmd shellOverride; ignore it so reconnects and
   // daemon-backed terminals enter the WSL distro just like LocalPtyProvider.
   let shellPath =
     cwdWslInfo || sessionWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
-  let spawnCwd = opts.cwd || getDefaultCwd()
+  const requestedCwd = opts.cwd || getDefaultCwd()
+  let spawnCwd = requestedCwd
   let validationCwd = spawnCwd
 
   if (process.platform === 'win32') {
@@ -245,18 +267,57 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       shellPath,
       spawnCwd,
       getDefaultCwd(),
-      sessionWslContext
+      sessionWslContext ?? preferredWslContext
     )
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
     validationCwd = resolved.validationCwd
-    if (
-      pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe' &&
-      isHostCodexHomeForWsl(env.CODEX_HOME)
-    ) {
-      // Why: Orca's selected Codex runtime home is host-local. WSL Codex must
-      // use its Linux-side ~/.codex instead of inheriting a Windows path.
+    const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
+    if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+      if (codexHomeWslInfo) {
+        const launchWslDistro =
+          cwdWslInfo?.distro ?? sessionWslContext?.distro ?? preferredWslContext?.distro
+        if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
+          delete env.CODEX_HOME
+          delete env.ORCA_CODEX_HOME
+        } else {
+          env.CODEX_HOME = codexHomeWslInfo.linuxPath
+          env.ORCA_CODEX_HOME = codexHomeWslInfo.linuxPath
+          // Why: wsl.exe only imports non-default env vars named in WSLENV.
+          addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+          if (!launchWslDistro) {
+            const resolved = resolveWindowsShellLaunchArgs(
+              shellPath,
+              requestedCwd,
+              getDefaultCwd(),
+              {
+                distro: codexHomeWslInfo.distro
+              }
+            )
+            shellArgs = resolved.shellArgs
+            spawnCwd = resolved.effectiveCwd
+            validationCwd = resolved.validationCwd
+          }
+        }
+      } else if (isHostCodexHomeForWsl(env.CODEX_HOME)) {
+        // Why: Orca's selected Codex runtime home is host-local. WSL Codex
+        // must use its Linux-side ~/.codex instead of a Windows path.
+        delete env.CODEX_HOME
+        delete env.ORCA_CODEX_HOME
+      } else if (env.CODEX_HOME) {
+        addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+      }
+      if (env.CLAUDE_CONFIG_DIR) {
+        // Why: managed WSL Claude accounts pass a Linux CLAUDE_CONFIG_DIR
+        // through Windows wsl.exe; non-default env vars need WSLENV import.
+        addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
+      }
+    } else if (codexHomeWslInfo || isWslCodexHomeForHost(env.CODEX_HOME)) {
+      // Why: WSL-managed Codex homes are Linux paths. Windows Codex cannot use
+      // them. ORCA_CODEX_HOME must go too because shell-ready scripts restore
+      // CODEX_HOME from it after user profiles run.
       delete env.CODEX_HOME
+      delete env.ORCA_CODEX_HOME
     }
   } else {
     // Why: any Orca-injected overlay env that user rc files can clobber
@@ -333,6 +394,20 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   return {
     pid: proc.pid,
+    getForegroundProcess: () => {
+      // Why: node-pty's `.process` getter reports the PTY's live foreground
+      // process name (the agent running in the shell, or the shell itself) and
+      // updates as it changes. Null once the child is gone — `.process` on a
+      // reaped pty can read a recycled pid.
+      if (dead) {
+        return null
+      }
+      try {
+        return normalizeForegroundProcessName(proc.process)
+      } catch {
+        return null
+      }
+    },
     write: (data) => {
       if (dead) {
         return

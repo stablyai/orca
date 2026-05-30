@@ -106,6 +106,24 @@ describe('DaemonClient', () => {
       await waitFor(() => hellos.length > 0)
     })
 
+    it('removes socket startup listeners after connecting', async () => {
+      await startMockDaemon()
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+
+      const connectedClient = client as unknown as {
+        controlSocket: Socket | null
+        streamSocket: Socket | null
+      }
+      for (const socket of [connectedClient.controlSocket, connectedClient.streamSocket]) {
+        expect(socket?.listenerCount('connect')).toBe(0)
+        // One live error listener remains: the disconnect handler installed
+        // after the daemon hello handshake succeeds.
+        expect(socket?.listenerCount('error')).toBe(1)
+      }
+    })
+
     it('rejects on version mismatch', async () => {
       await startMockDaemon({ rejectVersion: true })
 

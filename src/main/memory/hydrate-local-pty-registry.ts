@@ -146,7 +146,11 @@ async function collectSessionInfos(
   for (const adapter of adapters) {
     try {
       const sessions = await adapter.listSessions()
-      out.push(...sessions)
+      // Why: warm reattach can discover many daemon sessions at once; spreading
+      // listSessions() into push can exceed JavaScript's argument limit.
+      for (const session of sessions) {
+        out.push(session)
+      }
     } catch (err) {
       // Why: a single adapter failing should not abort hydration of the
       // others — the current adapter and any legacy daemons each have

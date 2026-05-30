@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react'
 
 export type WindowsTerminalCapabilities = {
   wslAvailable: boolean
+  wslDistros: string[]
   pwshAvailable: boolean
+  isLoading: boolean
 }
 
 const UNAVAILABLE_CAPABILITIES: WindowsTerminalCapabilities = {
   wslAvailable: false,
-  pwshAvailable: false
+  wslDistros: [],
+  pwshAvailable: false,
+  isLoading: false
 }
 
 const CAPABILITY_CACHE_TTL_MS = 30_000
@@ -52,10 +56,11 @@ export function loadWindowsTerminalCapabilities(
   const requestId = ++latestCapabilityRequestId
   pendingCapabilities = Promise.all([
     window.api.wsl.isAvailable().catch(() => false),
+    window.api.wsl.listDistros().catch(() => []),
     window.api.pwsh.isAvailable().catch(() => false)
   ])
-    .then(([wslAvailable, pwshAvailable]) => {
-      const capabilities = { wslAvailable, pwshAvailable }
+    .then(([wslAvailable, wslDistros, pwshAvailable]) => {
+      const capabilities = { wslAvailable, wslDistros, pwshAvailable, isLoading: false }
       if (requestId === latestCapabilityRequestId) {
         pendingCapabilities = null
         publish(capabilities, now)
@@ -79,7 +84,10 @@ export function refreshWindowsTerminalCapabilities(): Promise<WindowsTerminalCap
   return loadWindowsTerminalCapabilities({ force: true })
 }
 
-export function useWindowsTerminalCapabilities(enabled: boolean): WindowsTerminalCapabilities {
+export function useWindowsTerminalCapabilities(
+  enabled: boolean,
+  forceRefreshOnMount = false
+): WindowsTerminalCapabilities {
   const [capabilities, setCapabilities] = useState(getCachedWindowsTerminalCapabilities)
 
   useEffect(() => {
@@ -88,14 +96,23 @@ export function useWindowsTerminalCapabilities(enabled: boolean): WindowsTermina
       return
     }
 
-    setCapabilities(getCachedWindowsTerminalCapabilities())
+    let cancelled = false
+    const cached = getCachedWindowsTerminalCapabilities()
+    setCapabilities(cachedCapabilities ? cached : { ...cached, isLoading: true })
     subscribers.add(setCapabilities)
-    void loadWindowsTerminalCapabilities().then(setCapabilities)
+    void loadWindowsTerminalCapabilities({ force: forceRefreshOnMount }).then(
+      (nextCapabilities) => {
+        if (!cancelled) {
+          setCapabilities(nextCapabilities)
+        }
+      }
+    )
 
     return () => {
+      cancelled = true
       subscribers.delete(setCapabilities)
     }
-  }, [enabled])
+  }, [enabled, forceRefreshOnMount])
 
   return enabled ? capabilities : UNAVAILABLE_CAPABILITIES
 }

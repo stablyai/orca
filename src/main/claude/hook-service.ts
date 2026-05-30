@@ -14,13 +14,29 @@ import {
 import {
   applyManagedHooks,
   CLAUDE_EVENTS,
+  CLAUDE_HOOK_SETTINGS,
+  getManagedScriptFileName,
   getConfigPath,
   getManagedCommand,
   getManagedScriptPath,
+  getPosixManagedScriptFileName,
   getRemoteConfigPath,
   getRemoteManagedCommand,
-  removeManagedHooks
+  removeManagedHooks,
+  type ClaudeCompatibleHookSettings
 } from './hook-settings'
+
+type ClaudeHookServiceOptions = {
+  agent: AgentHookInstallStatus['agent']
+  displayName: string
+  settings: ClaudeCompatibleHookSettings
+}
+
+const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
+  agent: 'claude',
+  displayName: 'Claude',
+  settings: CLAUDE_HOOK_SETTINGS
+}
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
@@ -87,17 +103,23 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 }
 
 export class ClaudeHookService {
+  private readonly options: ClaudeHookServiceOptions
+
+  constructor(options: ClaudeHookServiceOptions = DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS) {
+    this.options = options
+  }
+
   getStatus(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
-    const scriptPath = getManagedScriptPath()
+    const configPath = getConfigPath(this.options.settings)
+    const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
-        agent: 'claude',
+        agent: this.options.agent,
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: 'Could not parse Claude settings.json'
+        detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
 
@@ -134,25 +156,29 @@ export class ClaudeHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
-    return { agent: 'claude', state, configPath, managedHooksPresent, detail }
+    return { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
   }
 
   install(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
-    const scriptPath = getManagedScriptPath()
+    const configPath = getConfigPath(this.options.settings)
+    const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
-        agent: 'claude',
+        agent: this.options.agent,
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: 'Could not parse Claude settings.json'
+        detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
 
     const command = getManagedCommand(scriptPath)
-    const nextConfig = applyManagedHooks(config, command)
+    const nextConfig = applyManagedHooks(
+      config,
+      command,
+      getManagedScriptFileName(this.options.settings)
+    )
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
@@ -166,8 +192,9 @@ export class ClaudeHookService {
     // and a `.sh` managed script body. The remote platform is gated by the
     // relay's capability RPC at a higher layer; we cannot detect it from
     // `process.platform` here (that's the local box).
-    const remoteConfigPath = getRemoteConfigPath(remoteHome)
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/claude-hook.sh`
+    const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
+    const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
     // Why: SFTP reads/writes fail far more often than local fs (network drops,
     // EACCES on remote dirs, disk full, channel closed). Wrap the entire
     // install flow in try/catch so a transient I/O failure surfaces as a
@@ -179,18 +206,18 @@ export class ClaudeHookService {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {
         return {
-          agent: 'claude',
+          agent: this.options.agent,
           state: 'error',
           configPath: remoteConfigPath,
           managedHooksPresent: false,
-          detail: 'Could not parse remote Claude settings.json'
+          detail: `Could not parse remote ${this.options.displayName} settings.json`
         }
       }
 
       // Why: the POSIX wrapper is identical regardless of where the script
       // lands; only the path differs. Reuse the same wrapper helper.
       const command = getRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyManagedHooks(config, command, 'claude-hook.sh')
+      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
 
       // Why: write the script first, then the settings — settings.json
       // referencing a missing script body would fire `command not found` on
@@ -204,7 +231,7 @@ export class ClaudeHookService {
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
       return {
-        agent: 'claude',
+        agent: this.options.agent,
         state: 'installed',
         configPath: remoteConfigPath,
         managedHooksPresent: true,
@@ -212,7 +239,7 @@ export class ClaudeHookService {
       }
     } catch (err) {
       return {
-        agent: 'claude',
+        agent: this.options.agent,
         state: 'error',
         configPath: remoteConfigPath,
         managedHooksPresent: false,
@@ -222,18 +249,21 @@ export class ClaudeHookService {
   }
 
   remove(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+    const configPath = getConfigPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
-        agent: 'claude',
+        agent: this.options.agent,
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: 'Could not parse Claude settings.json'
+        detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
-    const { config: nextConfig, changed } = removeManagedHooks(config)
+    const { config: nextConfig, changed } = removeManagedHooks(
+      config,
+      getManagedScriptFileName(this.options.settings)
+    )
     if (changed) {
       writeHooksJson(configPath, nextConfig)
     }

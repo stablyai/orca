@@ -28,6 +28,7 @@ import { useAppStore } from '../../store'
 import { getRuntimeGitScope } from '../../runtime/runtime-git-client'
 import { getRepositorySourceControlAiSectionId } from './repository-settings-targets'
 import { Button } from '../ui/button'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 type RepositorySourceControlAiSectionProps = {
   repo: Repo
@@ -102,6 +103,7 @@ export function RepositorySourceControlAiSection({
   repo,
   updateRepo
 }: RepositorySourceControlAiSectionProps): React.JSX.Element {
+  const mountedRef = useMountedRef()
   const settings = useAppStore((state) => state.settings)
   const source = normalizeSourceControlAiSettings(
     settings?.sourceControlAi,
@@ -188,6 +190,9 @@ export function RepositorySourceControlAiSection({
     setSaveError(null)
     try {
       const result = await updateRepo(repo.id, { sourceControlAi: next })
+      if (!mountedRef.current) {
+        return
+      }
       if (result === false) {
         setSaveError('Failed to save Source Control AI settings.')
         return
@@ -204,9 +209,13 @@ export function RepositorySourceControlAiSection({
         }
       })
     } catch {
-      setSaveError('Failed to save Source Control AI settings.')
+      if (mountedRef.current) {
+        setSaveError('Failed to save Source Control AI settings.')
+      }
     } finally {
-      setIsSaving(false)
+      if (mountedRef.current) {
+        setIsSaving(false)
+      }
     }
   }
 

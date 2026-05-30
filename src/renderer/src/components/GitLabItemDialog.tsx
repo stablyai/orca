@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VisuallyHidden } from 'radix-ui'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import type {
   GitLabPipelineJob,
@@ -158,6 +159,7 @@ export default function GitLabItemDialog({
   const [commentDraft, setCommentDraft] = useState('')
   const [commentSubmitting, setCommentSubmitting] = useState(false)
   const [actionInFlight, setActionInFlight] = useState<'close' | 'reopen' | 'merge' | null>(null)
+  const mountedRef = useMountedRef()
 
   useEffect(() => {
     if (!item || !repoPath) {
@@ -214,15 +216,21 @@ export default function GitLabItemDialog({
     try {
       const res = await window.api.gl.closeMR({ repoPath, iid: item.number })
       if (res.ok) {
-        toast.success(`Closed MR !${item.number}`)
-        handleRefresh()
+        if (mountedRef.current) {
+          toast.success(`Closed MR !${item.number}`)
+          handleRefresh()
+        }
       } else {
-        toast.error(res.error)
+        if (mountedRef.current) {
+          toast.error(res.error)
+        }
       }
     } finally {
-      setActionInFlight(null)
+      if (mountedRef.current) {
+        setActionInFlight(null)
+      }
     }
-  }, [item, repoPath, handleRefresh])
+  }, [item, repoPath, mountedRef, handleRefresh])
 
   const handleReopen = useCallback(async (): Promise<void> => {
     if (!item || !repoPath || item.type !== 'mr') {
@@ -232,15 +240,21 @@ export default function GitLabItemDialog({
     try {
       const res = await window.api.gl.reopenMR({ repoPath, iid: item.number })
       if (res.ok) {
-        toast.success(`Reopened MR !${item.number}`)
-        handleRefresh()
+        if (mountedRef.current) {
+          toast.success(`Reopened MR !${item.number}`)
+          handleRefresh()
+        }
       } else {
-        toast.error(res.error)
+        if (mountedRef.current) {
+          toast.error(res.error)
+        }
       }
     } finally {
-      setActionInFlight(null)
+      if (mountedRef.current) {
+        setActionInFlight(null)
+      }
     }
-  }, [item, repoPath, handleRefresh])
+  }, [item, repoPath, mountedRef, handleRefresh])
 
   const handleMerge = useCallback(async (): Promise<void> => {
     if (!item || !repoPath || item.type !== 'mr') {
@@ -250,15 +264,21 @@ export default function GitLabItemDialog({
     try {
       const res = await window.api.gl.mergeMR({ repoPath, iid: item.number })
       if (res.ok) {
-        toast.success(`Merged MR !${item.number}`)
-        handleRefresh()
+        if (mountedRef.current) {
+          toast.success(`Merged MR !${item.number}`)
+          handleRefresh()
+        }
       } else {
-        toast.error(res.error)
+        if (mountedRef.current) {
+          toast.error(res.error)
+        }
       }
     } finally {
-      setActionInFlight(null)
+      if (mountedRef.current) {
+        setActionInFlight(null)
+      }
     }
-  }, [item, repoPath, handleRefresh])
+  }, [item, repoPath, mountedRef, handleRefresh])
 
   const handleSubmitComment = useCallback(async (): Promise<void> => {
     const body = commentDraft.trim()
@@ -274,15 +294,21 @@ export default function GitLabItemDialog({
           ? await window.api.gl.addMRComment({ repoPath, iid: item.number, body })
           : await window.api.gl.addIssueComment({ repoPath, number: item.number, body })
       if (res.ok) {
-        setCommentDraft('')
-        handleRefresh()
+        if (mountedRef.current) {
+          setCommentDraft('')
+          handleRefresh()
+        }
       } else {
-        toast.error(res.error)
+        if (mountedRef.current) {
+          toast.error(res.error)
+        }
       }
     } finally {
-      setCommentSubmitting(false)
+      if (mountedRef.current) {
+        setCommentSubmitting(false)
+      }
     }
-  }, [commentDraft, item, repoPath, handleRefresh])
+  }, [commentDraft, item, repoPath, mountedRef, handleRefresh])
 
   // Why: GitMerge for MRs visually disambiguates from GitBranch (and
   // matches gitlab.com's MR iconography); CircleDot stays on issues.

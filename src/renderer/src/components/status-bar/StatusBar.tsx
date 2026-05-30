@@ -7,11 +7,13 @@ import {
   Plug,
   ChevronDown,
   ChevronRight,
+  Loader2,
   PanelsTopLeft,
   RefreshCw,
   Server
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -25,9 +27,14 @@ import {
 import { useAppStore } from '../../store'
 import type {
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState
+  CodexRateLimitAccountsState,
+  GlobalSettings
 } from '../../../../shared/types'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitRuntimeTarget,
+  RateLimitWindow
+} from '../../../../shared/rate-limit-types'
 import { ProviderIcon, ProviderPanel, barColor } from './tooltip'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
@@ -43,9 +50,55 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
 import { summarizeCodexRestartStatus } from './codex-restart-status-summary'
+import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
+}
+
+export type CodexStatusRuntimeTarget = {
+  runtime: 'host' | 'wsl'
+  wslDistro: string | null
+}
+
+type CodexStatusAccount = CodexRateLimitAccountsState['accounts'][number]
+type ClaudeStatusAccount = ClaudeRateLimitAccountsState['accounts'][number]
+
+export type CodexStatusSwitchTarget = {
+  id: string | null
+  label: string
+  active: boolean
+  runtimeTarget: CodexStatusRuntimeTarget
+}
+
+export type CodexStatusSwitchGroup = {
+  key: string
+  label: string
+  runtimeTarget: CodexStatusRuntimeTarget
+  targets: CodexStatusSwitchTarget[]
+}
+
+export type ClaudeStatusSwitchTarget = {
+  id: string | null
+  label: string
+  active: boolean
+  runtimeTarget: CodexStatusRuntimeTarget
+}
+
+export type ClaudeStatusSwitchGroup = {
+  key: string
+  label: string
+  runtimeTarget: CodexStatusRuntimeTarget
+  targets: ClaudeStatusSwitchTarget[]
+}
+
+type StatusSwitchGroupOptions = {
+  fallbackWslDistro?: string | null
+  includeFallbackWsl?: boolean
+}
+
+function getHostRuntimeLabel(): string {
+  return navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
 }
 
 function getCodexAccountLabel(
@@ -56,6 +109,369 @@ function getCodexAccountLabel(
     return 'System default'
   }
   return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
+}
+
+function getCodexAccountDisplayLabel(account: CodexStatusAccount): string {
+  return account.workspaceLabel ? `${account.email} (${account.workspaceLabel})` : account.email
+}
+
+function getCodexStatusWslKey(wslDistro: string | null | undefined): string {
+  const trimmed = wslDistro?.trim()
+  return trimmed ? trimmed : '__default__'
+}
+
+function getCodexStatusRuntimeLabel(target: CodexStatusRuntimeTarget): string {
+  if (target.runtime === 'host') {
+    return getHostRuntimeLabel()
+  }
+  return target.wslDistro ? `WSL ${target.wslDistro}` : 'WSL default'
+}
+
+function getCodexStatusRuntimeKey(target: CodexStatusRuntimeTarget): string {
+  return target.runtime === 'host' ? 'host' : `wsl:${getCodexStatusWslKey(target.wslDistro)}`
+}
+
+function toCodexStatusRuntimeTarget(
+  target: RateLimitRuntimeTarget | undefined
+): CodexStatusRuntimeTarget {
+  if (target?.runtime === 'wsl') {
+    return { runtime: 'wsl', wslDistro: target.wslDistro }
+  }
+  return { runtime: 'host', wslDistro: null }
+}
+
+function getStatusBarPreferredWslDistro(
+  settings: GlobalSettings | null | undefined,
+  wslDistros: string[]
+): string | null {
+  const configuredDistro =
+    settings?.localAccountWslDistro?.trim() || settings?.terminalWindowsWslDistro?.trim() || null
+  if (configuredDistro) {
+    return configuredDistro
+  }
+  return wslDistros.length === 1 ? wslDistros[0] : null
+}
+
+function shouldIncludeSettingsWslRuntime(settings: GlobalSettings | null | undefined): boolean {
+  return settings?.localAccountRuntime === 'wsl'
+}
+
+function getSingleConcreteCodexWslDistro(state: CodexRateLimitAccountsState): string | null {
+  const keys = new Set<string>()
+  for (const [key, accountId] of Object.entries(state.activeAccountIdsByRuntime?.wsl ?? {})) {
+    if (accountId && key !== '__default__') {
+      keys.add(key)
+    }
+  }
+  for (const account of state.accounts) {
+    const key = getCodexStatusWslKey(account.wslDistro)
+    if (account.managedHomeRuntime === 'wsl' && key !== '__default__') {
+      keys.add(key)
+    }
+  }
+  return keys.size === 1 ? Array.from(keys)[0] : null
+}
+
+function normalizeCodexStatusRuntimeTarget(
+  state: CodexRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): CodexStatusRuntimeTarget {
+  if (target.runtime !== 'wsl' || target.wslDistro) {
+    return target
+  }
+  const concreteDistro = getSingleConcreteCodexWslDistro(state)
+  return concreteDistro ? { runtime: 'wsl', wslDistro: concreteDistro } : target
+}
+
+function getCodexStatusActiveId(
+  state: CodexRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): string | null {
+  const selection = state.activeAccountIdsByRuntime
+  if (target.runtime === 'host') {
+    return selection?.host ?? state.activeAccountId ?? null
+  }
+  const distroSelection = selection?.wsl?.[getCodexStatusWslKey(target.wslDistro)]
+  if (target.wslDistro || distroSelection) {
+    return distroSelection ?? null
+  }
+  const selectedIds = Array.from(new Set(Object.values(selection?.wsl ?? {}).filter(Boolean)))
+  return selectedIds.length === 1 ? selectedIds[0] : null
+}
+
+function getCodexStatusAccountsForTarget(
+  state: CodexRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): CodexStatusAccount[] {
+  if (target.runtime === 'host') {
+    return state.accounts.filter((account) => account.managedHomeRuntime !== 'wsl')
+  }
+  return state.accounts.filter(
+    (account) =>
+      account.managedHomeRuntime === 'wsl' &&
+      getCodexStatusWslKey(account.wslDistro) === getCodexStatusWslKey(target.wslDistro)
+  )
+}
+
+export function buildCodexStatusSwitchGroups(
+  state: CodexRateLimitAccountsState,
+  currentTarget: CodexStatusRuntimeTarget,
+  options: StatusSwitchGroupOptions = {}
+): CodexStatusSwitchGroup[] {
+  const groups: CodexStatusSwitchGroup[] = []
+  const normalizedCurrentTarget = normalizeCodexStatusRuntimeTarget(state, currentTarget)
+  const makeGroup = (target: CodexStatusRuntimeTarget): CodexStatusSwitchGroup => {
+    const activeId = getCodexStatusActiveId(state, target)
+    const accountsForTarget = getCodexStatusAccountsForTarget(state, target)
+    return {
+      key: getCodexStatusRuntimeKey(target),
+      label: getCodexStatusRuntimeLabel(target),
+      runtimeTarget: target,
+      targets: [
+        {
+          id: null,
+          label: 'System default',
+          active: activeId === null,
+          runtimeTarget: target
+        },
+        ...accountsForTarget.map((account) => ({
+          id: account.id,
+          label: getCodexAccountDisplayLabel(account),
+          active: account.id === activeId,
+          runtimeTarget: target
+        }))
+      ]
+    }
+  }
+
+  groups.push(makeGroup({ runtime: 'host', wslDistro: null }))
+
+  const wslKeys = new Set<string>(Object.keys(state.activeAccountIdsByRuntime?.wsl ?? {}))
+  if (normalizedCurrentTarget.runtime === 'wsl') {
+    wslKeys.add(getCodexStatusWslKey(normalizedCurrentTarget.wslDistro))
+  }
+  for (const account of state.accounts) {
+    if (account.managedHomeRuntime === 'wsl') {
+      wslKeys.add(getCodexStatusWslKey(account.wslDistro))
+    }
+  }
+  if (options.includeFallbackWsl) {
+    wslKeys.add(getCodexStatusWslKey(options.fallbackWslDistro))
+  }
+  if (currentTarget.runtime === 'wsl' && currentTarget.wslDistro === null) {
+    const concreteDistro = getSingleConcreteCodexWslDistro(state)
+    if (concreteDistro) {
+      wslKeys.delete('__default__')
+    }
+  }
+
+  for (const key of Array.from(wslKeys).sort((a, b) => {
+    if (a === '__default__') {
+      return -1
+    }
+    if (b === '__default__') {
+      return 1
+    }
+    return a.localeCompare(b)
+  })) {
+    groups.push(makeGroup({ runtime: 'wsl', wslDistro: key === '__default__' ? null : key }))
+  }
+
+  return groups
+}
+
+function getCodexStatusAccountsFromSettings(
+  settings: GlobalSettings | null | undefined
+): CodexRateLimitAccountsState | null {
+  if (!settings) {
+    return null
+  }
+  return {
+    accounts: settings.codexManagedAccounts
+      .map((account) => ({
+        id: account.id,
+        email: account.email,
+        managedHomeRuntime: account.managedHomeRuntime ?? 'host',
+        wslDistro: account.wslDistro ?? null,
+        providerAccountId: account.providerAccountId ?? null,
+        workspaceLabel: account.workspaceLabel ?? null,
+        workspaceAccountId: account.workspaceAccountId ?? null,
+        createdAt: account.createdAt,
+        updatedAt: account.updatedAt,
+        lastAuthenticatedAt: account.lastAuthenticatedAt
+      }))
+      .sort((a, b) => b.updatedAt - a.updatedAt),
+    activeAccountId:
+      settings.activeCodexManagedAccountIdsByRuntime?.host ??
+      settings.activeCodexManagedAccountId ??
+      null,
+    activeAccountIdsByRuntime: {
+      host:
+        settings.activeCodexManagedAccountIdsByRuntime?.host ??
+        settings.activeCodexManagedAccountId ??
+        null,
+      wsl: { ...settings.activeCodexManagedAccountIdsByRuntime?.wsl }
+    }
+  }
+}
+
+function getSingleConcreteClaudeWslDistro(state: ClaudeRateLimitAccountsState): string | null {
+  const keys = new Set<string>()
+  for (const [key, accountId] of Object.entries(state.activeAccountIdsByRuntime?.wsl ?? {})) {
+    if (accountId && key !== '__default__') {
+      keys.add(key)
+    }
+  }
+  for (const account of state.accounts) {
+    const key = getCodexStatusWslKey(account.wslDistro)
+    if (account.managedAuthRuntime === 'wsl' && key !== '__default__') {
+      keys.add(key)
+    }
+  }
+  return keys.size === 1 ? Array.from(keys)[0] : null
+}
+
+function normalizeClaudeStatusRuntimeTarget(
+  state: ClaudeRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): CodexStatusRuntimeTarget {
+  if (target.runtime !== 'wsl' || target.wslDistro) {
+    return target
+  }
+  const concreteDistro = getSingleConcreteClaudeWslDistro(state)
+  return concreteDistro ? { runtime: 'wsl', wslDistro: concreteDistro } : target
+}
+
+function getClaudeStatusActiveId(
+  state: ClaudeRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): string | null {
+  const selection = state.activeAccountIdsByRuntime
+  if (target.runtime === 'host') {
+    return selection?.host ?? state.activeAccountId ?? null
+  }
+  const distroSelection = selection?.wsl?.[getCodexStatusWslKey(target.wslDistro)]
+  if (target.wslDistro || distroSelection) {
+    return distroSelection ?? null
+  }
+  const selectedIds = Array.from(new Set(Object.values(selection?.wsl ?? {}).filter(Boolean)))
+  return selectedIds.length === 1 ? selectedIds[0] : null
+}
+
+function getClaudeStatusAccountsForTarget(
+  state: ClaudeRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): ClaudeStatusAccount[] {
+  if (target.runtime === 'host') {
+    return state.accounts.filter((account) => account.managedAuthRuntime !== 'wsl')
+  }
+  return state.accounts.filter(
+    (account) =>
+      account.managedAuthRuntime === 'wsl' &&
+      getCodexStatusWslKey(account.wslDistro) === getCodexStatusWslKey(target.wslDistro)
+  )
+}
+
+export function buildClaudeStatusSwitchGroups(
+  state: ClaudeRateLimitAccountsState,
+  currentTarget: CodexStatusRuntimeTarget,
+  options: StatusSwitchGroupOptions = {}
+): ClaudeStatusSwitchGroup[] {
+  const groups: ClaudeStatusSwitchGroup[] = []
+  const normalizedCurrentTarget = normalizeClaudeStatusRuntimeTarget(state, currentTarget)
+  const makeGroup = (target: CodexStatusRuntimeTarget): ClaudeStatusSwitchGroup => {
+    const activeId = getClaudeStatusActiveId(state, target)
+    const accountsForTarget = getClaudeStatusAccountsForTarget(state, target)
+    return {
+      key: getCodexStatusRuntimeKey(target),
+      label: getCodexStatusRuntimeLabel(target),
+      runtimeTarget: target,
+      targets: [
+        {
+          id: null,
+          label: 'System default',
+          active: activeId === null,
+          runtimeTarget: target
+        },
+        ...accountsForTarget.map((account) => ({
+          id: account.id,
+          label: account.email,
+          active: account.id === activeId,
+          runtimeTarget: target
+        }))
+      ]
+    }
+  }
+
+  groups.push(makeGroup({ runtime: 'host', wslDistro: null }))
+
+  const wslKeys = new Set<string>(Object.keys(state.activeAccountIdsByRuntime?.wsl ?? {}))
+  if (normalizedCurrentTarget.runtime === 'wsl') {
+    wslKeys.add(getCodexStatusWslKey(normalizedCurrentTarget.wslDistro))
+  }
+  for (const account of state.accounts) {
+    if (account.managedAuthRuntime === 'wsl') {
+      wslKeys.add(getCodexStatusWslKey(account.wslDistro))
+    }
+  }
+  if (options.includeFallbackWsl) {
+    wslKeys.add(getCodexStatusWslKey(options.fallbackWslDistro))
+  }
+  if (currentTarget.runtime === 'wsl' && currentTarget.wslDistro === null) {
+    const concreteDistro = getSingleConcreteClaudeWslDistro(state)
+    if (concreteDistro) {
+      wslKeys.delete('__default__')
+    }
+  }
+
+  for (const key of Array.from(wslKeys).sort((a, b) => {
+    if (a === '__default__') {
+      return -1
+    }
+    if (b === '__default__') {
+      return 1
+    }
+    return a.localeCompare(b)
+  })) {
+    groups.push(makeGroup({ runtime: 'wsl', wslDistro: key === '__default__' ? null : key }))
+  }
+
+  return groups
+}
+
+function getClaudeStatusAccountsFromSettings(
+  settings: GlobalSettings | null | undefined
+): ClaudeRateLimitAccountsState | null {
+  if (!settings) {
+    return null
+  }
+  return {
+    accounts: settings.claudeManagedAccounts
+      .map((account) => ({
+        id: account.id,
+        email: account.email,
+        managedAuthRuntime: account.managedAuthRuntime ?? 'host',
+        wslDistro: account.wslDistro ?? null,
+        authMethod: account.authMethod ?? 'unknown',
+        organizationUuid: account.organizationUuid ?? null,
+        organizationName: account.organizationName ?? null,
+        createdAt: account.createdAt,
+        updatedAt: account.updatedAt,
+        lastAuthenticatedAt: account.lastAuthenticatedAt
+      }))
+      .sort((a, b) => b.updatedAt - a.updatedAt),
+    activeAccountId:
+      settings.activeClaudeManagedAccountIdsByRuntime?.host ??
+      settings.activeClaudeManagedAccountId ??
+      null,
+    activeAccountIdsByRuntime: {
+      host:
+        settings.activeClaudeManagedAccountIdsByRuntime?.host ??
+        settings.activeClaudeManagedAccountId ??
+        null,
+      wsl: { ...settings.activeClaudeManagedAccountIdsByRuntime?.wsl }
+    }
+  }
 }
 
 function CodexRestartStatusPrompt(): React.JSX.Element | null {
@@ -109,6 +525,52 @@ function CodexRestartStatusPrompt(): React.JSX.Element | null {
   )
 }
 
+function AccountRuntimeToggle<TGroup extends { key: string; label: string }>({
+  groups,
+  value,
+  onChange,
+  ariaLabel
+}: {
+  groups: TGroup[]
+  value: string
+  onChange: (group: TGroup) => void
+  ariaLabel: string
+}): React.JSX.Element | null {
+  if (groups.length <= 1) {
+    return null
+  }
+
+  return (
+    <div className="px-2 pt-2">
+      <div
+        role="radiogroup"
+        aria-label={ariaLabel}
+        className="inline-flex w-full items-center rounded-md border border-border bg-background/50 p-0.5"
+      >
+        {groups.map((group) => {
+          const active = group.key === value
+          return (
+            <button
+              key={group.key}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(group)}
+              className={`min-w-0 flex-1 rounded-sm px-2 py-1 text-center text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 ${
+                active
+                  ? 'bg-accent font-medium text-accent-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="block truncate">{group.label}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function ClaudeSwitcherMenu({
   claude,
   compact,
@@ -122,26 +584,44 @@ function ClaudeSwitcherMenu({
   const [accountsExpanded, setAccountsExpanded] = useState(false)
   const [accounts, setAccounts] = useState<ClaudeRateLimitAccountsState>({
     accounts: [],
-    activeAccountId: null
+    activeAccountId: null,
+    activeAccountIdsByRuntime: { host: null, wsl: {} }
   })
   const [isSwitching, setIsSwitching] = useState(false)
+  const mountedRef = useRef(true)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const refreshClaudeRateLimitsForTarget = useAppStore((s) => s.refreshClaudeRateLimitsForTarget)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
+  const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
+  const settings = useAppStore((s) => s.settings)
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
+    navigator.userAgent.includes('Windows')
+  )
   const claudeAccountSyncKey = useAppStore((s) => {
     const settings = s.settings
     if (!settings) {
       return 'no-settings'
     }
-    return `${settings.activeClaudeManagedAccountId ?? 'system'}:${settings.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+    return `${settings.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeClaudeManagedAccountIdsByRuntime ?? null)}:${settings.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
   })
+  const accountState = getClaudeStatusAccountsFromSettings(settings) ?? accounts
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const loadAccounts = useCallback(async () => {
     const next = await window.api.claudeAccounts.list()
-    setAccounts(next)
+    if (mountedRef.current) {
+      setAccounts(next)
+    }
   }, [])
 
   useEffect(() => {
@@ -163,37 +643,70 @@ function ClaudeSwitcherMenu({
     }
   }, [accountsExpanded, fetchInactiveClaudeAccountUsage])
 
-  const handleSelectAccount = async (accountId: string | null): Promise<void> => {
+  const handleSelectAccount = async (
+    accountId: string | null,
+    target: CodexStatusRuntimeTarget
+  ): Promise<void> => {
     if (isSwitching) {
       return
     }
     setIsSwitching(true)
     try {
-      const next = await window.api.claudeAccounts.select({ accountId })
+      const next = await window.api.claudeAccounts.select({
+        accountId,
+        runtime: target.runtime,
+        wslDistro: target.wslDistro
+      })
       recordFeatureInteraction('claude-account-switching')
-      setAccounts(next)
+      if (mountedRef.current) {
+        setAccounts(next)
+      }
       await fetchSettings()
-      setAccountsExpanded(false)
+      if (mountedRef.current) {
+        setAccountsExpanded(false)
+      }
     } catch (error) {
       console.error('Failed to switch Claude account from status bar:', error)
     } finally {
-      setIsSwitching(false)
+      if (mountedRef.current) {
+        setIsSwitching(false)
+      }
     }
   }
 
-  const activeAccountLabel =
-    accounts.activeAccountId === null
-      ? 'System default'
-      : (accounts.accounts.find((account) => account.id === accounts.activeAccountId)?.email ??
-        'Managed')
-  const availableSwitchTargets = [
-    ...(accounts.activeAccountId === null
-      ? []
-      : [{ id: null as string | null, label: 'System default' }]),
-    ...accounts.accounts
-      .filter((account) => account.id !== accounts.activeAccountId)
-      .map((account) => ({ id: account.id, label: account.email }))
-  ]
+  const handleSelectRuntime = async (group: ClaudeStatusSwitchGroup): Promise<void> => {
+    const currentKey = getCodexStatusRuntimeKey(
+      normalizeClaudeStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(claudeTarget))
+    )
+    if (group.key === currentKey) {
+      return
+    }
+    setAccountsExpanded(false)
+    try {
+      await refreshClaudeRateLimitsForTarget(group.runtimeTarget)
+    } catch (error) {
+      console.error('Failed to switch Claude usage runtime:', error)
+    }
+  }
+
+  const selectedRuntimeKey = getCodexStatusRuntimeKey(
+    normalizeClaudeStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(claudeTarget))
+  )
+  const fallbackWslDistro = getStatusBarPreferredWslDistro(
+    settings,
+    windowsTerminalCapabilities.wslDistros
+  )
+  const switchGroups = buildClaudeStatusSwitchGroups(
+    accountState,
+    toCodexStatusRuntimeTarget(claudeTarget),
+    {
+      fallbackWslDistro,
+      includeFallbackWsl: shouldIncludeSettingsWslRuntime(settings)
+    }
+  )
+  const selectedGroup =
+    switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
+  const activeTarget = selectedGroup?.targets.find((target) => target.active)
 
   return (
     <ProviderDetailsMenu
@@ -201,6 +714,14 @@ function ClaudeSwitcherMenu({
       compact={compact}
       iconOnly={iconOnly}
       ariaLabel="Open Claude details and account switcher"
+      topContent={
+        <AccountRuntimeToggle
+          groups={switchGroups}
+          value={selectedGroup?.key ?? selectedRuntimeKey}
+          onChange={(group) => void handleSelectRuntime(group)}
+          ariaLabel="Claude usage runtime"
+        />
+      }
       open={open}
       onOpenChange={handleOpenChange}
     >
@@ -212,7 +733,7 @@ function ClaudeSwitcherMenu({
         }}
       >
         <span className="max-w-[180px] truncate text-[12px] text-foreground">
-          {activeAccountLabel}
+          {activeTarget?.label ?? 'System default'}
         </span>
         {accountsExpanded ? (
           <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
@@ -226,25 +747,34 @@ function ClaudeSwitcherMenu({
             Switch to
           </div>
           <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
-            {availableSwitchTargets.length === 0 ? (
+            {selectedGroup?.targets.length === 0 ? (
               <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
             ) : null}
-            {availableSwitchTargets.map((target) => {
+            {selectedGroup?.targets.map((target) => {
               const inactiveUsage = target.id
                 ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
                 : null
 
               return (
                 <DropdownMenuItem
-                  key={target.id ?? 'system'}
-                  disabled={isSwitching}
+                  key={`${selectedGroup.key}:${target.id ?? 'system'}`}
+                  disabled={isSwitching || target.active}
                   onSelect={(event) => {
                     event.preventDefault()
-                    void handleSelectAccount(target.id)
+                    if (!target.active) {
+                      void handleSelectAccount(target.id, target.runtimeTarget)
+                    }
                   }}
                 >
                   <div className="flex w-full flex-col gap-0.5">
-                    <span className="max-w-[220px] truncate">{target.label}</span>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate">{target.label}</span>
+                      {target.active ? (
+                        <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                          Active
+                        </span>
+                      ) : null}
+                    </div>
                     {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
                       <InlineUsageSkeleton />
                     ) : inactiveUsage?.claude ? (
@@ -342,6 +872,54 @@ function InlineUsageBars({
       {limits.status === 'error' && !limits.session && !limits.weekly && (
         <span className="text-[10px] text-muted-foreground">Sign in to see usage</span>
       )}
+    </div>
+  )
+}
+
+function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
+  return limits?.status === 'error' && !limits.session && !limits.weekly
+}
+
+function InlineUsageSignInAction({
+  isFetching,
+  isSigningIn,
+  disabled,
+  onSignInPointerDown,
+  onSignIn
+}: {
+  isFetching: boolean
+  isSigningIn: boolean
+  disabled: boolean
+  onSignInPointerDown?: () => void
+  onSignIn: () => void
+}): React.JSX.Element {
+  return (
+    <div className={`flex w-full items-center gap-2 ${isFetching ? 'animate-pulse' : ''}`}>
+      <span className="min-w-0 flex-1 text-[10px] text-muted-foreground">Sign in to see usage</span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        disabled={disabled}
+        className="h-6 shrink-0 px-2 text-muted-foreground hover:text-foreground"
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onSignInPointerDown?.()
+        }}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onSignIn()
+        }}
+      >
+        {isSigningIn ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : (
+          <RefreshCw className="size-3" />
+        )}
+        Sign in
+      </Button>
     </div>
   )
 }
@@ -483,24 +1061,56 @@ function CodexSwitcherMenu({
     activeAccountId: null
   })
   const [isSwitching, setIsSwitching] = useState(false)
+  const [reauthenticatingAccountId, setReauthenticatingAccountId] = useState<string | null>(null)
+  const mountedRef = useRef(true)
+  const accountsExpandedRef = useRef(accountsExpanded)
+  // Why: Radix item selection is separate from the nested button click, so
+  // propagation stops alone do not prevent the row switch action.
+  const suppressNextAccountSelectRef = useRef(false)
+  const suppressNextAccountSelect = useCallback(() => {
+    suppressNextAccountSelectRef.current = true
+    window.setTimeout(() => {
+      suppressNextAccountSelectRef.current = false
+    }, 0)
+  }, [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const refreshCodexRateLimitsForTarget = useAppStore((s) => s.refreshCodexRateLimitsForTarget)
   const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
   const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
+  const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
+  const settings = useAppStore((s) => s.settings)
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
+    navigator.userAgent.includes('Windows')
+  )
   const codexAccountSyncKey = useAppStore((s) => {
     const settings = s.settings
     if (!settings) {
       return 'no-settings'
     }
-    return `${settings.activeCodexManagedAccountId ?? 'system'}:${settings.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+    return `${settings.activeCodexManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeCodexManagedAccountIdsByRuntime ?? null)}:${settings.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
   })
+  const accountState = getCodexStatusAccountsFromSettings(settings) ?? accounts
 
   const loadAccounts = useCallback(async () => {
     const next = await window.api.codexAccounts.list()
-    setAccounts(next)
+    if (mountedRef.current) {
+      setAccounts(next)
+    }
   }, [])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    accountsExpandedRef.current = accountsExpanded
+  }, [accountsExpanded])
 
   useEffect(() => {
     // Why: the status bar keeps its own lightweight account snapshot for the
@@ -512,32 +1122,85 @@ function CodexSwitcherMenu({
     })
   }, [loadAccounts, open, codexAccountSyncKey])
 
-  const handleSelectAccount = async (accountId: string | null): Promise<void> => {
-    if (isSwitching) {
+  const handleSelectAccount = async (
+    accountId: string | null,
+    target: CodexStatusRuntimeTarget
+  ): Promise<void> => {
+    if (isSwitching || reauthenticatingAccountId !== null) {
       return
     }
-    const previousActiveAccountId = accounts.activeAccountId
+    const previousActiveAccountId = getCodexStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
-      const next = await window.api.codexAccounts.select({ accountId })
+      const next = await window.api.codexAccounts.select({
+        accountId,
+        runtime: target.runtime,
+        wslDistro: target.wslDistro
+      })
       recordFeatureInteraction('codex-account-switching')
-      setAccounts(next)
+      if (mountedRef.current) {
+        setAccounts(next)
+      }
       await fetchSettings()
-      if (previousActiveAccountId !== next.activeAccountId) {
+      const nextActiveAccountId = getCodexStatusActiveId(next, target)
+      if (previousActiveAccountId !== nextActiveAccountId) {
         await markLiveCodexSessionsForRestart({
-          previousAccountLabel: getCodexAccountLabel(accounts, previousActiveAccountId),
-          nextAccountLabel: getCodexAccountLabel(next, next.activeAccountId)
+          previousAccountLabel: getCodexAccountLabel(accountState, previousActiveAccountId),
+          nextAccountLabel: getCodexAccountLabel(next, nextActiveAccountId)
         })
         // Why: account switching can require a second explicit recovery step
         // for live Codex terminals. Keeping the switcher open and collapsing
         // back to the summary row lets the follow-up "restart open tabs"
         // prompt appear in the same flow instead of feeling detached.
-        setAccountsExpanded(false)
+        if (mountedRef.current) {
+          setAccountsExpanded(false)
+        }
       }
     } catch (error) {
       console.error('Failed to switch Codex account from status bar:', error)
     } finally {
-      setIsSwitching(false)
+      if (mountedRef.current) {
+        setIsSwitching(false)
+      }
+    }
+  }
+
+  const handleSignInAccount = async (accountId: string): Promise<void> => {
+    if (isSwitching || reauthenticatingAccountId !== null) {
+      return
+    }
+    setReauthenticatingAccountId(accountId)
+    try {
+      const next = await window.api.codexAccounts.reauthenticate({ accountId })
+      recordFeatureInteraction('codex-account-switching')
+      if (mountedRef.current) {
+        setAccounts(next)
+      }
+      await fetchSettings()
+      if (mountedRef.current && accountsExpandedRef.current) {
+        await fetchInactiveCodexAccountUsage()
+      }
+    } catch (error) {
+      console.error('Failed to re-authenticate Codex account from status bar:', error)
+    } finally {
+      if (mountedRef.current) {
+        setReauthenticatingAccountId(null)
+      }
+    }
+  }
+
+  const handleSelectRuntime = async (group: CodexStatusSwitchGroup): Promise<void> => {
+    const currentKey = getCodexStatusRuntimeKey(
+      normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
+    )
+    if (group.key === currentKey) {
+      return
+    }
+    setAccountsExpanded(false)
+    try {
+      await refreshCodexRateLimitsForTarget(group.runtimeTarget)
+    } catch (error) {
+      console.error('Failed to switch Codex usage runtime:', error)
     }
   }
 
@@ -554,24 +1217,24 @@ function CodexSwitcherMenu({
     }
   }, [accountsExpanded, fetchInactiveCodexAccountUsage])
 
-  const activeAccountLabel =
-    accounts.activeAccountId === null
-      ? 'System default'
-      : (accounts.accounts.find((account) => account.id === accounts.activeAccountId)?.email ??
-        'Managed')
-  const availableSwitchTargets = [
-    ...(accounts.activeAccountId === null
-      ? []
-      : [{ id: null as string | null, label: 'System default' }]),
-    ...accounts.accounts
-      .filter((account) => account.id !== accounts.activeAccountId)
-      .map((account) => ({
-        id: account.id,
-        label: account.workspaceLabel
-          ? `${account.email} (${account.workspaceLabel})`
-          : account.email
-      }))
-  ]
+  const selectedRuntimeKey = getCodexStatusRuntimeKey(
+    normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
+  )
+  const fallbackWslDistro = getStatusBarPreferredWslDistro(
+    settings,
+    windowsTerminalCapabilities.wslDistros
+  )
+  const switchGroups = buildCodexStatusSwitchGroups(
+    accountState,
+    toCodexStatusRuntimeTarget(codexTarget),
+    {
+      fallbackWslDistro,
+      includeFallbackWsl: shouldIncludeSettingsWslRuntime(settings)
+    }
+  )
+  const selectedGroup =
+    switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
+  const activeTarget = selectedGroup?.targets.find((target) => target.active)
 
   return (
     <ProviderDetailsMenu
@@ -579,6 +1242,14 @@ function CodexSwitcherMenu({
       compact={compact}
       iconOnly={iconOnly}
       ariaLabel="Open Codex details and account switcher"
+      topContent={
+        <AccountRuntimeToggle
+          groups={switchGroups}
+          value={selectedGroup?.key ?? selectedRuntimeKey}
+          onChange={(group) => void handleSelectRuntime(group)}
+          ariaLabel="Codex usage runtime"
+        />
+      }
       open={open}
       onOpenChange={handleOpenChange}
     >
@@ -589,9 +1260,13 @@ function CodexSwitcherMenu({
           setAccountsExpanded((prev) => !prev)
         }}
       >
-        <span className="max-w-[180px] truncate text-[12px] text-foreground">
-          {activeAccountLabel}
-        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5 text-[12px]">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 flex-1 truncate text-foreground">
+              {activeTarget?.label ?? 'System default'}
+            </span>
+          </div>
+        </div>
         {accountsExpanded ? (
           <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
         ) : (
@@ -600,45 +1275,75 @@ function CodexSwitcherMenu({
       </DropdownMenuItem>
       {accountsExpanded ? (
         <div className="px-1 pb-1">
-          <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Switch to
-          </div>
           <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
-            {availableSwitchTargets.length === 0 ? (
-              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
-            ) : null}
-            {availableSwitchTargets.map((target) => {
-              const inactiveUsage = target.id
-                ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
-                : null
+            {selectedGroup ? (
+              <>
+                {selectedGroup.targets.map((target) => {
+                  const inactiveUsage = target.id
+                    ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
+                    : null
+                  const showSignInAction =
+                    !target.active &&
+                    target.id !== null &&
+                    isUnavailableInactiveUsage(inactiveUsage?.claude)
+                  const isSigningIn = reauthenticatingAccountId === target.id
+                  const isBusy = isSwitching || reauthenticatingAccountId !== null
 
-              return (
-                <DropdownMenuItem
-                  key={target.id ?? 'system'}
-                  onSelect={(event) => {
-                    // Why: account switching may need an immediate follow-up
-                    // restart action for live Codex tabs. Prevent the menu from
-                    // auto-closing so that prompt can stay within the same
-                    // account-switcher interaction instead of jumping elsewhere.
-                    event.preventDefault()
-                    void handleSelectAccount(target.id)
-                  }}
-                  disabled={isSwitching}
-                >
-                  <div className="flex w-full flex-col gap-0.5">
-                    <span className="truncate">{target.label}</span>
-                    {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
-                      <InlineUsageSkeleton />
-                    ) : inactiveUsage?.claude ? (
-                      <InlineUsageBars
-                        limits={inactiveUsage.claude}
-                        isFetching={inactiveUsage.isFetching}
-                      />
-                    ) : null}
-                  </div>
-                </DropdownMenuItem>
-              )
-            })}
+                  return (
+                    <DropdownMenuItem
+                      key={`${selectedGroup.key}:${target.id ?? 'system'}`}
+                      onSelect={(event) => {
+                        // Why: account switching may need an immediate follow-up
+                        // restart action for live Codex tabs. Prevent the menu from
+                        // auto-closing so that prompt can stay within the same
+                        // account-switcher interaction instead of jumping elsewhere.
+                        event.preventDefault()
+                        if (suppressNextAccountSelectRef.current) {
+                          suppressNextAccountSelectRef.current = false
+                          return
+                        }
+                        if (!target.active) {
+                          void handleSelectAccount(target.id, target.runtimeTarget)
+                        }
+                      }}
+                      disabled={isBusy || target.active}
+                    >
+                      <div className="flex w-full min-w-0 flex-col gap-0.5">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate">{target.label}</span>
+                          {target.active ? (
+                            <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                              Active
+                            </span>
+                          ) : null}
+                        </div>
+                        {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
+                          <InlineUsageSkeleton />
+                        ) : showSignInAction ? (
+                          <InlineUsageSignInAction
+                            isFetching={inactiveUsage?.isFetching ?? false}
+                            isSigningIn={isSigningIn}
+                            disabled={isBusy}
+                            onSignInPointerDown={suppressNextAccountSelect}
+                            onSignIn={() => {
+                              suppressNextAccountSelect()
+                              if (target.id !== null) {
+                                void handleSignInAccount(target.id)
+                              }
+                            }}
+                          />
+                        ) : inactiveUsage?.claude ? (
+                          <InlineUsageBars
+                            limits={inactiveUsage.claude}
+                            isFetching={inactiveUsage.isFetching}
+                          />
+                        ) : null}
+                      </div>
+                    </DropdownMenuItem>
+                  )
+                })}
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -665,6 +1370,7 @@ function ProviderDetailsMenu({
   compact,
   iconOnly,
   ariaLabel,
+  topContent,
   open,
   onOpenChange,
   children
@@ -673,6 +1379,7 @@ function ProviderDetailsMenu({
   compact: boolean
   iconOnly: boolean
   ariaLabel: string
+  topContent?: React.ReactNode
   open?: boolean
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
@@ -715,6 +1422,7 @@ function ProviderDetailsMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-[260px]">
+        {topContent}
         <div className="p-2">
           <ProviderPanel p={provider} />
         </div>
@@ -760,12 +1468,20 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
   const containerRef = useRef<HTMLDivElement>(null)
+  const mountedRef = useRef(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
   const [containerWidth, setContainerWidth] = useState(900)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -810,7 +1526,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       // appears (and a removed CLI's bar hides) without restarting Orca.
       await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
     } finally {
-      setIsRefreshing(false)
+      if (mountedRef.current) {
+        setIsRefreshing(false)
+      }
     }
   }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
 

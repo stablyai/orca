@@ -1,4 +1,4 @@
-import { Suspense, type JSX, type RefObject } from 'react'
+import { Suspense, type JSX, type Ref } from 'react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
@@ -13,7 +13,7 @@ import { getUntitledFileRoot } from './untitled-file-rename-path'
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
 
 type EditorPanelShellProps = {
-  panelRef: RefObject<HTMLDivElement | null>
+  panelRef: Ref<HTMLDivElement>
   activeFile: OpenFile
   activeViewStateId: string | null | undefined
   model: EditorPanelRenderModel

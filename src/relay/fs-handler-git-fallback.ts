@@ -108,8 +108,13 @@ export function listFilesWithGit(
         resolve()
       })
       const timer = setTimeout(() => {
+        if (done) {
+          return
+        }
+        done = true
         buf = ''
         child.kill()
+        reject(new Error('git ls-files timed out'))
       }, 10_000)
     })
   }
@@ -134,50 +139,69 @@ export function searchWithGitGrep(
     let stdoutBuffer = ''
     let done = false
 
-    const resolveOnce = (): void => {
+    const child = spawn('git', gitArgs, {
+      cwd: rootPath,
+      env: buildRelayCommandEnv(),
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    let killTimeout: ReturnType<typeof setTimeout>
+
+    function resolveOnce(): void {
       if (done) {
         return
       }
       done = true
       clearTimeout(killTimeout)
+      // Why: child.kill() is advisory. If git ignores it, detach our
+      // closures so repeated relay searches do not retain old scans.
+      child.stdout!.off('data', handleStdoutData)
+      child.stderr!.off('data', handleStderrData)
+      child.off('error', handleError)
+      child.off('close', handleClose)
       resolve(finalize(acc))
     }
 
-    const processLine = (line: string): void => {
+    function processLine(line: string): void {
       const verdict = ingestGitGrepLine(line, rootPath, matchRegex, acc, opts.maxResults)
       if (verdict === 'stop') {
         child.kill()
       }
     }
 
-    const child = spawn('git', gitArgs, {
-      cwd: rootPath,
-      env: buildRelayCommandEnv(),
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
-    child.stdout!.setEncoding('utf-8')
-    child.stdout!.on('data', (chunk: string) => {
+    function handleStdoutData(chunk: string): void {
       stdoutBuffer += chunk
       const lines = stdoutBuffer.split('\n')
       stdoutBuffer = lines.pop() ?? ''
       for (const l of lines) {
         processLine(l)
       }
-    })
-    child.stderr!.on('data', () => {
+    }
+
+    function handleStderrData(): void {
       /* drain */
-    })
-    child.once('error', () => resolveOnce())
-    child.once('close', () => {
+    }
+
+    function handleError(): void {
+      resolveOnce()
+    }
+
+    function handleClose(): void {
       if (stdoutBuffer) {
         processLine(stdoutBuffer)
       }
       resolveOnce()
-    })
+    }
 
-    const killTimeout = setTimeout(() => {
+    child.stdout!.setEncoding('utf-8')
+    child.stdout!.on('data', handleStdoutData)
+    child.stderr!.on('data', handleStderrData)
+    child.once('error', handleError)
+    child.once('close', handleClose)
+
+    killTimeout = setTimeout(() => {
       acc.truncated = true
       child.kill()
+      resolveOnce()
     }, SEARCH_TIMEOUT_MS)
   })
 }

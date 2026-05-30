@@ -8,6 +8,7 @@ import { app, ipcMain, net } from 'electron'
 // same pattern used by updater-changelog.ts and updater-nudge.ts.
 const FEEDBACK_API_URL = 'https://api.onorca.dev/v1/feedback'
 const FEEDBACK_API_FALLBACK_URL = 'https://www.onorca.dev/v1/feedback'
+const FEEDBACK_REQUEST_TIMEOUT_MS = 10_000
 
 export type FeedbackSubmissionType = 'feedback' | 'crash'
 
@@ -61,11 +62,20 @@ function buildSubmitBody(args: InternalFeedbackSubmitArgs): FeedbackSubmitBody {
 }
 
 async function postFeedback(url: string, body: FeedbackSubmitBody): Promise<Response> {
-  return net.fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  })
+  const controller = new AbortController()
+  // Why: a silent feedback endpoint should not leave IPC or crash-report
+  // submission flows pending forever.
+  const timeout = setTimeout(() => controller.abort(), FEEDBACK_REQUEST_TIMEOUT_MS)
+  try {
+    return await net.fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export async function submitFeedback(

@@ -264,6 +264,29 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
   })
 
+  it('changes when a terminal tab launch agent changes', () => {
+    const sharedOverrides = makeSharedOverrides()
+
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        tabsByWorktree: {
+          'wt-1': [{ id: 'term-1', title: 'Terminal 1', customTitle: null }]
+        } as unknown as AppState['tabsByWorktree']
+      })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        tabsByWorktree: {
+          'wt-1': [{ id: 'term-1', title: 'Terminal 1', customTitle: null, launchAgent: 'codex' }]
+        } as unknown as AppState['tabsByWorktree']
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
   it('changes when explicit agent status epoch changes', () => {
     const sharedOverrides = makeSharedOverrides()
     const before = getRuntimeMobileSessionSyncKey(

@@ -1,7 +1,8 @@
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import {
   buildTerminalQuickCommandInput,
-  flattenTerminalQuickCommand
+  flattenTerminalQuickCommand,
+  isTerminalAgentQuickCommand
 } from '../../../../shared/terminal-quick-commands'
 
 type QuickCommandPane = {
@@ -23,6 +24,9 @@ export function sendTerminalQuickCommandToPane({
   pane: QuickCommandPane
   transport: QuickCommandTransport | null | undefined
 }): boolean {
+  if (isTerminalAgentQuickCommand(command)) {
+    return false
+  }
   if (!transport) {
     return false
   }
