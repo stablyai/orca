@@ -12823,12 +12823,15 @@ function trimTerminalPreviewToCharacterBudget(
     return { tail: lines, limited: false, omittedLineCount: 0, slicedFirstLine: false }
   }
 
-  const tail = [...lines]
   let omittedLineCount = 0
-  while (tail.length > 0 && totalCharacters - tail[0].length >= characterBudget) {
-    totalCharacters -= tail.shift()!.length
+  while (
+    omittedLineCount < lines.length &&
+    totalCharacters - lines[omittedLineCount].length >= characterBudget
+  ) {
+    totalCharacters -= lines[omittedLineCount].length
     omittedLineCount += 1
   }
+  const tail = omittedLineCount > 0 ? lines.slice(omittedLineCount) : [...lines]
 
   let slicedFirstLine = false
   if (tail.length > 0 && totalCharacters > characterBudget) {

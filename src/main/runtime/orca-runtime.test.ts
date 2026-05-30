@@ -3934,6 +3934,25 @@ describe('OrcaRuntimeService', () => {
     expect(collected.findIndex((line, index) => line !== lines[index])).toBe(-1)
   })
 
+  it('trims terminal read preview character budget without per-line array shifts', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const lines = Array.from({ length: 120 }, (_, index) => `line-${index}-${'x'.repeat(400)}`)
+    runtime.onPtyData('pty-1', `${lines.join('\n')}\n`, 100)
+
+    const shiftSpy = vi.spyOn(Array.prototype, 'shift')
+    const preview = await runtime.readTerminal(terminal.handle)
+    const shiftCallCount = shiftSpy.mock.calls.length
+    shiftSpy.mockRestore()
+
+    expect(preview.limited).toBe(true)
+    expect(preview.tail.at(-1)).toBe(lines.at(-1))
+    expect(preview.tail.reduce((sum, line) => sum + line.length, 0)).toBeLessThanOrEqual(32 * 1024)
+    expect(shiftCallCount).toBe(0)
+  })
+
   it('trims oversized terminal output bursts without per-line array shifts', async () => {
     const shiftSpy = vi.spyOn(Array.prototype, 'shift')
     const lines = Array.from({ length: 5000 }, (_, index) => `line-${index}`)
