@@ -240,6 +240,49 @@ function createDefaultCollapsedSections(): Set<string> {
   return new Set(DEFAULT_COLLAPSED_SECTIONS)
 }
 
+function useCopyFeedbackState<T>(resetValue: T): [T, (value: T) => void] {
+  const [value, setValue] = useState(resetValue)
+  const resetTimerRef = useRef<number | null>(null)
+  const mountedRef = useRef(true)
+
+  const clearResetTimer = useCallback(() => {
+    if (resetTimerRef.current !== null) {
+      window.clearTimeout(resetTimerRef.current)
+      resetTimerRef.current = null
+    }
+  }, [])
+
+  // Why: copy feedback timers are event-owned, but still need unmount cleanup
+  // so a delayed reset cannot update a destroyed component.
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      clearResetTimer()
+    }
+  }, [clearResetTimer])
+
+  const showFeedback = useCallback(
+    (nextValue: T) => {
+      if (!mountedRef.current) {
+        return
+      }
+      clearResetTimer()
+      setValue(nextValue)
+      resetTimerRef.current = window.setTimeout(() => {
+        if (!mountedRef.current) {
+          return
+        }
+        setValue(resetValue)
+        resetTimerRef.current = null
+      }, 1500)
+    },
+    [clearResetTimer, resetValue]
+  )
+
+  return [value, showFeedback]
+}
+
 // Why: the pure state-machine logic now lives in
 // ./source-control-primary-action.ts. It is imported directly by callers
 // (tests and other components) instead of going through this module.
@@ -998,10 +1041,7 @@ function SourceControlInner(): React.JSX.Element {
     [diffCommentsForActive]
   )
   const [diffCommentsExpanded, setDiffCommentsExpanded] = useState(false)
-  const [diffCommentsCopied, setDiffCommentsCopied] = useState(false)
-  // Why: copy feedback is event-scoped; the copy handler owns the reset timer
-  // instead of repairing copied state in a follow-up Effect.
-  const diffCommentsCopiedResetTimerRef = useRef<number | null>(null)
+  const [diffCommentsCopied, showDiffCommentsCopied] = useCopyFeedbackState(false)
   const [pendingDiffCommentsClear, setPendingDiffCommentsClear] =
     useState<PendingDiffCommentsClear | null>(null)
   const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
@@ -1012,19 +1052,12 @@ function SourceControlInner(): React.JSX.Element {
     }
     try {
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
-      if (diffCommentsCopiedResetTimerRef.current !== null) {
-        window.clearTimeout(diffCommentsCopiedResetTimerRef.current)
-      }
-      setDiffCommentsCopied(true)
-      diffCommentsCopiedResetTimerRef.current = window.setTimeout(() => {
-        setDiffCommentsCopied(false)
-        diffCommentsCopiedResetTimerRef.current = null
-      }, 1500)
+      showDiffCommentsCopied(true)
     } catch {
       // Why: swallow — clipboard write can fail when the window isn't focused.
       // No dedicated error surface is warranted for a best-effort copy action.
     }
-  }, [diffCommentsForActive, diffCommentsPrompt])
+  }, [diffCommentsForActive, diffCommentsPrompt, showDiffCommentsCopied])
 
   const pendingDiffCommentsClearCount = useMemo(() => {
     if (!pendingDiffCommentsClear || pendingDiffCommentsClear.worktreeId !== activeWorktreeId) {
@@ -5796,26 +5829,19 @@ function DiffCommentsInlineList({
     return Array.from(map.entries())
   }, [comments])
 
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  // Why: per-row copy feedback follows the same event-scoped reset as the
-  // top-level Copy Notes action.
-  const copiedResetTimerRef = useRef<number | null>(null)
+  const [copiedId, showCopiedId] = useCopyFeedbackState<string | null>(null)
 
-  const handleCopyOne = useCallback(async (c: DiffComment): Promise<void> => {
-    try {
-      await window.api.ui.writeClipboardText(formatDiffComment(c))
-      if (copiedResetTimerRef.current !== null) {
-        window.clearTimeout(copiedResetTimerRef.current)
+  const handleCopyOne = useCallback(
+    async (c: DiffComment): Promise<void> => {
+      try {
+        await window.api.ui.writeClipboardText(formatDiffComment(c))
+        showCopiedId(c.id)
+      } catch {
+        // Why: swallow — clipboard write can fail when the window isn't focused.
       }
-      setCopiedId(c.id)
-      copiedResetTimerRef.current = window.setTimeout(() => {
-        setCopiedId(null)
-        copiedResetTimerRef.current = null
-      }, 1500)
-    } catch {
-      // Why: swallow — clipboard write can fail when the window isn't focused.
-    }
-  }, [])
+    },
+    [showCopiedId]
+  )
 
   if (comments.length === 0) {
     return (
