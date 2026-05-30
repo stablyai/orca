@@ -52,6 +52,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.bash': 'shell',
   '.zsh': 'shell',
   '.fish': 'shell',
+  '.bat': 'bat',
+  '.cmd': 'bat',
   '.ps1': 'powershell',
   '.yaml': 'yaml',
   '.yml': 'yaml',

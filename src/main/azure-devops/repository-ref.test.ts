@@ -1,7 +1,28 @@
-import { describe, expect, it } from 'vitest'
-import { parseAzureDevOpsRepoRef } from './repository-ref'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { sshExecMock } = vi.hoisted(() => ({
+  sshExecMock: vi.fn()
+}))
+
+import {
+  _resetAzureDevOpsRepoRefCache,
+  getAzureDevOpsRepoRefForRemote,
+  parseAzureDevOpsRepoRef
+} from './repository-ref'
+import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 
 describe('parseAzureDevOpsRepoRef', () => {
+  beforeEach(() => {
+    sshExecMock.mockReset()
+    unregisterSshGitProvider('conn-1')
+    _resetAzureDevOpsRepoRefCache()
+  })
+
+  afterEach(() => {
+    unregisterSshGitProvider('conn-1')
+    _resetAzureDevOpsRepoRefCache()
+  })
+
   it('parses dev.azure.com HTTPS remotes', () => {
     expect(
       parseAzureDevOpsRepoRef('https://dev.azure.com/acme/Project%20One/_git/repo-name')
@@ -52,5 +73,44 @@ describe('parseAzureDevOpsRepoRef', () => {
 
   it('ignores non-Azure remotes', () => {
     expect(parseAzureDevOpsRepoRef('git@github.com:stablyai/orca.git')).toBeNull()
+  })
+
+  it('resolves repository refs through the SSH git provider for connected repos', async () => {
+    sshExecMock.mockResolvedValueOnce({
+      stdout: 'git@ssh.dev.azure.com:v3/acme/Project/repo\n',
+      stderr: ''
+    })
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    await expect(getAzureDevOpsRepoRefForRemote('/repo', 'origin', 'conn-1')).resolves.toEqual({
+      host: 'dev.azure.com',
+      organization: 'acme',
+      project: 'Project',
+      repository: 'repo',
+      apiBaseUrl: 'https://dev.azure.com/acme/Project',
+      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+    })
+
+    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
+  })
+
+  it('does not cache transient SSH provider failures as unsupported repos', async () => {
+    sshExecMock.mockRejectedValueOnce(new Error('connection closed')).mockResolvedValueOnce({
+      stdout: 'git@ssh.dev.azure.com:v3/acme/Project/repo\n',
+      stderr: ''
+    })
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    await expect(getAzureDevOpsRepoRefForRemote('/repo', 'origin', 'conn-1')).resolves.toBeNull()
+    await expect(getAzureDevOpsRepoRefForRemote('/repo', 'origin', 'conn-1')).resolves.toEqual({
+      host: 'dev.azure.com',
+      organization: 'acme',
+      project: 'Project',
+      repository: 'repo',
+      apiBaseUrl: 'https://dev.azure.com/acme/Project',
+      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+    })
+
+    expect(sshExecMock).toHaveBeenCalledTimes(2)
   })
 })

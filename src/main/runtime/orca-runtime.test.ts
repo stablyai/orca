@@ -26,7 +26,12 @@ import {
 import { getBranchConflictKind, getDefaultBaseRef } from '../git/repo'
 import type { OrchestrationDb } from './orchestration/db'
 import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
-import { OrcaRuntimeService } from './orca-runtime'
+import {
+  appendNormalizedToTailBuffer,
+  appendRecentPtyOutput,
+  buildPreview,
+  OrcaRuntimeService
+} from './orca-runtime'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
@@ -69,6 +74,7 @@ const {
   MOCK_GIT_WORKTREES,
   addWorktreeMock,
   removeWorktreeMock,
+  forceDeleteLocalBranchMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
   sshGitProviders,
@@ -118,6 +124,7 @@ const {
     ],
     addWorktreeMock: vi.fn(),
     removeWorktreeMock: vi.fn(),
+    forceDeleteLocalBranchMock: vi.fn(),
     computeWorktreePathMock: vi.fn(),
     ensurePathWithinWorkspaceMock: vi.fn(),
     sshGitProviders,
@@ -161,7 +168,8 @@ vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
   assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
   addWorktree: addWorktreeMock,
-  removeWorktree: removeWorktreeMock
+  removeWorktree: removeWorktreeMock,
+  forceDeleteLocalBranch: forceDeleteLocalBranchMock
 }))
 
 vi.mock('../terminal-history', () => ({
@@ -314,6 +322,8 @@ afterEach(() => {
   vi.mocked(assertWorktreeCleanForRemoval).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
   vi.mocked(removeWorktree).mockReset()
+  vi.mocked(forceDeleteLocalBranchMock).mockReset()
+  vi.mocked(forceDeleteLocalBranchMock).mockResolvedValue(undefined)
   sshGitProviders.clear()
   getSshGitProviderMock.mockReset()
   getSshGitProviderMock.mockImplementation((connectionId: string) =>
@@ -480,7 +490,7 @@ function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High
 }
 
 // Why: these runtime feature tests only need message-queue semantics; using
-// SQLite here makes them fail on unrelated better-sqlite3 native ABI drift.
+// SQLite here makes them fail on unrelated native runtime ABI drift.
 class InMemoryOrchestrationMessages {
   private sequence = 0
 
@@ -3922,6 +3932,90 @@ describe('OrcaRuntimeService', () => {
 
     expect(collected).toHaveLength(lines.length)
     expect(collected.findIndex((line, index) => line !== lines[index])).toBe(-1)
+  })
+
+  it('trims terminal read preview character budget without per-line array shifts', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const lines = Array.from({ length: 120 }, (_, index) => `line-${index}-${'x'.repeat(400)}`)
+    runtime.onPtyData('pty-1', `${lines.join('\n')}\n`, 100)
+
+    const shiftSpy = vi.spyOn(Array.prototype, 'shift')
+    const preview = await runtime.readTerminal(terminal.handle)
+    const shiftCallCount = shiftSpy.mock.calls.length
+    shiftSpy.mockRestore()
+
+    expect(preview.limited).toBe(true)
+    expect(preview.tail.at(-1)).toBe(lines.at(-1))
+    expect(preview.tail.reduce((sum, line) => sum + line.length, 0)).toBeLessThanOrEqual(32 * 1024)
+    expect(shiftCallCount).toBe(0)
+  })
+
+  it('trims oversized terminal output bursts without per-line array shifts', async () => {
+    const shiftSpy = vi.spyOn(Array.prototype, 'shift')
+    const lines = Array.from({ length: 5000 }, (_, index) => `line-${index}`)
+    const result = appendNormalizedToTailBuffer([], '', `${lines.join('\n')}\n`)
+    const shiftCallCount = shiftSpy.mock.calls.length
+    shiftSpy.mockRestore()
+
+    expect(result.truncated).toBe(true)
+    expect(result.lines).toHaveLength(2000)
+    expect(result.lines.slice(0, 5)).toEqual([
+      'line-3000',
+      'line-3001',
+      'line-3002',
+      'line-3003',
+      'line-3004'
+    ])
+    expect(shiftCallCount).toBe(0)
+  })
+
+  it('trims terminal tail character budget without per-line array shifts', () => {
+    const shiftSpy = vi.spyOn(Array.prototype, 'shift')
+    const lines = Array.from({ length: 1000 }, (_, index) => `line-${index}-${'x'.repeat(300)}`)
+    const result = appendNormalizedToTailBuffer([], '', `${lines.join('\n')}\n`)
+    const shiftCallCount = shiftSpy.mock.calls.length
+    shiftSpy.mockRestore()
+
+    let retainedChars = lines.reduce((sum, line) => sum + line.length, 0)
+    let expectedStartIndex = 0
+    while (expectedStartIndex < lines.length && retainedChars > 256 * 1024) {
+      retainedChars -= lines[expectedStartIndex].length
+      expectedStartIndex += 1
+    }
+
+    expect(result.truncated).toBe(true)
+    expect(result.lines).toEqual(lines.slice(expectedStartIndex))
+    expect(result.lines.reduce((sum, line) => sum + line.length, 0)).toBeLessThanOrEqual(256 * 1024)
+    expect(shiftCallCount).toBe(0)
+  })
+
+  it('builds terminal previews without mapping the full retained tail', () => {
+    const lines = Array.from({ length: 5000 }, (_, index) =>
+      index % 2 === 0 ? `line-${index}` : '   '
+    )
+    const mapSpy = vi.spyOn(Array.prototype, 'map')
+
+    const preview = buildPreview(lines, 'partial-tail')
+    const mapCallCount = mapSpy.mock.calls.length
+    mapSpy.mockRestore()
+
+    expect(preview).toBe(
+      ['line-4990', 'line-4992', 'line-4994', 'line-4996', 'line-4998', 'partial-tail'].join('\n')
+    )
+    expect(mapCallCount).toBe(0)
+  })
+
+  it('keeps recent PTY replay output capped without needing previous data for large chunks', () => {
+    const previous = 'old-output'.repeat(1000)
+    const data = 'new-output'.repeat(1000)
+    const expected = `${previous}${data}`.slice(-4096)
+
+    expect(appendRecentPtyOutput(previous, 'tail')).toBe(`${previous}tail`.slice(-4096))
+    expect(appendRecentPtyOutput(previous, data)).toBe(expected)
+    expect(appendRecentPtyOutput(undefined, data)).toBe(data.slice(-4096))
   })
 
   it('bounds retained partial terminal output before preview reads', async () => {
@@ -9205,7 +9299,7 @@ describe('OrcaRuntimeService', () => {
         archive: 'pnpm worktree:archive'
       }
     })
-    vi.mocked(removeWorktree).mockResolvedValue(undefined)
+    vi.mocked(removeWorktree).mockResolvedValue({})
 
     const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
@@ -9217,6 +9311,41 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('force-deletes a branch that was preserved by runtime worktree removal', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(removeWorktree).mockResolvedValue({
+      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+    })
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+    const result = await runtime.forceDeletePreservedBranch(
+      TEST_WORKTREE_ID,
+      'feature/test',
+      'def456'
+    )
+
+    expect(result).toEqual({ deleted: true })
+    expect(forceDeleteLocalBranchMock).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      'feature/test',
+      'def456'
+    )
+  })
+
+  it('rejects stale preserved-branch runtime cleanup actions with an old head', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(removeWorktree).mockResolvedValue({
+      preservedBranch: { branchName: 'feature/test', head: 'new456' }
+    })
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    await expect(
+      runtime.forceDeletePreservedBranch(TEST_WORKTREE_ID, 'feature/test', 'old123')
+    ).rejects.toThrow('No preserved branch cleanup is pending')
+    expect(forceDeleteLocalBranchMock).not.toHaveBeenCalled()
+  })
+
   it('coalesces concurrent runtime worktree removals for the same worktree id', async () => {
     const runtime = new OrcaRuntimeService(store)
     const removeStarted = deferred<void>()
@@ -9224,6 +9353,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(removeWorktree).mockImplementation(async () => {
       removeStarted.resolve()
       await finishRemoval.promise
+      return {}
     })
 
     const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)
@@ -9244,6 +9374,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(removeWorktree).mockImplementation(async () => {
       removeStarted.resolve()
       await finishRemoval.promise
+      return {}
     })
 
     const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID)
@@ -9533,7 +9664,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
-    vi.mocked(removeWorktree).mockResolvedValue(undefined)
+    vi.mocked(removeWorktree).mockResolvedValue({})
 
     await runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, true)
 
@@ -9562,7 +9693,7 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
-    vi.mocked(removeWorktree).mockResolvedValue(undefined)
+    vi.mocked(removeWorktree).mockResolvedValue({})
 
     const token = runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
     await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
@@ -10125,6 +10256,7 @@ describe('OrcaRuntimeService', () => {
       })
       vi.mocked(removeWorktree).mockImplementation(async () => {
         callOrder.push('git-removeWorktree')
+        return {}
       })
 
       const runtime = new OrcaRuntimeService(store, undefined, {
@@ -10173,7 +10305,7 @@ describe('OrcaRuntimeService', () => {
       const runtime = new OrcaRuntimeService(store, undefined, {
         getLocalProvider: () => currentProvider as never
       })
-      vi.mocked(removeWorktree).mockResolvedValue(undefined)
+      vi.mocked(removeWorktree).mockResolvedValue({})
 
       // Simulate daemon-init swapping the provider after construction.
       currentProvider = postDaemonProvider

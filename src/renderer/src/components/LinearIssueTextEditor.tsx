@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -45,6 +46,7 @@ export function LinearIssueTextEditor({
   const titleRef = useAutosizeTextArea(titleDraft)
   const descriptionRef = useAutosizeTextArea(descriptionDraft)
   const lastIssueIdRef = useRef(issue.id)
+  const mountedRef = useMountedRef()
   const lastSyncedTitleRef = useRef(issue.title)
   const lastSyncedDescriptionRef = useRef(issue.description ?? '')
 
@@ -56,6 +58,7 @@ export function LinearIssueTextEditor({
       lastSyncedDescriptionRef.current = nextDescription
       setTitleDraft(issue.title)
       setDescriptionDraft(nextDescription)
+      setSavingField(null)
       return
     }
 
@@ -108,16 +111,23 @@ export function LinearIssueTextEditor({
           field === 'title'
             ? ({ title: issue.title } as const)
             : ({ description: issue.description ?? '' } as const)
-        onIssueChange(revert)
+        const stillEditingIssue = mountedRef.current && lastIssueIdRef.current === issue.id
+        if (stillEditingIssue) {
+          onIssueChange(revert)
+        }
         patchLinearIssue(issue.id, revert)
-        if (field === 'title') {
-          setTitleDraft(issue.title)
-        } else {
-          setDescriptionDraft(issue.description ?? '')
+        if (stillEditingIssue) {
+          if (field === 'title') {
+            setTitleDraft(issue.title)
+          } else {
+            setDescriptionDraft(issue.description ?? '')
+          }
         }
         toast.error(error instanceof Error ? error.message : `Failed to update ${field}`)
       } finally {
-        setSavingField(null)
+        if (mountedRef.current && lastIssueIdRef.current === issue.id) {
+          setSavingField(null)
+        }
       }
     },
     [
@@ -126,6 +136,7 @@ export function LinearIssueTextEditor({
       issue.id,
       issue.title,
       issue.workspaceId,
+      mountedRef,
       onIssueChange,
       patchLinearIssue,
       settings,

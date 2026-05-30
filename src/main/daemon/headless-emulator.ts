@@ -285,6 +285,8 @@ export class HeadlessEmulator {
       case 'any':
         seqs.push('\x1b[?1003h')
         break
+      case 'none':
+        break
     }
     // Why: xterm tracks the mouse protocol and SGR encoding as independent
     // modes, so snapshots must preserve the encoding even when reporting is off.

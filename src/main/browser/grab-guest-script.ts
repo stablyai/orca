@@ -93,6 +93,8 @@ const ARM_SCRIPT = `(function() {
     'secret', 'password', 'passwd'
   ];
 
+  var SAFE_URL_PROTOCOLS = new Set(['http:', 'https:', 'file:']);
+
   var STYLE_PROPS = [
     'display', 'position', 'width', 'height', 'margin', 'padding',
     'color', 'backgroundColor', 'border', 'borderRadius', 'fontFamily',
@@ -118,6 +120,12 @@ const ARM_SCRIPT = `(function() {
   function sanitizeUrl(url) {
     try {
       var u = new URL(url);
+      if (u.protocol === 'about:') {
+        return u.toString() === 'about:blank' ? 'about:blank' : '';
+      }
+      if (!SAFE_URL_PROTOCOLS.has(u.protocol)) {
+        return '';
+      }
       u.search = '';
       u.hash = '';
       return u.toString();

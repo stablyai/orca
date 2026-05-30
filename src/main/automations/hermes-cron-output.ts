@@ -4,7 +4,7 @@ import { existsSync } from 'fs'
 import { open, readdir, readFile, realpath, stat } from 'fs/promises'
 import { homedir } from 'os'
 import { isAbsolute, join, relative, resolve } from 'path'
-import Database from 'better-sqlite3'
+import Database from '../sqlite/sync-database'
 
 const HERMES_HOME = process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
 const HERMES_OUTPUT_DIR = join(HERMES_HOME, 'cron', 'output')

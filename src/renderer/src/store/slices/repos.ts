@@ -128,7 +128,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const target = getActiveRuntimeTarget(get().settings)
       const repos =
         target.kind === 'local'
-          ? ((await window.api.repos.list()) as Repo[])
+          ? await window.api.repos.list()
           : (
               await callRuntimeRpc<{ repos: Repo[] }>(
                 target,
@@ -162,7 +162,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const target = getActiveRuntimeTarget(get().settings)
       const projectGroups =
         target.kind === 'local'
-          ? ((await window.api.projectGroups.list()) as ProjectGroup[])
+          ? await window.api.projectGroups.list()
           : (
               await callRuntimeRpc<{ groups: ProjectGroup[] }>(
                 target,
@@ -183,10 +183,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     try {
       const target = getActiveRuntimeTarget(get().settings)
       return target.kind === 'local'
-        ? ((await window.api.projectGroups.scanNested({
+        ? await window.api.projectGroups.scanNested({
             path,
             connectionId
-          })) as NestedRepoScanResult)
+          })
         : await callRuntimeRpc<NestedRepoScanResult>(
             target,
             'projectGroup.scanNested',
@@ -204,7 +204,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const target = getActiveRuntimeTarget(get().settings)
       const result =
         target.kind === 'local'
-          ? ((await window.api.projectGroups.importNested(args)) as ProjectGroupImportResult)
+          ? await window.api.projectGroups.importNested(args)
           : await callRuntimeRpc<ProjectGroupImportResult>(
               target,
               'projectGroup.importNested',
@@ -233,10 +233,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const target = getActiveRuntimeTarget(get().settings)
       const group =
         target.kind === 'local'
-          ? ((await window.api.projectGroups.create({
+          ? await window.api.projectGroups.create({
               name,
               createdFrom: 'manual'
-            })) as ProjectGroup)
+            })
           : (
               await callRuntimeRpc<{ group: ProjectGroup }>(
                 target,
@@ -258,7 +258,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const target = getActiveRuntimeTarget(get().settings)
       const updated =
         target.kind === 'local'
-          ? ((await window.api.projectGroups.update({ groupId, updates })) as ProjectGroup | null)
+          ? await window.api.projectGroups.update({ groupId, updates })
           : (
               await callRuntimeRpc<{ group: ProjectGroup | null }>(
                 target,
@@ -320,11 +320,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const target = getActiveRuntimeTarget(get().settings)
       const moved =
         target.kind === 'local'
-          ? ((await window.api.projectGroups.moveProject({
+          ? await window.api.projectGroups.moveProject({
               projectId,
               groupId,
               order
-            })) as Repo | null)
+            })
           : (
               await callRuntimeRpc<{ repo: Repo | null }>(
                 target,

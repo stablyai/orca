@@ -162,6 +162,17 @@ export const WorktreeRemove = WorktreeSelector.extend({
   runHooks: OptionalBoolean
 })
 
+export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
+  branchName: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing branch name')),
+  expectedHead: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing expected branch head'))
+})
+
 export const WorktreeResolvePrBase = z.object({
   repo: z
     .unknown()

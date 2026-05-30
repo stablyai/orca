@@ -8,6 +8,7 @@ import {
 } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
+import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import type { PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
@@ -19,6 +20,7 @@ import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
 import { terminalOutputPrefersDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
 import {
+  POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
   RESET_TERMINAL_CURSOR_STYLE
@@ -80,6 +82,7 @@ const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
 const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_STARTUP_RENDERER_QUERY_WINDOW_MS = 10_000
 const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
+const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 // Why: this is only shown if renderer backlog overflowed and main-owned
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
@@ -120,11 +123,51 @@ let codexRestartNoticePresence = false
 
 export type PanePtyBinding = IDisposable & {
   syncRendererOutputVisibility: () => void
+  syncProcessTracking: () => void
 }
 
 function isAgentTaskCompleteNotificationEnabled(): boolean {
-  const notifications = useAppStore.getState().settings?.notifications
+  return isAgentTaskCompleteNotificationEnabledFromState(useAppStore.getState())
+}
+
+function isAgentTaskCompleteNotificationEnabledFromState(
+  state: ReturnType<typeof useAppStore.getState>
+): boolean {
+  const notifications = state.settings?.notifications
   return notifications?.enabled !== false && notifications?.agentTaskComplete !== false
+}
+
+const agentTaskCompleteNotificationEnabledListeners = new Set<() => void>()
+let agentTaskCompleteNotificationSettingsUnsubscribe: (() => void) | null = null
+let agentTaskCompleteNotificationEnabledSnapshot: boolean | null = null
+
+function subscribeAgentTaskCompleteNotificationEnabled(listener: () => void): () => void {
+  if (agentTaskCompleteNotificationSettingsUnsubscribe === null) {
+    agentTaskCompleteNotificationEnabledSnapshot = isAgentTaskCompleteNotificationEnabled()
+    agentTaskCompleteNotificationSettingsUnsubscribe = useAppStore.subscribe((state) => {
+      const enabled = isAgentTaskCompleteNotificationEnabledFromState(state)
+      if (enabled === agentTaskCompleteNotificationEnabledSnapshot) {
+        return
+      }
+      agentTaskCompleteNotificationEnabledSnapshot = enabled
+      for (const subscriber of Array.from(agentTaskCompleteNotificationEnabledListeners)) {
+        subscriber()
+      }
+    })
+  }
+
+  agentTaskCompleteNotificationEnabledListeners.add(listener)
+  return () => {
+    agentTaskCompleteNotificationEnabledListeners.delete(listener)
+    if (
+      agentTaskCompleteNotificationEnabledListeners.size === 0 &&
+      agentTaskCompleteNotificationSettingsUnsubscribe !== null
+    ) {
+      agentTaskCompleteNotificationSettingsUnsubscribe()
+      agentTaskCompleteNotificationSettingsUnsubscribe = null
+      agentTaskCompleteNotificationEnabledSnapshot = null
+    }
+  }
 }
 
 function hasAgentNotificationDetail(entry: AgentStatusEntry | undefined): boolean {
@@ -560,6 +603,8 @@ export function connectPanePty(
     getSettings: () => useAppStore.getState().settings,
     inspectProcess: inspectRuntimeTerminalProcess,
     dispatchCompletion: (title) => scheduleAgentTaskCompleteNotification(title),
+    shouldPollProcessCadence: () =>
+      isAgentTaskCompleteNotificationEnabled() && deps.isVisibleRef.current,
     isLive: () => {
       if (disposed) {
         return false
@@ -896,9 +941,9 @@ export function connectPanePty(
       AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS
     )
   }
-  agentTaskCompleteSettingsUnsubscribe = useAppStore.subscribe((state, previousState) => {
-    if (state.settings?.notifications !== previousState?.settings?.notifications) {
-      syncAgentTaskCompleteNotificationEnabled()
+  agentTaskCompleteSettingsUnsubscribe = subscribeAgentTaskCompleteNotificationEnabled(() => {
+    if (syncAgentTaskCompleteNotificationEnabled()) {
+      agentCompletionCoordinator.startProcessTracking()
     }
   })
 
@@ -971,9 +1016,8 @@ export function connectPanePty(
   // Why: remote repos route PTY spawn through the SSH provider. Resolve the
   // repo's connectionId from the store so the transport passes it to pty:spawn.
   const state = useAppStore.getState()
-  const allWorktrees = Object.values(state.worktreesByRepo ?? {}).flat()
-  const worktree = allWorktrees.find((w) => w.id === deps.worktreeId)
-  const repo = worktree ? state.repos?.find((r) => r.id === worktree.repoId) : null
+  const worktree = getWorktreeMapFromState(state).get(deps.worktreeId)
+  const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
   const connectionId = repo?.connectionId ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
@@ -1344,6 +1388,19 @@ export function connectPanePty(
       pendingSpawnByPaneKey.set(pendingSpawnKey, trackedPromise)
     }
 
+    let rendererRiskScanTail = ''
+
+    function terminalOutputChunkPrefersDomRenderer(data: string): boolean {
+      if (!data) {
+        return false
+      }
+      // Why: PTY chunk boundaries can split ASCII SGR sequences; keep a small
+      // tail so Codex background-color redraws still trigger the DOM fallback.
+      const scanData = rendererRiskScanTail ? `${rendererRiskScanTail}${data}` : data
+      rendererRiskScanTail = scanData.slice(-TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS)
+      return terminalOutputPrefersDomRenderer(scanData)
+    }
+
     // The replay path uses the guard so xterm auto-replies to embedded query
     // sequences don't leak into the shell. xterm.write() buffers internally
     // regardless of DOM visibility and the guard stays engaged via the
@@ -1352,7 +1409,7 @@ export function connectPanePty(
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
       flushTerminalOutput(pane.terminal)
-      if (terminalOutputPrefersDomRenderer(data)) {
+      if (terminalOutputChunkPrefersDomRenderer(data)) {
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
       replayIntoTerminal(pane, deps.replayingPanesRef, data)
@@ -1364,6 +1421,7 @@ export function connectPanePty(
       // disconnect. Clear first to prevent duplication on SSH reconnect.
       writeReplayData('\x1b[2J\x1b[3J\x1b[H')
       writeReplayData(data)
+      writeReplayData(POST_REPLAY_REATTACH_RESET)
     }
 
     type PendingHiddenOutputRestoreChunk = {
@@ -1480,7 +1538,7 @@ export function connectPanePty(
       // Why: hidden tab output is coalesced by the scheduler. Run per-byte
       // renderer checks at the xterm write boundary so background PTY bursts
       // do not spend foreground event-loop time scanning bytes we will delay.
-      if (terminalOutputPrefersDomRenderer(chunk)) {
+      if (terminalOutputChunkPrefersDomRenderer(chunk)) {
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
       recordTerminalOutput(pane.terminal)
@@ -1706,7 +1764,7 @@ export function connectPanePty(
       }
       writeReplayData('\x1b[2J\x1b[3J\x1b[H')
       writeReplayData(snapshot.data)
-      writeReplayData(POST_REPLAY_REATTACH_RESET)
+      writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
       recordTerminalOutput(pane.terminal)
       const currentPtyId = transport.getPtyId()
       if (currentPtyId && !getFitOverrideForPty(currentPtyId)) {
@@ -2481,6 +2539,9 @@ export function connectPanePty(
   return {
     syncRendererOutputVisibility() {
       syncRendererOutputVisibility()
+    },
+    syncProcessTracking() {
+      agentCompletionCoordinator.startProcessTracking()
     },
     dispose() {
       disposed = true

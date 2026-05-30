@@ -4,45 +4,42 @@
  *
  * The standard `electron-builder install-app-deps` uses @electron/rebuild
  * internally but does not expose the `ignoreModules` option (as of
- * electron-builder 26.x).  On Windows dev machines that lack the full
- * Visual C++ / Python build toolchain, `cpu-features@0.0.10` (an optional
- * performance dependency of `ssh2`) fails to build with node-gyp because
- * `buildcheck.gypi` is missing from the tarball.  This causes the entire
- * postinstall step to fail and prevents `pnpm install` from completing.
+ * electron-builder 26.x).  `cpu-features@0.0.10` is an optional performance
+ * dependency of `ssh2`; it fails to build in common environments (missing
+ * buildcheck.gypi on Windows, and Electron 42's V8 external-pointer API on
+ * Linux).  This can make the entire postinstall step fail and prevent
+ * `pnpm install` from completing.
  *
  * This script replaces `electron-builder install-app-deps` in the postinstall
- * lifecycle.  It calls @electron/rebuild's JS API directly so that we can pass
- * `ignoreModules: ['cpu-features']` on Windows.  Skipping cpu-features is
- * safe: ssh2 detects the missing native module and falls back to pure-JS CPU
- * feature detection automatically.
- *
- * On macOS and Linux the full rebuild (including cpu-features) runs as usual.
+ * lifecycle.  It calls @electron/rebuild's JS API directly so that we can skip
+ * `cpu-features` when rebuilding modules against Electron. Skipping
+ * cpu-features is safe: ssh2 detects the missing native module and falls back
+ * to pure-JS CPU feature detection automatically.
  */
 
 import { rebuild } from '@electron/rebuild'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { createRequire } from 'node:module'
 import { existsSync, globSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { platform as osPlatform } from 'node:os'
 import { resolve } from 'node:path'
 
-const require = createRequire(import.meta.url)
 const projectDir = process.cwd()
+const electronPackageDir = resolve(projectDir, 'node_modules/electron')
 const electronVersion = JSON.parse(
-  readFileSync(resolve(projectDir, 'node_modules/electron/package.json'), 'utf8')
+  readFileSync(resolve(electronPackageDir, 'package.json'), 'utf8')
 ).version
 
-const ignoreModules = process.platform === 'win32' ? ['cpu-features'] : []
+const ignoreModules = ['cpu-features']
 
 if (ignoreModules.length > 0) {
-  console.log(`[rebuild] Skipping modules on Windows: ${ignoreModules.join(', ')}`)
+  console.log(`[rebuild] Skipping optional Electron rebuild modules: ${ignoreModules.join(', ')}`)
 }
 
 // Why: @electron/rebuild's default module walker doesn't reliably find native
 // modules inside pnpm's .pnpm/ store. Passing an explicit list of modules to
 // rebuild via `onlyModules` ensures they're recompiled against Electron's Node
 // ABI regardless of the package manager's store layout.
-const NATIVE_MODULES = ['better-sqlite3', 'node-pty', 'cpu-features']
+const NATIVE_MODULES = ['node-pty', 'cpu-features']
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
 const forceRebuild = process.env.ORCA_FORCE_NATIVE_REBUILD === '1'
 
@@ -127,18 +124,13 @@ try {
 }
 
 function ensureElectronPackageInstalled() {
-  try {
-    require('electron')
+  if (electronPackageIsUsable()) {
     return
-  } catch (/** @type {any} */ err) {
-    if (!isElectronPackageInstallError(err)) {
-      throw err
-    }
   }
 
   // Why: CI has observed Electron's postinstall exiting cleanly without
-  // writing path.txt; use our strict installer instead of Electron's install.js
-  // so partial extracts and poisoned caches are rejected before native rebuild.
+  // writing path.txt. Electron 42's lazy require() would run install.js here,
+  // so inspect dist/ directly and keep using our strict partial-extract checks.
   console.log('[rebuild] Electron package binary is missing; installing Electron package binary.')
   resetPartialElectronInstall()
   try {
@@ -152,29 +144,32 @@ function ensureElectronPackageInstalled() {
     process.exit(1)
   }
 
-  try {
-    require('electron')
-  } catch (/** @type {any} */ err) {
-    if (!repairElectronPathFile()) {
+  if (!electronPackageIsUsable()) {
+    const repaired = repairElectronPathFile()
+    if (!repaired || !electronPackageIsUsable()) {
       logElectronInstallDiagnostics()
       if (continuePostinstallWithoutElectron()) {
         process.exit(0)
       }
-      console.error(
-        '[rebuild] Electron package is still unavailable after retry:',
-        err?.message ?? err
-      )
+      console.error('[rebuild] Electron package is still unavailable after retry.')
       process.exit(1)
     }
-    try {
-      require('electron')
-    } catch (/** @type {any} */ retryErr) {
-      console.error(
-        '[rebuild] Electron package is still unavailable after repairing path.txt:',
-        retryErr?.message ?? retryErr
-      )
-      process.exit(1)
-    }
+  }
+}
+
+function electronPackageIsUsable() {
+  try {
+    const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
+      .trim()
+      .replace(/^v/, '')
+    const installedPlatformPath = readFileSync(resolve(electronPackageDir, 'path.txt'), 'utf8')
+    return (
+      installedVersion === electronVersion &&
+      installedPlatformPath === getElectronPlatformPath() &&
+      existsSync(getElectronExecutablePath())
+    )
+  } catch {
+    return false
   }
 }
 
@@ -204,7 +199,6 @@ function runElectronPackageBinaryInstall() {
 }
 
 function resetPartialElectronInstall() {
-  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
   // Why: Electron's installer can leave a partial dist/ tree behind after
   // skipped or interrupted postinstall runs; retry from a clean target.
   rmSync(resolve(electronPackageDir, 'dist'), { recursive: true, force: true })
@@ -224,12 +218,8 @@ function continuePostinstallWithoutElectron() {
 }
 
 function repairElectronPathFile() {
-  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
   const platformPath = getElectronPlatformPath()
-  const electronPath = process.env.ELECTRON_OVERRIDE_DIST_PATH
-    ? resolve(process.env.ELECTRON_OVERRIDE_DIST_PATH, platformPath)
-    : resolve(electronPackageDir, 'dist', platformPath)
-  if (!existsSync(electronPath)) {
+  if (!existsSync(getElectronExecutablePath())) {
     return false
   }
 
@@ -242,7 +232,6 @@ function repairElectronPathFile() {
 }
 
 function logElectronInstallDiagnostics() {
-  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
   const electronDistDir = resolve(electronPackageDir, 'dist')
   const pathFile = resolve(electronPackageDir, 'path.txt')
   console.error('[rebuild] Electron install diagnostics:')
@@ -263,7 +252,8 @@ function safeReaddir(targetPath) {
 }
 
 function getElectronPlatformPath() {
-  const targetPlatform = process.env.npm_config_platform || osPlatform()
+  const targetPlatform =
+    process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || osPlatform()
   switch (targetPlatform) {
     case 'mas':
     case 'darwin':
@@ -279,13 +269,18 @@ function getElectronPlatformPath() {
   }
 }
 
+function getElectronExecutablePath() {
+  const platformPath = getElectronPlatformPath()
+  return process.env.ELECTRON_OVERRIDE_DIST_PATH
+    ? resolve(process.env.ELECTRON_OVERRIDE_DIST_PATH, platformPath)
+    : resolve(electronPackageDir, 'dist', platformPath)
+}
+
 function probeElectronNativeModules(moduleNames) {
-  let electronExecutable
-  try {
-    electronExecutable = require('electron')
-  } catch (error) {
-    return { ok: false, status: null, stderr: formatError(error) }
+  if (!electronPackageIsUsable()) {
+    return { ok: false, status: null, stderr: 'Electron package binary is unavailable.' }
   }
+  const electronExecutable = getElectronExecutablePath()
 
   const probeSource = `
 const { createRequire } = require('node:module')
@@ -309,12 +304,6 @@ if (failures.length > 0) {
 }
 
 function loadNativeModule(moduleName) {
-  if (moduleName === 'better-sqlite3') {
-    const Database = projectRequire(moduleName)
-    const db = new Database(':memory:')
-    db.close()
-    return
-  }
   if (moduleName === 'node-pty') {
     projectRequire('node-pty')
     const { loadNativeModule } = projectRequire('node-pty/lib/utils')
@@ -371,10 +360,6 @@ function isWindowsNativeLockError(error) {
 
 function isPostinstall() {
   return process.env.npm_lifecycle_event === 'postinstall'
-}
-
-function isElectronPackageInstallError(error) {
-  return /Electron failed to install correctly/i.test(formatError(error))
 }
 
 function formatError(error) {

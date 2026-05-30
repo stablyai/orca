@@ -1,3 +1,5 @@
+/* oxlint-disable max-lines -- Why: keeping these mocked TabBar wiring cases
+ * together avoids duplicating the lightweight renderer harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const appStoreSnapshot: {
@@ -155,6 +157,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>
+  ref?: unknown
 }
 
 function findChildrenByType(node: unknown, typeName: string): ReactElementLike[] {
@@ -241,6 +244,7 @@ describe('TabBar context menu wiring', () => {
       callback(0)
       return 1
     })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
     vi.stubGlobal('window', {
       setTimeout,
       clearTimeout,
@@ -323,5 +327,36 @@ describe('TabBar context menu wiring', () => {
     await vi.advanceTimersByTimeAsync(100)
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('new-terminal')
     expect(focusTerminalTabSurface).not.toHaveBeenCalledWith('old-terminal')
+  })
+
+  it('cancels delayed menu focus when the tab bar root unmounts', async () => {
+    vi.useFakeTimers()
+    Object.assign(window, { setTimeout, clearTimeout })
+    const { focusTerminalTabSurface } = await import('@/lib/focus-terminal-tab-surface')
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      activeTabId: 'old-terminal',
+      activeTabType: 'terminal',
+      onNewTerminalTab: () => {
+        window.setTimeout(() => {
+          appStoreSnapshot.activeTabId = 'new-terminal'
+          appStoreSnapshot.activeTabType = 'terminal'
+        }, 100)
+      }
+    })
+
+    const newTerminalItem = findChildrenByType(element, 'DropdownMenuItem')[0]
+    const menuContent = findChildrenByType(element, 'DropdownMenuContent')[0]
+    ;(newTerminalItem.props.onSelect as () => void)()
+    ;(menuContent.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
+      preventDefault: vi.fn()
+    })
+
+    const root = findChildrenByType(element, 'div')[0]
+    const rootRef = (root.props.ref ?? root.ref) as (node: HTMLDivElement | null) => void
+    rootRef(null)
+
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(focusTerminalTabSurface).not.toHaveBeenCalled()
   })
 })

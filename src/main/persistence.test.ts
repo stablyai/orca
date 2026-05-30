@@ -16,6 +16,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import type {
   PersistedState,
+  ProjectGroup,
   Repo,
   TerminalPaneLayoutNode,
   TerminalTab,
@@ -1516,6 +1517,35 @@ describe('Store', () => {
     expect(store.getRepo('direct')?.projectGroupId).toBeNull()
     expect(store.getRepo('nested')?.projectGroupId).toBeNull()
     expect(store.getRepo('sibling')?.projectGroupId).toBe(sibling.id)
+  })
+
+  it('creates a project group when persisted group history is very large', async () => {
+    const projectGroups: ProjectGroup[] = Array.from({ length: 130_000 }, (_, index) => ({
+      id: `group-${index}`,
+      name: `Group ${index}`,
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual',
+      tabOrder: index,
+      isCollapsed: false,
+      color: null,
+      createdAt: index,
+      updatedAt: index
+    }))
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups
+    })
+    const store = await createStore()
+
+    const group = store.createProjectGroup({ name: 'New group', createdFrom: 'manual' })
+
+    expect(group.tabOrder).toBe(projectGroups.length)
   })
 
   it('sanitizes invalid project group updates before persisting a repo', async () => {

@@ -3,7 +3,9 @@ import type {
   CreateSparseCheckoutRequest,
   DetectedWorktree,
   DetectedWorktreeListResult,
+  ForceDeleteWorktreeBranchResult,
   GitPushTarget,
+  RemoveWorktreeResult,
   SetupDecision,
   TuiAgent,
   WorkspaceCreateTelemetrySource,
@@ -102,7 +104,12 @@ export type WorktreeSlice = {
   removeWorktree: (
     worktreeId: string,
     force?: boolean
-  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
+  forceDeletePreservedBranch: (
+    worktreeId: string,
+    branchName: string,
+    expectedHead: string
+  ) => Promise<({ ok: true } & ForceDeleteWorktreeBranchResult) | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
   updateWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => Promise<void>
   updateWorktreesMeta: (

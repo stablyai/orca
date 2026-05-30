@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { Check, ChevronsUpDown, Loader2, Sparkles, Square, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -130,14 +130,11 @@ export function CreatePullRequestDialog({
     onBranchChangedByGeneration
   })
 
-  useEffect(() => {
-    if (open) {
-      return
-    }
+  const resetSubmissionState = useCallback((): void => {
     submitInFlightRef.current = false
     setSubmitting(false)
     setError(null)
-  }, [open])
+  }, [])
 
   const submitDisabled =
     submitting ||
@@ -178,6 +175,7 @@ export function CreatePullRequestDialog({
         if (prCreationDefaults.openAfterCreate) {
           window.api.shell.openUrl(result.url)
         }
+        resetSubmissionState()
         onOpenChange(false)
         return
       }
@@ -194,6 +192,7 @@ export function CreatePullRequestDialog({
         )
         if (number) {
           await onCreated({ number, url: result.existingReview.url })
+          resetSubmissionState()
           onOpenChange(false)
           return
         }
@@ -216,6 +215,7 @@ export function CreatePullRequestDialog({
     prCreationDefaults.openAfterCreate,
     prCreationDefaults.useTemplate,
     repoPath,
+    resetSubmissionState,
     submitDisabled,
     title,
     worktreePath
@@ -228,9 +228,12 @@ export function CreatePullRequestDialog({
       if (submitting && !nextOpen) {
         return
       }
+      if (!nextOpen) {
+        resetSubmissionState()
+      }
       onOpenChange(nextOpen)
     },
-    [onOpenChange, submitting]
+    [onOpenChange, resetSubmissionState, submitting]
   )
 
   return (
@@ -380,7 +383,7 @@ export function CreatePullRequestDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
           <Button onClick={() => void handleSubmit()} disabled={submitDisabled}>

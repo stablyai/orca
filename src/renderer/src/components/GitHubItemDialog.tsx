@@ -25,6 +25,7 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  FolderKanban,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
@@ -34,6 +35,7 @@ import {
   MessageSquarePlus,
   PanelLeftOpen,
   Pencil,
+  Plus,
   RefreshCw,
   Send,
   UndoDot,
@@ -45,6 +47,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { VisuallyHidden } from 'radix-ui'
@@ -68,7 +71,6 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
-import { useMountedRef } from '@/hooks/useMountedRef'
 import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
 import {
   CombinedDiffFileTree,
@@ -101,6 +103,7 @@ import {
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
 import { useAppStore } from '@/store'
+import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
@@ -115,6 +118,11 @@ import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { getConnectionId } from '@/lib/connection-context'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import {
+  findGithubIssueWorkspaceAttachment,
+  findGithubPrWorkspaceAttachment,
+  getGithubWorkItemWorkspaceAttachmentLabel
+} from '@/lib/github-work-item-workspace-attachment'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -132,8 +140,7 @@ import type {
   PRCheckDetail,
   PRCheckRunDetails,
   PRComment,
-  TuiAgent,
-  Worktree
+  TuiAgent
 } from '../../../shared/types'
 import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
 
@@ -1432,7 +1439,9 @@ function mapPRFileStatus(status: GitHubPRFile['status']): GitBranchChangeEntry['
       return 'renamed'
     case 'copied':
       return 'copied'
-    default:
+    case 'changed':
+    case 'modified':
+    case 'unchanged':
       return 'modified'
   }
 }
@@ -2989,14 +2998,7 @@ function CommentReplyForm({
 }): React.JSX.Element {
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const mountedRef = useRef(true)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
+  const mountedRef = useMountedRef()
 
   const submit = useCallback(async () => {
     const trimmed = body.trim()
@@ -3017,7 +3019,7 @@ function CommentReplyForm({
         setSubmitting(false)
       }
     }
-  }, [body, onSubmit, submitting])
+  }, [body, mountedRef, onSubmit, submitting])
 
   return (
     <div className={cn('rounded-md border border-border/50 bg-background/60 p-2', className)}>
@@ -3161,19 +3163,6 @@ function buildFixBrokenChecksPrompt(item: GitHubWorkItem, checks: PRCheckDetail[
     '',
     'Focus only on making the failing checks pass. Inspect the CI output first, make the smallest correct code or test changes, and do not work on unrelated cleanup.'
   ].join('\n')
-}
-
-function findWorkspaceAttachedToPR(
-  worktrees: Worktree[],
-  repoId: string,
-  prNumber: number
-): Worktree | null {
-  return (
-    worktrees.find(
-      (worktree) =>
-        worktree.repoId === repoId && worktree.linkedPR === prNumber && !worktree.isArchived
-    ) ?? null
-  )
 }
 
 function pickDefaultAgent(
@@ -3344,7 +3333,7 @@ function ChecksTab({
     try {
       const prompt = buildFixBrokenChecksPrompt(item, list)
       const store = useAppStore.getState()
-      const attachedWorkspace = findWorkspaceAttachedToPR(
+      const attachedWorkspace = findGithubPrWorkspaceAttachment(
         store.allWorktrees(),
         targetRepoId,
         item.number
@@ -4055,6 +4044,8 @@ function GHEditSection({
   onMutated,
   assignees,
   onUse,
+  onOpenOrUse,
+  attachedWorkspaceLabel,
   layout = 'horizontal'
 }: {
   item: GitHubWorkItem
@@ -4071,6 +4062,8 @@ function GHEditSection({
   onMutated: () => void
   assignees: string[]
   onUse: (item: GitHubWorkItem) => void
+  onOpenOrUse?: (item: GitHubWorkItem) => void
+  attachedWorkspaceLabel?: string | null
   /** `'horizontal'` is the legacy strip rendered above the conversation; the
    *  `'sidebar'` layout matches the GitHub issue page's right rail with each
    *  metadata row stacked under a section heading. */
@@ -4115,6 +4108,15 @@ function GHEditSection({
   )
   const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
+  const hasAttachedWorkspace =
+    attachedWorkspaceLabel !== null && attachedWorkspaceLabel !== undefined
+  const handleOpenOrUseWorkspace = useCallback((): void => {
+    if (onOpenOrUse) {
+      onOpenOrUse(item)
+      return
+    }
+    onUse(item)
+  }, [item, onOpenOrUse, onUse])
 
   // Why: sync local assignees when item changes or when the detail fetch
   // resolves with real data — but skip if the user already made an
@@ -4549,6 +4551,56 @@ function GHEditSection({
             </div>
           )}
         </section>
+
+        <section>
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            Workspace
+          </div>
+          {attachedWorkspaceLabel ? (
+            <div className="mb-2 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
+              <FolderKanban className="size-3.5 shrink-0" />
+              <span className="truncate">{attachedWorkspaceLabel}</span>
+            </div>
+          ) : null}
+          {hasAttachedWorkspace ? (
+            <DropdownMenu modal={false}>
+              <ButtonGroup className="w-full">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleOpenOrUseWorkspace}
+                  className="flex-1 gap-1.5"
+                  aria-label="Open workspace attached to issue"
+                >
+                  Open workspace
+                  <ArrowRight className="size-3.5" />
+                </Button>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" size="icon-sm" aria-label="More issue workspace actions">
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </ButtonGroup>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => onUse(item)}>
+                  <Plus className="size-4" />
+                  Start new workspace
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onUse(item)}
+              className="w-full gap-1.5"
+              aria-label="Start workspace from issue"
+            >
+              Start workspace from issue
+              <ArrowRight className="size-3.5" />
+            </Button>
+          )}
+        </section>
       </aside>
     )
   }
@@ -4714,15 +4766,52 @@ function GHEditSection({
         </PopoverContent>
       </Popover>
 
-      <Button
-        size="sm"
-        onClick={() => onUse(item)}
-        className="ml-auto gap-2"
-        aria-label="Start workspace from issue"
-      >
-        Start workspace from issue
-        <ArrowRight className="size-4" />
-      </Button>
+      <div className="ml-auto flex min-w-0 items-center gap-2">
+        {attachedWorkspaceLabel ? (
+          <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+            <FolderKanban className="size-3 shrink-0" />
+            <span className="truncate">{attachedWorkspaceLabel}</span>
+          </span>
+        ) : null}
+        {hasAttachedWorkspace ? (
+          <DropdownMenu modal={false}>
+            <ButtonGroup>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleOpenOrUseWorkspace}
+                className="gap-2"
+                aria-label="Open workspace attached to issue"
+              >
+                Open workspace
+                <ArrowRight className="size-4" />
+              </Button>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" size="icon-sm" aria-label="More issue workspace actions">
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+            </ButtonGroup>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => onUse(item)}>
+                <Plus className="size-4" />
+                Start new workspace
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => onUse(item)}
+            className="gap-2"
+            aria-label="Start workspace from issue"
+          >
+            Start workspace from issue
+            <ArrowRight className="size-4" />
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -4744,14 +4833,7 @@ function GHCommentComposer({
 }): React.JSX.Element {
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const mountedRef = useRef(true)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
+  const mountedRef = useMountedRef()
 
   const handleSubmit = useCallback(async () => {
     const trimmed = body.trim()
@@ -4787,7 +4869,7 @@ function GHCommentComposer({
         setSubmitting(false)
       }
     }
-  }, [body, repoPath, repoId, issueNumber, itemType, onCommentAdded])
+  }, [body, mountedRef, repoPath, repoId, issueNumber, itemType, onCommentAdded])
 
   return (
     <div className={cn('flex flex-col items-start gap-2', className)}>
@@ -4899,6 +4981,37 @@ export default function GitHubItemDialog({
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
   const effectiveRepoId = repoId ?? workItem?.repoId ?? null
+  const allWorktrees = useAllWorktrees()
+  const issueAttachedWorkspace = useMemo(
+    () =>
+      workItem?.type === 'issue'
+        ? findGithubIssueWorkspaceAttachment(allWorktrees, effectiveRepoId, workItem.number)
+        : null,
+    [allWorktrees, effectiveRepoId, workItem]
+  )
+  const issueAttachedWorkspaceLabel = issueAttachedWorkspace
+    ? getGithubWorkItemWorkspaceAttachmentLabel(issueAttachedWorkspace)
+    : null
+
+  const handleOpenOrUseIssueWorkspace = useCallback(
+    (item: GitHubWorkItem): void => {
+      const currentAttached = findGithubIssueWorkspaceAttachment(
+        useAppStore.getState().allWorktrees(),
+        effectiveRepoId,
+        item.number
+      )
+      if (!currentAttached) {
+        onUse(item)
+        return
+      }
+
+      const result = activateAndRevealWorktree(currentAttached.id)
+      if (result === false) {
+        toast.error('Unable to open the workspace attached to this issue.')
+      }
+    },
+    [effectiveRepoId, onUse]
+  )
 
   // Why: the cache key has to include the issue source preference so a user
   // toggling between origin/upstream for the same issue number doesn't read
@@ -5362,16 +5475,52 @@ export default function GitHubItemDialog({
               <div className="flex shrink-0 items-center gap-2">
                 {/* Why: Orca's signature affordance — keep this primary so it
                     stands out against GitHub's familiar surface. */}
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => onUse(workItem)}
-                  className="gap-1.5 whitespace-nowrap"
-                  aria-label="Start workspace from issue"
-                >
-                  Start workspace from issue
-                  <ArrowRight className="size-3.5" />
-                </Button>
+                {issueAttachedWorkspace ? (
+                  <DropdownMenu modal={false}>
+                    <ButtonGroup>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleOpenOrUseIssueWorkspace(workItem)}
+                        className="gap-1.5 whitespace-nowrap"
+                        aria-label="Open workspace attached to issue"
+                      >
+                        Open workspace
+                        <ArrowRight className="size-3.5" />
+                      </Button>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          aria-label="More issue workspace actions"
+                        >
+                          <ChevronDown className="size-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </ButtonGroup>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => onUse(workItem)}>
+                        <Plus className="size-4" />
+                        Start new workspace
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
+                        <ExternalLink className="size-4" />
+                        Open on GitHub
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => onUse(workItem)}
+                    className="gap-1.5 whitespace-nowrap"
+                    aria-label="Start workspace from issue"
+                  >
+                    Start workspace from issue
+                    <ArrowRight className="size-3.5" />
+                  </Button>
+                )}
               </div>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
@@ -5398,6 +5547,12 @@ export default function GitHubItemDialog({
                 </span>
               </span>
               <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
+              {issueAttachedWorkspaceLabel ? (
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <FolderKanban className="size-3.5 shrink-0" />
+                  <span className="truncate">{issueAttachedWorkspaceLabel}</span>
+                </span>
+              ) : null}
             </div>
           </div>
         </>
@@ -5437,6 +5592,12 @@ export default function GitHubItemDialog({
                     {workItem.branchName}
                   </span>
                 )}
+                {issueAttachedWorkspaceLabel ? (
+                  <span className="inline-flex min-w-0 items-center gap-1">
+                    <FolderKanban className="size-3 shrink-0" />
+                    <span className="truncate">{issueAttachedWorkspaceLabel}</span>
+                  </span>
+                ) : null}
               </div>
               {workItem.type === 'issue' && (
                 <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
@@ -5540,6 +5701,8 @@ export default function GitHubItemDialog({
           }}
           assignees={details?.assignees ?? []}
           onUse={onUse}
+          onOpenOrUse={handleOpenOrUseIssueWorkspace}
+          attachedWorkspaceLabel={issueAttachedWorkspaceLabel}
         />
       )}
 
@@ -5621,6 +5784,8 @@ export default function GitHubItemDialog({
                       }}
                       assignees={details?.assignees ?? []}
                       onUse={onUse}
+                      onOpenOrUse={handleOpenOrUseIssueWorkspace}
+                      attachedWorkspaceLabel={issueAttachedWorkspaceLabel}
                       layout="sidebar"
                     />
                   </div>

@@ -744,7 +744,9 @@ export function getUserAgentForBrowser(
       const v = readBrowserVersion('/Applications/Comet.app')
       return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
     }
-    default:
+    case 'firefox':
+    case 'safari':
+    case 'manual':
       return null
   }
 }

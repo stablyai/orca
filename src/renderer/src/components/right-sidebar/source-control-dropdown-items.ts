@@ -405,7 +405,8 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         return 'A pull request already exists'
       case 'fork_head_unsupported':
         return 'Fork head unsupported'
-      default:
+      case null:
+      case undefined:
         return upstreamLoading ? 'Checking branch status…' : 'Branch is not ready'
     }
   })()

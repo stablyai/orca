@@ -155,7 +155,7 @@ function presetToQuery(presetId: TaskViewPresetId | null): string {
       return 'review-requested:@me is:pr is:open'
     case 'my-prs':
       return 'author:@me is:pr is:open'
-    default:
+    case null:
       return 'is:issue is:open'
   }
 }
@@ -456,6 +456,12 @@ export type UISlice = {
       number: number
       title: string
       url: string
+      linearIdentifier?: string
+      linkedContext?: {
+        provider: TaskProvider
+        version: 1
+        renderedText: string
+      }
     } | null
     agent: TuiAgent
     linkedIssue: string

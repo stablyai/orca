@@ -329,6 +329,14 @@ function parseLineTarget(hash: string): { line: number; column?: number } | null
   return { line: Number(match[1]), column: match[2] ? Number(match[2]) : undefined }
 }
 
+export function decodeMarkdownPreviewAnchor(rawAnchor: string): string {
+  try {
+    return decodeURIComponent(rawAnchor)
+  } catch {
+    return rawAnchor
+  }
+}
+
 function normalizeMarkdownPreviewAbsolutePath(absolutePath: string): string {
   return absolutePath.replaceAll('\\', '/')
 }
@@ -715,7 +723,7 @@ export default function MarkdownPreview({
       return false
     }
 
-    const decodedAnchor = decodeURIComponent(rawAnchor)
+    const decodedAnchor = decodeMarkdownPreviewAnchor(rawAnchor)
     let target: HTMLElement | null = null
     for (const candidate of body.querySelectorAll<HTMLElement>('[id]')) {
       if (candidate.id === decodedAnchor) {

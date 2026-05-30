@@ -174,6 +174,7 @@ describe('getHostedReviewForBranch', () => {
     await expect(
       getHostedReviewForBranch({
         repoPath: '/repo',
+        connectionId: 'ssh-1',
         branch: 'feature/bitbucket',
         linkedBitbucketPR: 11
       })
@@ -188,10 +189,12 @@ describe('getHostedReviewForBranch', () => {
       mergeable: 'UNKNOWN',
       headSha: 'abc123'
     })
+    expect(getBitbucketRepoSlugMock).toHaveBeenCalledWith('/repo', 'ssh-1')
     expect(getBitbucketPullRequestForBranchMock).toHaveBeenCalledWith(
       '/repo',
       'feature/bitbucket',
-      11
+      11,
+      'ssh-1'
     )
   })
 
@@ -219,6 +222,7 @@ describe('getHostedReviewForBranch', () => {
     await expect(
       getHostedReviewForBranch({
         repoPath: '/repo',
+        connectionId: 'ssh-1',
         branch: 'feature/gitea',
         linkedGiteaPR: 14
       })
@@ -233,7 +237,13 @@ describe('getHostedReviewForBranch', () => {
       mergeable: 'MERGEABLE',
       headSha: 'def456'
     })
-    expect(getGiteaPullRequestForBranchMock).toHaveBeenCalledWith('/repo', 'feature/gitea', 14)
+    expect(getGiteaRepoSlugMock).toHaveBeenCalledWith('/repo', 'ssh-1')
+    expect(getGiteaPullRequestForBranchMock).toHaveBeenCalledWith(
+      '/repo',
+      'feature/gitea',
+      14,
+      'ssh-1'
+    )
   })
 
   it('falls through to Azure DevOps before Gitea when origin is an Azure Repos remote', async () => {
@@ -260,6 +270,7 @@ describe('getHostedReviewForBranch', () => {
     await expect(
       getHostedReviewForBranch({
         repoPath: '/repo',
+        connectionId: 'ssh-1',
         branch: 'feature/azure',
         linkedAzureDevOpsPR: 21
       })
@@ -274,10 +285,12 @@ describe('getHostedReviewForBranch', () => {
       mergeable: 'MERGEABLE',
       headSha: 'abc123'
     })
+    expect(getAzureDevOpsRepoSlugMock).toHaveBeenCalledWith('/repo', 'ssh-1')
     expect(getAzureDevOpsPullRequestForBranchMock).toHaveBeenCalledWith(
       '/repo',
       'feature/azure',
-      21
+      21,
+      'ssh-1'
     )
     expect(getGiteaRepoSlugMock).not.toHaveBeenCalled()
   })

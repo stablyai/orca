@@ -13,6 +13,7 @@ const {
   addWorktreeMock,
   addSparseWorktreeMock,
   removeWorktreeMock,
+  forceDeleteLocalBranchMock,
   getGitUsernameMock,
   getDefaultBaseRefMock,
   getDefaultRemoteMock,
@@ -58,6 +59,7 @@ const {
   addWorktreeMock: vi.fn(),
   addSparseWorktreeMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
+  forceDeleteLocalBranchMock: vi.fn(),
   getGitUsernameMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
   getDefaultRemoteMock: vi.fn(),
@@ -98,7 +100,8 @@ vi.mock('../git/worktree', () => ({
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,
   addSparseWorktree: addSparseWorktreeMock,
-  removeWorktree: removeWorktreeMock
+  removeWorktree: removeWorktreeMock,
+  forceDeleteLocalBranch: forceDeleteLocalBranchMock
 }))
 
 vi.mock('../git/runner', () => ({
@@ -233,6 +236,7 @@ describe('registerWorktreeHandlers', () => {
       addWorktreeMock,
       addSparseWorktreeMock,
       removeWorktreeMock,
+      forceDeleteLocalBranchMock,
       getGitUsernameMock,
       getDefaultBaseRefMock,
       getDefaultRemoteMock,
@@ -372,6 +376,7 @@ describe('registerWorktreeHandlers', () => {
     )
     ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
     listWorktreesMock.mockResolvedValue([])
+    forceDeleteLocalBranchMock.mockResolvedValue(undefined)
 
     // Why: createLocalWorktree routes `git fetch` through
     // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). A minimal stub
@@ -3200,6 +3205,49 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
+  it('force-deletes a branch that was preserved by safe worktree removal', async () => {
+    mockKnownFeatureWorktree()
+    removeWorktreeMock.mockResolvedValue({
+      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+    })
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt'
+    })
+    const result = await handlers['worktrees:forceDeletePreservedBranch'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      branchName: 'feature/test',
+      expectedHead: 'def456'
+    })
+
+    expect(result).toEqual({ deleted: true })
+    expect(forceDeleteLocalBranchMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'feature/test',
+      'def456'
+    )
+  })
+
+  it('rejects stale preserved-branch cleanup actions with an old head', async () => {
+    mockKnownFeatureWorktree()
+    removeWorktreeMock.mockResolvedValue({
+      preservedBranch: { branchName: 'feature/test', head: 'new456' }
+    })
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt'
+    })
+
+    await expect(
+      handlers['worktrees:forceDeletePreservedBranch'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        branchName: 'feature/test',
+        expectedHead: 'old123'
+      })
+    ).rejects.toThrow('No preserved branch cleanup is pending')
+    expect(forceDeleteLocalBranchMock).not.toHaveBeenCalled()
+  })
+
   it('removes an unused Orca-created fork remote after deleting its worktree', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
@@ -3533,18 +3581,18 @@ describe('registerWorktreeHandlers', () => {
     const first = handlers['worktrees:remove'](null, {
       worktreeId: 'repo-1::/workspace/feature-wt',
       force: true
-    }) as Promise<void>
+    }) as Promise<unknown>
     const second = handlers['worktrees:remove'](null, {
       worktreeId: 'repo-1::/workspace/feature-wt',
       force: true
-    }) as Promise<void>
+    }) as Promise<unknown>
 
     await started
     await Promise.resolve()
     expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
 
     finishRemoval()
-    await expect(Promise.all([first, second])).resolves.toEqual([undefined, undefined])
+    await expect(Promise.all([first, second])).resolves.toEqual([{}, {}])
     expect(store.removeWorktreeMeta).toHaveBeenCalledTimes(1)
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledTimes(1)
     expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
@@ -3567,7 +3615,7 @@ describe('registerWorktreeHandlers', () => {
 
     const first = handlers['worktrees:remove'](null, {
       worktreeId: 'repo-1::/workspace/feature-wt'
-    }) as Promise<void>
+    }) as Promise<unknown>
 
     await started
     await expect(
@@ -3579,7 +3627,7 @@ describe('registerWorktreeHandlers', () => {
 
     expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
     finishRemoval()
-    await expect(first).resolves.toBeUndefined()
+    await expect(first).resolves.toEqual({})
   })
 
   it('still rejects forced unregistered delete paths that exist on disk', async () => {

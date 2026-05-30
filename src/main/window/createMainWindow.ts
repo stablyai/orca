@@ -839,6 +839,11 @@ export function createMainWindow(
       return
     }
 
+    if (action.type === 'deleteCurrentWorkspace') {
+      mainWindow.webContents.send('ui:deleteCurrentWorkspace')
+      return
+    }
+
     if (action.type === 'openTasks') {
       mainWindow.webContents.send('ui:openTasks')
       return

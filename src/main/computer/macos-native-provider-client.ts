@@ -28,6 +28,10 @@ import { RuntimeClientError } from './runtime-client-error'
 const REQUEST_TIMEOUT_MS = 60_000
 const HELPER_CONNECT_TIMEOUT_MS = 10_000
 
+// Why: Node treats unhandled socket 'error' events as process exceptions, so
+// stale helper sockets keep a no-op listener that does not retain the client.
+function ignoreStaleSocketError(): void {}
+
 export function shouldUseMacOSNativeProvider(): boolean {
   return (
     process.platform === 'darwin' &&
@@ -47,6 +51,7 @@ export class MacOSNativeProviderClient {
   private pending = new Map<number, PendingNativeRequest>()
   private socketBuffer = ''
   private providerCapabilities: ComputerProviderCapabilities | null = null
+  private socketListenerCleanup: (() => void) | null = null
   async listApps(): Promise<ComputerListAppsResult> {
     return (await this.call('listApps', {})) as ComputerListAppsResult
   }
@@ -70,6 +75,8 @@ export class MacOSNativeProviderClient {
     this.socket = null
     this.socketStartPromise = null
     this.providerCapabilities = null
+    this.socketBuffer = ''
+    this.cleanupActiveSocketListeners()
     if (socket && !socket.destroyed) {
       const id = this.nextId++
       socket.write(`${JSON.stringify({ id, method: 'terminate', params: {}, token })}\n`)
@@ -164,6 +171,8 @@ export class MacOSNativeProviderClient {
     if (this.socket && !this.socket.destroyed) {
       return this.socket
     }
+    this.cleanupActiveSocketListeners()
+    this.socket = null
     if (this.socketStartPromise) {
       return await this.socketStartPromise
     }
@@ -193,9 +202,19 @@ export class MacOSNativeProviderClient {
       const socket = await connectMacOSProviderSocket(this.socketPath, HELPER_CONNECT_TIMEOUT_MS)
       socket.setEncoding('utf8')
       this.socketBuffer = ''
-      socket.on('data', (chunk: string) => this.handleSocketData(socket, chunk))
-      socket.on('close', () => this.handleSocketClose(socket))
-      socket.on('error', (error) => this.handleTransportError(socket, error))
+      const onData = (chunk: string) => this.handleSocketData(socket, chunk)
+      const onClose = () => this.handleSocketClose(socket)
+      const onError = (error: Error) => this.handleTransportError(socket, error)
+      socket.on('data', onData)
+      socket.on('close', onClose)
+      socket.on('error', onError)
+      this.socketListenerCleanup = () => {
+        socket.off('data', onData)
+        socket.off('close', onClose)
+        socket.off('error', onError)
+        socket.off('error', ignoreStaleSocketError)
+        socket.on('error', ignoreStaleSocketError)
+      }
       this.socket = socket
       return socket
     } catch (error) {
@@ -254,6 +273,7 @@ export class MacOSNativeProviderClient {
     if (this.socket !== socket) {
       return
     }
+    this.cleanupActiveSocketListeners()
     this.socket = null
     this.socketBuffer = ''
     this.cleanupSocketDirectory()
@@ -266,6 +286,7 @@ export class MacOSNativeProviderClient {
     if (this.socket !== socket) {
       return
     }
+    this.cleanupActiveSocketListeners()
     // Why: an active transport error makes the helper socket unreliable; the
     // next request must reconnect instead of reusing a broken socket.
     this.socket = null
@@ -291,6 +312,11 @@ export class MacOSNativeProviderClient {
       pending.reject(error)
       this.pending.delete(id)
     }
+  }
+  private cleanupActiveSocketListeners(): void {
+    const cleanup = this.socketListenerCleanup
+    this.socketListenerCleanup = null
+    cleanup?.()
   }
 }
 

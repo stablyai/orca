@@ -1,4 +1,5 @@
 import { gitExecFileAsync } from '../git/runner'
+import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 
 export type BitbucketRepoRef = {
   workspace: string
@@ -60,25 +61,40 @@ export function parseBitbucketRepoRef(remoteUrl: string): BitbucketRepoRef | nul
 
 export async function getBitbucketRepoRefForRemote(
   repoPath: string,
-  remoteName: string
+  remoteName: string,
+  connectionId?: string | null
 ): Promise<BitbucketRepoRef | null> {
-  const cacheKey = `${repoPath}\0${remoteName}`
+  const cacheKey = `${connectionId ?? 'local'}\0${repoPath}\0${remoteName}`
   if (repoRefCache.has(cacheKey)) {
     return repoRefCache.get(cacheKey)!
   }
   try {
-    const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
-      cwd: repoPath
-    })
+    const sshGitProvider = connectionId ? getSshGitProvider(connectionId) : null
+    if (connectionId && !sshGitProvider) {
+      return null
+    }
+    const { stdout } = sshGitProvider
+      ? await sshGitProvider.exec(['remote', 'get-url', remoteName], repoPath)
+      : await gitExecFileAsync(['remote', 'get-url', remoteName], {
+          cwd: repoPath
+        })
     const result = parseBitbucketRepoRef(stdout)
     repoRefCache.set(cacheKey, result)
     return result
   } catch {
+    if (connectionId) {
+      // Why: SSH provider failures are often transient reconnect/tunnel states;
+      // caching them as "not Bitbucket" would poison the repo for the session.
+      return null
+    }
     repoRefCache.set(cacheKey, null)
     return null
   }
 }
 
-export async function getBitbucketRepoRef(repoPath: string): Promise<BitbucketRepoRef | null> {
-  return getBitbucketRepoRefForRemote(repoPath, 'origin')
+export async function getBitbucketRepoRef(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<BitbucketRepoRef | null> {
+  return getBitbucketRepoRefForRemote(repoPath, 'origin', connectionId)
 }

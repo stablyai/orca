@@ -254,14 +254,12 @@ export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus>
 
 export async function getAzureDevOpsPullRequest(
   repoPath: string,
-  prNumber: number
+  prNumber: number,
+  connectionId?: string | null
 ): Promise<AzureDevOpsPullRequestInfo | null> {
-  const repo = await getAzureDevOpsRepoRef(repoPath)
-  if (!repo) {
-    return null
-  }
-  const repository = await getRepository(repo)
-  if (!repository) {
+  const repo = await getAzureDevOpsRepoRef(repoPath, connectionId)
+  const repository = repo ? await getRepository(repo) : null
+  if (!repo || !repository) {
     return null
   }
   const raw = await requestJson<RawAzureDevOpsPullRequest>(
@@ -276,19 +274,17 @@ export async function getAzureDevOpsPullRequest(
 export async function getAzureDevOpsPullRequestForBranch(
   repoPath: string,
   branch: string,
-  linkedPRNumber?: number | null
+  linkedPRNumber?: number | null,
+  connectionId?: string | null
 ): Promise<AzureDevOpsPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
     return null
   }
 
-  const repo = await getAzureDevOpsRepoRef(repoPath)
-  if (!repo) {
-    return null
-  }
-  const repository = await getRepository(repo)
-  if (!repository) {
+  const repo = await getAzureDevOpsRepoRef(repoPath, connectionId)
+  const repository = repo ? await getRepository(repo) : null
+  if (!repo || !repository) {
     return null
   }
 
@@ -322,6 +318,9 @@ export async function getAzureDevOpsPullRequestForBranch(
   return raw ? normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw) : null
 }
 
-export async function getAzureDevOpsRepoSlug(repoPath: string): Promise<AzureDevOpsRepoRef | null> {
-  return getAzureDevOpsRepoRef(repoPath)
+export async function getAzureDevOpsRepoSlug(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<AzureDevOpsRepoRef | null> {
+  return getAzureDevOpsRepoRef(repoPath, connectionId)
 }

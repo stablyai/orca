@@ -28,6 +28,17 @@ import {
 } from './runtime-environment-request-connections'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
+const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
+  'runtimeEnvironments:list',
+  'runtimeEnvironments:addFromPairingCode',
+  'runtimeEnvironments:resolve',
+  'runtimeEnvironments:remove',
+  'runtimeEnvironments:getStatus',
+  'runtimeEnvironments:call',
+  'runtimeEnvironments:subscribe',
+  'runtimeEnvironments:unsubscribe'
+] as const
+
 type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
   ownerWebContentsId: number
   removeDestroyedListener: () => void
@@ -43,6 +54,13 @@ function shouldUseCachedRequestConnection(method: string): boolean {
 }
 
 export function registerRuntimeEnvironmentHandlers(): void {
+  // Why: keep direct re-registration safe even though register-core-handlers
+  // normally guards this path; otherwise the binary send listener can stack.
+  for (const channel of RUNTIME_ENVIRONMENT_HANDLER_CHANNELS) {
+    ipcMain.removeHandler(channel)
+  }
+  ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
+
   ipcMain.handle('runtimeEnvironments:list', (): PublicKnownRuntimeEnvironment[] =>
     listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
   )

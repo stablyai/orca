@@ -261,6 +261,32 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'openTasks' })
   })
 
+  it('leaves workspace delete unbound by default but honors custom terminal-active bindings', () => {
+    const input = {
+      code: 'Backspace',
+      key: 'Backspace',
+      meta: false,
+      control: true,
+      alt: false,
+      shift: true
+    }
+
+    expect(resolveWindowShortcutAction(input, 'linux')).toBeNull()
+    expect(
+      resolveWindowShortcutAction(input, 'linux', {
+        'workspace.delete': ['Mod+Shift+Backspace']
+      })
+    ).toEqual({ type: 'deleteCurrentWorkspace' })
+    expect(
+      resolveWindowShortcutAction(
+        input,
+        'linux',
+        { 'workspace.delete': ['Mod+Shift+Backspace'] },
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toEqual({ type: 'deleteCurrentWorkspace' })
+  })
+
   it('resolves the MRU tab quick-toggle chord', () => {
     expect(
       resolveWindowShortcutAction(

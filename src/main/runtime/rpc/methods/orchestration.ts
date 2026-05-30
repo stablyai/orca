@@ -240,7 +240,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const readAndReturn = () => {
         const messages = showUnread
           ? db.getUnreadMessages(handle, typeFilter)
-          : db.getAllMessagesForHandle(handle)
+          : db.getAllMessagesForHandle(handle, undefined, typeFilter)
 
         if (showUnread && messages.length > 0) {
           db.markAsRead(messages.map((m) => m.id))

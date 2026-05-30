@@ -171,6 +171,22 @@ function parseShellArgs(input: string): string[] {
   return args
 }
 
+function stripAgentBrowserTargetArgs(args: string[]): string[] {
+  const stripped: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === '--cdp' || arg === '--session') {
+      index++
+      continue
+    }
+    if (arg.startsWith('--cdp=') || arg.startsWith('--session=')) {
+      continue
+    }
+    stripped.push(arg)
+  }
+  return stripped
+}
+
 // Why: agent-browser returns generic error messages for stale/unknown refs.
 // Map them to a specific code so agents can reliably detect and re-snapshot.
 function classifyErrorCode(message: string): string {
@@ -690,10 +706,10 @@ export class AgentBrowserBridge {
     // directly via JS and dispatch input/change events for React/framework compat.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       await this.execAgentBrowser(sessionName, ['focus', element])
-      const escaped = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+      const serializedValue = JSON.stringify(value)
       await this.execAgentBrowser(sessionName, [
         'eval',
-        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, '${escaped}'); } else { el.value = '${escaped}'; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
+        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, ${serializedValue}); } else { el.value = ${serializedValue}; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
       ])
       return { filled: element } as BrowserFillResult
     })
@@ -1695,12 +1711,9 @@ export class AgentBrowserBridge {
 
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: strip --cdp and --session from raw command to prevent session/target injection
-      const sanitized = command
-        .replace(/--cdp\s+\S+/g, '')
-        .replace(/--session\s+\S+/g, '')
-        .trim()
-      const args = parseShellArgs(sanitized)
+      // Why: strip target/session flags from raw passthrough commands so a
+      // caller cannot override Orca's selected browser page or CDP proxy.
+      const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
       return await this.execAgentBrowser(sessionName, args)
     })
   }
@@ -2042,7 +2055,12 @@ export class AgentBrowserBridge {
       args.push('--cdp', String(port))
     }
 
-    args.push(...commandArgs, '--json')
+    // Why: exec passthrough can produce a large argv array; spreading it into
+    // push risks V8 argument limits before execFile receives the command.
+    for (const commandArg of commandArgs) {
+      args.push(commandArg)
+    }
+    args.push('--json')
 
     const stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
     const translated = translateResult(stdout)

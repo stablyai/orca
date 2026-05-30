@@ -1060,6 +1060,7 @@ export type LinearWorkspace = LinearViewer & {
   id: string
   organizationId: string
   isLegacy?: true
+  credentialRevision?: number
 }
 
 export type LinearWorkspaceSelection = string | 'all'
@@ -1405,6 +1406,19 @@ export type CreateWorktreeResult = {
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
+}
+
+export type PreservedWorktreeBranch = {
+  branchName: string
+  head?: string
+}
+
+export type RemoveWorktreeResult = {
+  preservedBranch?: PreservedWorktreeBranch
+}
+
+export type ForceDeleteWorktreeBranchResult = {
+  deleted: true
 }
 
 export type LocalBaseRefRefreshResult = {

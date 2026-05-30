@@ -2127,10 +2127,11 @@ export class Store {
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
-    const maxOrder = Math.max(
-      -1,
-      ...(this.state.projectGroups ?? []).map((group) => group.tabOrder)
-    )
+    let maxOrder = -1
+    // Why: persisted group lists can be large enough to exceed spread limits.
+    for (const existingGroup of this.state.projectGroups ?? []) {
+      maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
+    }
     const group = createProjectGroup({
       ...input,
       tabOrder: maxOrder + 1

@@ -5,7 +5,7 @@ import { PINNED_GROUP_KEY } from './worktree-list-groups'
 
 export const GROUP_HEADER_ROW_HEIGHT = 28
 const SECONDARY_GROUP_HEADER_TOP_MARGIN = 8
-const IMPORTED_WORKTREES_CARD_ROW_HEIGHT = 224
+const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
 
 type WorktreeItemRow = Extract<Row, { type: 'item' }>
 export type RenderRow = Row | { type: 'lineage-group'; key: string; rows: WorktreeItemRow[] }
@@ -44,7 +44,7 @@ export function estimateRenderRowSize(
     return 100 + Math.max(0, row.rows.length - 1) * 96
   }
   if (row?.type === 'imported-worktrees-card') {
-    return IMPORTED_WORKTREES_CARD_ROW_HEIGHT
+    return IMPORTED_WORKTREES_LINE_ROW_HEIGHT
   }
   return 116
 }

@@ -33,6 +33,7 @@ import type {
   CreateWorktreeResult,
   DetectedWorktree,
   DetectedWorktreeListResult,
+  ForceDeleteWorktreeBranchResult,
   GitPushTarget,
   GitWorktreeInfo,
   GitHubCreateIssueFields,
@@ -40,6 +41,7 @@ import type {
   GlobalSettings,
   PersistedUIState,
   Repo,
+  RemoveWorktreeResult,
   StatsSummary,
   Worktree,
   WorktreeLineage,
@@ -318,6 +320,7 @@ import {
   addWorktree,
   addSparseWorktree,
   assertWorktreeCleanForRemoval,
+  forceDeleteLocalBranch,
   removeWorktree
 } from '../git/worktree'
 import type { AddWorktreeResult } from '../git/worktree'
@@ -772,7 +775,13 @@ type RuntimeWorktreeRemovalTarget = {
 
 type RuntimeWorktreeRemovalInFlight = {
   optionsKey: string
-  promise: Promise<{ warning?: string }>
+  promise: Promise<RemoveWorktreeResult & { warning?: string }>
+}
+
+type PreservedBranchCleanupTarget = {
+  branchName: string
+  head: string
+  pushTarget?: GitPushTarget
 }
 
 function getRuntimeWorktreeRemovalOptionsKey(force: boolean, runHooks: boolean): string {
@@ -1312,6 +1321,7 @@ export class OrcaRuntimeService {
   private canonicalFetchKeyCache = new Map<string, string>()
   private optimisticReconcileTokens = new Map<string, string>()
   private removeManagedWorktreeInFlight = new Map<string, RuntimeWorktreeRemovalInFlight>()
+  private preservedBranchCleanupByWorktreeId = new Map<string, PreservedBranchCleanupTarget>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
@@ -2248,7 +2258,7 @@ export class OrcaRuntimeService {
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.recentPtyOutputById.set(
       ptyId,
-      `${this.recentPtyOutputById.get(ptyId) ?? ''}${data}`.slice(-RECENT_PTY_OUTPUT_LIMIT)
+      appendRecentPtyOutput(this.recentPtyOutputById.get(ptyId), data)
     )
     // Agent detection runs on raw data before leaf processing, since the
     // tail buffer logic normalizes away the OSC sequences we need.
@@ -8875,11 +8885,108 @@ export class OrcaRuntimeService {
     deleteWorktreeHistoryDir(worktreeId)
   }
 
+  private rememberPreservedBranchCleanupTarget(
+    worktreeId: string,
+    result: RemoveWorktreeResult | undefined,
+    fallbackHead: string | undefined,
+    pushTarget: GitPushTarget | undefined
+  ): void {
+    if (result?.preservedBranch) {
+      const head = result.preservedBranch.head ?? fallbackHead
+      if (!head) {
+        throw new Error(
+          `Cannot safely offer force-delete for preserved branch "${result.preservedBranch.branchName}" without its saved commit.`
+        )
+      }
+      this.preservedBranchCleanupByWorktreeId.set(worktreeId, {
+        branchName: result.preservedBranch.branchName,
+        head,
+        ...(pushTarget ? { pushTarget } : {})
+      })
+      return
+    }
+    this.preservedBranchCleanupByWorktreeId.delete(worktreeId)
+  }
+
+  private preserveBranchHeadFallback(
+    result: RemoveWorktreeResult | undefined,
+    fallbackHead: string | undefined
+  ): RemoveWorktreeResult {
+    if (!result?.preservedBranch || result.preservedBranch.head || !fallbackHead) {
+      return result ?? {}
+    }
+    return {
+      ...result,
+      preservedBranch: {
+        ...result.preservedBranch,
+        head: fallbackHead
+      }
+    }
+  }
+
+  async forceDeletePreservedBranch(
+    worktreeSelector: string,
+    branchName: string,
+    expectedHead: string
+  ): Promise<ForceDeleteWorktreeBranchResult> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const removalTarget = parseExactWorktreeIdSelector(worktreeSelector)
+    const cleanupTarget = removalTarget
+      ? this.preservedBranchCleanupByWorktreeId.get(removalTarget.id)
+      : undefined
+    if (
+      !removalTarget ||
+      !cleanupTarget ||
+      cleanupTarget.branchName !== branchName ||
+      cleanupTarget.head !== expectedHead
+    ) {
+      throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
+    }
+
+    const repo = this.store.getRepo(removalTarget.repoId)
+    if (!repo) {
+      throw new Error('repo_not_found')
+    }
+    if (isFolderRepo(repo)) {
+      throw new Error('Folder workspaces do not have local Git branches.')
+    }
+
+    if (repo.connectionId) {
+      const provider = requireSshGitProvider(repo.connectionId)
+      await forceDeleteLocalBranch(
+        repo.path,
+        cleanupTarget.branchName,
+        cleanupTarget.head,
+        (argv, cwd) => provider.exec(argv, cwd)
+      )
+      await cleanupUnusedWorktreePushTargetRemoteSsh(
+        provider,
+        repo.path,
+        removalTarget.id,
+        cleanupTarget.pushTarget,
+        this.store
+      )
+    } else {
+      await forceDeleteLocalBranch(repo.path, cleanupTarget.branchName, cleanupTarget.head)
+      await cleanupUnusedWorktreePushTargetRemote(
+        repo.path,
+        removalTarget.id,
+        cleanupTarget.pushTarget,
+        this.store
+      )
+    }
+
+    this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+    return { deleted: true }
+  }
+
   async removeManagedWorktree(
     worktreeSelector: string,
     force = false,
     runHooks = false
-  ): Promise<{ warning?: string }> {
+  ): Promise<RemoveWorktreeResult & { warning?: string }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
@@ -8896,7 +9003,7 @@ export class OrcaRuntimeService {
 
     // Why: runtime callers can race the same workspace through CLI/mobile
     // retries. Share one destructive Git/filesystem operation per worktree ID.
-    const removal = (async (): Promise<{ warning?: string }> => {
+    const removal = (async (): Promise<RemoveWorktreeResult & { warning?: string }> => {
       const repo = store.getRepo(removalTarget.repoId)
       if (!repo) {
         throw new Error('repo_not_found')
@@ -8919,6 +9026,7 @@ export class OrcaRuntimeService {
           })
         }
         this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+        this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
         this.invalidateResolvedWorktreeCache()
         this.notifier?.worktreesChanged(repo.id)
         return {}
@@ -8993,6 +9101,7 @@ export class OrcaRuntimeService {
           }
           this.clearOptimisticReconcileToken(removalTarget.id)
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+          this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
           this.invalidateResolvedWorktreeCache()
           invalidateAuthorizedRootsCache()
           this.notifier?.worktreesChanged(repo.id)
@@ -9018,6 +9127,7 @@ export class OrcaRuntimeService {
               ))
           this.clearOptimisticReconcileToken(removalTarget.id)
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+          this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
           this.invalidateResolvedWorktreeCache()
           invalidateAuthorizedRootsCache()
           this.notifier?.worktreesChanged(repo.id)
@@ -9028,9 +9138,13 @@ export class OrcaRuntimeService {
       const canonicalWorktreePath = registeredWorktree.path
       const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
       if (repo.connectionId) {
-        await (deleteBranch
+        const rawRemovalResult = await (deleteBranch
           ? provider!.removeWorktree(canonicalWorktreePath, force)
           : provider!.removeWorktree(canonicalWorktreePath, force, { deleteBranch }))
+        const removalResult = this.preserveBranchHeadFallback(
+          rawRemovalResult,
+          registeredWorktree.head
+        )
         await cleanupUnusedWorktreePushTargetRemoteSsh(
           provider!,
           repo.path,
@@ -9038,12 +9152,18 @@ export class OrcaRuntimeService {
           removedPushTarget,
           store
         )
+        this.rememberPreservedBranchCleanupTarget(
+          removalTarget.id,
+          removalResult,
+          registeredWorktree.head,
+          removedPushTarget
+        )
         this.clearOptimisticReconcileToken(removalTarget.id)
         this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
         this.invalidateResolvedWorktreeCache()
         invalidateAuthorizedRootsCache()
         this.notifier?.worktreesChanged(repo.id)
-        return {}
+        return removalResult ?? {}
       }
 
       const hooks = getEffectiveHooks(repo)
@@ -9098,10 +9218,14 @@ export class OrcaRuntimeService {
           })
       }
 
+      let removalResult: RemoveWorktreeResult | undefined
       try {
-        await (deleteBranch
-          ? removeWorktree(repo.path, canonicalWorktreePath, force)
-          : removeWorktree(repo.path, canonicalWorktreePath, force, { deleteBranch }))
+        removalResult = this.preserveBranchHeadFallback(
+          await (deleteBranch
+            ? removeWorktree(repo.path, canonicalWorktreePath, force)
+            : removeWorktree(repo.path, canonicalWorktreePath, force, { deleteBranch })),
+          registeredWorktree.head
+        )
       } catch (error) {
         if (isOrphanedWorktreeError(error)) {
           if (await canSafelyRemoveOrphanedWorktreeDirectory(canonicalWorktreePath, repo.path)) {
@@ -9124,6 +9248,7 @@ export class OrcaRuntimeService {
           )
           this.clearOptimisticReconcileToken(removalTarget.id)
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+          this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
           this.invalidateResolvedWorktreeCache()
           invalidateAuthorizedRootsCache()
           this.notifier?.worktreesChanged(repo.id)
@@ -9140,12 +9265,19 @@ export class OrcaRuntimeService {
         removedPushTarget,
         store
       )
+      this.rememberPreservedBranchCleanupTarget(
+        removalTarget.id,
+        removalResult,
+        registeredWorktree.head,
+        removedPushTarget
+      )
       this.clearOptimisticReconcileToken(removalTarget.id)
       this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
       this.invalidateResolvedWorktreeCache()
       invalidateAuthorizedRootsCache()
       this.notifier?.worktreesChanged(repo.id)
       return {
+        ...removalResult,
         ...(warning ? { warning } : {})
       }
     })()
@@ -12536,11 +12668,34 @@ function withTimeoutResult<T>(
   })
 }
 
-function buildPreview(lines: string[], partialLine: string): string {
-  const previewLines = buildTailLines(lines, partialLine)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(-MAX_PREVIEW_LINES)
+export function appendRecentPtyOutput(previous: string | undefined, data: string): string {
+  if (data.length >= RECENT_PTY_OUTPUT_LIMIT) {
+    return data.slice(-RECENT_PTY_OUTPUT_LIMIT)
+  }
+  return `${previous ?? ''}${data}`.slice(-RECENT_PTY_OUTPUT_LIMIT)
+}
+
+export function buildPreview(lines: string[], partialLine: string): string {
+  const previewLines: string[] = []
+  const collectVisibleLine = (line: string): void => {
+    const trimmed = line.trim()
+    if (trimmed.length > 0) {
+      previewLines.push(trimmed)
+    }
+  }
+
+  if (partialLine.length > 0) {
+    collectVisibleLine(partialLine)
+  }
+  for (
+    let index = lines.length - 1;
+    index >= 0 && previewLines.length < MAX_PREVIEW_LINES;
+    index--
+  ) {
+    collectVisibleLine(lines[index])
+  }
+  previewLines.reverse()
+
   const preview = previewLines.join('\n')
   return preview.length > MAX_PREVIEW_CHARS
     ? preview.slice(preview.length - MAX_PREVIEW_CHARS)
@@ -12557,7 +12712,7 @@ function buildTerminalWaitText(lines: string[], partialLine: string, preview: st
   return waitText.length > 0 ? waitText : preview
 }
 
-function appendNormalizedToTailBuffer(
+export function appendNormalizedToTailBuffer(
   previousLines: string[],
   previousPartialLine: string,
   normalizedChunk: string
@@ -12590,8 +12745,8 @@ function appendNormalizedToTailBuffer(
       : previousLines
   let truncated = previousPartialWasCapped || nextPartialLine.length > MAX_TAIL_PARTIAL_CHARS
 
-  while (nextLines.length > MAX_TAIL_LINES) {
-    nextLines.shift()
+  if (nextLines.length > MAX_TAIL_LINES) {
+    nextLines = nextLines.slice(nextLines.length - MAX_TAIL_LINES)
     truncated = true
   }
 
@@ -12601,8 +12756,13 @@ function appendNormalizedToTailBuffer(
     }
     let totalChars =
       nextLines.reduce((sum, line) => sum + line.length, 0) + retainedPartialLine.length
-    while (nextLines.length > 0 && totalChars > MAX_TAIL_CHARS) {
-      totalChars -= nextLines.shift()!.length
+    let trimStartIndex = 0
+    while (trimStartIndex < nextLines.length && totalChars > MAX_TAIL_CHARS) {
+      totalChars -= nextLines[trimStartIndex].length
+      trimStartIndex += 1
+    }
+    if (trimStartIndex > 0) {
+      nextLines = nextLines.slice(trimStartIndex)
       truncated = true
     }
   }
@@ -12666,12 +12826,15 @@ function trimTerminalPreviewToCharacterBudget(
     return { tail: lines, limited: false, omittedLineCount: 0, slicedFirstLine: false }
   }
 
-  const tail = [...lines]
   let omittedLineCount = 0
-  while (tail.length > 0 && totalCharacters - tail[0].length >= characterBudget) {
-    totalCharacters -= tail.shift()!.length
+  while (
+    omittedLineCount < lines.length &&
+    totalCharacters - lines[omittedLineCount].length >= characterBudget
+  ) {
+    totalCharacters -= lines[omittedLineCount].length
     omittedLineCount += 1
   }
+  const tail = omittedLineCount > 0 ? lines.slice(omittedLineCount) : [...lines]
 
   let slicedFirstLine = false
   if (tail.length > 0 && totalCharacters > characterBudget) {

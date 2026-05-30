@@ -15,6 +15,10 @@ type WorktreeBatchDeleteOptions = {
   onDeleted?: (worktreeIds: string[]) => void
 }
 
+type WorktreeDeleteWithToastOptions = {
+  onForceDeleted?: (worktreeId: string) => void
+}
+
 // Why: a failed delete almost always means the worktree still has changes
 // that need attention (uncommitted work, unpushed commits, conflicts). The
 // "View" affordance should surface those changes directly, not just bring
@@ -35,7 +39,8 @@ function isStrictDescendantPath(parentPath: string, childPath: string): boolean 
 }
 
 export async function runWorktreeDeletesInParallel(
-  targets: readonly Pick<Worktree, 'id' | 'displayName' | 'repoId' | 'path'>[]
+  targets: readonly Pick<Worktree, 'id' | 'displayName' | 'repoId' | 'path'>[],
+  options: WorktreeDeleteWithToastOptions = {}
 ): Promise<string[]> {
   // Why: `git worktree remove`/`prune`/`branch -D` mutate repo-wide ref state
   // and contend on `.git/packed-refs.lock` and per-worktree HEAD.lock. Running
@@ -65,7 +70,7 @@ export async function runWorktreeDeletesInParallel(
         if (failedInGroup.some((failed) => isStrictDescendantPath(target.path, failed.path))) {
           continue
         }
-        const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName)
+        const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName, options)
         if (deleted) {
           deletedInGroup.push(target.id)
         } else {
@@ -96,7 +101,8 @@ export async function runWorktreeDeletesInParallel(
  */
 export function runWorktreeDeleteWithToast(
   worktreeId: string,
-  worktreeName: string
+  worktreeName: string,
+  options: WorktreeDeleteWithToastOptions = {}
 ): Promise<boolean> {
   const removeWorktree = useAppStore.getState().removeWorktree
 
@@ -132,7 +138,9 @@ export function runWorktreeDeleteWithToast(
                           onClick: () => viewWorktreeDiff(worktreeId)
                         }
                       })
+                      return
                     }
+                    options.onForceDeleted?.(worktreeId)
                   })
                   .catch((err: unknown) => {
                     toast.error('Failed to delete workspace', {
@@ -235,7 +243,9 @@ export function runWorktreeBatchDelete(
     !singleTargetHasLineageChildren &&
     (state.settings?.skipDeleteWorktreeConfirm ?? false)
   if (skipConfirm) {
-    void runWorktreeDeletesInParallel(targets).then((deletedIds) => {
+    void runWorktreeDeletesInParallel(targets, {
+      onForceDeleted: (deletedId) => options.onDeleted?.([deletedId])
+    }).then((deletedIds) => {
       if (deletedIds.length > 0) {
         options.onDeleted?.(deletedIds)
       }

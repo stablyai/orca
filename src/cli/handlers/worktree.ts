@@ -2,7 +2,8 @@ import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord,
-  RuntimeWorktreeCreateResult
+  RuntimeWorktreeCreateResult,
+  RuntimeWorktreeRemoveResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
@@ -24,9 +25,23 @@ type HookWarningResult = {
   warning?: string
 }
 
+type PreservedBranchResult = {
+  preservedBranch?: {
+    branchName: string
+  }
+}
+
 function printHookWarning(result: HookWarningResult, json: boolean): void {
   if (!json && result.warning) {
     console.error(`warning: ${result.warning}`)
+  }
+}
+
+function printPreservedBranchWarning(result: PreservedBranchResult, json: boolean): void {
+  if (!json && result.preservedBranch) {
+    console.error(
+      `warning: local branch "${result.preservedBranch.branchName}" was kept because Git could not safely delete it`
+    )
   }
 }
 
@@ -152,12 +167,13 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree rm': async ({ flags, client, cwd, json }) => {
-    const result = await client.call<{ removed: boolean; warning?: string }>('worktree.rm', {
+    const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
       force: flags.get('force') === true,
       runHooks: flags.get('run-hooks') === true
     })
     printHookWarning(result.result, json)
+    printPreservedBranchWarning(result.result, json)
     printResult(result, json, (value) => `removed: ${value.removed}`)
   }
 }

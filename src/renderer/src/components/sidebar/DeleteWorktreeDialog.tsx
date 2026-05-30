@@ -185,6 +185,13 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     })
   }, [openSettingsPage, openSettingsTarget, updateSettings])
 
+  const handleForceDeletedFromToast = useCallback(
+    (deletedId: string): void => {
+      onDeleted?.([deletedId])
+    },
+    [onDeleted]
+  )
+
   const handleDelete = useCallback(
     (force = false) => {
       if (worktreeIds.length === 0) {
@@ -220,7 +227,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             })
           })
       } else {
-        const deletePromise = runWorktreeDeletesInParallel(worktrees)
+        const deletePromise = runWorktreeDeletesInParallel(worktrees, {
+          onForceDeleted: handleForceDeletedFromToast
+        })
         // Why: the workspace card owns the in-progress feedback, so the
         // confirmation should get out of the way as soon as deletion begins.
         closeModal()
@@ -235,6 +244,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       closeModal,
       dontAskAgain,
       allowSkipConfirm,
+      handleForceDeletedFromToast,
       onDeleted,
       persistDontAskAgainPreference,
       removeWorktree,
@@ -248,7 +258,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     if (lineageDelete.deleteAllTargets.length <= 1) {
       return
     }
-    const deletePromise = runWorktreeDeletesInParallel(lineageDelete.deleteAllTargets)
+    const deletePromise = runWorktreeDeletesInParallel(lineageDelete.deleteAllTargets, {
+      onForceDeleted: handleForceDeletedFromToast
+    })
     // Why: like the parent-only path, deletion progress is shown on the
     // workspace cards; the modal should not sit on top of that in-progress UI.
     closeModal()
@@ -257,7 +269,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         onDeleted?.(deletedIds)
       }
     })
-  }, [closeModal, lineageDelete.deleteAllTargets, onDeleted])
+  }, [closeModal, handleForceDeletedFromToast, lineageDelete.deleteAllTargets, onDeleted])
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>

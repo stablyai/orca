@@ -159,12 +159,25 @@ function resolveMobileFloorClientId(
 function appendPendingMultiplexOutput(stream: TerminalMultiplexStream, data: string): void {
   stream.pendingOutput.push(data)
   stream.pendingOutputChars += data.length
+  stream.pendingOutputChars = trimPendingOutputToBudget(
+    stream.pendingOutput,
+    stream.pendingOutputChars
+  )
+}
+
+function trimPendingOutputToBudget(pendingOutput: string[], pendingOutputChars: number): number {
+  let omittedChunkCount = 0
   while (
-    stream.pendingOutputChars > TERMINAL_MULTIPLEX_PENDING_MAX_CHARS &&
-    stream.pendingOutput.length > 0
+    pendingOutputChars > TERMINAL_MULTIPLEX_PENDING_MAX_CHARS &&
+    omittedChunkCount < pendingOutput.length
   ) {
-    stream.pendingOutputChars -= stream.pendingOutput.shift()?.length ?? 0
+    pendingOutputChars -= pendingOutput[omittedChunkCount].length
+    omittedChunkCount += 1
   }
+  if (omittedChunkCount > 0) {
+    pendingOutput.splice(0, omittedChunkCount)
+  }
+  return pendingOutputChars
 }
 
 function isTerminalReadPayloadIncomplete(read: { truncated: boolean; limited?: boolean }): boolean {
@@ -1210,12 +1223,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (buffering) {
             pendingOutput.push(data)
             pendingOutputChars += data.length
-            while (
-              pendingOutputChars > TERMINAL_MULTIPLEX_PENDING_MAX_CHARS &&
-              pendingOutput.length > 0
-            ) {
-              pendingOutputChars -= pendingOutput.shift()?.length ?? 0
-            }
+            pendingOutputChars = trimPendingOutputToBudget(pendingOutput, pendingOutputChars)
             return
           }
           outputBatcher?.push(data)

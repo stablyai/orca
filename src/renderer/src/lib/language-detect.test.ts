@@ -18,4 +18,9 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
     expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')
   })
+
+  it('maps Windows Batch files to Monaco built-in Batch language id', () => {
+    expect(detectLanguage('scripts/setup.bat')).toBe('bat')
+    expect(detectLanguage('C:\\repo\\scripts\\bootstrap.CMD')).toBe('bat')
+  })
 })

@@ -9,6 +9,7 @@ import type {
   GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo,
+  RemoveWorktreeResult,
   SearchOptions,
   SearchResult
 } from '../../shared/types'
@@ -211,7 +212,7 @@ export type IGitProvider = {
     worktreePath: string,
     force?: boolean,
     options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
-  ): Promise<void>
+  ): Promise<RemoveWorktreeResult>
   renameCurrentBranch?(worktreePath: string, newBranch: string): Promise<void>
   isGitRepo(path: string): boolean
   isGitRepoAsync(dirPath: string): Promise<{ isRepo: boolean; rootPath: string | null }>

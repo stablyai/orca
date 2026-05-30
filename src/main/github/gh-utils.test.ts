@@ -47,6 +47,14 @@ describe('github owner/repo resolution', () => {
       owner: 'TheBoredTeam',
       repo: 'boring.notch'
     })
+    expect(parseGitHubOwnerRepo('ssh://git@github.com/stablyai/orca.git')).toEqual({
+      owner: 'stablyai',
+      repo: 'orca'
+    })
+    expect(parseGitHubOwnerRepo('ssh://git@ssh.github.com:443/stablyai/orca.git')).toEqual({
+      owner: 'stablyai',
+      repo: 'orca'
+    })
     expect(parseGitHubOwnerRepo('git@example.com:stablyai/orca.git')).toBeNull()
   })
 

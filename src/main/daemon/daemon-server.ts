@@ -264,6 +264,9 @@ export class DaemonServer {
         }
       }
 
+      case 'cancelCreateOrAttach':
+        return {}
+
       case 'write':
         try {
           this.lastInputAtBySessionId.set(request.payload.sessionId, performance.now())
@@ -330,10 +333,8 @@ export class DaemonServer {
         }
         process.nextTick(() => this.shutdown())
         return {}
-
-      default:
-        throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
     }
+    throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
   }
 
   private sendExitEvent(

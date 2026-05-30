@@ -200,9 +200,8 @@ function optimisticFieldValueFromMutation(
       return { kind: 'number', fieldId, number: value.number }
     case 'date':
       return { kind: 'date', fieldId, date: value.date }
-    default:
-      return null
   }
+  return null
 }
 
 function applyRowPatch(

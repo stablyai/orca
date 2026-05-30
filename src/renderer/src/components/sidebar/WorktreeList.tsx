@@ -170,7 +170,7 @@ import {
 } from '../../../../shared/worktree-ownership'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import ImportedWorktreesVisibilityCard from './ImportedWorktreesVisibilityCard'
+import ImportedWorktreesVisibilityLine from './ImportedWorktreesVisibilityLine'
 import {
   keepImportedWorktreesHiddenCard,
   showImportedWorktreesCard,
@@ -293,7 +293,7 @@ function getWorktreeVisibilityMenuLabel(repo: Repo): string {
     repo,
     isLegacyRepoForExternalWorktreeVisibility(repo)
   )
-  return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Import Worktrees'
+  return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Show hidden worktrees'
 }
 
 const LINEAGE_INDENT = 18
@@ -3016,7 +3016,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   className="absolute left-0 right-0 top-0"
                   style={{ transform: getVirtualRowTransform(vItem.start) }}
                 >
-                  <ImportedWorktreesVisibilityCard
+                  <ImportedWorktreesVisibilityLine
                     repoDisplayName={row.repo.displayName}
                     hiddenWorktrees={row.hiddenWorktrees}
                     placement={row.placement}

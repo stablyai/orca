@@ -263,7 +263,9 @@ export class Coordinator {
         case 'status':
           this.opts.onLog(`Status from ${msg.from_handle}: ${msg.subject}`)
           break
-        default:
+        case 'dispatch':
+        case 'handoff':
+        case 'merge_ready':
           break
       }
     }
@@ -303,7 +305,7 @@ export class Coordinator {
   private handleWorkerDone(msg: MessageRow): void {
     this.opts.onLog(`Worker done: ${msg.from_handle} — ${msg.subject}`)
 
-    let payload: { taskId?: string; filesModified?: string[] } = {}
+    let payload: { taskId?: unknown; dispatchId?: unknown; filesModified?: unknown } = {}
     if (msg.payload) {
       try {
         payload = JSON.parse(msg.payload)
@@ -313,8 +315,14 @@ export class Coordinator {
     }
 
     const taskId = payload.taskId
-    if (!taskId) {
+    if (typeof taskId !== 'string' || taskId.length === 0) {
       this.opts.onLog(`Warning: worker_done without taskId from ${msg.from_handle}`)
+      return
+    }
+
+    const dispatchId = payload.dispatchId
+    if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
+      this.opts.onLog(`Warning: worker_done without dispatchId from ${msg.from_handle}`)
       return
     }
 
@@ -324,20 +332,47 @@ export class Coordinator {
       return
     }
 
+    // Why: taskId alone is not a completion authority; retried tasks can have
+    // stale worker_done messages racing the current active dispatch.
+    const dispatch = this.db.getDispatchContextById(dispatchId)
+    if (!dispatch) {
+      this.opts.onLog(`Warning: worker_done for unknown dispatch ${dispatchId}`)
+      return
+    }
+    if (dispatch.task_id !== taskId) {
+      this.opts.onLog(
+        `Warning: worker_done dispatch ${dispatchId} belongs to ${dispatch.task_id}, not ${taskId}`
+      )
+      return
+    }
+    if (dispatch.assignee_handle !== msg.from_handle) {
+      this.opts.onLog(
+        `Warning: worker_done for dispatch ${dispatchId} came from ${msg.from_handle}, expected ${dispatch.assignee_handle ?? '<unknown>'}`
+      )
+      return
+    }
+    if (dispatch.status !== 'dispatched') {
+      this.opts.onLog(`Warning: worker_done for inactive dispatch ${dispatchId} ignored`)
+      return
+    }
+    if (this.db.getDispatchContext(taskId)?.id !== dispatchId || task.status !== 'dispatched') {
+      this.opts.onLog(`Warning: worker_done for stale dispatch ${dispatchId} ignored`)
+      return
+    }
+
+    const filesModified =
+      Array.isArray(payload.filesModified) &&
+      payload.filesModified.every((file) => typeof file === 'string')
+        ? payload.filesModified
+        : []
+
     const result = JSON.stringify({
       completedBy: msg.from_handle,
-      filesModified: payload.filesModified ?? [],
+      filesModified,
       completedAt: new Date().toISOString()
     })
     this.db.updateTaskStatus(taskId, 'completed', result)
     this.state.completedTasks.push(taskId)
-
-    // Why: complete the dispatch context so the terminal is freed for
-    // subsequent task assignments.
-    const dispatch = this.db.getDispatchContext(taskId)
-    if (dispatch) {
-      this.db.completeDispatch(dispatch.id)
-    }
 
     this.opts.onLog(`Task ${taskId} completed`)
   }
