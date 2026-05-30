@@ -19,6 +19,19 @@ describe('resolveMarkdownLinkTarget', () => {
     })
   })
 
+  it('classifies relative .md inside a UNC worktree as markdown', () => {
+    const r = resolveMarkdownLinkTarget(
+      './guide.md',
+      '\\\\server\\share\\repo\\docs\\note.md',
+      '\\\\server\\share\\repo'
+    )
+    expect(r).toEqual({
+      kind: 'markdown',
+      absolutePath: '//server/share/repo/docs/guide.md',
+      relativePath: 'docs/guide.md'
+    })
+  })
+
   it('classifies relative .md outside worktree as file', () => {
     const r = resolveMarkdownLinkTarget('../../other/guide.md', SOURCE, ROOT)
     expect(r?.kind).toBe('file')
@@ -96,6 +109,20 @@ describe('resolveMarkdownLinkTarget', () => {
       kind: 'file',
       uri: 'file:///repo/docs/image.png',
       absolutePath: '/repo/docs/image.png',
+      relativePath: 'docs/image.png'
+    })
+  })
+
+  it('classifies explicit UNC file URLs without losing the server name', () => {
+    const r = resolveMarkdownLinkTarget(
+      'file://server/share/repo/docs/image.png',
+      '\\\\server\\share\\repo\\docs\\note.md',
+      '\\\\server\\share\\repo'
+    )
+    expect(r).toMatchObject({
+      kind: 'file',
+      uri: 'file://server/share/repo/docs/image.png',
+      absolutePath: '//server/share/repo/docs/image.png',
       relativePath: 'docs/image.png'
     })
   })
