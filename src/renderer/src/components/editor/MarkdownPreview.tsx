@@ -1,7 +1,15 @@
 /* eslint-disable max-lines -- Why: MarkdownPreview owns rendering, link interception,
 search, and viewport state for the preview surface in one place so markdown
 behavior stays coherent across split panes and preview tabs. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject
+} from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
@@ -175,6 +183,31 @@ export function findMarkdownPreviewOpenedEditFileId(
   )
 }
 
+function cancelMarkdownPreviewEditorRevealFrames(frameIds: MutableRefObject<number[]>): void {
+  for (const frameId of frameIds.current) {
+    cancelAnimationFrame(frameId)
+  }
+  frameIds.current = []
+}
+
+function requestMarkdownPreviewEditorRevealFrame(
+  frameIds: MutableRefObject<number[]>,
+  callback: FrameRequestCallback
+): void {
+  let completed = false
+  let frameId: number | undefined
+  frameId = requestAnimationFrame((timestamp) => {
+    completed = true
+    if (frameId !== undefined) {
+      frameIds.current = frameIds.current.filter((pendingFrameId) => pendingFrameId !== frameId)
+    }
+    callback(timestamp)
+  })
+  if (!completed) {
+    frameIds.current.push(frameId)
+  }
+}
+
 function getMarkdownPreviewBlockRange(
   node: MarkdownPreviewPositionNode | undefined
 ): { startLine: number; endLine: number } | null {
@@ -346,6 +379,7 @@ export default function MarkdownPreview({
   const inputRef = useRef<HTMLInputElement>(null)
   const matchesRef = useRef<HTMLElement[]>([])
   const lastAppliedInitialAnchorRef = useRef<string | null>(null)
+  const pendingEditorRevealFrameIdsRef = useRef<number[]>([])
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
@@ -480,6 +514,10 @@ export default function MarkdownPreview({
   const canShowReviewTools = Boolean(
     markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null
   )
+
+  useEffect(() => {
+    return () => cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
+  }, [])
 
   // Why: each split pane needs its own markdown preview viewport even when the
   // underlying file is shared. The caller passes a pane-scoped cache key so
@@ -1078,9 +1116,10 @@ export default function MarkdownPreview({
             if (language === 'markdown') {
               setMarkdownViewMode(targetFileId, 'source')
             }
+            cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
             setPendingEditorReveal(null)
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
+            requestMarkdownPreviewEditorRevealFrame(pendingEditorRevealFrameIdsRef, () => {
+              requestMarkdownPreviewEditorRevealFrame(pendingEditorRevealFrameIdsRef, () => {
                 setPendingEditorReveal({
                   filePath: absolutePath,
                   fileId: targetFileId,
