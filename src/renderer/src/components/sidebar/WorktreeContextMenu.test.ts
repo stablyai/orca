@@ -5,7 +5,8 @@ import {
   shouldUseNativeContextMenu,
   shouldIgnoreNestedWorktreeContextMenuScope,
   shouldRemoveFolderProjectFromContextMenu,
-  shouldSuppressContextMenuFollowUpClick
+  shouldSuppressContextMenuFollowUpClick,
+  shouldContinueDeleteSiblingPositionRestore
 } from './WorktreeContextMenu'
 
 describe('shouldUseNativeContextMenu', () => {
@@ -91,6 +92,17 @@ describe('shouldSuppressContextMenuFollowUpClick', () => {
 
   it('does not suppress clicks that predate the context menu timestamp', () => {
     expect(shouldSuppressContextMenuFollowUpClick(1_000, 999)).toBe(false)
+  })
+})
+
+describe('shouldContinueDeleteSiblingPositionRestore', () => {
+  it('stops once the delete row position has settled even when the row remains mounted', () => {
+    expect(
+      shouldContinueDeleteSiblingPositionRestore({
+        attempts: 6,
+        stableFrames: 6
+      })
+    ).toBe(false)
   })
 })
 

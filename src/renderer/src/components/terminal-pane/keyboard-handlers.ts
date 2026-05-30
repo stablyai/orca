@@ -16,6 +16,7 @@ import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
+import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -208,6 +209,10 @@ export function useTerminalKeyboardShortcuts({
       }
 
       if (isEditableTarget(e.target)) {
+        return
+      }
+
+      if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
         return
       }
 

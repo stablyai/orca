@@ -57,10 +57,17 @@ import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import { acquireSingleInstanceLock } from './startup/single-instance-lock'
 import { RateLimitService } from './rate-limits/service'
+import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
+import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
+import {
+  normalizeCodexRuntimeSelection,
+  type CodexAccountSelectionTarget
+} from './codex-accounts/runtime-selection'
+import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService } from './codex/hook-service'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
@@ -307,8 +314,8 @@ if (hasSingleInstanceLock) {
   enableMainProcessGpuFeatures()
 }
 
-function prepareCodexRuntimeHomeForLaunch(): string {
-  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch()
+function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
+  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
   try {
     // Why: launch prep is reachable after startup via PTY/runtime paths; honor
@@ -487,7 +494,7 @@ function openMainWindow(): BrowserWindow {
     store,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
-    () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
+    (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
         if (window.webContents.id === webContentsId) {
@@ -1048,8 +1055,14 @@ app.whenReady().then(async () => {
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
-  rateLimits.setCodexHomePathResolver(() => codexRuntimeHome!.prepareForRateLimitFetch())
-  rateLimits.setClaudeAuthPreparationResolver(() => claudeRuntimeAuth!.prepareForRateLimitFetch())
+  rateLimits.setCodexHomePathResolver((target) =>
+    codexRuntimeHome!.prepareForRateLimitFetch(target)
+  )
+  rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
+  rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
+  rateLimits.setClaudeAuthPreparationResolver((target) =>
+    claudeRuntimeAuth!.prepareForRateLimitFetch(target)
+  )
   rateLimits.setSettingsResolver(() => store!.getSettings())
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
@@ -1058,14 +1071,32 @@ app.whenReady().then(async () => {
   browserManager.setSettingsResolver(() => ({ keybindings: keybindings?.getOverrides() }))
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store!.getSettings()
+    const activeIds = new Set(
+      [
+        normalizeClaudeRuntimeSelection(settings).host,
+        ...Object.values(normalizeClaudeRuntimeSelection(settings).wsl)
+      ].filter(Boolean)
+    )
     return settings.claudeManagedAccounts
-      .filter((account) => account.id !== settings.activeClaudeManagedAccountId)
-      .map((account) => ({ id: account.id, managedAuthPath: account.managedAuthPath }))
+      .filter((account) => !activeIds.has(account.id))
+      .map((account) => ({
+        id: account.id,
+        managedAuthPath: account.managedAuthPath,
+        managedAuthRuntime: account.managedAuthRuntime,
+        wslDistro: account.wslDistro,
+        wslLinuxAuthPath: account.wslLinuxAuthPath
+      }))
   })
   rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store!.getSettings()
+    const activeIds = new Set(
+      [
+        normalizeCodexRuntimeSelection(settings).host,
+        ...Object.values(normalizeCodexRuntimeSelection(settings).wsl)
+      ].filter(Boolean)
+    )
     return settings.codexManagedAccounts
-      .filter((account) => account.id !== settings.activeCodexManagedAccountId)
+      .filter((account) => !activeIds.has(account.id))
       .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
   })
   const runtimeService = new OrcaRuntimeService(store, stats, {
@@ -1249,7 +1280,7 @@ app.whenReady().then(async () => {
       runtime,
       prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
-      () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
+      (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
       store
     )
     // Why: headless servers have no renderer graph publisher. Publish an

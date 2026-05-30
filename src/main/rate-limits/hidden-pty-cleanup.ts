@@ -22,6 +22,12 @@ export function cleanupHiddenRateLimitPty(
     } catch {
       /* already exited */
     }
+
+    // Why: node-pty WindowsTerminal.destroy() calls kill() again, which can
+    // close the same ConPTY handle twice after an intentional termination.
+    if (process.platform === 'win32') {
+      return
+    }
   }
 
   // Why: node-pty destroy releases the master PTY fd; on POSIX, neutralize

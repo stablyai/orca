@@ -454,6 +454,7 @@ describe('web GitHub preload API', () => {
         'requestPRReviewers',
         'resolveProjectRef',
         'resolveReviewThread',
+        'setPRAutoMerge',
         'setPRFileViewed',
         'starOrca',
         'updateIssue',
@@ -658,6 +659,12 @@ describe('web GitHub preload API', () => {
         args: { repoPath, prNumber: 7, method: 'squash' },
         expectedMethod: 'github.mergePR',
         expectedParams: withRepo({ repoPath, prNumber: 7, method: 'squash' })
+      },
+      {
+        key: 'setPRAutoMerge',
+        args: { repoPath, prNumber: 7, enabled: true },
+        expectedMethod: 'github.setPRAutoMerge',
+        expectedParams: withRepo({ repoPath, prNumber: 7, enabled: true })
       },
       {
         key: 'updatePRState',

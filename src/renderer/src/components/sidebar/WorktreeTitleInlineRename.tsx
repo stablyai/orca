@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
@@ -39,30 +39,33 @@ export function WorktreeTitleInlineRename({
   onEditingChange,
   onRename
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const editingRef = useRef(false)
   const savingRef = useRef(false)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(displayName)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    onEditingChange?.(editing)
-    return () => {
-      if (editing) {
-        onEditingChange?.(false)
+  const setEditingMode = useCallback(
+    (nextEditing: boolean) => {
+      if (editingRef.current === nextEditing) {
+        return
       }
-    }
-  }, [editing, onEditingChange])
+      editingRef.current = nextEditing
+      setEditing(nextEditing)
+      // Why: the parent card disables drag while renaming; an Effect leaves one draggable commit.
+      onEditingChange?.(nextEditing)
+    },
+    [onEditingChange]
+  )
 
-  useEffect(() => {
-    if (!editing) {
+  const handleInputRef = useCallback((input: HTMLInputElement | null) => {
+    if (!input) {
       return
     }
-    const input = inputRef.current
-    input?.focus()
+    input.focus()
     // Why: double-click rename should make replacing the workspace title a one-keystroke action.
-    input?.select()
-  }, [editing])
+    input.select()
+  }, [])
 
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -76,15 +79,15 @@ export function WorktreeTitleInlineRename({
       event.preventDefault()
       event.stopPropagation()
       setValue(displayName)
-      setEditing(true)
+      setEditingMode(true)
     },
-    [disabled, displayName]
+    [disabled, displayName, setEditingMode]
   )
 
   const cancelRename = useCallback(() => {
     setValue(displayName)
-    setEditing(false)
-  }, [displayName])
+    setEditingMode(false)
+  }, [displayName, setEditingMode])
 
   const commitRename = useCallback(async () => {
     if (savingRef.current) {
@@ -101,14 +104,14 @@ export function WorktreeTitleInlineRename({
     setSaving(true)
     try {
       await onRename(commit.displayName)
-      setEditing(false)
+      setEditingMode(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
     } finally {
       savingRef.current = false
       setSaving(false)
     }
-  }, [cancelRename, displayName, onRename, value])
+  }, [cancelRename, displayName, onRename, setEditingMode, value])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -142,7 +145,7 @@ export function WorktreeTitleInlineRename({
           {displayName}
         </span>
         <Input
-          ref={inputRef}
+          ref={handleInputRef}
           value={value}
           style={{ font: 'inherit' }}
           disabled={saving}

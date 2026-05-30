@@ -70,6 +70,11 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: SIDEBAR_QUICK_CREATE_SEARCH_KEYWORDS
   },
   {
+    title: 'Agent Location',
+    description: 'Choose whether installed agents are detected on this device or in WSL.',
+    keywords: ['agent', 'location', 'windows', 'wsl', 'linux', 'detect', 'installed', 'path']
+  },
+  {
     title: AGENT_STATUS_HOOKS_TITLE,
     description: AGENT_STATUS_HOOKS_DESCRIPTION,
     keywords: AGENT_STATUS_HOOKS_SEARCH_KEYWORDS

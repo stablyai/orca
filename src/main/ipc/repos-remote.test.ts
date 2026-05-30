@@ -1332,7 +1332,17 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(mockGitProvider.exec).not.toHaveBeenCalled()
   })
 
-  it('short-circuits an empty query without calling the relay', async () => {
+  it('returns refs for an empty query so remote Branch pickers open populated', async () => {
+    const stdout = [
+      'refs/remotes/origin/main\0origin/main',
+      'refs/remotes/upstream/feature-x\0upstream/feature-x'
+    ].join('\n')
+    mockGitProvider.exec = vi.fn().mockImplementation((argv: string[]) => {
+      if (argv[0] === 'remote') {
+        return Promise.resolve({ stdout: 'origin\nupstream\n', stderr: '' })
+      }
+      return Promise.resolve({ stdout, stderr: '' })
+    })
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
       path: '/remote/repo',
@@ -1345,14 +1355,47 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: ''
     })
 
-    // Why: empty-query short-circuit must happen in the handler (mirrors the
-    // local path's normalizeRefSearchQuery guard). Without it a user-typed
-    // empty query would leak every ref from the remote.
-    expect(result).toEqual([])
-    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+    expect(result).toEqual(['origin/main', 'upstream/feature-x'])
+    expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
+    const [argv] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=100')
+    expect(argv).toContain('refs/heads/**/**')
+    expect(argv).toContain('refs/heads/**/**/**')
+    expect(argv).toContain('refs/remotes/**/**')
+    expect(argv).toContain('refs/remotes/**/**/**')
   })
 
-  it('short-circuits a query containing only glob metacharacters', async () => {
+  it('sanitizes glob metacharacter-only queries into the empty-query branch list', async () => {
+    mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '***'
+    })
+
+    // Why: normalizeRefSearchQuery still strips glob metacharacters before
+    // building argv; the resulting empty query now intentionally lists refs.
+    const [argv] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=100')
+    expect(argv).toContain('refs/heads/**/**')
+    expect(argv).toContain('refs/heads/**/**/**')
+    expect(argv).toContain('refs/remotes/**/**')
+    expect(argv).toContain('refs/remotes/**/**/**')
+  })
+
+  it('rejects invalid limits before building broad relay searches', async () => {
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
       path: '/remote/repo',
@@ -1362,15 +1405,53 @@ describe('repos:searchBaseRefs SSH relay', () => {
 
     const result = await handlers.get('repos:searchBaseRefs')!(null, {
       repoId: 'r1',
-      query: '***'
+      query: '',
+      limit: 0.5
     })
 
-    // Why: normalizeRefSearchQuery strips `*?[]\`, so a query made up only of
-    // glob metacharacters normalizes to '' and must be treated like an empty
-    // query (no relay call, no leaked refs). Guards against glob injection
-    // via the SSH branch.
     expect(result).toEqual([])
     expect(mockGitProvider.exec).not.toHaveBeenCalled()
+  })
+
+  it('retries without --exclude for older git on SSH hosts', async () => {
+    const stdout = [
+      'refs/remotes/origin/main\0origin/main',
+      'refs/remotes/origin/HEAD\0origin/HEAD'
+    ].join('\n')
+    mockGitProvider.exec = vi.fn().mockImplementation((argv: string[]) => {
+      if (argv[0] === 'remote') {
+        return Promise.resolve({ stdout: 'origin\n', stderr: '' })
+      }
+      if (argv.includes('--exclude=refs/remotes/**/HEAD')) {
+        return Promise.reject(
+          Object.assign(new Error("unknown option `exclude'"), {
+            stderr: "error: unknown option `exclude'"
+          })
+        )
+      }
+      return Promise.resolve({ stdout, stderr: '' })
+    })
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '',
+      limit: 1
+    })
+
+    expect(result).toEqual(['origin/main'])
+    const forEachRefCalls = mockGitProvider.exec.mock.calls.filter(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )
+    expect(forEachRefCalls).toHaveLength(2)
+    expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(forEachRefCalls[1][0]).toContain('--count=104')
   })
 
   it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {
@@ -1390,7 +1471,9 @@ describe('repos:searchBaseRefs SSH relay', () => {
     await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream' })
 
     expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
-    const [argv, path] = mockGitProvider.exec.mock.calls[0]
+    const [argv, path] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
     expect(path).toBe('/remote/repo')
     expect(argv[0]).toBe('for-each-ref')
     expect(argv).toContain('refs/heads/**/*upstream*')
@@ -1399,7 +1482,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(argv).toContain('refs/remotes/**/*upstream*/**')
     // Guard against regression to the old origin-only glob.
     expect(argv).not.toContain('refs/remotes/origin/*upstream*')
-    expect(mockGitProvider.exec.mock.calls[1]).toEqual([['remote'], '/remote/repo'])
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
   })
 
   it('sends segmented argv for display-format queries like `upstream/main`', async () => {
@@ -1420,7 +1503,9 @@ describe('repos:searchBaseRefs SSH relay', () => {
     await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream/main' })
 
     expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
-    const [argv] = mockGitProvider.exec.mock.calls[0]
+    const [argv] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
     expect(argv).toContain('refs/remotes/*upstream*/*main*')
     expect(argv).toContain('refs/heads/*upstream*/*main*')
     // Regression guard: the literal slash must never appear inside a
@@ -1428,7 +1513,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     // which fnmatch cannot match because `*` doesn't cross `/`.
     expect(argv).not.toContain('refs/remotes/*upstream/main*/*')
     expect(argv).not.toContain('refs/remotes/*/*upstream/main*')
-    expect(mockGitProvider.exec.mock.calls[1]).toEqual([['remote'], '/remote/repo'])
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
   })
 
   it('parses NUL-delimited stdout and filters <remote>/HEAD pseudo-refs', async () => {

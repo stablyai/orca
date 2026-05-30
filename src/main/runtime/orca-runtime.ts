@@ -170,6 +170,7 @@ import {
   updatePRTitle,
   updatePRDetails,
   mergePR,
+  setPRAutoMerge,
   updatePRState,
   requestPRReviewers,
   removePRReviewers,
@@ -306,6 +307,7 @@ import {
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
+  isForEachRefExcludeUnsupportedError,
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
@@ -5796,14 +5798,21 @@ export class OrcaRuntimeService {
       return []
     }
     const normalizedQuery = normalizeRefSearchQuery(query)
-    if (!normalizedQuery) {
-      return []
-    }
     try {
-      const [result, remotesResult] = await Promise.all([
-        provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path),
-        provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      ])
+      const remotesPromise = provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
+      let result: { stdout: string }
+      try {
+        result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery, limit), repo.path)
+      } catch (err) {
+        if (!isForEachRefExcludeUnsupportedError(err)) {
+          throw err
+        }
+        result = await provider.exec(
+          buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
+          repo.path
+        )
+      }
+      const remotesResult = await remotesPromise
       const remotes = remotesResult.stdout
         .split('\n')
         .map((line) => line.trim())
@@ -6414,6 +6423,16 @@ export class OrcaRuntimeService {
   ): Promise<Awaited<ReturnType<typeof mergePR>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     return mergePR(repo.path, prNumber, method, repo.connectionId ?? null, prRepo ?? null)
+  }
+
+  async setRepoPRAutoMerge(
+    repoSelector: string,
+    prNumber: number,
+    enabled: boolean,
+    prRepo?: GitHubOwnerRepo | null
+  ): Promise<Awaited<ReturnType<typeof setPRAutoMerge>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return setPRAutoMerge(repo.path, prNumber, enabled, repo.connectionId ?? null, prRepo ?? null)
   }
 
   async updateRepoPRState(
