@@ -58,6 +58,7 @@ import {
   type ChecksPanelGitStatusSnapshot
 } from './checks-panel-git-status-snapshot'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 const RUNTIME_SSH_STATUS_REFRESH_MS = 3000
 const GIT_STATUS_FAILURE_RETRY_MS = 3000
@@ -133,6 +134,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const titleInputRef = useRef<HTMLInputElement>(null)
   const titleInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollIntervalRef = useRef(30_000) // start at 30s, backs off to 120s
+  const mountedRef = useMountedRef()
   const prevChecksRef = useRef<string>('')
   const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
   const asyncResultKeyRef = useRef<string>('')
@@ -1065,8 +1067,10 @@ export default function ChecksPanel(): React.JSX.Element {
       }
     } finally {
       clearTitleInputFocusTimer()
-      setTitleSaving(false)
-      setEditingTitle(false)
+      if (mountedRef.current) {
+        setTitleSaving(false)
+        setEditingTitle(false)
+      }
     }
   }, [
     repo,
@@ -1076,7 +1080,8 @@ export default function ChecksPanel(): React.JSX.Element {
     linkedPR,
     fallbackGitHubPRNumber,
     fetchPRForBranch,
-    clearTitleInputFocusTimer
+    clearTitleInputFocusTimer,
+    mountedRef
   ])
 
   const handleTitleKeyDown = useCallback(
