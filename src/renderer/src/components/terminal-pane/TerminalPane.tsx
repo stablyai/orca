@@ -88,6 +88,7 @@ import {
   applyTerminalPaneAttentionToManager,
   subscribeTerminalPaneAttention
 } from './terminal-pane-attention-subscriptions'
+import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
 
 type TerminalPaneProps = {
   tabId: string
@@ -335,8 +336,8 @@ export default function TerminalPane({
   )
   const clearCodexRestartNotice = useAppStore((store) => store.clearCodexRestartNotice)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
-  const terminalTab = useAppStore(
-    (store) => (store.tabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === tabId) ?? null
+  const terminalTab = useAppStore((store) =>
+    getCachedTerminalTabForWorktree(store.tabsByWorktree, worktreeId, tabId)
   )
   const setTabLayout = useAppStore((store) => store.setTabLayout)
   const restoredLayout = useMemo(
