@@ -192,9 +192,10 @@ export class MacOSNativeProviderClient {
     try {
       const socket = await connectMacOSProviderSocket(this.socketPath, HELPER_CONNECT_TIMEOUT_MS)
       socket.setEncoding('utf8')
-      socket.on('data', (chunk: string) => this.handleSocketData(chunk))
-      socket.on('close', () => this.handleSocketClose())
-      socket.on('error', (error) => this.handleTransportError(error))
+      this.socketBuffer = ''
+      socket.on('data', (chunk: string) => this.handleSocketData(socket, chunk))
+      socket.on('close', () => this.handleSocketClose(socket))
+      socket.on('error', (error) => this.handleTransportError(socket, error))
       this.socket = socket
       return socket
     } catch (error) {
@@ -205,7 +206,12 @@ export class MacOSNativeProviderClient {
       throw error
     }
   }
-  private handleSocketData(chunk: string): void {
+  private handleSocketData(socket: net.Socket, chunk: string): void {
+    // Why: a timed-out helper socket can emit after a replacement starts.
+    // Stale data must not corrupt the replacement socket's line buffer.
+    if (this.socket !== socket) {
+      return
+    }
     this.socketBuffer += chunk
     this.socketBuffer = this.consumeLines(this.socketBuffer)
   }
@@ -242,14 +248,24 @@ export class MacOSNativeProviderClient {
     }
     pending.reject(new RuntimeClientError(response.error.code, response.error.message))
   }
-  private handleSocketClose(): void {
+  private handleSocketClose(socket: net.Socket): void {
+    // Why: late close from a prior helper socket must not tear down the active
+    // replacement socket or reject its in-flight requests.
+    if (this.socket !== socket) {
+      return
+    }
     this.socket = null
+    this.socketBuffer = ''
     this.cleanupSocketDirectory()
     this.rejectPending(
       new RuntimeClientError('accessibility_error', 'native macOS helper app connection closed')
     )
   }
-  private handleTransportError(error: Error): void {
+  private handleTransportError(socket: net.Socket, error: Error): void {
+    // Why: stale socket errors can arrive after shutdown/restart.
+    if (this.socket !== socket) {
+      return
+    }
     this.rejectPending(new RuntimeClientError('accessibility_error', error.message))
   }
   private cleanupSocketDirectory(): void {
