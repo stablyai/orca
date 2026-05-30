@@ -294,6 +294,7 @@ import {
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
+  isForEachRefExcludeUnsupportedError,
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
@@ -5467,10 +5468,20 @@ export class OrcaRuntimeService {
     }
     const normalizedQuery = normalizeRefSearchQuery(query)
     try {
-      const [result, remotesResult] = await Promise.all([
-        provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path),
-        provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      ])
+      const remotesPromise = provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
+      let result: { stdout: string }
+      try {
+        result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery, limit), repo.path)
+      } catch (err) {
+        if (!isForEachRefExcludeUnsupportedError(err)) {
+          throw err
+        }
+        result = await provider.exec(
+          buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
+          repo.path
+        )
+      }
+      const remotesResult = await remotesPromise
       const remotes = remotesResult.stdout
         .split('\n')
         .map((line) => line.trim())

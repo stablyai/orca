@@ -5,6 +5,7 @@ import { tmpdir } from 'os'
 import path from 'path'
 
 import {
+  buildSearchBaseRefsArgv,
   getDefaultBaseRef,
   getBranchConflictKind,
   getRemoteCount,
@@ -189,6 +190,24 @@ describe('searchBaseRefs (widened glob)', () => {
     const results = await searchBaseRefs(tmpDir, '')
 
     expect(results).toEqual(['main', 'upstream/feature-x', 'upstream/main'])
+  })
+
+  it('caps broad ref-search argv before git output is captured', () => {
+    const argv = buildSearchBaseRefsArgv('', 12)
+
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=48')
+  })
+
+  it('does not hard-cap large explicit ref-search limits below the request size', () => {
+    const argv = buildSearchBaseRefsArgv('', 600)
+
+    expect(argv).toContain('--count=2400')
+  })
+
+  it('returns [] for invalid search limits instead of running an uncapped search', async () => {
+    await expect(searchBaseRefs(tmpDir, '', 0.5)).resolves.toEqual([])
+    await expect(searchBaseRefs(tmpDir, '', Number.NaN)).resolves.toEqual([])
   })
 
   // Why: the picker displays results as `<remote>/<branch>` and labels

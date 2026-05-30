@@ -30,6 +30,7 @@ import {
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
+  isForEachRefExcludeUnsupportedError,
   searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -872,6 +873,9 @@ async function searchBaseRefDetailsForRepo(
     return []
   }
   const limit = args.limit ?? 25
+  if (!Number.isInteger(limit) || limit <= 0) {
+    return []
+  }
   // Why: remote repos need the relay to list branches on the remote host.
   if (repo.connectionId) {
     const provider = getSshGitProvider(repo.connectionId)
@@ -885,10 +889,20 @@ async function searchBaseRefDetailsForRepo(
     try {
       // Why: argv (including the two-remote-glob rationale) lives in
       // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
-      const [result, remotesResult] = await Promise.all([
-        provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path),
-        provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      ])
+      const remotesPromise = provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
+      let result: { stdout: string }
+      try {
+        result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery, limit), repo.path)
+      } catch (err) {
+        if (!isForEachRefExcludeUnsupportedError(err)) {
+          throw err
+        }
+        result = await provider.exec(
+          buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
+          repo.path
+        )
+      }
+      const remotesResult = await remotesPromise
       // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
       // to the shared helper so the SSH and local paths cannot diverge.
       // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +

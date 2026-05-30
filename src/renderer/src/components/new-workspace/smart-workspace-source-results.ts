@@ -51,6 +51,31 @@ export function getBranchSearchRequest({
   return { repoId: selectedRepoId, query: trimmedQuery, limit }
 }
 
+export function getVisibleBranchResults({
+  branches,
+  mode,
+  resultRepoId,
+  resultQuery,
+  selectedRepoId,
+  value
+}: {
+  branches: BaseRefSearchResult[]
+  mode: SmartNameMode
+  resultRepoId: string | null
+  resultQuery: string | null
+  selectedRepoId: string | null
+  value: string
+}): BaseRefSearchResult[] {
+  const currentQuery = value.trim()
+  if (mode !== 'branches' && mode !== 'smart') {
+    return []
+  }
+  if (!selectedRepoId || resultRepoId !== selectedRepoId || resultQuery !== currentQuery) {
+    return []
+  }
+  return branches
+}
+
 export function buildSmartWorkspaceSourceRows({
   branches,
   githubItems,
@@ -98,7 +123,8 @@ export function buildSmartWorkspaceSourceRows({
       }))
     )
   }
-  if (mode === 'smart' || mode === 'branches') {
+  const shouldShowBranches = mode === 'branches' || (mode === 'smart' && trimmed.length > 0)
+  if (shouldShowBranches) {
     const branchExactMatch = branches.some(
       (branch) => branch.refName === trimmed || branch.localBranchName === trimmed
     )

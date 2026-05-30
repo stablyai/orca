@@ -47,6 +47,7 @@ import {
   buildSmartWorkspaceSourceRows,
   getBranchSearchRequest,
   getSmartWorkspaceEmptyHint,
+  getVisibleBranchResults,
   type SmartNameMode,
   type SmartWorkspaceSourceRow
 } from './smart-workspace-source-results'
@@ -182,6 +183,10 @@ export default function SmartWorkspaceNameField({
   const [githubItems, setGithubItems] = useState<GitHubWorkItem[]>([])
   const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
   const [branches, setBranches] = useState<BaseRefSearchResult[]>([])
+  const [branchResultsSource, setBranchResultsSource] = useState<{
+    repoId: string
+    query: string
+  } | null>(null)
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
   const [githubLoading, setGithubLoading] = useState(false)
   const [gitlabLoading, setGitlabLoading] = useState(false)
@@ -282,6 +287,7 @@ export default function SmartWorkspaceNameField({
     setGithubItems([])
     setGitlabItems([])
     setBranches([])
+    setBranchResultsSource(null)
     setLinearIssues([])
     setGithubLoading(false)
     setGitlabLoading(false)
@@ -464,10 +470,13 @@ export default function SmartWorkspaceNameField({
   useEffect(() => {
     if (!branchSearchRequest) {
       setBranches([])
+      setBranchResultsSource(null)
       setBranchesLoading(false)
       return
     }
     let stale = false
+    setBranches([])
+    setBranchResultsSource(null)
     setBranchesLoading(true)
     void searchRuntimeRepoBaseRefDetails(
       settings,
@@ -478,11 +487,16 @@ export default function SmartWorkspaceNameField({
       .then((results) => {
         if (!stale) {
           setBranches(results)
+          setBranchResultsSource({
+            repoId: branchSearchRequest.repoId,
+            query: branchSearchRequest.query
+          })
         }
       })
       .catch(() => {
         if (!stale) {
           setBranches([])
+          setBranchResultsSource(null)
         }
       })
       .finally(() => {
@@ -668,7 +682,14 @@ export default function SmartWorkspaceNameField({
   const rows = useMemo<RowEntry[]>(
     () =>
       buildSmartWorkspaceSourceRows({
-        branches,
+        branches: getVisibleBranchResults({
+          branches,
+          mode,
+          resultRepoId: branchResultsSource?.repoId ?? null,
+          resultQuery: branchResultsSource?.query ?? null,
+          selectedRepoId: selectedRepo?.id ?? null,
+          value
+        }),
         githubItems,
         gitlabAvailable,
         gitlabItems,
@@ -680,12 +701,14 @@ export default function SmartWorkspaceNameField({
       }),
     [
       branches,
+      branchResultsSource,
       githubItems,
       gitlabAvailable,
       gitlabItems,
       linearAvailable,
       linearIssues,
       mode,
+      selectedRepo?.id,
       value
     ]
   )

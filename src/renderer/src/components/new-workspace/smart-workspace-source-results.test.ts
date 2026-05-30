@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildSmartWorkspaceSourceRows,
   getBranchSearchRequest,
-  getSmartWorkspaceEmptyHint
+  getSmartWorkspaceEmptyHint,
+  getVisibleBranchResults
 } from './smart-workspace-source-results'
 
 describe('Branch source results', () => {
@@ -30,6 +31,48 @@ describe('Branch source results', () => {
         limit: 12
       })
     ).toBeNull()
+  })
+
+  it('hides stale branch rows when Smart mode input is cleared', () => {
+    const rows = buildSmartWorkspaceSourceRows({
+      mode: 'smart',
+      value: '',
+      branches: [{ refName: 'origin/old-result', localBranchName: 'old-result' }],
+      githubItems: [],
+      gitlabItems: [],
+      linearIssues: [],
+      gitlabAvailable: false,
+      linearAvailable: false,
+      resultLimit: 12
+    })
+
+    expect(rows).toEqual([])
+  })
+
+  it('hides branch results from a stale Branch-mode query', () => {
+    expect(
+      getVisibleBranchResults({
+        mode: 'branches',
+        value: '',
+        selectedRepoId: 'repo-1',
+        resultRepoId: 'repo-1',
+        resultQuery: 'feature',
+        branches: [{ refName: 'origin/feature', localBranchName: 'feature' }]
+      })
+    ).toEqual([])
+  })
+
+  it('keeps matching empty-query branch results visible in Branch mode', () => {
+    expect(
+      getVisibleBranchResults({
+        mode: 'branches',
+        value: '',
+        selectedRepoId: 'repo-1',
+        resultRepoId: 'repo-1',
+        resultQuery: '',
+        branches: [{ refName: 'origin/main', localBranchName: 'main' }]
+      })
+    ).toEqual([{ refName: 'origin/main', localBranchName: 'main' }])
   })
 
   it('keeps returned branch rows visible before the user types', () => {
