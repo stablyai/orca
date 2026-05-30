@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: SSH connection utility tests share mocked filesystem and environment setup across auth, proxy, and retry helpers. */
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
+import { join } from 'path'
 import { BaseAgent, utils, type ParsedKey } from 'ssh2'
 
 vi.mock('os', () => ({
@@ -8,6 +9,11 @@ vi.mock('os', () => ({
 
 const mockExistsSync = vi.fn().mockReturnValue(false)
 const mockReadFileSync = vi.fn()
+const TEST_HOME = '/home/testuser'
+
+function testHomePath(...parts: string[]): string {
+  return join(TEST_HOME, ...parts)
+}
 
 vi.mock('fs', () => ({
   existsSync: (...args: unknown[]) => mockExistsSync(...args),
@@ -205,7 +211,7 @@ describe('findDefaultKeyFile', () => {
 
   it('returns the first existing key file', () => {
     mockExistsSync.mockImplementation((path: unknown) => {
-      return path === '/home/testuser/.ssh/id_ed25519'
+      return path === testHomePath('.ssh', 'id_ed25519')
     })
     mockReadFileSync.mockReturnValue(Buffer.from('key-contents'))
 
@@ -225,20 +231,20 @@ describe('findDefaultKeyFile', () => {
     findDefaultKeyFile()
 
     expect(checkedPaths).toEqual([
-      '/home/testuser/.ssh/id_ed25519',
-      '/home/testuser/.ssh/id_rsa',
-      '/home/testuser/.ssh/id_ecdsa',
-      '/home/testuser/.ssh/id_dsa',
-      '/home/testuser/.ssh/id_xmss'
+      testHomePath('.ssh', 'id_ed25519'),
+      testHomePath('.ssh', 'id_rsa'),
+      testHomePath('.ssh', 'id_ecdsa'),
+      testHomePath('.ssh', 'id_dsa'),
+      testHomePath('.ssh', 'id_xmss')
     ])
   })
 
   it('skips unreadable key files and tries next', () => {
     mockExistsSync.mockImplementation((path: unknown) => {
-      return path === '/home/testuser/.ssh/id_ed25519' || path === '/home/testuser/.ssh/id_rsa'
+      return path === testHomePath('.ssh', 'id_ed25519') || path === testHomePath('.ssh', 'id_rsa')
     })
     mockReadFileSync.mockImplementation((path: unknown) => {
-      if (String(path) === '/home/testuser/.ssh/id_ed25519') {
+      if (String(path) === testHomePath('.ssh', 'id_ed25519')) {
         throw new Error('permission denied')
       }
       return Buffer.from('rsa-key')
@@ -337,9 +343,9 @@ describe('buildConnectConfig', () => {
   it('prefers ssh -G resolved IdentityAgent for config-host targets', () => {
     const config = buildConnectConfig(
       makeTarget({ configHost: 'work', identityAgent: '%d/.1password/agent.sock' }),
-      makeResolved({ identityAgent: '/home/testuser/.1password/agent.sock' })
+      makeResolved({ identityAgent: testHomePath('.1password', 'agent.sock') })
     )
-    expect(config.agent).toBe('/home/testuser/.1password/agent.sock')
+    expect(config.agent).toBe(testHomePath('.1password', 'agent.sock'))
   })
 
   it('allows IdentityAgent none to disable agent auth', () => {
@@ -419,11 +425,29 @@ describe('buildConnectConfig', () => {
   })
 
   it('uses keyFile auth when target.identityFile is set and no agent is available', () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     delete process.env.SSH_AUTH_SOCK
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
-    const config = buildConnectConfig(makeTarget({ identityFile: '/home/user/.ssh/custom' }), null)
+    try {
+      const config = buildConnectConfig(
+        makeTarget({ identityFile: '/home/user/.ssh/custom' }),
+        null
+      )
+      expect(config.privateKey).toEqual(Buffer.from('key'))
+      expect(config.agent).toBeUndefined()
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  it('expands Windows-style target.identityFile before reading private key', () => {
+    mockReadFileSync.mockReturnValue(Buffer.from('key'))
+    const config = buildConnectConfig(makeTarget({ identityFile: '~\\.ssh\\custom' }), null, {
+      includeAgent: false,
+      includePrivateKey: true
+    })
     expect(config.privateKey).toEqual(Buffer.from('key'))
-    expect(config.agent).toBeUndefined()
+    expect(mockReadFileSync).toHaveBeenCalledWith(testHomePath('.ssh', 'custom'))
   })
 
   it('includes unencrypted resolved identityFile auth when an agent is available', () => {
@@ -442,7 +466,7 @@ describe('buildConnectConfig', () => {
   it('uses agent auth without probing when resolved identityFile is a default path (expanded)', () => {
     const config = buildConnectConfig(
       makeTarget(),
-      makeResolved({ identityFile: ['/home/testuser/.ssh/id_ed25519'] })
+      makeResolved({ identityFile: [testHomePath('.ssh', 'id_ed25519')] })
     )
     expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
@@ -451,7 +475,7 @@ describe('buildConnectConfig', () => {
 
   it('does not probe default key files before agent auth', () => {
     mockExistsSync.mockImplementation(
-      (p: unknown) => String(p) === '/home/testuser/.ssh/id_ed25519'
+      (p: unknown) => String(p) === testHomePath('.ssh', 'id_ed25519')
     )
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.agent).toBe('/tmp/agent.sock')
@@ -460,14 +484,19 @@ describe('buildConnectConfig', () => {
   })
 
   it('provides fallback key when no agent is available', () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     delete process.env.SSH_AUTH_SOCK
     mockExistsSync.mockImplementation(
-      (p: unknown) => String(p) === '/home/testuser/.ssh/id_ed25519'
+      (p: unknown) => String(p) === testHomePath('.ssh', 'id_ed25519')
     )
     mockReadFileSync.mockReturnValue(Buffer.from('fallback'))
-    const config = buildConnectConfig(makeTarget(), null)
-    expect(config.agent).toBeUndefined()
-    expect(config.privateKey).toEqual(Buffer.from('fallback'))
+    try {
+      const config = buildConnectConfig(makeTarget(), null)
+      expect(config.agent).toBeUndefined()
+      expect(config.privateKey).toEqual(Buffer.from('fallback'))
+    } finally {
+      platformSpy.mockRestore()
+    }
   })
 
   it('can force private key inclusion for the post-agent fallback path', () => {
