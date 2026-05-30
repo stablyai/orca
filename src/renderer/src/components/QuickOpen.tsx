@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
@@ -66,14 +66,14 @@ function InstallRgGuidance({
   guidance?: string | null
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+  const copiedResetTimerRef = useRef<number | null>(null)
 
-  useEffect(() => {
-    if (!copied) {
-      return
+  const clearCopiedResetTimer = useCallback((): void => {
+    if (copiedResetTimerRef.current !== null) {
+      window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = null
     }
-    const timeout = window.setTimeout(() => setCopied(false), 1500)
-    return () => window.clearTimeout(timeout)
-  }, [copied])
+  }, [])
 
   const handleCopy = useCallback(() => {
     if (!command) {
@@ -86,12 +86,17 @@ function InstallRgGuidance({
     void window.api.ui
       .writeClipboardText(command)
       .then(() => {
+        clearCopiedResetTimer()
         setCopied(true)
+        copiedResetTimerRef.current = window.setTimeout(() => {
+          copiedResetTimerRef.current = null
+          setCopied(false)
+        }, 1500)
       })
       .catch(() => {
         /* best-effort */
       })
-  }, [command])
+  }, [clearCopiedResetTimer, command])
 
   return (
     <div className="px-4 py-5 text-sm text-muted-foreground space-y-3">
