@@ -26,6 +26,7 @@ import {
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -54,6 +55,11 @@ import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
 import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
 import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
+import {
+  normalizeFeatureInteractions,
+  type FeatureInteractionId,
+  type FeatureInteractionState
+} from '../../../shared/feature-interactions'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -298,6 +304,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
       relaunch: () => Promise.resolve(window.location.reload()),
+      restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
@@ -432,7 +439,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     pty: createPtyApi(),
     ssh: createSshApi(),
-    wsl: { isAvailable: () => Promise.resolve(false) },
+    wsl: { isAvailable: () => Promise.resolve(false), listDistros: () => Promise.resolve([]) },
     pwsh: { isAvailable: () => Promise.resolve(false) },
     agentStatus: {
       onSet: () => noopUnsubscribe,
@@ -1063,6 +1070,14 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.conflictOperation', { worktree: worktree.id })
     },
+    abortMerge: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.abortMerge', { worktree: worktree.id })
+    },
+    abortRebase: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.abortRebase', { worktree: worktree.id })
+    },
     diff: async ({ worktreePath, filePath, staged, compareAgainstHead }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.diff', {
@@ -1459,7 +1474,14 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           undefined,
           15_000
         )
-        const next = mergeWebUIState(readLocalWebUIState(), result.ui)
+        const local = readLocalWebUIState()
+        const next = {
+          ...mergeWebUIState(local, result.ui),
+          featureInteractions: mergeFeatureInteractionState(
+            local.featureInteractions,
+            result.ui.featureInteractions
+          )
+        }
         writeJson(UI_STORAGE_KEY, next)
         zoomLevel = next.uiZoomLevel
         return next
@@ -1475,6 +1497,41 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         await callRuntimeResult('ui.set', updates, 15_000)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
+      }
+    },
+    recordFeatureInteraction: async (id: FeatureInteractionId) => {
+      const current = readLocalWebUIState()
+      const featureInteractions = normalizeFeatureInteractions(current.featureInteractions)
+      const existing = featureInteractions[id]
+      const optimistic = mergeWebUIState(current, {
+        featureInteractions: {
+          ...featureInteractions,
+          [id]: {
+            firstInteractedAt: existing?.firstInteractedAt ?? Date.now(),
+            interactionCount: (existing?.interactionCount ?? 0) + 1
+          }
+        }
+      })
+      writeJson(UI_STORAGE_KEY, optimistic)
+      try {
+        const result = await callRuntimeResult<{ ui: PersistedUIState }>(
+          'ui.recordFeatureInteraction',
+          id,
+          15_000
+        )
+        const local = readLocalWebUIState()
+        const next = {
+          ...mergeWebUIState(local, result.ui),
+          featureInteractions: mergeFeatureInteractionState(
+            local.featureInteractions,
+            result.ui.featureInteractions
+          )
+        }
+        writeJson(UI_STORAGE_KEY, next)
+        zoomLevel = next.uiZoomLevel
+        return next
+      } catch {
+        return optimistic
       }
     },
     readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
@@ -1618,7 +1675,7 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
 function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
   const status = {
     platform: getBrowserPlatform(),
-    commandName: 'orca',
+    commandName: getBrowserPlatform() === 'linux' ? 'orca-ide' : 'orca',
     commandPath: null,
     pathDirectory: null,
     pathConfigured: false,
@@ -1649,6 +1706,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
       | 'antigravity'
       | 'cursor'
       | 'droid'
+      | 'command-code'
       | 'grok'
       | 'copilot'
       | 'hermes'
@@ -1667,6 +1725,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     antigravityStatus: () => status('antigravity'),
     cursorStatus: () => status('cursor'),
     droidStatus: () => status('droid'),
+    commandCodeStatus: () => status('command-code'),
     grokStatus: () => status('grok'),
     copilotStatus: () => status('copilot'),
     hermesStatus: () => status('hermes')
@@ -1730,12 +1789,16 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     codex: null,
     gemini: null,
     opencodeGo: null,
+    claudeTarget: { runtime: 'host', wslDistro: null },
+    codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
     inactiveCodexAccounts: []
   }
   return {
     get: () => Promise.resolve(empty),
     refresh: () => Promise.resolve(empty),
+    refreshCodexForTarget: () => Promise.resolve(empty),
+    refreshClaudeForTarget: () => Promise.resolve(empty),
     setPollingInterval: () => Promise.resolve(),
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
     fetchInactiveCodexAccounts: () => Promise.resolve(),
@@ -1744,7 +1807,11 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
 }
 
 function createAccountsApi(): never {
-  const empty = { accounts: [], activeAccountId: null }
+  const empty = {
+    accounts: [],
+    activeAccountId: null,
+    activeAccountIdsByRuntime: { host: null, wsl: {} }
+  }
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),
@@ -1809,6 +1876,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     listSessions: () => Promise.resolve([]),
+    getMainBufferSnapshot: () => Promise.resolve(null),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,
@@ -2048,6 +2116,32 @@ function mergeWebUIState(
   }
 }
 
+function mergeFeatureInteractionState(
+  current: PersistedUIState['featureInteractions'],
+  incoming: PersistedUIState['featureInteractions']
+): FeatureInteractionState {
+  const currentNormalized = normalizeFeatureInteractions(current)
+  const incomingNormalized = normalizeFeatureInteractions(incoming)
+  const merged: FeatureInteractionState = { ...currentNormalized }
+  for (const [id, incomingRecord] of Object.entries(incomingNormalized)) {
+    const featureId = id as FeatureInteractionId
+    const currentRecord = currentNormalized[featureId]
+    merged[featureId] = currentRecord
+      ? {
+          firstInteractedAt: Math.min(
+            currentRecord.firstInteractedAt,
+            incomingRecord.firstInteractedAt
+          ),
+          interactionCount: Math.max(
+            currentRecord.interactionCount,
+            incomingRecord.interactionCount
+          )
+        }
+      : incomingRecord
+  }
+  return merged
+}
+
 function mergeSettings(base: GlobalSettings, updates: Partial<GlobalSettings>): GlobalSettings {
   const defaults = getDefaultSettings('~')
   return {
@@ -2061,6 +2155,9 @@ function mergeSettings(base: GlobalSettings, updates: Partial<GlobalSettings>): 
       ...(base.githubProjects ?? defaults.githubProjects),
       ...updates.githubProjects
     } as GlobalSettings['githubProjects'],
+    disabledTuiAgents: normalizeDisabledTuiAgents(
+      updates.disabledTuiAgents ?? base.disabledTuiAgents
+    ),
     voice: {
       ...(base.voice ?? defaults.voice),
       ...updates.voice

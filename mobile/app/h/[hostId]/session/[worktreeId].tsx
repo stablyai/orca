@@ -18,19 +18,21 @@ import {
   type TextStyle
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   AlertTriangle,
   ArrowUp,
   ChevronLeft,
   ChevronRight,
+  ChevronsRight,
   Eraser,
   Folder,
   File,
   FileText,
   GitBranch,
   Globe,
+  Keyboard as KeyboardIcon,
   Mic,
   Monitor,
   Plus,
@@ -54,10 +56,19 @@ import {
 import {
   TerminalWebView,
   type TerminalKeyboardAvoidanceMetrics,
+  type MobileTerminalTheme,
   type TerminalModes,
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
-import { TERMINAL_ACCESSORY_KEYS } from '../../../../src/terminal/terminal-accessory-keys'
+import {
+  getDefaultTerminalAccessoryBuiltInIds,
+  getVisibleTerminalAccessoryKeys,
+  loadTerminalAccessoryLayout
+} from '../../../../src/terminal/terminal-accessory-layout'
+import {
+  getTerminalLiveSpecialKeyBytes,
+  isTerminalLiveInputWithinByteLimit
+} from '../../../../src/terminal/terminal-live-input'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
@@ -85,13 +96,16 @@ import {
   type MobileSyntaxSegment,
   type MobileSyntaxTokenKind
 } from '../../../../src/session/mobile-file-syntax'
+import {
+  getTerminalRecordsFromSessionTabs,
+  mergeTerminalListWithKnownRecords,
+  mergeTerminalRecordsByCurrentOrder,
+  terminalRecordsEqual,
+  type TerminalRecord
+} from '../../../../src/session/mobile-terminal-records'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
 
-type Terminal = {
-  handle: string
-  title: string
-  isActive: boolean
-}
+type Terminal = TerminalRecord
 
 type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser'
 
@@ -104,6 +118,7 @@ type MobileSessionTab =
       leafId?: string
       status?: 'pending-handle' | 'ready'
       terminal: string | null
+      terminalTheme?: MobileTerminalTheme
       isActive: boolean
     }
   | {
@@ -187,33 +202,6 @@ type DirtyMarkdownDraft = {
   content: string
 }
 
-function mergeTerminalRecordsByCurrentOrder(
-  terminalTabs: Terminal[],
-  currentTerminals: Terminal[]
-): Terminal[] {
-  if (currentTerminals.length === 0) {
-    return terminalTabs
-  }
-  const terminalTabsByHandle = new Map(terminalTabs.map((tab) => [tab.handle, tab]))
-  const currentHandles = new Set(currentTerminals.map((terminal) => terminal.handle))
-  return [
-    ...currentTerminals.map((terminal) => terminalTabsByHandle.get(terminal.handle) ?? terminal),
-    ...terminalTabs.filter((terminal) => !currentHandles.has(terminal.handle))
-  ]
-}
-
-function terminalRecordsEqual(a: Terminal[], b: Terminal[]): boolean {
-  return (
-    a.length === b.length &&
-    a.every(
-      (terminal, index) =>
-        terminal.handle === b[index]?.handle &&
-        terminal.title === b[index]?.title &&
-        terminal.isActive === b[index]?.isActive
-    )
-  )
-}
-
 function mobileSessionTabsEqual(a: MobileSessionTab[], b: MobileSessionTab[]): boolean {
   return a.length === b.length && a.every((tab, index) => mobileSessionTabEqual(tab, b[index]))
 }
@@ -235,7 +223,8 @@ function mobileSessionTabEqual(a: MobileSessionTab, b: MobileSessionTab | undefi
         a.parentTabId === b.parentTabId &&
         a.leafId === b.leafId &&
         a.status === b.status &&
-        a.terminal === b.terminal
+        a.terminal === b.terminal &&
+        JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null)
       )
     case 'markdown':
       return (
@@ -347,6 +336,7 @@ function TerminalPaneView({
   handle,
   active,
   keyboardLift,
+  terminalTheme,
   onRef,
   onWebReady,
   onSelectionMode,
@@ -355,11 +345,13 @@ function TerminalPaneView({
   onModesChanged,
   onKeyboardAvoidanceMetrics,
   onHaptic,
-  onTerminalInput
+  onTerminalInput,
+  onTerminalTap
 }: {
   handle: string
   active: boolean
   keyboardLift: number
+  terminalTheme?: MobileTerminalTheme
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
   onWebReady: (handle: string) => void
   onSelectionMode: (handle: string, active: boolean) => void
@@ -369,6 +361,7 @@ function TerminalPaneView({
   onKeyboardAvoidanceMetrics: (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
   onTerminalInput: (handle: string, bytes: string) => void
+  onTerminalTap: (handle: string) => void
 }) {
   const setRef = useCallback(
     (ref: TerminalWebViewHandle | null) => {
@@ -389,6 +382,7 @@ function TerminalPaneView({
       <TerminalWebView
         ref={setRef}
         style={styles.terminalWebView}
+        terminalTheme={terminalTheme}
         onWebReady={() => onWebReady(handle)}
         onSelectionMode={(a) => onSelectionMode(handle, a)}
         onSelectionCopy={(t) => onSelectionCopy(handle, t)}
@@ -397,6 +391,7 @@ function TerminalPaneView({
         onKeyboardAvoidanceMetrics={(m) => onKeyboardAvoidanceMetrics(handle, m)}
         onHaptic={onHaptic}
         onTerminalInput={(bytes) => onTerminalInput(handle, bytes)}
+        onTerminalTap={() => onTerminalTap(handle)}
       />
     </View>
   )
@@ -697,6 +692,10 @@ export default function SessionScreen() {
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
   const [terminalsLoaded, setTerminalsLoaded] = useState(false)
   const [input, setInput] = useState('')
+  const [liveInputCapture, setLiveInputCapture] = useState('')
+  const [liveInputTerminalHandles, setLiveInputTerminalHandles] = useState<Set<string>>(
+    () => new Set()
+  )
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
   const activeSessionTabIdRef = useRef<string | null>(null)
@@ -730,8 +729,15 @@ export default function SessionScreen() {
   const [leaveDrafts, setLeaveDrafts] = useState<DirtyMarkdownDraft[] | null>(null)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
+  const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
+    getDefaultTerminalAccessoryBuiltInIds
+  )
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
   const [deleteKeyTarget, setDeleteKeyTarget] = useState<CustomKey | null>(null)
+  const visibleBuiltInAccessoryKeys = useMemo(
+    () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
+    [visibleBuiltInIds]
+  )
   // Why: in Expo SDK 55 edge-to-edge mode the OS does NOT resize the window when
   // the IME opens — the keyboard draws on top of the app. We track the keyboard
   // height ourselves and translate the input/accessory area above the IME without
@@ -763,6 +769,7 @@ export default function SessionScreen() {
   const viewportRef = useRef<{ cols: number; rows: number } | null>(null)
   const viewportMeasuredRef = useRef(false)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
+  const liveInputRef = useRef<TextInput>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   const initializedHandlesRef = useRef<Set<string>>(new Set())
@@ -775,6 +782,7 @@ export default function SessionScreen() {
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingActiveSessionTabIdRef = useRef<string | null>(null)
   const pendingActiveTerminalHandleRef = useRef<string | null>(null)
+  const initialEmptySessionAutoCreateRef = useRef<string | null>(null)
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
   const subscribeSeqRef = useRef<Map<string, number>>(new Map())
@@ -798,6 +806,7 @@ export default function SessionScreen() {
     activeSessionTab?.type !== 'markdown' &&
     activeSessionTab?.type !== 'file' &&
     activeSessionTab?.type !== 'browser'
+  const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -1205,8 +1214,15 @@ export default function SessionScreen() {
             return true
           })
 
-          setTerminals(deduped)
-          terminalsRef.current = deduped
+          const mergedTerminals = mergeTerminalListWithKnownRecords(
+            deduped,
+            terminalsRef.current,
+            sessionTabsRef.current
+          )
+          setTerminals((prev) =>
+            terminalRecordsEqual(prev, mergedTerminals) ? prev : mergedTerminals
+          )
+          terminalsRef.current = mergedTerminals
 
           // Session tabs are the UI authority. terminal.list only refreshes
           // per-handle metadata for existing ready terminal surfaces.
@@ -1248,12 +1264,7 @@ export default function SessionScreen() {
       // Why: subscribe snapshots often repeat identical tab payloads. Avoid a
       // render loop where the subscription effect tears down and replays itself.
       setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
-      const terminalTabs = nextTabs.flatMap((tab): Terminal[] => {
-        if (tab.type !== 'terminal' || typeof tab.terminal !== 'string') {
-          return []
-        }
-        return [{ handle: tab.terminal, title: tab.title || 'Terminal', isActive: tab.isActive }]
-      })
+      const terminalTabs = getTerminalRecordsFromSessionTabs(nextTabs)
       const mergedTerminalsForActive = mergeTerminalRecordsByCurrentOrder(
         terminalTabs,
         terminalsRef.current
@@ -1717,6 +1728,34 @@ export default function SessionScreen() {
     void loadCustomKeys().then(setCustomKeys)
   }, [])
 
+  useFocusEffect(
+    useCallback(() => {
+      let stale = false
+      void loadTerminalAccessoryLayout().then((layout) => {
+        if (!stale) setVisibleBuiltInIds(layout.visibleBuiltInIds)
+      })
+      return () => {
+        stale = true
+      }
+    }, [])
+  )
+
+  useEffect(() => {
+    let mounted = true
+    const refresh = () => {
+      void loadTerminalAccessoryLayout().then((layout) => {
+        if (mounted) setVisibleBuiltInIds(layout.visibleBuiltInIds)
+      })
+    }
+    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+      if (s === 'active') refresh()
+    })
+    return () => {
+      mounted = false
+      sub.remove()
+    }
+  }, [])
+
   // Why: re-measure when non-keyboard layout-affecting state changes
   // (e.g. tab strip toggling visibility when the terminal count crosses
   // 0↔1 — without this, a freshly-created 2nd tab subscribes with a
@@ -1816,12 +1855,18 @@ export default function SessionScreen() {
     [customKeys]
   )
 
+  const handleManageShortcuts = useCallback(() => {
+    setShowCustomKeyModal(false)
+    router.push('/terminal-settings')
+  }, [router])
+
   useEffect(() => {
     clearTerminalCache()
     activeHandleRef.current = null
     activeSessionTabTypeRef.current = null
     pendingActiveSessionTabIdRef.current = null
     pendingActiveTerminalHandleRef.current = null
+    initialEmptySessionAutoCreateRef.current = null
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) clearTimeout(queued.timer)
     }
@@ -1832,6 +1877,8 @@ export default function SessionScreen() {
     terminalsRef.current = []
     setSessionTabs([])
     setActiveSessionTabId(null)
+    setLiveInputCapture('')
+    setLiveInputTerminalHandles(new Set())
     setMarkdownDocs(new Map())
     setFileDocs(new Map())
   }, [clearTerminalCache, worktreeId])
@@ -2159,6 +2206,117 @@ export default function SessionScreen() {
       // Transient failure
     }
   }
+
+  const sendLiveTerminalInput = useCallback(
+    (handle: string, bytes: string) => {
+      if (bytes.length === 0) return
+      if (!isTerminalLiveInputWithinByteLimit(bytes)) {
+        triggerError()
+        showToast('Input too large (max 256 KiB)', 1500)
+        return
+      }
+      const rpc = clientRef.current
+      if (
+        !rpc ||
+        connStateRef.current !== 'connected' ||
+        handle !== activeHandleRef.current ||
+        activeSessionTabTypeRef.current !== 'terminal'
+      ) {
+        return
+      }
+      void rpc
+        .sendRequest('terminal.send', {
+          terminal: handle,
+          text: bytes,
+          enter: false,
+          ...(deviceTokenRef.current
+            ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+            : {})
+        })
+        .catch(() => {
+          // Transient failure
+        })
+    },
+    [showToast]
+  )
+
+  const focusLiveInput = useCallback(() => {
+    if (!canSend || !liveInputEnabled) return
+    liveInputRef.current?.focus()
+  }, [canSend, liveInputEnabled])
+
+  const handleTerminalTap = useCallback(
+    (handle: string) => {
+      if (handle !== activeHandleRef.current) return
+      focusLiveInput()
+    },
+    [focusLiveInput]
+  )
+
+  const toggleLiveInput = useCallback(() => {
+    if (!activeHandle) return
+    const nextEnabled = !liveInputTerminalHandles.has(activeHandle)
+    setLiveInputTerminalHandles((prev) => {
+      const next = new Set(prev)
+      if (nextEnabled) {
+        next.add(activeHandle)
+      } else {
+        next.delete(activeHandle)
+      }
+      return next
+    })
+    setLiveInputCapture('')
+    if (nextEnabled) {
+      setTimeout(() => liveInputRef.current?.focus(), 50)
+    } else {
+      liveInputRef.current?.blur()
+    }
+  }, [activeHandle, liveInputTerminalHandles])
+
+  const handleLiveInputChange = useCallback(
+    (text: string) => {
+      if (!activeHandle) {
+        setLiveInputCapture('')
+        liveInputRef.current?.setNativeProps({ text: '' })
+        return
+      }
+      if (!liveInputTerminalHandles.has(activeHandle)) {
+        setLiveInputCapture('')
+        liveInputRef.current?.setNativeProps({ text: '' })
+        return
+      }
+      if (text.length > 0) {
+        sendLiveTerminalInput(activeHandle, text)
+      }
+      setLiveInputCapture('')
+      // Why: the field is only a keyboard capture surface. Clearing the
+      // native value prevents subsequent phone-keyboard events from replaying
+      // already-sent characters when React state remains the empty string.
+      liveInputRef.current?.setNativeProps({ text: '' })
+    },
+    [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput]
+  )
+
+  const handleLiveInputKeyPress = useCallback(
+    (event: { nativeEvent: { key: string } }) => {
+      if (!activeHandle) return
+      if (!liveInputTerminalHandles.has(activeHandle)) return
+      const bytes = getTerminalLiveSpecialKeyBytes(event.nativeEvent.key)
+      if (!bytes) return
+      sendLiveTerminalInput(activeHandle, bytes)
+      setLiveInputCapture('')
+      liveInputRef.current?.setNativeProps({ text: '' })
+    },
+    [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput]
+  )
+
+  const handleLiveInputSubmit = useCallback(() => {
+    if (!activeHandle) return
+    if (!liveInputTerminalHandles.has(activeHandle)) return
+    sendLiveTerminalInput(activeHandle, '\r')
+    setLiveInputCapture('')
+    liveInputRef.current?.setNativeProps({ text: '' })
+  }, [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput])
 
   const allowTerminalGestureInput = useCallback(
     (handle: string, sequenceCount: number): boolean => {
@@ -2533,14 +2691,21 @@ export default function SessionScreen() {
           activeHandleRef.current = createdHandle
           setActiveHandle(createdHandle)
           setTerminals((prev) => {
-            if (prev.some((t) => t.handle === createdHandle)) {
-              terminalsRef.current = prev
-              return prev
+            const existing = prev.find((terminal) => terminal.handle === createdHandle)
+            const createdTerminal: Terminal = {
+              handle: createdHandle,
+              title: created.title || existing?.title || 'Terminal',
+              terminalTheme: created.terminalTheme ?? existing?.terminalTheme,
+              isActive: true
             }
-            const next = [
-              ...prev,
-              { handle: createdHandle, title: created.title || 'Terminal', isActive: true }
-            ]
+            if (existing) {
+              const next = prev.map((terminal) =>
+                terminal.handle === createdHandle ? { ...terminal, ...createdTerminal } : terminal
+              )
+              terminalsRef.current = next
+              return terminalRecordsEqual(prev, next) ? prev : next
+            }
+            const next = [...prev, createdTerminal]
             terminalsRef.current = next
             return next
           })
@@ -2773,6 +2938,25 @@ export default function SessionScreen() {
   const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
+
+  useEffect(() => {
+    if (
+      !client ||
+      !showEmptyState ||
+      creating ||
+      creatingBrowser ||
+      creatingMarkdown ||
+      initialEmptySessionAutoCreateRef.current === worktreeId
+    ) {
+      return
+    }
+    // Why: a sleeping/new workspace can hydrate with zero session tabs. Create
+    // the first terminal once on initial load instead of leaving mobile blank.
+    initialEmptySessionAutoCreateRef.current = worktreeId
+    setCreateError('')
+    void handleCreateTerminal()
+  }, [client, creating, creatingBrowser, creatingMarkdown, showEmptyState, worktreeId])
+
   const terminalSummary =
     connState === 'connected'
       ? showLoadingState
@@ -3063,6 +3247,7 @@ export default function SessionScreen() {
                 handle={terminal.handle}
                 active={terminal.handle === activeHandle}
                 keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}
+                terminalTheme={terminal.terminalTheme}
                 onRef={setTerminalWebViewRef}
                 onWebReady={handleTerminalWebReady}
                 onSelectionMode={handleSelectionMode}
@@ -3072,6 +3257,7 @@ export default function SessionScreen() {
                 onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
                 onHaptic={handleHaptic}
                 onTerminalInput={handleTerminalInput}
+                onTerminalTap={handleTerminalTap}
               />
             ))}
             {toastMessage && (
@@ -3123,6 +3309,32 @@ export default function SessionScreen() {
                     />
                   )}
                 </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.accessoryKey,
+                    liveInputEnabled && styles.accessoryKeyActive,
+                    pressed && styles.accessoryKeyPressed,
+                    !canSend && styles.accessoryKeyDisabled
+                  ]}
+                  disabled={!canSend}
+                  onPress={toggleLiveInput}
+                  accessibilityLabel={
+                    liveInputEnabled
+                      ? 'Switch to buffered command input'
+                      : 'Switch to live terminal input'
+                  }
+                >
+                  <ChevronsRight
+                    size={14}
+                    color={
+                      liveInputEnabled
+                        ? colors.bgBase
+                        : canSend
+                          ? colors.textSecondary
+                          : colors.textMuted
+                    }
+                  />
+                </Pressable>
                 {canPaste && (
                   <Pressable
                     style={({ pressed }) => [
@@ -3141,9 +3353,9 @@ export default function SessionScreen() {
                     </Text>
                   </Pressable>
                 )}
-                {TERMINAL_ACCESSORY_KEYS.map((key) => (
+                {visibleBuiltInAccessoryKeys.map((key) => (
                   <Pressable
-                    key={key.label}
+                    key={key.id}
                     style={({ pressed }) => [
                       styles.accessoryKey,
                       pressed && styles.accessoryKeyPressed,
@@ -3210,72 +3422,104 @@ export default function SessionScreen() {
             </View>
 
             {/* Input bar */}
-            <View style={styles.inputBar}>
-              <TextInput
-                style={styles.textInput}
-                value={input}
-                onChangeText={setInput}
-                placeholder="Type a command…"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="send"
-                editable={canSend}
-                onSubmitEditing={() => void handleSend()}
-              />
+            {liveInputEnabled ? (
               <Pressable
-                style={[
-                  styles.dictationButton,
-                  (dictation.isStarting || dictation.isRecording) && styles.dictationButtonActive,
-                  !canSend && styles.sendButtonDisabled
-                ]}
+                style={[styles.inputBar, styles.liveInputBar]}
                 disabled={!canSend}
-                onPress={() => {
-                  if (dictation.isProcessing) {
-                    void dictation.cancel()
-                  } else if (dictation.isStarting) {
-                    return
-                  } else if (dictation.isRecording) {
-                    void dictation.stop()
-                  } else {
-                    void dictation.start().catch((err) => {
-                      triggerError()
-                      showToast(err instanceof Error ? err.message : String(err))
-                    })
-                  }
-                }}
-                onLongPress={() => {
-                  if (dictation.isRecording || dictation.isProcessing) {
-                    void dictation.cancel()
-                  }
-                }}
-                accessibilityLabel={
-                  dictation.isRecording
-                    ? 'Stop voice dictation'
-                    : dictation.isProcessing
-                      ? 'Cancel voice dictation'
-                      : dictation.isStarting
-                        ? 'Starting voice dictation'
-                        : 'Start voice dictation'
-                }
+                onPress={focusLiveInput}
+                accessibilityLabel="Focus live terminal input"
               >
-                {dictation.isProcessing ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : dictation.isStarting || dictation.isRecording ? (
-                  <Mic size={17} color={colors.textPrimary} strokeWidth={2.4} />
-                ) : (
-                  <Mic size={17} color={colors.textSecondary} strokeWidth={2.4} />
-                )}
+                <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
+                <Text style={styles.liveInputHint} numberOfLines={1}>
+                  Keyboard input directly goes to terminal
+                </Text>
+                <TextInput
+                  ref={liveInputRef}
+                  style={styles.liveInputCapture}
+                  value={liveInputCapture}
+                  onChangeText={handleLiveInputChange}
+                  onKeyPress={handleLiveInputKeyPress}
+                  onSubmitEditing={handleLiveInputSubmit}
+                  placeholder=""
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'visible-password'}
+                  returnKeyType="default"
+                  blurOnSubmit={false}
+                  editable={canSend}
+                  importantForAutofill="no"
+                  textContentType="none"
+                />
               </Pressable>
-              <Pressable
-                style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
-                disabled={!canSend}
-                onPress={() => void handleSend()}
-                accessibilityLabel="Send command"
-              >
-                <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
-              </Pressable>
-            </View>
+            ) : (
+              <View style={styles.inputBar}>
+                <TextInput
+                  style={styles.textInput}
+                  value={input}
+                  onChangeText={setInput}
+                  placeholder="Type a command…"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="send"
+                  editable={canSend}
+                  onSubmitEditing={() => void handleSend()}
+                />
+                <Pressable
+                  style={[
+                    styles.dictationButton,
+                    (dictation.isStarting || dictation.isRecording) && styles.dictationButtonActive,
+                    !canSend && styles.sendButtonDisabled
+                  ]}
+                  disabled={!canSend}
+                  onPress={() => {
+                    if (dictation.isProcessing) {
+                      void dictation.cancel()
+                    } else if (dictation.isStarting) {
+                      return
+                    } else if (dictation.isRecording) {
+                      void dictation.stop()
+                    } else {
+                      void dictation.start().catch((err) => {
+                        triggerError()
+                        showToast(err instanceof Error ? err.message : String(err))
+                      })
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (dictation.isRecording || dictation.isProcessing) {
+                      void dictation.cancel()
+                    }
+                  }}
+                  accessibilityLabel={
+                    dictation.isRecording
+                      ? 'Stop voice dictation'
+                      : dictation.isProcessing
+                        ? 'Cancel voice dictation'
+                        : dictation.isStarting
+                          ? 'Starting voice dictation'
+                          : 'Start voice dictation'
+                  }
+                >
+                  {dictation.isProcessing ? (
+                    <ActivityIndicator size="small" color={colors.textSecondary} />
+                  ) : dictation.isStarting || dictation.isRecording ? (
+                    <Mic size={17} color={colors.textPrimary} strokeWidth={2.4} />
+                  ) : (
+                    <Mic size={17} color={colors.textSecondary} strokeWidth={2.4} />
+                  )}
+                </Pressable>
+                <Pressable
+                  style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+                  disabled={!canSend}
+                  onPress={() => void handleSend()}
+                  accessibilityLabel="Send command"
+                >
+                  <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
+                </Pressable>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -3574,6 +3818,7 @@ export default function SessionScreen() {
         visible={showCustomKeyModal}
         onClose={() => setShowCustomKeyModal(false)}
         onKeysChanged={setCustomKeys}
+        onManageShortcuts={handleManageShortcuts}
       />
       <ActionSheetModal
         visible={deleteKeyTarget != null}
@@ -3992,6 +4237,9 @@ const styles = StyleSheet.create({
   accessoryKeyPressed: {
     backgroundColor: colors.borderSubtle
   },
+  accessoryKeyActive: {
+    backgroundColor: colors.textPrimary
+  },
   customAccessoryKey: {
     borderWidth: 1,
     borderColor: colors.borderSubtle
@@ -4004,12 +4252,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: typography.monoFamily
   },
+  accessoryKeyTextActive: {
+    color: colors.bgBase,
+    fontWeight: '700'
+  },
   accessoryKeyTextDisabled: {
     color: colors.textMuted
   },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 46,
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.md,
     borderTopWidth: 1,
@@ -4018,14 +4271,32 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
+    height: 34,
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: 0,
     fontSize: 14,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
+  },
+  liveInputBar: {
+    gap: spacing.sm
+  },
+
+  liveInputHint: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontFamily: typography.monoFamily
+  },
+  liveInputCapture: {
+    position: 'absolute',
+    opacity: 0,
+    width: 1,
+    height: 1,
+    color: colors.textPrimary
   },
   sendButton: {
     backgroundColor: colors.bgRaised,

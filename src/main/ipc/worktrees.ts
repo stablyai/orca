@@ -79,9 +79,13 @@ import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { workspaceSourceSchema, type WorkspaceSource } from '../../shared/telemetry-events'
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 import {
+  assertWorktreeDoesNotContainRegisteredWorktree,
+  canCleanupUnregisteredOrcaWorktreeDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
-  isWorktreePathMissing
+  isWorktreePathMissing,
+  ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
+  stripOrcaProvenanceMetaUpdates
 } from '../worktree-removal-safety'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -947,6 +951,69 @@ export function registerWorktreeHandlers(
           registeredWorktrees
         )
         if (!registeredWorktree) {
+          const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
+          let canCleanOrphanedDirectory = false
+          const knownOrcaLayouts = repo.connectionId
+            ? []
+            : buildKnownOrcaWorkspaceLayouts(store.getSettings(), repo)
+          if (
+            canCleanupUnregisteredOrcaWorktreeDirectory({
+              meta: removedMeta,
+              worktreePath,
+              repo,
+              knownOrcaLayouts
+            })
+          ) {
+            if (repo.connectionId) {
+              if (!fsProvider) {
+                throw new Error('SSH filesystem provider unavailable')
+              }
+              if (!fsProvider.lstat) {
+                throw new Error('SSH filesystem provider lstat unavailable')
+              }
+              canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+                worktreePath,
+                repo.path,
+                (path) => fsProvider.lstat!(path),
+                (path) => fsProvider.readFile(path)
+              )
+            } else {
+              canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+                worktreePath,
+                repo.path
+              )
+            }
+          }
+          if (canCleanOrphanedDirectory) {
+            assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
+            if (!args.force) {
+              throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+            }
+            if (repo.connectionId) {
+              await fsProvider!.deletePath(worktreePath, true)
+              await cleanupUnusedWorktreePushTargetRemoteSsh(
+                provider!,
+                repo.path,
+                args.worktreeId,
+                removedPushTarget,
+                store
+              )
+            } else {
+              await rm(worktreePath, { recursive: true, force: true })
+              await cleanupUnusedWorktreePushTargetRemote(
+                repo.path,
+                args.worktreeId,
+                removedPushTarget,
+                store
+              )
+              invalidateAuthorizedRootsCache()
+            }
+            runtime.clearOptimisticReconcileToken(args.worktreeId)
+            store.removeWorktreeMeta(args.worktreeId)
+            deleteWorktreeHistoryDir(args.worktreeId)
+            notifyWorktreesChanged(mainWindow, repoId)
+            return
+          }
           if (args.force && (await isAlreadyRemovedWorktreePath(repo, worktreePath))) {
             // Why: Force-delete can be retried from stale UI after a prior delete
             // already removed the directory and Git registration. Treat that as
@@ -979,6 +1046,8 @@ export function registerWorktreeHandlers(
         const canonicalWorktreePath = registeredWorktree.path
         const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
 
+        let shouldTearDownPtys = true
+
         // Run archive hook before removal so teardown scripts still see the worktree directory.
         const hooks = await getArchiveHooksForRemoval(repo)
         if (hooks?.scripts.archive && !args.skipArchive) {
@@ -994,6 +1063,17 @@ export function registerWorktreeHandlers(
         }
 
         if (repo.connectionId) {
+          // Why: SSH deletion mirrors the local flow: hooks run while the
+          // directory is intact, then the clean check guards destructive removal.
+          if (!args.force) {
+            const { clean, stdout } = await provider!.worktreeIsClean(canonicalWorktreePath)
+            if (!clean) {
+              const error = new Error('Worktree has uncommitted or untracked changes.')
+              ;(error as Error & { stdout?: string }).stdout = stdout
+              throw error
+            }
+          }
+
           await (deleteBranch
             ? provider!.removeWorktree(canonicalWorktreePath, args.force)
             : provider!.removeWorktree(canonicalWorktreePath, args.force, { deleteBranch }))
@@ -1020,7 +1100,6 @@ export function registerWorktreeHandlers(
           await removeWorktreeSymlinks(canonicalWorktreePath, repo.symlinkPaths)
         }
 
-        let shouldTearDownPtys = true
         try {
           await assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false)
         } catch (error) {
@@ -1122,7 +1201,10 @@ export function registerWorktreeHandlers(
   ipcMain.handle(
     'worktrees:updateMeta',
     (_event, args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => {
-      const meta = store.setWorktreeMeta(args.worktreeId, args.updates)
+      const meta = store.setWorktreeMeta(
+        args.worktreeId,
+        stripOrcaProvenanceMetaUpdates(args.updates)
+      )
       // Do NOT call notifyWorktreesChanged here. The renderer applies meta
       // updates optimistically before calling this IPC, so a notification
       // would trigger a redundant fetchWorktrees round-trip that bumps

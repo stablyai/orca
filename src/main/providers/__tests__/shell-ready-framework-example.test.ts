@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, rmSync } from 'fs'
+import { spawnSync } from 'child_process'
 import { shellScriptTest } from './shell-ready-framework/shell-script-test'
 
 const { getUserDataPathMock } = vi.hoisted(() => ({
@@ -24,9 +25,10 @@ vi.mock('electron', () => ({
   }
 }))
 
-const describePosix = process.platform === 'win32' ? describe.skip : describe
+const hasZsh = process.platform !== 'win32' && spawnSync('which', ['zsh']).status === 0
+const describeIfZsh = hasZsh ? describe : describe.skip
 
-describePosix('shell-script-literal framework example', () => {
+describeIfZsh('shell-script-literal framework example', () => {
   let userDataPath: string
 
   beforeEach(() => {

@@ -3,6 +3,9 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
   DetectedWorktreeListResult,
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  LocalBaseRefRefreshResult,
   Worktree,
   WorkspaceVisibleTabType,
   GitPushTarget,
@@ -26,11 +29,59 @@ import {
 import { getHostedReviewCacheKey } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
+import { toast } from 'sonner'
+import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { branchName } from '@/lib/git-utils'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
 // UI hydration parity this slice used before `worktree.detectedList` existed.
 const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
+
+function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
+  if (!node) {
+    return 0
+  }
+  if (node.type === 'leaf') {
+    return 1
+  }
+  return countTerminalLayoutLeaves(node.first) + countTerminalLayoutLeaves(node.second)
+}
+
+function getActivationSpawnSuppression(layout: TerminalLayoutSnapshot | undefined): true | number {
+  const paneCount = Math.max(
+    1,
+    countTerminalLayoutLeaves(layout?.root),
+    Object.keys(layout?.ptyIdsByLeafId ?? {}).length
+  )
+  return paneCount === 1 ? true : paneCount
+}
+
+function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefined): void {
+  if (!result || result.status === 'updated') {
+    return
+  }
+
+  let reason: string
+  switch (result.status) {
+    case 'skipped_dirty_worktree':
+      reason =
+        'the worktree where it is checked out has uncommitted changes. Commit, stash, or discard those changes, then try again.'
+      break
+    case 'skipped_not_fast_forward':
+      reason =
+        'the local branch does not exist or cannot be fast-forwarded cleanly from the remote base. Check for local-only commits before updating it manually.'
+      break
+    case 'skipped_error':
+      reason =
+        'Git returned an error while updating the local ref. Check the repo for locked refs or unusual worktree state, then try again.'
+      break
+  }
+
+  toast.warning(`Local ${result.localBranch} was not refreshed`, {
+    description: `Workspace created from ${result.baseRef}, but Orca could not fast-forward local ${result.localBranch} because ${reason}`
+  })
+}
 
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
   if (a === b) {
@@ -145,16 +196,27 @@ function toRuntimeWorktreeIdSelector(worktreeId: string): string {
   return `id:${worktreeId}`
 }
 
+const FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES = [
+  'Worktree has uncommitted or untracked changes',
+  'contains modified or untracked files',
+  'Worktree is no longer registered with Git but its directory remains'
+] as const
+
+// Why: local preflight formatting can surface raw git porcelain instead of the
+// friendly dirty-worktree message; only those status prefixes are forceable.
+const FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN =
+  /Failed to delete worktree at [^\n]*\.\s*(?:(?:[MADRCUT][ MADRCUT]| [MADRCUT]|\?\?)\s+\S)/
+
 function canRetryWorktreeRemovalWithForce(error: string, force: boolean | undefined): boolean {
   if (force) {
     return false
   }
-  const protectedRemovalMessages = [
-    'Refusing to delete unregistered worktree path:',
-    'Refusing to delete protected worktree path:',
-    'Refusing to delete worktree because it contains another registered worktree:'
-  ]
-  return !protectedRemovalMessages.some((message) => error.includes(message))
+  // Why: force only helps backend safety refusals that are explicitly safe to
+  // retry with user confirmation; transport/provider errors need recovery first.
+  return (
+    FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES.some((message) => error.includes(message)) ||
+    FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN.test(error)
+  )
 }
 
 type WorktreeWithLineage = Worktree & {
@@ -177,12 +239,30 @@ function toVisibleWorktrees(result: DetectedWorktreeListResult): Worktree[] {
   return result.worktrees.filter((worktree) => worktree.visible).map(toVisibleWorktree)
 }
 
+function getHydratedSessionWorktreeIdsForRepo(state: AppState, repoId: string): string[] {
+  return Object.keys(state.tabsByWorktree).filter((id) => getRepoIdFromWorktreeId(id) === repoId)
+}
+
 function getKnownWorktreeIdsForPurge(state: AppState, repoId: string): string[] {
   const detected = state.detectedWorktreesByRepo[repoId]
+  const knownIds = new Set<string>()
   if (detected?.authoritative === true) {
-    return detected.worktrees.map((worktree) => worktree.id)
+    for (const worktree of detected.worktrees) {
+      knownIds.add(worktree.id)
+    }
+  } else {
+    for (const worktree of state.worktreesByRepo[repoId] ?? []) {
+      knownIds.add(worktree.id)
+    }
   }
-  return (state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id)
+  if (!state.hasHydratedWorktreePurge) {
+    // Why (#1158): hydration can preserve tab keys before worktree metadata exists;
+    // the first authoritative scan still needs to reap deleted session-only keys.
+    for (const id of getHydratedSessionWorktreeIdsForRepo(state, repoId)) {
+      knownIds.add(id)
+    }
+  }
+  return [...knownIds]
 }
 
 function getRemovedWorktreeIdsAfterAuthoritativeScan(
@@ -798,7 +878,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           return worktree
         }
         changed = true
-        return { ...worktree, head: nextHead, branch: nextBranch }
+        // Why: terminal branch switches only patch branch/head here; auto-derived
+        // titles need the same branch derivation that full worktree listing uses.
+        const wasAutoDerived = worktree.displayName === branchName(worktree.branch)
+        const nextDisplayName = wasAutoDerived ? branchName(nextBranch) : worktree.displayName
+        return { ...worktree, head: nextHead, branch: nextBranch, displayName: nextDisplayName }
       })
 
       if (!changed) {
@@ -944,6 +1028,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               sortEpoch: s.sortEpoch + 1
             }
           })
+          showLocalBaseRefRefreshToast(result.localBaseRefRefresh)
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
@@ -1020,6 +1105,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       await get().shutdownWorktreeTerminals(worktreeId)
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
+
+      // Why: deletion is async (backend + terminal/browser teardown awaited
+      // above), so snapshot the sidebar's current top-row anchor in the same
+      // tick we remove the row. Recording at click time goes stale across the
+      // await, and this covers every delete entry point (modal, card, SSH,
+      // batch) rather than only the context menu.
+      requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
 
       set((s) => {
         const next = { ...s.worktreesByRepo }
@@ -1418,11 +1510,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   markWorktreeUnread: (worktreeId) => {
-    // Why: BEL must fire regardless of focus (ghostty semantics — "show
-    // until interact"). Interaction with a pane inside the worktree
-    // dismisses the dot via clearWorktreeUnread. Worktree activation via
-    // setActiveWorktree also clears isUnread as a side-effect; that path
-    // predates this PR and is unaffected here.
+    // Why: terminal attention should remain visible until the user engages
+    // with the worktree. Interaction with a pane inside the worktree dismisses
+    // the dot via clearWorktreeUnread. Worktree activation via setActiveWorktree
+    // also clears isUnread as a side-effect; that path predates this PR and is
+    // unaffected here.
     let shouldPersist = false
     const now = Date.now()
     set((s) => {
@@ -1827,7 +1919,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 [worktreeId!]: tabs.map((tab) => ({
                   ...tab,
                   ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
-                  ...(shouldTagTabs ? { pendingActivationSpawn: true } : {})
+                  // Why: the allDead generation bump remounts panes and may
+                  // fresh-spawn PTYs — click side-effects, not real activity.
+                  // Split layouts remount several panes, so count the expected
+                  // pane events instead of suppressing only the first one.
+                  ...(allDead || shouldTagTabs
+                    ? {
+                        pendingActivationSpawn: getActivationSpawnSuppression(
+                          s.terminalLayoutsByTabId[tab.id]
+                        )
+                      }
+                    : {})
                 }))
               }
             }

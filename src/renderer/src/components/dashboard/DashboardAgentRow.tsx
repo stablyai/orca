@@ -465,13 +465,16 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       </div>
       {/* Why: tool row and message row both carry different info — tool shows
           the mechanical step (Bash: ...), message shows the agent's narration
-          ("let me verify the test ordering"). Rendering both together would
-          cause the row to jump whenever one appeared/disappeared mid-turn,
-          so instead we always render both slots and fall back to a single-line
-          placeholder when empty. Tool slot only reserves height while working,
-          since done/blocked rows shouldn't show a dangling wrench. */}
+          ("let me verify the test ordering"). Antigravity can emit working
+          hooks without tool metadata between tool events, so the empty tool
+          slot must be a real line box instead of whitespace that can collapse.
+          Tool slot only reserves height while working, since done/blocked rows
+          shouldn't show a dangling wrench. */}
       {isWorking && (
-        <div className="mt-0.5 min-w-0 pl-5 text-[10px] leading-snug text-muted-foreground/70">
+        <div
+          data-agent-row-tool-slot=""
+          className="mt-0.5 min-w-0 pl-5 text-[10px] leading-snug text-muted-foreground/70"
+        >
           {toolName ? (
             <>
               {/* Why: header (wrench + tool name) stays on one line. When
@@ -480,7 +483,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
                   commands wrap to a consistent left margin instead of the
                   jagged shape that flex-wrapping produces. */}
               <div
-                className={cn('flex min-w-0 items-center gap-1', !expanded && 'overflow-hidden')}
+                data-agent-row-tool-header="true"
+                className={cn(
+                  'flex h-[1lh] min-w-0 items-center gap-1',
+                  !expanded && 'overflow-hidden'
+                )}
               >
                 <Wrench className="size-2.5 shrink-0" />
                 <code className="shrink-0 font-mono text-[10px]">{toolName}</code>
@@ -509,7 +516,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               )}
             </>
           ) : (
-            ' '
+            <span data-agent-row-tool-placeholder="true" aria-hidden className="block h-[1lh]" />
           )}
         </div>
       )}

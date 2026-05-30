@@ -255,6 +255,14 @@
   color: var(--muted-foreground);
 }
 
+.rich-markdown-editor summary.is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: color-mix(in srgb, var(--muted-foreground) 75%, transparent);
+}
+
 .rich-markdown-editor h1,
 .rich-markdown-editor h2,
 .rich-markdown-editor h3,
@@ -408,6 +416,79 @@
 .rich-markdown-editor ul[data-type='taskList'] li[data-checked='true'] > div {
   text-decoration: line-through;
   color: var(--muted-foreground);
+}
+
+.rich-markdown-editor .orca-details {
+  margin: 0.85em 0;
+}
+
+.rich-markdown-editor details.orca-details,
+.rich-markdown-editor .orca-details[data-type='details'] {
+  padding-left: 0.75em;
+}
+
+.rich-markdown-editor details.orca-details > summary,
+.rich-markdown-editor .orca-details[data-type='details'] summary {
+  display: block;
+  list-style: none;
+  min-height: 1.6em;
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.rich-markdown-editor details.orca-details > summary::-webkit-details-marker,
+.rich-markdown-editor .orca-details[data-type='details'] summary::-webkit-details-marker {
+  display: none;
+}
+
+.rich-markdown-editor .orca-details[data-type='details'] {
+  position: relative;
+  padding-left: 1.65em;
+}
+
+.rich-markdown-editor .orca-details[data-type='details'] > button {
+  position: absolute;
+  top: 0;
+  left: 0.15em;
+  display: flex;
+  width: 1.2em;
+  height: 1.6em;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.rich-markdown-editor .orca-details[data-type='details'] > button::before {
+  content: '\203A';
+  font-size: 1.25em;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+.rich-markdown-editor .orca-details[data-type='details'].is-open > button::before {
+  transform: rotate(90deg);
+}
+
+.rich-markdown-editor details.orca-details > div[data-type='detailsContent'],
+.rich-markdown-editor .orca-details[data-type='details'] div[data-type='detailsContent'] {
+  padding-left: 0.15em;
+}
+
+.rich-markdown-editor details.orca-details[data-orca-toggle='heading-1'] > summary,
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-1'] summary {
+  font-size: 1.85em;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-1'] > button {
+  height: 2.405em;
 }
 
 .rich-markdown-editor blockquote {

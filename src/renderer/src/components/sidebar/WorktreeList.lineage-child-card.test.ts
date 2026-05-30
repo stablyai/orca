@@ -1,7 +1,8 @@
+/* eslint-disable max-lines -- Why: WorktreeList render tests share expensive mocks so focused sidebar regressions can exercise the real component boundary. */
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { ProjectGroup, Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
 
 const mockStore = vi.hoisted(() => ({
   state: {} as Record<string, unknown>
@@ -41,7 +42,7 @@ vi.mock('@/hooks/useVirtualizedScrollAnchor', () => ({
   useVirtualizedScrollAnchor: vi.fn()
 }))
 
-vi.mock('./repo-header-drag', () => ({
+vi.mock('./project-header-drag', () => ({
   useRepoHeaderDrag: () => ({
     state: { draggingRepoId: null, dropIndicatorY: null },
     onHandlePointerDown: vi.fn()
@@ -100,6 +101,13 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
     React.createElement(React.Fragment, null, children),
   DropdownMenuItem: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', null, children),
+  DropdownMenuSeparator: () => React.createElement('hr'),
+  DropdownMenuSub: ({ children }: { children: React.ReactNode }) =>
+    React.createElement(React.Fragment, null, children),
+  DropdownMenuSubContent: ({ children }: { children: React.ReactNode }) =>
+    React.createElement(React.Fragment, null, children),
+  DropdownMenuSubTrigger: ({ children }: { children: React.ReactNode }) =>
+    React.createElement('div', null, children),
   DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children)
 }))
@@ -155,7 +163,7 @@ function makeLineage(worktree: Worktree, parent: Worktree): WorktreeLineage {
   }
 }
 
-function setLineageFixtureState(): void {
+function setLineageFixtureState(groupBy: 'none' | 'repo' = 'none'): void {
   const repo = makeRepo()
   const parent = makeWorktree({
     id: 'parent',
@@ -188,7 +196,7 @@ function setLineageFixtureState(): void {
     clearPendingRevealWorktreeId: vi.fn(),
     collapsedGroups: new Set<string>(),
     filterRepoIds: [],
-    groupBy: 'none',
+    groupBy,
     hideDefaultBranchWorkspace: false,
     issueCache: {},
     migrationUnsupportedByPtyId: {},
@@ -229,17 +237,104 @@ function setLineageFixtureState(): void {
   }
 }
 
+function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): void {
+  const group: ProjectGroup = {
+    id: 'group-1',
+    name: 'Imported Services',
+    parentPath: '/tmp/imported-services',
+    parentGroupId: null,
+    createdFrom: 'folder-scan',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1
+  }
+  const repo: Repo = {
+    ...makeRepo(),
+    projectGroupId: group.id
+  }
+
+  mockStore.state = {
+    activeModal: '',
+    activeView: 'terminal',
+    activeWorktreeId: null,
+    agentStatusByPaneKey: {},
+    browserTabsByWorktree: {},
+    clearPendingRevealWorktreeId: vi.fn(),
+    collapsedGroups: new Set<string>(),
+    filterRepoIds,
+    groupBy: 'repo',
+    hideDefaultBranchWorkspace: false,
+    issueCache: {},
+    migrationUnsupportedByPtyId: {},
+    openModal: vi.fn(),
+    pendingRevealWorktree: null,
+    prCache: {},
+    prVisibleRefreshGeneration: 0,
+    projectGroups: [group],
+    ptyIdsByTabId: {},
+    reorderRepos: vi.fn(),
+    reportVisibleGitHubPRRefreshCandidates: vi.fn(),
+    repos: [repo],
+    runtimePaneTitlesByTabId: {},
+    setFilterRepoIds: vi.fn(),
+    setHideDefaultBranchWorkspace: vi.fn(),
+    setShowSleepingWorkspaces: vi.fn(),
+    setSortBy: vi.fn(),
+    settings: null,
+    showSleepingWorkspaces: true,
+    sortBy: 'recent',
+    sortEpoch: 0,
+    sshConnectedGeneration: 0,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    toggleCollapsedGroup: vi.fn(),
+    updateWorktreeMeta: vi.fn(),
+    updateWorktreesMeta: vi.fn(),
+    workspaceStatuses: [],
+    worktreeCardProperties: ['status', 'inline-agents'],
+    worktreeLineageById: {},
+    worktreesByRepo: {
+      [repo.id]: []
+    }
+  }
+}
+
+async function renderWorktreeListMarkup(): Promise<string> {
+  const { default: WorktreeList } = await import('./WorktreeList')
+
+  return renderToStaticMarkup(
+    React.createElement(WorktreeList, {
+      scrollOffsetRef: { current: 0 },
+      scrollAnchorRef: { current: null }
+    })
+  )
+}
+
 describe('WorktreeList lineage child card renderer', () => {
+  it('renders project group headers when repos import before worktree rows load', async () => {
+    setProjectGroupWithoutWorktreeRowsState()
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('Imported Services')
+    expect(markup).not.toContain('No workspaces found')
+  })
+
+  it('shows Clear Filters when filters exclude pre-worktree project groups', async () => {
+    setProjectGroupWithoutWorktreeRowsState(['another-repo'])
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('No workspaces found')
+    expect(markup).toContain('Clear Filters')
+    expect(markup).not.toContain('Imported Services')
+  })
+
   it('renders nested inline agent rows before the nested child-count toggle', async () => {
     setLineageFixtureState()
-    const { default: WorktreeList } = await import('./WorktreeList')
-
-    const markup = renderToStaticMarkup(
-      React.createElement(WorktreeList, {
-        scrollOffsetRef: { current: 0 },
-        scrollAnchorRef: { current: null }
-      })
-    )
+    const markup = await renderWorktreeListMarkup()
 
     const childStart = markup.indexOf('lineage child with agent')
     const agentRowIndex = markup.indexOf('Review fixture prompt', childStart)
@@ -249,5 +344,24 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(agentRowIndex).toBeGreaterThan(childStart)
     expect(childToggleIndex).toBeGreaterThan(childStart)
     expect(agentRowIndex).toBeLessThan(childToggleIndex)
+  })
+
+  it('does not add group indentation when grouping is disabled', async () => {
+    setLineageFixtureState('none')
+    const markup = await renderWorktreeListMarkup()
+
+    const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
+
+    expect(parentRow).toContain('id="worktree-list-option-parent"')
+    expect(parentRow).not.toContain('padding-left')
+  })
+
+  it('adds one group indentation step when grouped by project', async () => {
+    setLineageFixtureState('repo')
+    const markup = await renderWorktreeListMarkup()
+
+    const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
+
+    expect(parentRow).toContain('style="padding-left:18px"')
   })
 })

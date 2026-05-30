@@ -17,9 +17,6 @@ export async function listProjects(
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearProjectSummary[]> {
   const trimmed = query?.trim()
-  if (!trimmed) {
-    return []
-  }
 
   const entries = getClients(workspaceId)
   if (entries.length === 0) {
@@ -30,6 +27,10 @@ export async function listProjects(
     entries.map(async (entry) => {
       await acquire()
       try {
+        if (!trimmed) {
+          const connection = await entry.client.projects({ first: limit })
+          return connection.nodes.map(mapLinearProject)
+        }
         const connection = await entry.client.searchProjects(trimmed, { first: limit })
         return connection.nodes.map(mapLinearProject)
       } catch (error) {

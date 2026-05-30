@@ -162,6 +162,9 @@ export class RelayDispatcher {
       clearInterval(this.keepaliveTimer)
       this.keepaliveTimer = null
     }
+    // Why: dispose means this relay instance cannot send responses anymore;
+    // abort in-flight request work so stale SSH-side scans/watchers release.
+    this.requestAborts.abortAll()
   }
 
   private createClient(write: (data: Buffer) => void): RelayClient {

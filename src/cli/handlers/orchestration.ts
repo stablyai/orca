@@ -438,8 +438,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration reset': async ({ flags, client, json }) => {
+    const hasScopeFlag = flags.has('all') || flags.has('tasks') || flags.has('messages')
     const result = await client.call<{ reset: string }>('orchestration.reset', {
-      all: flags.has('all') ? true : undefined,
+      all: flags.has('all') || !hasScopeFlag ? true : undefined,
       tasks: flags.has('tasks') ? true : undefined,
       messages: flags.has('messages') ? true : undefined
     })

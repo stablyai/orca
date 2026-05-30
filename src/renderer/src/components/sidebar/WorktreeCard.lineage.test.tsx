@@ -43,7 +43,8 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 vi.mock('./CacheTimer', () => ({
-  default: () => null
+  default: () => null,
+  usePromptCacheCountdownStartedAt: () => null
 }))
 
 vi.mock('./WorktreeCardAgents', () => ({

@@ -64,6 +64,7 @@ export async function readFileViaStream(
     let expectedSeq = 0
     let receivedChunks = 0
     let totalChunks = 0
+    let bytesReceived = 0
     let settled = false
 
     // Why: chunk/end/error frames may arrive in the same dispatch tick as the
@@ -128,10 +129,13 @@ export async function readFileViaStream(
       }
       const offset = seq * STREAM_CHUNK_SIZE
       const decoded = Buffer.from(data, 'base64')
-      if (offset + decoded.length > totalSize) {
+      // Why: a short chunk would leave the pre-allocated buffer zero-filled and
+      // resolve as silently-corrupt data; validate each chunk's exact length.
+      const expectedLength = Math.min(STREAM_CHUNK_SIZE, totalSize - offset)
+      if (decoded.length !== expectedLength) {
         fail(
           new StreamProtocolError(
-            `Chunk overflows declared totalSize: offset=${offset} len=${decoded.length} total=${totalSize}`
+            `Chunk length mismatch for stream ${id}: seq=${seq} expected=${expectedLength} got=${decoded.length}`
           )
         )
         return
@@ -143,6 +147,7 @@ export async function readFileViaStream(
       decoded.copy(buffer, offset)
       expectedSeq += 1
       receivedChunks += 1
+      bytesReceived += decoded.length
     }
 
     const handleEnd = (params: Record<string, unknown>): void => {
@@ -157,6 +162,16 @@ export async function readFileViaStream(
         fail(
           new StreamProtocolError(
             `Chunk count mismatch for stream ${id}: expected ${totalChunks}, received ${receivedChunks}`
+          )
+        )
+        return
+      }
+      // Why: redundant given the per-chunk length + count checks, but kept as a
+      // last-line invariant guard; never resolve with fewer bytes than declared.
+      if (bytesReceived !== totalSize) {
+        fail(
+          new StreamProtocolError(
+            `Byte count mismatch for stream ${id}: expected ${totalSize}, received ${bytesReceived}`
           )
         )
         return

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { PanelsTopLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -8,22 +8,40 @@ import {
   clampFloatingTerminalTriggerPosition,
   getDefaultFloatingTerminalTriggerPosition,
   parseFloatingTerminalTriggerPosition,
-  type FloatingTerminalTriggerPosition
+  resolveFloatingTerminalTriggerPosition,
+  shouldReconcileFloatingTerminalTriggerPosition,
+  type FloatingTerminalTriggerPosition,
+  type FloatingTerminalTriggerPositionSource
 } from './floating-terminal-trigger-position'
 
 // Why: v2 resets older parked positions that sat too low over bottom bars.
 const FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY = 'orca-floating-terminal-trigger-position-v2'
 const FLOATING_TERMINAL_TRIGGER_DRAG_THRESHOLD = 4
 
-function readInitialTriggerPosition(): FloatingTerminalTriggerPosition {
+type FloatingTerminalTriggerPositionState = {
+  position: FloatingTerminalTriggerPosition
+  source: FloatingTerminalTriggerPositionSource
+}
+
+function readInitialTriggerPosition(): FloatingTerminalTriggerPositionState {
   if (typeof window === 'undefined') {
-    return getDefaultFloatingTerminalTriggerPosition()
+    return {
+      position: getDefaultFloatingTerminalTriggerPosition(),
+      source: 'default'
+    }
   }
-  return (
-    parseFloatingTerminalTriggerPosition(
-      window.localStorage.getItem(FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY)
-    ) ?? getDefaultFloatingTerminalTriggerPosition()
+  const persistedPosition = parseFloatingTerminalTriggerPosition(
+    window.localStorage.getItem(FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY)
   )
+  return persistedPosition
+    ? {
+        position: persistedPosition,
+        source: 'user'
+      }
+    : {
+        position: getDefaultFloatingTerminalTriggerPosition(),
+        source: 'default'
+      }
 }
 
 function persistTriggerPosition(position: FloatingTerminalTriggerPosition): void {
@@ -41,7 +59,14 @@ export function FloatingTerminalToggleButton({
   onToggle: () => void
 }): React.JSX.Element {
   const shortcutLabel = useShortcutLabel('floatingTerminal.toggle')
-  const [position, setPosition] = useState(readInitialTriggerPosition)
+  const initialPositionState = useRef<FloatingTerminalTriggerPositionState | null>(null)
+  if (initialPositionState.current === null) {
+    initialPositionState.current = readInitialTriggerPosition()
+  }
+  const positionSourceRef = useRef<FloatingTerminalTriggerPositionSource>(
+    initialPositionState.current.source
+  )
+  const [position, setPosition] = useState(initialPositionState.current.position)
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -53,22 +78,38 @@ export function FloatingTerminalToggleButton({
   const suppressClickRef = useRef(false)
 
   const updatePosition = useCallback((nextPosition: FloatingTerminalTriggerPosition): void => {
+    positionSourceRef.current = 'user'
     const clamped = clampFloatingTerminalTriggerPosition(nextPosition)
     setPosition(clamped)
     persistTriggerPosition(clamped)
   }, [])
 
+  const reconcilePosition = useCallback((): void => {
+    setPosition((current) => {
+      if (!shouldReconcileFloatingTerminalTriggerPosition(positionSourceRef.current)) {
+        // Why: a startup-size viewport must not overwrite an intentional saved
+        // drag position with the safety clamp before the renderer finishes sizing.
+        return current
+      }
+      const next = resolveFloatingTerminalTriggerPosition(current, positionSourceRef.current)
+      if (positionSourceRef.current === 'user') {
+        persistTriggerPosition(next)
+      }
+      return next
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    // Why: Electron can mount before the renderer has final viewport dimensions;
+    // default positions should re-anchor to bottom-right before first paint.
+    reconcilePosition()
+  }, [reconcilePosition])
+
   useEffect(() => {
-    const handleResize = (): void => {
-      setPosition((current) => {
-        const clamped = clampFloatingTerminalTriggerPosition(current)
-        persistTriggerPosition(clamped)
-        return clamped
-      })
-    }
+    const handleResize = (): void => reconcilePosition()
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [])
+  }, [reconcilePosition])
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>): void => {
     if (event.button !== 0) {

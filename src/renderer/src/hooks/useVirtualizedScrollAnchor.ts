@@ -1,5 +1,13 @@
-import { useCallback, useLayoutEffect, useMemo, type MutableRefObject, type RefObject } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type MutableRefObject,
+  type RefObject
+} from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
+import { shouldCancelVirtualizedScrollOffsetRestore } from './virtualizedScrollOffsetRestore'
 
 export type VirtualizedScrollAnchor = {
   fallbackKeys?: readonly string[]
@@ -8,13 +16,6 @@ export type VirtualizedScrollAnchor = {
 } | null
 export const VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT = 'orca-record-virtualized-scroll-anchor'
 const RECORD_ANCHOR_SCROLL_IDLE_DELAY_MS = 150
-
-export function shouldCancelVirtualizedScrollOffsetRestore(args: {
-  hasDirectScrollInput?: () => boolean
-  restoring: boolean
-}): boolean {
-  return args.restoring && args.hasDirectScrollInput?.() === true
-}
 
 type UseVirtualizedScrollAnchorOptions<
   TRow,
@@ -145,6 +146,15 @@ export function useVirtualizedScrollAnchor<
     [anchorRef, findDomAnchor, recordVirtualScrollAnchor, scrollElementRef]
   )
 
+  // Why: row changes must not re-register the scroll listener; cleanup records
+  // an anchor and would overwrite the pre-delete anchor after the row is gone.
+  const recordScrollAnchorRef = useRef(recordScrollAnchor)
+  recordScrollAnchorRef.current = recordScrollAnchor
+  const recordVirtualScrollAnchorRef = useRef(recordVirtualScrollAnchor)
+  recordVirtualScrollAnchorRef.current = recordVirtualScrollAnchor
+  const hasDirectScrollInputRef = useRef(hasDirectScrollInput)
+  hasDirectScrollInputRef.current = hasDirectScrollInput
+
   useLayoutEffect(() => {
     const el = scrollElementRef.current
     if (!el) {
@@ -177,19 +187,19 @@ export function useVirtualizedScrollAnchor<
         // is idle, then do the read on the next frame instead of the input path.
         frameId = window.requestAnimationFrame(() => {
           frameId = null
-          recordScrollAnchor(el.scrollTop)
+          recordScrollAnchorRef.current(el.scrollTop)
         })
       }, RECORD_ANCHOR_SCROLL_IDLE_DELAY_MS)
     }
     const recordCurrentAnchor = (): void => {
       cancelScheduledRecord()
       scrollOffsetRef.current = el.scrollTop
-      recordScrollAnchor(el.scrollTop)
+      recordScrollAnchorRef.current(el.scrollTop)
     }
     const onScroll = (): void => {
       if (
         shouldCancelVirtualizedScrollOffsetRestore({
-          hasDirectScrollInput,
+          hasDirectScrollInput: hasDirectScrollInputRef.current,
           restoring
         })
       ) {
@@ -219,7 +229,7 @@ export function useVirtualizedScrollAnchor<
         return
       }
       scrollOffsetRef.current = el.scrollTop
-      recordVirtualScrollAnchor(el.scrollTop)
+      recordVirtualScrollAnchorRef.current(el.scrollTop)
       scheduleRecordAnchor()
     }
 
@@ -228,17 +238,11 @@ export function useVirtualizedScrollAnchor<
     return () => {
       cancelScheduledRecord()
       scrollOffsetRef.current = el.scrollTop
-      recordScrollAnchor(el.scrollTop)
+      recordScrollAnchorRef.current(el.scrollTop)
       el.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
       el.removeEventListener('scroll', onScroll)
     }
-  }, [
-    recordScrollAnchor,
-    recordVirtualScrollAnchor,
-    scrollElementRef,
-    scrollOffsetRef,
-    hasDirectScrollInput
-  ])
+  }, [scrollElementRef, scrollOffsetRef])
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current
@@ -309,13 +313,18 @@ export function useVirtualizedScrollAnchor<
       return
     }
 
-    if (!itemElementSelector && restoreFromMeasuredItem()) {
+    // Why: right after a delete the virtualizer can briefly render the wrong
+    // window, so the anchor row's DOM node isn't mounted yet even though the
+    // virtualizer still has its measured slot. Pin from that measured start
+    // (preserving the within-row offset) before falling back to scrollToIndex,
+    // whose align:'start' snaps the row to the viewport top and visibly jumps.
+    if (restoreFromMeasuredItem()) {
       return
     }
 
-    // Why: after add/delete the virtualizer can initially render the wrong
-    // window. Move to the anchored row, then apply the within-row offset once
-    // TanStack Virtual has mounted and measured that row.
+    // Why: the anchored row is outside the virtualizer's current window — no
+    // DOM node and no measured slot. Bring it in, then apply the within-row
+    // offset once TanStack Virtual has mounted and measured that row.
     virtualizer.scrollToIndex(index, { align: 'start' })
     const frameId = window.requestAnimationFrame(() => {
       if (!restoreFromDomElement()) {

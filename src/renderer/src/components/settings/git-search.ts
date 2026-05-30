@@ -8,8 +8,22 @@ export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Refresh Local Base Ref',
-    description: 'Optionally fast-forward local main or master when creating worktrees.',
-    keywords: ['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']
+    description: 'Safely fast-forward local main or master so AI tools and diffs use a fresh base.',
+    keywords: [
+      'main',
+      'master',
+      'origin/main',
+      'git diff',
+      'base ref',
+      'fresh base',
+      'safely',
+      'worktree'
+    ]
+  },
+  {
+    title: 'Auto-Rename Branch From Work',
+    description: 'Rename the auto-generated branch based on the work once an agent starts.',
+    keywords: ['branch', 'rename', 'auto', 'creature name', 'agent', 'prompt', 'worktree']
   },
   {
     title: 'GitHub API Budget',

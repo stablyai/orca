@@ -10,7 +10,8 @@ const RepoSelector = z.object({
 const WorkItemsList = RepoSelector.extend({
   limit: OptionalFiniteNumber,
   query: OptionalString,
-  before: OptionalString
+  before: OptionalString,
+  noCache: z.boolean().optional()
 })
 
 const IssuesList = RepoSelector.extend({
@@ -283,7 +284,13 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.listWorkItems',
     params: WorkItemsList,
     handler: async (params, { runtime }) =>
-      runtime.listRepoWorkItems(params.repo, params.limit, params.query, params.before)
+      runtime.listRepoWorkItems(
+        params.repo,
+        params.limit,
+        params.query,
+        params.before,
+        params.noCache
+      )
   }),
   defineMethod({
     name: 'github.listIssues',

@@ -1,10 +1,17 @@
 import { z } from 'zod'
+import {
+  isFeatureInteractionId,
+  type FeatureInteractionId
+} from '../../../../shared/feature-interactions'
+import { isFeatureTipId } from '../../../../shared/feature-tips'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type { PersistedUIState } from '../../../../shared/types'
 import { defineMethod, type RpcMethod } from '../core'
 
 const NullableString = z.string().nullable()
 const StringArray = z.array(z.string())
+const FeatureTipIds = z.array(z.custom(isFeatureTipId, { message: 'Unknown feature tip id' }))
 const UnknownRecord = z.record(z.string(), z.unknown())
 const UnknownRecordArray = z.array(UnknownRecord)
 const WorktreeCardProperty = z.enum([
@@ -48,6 +55,28 @@ const WorkspaceCleanup = z
     dismissals: z.record(z.string(), WorkspaceCleanupDismissal)
   })
   .strict()
+const FeatureInteractionRecord = z
+  .object({
+    firstInteractedAt: z.number().finite().nonnegative(),
+    interactionCount: z.number().int().positive().optional()
+  })
+  .strict()
+const FeatureInteractions = z
+  .record(z.string(), FeatureInteractionRecord)
+  .superRefine((value, ctx) => {
+    for (const id of Object.keys(value)) {
+      if (!isFeatureInteractionId(id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Unknown feature interaction id: ${id}`,
+          path: [id]
+        })
+      }
+    }
+  })
+const FeatureInteractionIdParam = z.custom<FeatureInteractionId>(isFeatureInteractionId, {
+  message: 'Unknown feature interaction id'
+})
 const GitHubProjectRef = z
   .object({
     owner: z.string(),
@@ -75,6 +104,10 @@ const SettingsUpdate = z
       .transform((value) =>
         value === null || value === 'blank' || isTuiAgent(value) ? value : undefined
       )
+      .optional(),
+    disabledTuiAgents: z
+      .unknown()
+      .transform((value) => normalizeDisabledTuiAgents(value))
       .optional(),
     defaultTaskSource: z.enum(['github', 'gitlab', 'linear']).optional(),
     defaultTaskViewPreset: z
@@ -159,7 +192,9 @@ const UiUpdate = z
     customSidekicks: UnknownRecordArray.optional(),
     sidekickSize: z.number().finite().optional(),
     taskResumeState: TaskResumeState.optional(),
-    workspaceCleanup: WorkspaceCleanup.optional()
+    workspaceCleanup: WorkspaceCleanup.optional(),
+    featureTipsSeenIds: FeatureTipIds.optional(),
+    featureInteractions: FeatureInteractions.optional()
   })
   .strict()
   .default({})
@@ -185,6 +220,13 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
     params: UiUpdate,
     handler: (params, { runtime }) => ({
       ui: runtime.updateUIState(params as Partial<PersistedUIState>)
+    })
+  }),
+  defineMethod({
+    name: 'ui.recordFeatureInteraction',
+    params: FeatureInteractionIdParam,
+    handler: (params, { runtime }) => ({
+      ui: runtime.recordFeatureInteraction(params)
     })
   })
 ]

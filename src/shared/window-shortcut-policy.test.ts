@@ -373,6 +373,22 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'toggleFloatingTerminal' })
   })
 
+  it('resolves the floating terminal chord when macOS Option composes the letter', () => {
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'KeyA',
+          key: 'å',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toEqual({ type: 'toggleFloatingTerminal' })
+  })
+
   it('rejects floating terminal chord variants with Shift or opposite primary modifier', () => {
     expect(
       resolveWindowShortcutAction(

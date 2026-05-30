@@ -1099,9 +1099,13 @@ export default function ChecksPanel(): React.JSX.Element {
         typeof connectionId === 'string'
           ? await store.ensureRemoteDetectedAgents(connectionId)
           : await store.ensureDetectedAgents()
-      const agent = pickDefaultSourceControlAgent(store.settings?.defaultTuiAgent, detectedAgents)
+      const agent = pickDefaultSourceControlAgent(
+        store.settings?.defaultTuiAgent,
+        detectedAgents,
+        store.settings?.disabledTuiAgents
+      )
       if (!agent) {
-        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        toast.error('No enabled AI agents. Configure agents in Settings.')
         return
       }
       const prompt = buildResolvePullRequestConflictsPrompt({
@@ -1148,9 +1152,13 @@ export default function ChecksPanel(): React.JSX.Element {
         typeof connectionId === 'string'
           ? await store.ensureRemoteDetectedAgents(connectionId)
           : await store.ensureDetectedAgents()
-      const agent = pickDefaultSourceControlAgent(store.settings?.defaultTuiAgent, detectedAgents)
+      const agent = pickDefaultSourceControlAgent(
+        store.settings?.defaultTuiAgent,
+        detectedAgents,
+        store.settings?.disabledTuiAgents
+      )
       if (!agent) {
-        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        toast.error('No enabled AI agents. Configure agents in Settings.')
         return
       }
       const prompt = buildFixBrokenChecksPrompt({
@@ -1424,14 +1432,11 @@ export default function ChecksPanel(): React.JSX.Element {
     if (activeReviewClassification.needsResponse) {
       badges.push('Needs response')
     }
-    if (activeReviewClassification.readyToMerge) {
-      badges.push('Ready to merge')
-    }
     // Why: viewer/author/requestedReviewer signals are not wired into the
     // ChecksPanel call site yet, so `state` and `requested` would mis-classify
     // every PR (collapsing to 'teammate'). Suppress those badges until the
-    // inputs are available; needs-response / ready-to-merge work from PR
-    // metadata alone and remain accurate.
+    // inputs are available; needs-response works from PR metadata alone and
+    // remains accurate.
     return badges
   }, [activeReviewClassification])
 

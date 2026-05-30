@@ -90,9 +90,11 @@ beforeEach(() => {
                 }
               : method === 'browser.profile.list'
                 ? { profiles: [] }
-                : method === 'worktree.lineageList'
-                  ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
-                  : {}
+                : method === 'projectGroup.list'
+                  ? { groups: [] }
+                  : method === 'worktree.lineageList'
+                    ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
+                    : {}
     return Promise.resolve({ id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-2' } })
   })
   vi.stubGlobal('window', {
@@ -154,6 +156,20 @@ describe('createSettingsSlice runtime switching', () => {
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [{ id: 'repo-env-1', path: '/env-1/repo', displayName: 'Env 1' } as never],
+      projectGroups: [
+        {
+          id: 'group-env-1',
+          name: 'Env 1 Group',
+          parentPath: '/env-1',
+          parentGroupId: null,
+          createdFrom: 'manual',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
       worktreesByRepo: {
         'repo-env-1': [makeWorktree({ id: 'repo-env-1::/env-1/repo', repoId: 'repo-env-1' })]
       },
@@ -225,6 +241,7 @@ describe('createSettingsSlice runtime switching', () => {
       })
     )
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['repo-env-2'])
+    expect(store.getState().projectGroups).toEqual([])
     expect(store.getState().worktreesByRepo['repo-env-2']?.map((worktree) => worktree.id)).toEqual([
       'repo-env-2::/env-2/repo'
     ])

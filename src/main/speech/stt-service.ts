@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: speech worker ownership, warm reuse, and
+timeout teardown must stay co-located so dictation lifecycle state cannot drift. */
 import { Worker } from 'worker_threads'
 import { join } from 'path'
 import { app } from 'electron'
@@ -232,26 +234,62 @@ export class SttService {
     const worker = this.worker
     worker.postMessage({ type: 'stop' })
 
+    let forcedTeardown = false
     await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => {
-        worker.terminate()
+      let settled = false
+      let timeout: ReturnType<typeof setTimeout> | null = null
+
+      const cleanup = (): void => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        worker.off('message', onStopped)
+      }
+
+      const finish = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
         resolve()
-      }, STOP_DICTATION_TIMEOUT_MS)
+      }
 
       const onStopped = (msg: { type: string; text?: string; error?: string }) => {
         if (msg.type === 'stopped') {
-          clearTimeout(timeout)
-          worker.off('message', onStopped)
-          resolve()
+          finish()
         }
       }
+
+      timeout = setTimeout(() => {
+        if (settled) {
+          return
+        }
+        settled = true
+        forcedTeardown = true
+        cleanup()
+        // Why: a worker that cannot finish dictation is no longer reusable; do
+        // not keep it in the warm-worker slot or retain its message listeners.
+        worker.removeAllListeners()
+        void worker.terminate().finally(resolve)
+      }, STOP_DICTATION_TIMEOUT_MS)
+
       worker.on('message', onStopped)
     })
 
     if (this.worker === worker) {
-      this.activeOwner = null
-      this.eventSink = null
-      this.scheduleIdleTeardown()
+      if (forcedTeardown) {
+        this.worker = null
+        this.activeModelId = null
+        this.activeHotwordsFilePath = undefined
+        this.activeOwner = null
+        this.eventSink = null
+      } else {
+        this.activeOwner = null
+        this.eventSink = null
+        this.scheduleIdleTeardown()
+      }
     }
   }
 

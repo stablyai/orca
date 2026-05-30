@@ -44,7 +44,7 @@ import {
   UNATTRIBUTED_REPO_ID,
   type DaemonSession,
   type Metric,
-  type UnifiedRepoGroup,
+  type UnifiedProjectGroup,
   type UnifiedSessionRow,
   type UnifiedWorktreeRow
 } from './mergeSnapshotAndSessions'
@@ -298,7 +298,7 @@ function sortWorktrees(list: UnifiedWorktreeRow[], sort: SortOption): UnifiedWor
   return copy
 }
 
-function sortRepoGroups(groups: UnifiedRepoGroup[], sort: SortOption): UnifiedRepoGroup[] {
+function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): UnifiedProjectGroup[] {
   const copy = [...groups]
   if (sort === 'memory') {
     copy.sort((a, b) => compareMetricDesc(a.memory, b.memory))
@@ -543,7 +543,7 @@ function ResourceTree({
   onDelete,
   onKillSession
 }: {
-  repos: UnifiedRepoGroup[]
+  repos: UnifiedProjectGroup[]
   sortOption: SortOption
   collapsedRepos: Set<string>
   toggleRepo: (repoId: string) => void
@@ -558,7 +558,7 @@ function ResourceTree({
   const worktreeById = useWorktreeMap()
 
   const sortedRepos = useMemo(() => {
-    const grouped = sortRepoGroups(repos, sortOption)
+    const grouped = sortProjectGroups(repos, sortOption)
     return grouped.map((repo) => ({
       ...repo,
       worktrees: sortWorktrees(repo.worktrees, sortOption)
@@ -650,6 +650,7 @@ export function ResourceUsageStatusSegment({
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const activeView = useAppStore((s) => s.activeView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const workspaceSpaceScannedAt = useAppStore((s) => s.workspaceSpaceAnalysis?.scannedAt ?? null)
@@ -1060,7 +1061,15 @@ export function ResourceUsageStatusSegment({
   }, [openSpacePage])
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) {
+          recordFeatureInteraction('resource-manager')
+        }
+        setOpen(nextOpen)
+      }}
+    >
       <Tooltip delayDuration={150}>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>

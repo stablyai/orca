@@ -865,7 +865,11 @@ describe('registerPtyHandlers', () => {
 
       function setupDaemonAdapter() {
         const daemonSpawn = vi.fn(
-          async (options: { env: Record<string, string>; sessionId?: string }) => ({
+          async (options: {
+            env: Record<string, string>
+            sessionId?: string
+            isNewSession?: boolean
+          }) => ({
             id: options.sessionId ?? 'daemon-pty'
           })
         )
@@ -886,6 +890,7 @@ describe('registerPtyHandlers', () => {
       type DaemonSpawnCall = {
         env: Record<string, string>
         envToDelete?: string[]
+        isNewSession?: boolean
       }
 
       async function daemonSpawnAndGetOptions(
@@ -1223,6 +1228,7 @@ describe('registerPtyHandlers', () => {
         const sessionId = spawnOpts.sessionId
         expect(sessionId).toEqual(expect.any(String))
         expect((sessionId ?? '').length).toBeGreaterThan(0)
+        expect(spawnOpts.isNewSession).toBe(true)
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi')
       })
 
@@ -1237,6 +1243,7 @@ describe('registerPtyHandlers', () => {
           sessionId: 'user-session-42'
         })
         expect(daemonSpawn.mock.calls.at(-1)![0].sessionId).toBe('user-session-42')
+        expect(daemonSpawn.mock.calls.at(-1)![0].isNewSession).toBeUndefined()
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith('user-session-42', undefined, 'pi')
       })
 
@@ -3725,6 +3732,32 @@ describe('registerPtyHandlers', () => {
       const requestId = getSentRequestIds()[0]
       listener(null, { requestId, snapshot: { data: 'ok', cols: 'not-a-number' } })
       await expect(pending).resolves.toBeNull()
+    })
+  })
+
+  describe('main buffer snapshot dispatch', () => {
+    it('returns a sequenced main-owned terminal snapshot with clamped scrollback', async () => {
+      const runtime = {
+        setPtyController: vi.fn(),
+        serializeMainTerminalBuffer: vi.fn().mockResolvedValue({
+          data: 'snapshot\r\n',
+          cols: 120,
+          rows: 40,
+          seq: 42
+        })
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      const result = await handlers.get('pty:getMainBufferSnapshot')!(null, {
+        id: 'pty-1',
+        opts: { scrollbackRows: 999_999 }
+      })
+
+      expect(runtime.serializeMainTerminalBuffer).toHaveBeenCalledWith('pty-1', {
+        scrollbackRows: 50_000
+      })
+      expect(result).toEqual({ data: 'snapshot\r\n', cols: 120, rows: 40, seq: 42 })
     })
   })
 })

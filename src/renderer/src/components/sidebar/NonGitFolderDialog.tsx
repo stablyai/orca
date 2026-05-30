@@ -28,7 +28,6 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
       void (async () => {
         try {
           const stateBeforeAdd = useAppStore.getState()
-          const hadProjectBeforeAdd = stateBeforeAdd.repos.length > 0
           const result = await window.api.repos.addRemote({
             connectionId,
             remotePath: folderPath,
@@ -39,6 +38,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           }
           const repo = result.repo
           const state = useAppStore.getState()
+          const hadProjectBeforeAdd = stateBeforeAdd.repos.length > 0
           if (!state.repos.some((r) => r.id === repo.id)) {
             useAppStore.setState({ repos: [...state.repos, repo] })
           }

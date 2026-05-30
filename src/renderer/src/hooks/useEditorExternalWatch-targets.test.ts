@@ -56,11 +56,15 @@ describe('getEditorExternalWatchTargets', () => {
     openFiles?: EditorExternalWatchTargetState['openFiles']
     activeWorktreeId?: string | null
     runtimeEnvironmentId?: string | null
+    rightSidebarOpen?: boolean
+    rightSidebarTab?: EditorExternalWatchTargetState['rightSidebarTab']
   }): EditorExternalWatchTargetState => ({
     openFiles: args.openFiles ?? [],
     worktreesByRepo: { [args.repo.id]: [args.worktree] },
     repos: [args.repo],
     activeWorktreeId: args.activeWorktreeId ?? null,
+    rightSidebarOpen: args.rightSidebarOpen ?? false,
+    rightSidebarTab: args.rightSidebarTab ?? 'explorer',
     settings:
       args.runtimeEnvironmentId === undefined
         ? null
@@ -90,21 +94,55 @@ describe('getEditorExternalWatchTargets', () => {
     ])
   })
 
-  it('keeps watching the active worktree even when it has no open editor files', () => {
+  it('does not watch the active worktree while the file explorer is hidden', () => {
     const repo = makeRepo('repo-active')
     const worktree = makeWorktree(repo.id, 'wt-active')
 
     expect(
       getEditorExternalWatchTargets(makeState({ repo, worktree, activeWorktreeId: worktree.id }))
         .targets
+    ).toEqual([])
+  })
+
+  it('keeps watching the active worktree when the file explorer is visible', () => {
+    const repo = makeRepo('repo-active-visible')
+    const worktree = makeWorktree(repo.id, 'wt-active-visible')
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarOpen: true,
+          rightSidebarTab: 'explorer'
+        })
+      ).targets
     ).toEqual([
       {
-        worktreeId: 'wt-active',
-        worktreePath: '/repo-active/worktree',
+        worktreeId: 'wt-active-visible',
+        worktreePath: '/repo-active-visible/worktree',
         connectionId: undefined,
         runtimeEnvironmentId: undefined
       }
     ])
+  })
+
+  it('does not watch the active worktree when a different right sidebar tab is visible', () => {
+    const repo = makeRepo('repo-source-control')
+    const worktree = makeWorktree(repo.id, 'wt-source-control')
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarOpen: true,
+          rightSidebarTab: 'source-control'
+        })
+      ).targets
+    ).toEqual([])
   })
 
   it('rebuilds targets when SSH connection or runtime environment identity changes', () => {

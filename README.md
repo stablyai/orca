@@ -108,7 +108,7 @@ Control your agents from your phone.
 </p>
 
 - **iOS:** [Download from App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Download from GH release](https://github.com/stablyai/orca/releases/tag/mobile-v0.0.9)
+- **Android:** [Download from GH release](https://github.com/stablyai/orca/releases/tag/mobile-v0.0.10)
 
 ---
 

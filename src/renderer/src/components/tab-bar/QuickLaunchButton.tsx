@@ -8,6 +8,7 @@ import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import type { TuiAgent } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
+import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -111,6 +112,7 @@ function QuickLaunchAgentMenuItemsInner({
   })
   const { detectedIds } = useDetectedAgents(connectionId)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+  const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
@@ -161,7 +163,8 @@ function QuickLaunchAgentMenuItemsInner({
     [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
   )
 
-  const agents = detectedIds ? orderAgents(defaultAgent, detectedIds) : []
+  const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
+  const agents = detectedIds ? orderAgents(defaultAgent, enabledDetectedIds) : []
 
   return (
     <>
@@ -170,7 +173,7 @@ function QuickLaunchAgentMenuItemsInner({
           disabled
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
         >
-          No agents detected
+          {detectedIds && detectedIds.length > 0 ? 'No enabled agents' : 'No agents detected'}
         </DropdownMenuItem>
       ) : null}
       {agents.map((agent) => {

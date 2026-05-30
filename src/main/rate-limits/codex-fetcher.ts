@@ -6,13 +6,17 @@ import { spawn } from 'node:child_process'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
+import { cleanupHiddenRateLimitPty } from './hidden-pty-cleanup'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 
 const RPC_TIMEOUT_MS = 10_000
+const WSL_RPC_TIMEOUT_MS = 25_000
 const PTY_TIMEOUT_MS = 15_000
 const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
 
 export type FetchCodexRateLimitsOptions = {
   codexHomePath?: string | null
+  allowPtyFallback?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -40,6 +44,37 @@ type RpcRateLimitsResult = {
 // The actual response shape is `{ rateLimits: { primary, secondary, ... } }`.
 type RpcRateLimitsResponse = {
   rateLimits?: RpcRateLimitsResult
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+function buildWslCodexCommand(
+  codexHomePath: string,
+  args: string[]
+): {
+  command: string
+  args: string[]
+} | null {
+  const wslInfo = parseWslUncPath(codexHomePath)
+  if (process.platform !== 'win32' || !wslInfo) {
+    return null
+  }
+  const script = [
+    `export CODEX_HOME=${shellQuote(wslInfo.linuxPath)}`,
+    `exec codex ${args.map(shellQuote).join(' ')}`
+  ].join('; ')
+  return {
+    command: 'wsl.exe',
+    args: ['-d', wslInfo.distro, '--', 'bash', '-lc', script]
+  }
+}
+
+function cloneProcessEnvWithoutCodexHome(): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  delete env.CODEX_HOME
+  return env
 }
 
 function buildRpcMessage(id: number, method: string, params?: unknown): string {
@@ -94,18 +129,21 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let resolved = false
     let rpcId = 0
 
-    const codexCommand = resolveCodexCommand()
+    const codexArgs = ['-s', 'read-only', '-a', 'untrusted', 'app-server']
+    const wslCodex = options?.codexHomePath
+      ? buildWslCodexCommand(options.codexHomePath, codexArgs)
+      : null
+    // Why: cold WSL process startup plus Codex app-server initialization can
+    // exceed the host RPC budget, causing a false "unavailable" on app launch.
+    const rpcTimeoutMs = wslCodex ? WSL_RPC_TIMEOUT_MS : RPC_TIMEOUT_MS
+    const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
     // Why: on Windows, resolveCodexCommand() may return a .cmd/.bat file.
     // spawn() cannot execute batch scripts directly without shell:true, but
     // shell:true with an args array triggers DEP0190 (args are concatenated,
     // not escaped). Fix: detect batch scripts and route through cmd.exe /c.
-    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, [
-      '-s',
-      'read-only',
-      '-a',
-      'untrusted',
-      'app-server'
-    ])
+    const { spawnCmd, spawnArgs } = wslCodex
+      ? { spawnCmd: wslCodex.command, spawnArgs: wslCodex.args }
+      : getSpawnArgsForWindows(codexCommand, codexArgs)
     const child = spawn(spawnCmd, spawnArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
       // Why: the selected Codex rate-limit account must only affect this fetch
@@ -116,8 +154,8 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       // poll on Windows.
       windowsHide: true,
       env: {
-        ...process.env,
-        ...(options?.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {})
+        ...(wslCodex ? cloneProcessEnvWithoutCodexHome() : process.env),
+        ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
       }
     })
 
@@ -134,7 +172,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
           status: 'error'
         })
       }
-    }, RPC_TIMEOUT_MS)
+    }, rpcTimeoutMs)
 
     function sendRpc(method: string, params?: unknown): number {
       const id = ++rpcId
@@ -317,7 +355,8 @@ function parsePtyStatus(output: string): {
 
 async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<ProviderRateLimits> {
   const pty = await import('node-pty')
-  const codexCommand = resolveCodexCommand()
+  const wslCodex = options?.codexHomePath ? buildWslCodexCommand(options.codexHomePath, []) : null
+  const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
 
   // Why: node-pty cannot spawn .cmd/.bat batch scripts directly on Windows —
   // those need cmd.exe as an interpreter. resolveCodexCommand() may also fall
@@ -327,8 +366,8 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
   // even for bare 'codex' (not just .cmd/.bat) to let PATHEXT resolution
   // succeed under a minimal Electron PATH. /d matches the rest of the codebase.
   const isWin32 = process.platform === 'win32'
-  const spawnFile = isWin32 ? getCmdExePath() : codexCommand
-  const spawnArgs = isWin32 ? ['/d', '/c', codexCommand] : []
+  const spawnFile = wslCodex ? wslCodex.command : isWin32 ? getCmdExePath() : codexCommand
+  const spawnArgs = wslCodex ? wslCodex.args : isWin32 ? ['/d', '/c', codexCommand] : []
 
   return new Promise<ProviderRateLimits>((resolve) => {
     let output = ''
@@ -340,26 +379,17 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       cols: 120,
       rows: 40,
       env: {
-        ...process.env,
+        ...(wslCodex ? cloneProcessEnvWithoutCodexHome() : process.env),
         TERM: 'xterm-256color',
-        ...(options?.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {})
+        ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
       }
     })
     const termDisposables: { dispose: () => void }[] = []
-    const disposeTermListeners = (): void => {
-      for (const disposable of termDisposables.splice(0)) {
-        disposable.dispose()
-      }
-    }
 
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
-        // Why: killing a hidden PTY without disposing node-pty's NAPI listener
-        // handles leaves ThreadSafeFunction callbacks alive into Electron
-        // shutdown, which can abort the app while Node cleans up its env.
-        disposeTermListeners()
-        term.kill()
+        cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         resolve({
           provider: 'codex',
           session: null,
@@ -373,6 +403,11 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
 
     const onDataDisposable = term.onData((data) => {
       output += data
+      // Why: this background fallback only needs recent status output for
+      // parsing and diagnostics; cap noisy TUI output like the Claude fallback.
+      if (output.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
+        output = output.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
+      }
 
       // Wait for prompt, then send /status
       if (!sentStatus && />\s*$/.test(data)) {
@@ -389,8 +424,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           }
           resolved = true
           clearTimeout(timeout)
-          disposeTermListeners()
-          term.kill()
+          cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
           // eslint-disable-next-line no-control-regex
           const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
@@ -415,7 +449,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     }
 
     const onExitDisposable = term.onExit(() => {
-      disposeTermListeners()
+      cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })
       if (!resolved) {
         resolved = true
         clearTimeout(timeout)
@@ -454,9 +488,22 @@ export async function fetchCodexRateLimits(
     if (rpcResult.status === 'ok' || rpcResult.status === 'unavailable') {
       return rpcResult
     }
+    if (options?.allowPtyFallback === false) {
+      return rpcResult
+    }
     // Why: app-server can fail independently of the interactive CLI. Keep the
     // status-bar useful by trying the older /status PTY reader on RPC errors.
   } catch {
+    if (options?.allowPtyFallback === false) {
+      return {
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: 'RPC failed',
+        status: 'error'
+      }
+    }
     // RPC failed — fall through to PTY
   }
 
