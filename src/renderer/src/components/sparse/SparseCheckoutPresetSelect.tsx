@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { Check, ChevronsUpDown, LoaderCircle, Pencil, Plus, RefreshCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -83,8 +83,6 @@ export default function SparseCheckoutPresetSelect({
     cancelAnimationFrame(nameInputFocusFrameRef.current)
     nameInputFocusFrameRef.current = null
   }, [])
-
-  useEffect(() => cancelNameInputFocusFrame, [cancelNameInputFocusFrame])
 
   const setNameInputNode = useCallback(
     (node: HTMLInputElement | null): void => {

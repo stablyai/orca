@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { GitBranch, GitBranchPlus, Settings } from 'lucide-react'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -157,8 +157,6 @@ export function ProjectAddedContent({
     cancelAnimationFrame(radioFocusFrameRef.current)
     radioFocusFrameRef.current = null
   }, [])
-
-  useEffect(() => cancelRadioFocusFrame, [cancelRadioFocusFrame])
 
   const setRadioGroupNode = useCallback(
     (node: HTMLDivElement | null): void => {
