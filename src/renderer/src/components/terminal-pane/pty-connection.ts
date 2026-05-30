@@ -1354,6 +1354,13 @@ export function connectPanePty(
     }
 
     function writePtyOutputToXterm(data: string, foreground: boolean): void {
+      if (!foreground && canUseMainBufferSnapshot(transport.getPtyId())) {
+        // Why: hidden panes do not need live xterm parsing. Main already
+        // retains the PTY buffer, so defer display work until the pane is
+        // visible and restore from that snapshot instead.
+        markHiddenOutputRestoreNeeded()
+        return
+      }
       writeTerminalOutput(pane.terminal, data, {
         foreground,
         beforeWrite: beforeTerminalOutputWrite,
