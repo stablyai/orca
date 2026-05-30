@@ -172,7 +172,11 @@ async function clickWorkspaceCardAgentRow(page: Page, prompt: string): Promise<v
     .locator(`span[title="${prompt}"]`)
     .first()
   await expect(rowLabel).toBeVisible({ timeout: 10_000 })
-  await rowLabel.click()
+  const row = rowLabel.locator('xpath=ancestor::*[@data-testid="dashboard-agent-row"][1]')
+  // Why: the inline row contains height-transitioning text. In headless
+  // Electron, Playwright can wait forever for a fully stable box even though
+  // the user-visible row is ready for pointer activation.
+  await row.click({ force: true })
 }
 
 async function readActivePaneSelection(page: Page): Promise<ActivePaneSelection> {

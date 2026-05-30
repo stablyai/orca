@@ -246,6 +246,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     // stays a plain clickable surface for pointer activation.
     <div
       onClick={handleActivate}
+      data-testid="dashboard-agent-row"
       className={cn(
         // Why: this row owns the timestamp/X hover boundary; anonymous
         // ancestor groups from workspace cards must not reveal every row's X.

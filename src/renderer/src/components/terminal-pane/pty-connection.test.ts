@@ -542,6 +542,73 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('connects through a timeout fallback when animation frames are suspended', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    vi.useFakeTimers()
+    globalThis.requestAnimationFrame = vi.fn(() => 42) as never
+    globalThis.cancelAnimationFrame = vi.fn()
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+
+    const disposable = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+
+    expect(transport.connect).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(99)
+    await flushAsyncTicks()
+    expect(transport.connect).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    await flushAsyncTicks()
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42)
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    disposable.dispose()
+  })
+
+  it('uses transport viewport defaults when the timeout fallback finds zero terminal dimensions', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    vi.useFakeTimers()
+    globalThis.requestAnimationFrame = vi.fn(() => 42) as never
+    globalThis.cancelAnimationFrame = vi.fn()
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+    const pane = createPane(1)
+    pane.terminal.cols = 0
+    pane.terminal.rows = 0
+    const deps = createDeps()
+
+    const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
+
+    vi.advanceTimersByTime(100)
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    const connectOptions = transport.connect.mock.calls[0]?.[0] as
+      | { cols?: number; rows?: number }
+      | undefined
+    expect(connectOptions?.cols).toBeUndefined()
+    expect(connectOptions?.rows).toBeUndefined()
+    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+      pane.id,
+      expect.stringContaining('Terminal has zero dimensions')
+    )
+    disposable.dispose()
+  })
+
   it('keeps the surviving split pane mounted when an intentional pane-close PTY exit arrives', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-pane-2')

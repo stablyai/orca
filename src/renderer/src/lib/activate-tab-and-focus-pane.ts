@@ -1,13 +1,15 @@
 import { useAppStore } from '@/store'
 import { FOCUS_TERMINAL_PANE_EVENT, type FocusTerminalPaneDetail } from '@/constants/terminal'
+import {
+  scheduleAfterAnimationFrameOrTimeout,
+  type ScheduledAnimationFrameFallback
+} from './schedule-after-animation-frame-or-timeout'
 
-let pendingFocusPaneFrameId: number | null = null
+let pendingFocusPaneFrame: ScheduledAnimationFrameFallback | null = null
 
 function cancelPendingFocusPaneFrame(): void {
-  if (pendingFocusPaneFrameId !== null) {
-    cancelAnimationFrame(pendingFocusPaneFrameId)
-    pendingFocusPaneFrameId = null
-  }
+  pendingFocusPaneFrame?.cancel()
+  pendingFocusPaneFrame = null
 }
 
 export function activateTabAndFocusPane(
@@ -24,10 +26,10 @@ export function activateTabAndFocusPane(
   if (leafId === null) {
     return
   }
-  // Why: defer one frame so the new TerminalPane has mounted its
-  // FOCUS_TERMINAL_PANE_EVENT listener before we dispatch.
-  pendingFocusPaneFrameId = requestAnimationFrame(() => {
-    pendingFocusPaneFrameId = null
+  // Why: defer one frame so the new TerminalPane has mounted its listener.
+  // Hidden/headless Electron windows can pause rAF, so the timeout keeps focus usable.
+  pendingFocusPaneFrame = scheduleAfterAnimationFrameOrTimeout(() => {
+    pendingFocusPaneFrame = null
     const detail: FocusTerminalPaneDetail = {
       tabId,
       leafId,
