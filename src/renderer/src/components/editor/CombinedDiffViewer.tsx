@@ -181,6 +181,7 @@ export default function CombinedDiffViewer({
   const [clearNotesDialogOpen, setClearNotesDialogOpen] = useState(false)
   const [isClearingNotes, setIsClearingNotes] = useState(false)
   const [notesCopied, setNotesCopied] = useState(false)
+  const mountedRef = useRef(true)
   // Why: clipboard IPC can resolve after the combined diff unmounts; skip
   // copied feedback instead of starting a reset timer on a stale viewer.
   const notesCopyMountedRef = useRef(false)
@@ -202,6 +203,13 @@ export default function CombinedDiffViewer({
   const setScrollContainerRef = useCallback((node: HTMLDivElement | null) => {
     scrollContainerRef.current = node
     notesCopyMountedRef.current = node !== null
+  }, [])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
   }, [])
   const loadSchedulerRef = useRef(
     createCombinedDiffLoadScheduler({
@@ -906,13 +914,18 @@ export default function CombinedDiffViewer({
     setIsClearingNotes(true)
     try {
       const ok = await clearDiffComments(file.worktreeId)
+      if (!mountedRef.current) {
+        return
+      }
       if (ok) {
         setClearNotesDialogOpen(false)
       } else {
         toast.error('Failed to clear notes.')
       }
     } finally {
-      setIsClearingNotes(false)
+      if (mountedRef.current) {
+        setIsClearingNotes(false)
+      }
     }
   }, [clearDiffComments, diffCommentCount, file.worktreeId, isClearingNotes])
 
