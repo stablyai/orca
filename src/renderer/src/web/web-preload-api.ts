@@ -70,6 +70,7 @@ const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
 // Why: browser-paired clients need desktop parity for large dev sessions; the
 // runtime's no-limit default remains capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
+const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
 let activeClient: WebRuntimeClient | null = null
@@ -77,6 +78,64 @@ let activeClientEnvironmentId: string | null = null
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 let cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : ''
+      const commaIndex = result.indexOf(',')
+      resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1))
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read clipboard image'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob)
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    const context = canvas.getContext('2d')
+    if (!context || canvas.width <= 0 || canvas.height <= 0) {
+      throw new Error('Clipboard image could not be decoded')
+    }
+    context.drawImage(bitmap, 0, 0)
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((png) => {
+        if (!png) {
+          reject(new Error('Clipboard image could not be encoded as PNG'))
+          return
+        }
+        resolve(png)
+      }, 'image/png')
+    })
+  } finally {
+    bitmap.close()
+  }
+}
+
+async function readClipboardImagePngBase64(): Promise<string | null> {
+  const clipboard = navigator.clipboard as
+    | (Clipboard & { read?: () => Promise<ClipboardItem[]> })
+    | undefined
+  if (!clipboard?.read) {
+    return null
+  }
+  const items = await clipboard.read()
+  for (const item of items) {
+    const imageType = item.types.find((type) => type.startsWith('image/'))
+    if (!imageType) {
+      continue
+    }
+    const blob = await item.getType(imageType)
+    const pngBlob = imageType === 'image/png' ? blob : await convertImageBlobToPng(blob)
+    return blobToBase64(pngBlob)
+  }
+  return null
+}
 
 function invalidateRuntimeWorktreeCaches(): void {
   cachedWorktrees = null
@@ -107,6 +166,7 @@ type WebGitHubRouteKey =
   | 'setPRFileViewed'
   | 'updatePRTitle'
   | 'mergePR'
+  | 'setPRAutoMerge'
   | 'updatePRState'
   | 'requestPRReviewers'
   | 'removePRReviewers'
@@ -153,6 +213,7 @@ type WebGitHubRuntimeMethod =
   | 'github.setPRFileViewed'
   | 'github.updatePRTitle'
   | 'github.mergePR'
+  | 'github.setPRAutoMerge'
   | 'github.updatePRState'
   | 'github.requestPRReviewers'
   | 'github.removePRReviewers'
@@ -234,6 +295,7 @@ export const GITHUB_WEB_RPC_METHODS = {
   setPRFileViewed: 'github.setPRFileViewed',
   updatePRTitle: 'github.updatePRTitle',
   mergePR: 'github.mergePR',
+  setPRAutoMerge: 'github.setPRAutoMerge',
   updatePRState: 'github.updatePRState',
   requestPRReviewers: 'github.requestPRReviewers',
   removePRReviewers: 'github.removePRReviewers',
@@ -439,8 +501,13 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     pty: createPtyApi(),
     ssh: createSshApi(),
-    wsl: { isAvailable: () => Promise.resolve(false) },
-    pwsh: { isAvailable: () => Promise.resolve(false) },
+    wsl: {
+      isAvailable: () => callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),
+      listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])
+    },
+    pwsh: {
+      isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)
+    },
     agentStatus: {
       onSet: () => noopUnsubscribe,
       getSnapshot: () => Promise.resolve([]),
@@ -1294,6 +1361,8 @@ function createGitHubApi(): WebGitHubApi {
     updatePRTitle: (args) =>
       route<WebGitHubResult<'updatePRTitle'>>(GITHUB_WEB_RPC_METHODS.updatePRTitle, args),
     mergePR: (args) => route<WebGitHubResult<'mergePR'>>(GITHUB_WEB_RPC_METHODS.mergePR, args),
+    setPRAutoMerge: (args) =>
+      route<WebGitHubResult<'setPRAutoMerge'>>(GITHUB_WEB_RPC_METHODS.setPRAutoMerge, args),
     updatePRState: (args) =>
       route<WebGitHubResult<'updatePRState'>>(GITHUB_WEB_RPC_METHODS.updatePRState, args),
     requestPRReviewers: (args) =>
@@ -1537,8 +1606,23 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    saveClipboardImageAsTempFile: (_args?: { connectionId?: string | null }) =>
-      Promise.resolve(null),
+    saveClipboardImageAsTempFile: async (args?: { connectionId?: string | null }) => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return null
+      }
+      const contentBase64 = await readClipboardImagePngBase64()
+      if (!contentBase64) {
+        return null
+      }
+      return callRuntimeResult<string>(
+        'clipboard.saveImageAsTempFile',
+        {
+          contentBase64,
+          connectionId: args?.connectionId ?? null
+        },
+        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+      )
+    },
     writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
@@ -1675,7 +1759,7 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
 function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
   const status = {
     platform: getBrowserPlatform(),
-    commandName: 'orca',
+    commandName: getBrowserPlatform() === 'linux' ? 'orca-ide' : 'orca',
     commandPath: null,
     pathDirectory: null,
     pathConfigured: false,
@@ -1704,6 +1788,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
       | 'codex'
       | 'gemini'
       | 'antigravity'
+      | 'amp'
       | 'cursor'
       | 'droid'
       | 'command-code'
@@ -1723,6 +1808,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     codexStatus: () => status('codex'),
     geminiStatus: () => status('gemini'),
     antigravityStatus: () => status('antigravity'),
+    ampStatus: () => status('amp'),
     cursorStatus: () => status('cursor'),
     droidStatus: () => status('droid'),
     commandCodeStatus: () => status('command-code'),
@@ -1789,12 +1875,16 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     codex: null,
     gemini: null,
     opencodeGo: null,
+    claudeTarget: { runtime: 'host', wslDistro: null },
+    codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
     inactiveCodexAccounts: []
   }
   return {
     get: () => Promise.resolve(empty),
     refresh: () => Promise.resolve(empty),
+    refreshCodexForTarget: () => Promise.resolve(empty),
+    refreshClaudeForTarget: () => Promise.resolve(empty),
     setPollingInterval: () => Promise.resolve(),
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
     fetchInactiveCodexAccounts: () => Promise.resolve(),
@@ -1803,7 +1893,11 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
 }
 
 function createAccountsApi(): never {
-  const empty = { accounts: [], activeAccountId: null }
+  const empty = {
+    accounts: [],
+    activeAccountId: null,
+    activeAccountIdsByRuntime: { host: null, wsl: {} }
+  }
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),

@@ -22,3 +22,8 @@ export const COMPUTER_USE_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallC
 export const ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCHESTRATION_SKILL_NAME
 ])
+
+export const ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+  ORCA_CLI_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME
+])

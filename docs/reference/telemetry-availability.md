@@ -39,13 +39,14 @@ D1+/D3+/D7+ retention means the user fired `app_opened` at least once after 24/7
 - `source = 'unknown'` is not a real product surface. It means the caller omitted a source or the value failed schema validation.
 - `workspace_created` means create-worktree IPC succeeded. It is not a general "usable workspace exists" or "workspace revealed" marker.
 - `agent_started` means PTY spawn succeeded with agent telemetry attached. It is not first-repo activation and does not prove the user sent a prompt.
+- `agent_prompt_sent` means a live agent hook observed an explicit non-empty user prompt. It excludes hydrated/replayed status, agent auto-start, bare shells, draft prefill, and hookless sessions; missing rows mean no hook-confirmed interaction was observed, not proof the user never typed.
 - Workspace-outcome joins are native Electron coverage unless the query explicitly proves remote/web instrumentation. Remote runtime and web paths can bypass native repo/worktree telemetry, so do not interpret missing workspace outcome rows as product drop-off for SSH, remote, or web users.
 
 ## Rollouts
 
 ### 2026-05-08 - Repo Cohort Property
 
-Scope: `nth_repo_added` on repo/activation/retention events. Current schemas declare it on `app_opened`, `repo_added`, `add_repo_setup_step_action`, `add_repo_existing_workspaces_detected`, `workspace_created`, `workspace_create_failed`, `setup_script_prompt_shown`, `setup_script_prompt_action`, `agent_started`, and `agent_error`. The original rollout covered `app_opened`, `repo_added`, `add_repo_setup_step_action`, `workspace_created`, `workspace_create_failed`, `agent_started`, and `agent_error`; later events have their own first-seen timestamps below.
+Scope: `nth_repo_added` on repo/activation/retention events. Current schemas declare it on `app_opened`, `repo_added`, `add_repo_setup_step_action`, `add_repo_existing_workspaces_detected`, `workspace_created`, `workspace_create_failed`, `setup_script_prompt_shown`, `setup_script_prompt_action`, `agent_started`, `agent_prompt_sent`, and `agent_error`. The original rollout covered `app_opened`, `repo_added`, `add_repo_setup_step_action`, `workspace_created`, `workspace_create_failed`, `agent_started`, and `agent_error`; later events have their own first-seen timestamps below.
 
 | Field | Value |
 | --- | --- |
@@ -65,6 +66,7 @@ PostHog evidence checked at `2026-05-23T23:34:32Z`:
 | `app_opened` | `2026-05-08T18:40:00.354Z` (`1.3.42-rc.1`) |
 | `workspace_created` | `2026-05-08T19:15:06.913Z` |
 | `agent_started` | `2026-05-08T19:15:07.130Z` |
+| `agent_prompt_sent` | `TBD` |
 | `repo_added` | `2026-05-08T20:01:06.364Z` (`1.3.42`) |
 | `add_repo_setup_step_action` | `2026-05-08T20:01:20.897Z` |
 | `workspace_create_failed` | `2026-05-08T23:04:32.315Z` |

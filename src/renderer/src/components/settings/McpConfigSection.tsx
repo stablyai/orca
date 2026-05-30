@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, FileCode2, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Repo, Worktree } from '../../../../shared/types'
@@ -48,6 +48,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const [configs, setConfigs] = useState<LoadedMcpConfigInspection[]>([])
   const [loading, setLoading] = useState(true)
   const [createConfirm, setCreateConfirm] = useState(false)
+  const createConfirmResetTimerRef = useRef<number | null>(null)
   const [inspectionUnavailableMessage, setInspectionUnavailableMessage] = useState<string | null>(
     null
   )
@@ -215,6 +216,13 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     void loadConfigs()
   }, [loadConfigs])
 
+  const clearCreateConfirmResetTimer = useCallback((): void => {
+    if (createConfirmResetTimerRef.current !== null) {
+      window.clearTimeout(createConfirmResetTimerRef.current)
+      createConfirmResetTimerRef.current = null
+    }
+  }, [])
+
   const handleOpen = (config: LoadedMcpConfigInspection): void => {
     setActiveWorktree(targetWorktreeId)
     const targetGroupId = ensureWorktreeRootGroup(targetWorktreeId)
@@ -233,8 +241,12 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
   const handleCreateStarter = async (): Promise<void> => {
     if (!createConfirm) {
+      clearCreateConfirmResetTimer()
       setCreateConfirm(true)
-      window.setTimeout(() => setCreateConfirm(false), 3000)
+      createConfirmResetTimerRef.current = window.setTimeout(() => {
+        createConfirmResetTimerRef.current = null
+        setCreateConfirm(false)
+      }, 3000)
       return
     }
 
@@ -243,6 +255,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       // Why: v1 only creates the root workspace config so we do not need to
       // guess per-agent directory layouts or mutate agent-specific files.
       await window.api.fs.writeFile({ filePath: target, content: MCP_STARTER_CONFIG, connectionId })
+      clearCreateConfirmResetTimer()
       setCreateConfirm(false)
       await loadConfigs()
       setActiveWorktree(targetWorktreeId)

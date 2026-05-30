@@ -186,6 +186,13 @@ function countReposNeedingNotificationDisambiguation(
   return Math.max(activeRepoIds.size, countReposWithWorktrees(state))
 }
 
+function isOrcaWindowForegroundFocused(): boolean {
+  if (typeof document === 'undefined') {
+    return true
+  }
+  return document.visibilityState === 'visible' && document.hasFocus()
+}
+
 /**
  * Returns a stable dispatch function for terminal notifications.
  * Reads repo/worktree labels from the store at dispatch time rather
@@ -227,9 +234,9 @@ export function dispatchTerminalNotification(
       state.markWorktreeUnread(worktreeId)
       state.markTerminalTabUnread(tabId)
       state.markTerminalPaneUnread(event.paneKey)
-    } else if (state.activeWorktreeId !== worktreeId) {
-      // Why: when pane attention is disabled, agent completion still preserves
-      // the existing background-workspace unread signal for Dock/sidebar state.
+    } else if (state.activeWorktreeId !== worktreeId || !isOrcaWindowForegroundFocused()) {
+      // Why: activeWorktreeId is only in-app selection. If Orca is backgrounded,
+      // a selected chat finishing still needs unread/Dock attention.
       state.markWorktreeUnread(worktreeId)
     }
   }

@@ -196,6 +196,52 @@ describe('shared agent-hook-listener', () => {
         toolName: 'shell_command',
         toolInput: 'pwd'
       })
+      expect(tool?.hasExplicitPrompt).toBe(true)
+      expect(tool?.promptInteractionKey).toMatch(/^command-code-transcript-[a-f0-9]{12}-/)
+
+      const directPrompt = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            prompt: 'Direct command prompt'
+          }
+        },
+        'production'
+      )
+      expect(directPrompt?.hasExplicitPrompt).toBe(true)
+
+      const directPromptWithTranscript = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            prompt: 'Run pwd and report it',
+            transcript_path: transcriptPath
+          }
+        },
+        'production'
+      )
+      expect(directPromptWithTranscript?.hasExplicitPrompt).toBe(true)
+      expect(directPromptWithTranscript?.promptInteractionKey).toBe(tool?.promptInteractionKey)
+
+      const statusMessage = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            message: 'Preparing tool call'
+          }
+        },
+        'production'
+      )
+      expect(statusMessage?.hasExplicitPrompt).toBe(false)
 
       const done = normalizeHookPayload(
         state,
@@ -219,6 +265,25 @@ describe('shared agent-hook-listener', () => {
         agentType: 'command-code',
         lastAssistantMessage: 'The output is /tmp/project.'
       })
+      expect(done?.promptInteractionKey).toBe(tool?.promptInteractionKey)
+
+      const cachedOnly = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'Stop'
+          }
+        },
+        'production'
+      )
+      expect(cachedOnly?.payload.prompt).toBe('Run pwd and report it')
+      expect(cachedOnly?.hasExplicitPrompt).toBe(false)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -376,6 +441,7 @@ describe('shared agent-hook-listener', () => {
         prompt: 'Fix the failing test',
         agentType: 'antigravity'
       })
+      expect(started?.hasExplicitPrompt).toBe(true)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }

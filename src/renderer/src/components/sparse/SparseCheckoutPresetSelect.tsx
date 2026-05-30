@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronsUpDown, LoaderCircle, Pencil, Plus, RefreshCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -40,6 +40,7 @@ export default function SparseCheckoutPresetSelect({
   const [draft, setDraft] = useState<PresetDraft | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
+  const nameInputFocusFrameRef = useRef<number | null>(null)
 
   const visiblePresets = presetsForRepo ?? presets
   const presetsLoaded = presetsForRepo !== undefined
@@ -75,18 +76,30 @@ export default function SparseCheckoutPresetSelect({
     parsedDirectories !== null &&
     !parsedDirectories.error
 
+  const cancelNameInputFocusFrame = useCallback((): void => {
+    if (nameInputFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(nameInputFocusFrameRef.current)
+    nameInputFocusFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelNameInputFocusFrame, [cancelNameInputFocusFrame])
+
   const startDraft = useCallback(
     (nextDraft: PresetDraft): void => {
       if (disabled || !presetsLoaded) {
         return
       }
       setDraft(nextDraft)
-      requestAnimationFrame(() => {
+      cancelNameInputFocusFrame()
+      nameInputFocusFrameRef.current = requestAnimationFrame(() => {
+        nameInputFocusFrameRef.current = null
         nameInputRef.current?.focus()
         nameInputRef.current?.select()
       })
     },
-    [disabled, presetsLoaded]
+    [cancelNameInputFocusFrame, disabled, presetsLoaded]
   )
 
   const startNewPreset = useCallback((): void => {

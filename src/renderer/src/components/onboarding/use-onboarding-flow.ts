@@ -241,9 +241,7 @@ export function useOnboardingFlow(
   // Why: track the latest persisted theme in a ref so the unmount-only revert
   // below uses the freshest value without retriggering on each settings change.
   const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')
-  useEffect(() => {
-    persistedThemeRef.current = settings?.theme ?? 'dark'
-  }, [settings?.theme])
+  persistedThemeRef.current = settings?.theme ?? 'dark'
   const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
   const themeStepEntryCapturedRef = useRef(false)
   useEffect(() => {

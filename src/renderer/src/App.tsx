@@ -115,7 +115,11 @@ import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import { getFeatureTipsAppOpenDecision } from './components/feature-tips/feature-tip-startup-gate'
+import {
+  getFeatureTipsAppOpenDecision,
+  isCliFeatureTipCompleted
+} from './components/feature-tips/feature-tip-startup-gate'
+import { trackOrcaCliFeatureTipShown } from './components/feature-tips/feature-tip-telemetry'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -313,9 +317,28 @@ function App(): React.JSX.Element {
   const worktreeSidebarScrollOffsetRef = useRef(0)
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const floatingUnifiedTabCount = useAppStore(
-    (s) => s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.length ?? 0
-  )
+  const floatingVisibleTabCount = useAppStore((s) => {
+    const terminalIds = new Set(
+      (s.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
+    )
+    const browserIds = new Set(
+      (s.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
+    )
+    const editorIds = new Set(
+      s.openFiles
+        .filter((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
+        .map((file) => file.id)
+    )
+    return (s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter((tab) => {
+      if (tab.contentType === 'terminal') {
+        return terminalIds.has(tab.entityId)
+      }
+      if (tab.contentType === 'browser') {
+        return browserIds.has(tab.entityId)
+      }
+      return editorIds.has(tab.entityId)
+    }).length
+  })
   const activeTabId = useAppStore((s) => s.activeTabId)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
@@ -427,7 +450,16 @@ function App(): React.JSX.Element {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   const featureTipsPromptedThisSessionRef = useRef(false)
   const featureTipsSuppressedByOnboardingThisSessionRef = useRef(false)
+  const [featureTipCliInstalled, setFeatureTipCliInstalled] = useState<boolean | null>(null)
   const [onboardingSettingsDetour, setOnboardingSettingsDetour] = useState(false)
+  const shouldRenderOnboarding = onboarding !== null && shouldShowOnboarding(onboarding)
+  const onboardingSettingsDetourActive =
+    onboardingSettingsDetour && activeView === 'settings' && shouldRenderOnboarding
+  if (onboardingSettingsDetour && !onboardingSettingsDetourActive) {
+    // Why: the settings detour is valid only while Settings is onscreen; clear
+    // it during render so onboarding can resume without a follow-up Effect pass.
+    setOnboardingSettingsDetour(false)
+  }
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -460,8 +492,34 @@ function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    if (!persistedUIReady) {
+      return
+    }
+
+    let cancelled = false
+    void window.api.cli
+      .getInstallStatus()
+      .then((status) => {
+        if (cancelled) {
+          return
+        }
+        setFeatureTipCliInstalled(isCliFeatureTipCompleted(status))
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFeatureTipCliInstalled(true)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [persistedUIReady])
+
+  useEffect(() => {
     const featureTipsDecision = getFeatureTipsAppOpenDecision({
       activeModal,
+      cliInstalled: featureTipCliInstalled,
       featureTipsSeenIds,
       featureInteractions,
       onboarding,
@@ -483,6 +541,9 @@ function App(): React.JSX.Element {
     }
 
     featureTipsPromptedThisSessionRef.current = true
+    if (featureTipsDecision.tipId === 'orca-cli') {
+      trackOrcaCliFeatureTipShown('app_open')
+    }
     // Why: once a tip is visible, app quit/crash should not make it reappear
     // on the next launch just because the user never clicked a dismiss button.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
@@ -490,18 +551,13 @@ function App(): React.JSX.Element {
   }, [
     activeModal,
     actions,
+    featureTipCliInstalled,
     featureInteractions,
     featureTipsSeenIds,
     onboarding,
     persistedUIReady,
     settings
   ])
-
-  useEffect(() => {
-    if (activeView !== 'settings' || !shouldShowOnboarding(onboarding)) {
-      setOnboardingSettingsDetour(false)
-    }
-  }, [activeView, onboarding])
 
   const beginOnboardingSettingsDetour = useCallback(() => {
     setOnboardingSettingsDetour(true)
@@ -1132,6 +1188,22 @@ function App(): React.JSX.Element {
         }
       }
 
+      // Why: an empty floating workspace has no tab to close; Cmd/Ctrl+W
+      // should hide that transient overlay before underlying app surfaces act.
+      if (
+        keybindingMatchesAction('tab.close', e, shortcutPlatform, keybindings, {
+          context: 'app'
+        }) &&
+        shouldMinimizeFloatingWorkspacePanelOnCloseShortcut({
+          floatingTerminalOpen,
+          floatingVisibleTabCount
+        })
+      ) {
+        e.preventDefault()
+        setFloatingTerminalOpenWithFocus(false)
+        return
+      }
+
       // Why: keep this guard. TipTap's Cmd+B bold binding depends on the
       // window-level handler *not* toggling the sidebar when focus lives in an
       // editable surface. The main-process before-input-event already carves out
@@ -1182,22 +1254,6 @@ function App(): React.JSX.Element {
         ) {
           return
         }
-      }
-
-      // Why: after the last floating tab is closed, the empty overlay has no
-      // pane-level handler; Cmd/Ctrl+W should minimize only that landing state.
-      if (
-        matchShortcut('tab.close') &&
-        shouldMinimizeFloatingWorkspacePanelOnCloseShortcut({
-          activeView,
-          activeWorktreeId,
-          floatingTerminalOpen,
-          floatingUnifiedTabCount
-        })
-      ) {
-        e.preventDefault()
-        setFloatingTerminalOpenWithFocus(false)
-        return
       }
 
       // Cmd/Ctrl+B — toggle left sidebar
@@ -1297,7 +1353,7 @@ function App(): React.JSX.Element {
     activeWorktreeId,
     actions,
     floatingTerminalOpen,
-    floatingUnifiedTabCount,
+    floatingVisibleTabCount,
     keybindings,
     settings?.terminalShortcutPolicy,
     setFloatingTerminalOpenWithFocus
@@ -1728,7 +1784,7 @@ function App(): React.JSX.Element {
           <SshPassphraseDialog />
           <DeleteWorktreeDialog />
           <CrashReportDialog />
-          {onboarding && shouldShowOnboarding(onboarding) && !onboardingSettingsDetour ? (
+          {onboarding && shouldRenderOnboarding && !onboardingSettingsDetourActive ? (
             <Suspense fallback={null}>
               <OnboardingFlow
                 onboarding={onboarding}

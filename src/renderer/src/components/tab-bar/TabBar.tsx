@@ -6,9 +6,11 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
 import { FilePlus, FileText, Globe, Plus, TerminalSquare } from 'lucide-react'
+import { toast } from 'sonner'
 import type {
   BrowserTab as BrowserTabState,
   TerminalTab,
+  TuiAgent,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
 import { useAppStore } from '../../store'
@@ -23,9 +25,12 @@ import { reconcileTabOrder } from './reconcile-order'
 import type { HoveredTabInsertion, TabDragItemData } from '../tab-group/useTabDragSplit'
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
+import TabBarCreateEntry from './TabBarCreateEntry'
 import { ShellIcon } from './shell-icons'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
@@ -36,12 +41,15 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import type { TabCreateEntryArgs } from './tab-create-entry-action'
+import { buildTabAgentLaunchOptions, orderTabLaunchAgents } from './tab-agent-launch-options'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
 type GitStatusEntries = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree'][string]
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
+const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
 
 type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -57,6 +65,7 @@ type TabBarProps = {
   /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
+  onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   terminalOnly?: boolean
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
@@ -122,6 +131,7 @@ function TabBarInner({
   onNewTerminalTab,
   onNewTerminalWithShell,
   onNewBrowserTab,
+  onOpenEntry,
   terminalOnly = false,
   showAgentLaunchItems = true,
   onNewFileTab,
@@ -157,7 +167,65 @@ function TabBarInner({
   const defaultWindowsPowerShellImplementation = useAppStore(
     (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
   )
-  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(isWindows)
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId?.trim() || null
+  )
+  const unifiedNewTabLauncherEnabled = useAppStore(
+    (s) => s.settings?.experimentalUnifiedNewTabLauncher === true
+  )
+  const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+  const agentCmdOverrides = useAppStore(
+    (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
+  )
+  const connectionId = useAppStore((s) => {
+    if (!unifiedNewTabLauncherEnabled) {
+      return undefined
+    }
+    const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
+    const worktree = allWorktrees.find((w) => w.id === worktreeId)
+    if (!worktree) {
+      return undefined
+    }
+    const repo = s.repos?.find((r) => r.id === worktree.repoId)
+    return repo?.connectionId ?? null
+  })
+  const { detectedIds } = useDetectedAgents(connectionId)
+  const agentLaunchOptions = useMemo(
+    () =>
+      buildTabAgentLaunchOptions(
+        orderTabLaunchAgents(defaultAgent, detectedIds ?? []),
+        agentCmdOverrides
+      ),
+    [agentCmdOverrides, defaultAgent, detectedIds]
+  )
+  const [runtimeHostPlatform, setRuntimeHostPlatform] = useState<NodeJS.Platform | null>(null)
+  useEffect(() => {
+    if (
+      !(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ ||
+      !activeRuntimeEnvironmentId
+    ) {
+      setRuntimeHostPlatform(null)
+      return
+    }
+    let cancelled = false
+    void window.api.runtime
+      .getStatus()
+      .then((status) => {
+        if (!cancelled) {
+          setRuntimeHostPlatform(status.hostPlatform ?? null)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRuntimeHostPlatform(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeRuntimeEnvironmentId])
+  const shouldShowWindowsShellMenu = isWindows || runtimeHostPlatform === 'win32'
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(shouldShowWindowsShellMenu)
   const resolvedGroupId = groupId ?? worktreeId
 
   const statusByRelativePath = useMemo(() => buildStatusMap(gitStatusEntries), [gitStatusEntries])
@@ -220,6 +288,20 @@ function TabBarInner({
   }
   const queueTerminalTabFocusAfterNewTabMenuClose = (tabId: string): void => {
     pendingNewTabMenuFocusRef.current = () => focusTerminalTabSurface(tabId)
+  }
+  const launchAgentFromNewTabEntry = (agent: TuiAgent): void => {
+    const option = agentLaunchOptions.find((candidate) => candidate.agent === agent)
+    const result = launchAgentInNewTab({
+      agent,
+      worktreeId,
+      groupId: resolvedGroupId,
+      launchSource: 'tab_bar_quick_launch'
+    })
+    if (!result) {
+      toast.error(`Could not build launch command for ${option?.label ?? agent}.`)
+      return
+    }
+    queueTerminalTabFocusAfterNewTabMenuClose(result.tabId)
   }
   const runPendingNewTabMenuFocusAfterClose = (): void => {
     const pendingFocus = pendingNewTabMenuFocusRef.current
@@ -535,7 +617,7 @@ function TabBarInner({
         <DropdownMenuContent
           align="start"
           sideOffset={6}
-          className="min-w-[11rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
+          className={`${unifiedNewTabLauncherEnabled ? 'w-72 max-w-[calc(100vw-1rem)]' : 'min-w-[11rem]'} rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]`}
           onCloseAutoFocus={(e) => {
             // Why: terminal-producing menu actions activate a freshly-mounted
             // xterm. Radix's default focus restore sends focus back to the "+"
@@ -544,7 +626,25 @@ function TabBarInner({
             runPendingNewTabMenuFocusAfterClose()
           }}
         >
-          {isWindows && onNewTerminalWithShell ? (
+          {!terminalOnly && onOpenEntry && unifiedNewTabLauncherEnabled ? (
+            <>
+              <TabBarCreateEntry
+                worktreeId={worktreeId}
+                groupId={resolvedGroupId}
+                menuOpen={newTabMenuOpen}
+                agentOptions={agentLaunchOptions}
+                onLaunchAgent={launchAgentFromNewTabEntry}
+                onOpenDefaultTerminal={() => {
+                  queueNewActiveTerminalFocusAfterNewTabMenuClose()
+                  onNewTerminalTab()
+                }}
+                onOpenEntry={onOpenEntry}
+                onDidOpenEntry={() => setNewTabMenuOpen(false)}
+              />
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
+          {shouldShowWindowsShellMenu && onNewTerminalWithShell ? (
             // Why: previously the Windows path nested shell choices under a
             // Radix submenu. In practice the submenu frequently failed to open
             // on hover/click, and even when it worked the two-step expansion
