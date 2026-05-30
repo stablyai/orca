@@ -145,6 +145,14 @@ export type GetCwdRequest = {
   }
 }
 
+export type GetForegroundProcessRequest = {
+  id: string
+  type: 'getForegroundProcess'
+  payload: {
+    sessionId: string
+  }
+}
+
 export type ClearScrollbackRequest = {
   id: string
   type: 'clearScrollback'
@@ -189,6 +197,7 @@ export type DaemonRequest =
   | ListSessionsRequest
   | DetachRequest
   | GetCwdRequest
+  | GetForegroundProcessRequest
   | ClearScrollbackRequest
   | ShutdownRequest
   | PingRequest

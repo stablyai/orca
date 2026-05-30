@@ -333,6 +333,20 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   return {
     pid: proc.pid,
+    getForegroundProcess: () => {
+      // Why: node-pty's `.process` getter reports the PTY's live foreground
+      // process name (the agent running in the shell, or the shell itself) and
+      // updates as it changes. Null once the child is gone — `.process` on a
+      // reaped pty can read a recycled pid.
+      if (dead) {
+        return null
+      }
+      try {
+        return proc.process || null
+      } catch {
+        return null
+      }
+    },
     write: (data) => {
       if (dead) {
         return
