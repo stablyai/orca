@@ -57,15 +57,15 @@ Why: `--wait` blocks until a matching message arrives or the timeout expires (de
 
 **Group addresses** resolve to terminal handles:
 
-| Group | Resolves To |
-|-------|------------|
-| `@all` | All terminal handles except sender |
-| `@idle` | Handles where the agent is currently idle |
-| `@claude` | Handles running Claude Code |
-| `@codex` | Handles running Codex |
-| `@opencode` | Handles running OpenCode |
-| `@gemini` | Handles running Gemini |
-| `@worktree:<id>` | All handles in a specific worktree |
+| Group            | Resolves To                               |
+| ---------------- | ----------------------------------------- |
+| `@all`           | All terminal handles except sender        |
+| `@idle`          | Handles where the agent is currently idle |
+| `@claude`        | Handles running Claude Code               |
+| `@codex`         | Handles running Codex                     |
+| `@opencode`      | Handles running OpenCode                  |
+| `@gemini`        | Handles running Gemini                    |
+| `@worktree:<id>` | All handles in a specific worktree        |
 
 Group messages fan out: one message per recipient, shared `thread_id`, independent read tracking.
 

@@ -1801,7 +1801,10 @@ export default function ChecksPanel(): React.JSX.Element {
     return (
       <>
         {repo && (
+          /* Keyed to the same branch/worktree context as the panel's render-time
+             reset so dialog-local submission state cannot leak across contexts. */
           <CreatePullRequestDialog
+            key={panelContextKey}
             open={createPrDialogOpen}
             repoId={repo.id}
             repoPath={repo.path}

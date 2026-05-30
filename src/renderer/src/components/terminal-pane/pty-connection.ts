@@ -120,11 +120,51 @@ let codexRestartNoticePresence = false
 
 export type PanePtyBinding = IDisposable & {
   syncRendererOutputVisibility: () => void
+  syncProcessTracking: () => void
 }
 
 function isAgentTaskCompleteNotificationEnabled(): boolean {
-  const notifications = useAppStore.getState().settings?.notifications
+  return isAgentTaskCompleteNotificationEnabledFromState(useAppStore.getState())
+}
+
+function isAgentTaskCompleteNotificationEnabledFromState(
+  state: ReturnType<typeof useAppStore.getState>
+): boolean {
+  const notifications = state.settings?.notifications
   return notifications?.enabled !== false && notifications?.agentTaskComplete !== false
+}
+
+const agentTaskCompleteNotificationEnabledListeners = new Set<() => void>()
+let agentTaskCompleteNotificationSettingsUnsubscribe: (() => void) | null = null
+let agentTaskCompleteNotificationEnabledSnapshot: boolean | null = null
+
+function subscribeAgentTaskCompleteNotificationEnabled(listener: () => void): () => void {
+  if (agentTaskCompleteNotificationSettingsUnsubscribe === null) {
+    agentTaskCompleteNotificationEnabledSnapshot = isAgentTaskCompleteNotificationEnabled()
+    agentTaskCompleteNotificationSettingsUnsubscribe = useAppStore.subscribe((state) => {
+      const enabled = isAgentTaskCompleteNotificationEnabledFromState(state)
+      if (enabled === agentTaskCompleteNotificationEnabledSnapshot) {
+        return
+      }
+      agentTaskCompleteNotificationEnabledSnapshot = enabled
+      for (const subscriber of Array.from(agentTaskCompleteNotificationEnabledListeners)) {
+        subscriber()
+      }
+    })
+  }
+
+  agentTaskCompleteNotificationEnabledListeners.add(listener)
+  return () => {
+    agentTaskCompleteNotificationEnabledListeners.delete(listener)
+    if (
+      agentTaskCompleteNotificationEnabledListeners.size === 0 &&
+      agentTaskCompleteNotificationSettingsUnsubscribe !== null
+    ) {
+      agentTaskCompleteNotificationSettingsUnsubscribe()
+      agentTaskCompleteNotificationSettingsUnsubscribe = null
+      agentTaskCompleteNotificationEnabledSnapshot = null
+    }
+  }
 }
 
 function hasAgentNotificationDetail(entry: AgentStatusEntry | undefined): boolean {
@@ -560,6 +600,8 @@ export function connectPanePty(
     getSettings: () => useAppStore.getState().settings,
     inspectProcess: inspectRuntimeTerminalProcess,
     dispatchCompletion: (title) => scheduleAgentTaskCompleteNotification(title),
+    shouldPollProcessCadence: () =>
+      isAgentTaskCompleteNotificationEnabled() && deps.isVisibleRef.current,
     isLive: () => {
       if (disposed) {
         return false
@@ -896,9 +938,9 @@ export function connectPanePty(
       AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS
     )
   }
-  agentTaskCompleteSettingsUnsubscribe = useAppStore.subscribe((state, previousState) => {
-    if (state.settings?.notifications !== previousState?.settings?.notifications) {
-      syncAgentTaskCompleteNotificationEnabled()
+  agentTaskCompleteSettingsUnsubscribe = subscribeAgentTaskCompleteNotificationEnabled(() => {
+    if (syncAgentTaskCompleteNotificationEnabled()) {
+      agentCompletionCoordinator.startProcessTracking()
     }
   })
 
@@ -2481,6 +2523,9 @@ export function connectPanePty(
   return {
     syncRendererOutputVisibility() {
       syncRendererOutputVisibility()
+    },
+    syncProcessTracking() {
+      agentCompletionCoordinator.startProcessTracking()
     },
     dispose() {
       disposed = true

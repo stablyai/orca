@@ -119,7 +119,7 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   findGithubPrWorkspaceAttachment,
   getGithubPrWorkspaceAttachmentLabel
-} from '@/lib/github-pr-workspace-attachment'
+} from '@/lib/github-work-item-workspace-attachment'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'

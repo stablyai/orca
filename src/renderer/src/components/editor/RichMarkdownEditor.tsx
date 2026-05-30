@@ -1784,7 +1784,9 @@ export default function RichMarkdownEditor({
                           targetModeLabel="This note"
                           triggerClassName="rich-markdown-review-note-send"
                           disabledTooltip="Note already sent"
-                          onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+                          onDelivered={(notes) =>
+                            void clearDeliveredDiffComments(worktreeId, notes)
+                          }
                         />
                       }
                     />

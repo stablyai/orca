@@ -12,7 +12,6 @@ import type {
   BaseRefSearchResult,
   BaseRefDefaultResult,
   BrowserViewportOverride,
-  CreateWorktreeArgs,
   CustomPet,
   FsChangedPayload,
   GetRateLimitResult,
@@ -164,6 +163,7 @@ import type {
   ReactErrorBoundaryReportArgs,
   ReactErrorBoundaryReportResult
 } from '../shared/crash-reporting'
+import type { PreloadApi } from './api-types'
 
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
@@ -447,40 +447,27 @@ const api = {
   },
 
   repos: {
-    list: (): Promise<unknown[]> => ipcRenderer.invoke('repos:list'),
+    list: () => ipcRenderer.invoke('repos:list'),
 
-    add: (args: { path: string; kind?: 'git' | 'folder' }): Promise<unknown> =>
-      ipcRenderer.invoke('repos:add', args),
+    add: (args) => ipcRenderer.invoke('repos:add', args),
 
-    addRemote: (args: {
-      connectionId: string
-      remotePath: string
-      displayName?: string
-      kind?: 'git' | 'folder'
-    }): Promise<unknown> => ipcRenderer.invoke('repos:addRemote', args),
+    addRemote: (args) => ipcRenderer.invoke('repos:addRemote', args),
 
-    create: (args: {
-      parentPath: string
-      name: string
-      kind: 'git' | 'folder'
-    }): Promise<unknown> => ipcRenderer.invoke('repos:create', args),
+    create: (args) => ipcRenderer.invoke('repos:create', args),
 
-    remove: (args: { repoId: string }): Promise<void> => ipcRenderer.invoke('repos:remove', args),
+    remove: (args) => ipcRenderer.invoke('repos:remove', args),
 
-    reorder: (args: { orderedIds: string[] }): Promise<{ status: 'applied' | 'rejected' }> =>
-      ipcRenderer.invoke('repos:reorder', args),
+    reorder: (args) => ipcRenderer.invoke('repos:reorder', args),
 
-    update: (args: { repoId: string; updates: Record<string, unknown> }): Promise<unknown> =>
-      ipcRenderer.invoke('repos:update', args),
+    update: (args) => ipcRenderer.invoke('repos:update', args),
 
-    pickFolder: (): Promise<string | null> => ipcRenderer.invoke('repos:pickFolder'),
+    pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
 
-    pickDirectory: (): Promise<string | null> => ipcRenderer.invoke('repos:pickDirectory'),
+    pickDirectory: () => ipcRenderer.invoke('repos:pickDirectory'),
 
-    clone: (args: { url: string; destination: string }): Promise<unknown> =>
-      ipcRenderer.invoke('repos:clone', args),
+    clone: (args) => ipcRenderer.invoke('repos:clone', args),
 
-    cloneAbort: (): Promise<void> => ipcRenderer.invoke('repos:cloneAbort'),
+    cloneAbort: () => ipcRenderer.invoke('repos:cloneAbort'),
 
     onCloneProgress: (
       callback: (data: { phase: string; percent: number }) => void
@@ -513,52 +500,24 @@ const api = {
       ipcRenderer.on('repos:changed', listener)
       return () => ipcRenderer.removeListener('repos:changed', listener)
     }
-  },
+  } satisfies PreloadApi['repos'],
 
   projectGroups: {
-    list: (): Promise<unknown[]> => ipcRenderer.invoke('projectGroups:list'),
-    create: (args: {
-      name: string
-      parentPath?: string | null
-      parentGroupId?: string | null
-      createdFrom?: 'manual' | 'folder-scan' | 'migration'
-    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:create', args),
-    update: (args: { groupId: string; updates: Record<string, unknown> }): Promise<unknown> =>
-      ipcRenderer.invoke('projectGroups:update', args),
-    delete: (args: { groupId: string }): Promise<boolean> =>
-      ipcRenderer.invoke('projectGroups:delete', args),
-    moveProject: (args: {
-      projectId: string
-      groupId: string | null
-      order?: number
-    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:moveProject', args),
-    scanNested: (args: {
-      path: string
-      connectionId?: string
-      options?: Record<string, unknown>
-    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:scanNested', args),
-    importNested: (args: {
-      parentPath: string
-      groupName: string
-      projectPaths: string[]
-      connectionId?: string
-      mode: 'group' | 'separate'
-    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:importNested', args)
-  },
+    list: () => ipcRenderer.invoke('projectGroups:list'),
+    create: (args) => ipcRenderer.invoke('projectGroups:create', args),
+    update: (args) => ipcRenderer.invoke('projectGroups:update', args),
+    delete: (args) => ipcRenderer.invoke('projectGroups:delete', args),
+    moveProject: (args) => ipcRenderer.invoke('projectGroups:moveProject', args),
+    scanNested: (args) => ipcRenderer.invoke('projectGroups:scanNested', args),
+    importNested: (args) => ipcRenderer.invoke('projectGroups:importNested', args)
+  } satisfies PreloadApi['projectGroups'],
 
   sparsePresets: {
-    list: (args: { repoId: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('sparsePresets:list', args),
+    list: (args) => ipcRenderer.invoke('sparsePresets:list', args),
 
-    save: (args: {
-      repoId: string
-      id?: string
-      name: string
-      directories: string[]
-    }): Promise<unknown> => ipcRenderer.invoke('sparsePresets:save', args),
+    save: (args) => ipcRenderer.invoke('sparsePresets:save', args),
 
-    remove: (args: { repoId: string; presetId: string }): Promise<void> =>
-      ipcRenderer.invoke('sparsePresets:remove', args),
+    remove: (args) => ipcRenderer.invoke('sparsePresets:remove', args),
 
     onChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
@@ -566,55 +525,33 @@ const api = {
       ipcRenderer.on('sparsePresets:changed', listener)
       return () => ipcRenderer.removeListener('sparsePresets:changed', listener)
     }
-  },
+  } satisfies PreloadApi['sparsePresets'],
 
   worktrees: {
-    list: (args: { repoId: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('worktrees:list', args),
+    list: (args) => ipcRenderer.invoke('worktrees:list', args),
 
-    listDetected: (args: { repoId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('worktrees:listDetected', args),
+    listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
 
-    listAll: (): Promise<unknown[]> => ipcRenderer.invoke('worktrees:listAll'),
+    listAll: () => ipcRenderer.invoke('worktrees:listAll'),
 
-    create: (args: CreateWorktreeArgs): Promise<unknown> =>
-      ipcRenderer.invoke('worktrees:create', args),
+    create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
-    resolvePrBase: (args: {
-      repoId: string
-      prNumber: number
-      headRefName?: string
-      isCrossRepository?: boolean
-    }): Promise<{ baseBranch: string; pushTarget?: unknown } | { error: string }> =>
-      ipcRenderer.invoke('worktrees:resolvePrBase', args),
+    resolvePrBase: (args) => ipcRenderer.invoke('worktrees:resolvePrBase', args),
 
-    resolveMrBase: (args: {
-      repoId: string
-      mrIid: number
-      sourceBranch?: string
-      isCrossRepository?: boolean
-    }): Promise<{ baseBranch: string; pushTarget?: unknown } | { error: string }> =>
-      ipcRenderer.invoke('worktrees:resolveMrBase', args),
+    resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),
 
-    remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }): Promise<void> =>
-      ipcRenderer.invoke('worktrees:remove', args),
+    remove: (args) => ipcRenderer.invoke('worktrees:remove', args),
 
-    updateMeta: (args: {
-      worktreeId: string
-      updates: Record<string, unknown>
-    }): Promise<unknown> => ipcRenderer.invoke('worktrees:updateMeta', args),
+    forceDeletePreservedBranch: (args) =>
+      ipcRenderer.invoke('worktrees:forceDeletePreservedBranch', args),
 
-    listLineage: (): Promise<Record<string, unknown>> =>
-      ipcRenderer.invoke('worktrees:listLineage'),
+    updateMeta: (args) => ipcRenderer.invoke('worktrees:updateMeta', args),
 
-    updateLineage: (args: {
-      worktreeId: string
-      parentWorktreeId?: string
-      noParent?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('worktrees:updateLineage', args),
+    listLineage: () => ipcRenderer.invoke('worktrees:listLineage'),
 
-    persistSortOrder: (args: { orderedIds: string[] }): Promise<void> =>
-      ipcRenderer.invoke('worktrees:persistSortOrder', args),
+    updateLineage: (args) => ipcRenderer.invoke('worktrees:updateLineage', args),
+
+    persistSortOrder: (args) => ipcRenderer.invoke('worktrees:persistSortOrder', args),
 
     onChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
@@ -640,7 +577,7 @@ const api = {
       ipcRenderer.on('worktree:remoteBranchConflict', listener)
       return () => ipcRenderer.removeListener('worktree:remoteBranchConflict', listener)
     }
-  },
+  } satisfies PreloadApi['worktrees'],
 
   workspaceCleanup: {
     scan: (args?: { worktreeId?: string; skipGitWorktreeIds?: string[] }): Promise<unknown> =>
@@ -2427,6 +2364,11 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openNewWorkspace', listener)
       return () => ipcRenderer.removeListener('ui:openNewWorkspace', listener)
+    },
+    onDeleteCurrentWorkspace: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:deleteCurrentWorkspace', listener)
+      return () => ipcRenderer.removeListener('ui:deleteCurrentWorkspace', listener)
     },
     onOpenTasks: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()

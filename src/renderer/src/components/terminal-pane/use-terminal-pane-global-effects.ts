@@ -30,6 +30,7 @@ type UseTerminalPaneGlobalEffectsArgs = {
   cwd?: string
   isActive: boolean
   isVisible: boolean
+  isSyncFitEnabled: boolean
   paneCount: number
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -45,6 +46,7 @@ export function useTerminalPaneGlobalEffects({
   cwd,
   isActive,
   isVisible,
+  isSyncFitEnabled,
   paneCount,
   managerRef,
   containerRef,
@@ -73,7 +75,7 @@ export function useTerminalPaneGlobalEffects({
     visibleResumeCompleteRef: wasVisibleRef,
     paneCount
   })
-  useTerminalContainerFitSync({ isVisible, managerRef, containerRef })
+  useTerminalContainerFitSync({ isVisible, isSyncFitEnabled, managerRef, containerRef })
 
   useEffect(() => {
     const manager = managerRef.current

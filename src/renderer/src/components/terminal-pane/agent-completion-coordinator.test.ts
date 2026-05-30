@@ -45,6 +45,47 @@ describe('agent completion coordinator', () => {
     vi.restoreAllMocks()
   })
 
+  it('does not schedule cadence process inspections for hidden idle panes', () => {
+    const inspectProcess = vi.fn(async () => processResult(null))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true,
+      shouldPollProcessCadence: () => false
+    })
+
+    coordinator.startProcessTracking()
+    vi.advanceTimersByTime(10_000)
+
+    expect(inspectProcess).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps the process-exit backstop after hidden panes gain agent evidence', async () => {
+    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true,
+      shouldPollProcessCadence: () => false
+    })
+
+    coordinator.startProcessTracking()
+    expect(vi.getTimerCount()).toBe(0)
+
+    coordinator.observeTitle('Codex working')
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+
+    expect(inspectProcess).toHaveBeenCalledTimes(1)
+  })
+
   it('clears process evidence after agent exit so later non-agent spinner titles do not notify', async () => {
     let foregroundProcess: string | null = 'codex'
     const dispatchCompletion = vi.fn()

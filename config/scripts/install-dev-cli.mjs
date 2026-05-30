@@ -10,9 +10,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const source = path.join(scriptDir, 'orca-dev')
 
 const commandPath =
-  process.platform === 'darwin' || process.platform === 'linux'
-    ? '/usr/local/bin/orca-dev'
-    : null
+  process.platform === 'darwin' || process.platform === 'linux' ? '/usr/local/bin/orca-dev' : null
 
 if (!commandPath) {
   console.log('[orca-dev] Skipping global symlink (unsupported platform).')
@@ -21,7 +19,9 @@ if (!commandPath) {
 
 function isOwnedByUs(target) {
   try {
-    if (!lstatSync(target).isSymbolicLink()) { return false }
+    if (!lstatSync(target).isSymbolicLink()) {
+      return false
+    }
     return readlinkSync(target) === source
   } catch {
     return false

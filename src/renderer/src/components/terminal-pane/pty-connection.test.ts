@@ -3753,6 +3753,31 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('shares one raw store subscriber for agent-complete notification settings across panes', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    transportFactoryQueue.push(createMockTransport('pty-1'), createMockTransport('pty-2'))
+
+    vi.useFakeTimers()
+    const firstBinding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+    const secondBinding = connectPanePty(
+      createPane(2) as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+    await flushAsyncTicks()
+
+    expect(storeSubscribers).toHaveLength(1)
+
+    firstBinding.dispose()
+    expect(storeSubscribers).toHaveLength(1)
+    secondBinding.dispose()
+    expect(storeSubscribers).toHaveLength(0)
+  })
+
   it('does not dispatch generic title completions when agent-complete notifications are disabled', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-codex')

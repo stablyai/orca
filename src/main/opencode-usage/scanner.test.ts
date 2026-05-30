@@ -1,9 +1,14 @@
+/* eslint-disable max-lines -- Why: OpenCode scanner tests cover multiple DB schema generations and attribution boundaries together so parser regressions stay auditable. */
 import Database from 'better-sqlite3'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseOpenCodeUsageDatabase, parseOpenCodeUsageRow } from './scanner'
+import {
+  attributeOpenCodeUsageEvent,
+  parseOpenCodeUsageDatabase,
+  parseOpenCodeUsageRow
+} from './scanner'
 
 const WORKTREE = '/workspace/repo'
 
@@ -26,6 +31,21 @@ function worktrees() {
       canonicalPath: WORKTREE
     }
   ]
+}
+
+function usageEvent(cwd: string) {
+  return {
+    sessionId: 'session-1',
+    timestamp: '2026-04-09T10:00:00.000Z',
+    cwd,
+    model: 'anthropic/claude-sonnet-4-5',
+    estimatedCostUsd: 0.012,
+    inputTokens: 100,
+    cachedInputTokens: 10,
+    outputTokens: 25,
+    reasoningOutputTokens: 10,
+    totalTokens: 125
+  }
 }
 
 describe('parseOpenCodeUsageRow', () => {
@@ -69,6 +89,44 @@ describe('parseOpenCodeUsageRow', () => {
       reasoningOutputTokens: 100,
       totalTokens: 1350
     })
+  })
+})
+
+describe('attributeOpenCodeUsageEvent', () => {
+  it('attributes cwd paths under dotdot-prefixed child directories to the worktree', async () => {
+    const attributed = await attributeOpenCodeUsageEvent(
+      usageEvent(`${WORKTREE}/..fixtures/session`),
+      worktrees()
+    )
+
+    expect(attributed?.projectKey).toBe('worktree:repo-1::/workspace/repo')
+    expect(attributed?.projectLabel).toBe('Repo')
+    expect(attributed?.worktreeId).toBe('repo-1::/workspace/repo')
+  })
+
+  it('does not attribute true parent-directory escapes to the worktree', async () => {
+    const attributed = await attributeOpenCodeUsageEvent(
+      usageEvent(`${WORKTREE}/../other/session`),
+      worktrees()
+    )
+
+    expect(attributed?.projectKey).toBe('cwd:/workspace/repo/../other/session')
+    expect(attributed?.worktreeId).toBeNull()
+  })
+
+  it('does not treat different Windows drives as containing paths', async () => {
+    const attributed = await attributeOpenCodeUsageEvent(usageEvent('D:\\other\\repo'), [
+      {
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::C:\\repo',
+        path: 'C:\\repo',
+        displayName: 'Repo',
+        canonicalPath: 'C:\\repo'
+      }
+    ])
+
+    expect(attributed?.projectKey).toBe('cwd:d:/other/repo')
+    expect(attributed?.worktreeId).toBeNull()
   })
 })
 

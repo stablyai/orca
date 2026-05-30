@@ -12,10 +12,12 @@ import type {
   CreateWorktreeResult,
   DetectedWorktree,
   DetectedWorktreeListResult,
+  ForceDeleteWorktreeBranchResult,
   GitPushTarget,
   GitWorktreeInfo,
   OrcaHooks,
   Repo,
+  RemoveWorktreeResult,
   Worktree,
   WorktreeMeta
 } from '../../shared/types'
@@ -26,6 +28,7 @@ import {
 } from '../../shared/worktree-ownership'
 import {
   assertWorktreeCleanForRemoval,
+  forceDeleteLocalBranch,
   listWorktrees as listGitWorktrees,
   removeWorktree
 } from '../git/worktree'
@@ -199,7 +202,66 @@ async function runRemoteArchiveHook(
 
 type WorktreeRemovalInFlight = {
   optionsKey: string
-  promise: Promise<void>
+  promise: Promise<RemoveWorktreeResult>
+}
+
+type PreservedBranchCleanupTarget = {
+  branchName: string
+  head: string
+  pushTarget?: GitPushTarget
+}
+
+const preservedBranchCleanupByWorktreeId = new Map<string, PreservedBranchCleanupTarget>()
+
+function rememberPreservedBranchCleanupTarget(
+  worktreeId: string,
+  result: RemoveWorktreeResult | undefined,
+  fallbackHead: string | undefined,
+  pushTarget: GitPushTarget | undefined
+): void {
+  if (result?.preservedBranch) {
+    const head = result.preservedBranch.head ?? fallbackHead
+    if (!head) {
+      throw new Error(
+        `Cannot safely offer force-delete for preserved branch "${result.preservedBranch.branchName}" without its saved commit.`
+      )
+    }
+    preservedBranchCleanupByWorktreeId.set(worktreeId, {
+      branchName: result.preservedBranch.branchName,
+      head,
+      ...(pushTarget ? { pushTarget } : {})
+    })
+    return
+  }
+  preservedBranchCleanupByWorktreeId.delete(worktreeId)
+}
+
+function preserveBranchHeadFallback(
+  result: RemoveWorktreeResult | undefined,
+  fallbackHead: string | undefined
+): RemoveWorktreeResult {
+  if (!result?.preservedBranch || result.preservedBranch.head || !fallbackHead) {
+    return result ?? {}
+  }
+  return {
+    ...result,
+    preservedBranch: {
+      ...result.preservedBranch,
+      head: fallbackHead
+    }
+  }
+}
+
+function getPreservedBranchCleanupTarget(
+  worktreeId: string,
+  branchName: string,
+  expectedHead: string
+): PreservedBranchCleanupTarget {
+  const target = preservedBranchCleanupByWorktreeId.get(worktreeId)
+  if (!target || target.branchName !== branchName || target.head !== expectedHead) {
+    throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
+  }
+  return target
 }
 
 const loggedUnavailableSshGitProviders = new Set<string>()
@@ -547,6 +609,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:resolvePrBase')
   ipcMain.removeHandler('worktrees:resolveMrBase')
   ipcMain.removeHandler('worktrees:remove')
+  ipcMain.removeHandler('worktrees:forceDeletePreservedBranch')
   ipcMain.removeHandler('worktrees:updateMeta')
   ipcMain.removeHandler('worktrees:listLineage')
   ipcMain.removeHandler('worktrees:updateLineage')
@@ -911,7 +974,7 @@ export function registerWorktreeHandlers(
       // Why: stale toast actions, double-clicks, and Space/sidebar races can
       // target the same worktree concurrently. Share the destructive backend
       // operation so only one path touches Git and the filesystem.
-      const removal = (async (): Promise<void> => {
+      const removal = (async (): Promise<RemoveWorktreeResult> => {
         const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
         const repo = store.getRepo(repoId)
         if (!repo) {
@@ -933,8 +996,9 @@ export function registerWorktreeHandlers(
           })
           store.removeWorktreeMeta(args.worktreeId)
           deleteWorktreeHistoryDir(args.worktreeId)
+          preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
           notifyWorktreesChanged(mainWindow, repoId)
-          return
+          return {}
         }
 
         // Why: the renderer-supplied worktreeId contains a filesystem path.
@@ -1011,8 +1075,9 @@ export function registerWorktreeHandlers(
             runtime.clearOptimisticReconcileToken(args.worktreeId)
             store.removeWorktreeMeta(args.worktreeId)
             deleteWorktreeHistoryDir(args.worktreeId)
+            preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
             notifyWorktreesChanged(mainWindow, repoId)
-            return
+            return {}
           }
           if (args.force && (await isAlreadyRemovedWorktreePath(repo, worktreePath))) {
             // Why: Force-delete can be retried from stale UI after a prior delete
@@ -1038,8 +1103,9 @@ export function registerWorktreeHandlers(
             runtime.clearOptimisticReconcileToken(args.worktreeId)
             store.removeWorktreeMeta(args.worktreeId)
             deleteWorktreeHistoryDir(args.worktreeId)
+            preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
             notifyWorktreesChanged(mainWindow, repoId)
-            return
+            return {}
           }
           throw new Error(`Refusing to delete unregistered worktree path: ${worktreePath}`)
         }
@@ -1074,9 +1140,13 @@ export function registerWorktreeHandlers(
             }
           }
 
-          await (deleteBranch
+          const rawRemovalResult = await (deleteBranch
             ? provider!.removeWorktree(canonicalWorktreePath, args.force)
             : provider!.removeWorktree(canonicalWorktreePath, args.force, { deleteBranch }))
+          const removalResult = preserveBranchHeadFallback(
+            rawRemovalResult,
+            registeredWorktree.head
+          )
           await cleanupUnusedWorktreePushTargetRemoteSsh(
             provider!,
             repo.path,
@@ -1084,11 +1154,17 @@ export function registerWorktreeHandlers(
             removedPushTarget,
             store
           )
+          rememberPreservedBranchCleanupTarget(
+            args.worktreeId,
+            removalResult,
+            registeredWorktree.head,
+            removedPushTarget
+          )
           runtime.clearOptimisticReconcileToken(args.worktreeId)
           store.removeWorktreeMeta(args.worktreeId)
           deleteWorktreeHistoryDir(args.worktreeId)
           notifyWorktreesChanged(mainWindow, repoId)
-          return
+          return removalResult ?? {}
         }
 
         // Why: `git worktree remove` (non-force) refuses to delete a worktree
@@ -1133,12 +1209,16 @@ export function registerWorktreeHandlers(
             })
         }
 
+        let removalResult: RemoveWorktreeResult | undefined
         try {
-          await (deleteBranch
-            ? removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)
-            : removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false, {
-                deleteBranch
-              }))
+          removalResult = preserveBranchHeadFallback(
+            await (deleteBranch
+              ? removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)
+              : removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false, {
+                  deleteBranch
+                })),
+            registeredWorktree.head
+          )
         } catch (error) {
           // If git no longer tracks this worktree, clean up the directory and metadata
           if (isOrphanedWorktreeError(error)) {
@@ -1166,9 +1246,10 @@ export function registerWorktreeHandlers(
             runtime.clearOptimisticReconcileToken(args.worktreeId)
             store.removeWorktreeMeta(args.worktreeId)
             deleteWorktreeHistoryDir(args.worktreeId)
+            preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
             invalidateAuthorizedRootsCache()
             notifyWorktreesChanged(mainWindow, repoId)
-            return
+            return {}
           }
           throw new Error(
             formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
@@ -1180,21 +1261,78 @@ export function registerWorktreeHandlers(
           removedPushTarget,
           store
         )
+        rememberPreservedBranchCleanupTarget(
+          args.worktreeId,
+          removalResult,
+          registeredWorktree.head,
+          removedPushTarget
+        )
         runtime.clearOptimisticReconcileToken(args.worktreeId)
         store.removeWorktreeMeta(args.worktreeId)
         deleteWorktreeHistoryDir(args.worktreeId)
         invalidateAuthorizedRootsCache()
 
         notifyWorktreesChanged(mainWindow, repoId)
+        return removalResult ?? {}
       })()
       worktreeRemovalsInFlight.set(args.worktreeId, { optionsKey, promise: removal })
       try {
-        await removal
+        return await removal
       } finally {
         if (worktreeRemovalsInFlight.get(args.worktreeId)?.promise === removal) {
           worktreeRemovalsInFlight.delete(args.worktreeId)
         }
       }
+    }
+  )
+
+  ipcMain.handle(
+    'worktrees:forceDeletePreservedBranch',
+    async (
+      _event,
+      args: { worktreeId: string; branchName: string; expectedHead: string }
+    ): Promise<ForceDeleteWorktreeBranchResult> => {
+      const { repoId } = parseWorktreeId(args.worktreeId)
+      const cleanupTarget = getPreservedBranchCleanupTarget(
+        args.worktreeId,
+        args.branchName,
+        args.expectedHead
+      )
+      const repo = store.getRepo(repoId)
+      if (!repo) {
+        throw new Error(`Repo not found: ${repoId}`)
+      }
+      if (isFolderRepo(repo)) {
+        throw new Error('Folder workspaces do not have local Git branches.')
+      }
+
+      if (repo.connectionId) {
+        const provider = requireSshGitProvider(repo.connectionId)
+        await forceDeleteLocalBranch(
+          repo.path,
+          cleanupTarget.branchName,
+          cleanupTarget.head,
+          (argv, cwd) => provider.exec(argv, cwd)
+        )
+        await cleanupUnusedWorktreePushTargetRemoteSsh(
+          provider,
+          repo.path,
+          args.worktreeId,
+          cleanupTarget.pushTarget,
+          store
+        )
+      } else {
+        await forceDeleteLocalBranch(repo.path, cleanupTarget.branchName, cleanupTarget.head)
+        await cleanupUnusedWorktreePushTargetRemote(
+          repo.path,
+          args.worktreeId,
+          cleanupTarget.pushTarget,
+          store
+        )
+      }
+
+      preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
+      return { deleted: true }
     }
   )
 

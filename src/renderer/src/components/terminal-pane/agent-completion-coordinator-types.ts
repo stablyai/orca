@@ -12,6 +12,7 @@ export type AgentCompletionCoordinatorOptions = {
   ) => Promise<RuntimeTerminalProcessInspection>
   dispatchCompletion: (title: string) => void
   isLive: () => boolean
+  shouldPollProcessCadence?: () => boolean
 }
 
 export type AgentCompletionCoordinator = {

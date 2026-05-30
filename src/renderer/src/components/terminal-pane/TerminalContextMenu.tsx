@@ -53,6 +53,7 @@ type TerminalContextMenuProps = {
   onAddQuickCommand: () => void
   onToggleExpand: () => void
   onSetTitle: () => void
+  onCopyPaneId: () => void
 }
 
 export default function TerminalContextMenu({
@@ -77,7 +78,8 @@ export default function TerminalContextMenu({
   onQuickCommand,
   onAddQuickCommand,
   onToggleExpand,
-  onSetTitle
+  onSetTitle,
+  onCopyPaneId
 }: TerminalContextMenuProps): React.JSX.Element {
   const copyShortcut = useShortcutLabel('terminal.copySelection')
   const pasteShortcut = useShortcutLabel('terminal.paste')
@@ -238,6 +240,10 @@ export default function TerminalContextMenu({
         <DropdownMenuItem onSelect={onSetTitle}>
           <Pencil />
           Set Title…
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onCopyPaneId}>
+          <Copy />
+          Copy Pane ID
         </DropdownMenuItem>
         {canClosePane && (
           <>

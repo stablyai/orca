@@ -44,13 +44,13 @@ async function detectHostedReviewProvider(
   if (await getRepoSlug(repoPath, connectionId)) {
     return 'github'
   }
-  if (await getBitbucketRepoSlug(repoPath)) {
+  if (await getBitbucketRepoSlug(repoPath, connectionId)) {
     return 'bitbucket'
   }
-  if (await getAzureDevOpsRepoSlug(repoPath)) {
+  if (await getAzureDevOpsRepoSlug(repoPath, connectionId)) {
     return 'azure-devops'
   }
-  if (await getGiteaRepoSlug(repoPath)) {
+  if (await getGiteaRepoSlug(repoPath, connectionId)) {
     return 'gitea'
   }
   return 'unsupported'

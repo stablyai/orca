@@ -84,6 +84,10 @@ import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import { shutdownBufferCaptures } from './shutdown-buffer-captures'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { pasteTerminalText } from './terminal-bracketed-paste'
+import {
+  applyTerminalPaneAttentionToManager,
+  subscribeTerminalPaneAttention
+} from './terminal-pane-attention-subscriptions'
 
 type TerminalPaneProps = {
   tabId: string
@@ -351,10 +355,6 @@ export default function TerminalPane({
   const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
   const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
   const clearTerminalPaneUnread = useAppStore((store) => store.clearTerminalPaneUnread)
-  const unreadTerminalPanes = useAppStore((store) => store.unreadTerminalPanes)
-  const terminalAttentionEnabled = useAppStore(
-    (store) => store.settings?.experimentalTerminalAttention === true
-  )
   const openSpacePage = useAppStore((store) => store.openSpacePage)
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
@@ -1047,6 +1047,9 @@ export default function TerminalPane({
     cwd,
     isActive,
     isVisible,
+    // Why: hidden startup probes are opacity-hidden but measurable; ordinary
+    // hidden tabs are display:none and refit on visibility resume instead.
+    isSyncFitEnabled: isVisible || shouldMeasureHiddenStartup,
     paneCount,
     managerRef,
     containerRef,
@@ -1268,20 +1271,18 @@ export default function TerminalPane({
     }
   }, [tabId, worktreeId, clearTerminalTabUnread, clearTerminalPaneUnread, clearWorktreeUnread])
 
-  useLayoutEffect(() => {
+  const applyTerminalPaneAttention = useCallback(() => {
     const manager = managerRef.current
     if (!manager) {
       return
     }
-    for (const pane of manager.getPanes()) {
-      const paneKey = makePaneKey(tabId, pane.leafId)
-      if (terminalAttentionEnabled && unreadTerminalPanes[paneKey]) {
-        pane.container.setAttribute('data-terminal-attention', '')
-      } else {
-        pane.container.removeAttribute('data-terminal-attention')
-      }
-    }
-  }, [tabId, paneCount, terminalAttentionEnabled, unreadTerminalPanes])
+    applyTerminalPaneAttentionToManager(manager, tabId)
+  }, [tabId])
+
+  useLayoutEffect(() => {
+    applyTerminalPaneAttention()
+    return subscribeTerminalPaneAttention(tabId, applyTerminalPaneAttention)
+  }, [tabId, paneCount, applyTerminalPaneAttention])
 
   // Sync the data-has-title attribute on pane containers when titles change,
   // and reflow terminals so safeFit() sees the correct available height.
@@ -1540,6 +1541,7 @@ export default function TerminalPane({
     managerRef,
     paneTransportsRef,
     paneCwdRef,
+    tabId,
     worktreeId,
     groupId: quickCommandGroupId,
     fallbackCwd: cwd ?? '',
@@ -1759,6 +1761,7 @@ export default function TerminalPane({
         }
         onToggleExpand={contextMenu.onToggleExpand}
         onSetTitle={contextMenu.onSetTitle}
+        onCopyPaneId={contextMenu.onCopyPaneId}
       />
       <TerminalQuickCommandDialog
         open={quickCommandEditorOpen}

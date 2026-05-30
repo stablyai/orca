@@ -7,32 +7,8 @@ import {
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-
-export type EditingTarget = {
-  label: string
-  configHost: string
-  host: string
-  port: string
-  username: string
-  identityFile: string
-  proxyCommand: string
-  jumpHost: string
-  relayGracePeriodSeconds: string
-  relayKeepAliveUntilReset: boolean
-}
-
-export const EMPTY_FORM: EditingTarget = {
-  label: '',
-  configHost: '',
-  host: '',
-  port: '22',
-  username: '',
-  identityFile: '',
-  proxyCommand: '',
-  jumpHost: '',
-  relayGracePeriodSeconds: String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS),
-  relayKeepAliveUntilReset: false
-}
+import { applyParsedSshHostInput, type EditingTarget } from './ssh-target-draft'
+export { EMPTY_FORM, type EditingTarget } from './ssh-target-draft'
 
 type SshTargetFormProps = {
   editingId: string | null
@@ -69,15 +45,16 @@ export function SshTargetForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Host *</Label>
+          <Label>Host or alias *</Label>
           <Input
             value={form.host}
             onChange={(e) => onFormChange((f) => ({ ...f, host: e.target.value }))}
-            placeholder="192.168.1.100 or server.example.com"
+            onBlur={() => onFormChange(applyParsedSshHostInput)}
+            placeholder="server, deploy@server:2222, ssh://server"
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Username *</Label>
+          <Label>Username</Label>
           <Input
             value={form.username}
             onChange={(e) => onFormChange((f) => ({ ...f, username: e.target.value }))}

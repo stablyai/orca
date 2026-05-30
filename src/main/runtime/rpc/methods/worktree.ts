@@ -2,6 +2,7 @@ import { defineMethod, type RpcMethod } from '../core'
 import {
   WorktreeCreate,
   WorktreeDetectedListParams,
+  WorktreeForceDeleteBranch,
   WorktreeListParams,
   WorktreePsParams,
   WorktreeRemove,
@@ -166,5 +167,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       )
       return { removed: true, ...result }
     }
+  }),
+  defineMethod({
+    name: 'worktree.forceDeleteBranch',
+    params: WorktreeForceDeleteBranch,
+    handler: async (params, { runtime }) =>
+      runtime.forceDeletePreservedBranch(params.worktree, params.branchName, params.expectedHead)
   })
 ]
