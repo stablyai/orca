@@ -2,6 +2,7 @@ import { CornerDownLeft, Pencil, Trash, FileText } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 // Why: the saved-note card lives inside a Monaco view zone's DOM node.
 // useDiffCommentDecorator creates a React root per zone and renders this
@@ -51,6 +52,7 @@ export function DiffCommentCard({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(body)
   const [submitting, setSubmitting] = useState(false)
+  const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   // Why: stash `onContentResize` in a ref so the layout/resize effects only
@@ -119,7 +121,7 @@ export function DiffCommentCard({
     setSubmitting(true)
     try {
       const ok = await onSubmitEdit(trimmedDraft)
-      if (ok) {
+      if (ok && mountedRef.current) {
         setEditing(false)
       }
     } catch (err) {
@@ -129,7 +131,9 @@ export function DiffCommentCard({
       // (`void handleSubmit()`).
       console.error('Failed to submit diff comment edit:', err)
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 

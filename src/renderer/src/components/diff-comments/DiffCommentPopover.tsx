@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { CornerDownLeft, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 // Why: rendered as a DOM sibling overlay inside the editor container rather
 // than as a Monaco content widget because it owns a React textarea with
@@ -43,6 +44,7 @@ export function DiffCommentPopover({
   // fresh id/createdAt. Tracked in React state (not a ref) so the button can
   // reflect the in-flight status to the user.
   const [submitting, setSubmitting] = useState(false)
+  const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   // Why: stash onCancel in a ref so the document mousedown listener below can
@@ -104,7 +106,9 @@ export function DiffCommentPopover({
     try {
       await onSubmit(trimmed)
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
