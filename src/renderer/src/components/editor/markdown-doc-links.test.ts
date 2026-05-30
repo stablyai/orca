@@ -171,8 +171,10 @@ describe('doc link hrefs', () => {
 })
 
 describe('getMarkdownDocLinkAnchor', () => {
-  it('extracts heading anchors from doc link targets', () => {
-    expect(getMarkdownDocLinkAnchor('docs/setup-guide#Install steps')).toBe('Install steps')
+  it('extracts preview heading anchor ids from doc link targets', () => {
+    expect(getMarkdownDocLinkAnchor('docs/setup-guide#Install steps')).toBe('install-steps')
+    expect(getMarkdownDocLinkAnchor('docs/setup-guide#What is new?')).toBe('what-is-new')
+    expect(getMarkdownDocLinkAnchor('docs/setup-guide#install-steps')).toBe('install-steps')
     expect(getMarkdownDocLinkAnchor('docs/setup-guide')).toBeNull()
   })
 })

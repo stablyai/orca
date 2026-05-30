@@ -1,4 +1,5 @@
 import type { MarkdownDocument } from '../../../../shared/types'
+import { slugMarkdownHeading } from './markdown-heading-slug'
 
 export const MARKDOWN_DOC_LINK_PREFIX = '#orca-doc-link='
 
@@ -67,7 +68,7 @@ export function getMarkdownDocLinkAnchor(target: string): string | null {
     return null
   }
   const anchor = target.slice(hashIndex + 1).trim()
-  return anchor ? anchor : null
+  return anchor ? slugMarkdownHeading(anchor) : null
 }
 
 function normalizeDocLinkKey(value: string): string {
