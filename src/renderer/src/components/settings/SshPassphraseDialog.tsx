@@ -38,9 +38,11 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
 
   // DOM focus is a side effect that must remain in useEffect.
   useEffect(() => {
-    if (requestId) {
-      requestAnimationFrame(() => inputRef.current?.focus())
+    if (!requestId) {
+      return undefined
     }
+    const focusFrame = requestAnimationFrame(() => inputRef.current?.focus())
+    return () => cancelAnimationFrame(focusFrame)
   }, [requestId])
 
   const handleSubmit = useCallback(async () => {

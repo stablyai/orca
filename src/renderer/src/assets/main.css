@@ -1407,6 +1407,81 @@
   transform-origin: center;
 }
 
+/* CLI feature tip — terminal cursor inside the agent-control command. */
+@keyframes cli-tip-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  46%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-cli-tip-caret {
+  animation: cli-tip-caret 0.9s steps(1, end) infinite;
+}
+
+@keyframes cli-tip-command-line {
+  0% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-cli-tip-command-line {
+  animation: cli-tip-command-line 160ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-cli-tip-caret {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .animate-cli-tip-command-line {
+    animation: none;
+  }
+}
+
+.cli-tip-orchestration-frame .feature-wall-orch-stage {
+  --feature-wall-workspace-title-size: 11.5px;
+  --feature-wall-agent-message-size: 10.5px;
+  --feature-wall-agent-row-gap: 5px;
+  --feature-wall-agent-status-col: 10px;
+  --feature-wall-agent-icon-col: 12px;
+  --feature-wall-agent-status-box: 10px;
+  --feature-wall-agent-status-icon: 9px;
+  --feature-wall-agent-icon-box: 12px;
+  --feature-wall-child-indent: 22px;
+  align-content: start !important;
+  padding-top: 10px !important;
+  padding-left: 12px !important;
+  padding-right: 52px !important;
+}
+
+.cli-tip-orchestration-frame .feature-wall-agent-icon svg {
+  height: 11px;
+  width: 11px;
+}
+
+.cli-tip-orchestration-frame .feature-wall-agent-status [aria-label] {
+  height: 10px;
+  width: 10px;
+}
+
+.cli-tip-orchestration-frame .feature-wall-agent-status [aria-label] > span {
+  height: 6px;
+  width: 6px;
+  border-width: 1.5px;
+}
+
 /* ── Feature wall: agents-orchestration animations ───────────────── */
 
 /* Why: drives the supported-agents marquee on page 1 of the agents tile.
@@ -1509,7 +1584,7 @@
   offset-distance: 100%;
   transform: translate(-12px, -12px) scale(1);
   transition:
-    offset-distance 1500ms cubic-bezier(0.25, 0.6, 0.25, 1),
+    offset-distance 1600ms cubic-bezier(0.25, 0.6, 0.25, 1),
     transform 280ms ease,
     opacity 280ms ease;
 }
@@ -1537,37 +1612,6 @@
   animation: feature-wall-msg-pop 1100ms ease-out;
 }
 
-@keyframes feature-wall-orch-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.feature-wall-spawn-spinner {
-  width: 11px;
-  height: 11px;
-  border: 1.5px solid rgb(245 158 11);
-  border-top-color: transparent;
-  border-radius: 999px;
-  animation: feature-wall-orch-spin 800ms linear infinite;
-}
-
-/* "Creating workspaces…" placeholder shown before the child workspaces
-   reveal. Once the orchestrator finishes spawning, the wrapper collapses
-   and the real child cards take its place. */
-.feature-wall-creating-children {
-  overflow: hidden;
-  opacity: 1;
-  max-height: 60px;
-  transition:
-    opacity 220ms ease,
-    max-height 320ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-.feature-wall-creating-children[data-hidden='true'] {
-  opacity: 0;
-  max-height: 0;
-  pointer-events: none;
-}
-
 /* Children container fades in once the orchestrator finishes creating. */
 .feature-wall-children-wrapper {
   opacity: 0;
@@ -1579,6 +1623,20 @@
 .feature-wall-children-wrapper[data-visible='true'] {
   opacity: 1;
   transform: none;
+}
+
+@keyframes feature-wall-child-card-in {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.feature-wall-child-card-shell {
+  animation: feature-wall-child-card-in 260ms ease-out both;
 }
 
 /* Each child agent row stays collapsed until *its* dispatch bubble lands on
@@ -2327,194 +2385,218 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
      overlay first and never reach our buttons. Lifting the whole card creates
      a stacking context that keeps every nested control clickable. */
   z-index: 1;
-  border: 1px solid color-mix(in srgb, var(--foreground) 22%, transparent);
-  border-left: 3px solid color-mix(in srgb, var(--foreground) 55%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--foreground) 5%, var(--editor-surface));
-  padding: 6px 8px 6px 10px;
-  font-family: var(--font-sans, system-ui, sans-serif);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 15%, transparent);
+  display: flex;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, var(--border));
+  border-radius: 8px;
+  background: var(--background);
+  padding: 12px 14px;
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.03);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
 }
 
 .dark .orca-diff-comment-card {
-  background: color-mix(in srgb, var(--foreground) 6%, var(--editor-surface));
+  border-color: color-mix(in srgb, var(--foreground) 12%, var(--border));
+  background: color-mix(in srgb, var(--foreground) 2%, var(--editor-surface));
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
+/* Avatar Column */
+.orca-diff-comment-avatar-col {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Content Column */
+.orca-diff-comment-content-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Header Row */
 .orca-diff-comment-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.orca-diff-comment-meta {
-  font-size: 11px;
-  color: var(--foreground);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.orca-diff-comment-author-row {
-  display: flex;
+  gap: 12px;
   min-width: 0;
+}
+
+/* Meta Group (Name, line, timestamp) */
+.orca-diff-comment-meta-group {
+  display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
-  margin: 0 0 6px;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  line-height: 1.2;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--foreground);
 }
 
-.orca-diff-comment-avatar {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
-  background: var(--muted);
+/* Action button pill: segmented control like Notion's Resolve / ... */
+.orca-diff-comment-actions-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, var(--border));
+  border-radius: 6px;
+  background: var(--background);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
-.orca-diff-comment-avatar-fallback {
+.dark .orca-diff-comment-actions-pill {
+  border-color: color-mix(in srgb, var(--foreground) 14%, var(--border));
+  background: color-mix(in srgb, var(--foreground) 4%, var(--editor-surface));
+}
+
+.orca-diff-comment-pill-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--muted-foreground);
-  font-size: 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  height: 24px;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.orca-diff-comment-pill-btn:hover {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+
+.orca-diff-comment-pill-btn-danger:hover {
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  color: var(--destructive);
+}
+
+.orca-diff-comment-pill-divider {
+  width: 1px;
+  height: 12px;
+  background: color-mix(in srgb, var(--foreground) 12%, var(--border));
+  flex-shrink: 0;
+}
+
+/* Avatar design */
+.orca-diff-comment-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  object-fit: cover;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.orca-diff-comment-avatar-fallback,
+.orca-diff-comment-avatar-local {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--primary) 8%, var(--muted));
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--primary);
+  font-size: 11px;
   font-weight: 600;
 }
 
-.orca-diff-comment-author {
+.orca-diff-comment-avatar-local {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--muted));
+  border-color: color-mix(in srgb, var(--foreground) 12%, transparent);
+  color: var(--muted-foreground);
+}
+
+/* Quote/Reference block: Warm, gorgeous Notion-like callout */
+.orca-diff-comment-quote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 6px 0;
+  padding-left: 8px;
+  border-left: 2px solid color-mix(in srgb, #e7b10a 35%, transparent);
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.orca-diff-comment-quote-text {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: var(--foreground);
-  font-weight: 600;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
 }
 
-.orca-diff-comment-created-at {
-  flex: 0 0 auto;
-}
-
-.orca-diff-comment-link {
-  margin-left: auto;
-  flex: 0 0 auto;
-  border: 0;
-  background: transparent;
-  color: var(--muted-foreground);
-  font: inherit;
-  cursor: pointer;
-}
-
-.orca-diff-comment-link:hover {
-  color: var(--foreground);
-  text-decoration: underline;
-}
-
-/* Why: keep edit + delete close together but visually distinct from the meta
-   label. Both share the same subtle button styling; only delete recolours on
-   hover (destructive intent). */
-.orca-diff-comment-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.orca-diff-comment-edit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  pointer-events: auto;
-  position: relative;
-  z-index: 1;
-}
-
-.orca-diff-comment-edit:hover {
-  color: var(--foreground);
-  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-}
-
-/* Why: the trash button is always visible (not hover-only) because the saved
-   note is a persistent, action-bearing card — users should be able to see and
-   target the delete affordance without guessing that hovering reveals it.
-   Pointer-events are explicit since the card lives inside a Monaco view zone
-   where stray handlers higher in the tree have swallowed pointer events in
-   the past. z-index keeps it above the note body for click reliability. */
-.orca-diff-comment-delete {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  pointer-events: auto;
-  position: relative;
-  z-index: 1;
-}
-
-.orca-diff-comment-delete:hover {
-  color: var(--destructive);
-  border-color: color-mix(in srgb, var(--destructive) 40%, transparent);
-  background: color-mix(in srgb, var(--destructive) 10%, transparent);
-}
-
+/* Comment Body */
 .orca-diff-comment-body {
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13.5px;
+  line-height: 1.5;
   color: var(--foreground);
   white-space: pre-wrap;
   word-break: break-word;
+  margin-top: 2px;
 }
 
-.orca-diff-comment-review-body {
-  padding-left: 24px;
-}
-
-/* Why: mirror the saved-note card treatment so the "entering" and "saved"
-   states read as the same object at two stages of the same flow. Same
-   foreground-tinted fill over --editor-surface, same border + left accent
-   bar, same shadow. Kept one level stronger on the shadow because the
-   popover floats above the editor instead of being laid into a view zone. */
+/* Popover for adding new comment */
 .orca-diff-comment-popover {
   position: absolute;
   left: 56px;
   right: 24px;
   max-width: 420px;
   z-index: 1000;
-  padding: 8px 8px 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 22%, transparent);
-  border-left: 3px solid color-mix(in srgb, var(--foreground) 55%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--foreground) 5%, var(--editor-surface));
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, var(--border));
+  border-radius: 8px;
+  background: var(--background);
   color: var(--foreground);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    0 10px 32px rgba(0, 0, 0, 0.12),
+    0 4px 12px rgba(0, 0, 0, 0.08);
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  gap: 12px;
 }
 
 .dark .orca-diff-comment-popover {
-  background: color-mix(in srgb, var(--foreground) 6%, var(--editor-surface));
+  border-color: color-mix(in srgb, var(--foreground) 14%, var(--border));
+  background: color-mix(in srgb, var(--foreground) 2%, var(--editor-surface));
+  box-shadow:
+    0 10px 32px rgba(0, 0, 0, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .orca-diff-comment-popover-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted-foreground);
+  margin-bottom: 2px;
 }
 
 .orca-diff-comment-popover-textarea {
@@ -2523,19 +2605,28 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   max-height: 240px;
   overflow-y: auto;
   resize: none;
-  padding: 6px 8px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
-  border-radius: 4px;
-  /* Why: match the editor surface so the input reads as embedded in the card
-     rather than a pure-white/pure-black cutout pasted on top. */
-  background: var(--editor-surface);
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 12%, var(--border));
+  border-radius: 6px;
+  background: var(--background);
   color: var(--foreground);
   font-family: inherit;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.45;
   outline: none;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 34%, transparent) transparent;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.dark .orca-diff-comment-popover-textarea {
+  border-color: color-mix(in srgb, var(--foreground) 16%, var(--border));
+  background: color-mix(in srgb, var(--foreground) 3%, var(--editor-surface));
+}
+
+.orca-diff-comment-popover-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .orca-diff-comment-popover-textarea::-webkit-scrollbar {
@@ -2552,13 +2643,10 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   background-clip: padding-box;
 }
 
-.orca-diff-comment-popover-textarea:focus {
-  border-color: color-mix(in srgb, var(--primary) 60%, var(--border));
-}
-
 .orca-diff-comment-popover-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
+  margin-top: 4px;
 }

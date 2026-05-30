@@ -28,7 +28,7 @@ function getErrorMessage(error: unknown): string {
 function buildPreflightArgs(
   force: boolean,
   context: LocalPreflightContext
-): { force?: boolean; wslDistro?: string | null } | undefined {
+): { force?: boolean; wslDistro?: string | null; wslDefault?: boolean } | undefined {
   if (!force && !context) {
     return undefined
   }

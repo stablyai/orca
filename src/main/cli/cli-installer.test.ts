@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -33,60 +33,98 @@ describe('CliInstaller', () => {
   })
 
   // Why: this test creates Unix symlinks and shell scripts that only apply on macOS.
-  it.skipIf(process.platform === 'win32')('creates a dev launcher and installs a macOS symlink in the requested path', async () => {
-    const fixture = await makeFixture()
-    const installPath = join(fixture.root, 'bin', 'orca')
-    const installer = new CliInstaller({
-      platform: 'darwin',
-      isPackaged: false,
-      userDataPath: fixture.userDataPath,
-      execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
-      appPath: fixture.appPath,
-      commandPathOverride: installPath,
-      processPathEnv: join(fixture.root, 'bin')
-    })
+  it.skipIf(process.platform === 'win32')(
+    'creates a dev launcher and installs a macOS symlink in the requested path',
+    async () => {
+      const fixture = await makeFixture()
+      const installPath = join(fixture.root, 'bin', 'orca')
+      const installer = new CliInstaller({
+        platform: 'darwin',
+        isPackaged: false,
+        userDataPath: fixture.userDataPath,
+        execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
+        appPath: fixture.appPath,
+        commandPathOverride: installPath,
+        processPathEnv: join(fixture.root, 'bin')
+      })
 
-    const initial = await installer.getStatus()
-    expect(initial.state).toBe('not_installed')
-    expect(initial.launcherPath).toContain(join('userData', 'cli', 'bin', 'orca'))
+      const initial = await installer.getStatus()
+      expect(initial.state).toBe('not_installed')
+      expect(initial.launcherPath).toContain(join('userData', 'cli', 'bin', 'orca'))
 
-    const installed = await installer.install()
-    expect(installed.state).toBe('installed')
-    expect(installed.pathConfigured).toBe(true)
+      const installed = await installer.install()
+      expect(installed.state).toBe('installed')
+      expect(installed.pathConfigured).toBe(true)
 
-    const launcherContent = await readFile(installed.launcherPath as string, 'utf8')
-    expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1')
-    expect(launcherContent).toContain(join(fixture.appPath, 'out', 'cli', 'index.js'))
+      const launcherContent = await readFile(installed.launcherPath as string, 'utf8')
+      expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1')
+      expect(launcherContent).toContain(join(fixture.appPath, 'out', 'cli', 'index.js'))
 
-    const removed = await installer.remove()
-    expect(removed.state).toBe('not_installed')
-  })
+      const removed = await installer.remove()
+      expect(removed.state).toBe('not_installed')
+    }
+  )
 
   // Why: this test creates Unix symlinks and shell scripts that only apply on Linux.
-  it.skipIf(process.platform === 'win32')('creates a linux symlink under the requested path and warns when PATH is missing', async () => {
-    const fixture = await makeFixture()
-    const installPath = join(fixture.root, '.local', 'bin', 'orca')
-    const installer = new CliInstaller({
-      platform: 'linux',
-      isPackaged: false,
-      userDataPath: fixture.userDataPath,
-      execPath: '/opt/Orca/orca',
-      appPath: fixture.appPath,
-      commandPathOverride: installPath,
-      processPathEnv: '/usr/bin'
-    })
+  it.skipIf(process.platform === 'win32')(
+    'creates a linux symlink under the requested path and warns when PATH is missing',
+    async () => {
+      const fixture = await makeFixture()
+      const installPath = join(fixture.root, '.local', 'bin', 'orca-ide')
+      const installer = new CliInstaller({
+        platform: 'linux',
+        isPackaged: false,
+        userDataPath: fixture.userDataPath,
+        execPath: '/opt/Orca/orca-ide',
+        appPath: fixture.appPath,
+        commandPathOverride: installPath,
+        processPathEnv: '/usr/bin'
+      })
 
-    const installed = await installer.install()
-    expect(installed.state).toBe('installed')
-    expect(installed.pathConfigured).toBe(false)
-    expect(installed.detail).toContain('.local')
+      const installed = await installer.install()
+      expect(installed.state).toBe('installed')
+      expect(installed.commandName).toBe('orca-ide')
+      expect(installed.pathConfigured).toBe(false)
+      expect(installed.detail).toContain('.local')
 
-    const launcherContent = await readFile(installed.launcherPath as string, 'utf8')
-    expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1')
+      const launcherContent = await readFile(installed.launcherPath as string, 'utf8')
+      expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1')
 
-    const removed = await installer.remove()
-    expect(removed.state).toBe('not_installed')
-  })
+      const removed = await installer.remove()
+      expect(removed.state).toBe('not_installed')
+    }
+  )
+
+  // Why: Linux renamed the public command to avoid shadowing GNOME Orca, so
+  // upgrading must clean up only the old symlink owned by prior Orca installs.
+  it.skipIf(process.platform === 'win32')(
+    'removes the old managed linux orca symlink when installing orca-ide',
+    async () => {
+      const fixture = await makeFixture()
+      const homePath = join(fixture.root, 'home')
+      const commandDir = join(homePath, '.local', 'bin')
+      const oldLauncherPath = join(fixture.userDataPath, 'cli', 'bin', 'orca')
+      const legacyCommandPath = join(commandDir, 'orca')
+      await mkdir(commandDir, { recursive: true })
+      await mkdir(join(fixture.userDataPath, 'cli', 'bin'), { recursive: true })
+      await writeFile(oldLauncherPath, '#!/usr/bin/env bash\n', 'utf8')
+      await symlink(oldLauncherPath, legacyCommandPath)
+
+      const installer = new CliInstaller({
+        platform: 'linux',
+        isPackaged: false,
+        userDataPath: fixture.userDataPath,
+        execPath: '/opt/Orca/orca-ide',
+        appPath: fixture.appPath,
+        homePath,
+        processPathEnv: commandDir
+      })
+
+      const installed = await installer.install()
+      expect(installed.commandPath).toBe(join(commandDir, 'orca-ide'))
+      await expect(lstat(legacyCommandPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    }
+  )
 
   it('creates a windows wrapper and updates the user PATH', async () => {
     const fixture = await makeFixture()
@@ -120,24 +158,27 @@ describe('CliInstaller', () => {
   })
 
   // Why: this test creates a Unix symlink to /tmp/not-orca, which only applies on macOS/Linux.
-  it.skipIf(process.platform === 'win32')('reports stale when a different symlink already exists', async () => {
-    const fixture = await makeFixture()
-    const installPath = join(fixture.root, 'bin', 'orca')
-    await mkdir(join(fixture.root, 'bin'), { recursive: true })
-    await symlink('/tmp/not-orca', installPath)
+  it.skipIf(process.platform === 'win32')(
+    'reports stale when a different symlink already exists',
+    async () => {
+      const fixture = await makeFixture()
+      const installPath = join(fixture.root, 'bin', 'orca')
+      await mkdir(join(fixture.root, 'bin'), { recursive: true })
+      await symlink('/tmp/not-orca', installPath)
 
-    const installer = new CliInstaller({
-      platform: 'darwin',
-      isPackaged: false,
-      userDataPath: fixture.userDataPath,
-      execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
-      appPath: fixture.appPath,
-      commandPathOverride: installPath
-    })
+      const installer = new CliInstaller({
+        platform: 'darwin',
+        isPackaged: false,
+        userDataPath: fixture.userDataPath,
+        execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
+        appPath: fixture.appPath,
+        commandPathOverride: installPath
+      })
 
-    await expect(installer.getStatus()).resolves.toMatchObject({
-      state: 'stale',
-      supported: true
-    })
-  })
+      await expect(installer.getStatus()).resolves.toMatchObject({
+        state: 'stale',
+        supported: true
+      })
+    }
+  )
 })

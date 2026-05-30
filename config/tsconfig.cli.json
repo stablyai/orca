@@ -6,6 +6,7 @@
     "../src/main/agent-hooks/installer-utils.ts",
     "../src/main/agent-hooks/installer-utils-remote.ts",
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
+    "../src/main/amp/hook-service.ts",
     "../src/main/antigravity/hook-service.ts",
     "../src/main/claude/hook-settings.ts",
     "../src/main/claude/hook-service.ts",

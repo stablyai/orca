@@ -548,6 +548,24 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('fastForwardBranch sends git.fastForward request', async () => {
+    await provider.fastForwardBranch('/home/user/repo')
+    expect(mux.request).toHaveBeenCalledWith('git.fastForward', {
+      worktreePath: '/home/user/repo'
+    })
+  })
+
+  it('fastForwardBranch forwards an explicit push target', async () => {
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await provider.fastForwardBranch('/home/user/repo', pushTarget)
+
+    expect(mux.request).toHaveBeenCalledWith('git.fastForward', {
+      worktreePath: '/home/user/repo',
+      pushTarget
+    })
+  })
+
   it('rebaseFromBase sends git.rebaseFromBase request', async () => {
     await provider.rebaseFromBase('/home/user/repo', 'upstream/main')
 

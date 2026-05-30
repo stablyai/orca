@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ActivityIndicator,
@@ -2534,7 +2534,9 @@ export default function MobileTasksScreen() {
     return [...logins].sort().join(',')
   }, [projectRowDetail, projectRowItem?.content.assignees])
 
-  useEffect(() => {
+  // Why: task-loading effects use this as a stale-client guard, so the ref
+  // must be current before those passive effects can run after commit.
+  useLayoutEffect(() => {
     clientRef.current = client
   }, [client])
 

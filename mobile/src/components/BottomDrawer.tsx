@@ -22,6 +22,7 @@ import Animated, {
   Extrapolation
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useResponsiveLayout } from '../layout/responsive-layout'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -93,6 +94,10 @@ function MountedBottomDrawer({
   const contentDragCanDismiss = useSharedValue(false)
   const { height: screenHeight } = useWindowDimensions()
   const insets = useSafeAreaInsets()
+  // Why: on wide/tablet canvases a full-width sheet looks stretched; cap it and
+  // center it horizontally. Vertical bottom-anchoring (and all the drag/keyboard
+  // transforms below) is unchanged, so phone behavior stays identical.
+  const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
 
   useEffect(() => {
     if (visible) {
@@ -258,11 +263,13 @@ function MountedBottomDrawer({
           <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
         </Animated.View>
 
-        <View style={styles.anchor} pointerEvents="box-none">
+        <View style={[styles.anchor, isWideLayout && styles.anchorWide]} pointerEvents="box-none">
           <Animated.View
             style={[
               styles.drawer,
               {
+                width: '100%',
+                maxWidth: isWideLayout ? modalMaxWidth : undefined,
                 maxHeight: screenHeight - insets.top - spacing.lg,
                 paddingBottom: insets.bottom + spacing.lg
               },
@@ -339,6 +346,9 @@ const styles = StyleSheet.create({
   anchor: {
     flex: 1,
     justifyContent: 'flex-end'
+  },
+  anchorWide: {
+    alignItems: 'center'
   },
   drawer: {
     backgroundColor: colors.bgBase,

@@ -694,6 +694,28 @@ export function ResourceUsageStatusSegment({
   // fall to <body>. We park a ref on the popover body so we can restore focus
   // somewhere stable for keyboard users.
   const popoverBodyRef = useRef<HTMLDivElement | null>(null)
+  const popoverBodyFocusFrameRef = useRef<number | null>(null)
+
+  const cancelPopoverBodyFocusFrame = useCallback((): void => {
+    if (popoverBodyFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(popoverBodyFocusFrameRef.current)
+    popoverBodyFocusFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelPopoverBodyFocusFrame, [cancelPopoverBodyFocusFrame])
+
+  const setPopoverBodyNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued post-kill focus is only valid while the popover body exists.
+      if (!node) {
+        cancelPopoverBodyFocusFrame()
+      }
+      popoverBodyRef.current = node
+    },
+    [cancelPopoverBodyFocusFrame]
+  )
 
   const refreshSessions = useCallback(async () => {
     if (runtimeEnvironmentActive) {
@@ -1048,12 +1070,16 @@ export function ResourceUsageStatusSegment({
       // Why: after the killed row unmounts, focus would otherwise drop to
       // <body>. Park focus on the popover body so keyboard users land back
       // in the list rather than outside the popover.
-      requestAnimationFrame(() => {
-        popoverBodyRef.current?.focus()
-      })
+      cancelPopoverBodyFocusFrame()
+      if (popoverBodyRef.current) {
+        popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
+          popoverBodyFocusFrameRef.current = null
+          popoverBodyRef.current?.focus()
+        })
+      }
       void refreshSessions()
     }
-  }, [killConfirm, refreshSessions])
+  }, [cancelPopoverBodyFocusFrame, killConfirm, refreshSessions])
 
   const openSpaceResults = useCallback((): void => {
     setOpen(false)
@@ -1276,7 +1302,11 @@ export function ResourceUsageStatusSegment({
             jump as worktrees expand/collapse or as sessions come and go. The
             inner tree owns its own scroll. The footer renders below this
             shell when orphan-bulk-kill is available. */}
-        <div ref={popoverBodyRef} tabIndex={-1} className="flex h-[420px] flex-col outline-none">
+        <div
+          ref={setPopoverBodyNode}
+          tabIndex={-1}
+          className="flex h-[420px] flex-col outline-none"
+        >
           {(unifiedRepos.length > 0 || resourceSnapshot) && (
             <div className="flex items-center justify-between px-3 py-1 bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wide shrink-0">
               <button

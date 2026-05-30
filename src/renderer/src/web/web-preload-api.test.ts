@@ -181,6 +181,78 @@ describe('web UI preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('saves browser clipboard images through the paired host runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: 'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png',
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    vi.stubGlobal(
+      'FileReader',
+      class {
+        result: string | ArrayBuffer | null = null
+        error: DOMException | null = null
+        onload: (() => void) | null = null
+        onerror: (() => void) | null = null
+
+        readAsDataURL(blob: Blob): void {
+          void blob
+            .arrayBuffer()
+            .then((buffer) => {
+              this.result = `data:${blob.type};base64,${Buffer.from(buffer).toString('base64')}`
+              this.onload?.()
+            })
+            .catch((error: DOMException) => {
+              this.error = error
+              this.onerror?.()
+            })
+        }
+      }
+    )
+
+    const globals = installBrowserGlobals('Linux')
+    vi.stubGlobal('navigator', {
+      userAgent: 'Linux',
+      hardwareConcurrency: 8,
+      clipboard: {
+        readText: vi.fn().mockResolvedValue(''),
+        read: vi.fn().mockResolvedValue([
+          {
+            types: ['image/png'],
+            getType: vi.fn().mockResolvedValue(new Blob(['png-bytes'], { type: 'image/png' }))
+          }
+        ])
+      }
+    })
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.ui.saveClipboardImageAsTempFile({ connectionId: null })
+    ).resolves.toBe('C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png')
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'clipboard.saveImageAsTempFile',
+        params: {
+          contentBase64: Buffer.from('png-bytes').toString('base64'),
+          connectionId: null
+        }
+      }
+    ])
+  })
+
   it('migrates missing right sidebar visibility from the effective web legacy default', async () => {
     const { api } = await installApi('Linux')
 
@@ -454,6 +526,7 @@ describe('web GitHub preload API', () => {
         'requestPRReviewers',
         'resolveProjectRef',
         'resolveReviewThread',
+        'setPRAutoMerge',
         'setPRFileViewed',
         'starOrca',
         'updateIssue',
@@ -658,6 +731,12 @@ describe('web GitHub preload API', () => {
         args: { repoPath, prNumber: 7, method: 'squash' },
         expectedMethod: 'github.mergePR',
         expectedParams: withRepo({ repoPath, prNumber: 7, method: 'squash' })
+      },
+      {
+        key: 'setPRAutoMerge',
+        args: { repoPath, prNumber: 7, enabled: true },
+        expectedMethod: 'github.setPRAutoMerge',
+        expectedParams: withRepo({ repoPath, prNumber: 7, enabled: true })
       },
       {
         key: 'updatePRState',

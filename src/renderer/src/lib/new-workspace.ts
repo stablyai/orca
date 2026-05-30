@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import {
   inspectRuntimeTerminalProcess,
-  sendRuntimePtyInput
+  sendRuntimePtyInputVerified
 } from '@/runtime/runtime-terminal-inspection'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
@@ -244,7 +244,7 @@ export async function ensureAgentStartupInTerminal(args: {
   // session and submitted. Wait until the agent owns the PTY before writing.
   if (startup.followupPrompt) {
     await waitForAgentForeground(ptyId, startup.expectedProcess)
-    sendRuntimePtyInput(useAppStore.getState().settings, ptyId, `${startup.followupPrompt}\r`)
+    await sendFollowupPrompt(ptyId, startup.followupPrompt)
   }
 
   // Why: draftPrompt uses bracketed-paste so the URL lands atomically in the
@@ -256,6 +256,14 @@ export async function ensureAgentStartupInTerminal(args: {
       content: draftPrompt,
       agent: startup.agent
     })
+  }
+}
+
+async function sendFollowupPrompt(ptyId: string, prompt: string): Promise<boolean> {
+  try {
+    return await sendRuntimePtyInputVerified(useAppStore.getState().settings, ptyId, `${prompt}\r`)
+  } catch {
+    return false
   }
 }
 

@@ -75,6 +75,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import {
   createFloatingWorkspaceTerminalTab,
+  handleEmptyFloatingWorkspacePanelCloseShortcut,
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
@@ -85,6 +86,7 @@ import {
 } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -225,6 +227,24 @@ function Terminal(): React.JSX.Element | null {
   // so the stray click from the previous dialog is absorbed while a genuine
   // new click on the next dialog still works.
   const isClosingRef = useRef(false)
+  const closeDialogDebounceTimersRef = useRef<Set<number>>(new Set())
+  const releaseCloseDialogGuardAfterDebounce = useCallback(() => {
+    const timer = window.setTimeout(() => {
+      closeDialogDebounceTimersRef.current.delete(timer)
+      isClosingRef.current = false
+    }, CLOSE_DIALOG_DEBOUNCE_MS)
+    closeDialogDebounceTimersRef.current.add(timer)
+  }, [])
+
+  useEffect(() => {
+    const timers = closeDialogDebounceTimersRef.current
+    return () => {
+      for (const timer of timers) {
+        window.clearTimeout(timer)
+      }
+      timers.clear()
+    }
+  }, [])
 
   // Window close confirmation dialog — shown for local terminals with running
   // child processes. SSH terminals detach/persist through the relay lifecycle.
@@ -397,9 +417,7 @@ function Terminal(): React.JSX.Element | null {
         (id) => id !== fileId
       )
       advanceEditorCloseQueue()
-      setTimeout(() => {
-        isClosingRef.current = false
-      }, CLOSE_DIALOG_DEBOUNCE_MS)
+      releaseCloseDialogGuardAfterDebounce()
       return
     }
 
@@ -431,9 +449,7 @@ function Terminal(): React.JSX.Element | null {
           (id) => id !== fileId
         )
         advanceEditorCloseQueue()
-        setTimeout(() => {
-          isClosingRef.current = false
-        }, CLOSE_DIALOG_DEBOUNCE_MS)
+        releaseCloseDialogGuardAfterDebounce()
         return
       }
       toast.error('Save timed out or failed. Fix errors before closing.')
@@ -448,10 +464,13 @@ function Terminal(): React.JSX.Element | null {
       (id) => id !== fileId
     )
     advanceEditorCloseQueue()
-    setTimeout(() => {
-      isClosingRef.current = false
-    }, CLOSE_DIALOG_DEBOUNCE_MS)
-  }, [advanceEditorCloseQueue, saveDialogFileId, waitForFileClosed])
+    releaseCloseDialogGuardAfterDebounce()
+  }, [
+    advanceEditorCloseQueue,
+    releaseCloseDialogGuardAfterDebounce,
+    saveDialogFileId,
+    waitForFileClosed
+  ])
 
   const handleSaveDialogDiscard = useCallback(async () => {
     if (isClosingRef.current) {
@@ -486,10 +505,14 @@ function Terminal(): React.JSX.Element | null {
       (id) => id !== fileId
     )
     advanceEditorCloseQueue()
-    setTimeout(() => {
-      isClosingRef.current = false
-    }, CLOSE_DIALOG_DEBOUNCE_MS)
-  }, [advanceEditorCloseQueue, closeFile, markFileDirty, saveDialogFileId])
+    releaseCloseDialogGuardAfterDebounce()
+  }, [
+    advanceEditorCloseQueue,
+    closeFile,
+    markFileDirty,
+    releaseCloseDialogGuardAfterDebounce,
+    saveDialogFileId
+  ])
 
   const handleSaveDialogCancel = useCallback(() => {
     if (isClosingRef.current) {
@@ -499,10 +522,8 @@ function Terminal(): React.JSX.Element | null {
     pendingEditorCloseQueueRef.current = []
     windowCloseAfterDirtyRef.current = null
     setSaveDialogFileId(null)
-    setTimeout(() => {
-      isClosingRef.current = false
-    }, CLOSE_DIALOG_DEBOUNCE_MS)
-  }, [])
+    releaseCloseDialogGuardAfterDebounce()
+  }, [releaseCloseDialogGuardAfterDebounce])
 
   useEffect(() => {
     const onRequestEditorClose = (event: Event): void => {
@@ -737,6 +758,10 @@ function Terminal(): React.JSX.Element | null {
     createBrowserTab,
     openNewBrowserTabInActiveWorkspace
   ])
+
+  const handleOpenEntry = useCallback(async (args: TabCreateEntryArgs) => {
+    await openTabBarEntry(args)
+  }, [])
 
   const handleDuplicateBrowserTab = useCallback(
     (browserTabId: string) => {
@@ -1140,7 +1165,7 @@ function Terminal(): React.JSX.Element | null {
       }
 
       // Cmd/Ctrl+Shift+T — reopen closed browser tab when browser is active,
-      // otherwise reopen the most recently closed editor tab (VS Code–style).
+      // otherwise reopen the most recently closed editor tab.
       if (!e.repeat && matchShortcut('tab.reopenClosed')) {
         e.preventDefault()
         notifyTerminalCapture('tab.reopenClosed')
@@ -1192,6 +1217,10 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
+      if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
+        return
+      }
+
       // Cmd/Ctrl+W - close active editor tab, browser tab, or terminal pane.
       // Terminal pane/tab close is handled by the pane-level keyboard handler
       // in keyboard-handlers.ts so it can close individual split panes and
@@ -1232,7 +1261,7 @@ function Terminal(): React.JSX.Element | null {
       // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs (scoped to the
       // active tab type). Cmd/Ctrl+Alt+] and Cmd/Ctrl+Alt+[ cycles across
       // every tab type as an escape hatch from the type-scoped default, and
-      // mirrors Safari/Chrome's tab-switch chord on macOS.
+      // matches the platform tab-switch chord on macOS.
       // Why: use e.code instead of e.key because on macOS, Shift+[ reports '{'
       // as the key value (the shifted character), not '['. Option+[ also
       // composes to dead-key / punctuation on many layouts, so matching on
@@ -1448,7 +1477,7 @@ function Terminal(): React.JSX.Element | null {
       <EditorAutosaveController />
 
       {/* Why: once split groups are enabled, each group owns its own tab strip
-          inline like VS Code. The old titlebar portal stays only as a fallback
+          inline. The old titlebar portal stays only as a fallback
           before the root-group layout has been established. */}
       {activeWorktreeId &&
         !effectiveActiveLayout &&
@@ -1465,6 +1494,7 @@ function Terminal(): React.JSX.Element | null {
             onNewTerminalTab={() => handleNewTab()}
             onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
+            onOpenEntry={handleOpenEntry}
             onNewFileTab={handleNewFile}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}

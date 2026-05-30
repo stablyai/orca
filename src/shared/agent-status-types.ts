@@ -16,6 +16,7 @@ export type WellKnownAgentType =
   | 'codex'
   | 'gemini'
   | 'antigravity'
+  | 'amp'
   | 'opencode'
   | 'cursor'
   | 'copilot'

@@ -40,6 +40,7 @@ export default function SparseCheckoutPresetSelect({
   const [draft, setDraft] = useState<PresetDraft | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
+  const nameInputFocusFrameRef = useRef<number | null>(null)
 
   const visiblePresets = presetsForRepo ?? presets
   const presetsLoaded = presetsForRepo !== undefined
@@ -75,18 +76,39 @@ export default function SparseCheckoutPresetSelect({
     parsedDirectories !== null &&
     !parsedDirectories.error
 
+  const cancelNameInputFocusFrame = useCallback((): void => {
+    if (nameInputFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(nameInputFocusFrameRef.current)
+    nameInputFocusFrameRef.current = null
+  }, [])
+
+  const setNameInputNode = useCallback(
+    (node: HTMLInputElement | null): void => {
+      // Why: the queued draft focus is only valid while this input is mounted.
+      if (!node) {
+        cancelNameInputFocusFrame()
+      }
+      nameInputRef.current = node
+    },
+    [cancelNameInputFocusFrame]
+  )
+
   const startDraft = useCallback(
     (nextDraft: PresetDraft): void => {
       if (disabled || !presetsLoaded) {
         return
       }
       setDraft(nextDraft)
-      requestAnimationFrame(() => {
+      cancelNameInputFocusFrame()
+      nameInputFocusFrameRef.current = requestAnimationFrame(() => {
+        nameInputFocusFrameRef.current = null
         nameInputRef.current?.focus()
         nameInputRef.current?.select()
       })
     },
-    [disabled, presetsLoaded]
+    [cancelNameInputFocusFrame, disabled, presetsLoaded]
   )
 
   const startNewPreset = useCallback((): void => {
@@ -238,7 +260,7 @@ export default function SparseCheckoutPresetSelect({
                 <div className="rounded-md border border-border/70 bg-muted/20 px-2.5 shadow-xs transition focus-within:border-ring/70 focus-within:ring-1 focus-within:ring-ring/30">
                   <input
                     id="sparse-preset-name"
-                    ref={nameInputRef}
+                    ref={setNameInputNode}
                     value={draft.name}
                     onChange={(event) => setDraft({ ...draft, name: event.target.value })}
                     placeholder="Renderer UI"

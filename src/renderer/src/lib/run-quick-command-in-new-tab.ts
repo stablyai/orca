@@ -1,14 +1,35 @@
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
-import { flattenTerminalQuickCommand } from '../../../shared/terminal-quick-commands'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import {
+  flattenTerminalQuickCommand,
+  isTerminalAgentQuickCommand,
+  supportsTerminalAgentQuickCommand
+} from '../../../shared/terminal-quick-commands'
 import type { TerminalQuickCommand } from '../../../shared/types'
 
 export type RunQuickCommandInNewTabArgs = {
   command: TerminalQuickCommand
   worktreeId: string
   /** Tab group the user clicked from. Keeps the spawned terminal in the
-   *  pane the user initiated from instead of falling through to the active group. */
-  groupId: string
+   *  pane the user initiated from when available. */
+  groupId?: string | null
+}
+
+function resolveQuickCommandGroupId(
+  worktreeId: string,
+  tabId: string,
+  fallbackGroupId: string | null | undefined
+): string | null {
+  const state = useAppStore.getState()
+  return (
+    state.unifiedTabsByWorktree[worktreeId]?.find(
+      (tab) => tab.entityId === tabId && tab.contentType === 'terminal'
+    )?.groupId ??
+    fallbackGroupId ??
+    state.activeGroupIdByWorktree[worktreeId] ??
+    null
+  )
 }
 
 /**
@@ -18,21 +39,45 @@ export type RunQuickCommandInNewTabArgs = {
  * the command runs (mirrors the agent quick-launch path in
  * `launchAgentInNewTab`).
  *
- * Always appends Enter — the split-button is a "run" affordance, distinct
- * from the right-click "Insert" mode where `appendEnter: false` is honored.
+ * Terminal-command quick commands always append Enter — the split-button is
+ * a "run" affordance, distinct from the right-click "Insert" mode where
+ * `appendEnter: false` is honored. Agent-prompt quick commands use the
+ * agent's normal prompt launch command instead of post-launch TUI paste.
  */
 export function runQuickCommandInNewTab({
   command,
   worktreeId,
   groupId
 }: RunQuickCommandInNewTabArgs): { tabId: string } | null {
+  const targetGroupId = groupId ?? undefined
+  if (isTerminalAgentQuickCommand(command)) {
+    if (!command.prompt.trim() || !supportsTerminalAgentQuickCommand(command.agent)) {
+      return null
+    }
+    const result = launchAgentInNewTab({
+      agent: command.agent,
+      prompt: command.prompt,
+      worktreeId,
+      groupId: targetGroupId,
+      launchSource: 'quick_command'
+    })
+    if (result) {
+      const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.tabId, groupId)
+      if (launchedGroupId) {
+        useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, command.id)
+      }
+      return { tabId: result.tabId }
+    }
+    return null
+  }
+
   // Why: a whitespace-only command would still spawn a terminal but feed it an
   // empty string, leaving the user with an unexplained blank tab. Refuse early.
   if (!command.command.trim()) {
     return null
   }
   const store = useAppStore.getState()
-  const tab = store.createTab(worktreeId, groupId)
+  const tab = store.createTab(worktreeId, targetGroupId)
 
   store.queueTabStartupCommand(tab.id, {
     command: flattenTerminalQuickCommand(command).command
@@ -60,7 +105,10 @@ export function runQuickCommandInNewTab({
   order.push(tab.id)
   fresh.setTabBarOrder(worktreeId, order)
 
-  fresh.setRecentQuickCommandForGroup(groupId, command.id)
+  const launchedGroupId = resolveQuickCommandGroupId(worktreeId, tab.id, groupId)
+  if (launchedGroupId) {
+    fresh.setRecentQuickCommandForGroup(launchedGroupId, command.id)
+  }
 
   return { tabId: tab.id }
 }
