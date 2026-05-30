@@ -54,6 +54,45 @@ vi.mock('../browser/browser-manager', () => ({
 import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
 
+function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return fn()
+  } finally {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  }
+}
+
+function mockMainWindowForCreation(): void {
+  const webContents = {
+    on: vi.fn(),
+    setZoomLevel: vi.fn(),
+    setBackgroundThrottling: vi.fn(),
+    invalidate: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
+    send: vi.fn()
+  }
+  const browserWindowInstance = {
+    webContents,
+    on: vi.fn(),
+    isDestroyed: vi.fn(() => false),
+    isMaximized: vi.fn(() => false),
+    isFullScreen: vi.fn(() => false),
+    getSize: vi.fn(() => [1200, 800]),
+    setSize: vi.fn(),
+    maximize: vi.fn(),
+    show: vi.fn(),
+    loadFile: vi.fn(),
+    loadURL: vi.fn()
+  }
+  browserWindowMock.mockImplementation(function () {
+    return browserWindowInstance
+  })
+}
+
 describe('createMainWindow', () => {
   beforeEach(() => {
     browserWindowMock.mockReset()
@@ -2122,5 +2161,147 @@ describe('createMainWindow', () => {
 
     expect(browserWindowInstance.maximize).toHaveBeenCalledTimes(1)
     expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+  })
+
+  it('injects vibrancy when glassEffect is true on macOS', () => {
+    if (process.platform !== 'darwin') {
+      return
+    }
+
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow({
+      getUI: () => ({}) as never,
+      getSettings: () =>
+        ({
+          windowBackgroundBlur: false,
+          theme: 'dark',
+          glassEffect: true,
+          voice: { enabled: false, sttModel: '', dictationMode: 'toggle' }
+        }) as never,
+      updateUI: vi.fn()
+    } as never)
+
+    const opts = browserWindowMock.mock.calls[0]?.[0]
+    expect(opts?.vibrancy).toBe('under-window')
+    expect(opts?.transparent).toBe(true)
+  })
+
+  it('uses transparent backgroundColor when vibrancy is enabled', () => {
+    if (process.platform !== 'darwin') {
+      return
+    }
+
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow({
+      getUI: () => ({}) as never,
+      getSettings: () =>
+        ({
+          windowBackgroundBlur: false,
+          theme: 'dark',
+          glassEffect: true,
+          voice: { enabled: false, sttModel: '', dictationMode: 'toggle' }
+        }) as never,
+      updateUI: vi.fn()
+    } as never)
+
+    const opts = browserWindowMock.mock.calls[0]?.[0]
+    expect(opts?.backgroundColor).toBe('#00000000')
+    expect(opts?.transparent).toBe(true)
+  })
+
+  it('ignores glassEffect for native window options on Linux', () => {
+    withPlatform('linux', () => {
+      mockMainWindowForCreation()
+
+      createMainWindow({
+        getUI: () => ({}) as never,
+        getSettings: () =>
+          ({
+            windowBackgroundBlur: false,
+            theme: 'dark',
+            glassEffect: true,
+            voice: { enabled: false, sttModel: '', dictationMode: 'toggle' }
+          }) as never,
+        updateUI: vi.fn()
+      } as never)
+
+      const opts = browserWindowMock.mock.calls[0]?.[0]
+      expect(opts?.vibrancy).toBeUndefined()
+      expect(opts?.transparent).toBeUndefined()
+      expect(opts?.backgroundMaterial).toBeUndefined()
+      expect(opts?.backgroundColor).toBe('#ffffff')
+    })
+  })
+
+  it('ignores glassEffect for native window options on Windows', () => {
+    withPlatform('win32', () => {
+      mockMainWindowForCreation()
+
+      createMainWindow({
+        getUI: () => ({}) as never,
+        getSettings: () =>
+          ({
+            windowBackgroundBlur: false,
+            theme: 'dark',
+            glassEffect: true,
+            voice: { enabled: false, sttModel: '', dictationMode: 'toggle' }
+          }) as never,
+        updateUI: vi.fn()
+      } as never)
+
+      const opts = browserWindowMock.mock.calls[0]?.[0]
+      expect(opts?.vibrancy).toBeUndefined()
+      expect(opts?.transparent).toBeUndefined()
+      expect(opts?.backgroundMaterial).toBeUndefined()
+      expect(opts?.backgroundColor).toBe('#ffffff')
+    })
   })
 })

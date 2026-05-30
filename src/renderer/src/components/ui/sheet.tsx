@@ -32,7 +32,9 @@ function SheetOverlay({
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        'fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        // Why: see dialog.tsx — 'dialog-overlay-dim' lets glass themes
+        // lighten the dim so the dialog backdrop doesn't read as solid black.
+        'dialog-overlay-dim fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
         className
       )}
       // Why: Electron's OS-level drag hit-test ignores z-index. Without
@@ -45,7 +47,11 @@ function SheetOverlay({
 }
 
 const sheetContentVariants = cva(
-  'fixed z-50 flex flex-col gap-0 bg-background shadow-lg outline-none transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-300',
+  // Why: bg-popover (frosted-floating tier ~0.65 alpha) so sheets read as
+  // distinct surfaces under glass themes instead of nearly transparent.
+  // glass-surface-strong is appended separately so it doesn't conflict
+  // with CVA variant resolution.
+  'fixed z-50 flex flex-col gap-0 bg-popover text-popover-foreground shadow-lg outline-none transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-300',
   {
     variants: {
       side: {
@@ -83,7 +89,7 @@ function SheetContent({
       <SheetOverlay className={overlayClassName} style={overlayStyle} />
       <SheetPrimitive.Content
         data-slot="sheet-content"
-        className={cn(sheetContentVariants({ side }), className)}
+        className={cn('glass-surface-strong', sheetContentVariants({ side }), className)}
         // Why: same as SheetOverlay — the sheet content portals to the
         // document root and its header overlaps the titlebar drag strip.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}

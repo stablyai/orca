@@ -11,6 +11,12 @@ import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
+import {
+  ORCA_GLASS_LIGHT_THEME_NAME,
+  ORCA_GLASS_DARK_THEME_NAME,
+  orcaGlassLightTheme,
+  orcaGlassDarkTheme
+} from './monaco-glass-themes'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -76,6 +82,12 @@ installMonacoDiffEditorDisposalGuard(monaco)
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
+
+// Why: Monaco themes must be defined before any editor consumes them.
+// Register the glass variants at bootstrap so MonacoEditor.tsx can simply
+// pick the name in its theme prop without lifecycle gymnastics.
+monaco.editor.defineTheme(ORCA_GLASS_LIGHT_THEME_NAME, orcaGlassLightTheme)
+monaco.editor.defineTheme(ORCA_GLASS_DARK_THEME_NAME, orcaGlassDarkTheme)
 
 // Re-export for convenience
 export { monaco }

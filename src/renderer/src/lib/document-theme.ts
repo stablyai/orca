@@ -26,6 +26,12 @@ type ApplyDocumentThemeOptions = {
   requestAnimationFrame?: ThemeAnimationFrame
   cancelAnimationFrame?: ThemeCancelAnimationFrame
   disableTransitions?: boolean
+  /**
+   * Whether the host is macOS. Defaults to a userAgent sniff in the browser.
+   * Passing this explicitly is required in tests because jsdom's userAgent
+   * does not include "Mac" by default.
+   */
+  isDarwin?: boolean
 }
 
 let pendingTransitionDisableFrames: number[] = []
@@ -43,6 +49,13 @@ function systemPrefersDark(
   return matchMedia(DARK_MODE_QUERY).matches
 }
 
+function detectIsDarwin(): boolean {
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+  return navigator.userAgent.includes('Mac')
+}
+
 export function resolveDocumentTheme(
   theme: DocumentThemePreference,
   matchMedia?: ThemeMediaMatcher
@@ -56,13 +69,27 @@ export function resolveDocumentTheme(
   return systemPrefersDark(matchMedia)
 }
 
+/**
+ * Apply theme + glass effect classes to the document root.
+ *
+ * Class mapping:
+ * - 'dark' / 'light' — always set (mirror of resolved theme; Tailwind keys on 'dark')
+ * - 'glass-light' — set when glassEffect is on AND resolved theme is light
+ * - 'glass-dark'  — set when glassEffect is on AND resolved theme is dark
+ *
+ * Glass effect is silently dropped on non-macOS hosts because the
+ * underlying Electron vibrancy is macOS-only.
+ */
 export function applyDocumentTheme(
   theme: DocumentThemePreference,
+  glassEffect: boolean,
   options: ApplyDocumentThemeOptions = {}
 ): void {
   const root = options.root ?? document.documentElement
   const disableTransitions = options.disableTransitions ?? true
+  const isDarwin = options.isDarwin ?? detectIsDarwin()
   const shouldUseDarkTheme = resolveDocumentTheme(theme, options.matchMedia)
+  const effectiveGlassEffect = glassEffect && isDarwin
 
   if (disableTransitions) {
     root.classList.add(THEME_TRANSITION_DISABLED_CLASS)
@@ -72,6 +99,8 @@ export function applyDocumentTheme(
   // Mirror with `light` so consumers can observe the resolved theme
   // symmetrically (Tailwind keys only on `dark`, so this is style-neutral).
   root.classList.toggle('light', !shouldUseDarkTheme)
+  root.classList.toggle('glass-light', effectiveGlassEffect && !shouldUseDarkTheme)
+  root.classList.toggle('glass-dark', effectiveGlassEffect && shouldUseDarkTheme)
 
   if (!disableTransitions) {
     return

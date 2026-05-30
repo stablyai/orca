@@ -106,9 +106,9 @@ export function getWindowSections(
 // Tooltip — progress bar section for a single window
 // ---------------------------------------------------------------------------
 
-// Why: the base tooltip component uses `bg-foreground text-background` which
+// Why: the base tooltip component uses `bg-foreground text-background-opaque` which
 // inverts the color scheme (light bg in dark mode). These rich tooltips use
-// `text-background` for primary text and `text-background/50` for secondary
+// `text-background-opaque` for primary text and `text-background/50` for secondary
 // to stay readable inside the inverted tooltip container.
 
 // Why: color-coded by remaining capacity so users can quickly gauge urgency.
@@ -138,7 +138,7 @@ function TooltipWindowSection({
 
   return (
     <div className="space-y-1">
-      <div className="font-medium text-background">{label}</div>
+      <div className="font-medium text-background-opaque">{label}</div>
       <div className="w-full h-[6px] rounded-full bg-background/20 overflow-hidden">
         <div
           className={`h-full rounded-full ${barColor(leftPct)} transition-all duration-300`}
@@ -176,7 +176,7 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
   if (p.status === 'unavailable') {
     return (
       <div className="text-xs w-[200px]">
-        <div className="flex items-center gap-1.5 font-medium text-background">
+        <div className="flex items-center gap-1.5 font-medium text-background-opaque">
           <ProviderIcon provider={p.provider} />
           {name}
         </div>
@@ -188,7 +188,7 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
   if (p.status === 'error' && !p.session && !p.weekly && !p.monthly) {
     return (
       <div className="text-xs w-[200px]">
-        <div className="flex items-center gap-1.5 font-medium text-background">
+        <div className="flex items-center gap-1.5 font-medium text-background-opaque">
           <ProviderIcon provider={p.provider} />
           {name}
         </div>
@@ -203,7 +203,7 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
     <div className="text-xs w-[200px] space-y-3">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-1.5 font-medium text-background text-[13px]">
+        <div className="flex items-center gap-1.5 font-medium text-background-opaque text-[13px]">
           <ProviderIcon provider={p.provider} />
           {name}
         </div>
@@ -234,7 +234,7 @@ export function ProviderPanel({
   inverted?: boolean
   className?: string
 }): React.JSX.Element {
-  const textClass = inverted ? 'text-background' : 'text-foreground'
+  const textClass = inverted ? 'text-background-opaque' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
   const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'
   const dividerClass = inverted ? 'border-background/15' : 'border-border/70'

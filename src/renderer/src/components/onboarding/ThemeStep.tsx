@@ -165,6 +165,9 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     }
   }
 
+  // Why: glass effect is a separate setting (AppearancePane → Glass effect
+  // switch) so the onboarding picker stays focused on 3 base themes. Glass
+  // is an opt-in visual layer that can be paired with any base theme later.
   const themes: {
     id: GlobalSettings['theme']
     label: string
@@ -292,7 +295,7 @@ function GhosttyDiscoveryRow({
         )}
       </div>
       <button
-        className="shrink-0 rounded-md bg-foreground px-3 py-1.5 text-[11.5px] font-semibold text-background hover:bg-foreground/90 disabled:opacity-50"
+        className="shrink-0 rounded-md bg-foreground px-3 py-1.5 text-[11.5px] font-semibold text-background-opaque hover:bg-foreground/90 disabled:opacity-50"
         disabled={importing || disabled}
         onClick={() => onImport(preview)}
       >

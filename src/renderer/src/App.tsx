@@ -1031,31 +1031,31 @@ function App(): React.JSX.Element {
     acknowledgedAgentsByPaneKey
   ])
 
-  // Apply theme to document
+  // Apply theme + glass effect to document. applyDocumentTheme also
+  // gracefully ignores glassEffect on non-macOS hosts. The matchMedia
+  // listener only matters when the resolved theme depends on the OS
+  // (system mode) — under system + glass, OS dark/light changes also
+  // need to flip the glass-light/glass-dark class.
   useEffect(() => {
     if (!settings) {
       return
     }
+    const glassEffect = settings.glassEffect ?? false
 
-    if (settings.theme === 'dark') {
-      applyDocumentTheme('dark')
+    applyDocumentTheme(settings.theme, glassEffect)
+
+    if (settings.theme !== 'system') {
       return undefined
-    } else if (settings.theme === 'light') {
-      applyDocumentTheme('light')
-      return undefined
-    } else {
-      // system
-      const mq = window.matchMedia('(prefers-color-scheme: dark)')
-      applyDocumentTheme('system')
-      const handler = (): void => {
-        applyDocumentTheme('system')
-        // Why: system theme changes do not mutate the store, so mobile
-        // terminal colors need an explicit graph republish.
-        scheduleRuntimeGraphSync()
-      }
-      mq.addEventListener('change', handler)
-      return () => mq.removeEventListener('change', handler)
     }
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = (): void => {
+      applyDocumentTheme('system', glassEffect)
+      // Why: system theme changes do not mutate the store, so mobile
+      // terminal colors need an explicit graph republish.
+      scheduleRuntimeGraphSync()
+    }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
   }, [settings])
 
   useEffect(() => {

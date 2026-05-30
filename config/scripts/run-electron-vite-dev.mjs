@@ -27,6 +27,7 @@ delete process.env.ELECTRON_RUN_AS_NODE
 
 const require = createRequire(import.meta.url)
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const runnerScriptPath = fileURLToPath(import.meta.url)
 const STABLE_NAME_FLAG = '--stable-name'
 const rawForwardedArgs = process.argv.slice(2)
 // Why: keep an escape hatch for tools that key off Electron's stock app name.
@@ -37,6 +38,11 @@ const forwardedRaw = rawForwardedArgs.filter((arg) => arg !== STABLE_NAME_FLAG)
 if (useStableElectronName) {
   process.env.ORCA_DEV_STABLE_NAME = '1'
 }
+// Why: Electron's app.relaunch() from an electron-vite child otherwise restarts
+// only the child while the parent dev server exits, leaving a blank shell.
+process.env.ORCA_DEV_RELAUNCH_EXEC_PATH ||= process.execPath
+process.env.ORCA_DEV_RELAUNCH_SCRIPT ||= runnerScriptPath
+process.env.ORCA_DEV_RELAUNCH_ARGS ||= JSON.stringify(rawForwardedArgs)
 
 function readGitValue(args) {
   try {

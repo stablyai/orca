@@ -4458,7 +4458,7 @@ export default function TaskPage(): React.JSX.Element {
                               className={cn(
                                 'rounded-md border px-2 py-1 text-xs transition',
                                 active
-                                  ? 'border-border/50 bg-foreground/90 text-background'
+                                  ? 'border-border/50 bg-foreground/90 text-background-opaque'
                                   : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
                               )}
                             >
@@ -4555,7 +4555,7 @@ export default function TaskPage(): React.JSX.Element {
                             className={cn(
                               'rounded-md border px-2 py-1 text-xs transition',
                               active
-                                ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                ? 'border-border/50 bg-foreground/90 text-background-opaque backdrop-blur-md'
                                 : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
                             )}
                           >
@@ -4741,7 +4741,7 @@ export default function TaskPage(): React.JSX.Element {
                               className={cn(
                                 'rounded-md border px-2 py-1 text-xs transition',
                                 active
-                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                  ? 'border-border/50 bg-foreground/90 text-background-opaque backdrop-blur-md'
                                   : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
                               )}
                             >
@@ -4857,7 +4857,7 @@ export default function TaskPage(): React.JSX.Element {
                               className={cn(
                                 'rounded-md border px-2.5 py-1 text-xs transition',
                                 active
-                                  ? 'border-foreground/40 bg-foreground/90 text-background'
+                                  ? 'border-foreground/40 bg-foreground/90 text-background-opaque'
                                   : 'border-border/50 bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                               )}
                             >
@@ -4908,7 +4908,7 @@ export default function TaskPage(): React.JSX.Element {
                                       className={cn(
                                         'rounded-md border px-2 py-1 text-xs transition',
                                         active
-                                          ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                          ? 'border-border/50 bg-foreground/90 text-background-opaque backdrop-blur-md'
                                           : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
                                       )}
                                     >

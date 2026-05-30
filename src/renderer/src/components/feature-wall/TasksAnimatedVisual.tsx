@@ -256,7 +256,7 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
                     ref={(node) => {
                       buttonRefs.current[i] = node
                     }}
-                    className={`pointer-events-none inline-flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1 text-[11px] font-semibold text-background transition-[transform,filter] duration-150 ${
+                    className={`pointer-events-none inline-flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1 text-[11px] font-semibold text-background-opaque transition-[transform,filter] duration-150 ${
                       isPressing ? 'scale-[0.94] brightness-[1.4]' : 'scale-100'
                     }`}
                   >

@@ -260,15 +260,15 @@ export function useOnboardingFlow(
 
   // Apply preview when local theme changes.
   useEffect(() => {
-    applyDocumentTheme(theme)
-  }, [theme])
+    applyDocumentTheme(theme, settings?.glassEffect ?? false)
+  }, [theme, settings?.glassEffect])
 
   // Why: the theme step previews on the document before persistence. Revert to
   // the persisted theme only on wizard unmount so saving (which updates
   // settings.theme) doesn't trigger a one-frame revert/reapply flicker.
   useEffect(() => {
     return () => {
-      applyDocumentTheme(persistedThemeRef.current)
+      applyDocumentTheme(persistedThemeRef.current, settings?.glassEffect ?? false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -939,7 +939,7 @@ export function useOnboardingFlow(
       const themeBeforePreview = themeStepEntryThemeRef.current ?? settings?.theme
       if (themeBeforePreview) {
         setTheme(themeBeforePreview)
-        applyDocumentTheme(themeBeforePreview)
+        applyDocumentTheme(themeBeforePreview, settings?.glassEffect ?? false)
         await updateSettings({ theme: themeBeforePreview })
       }
     }

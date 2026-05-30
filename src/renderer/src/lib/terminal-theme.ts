@@ -1,6 +1,7 @@
 import type { ITheme } from '@xterm/xterm'
 import { getTheme, getThemeNames } from './terminal-themes-data'
 import type { GlobalSettings } from '../../../shared/types'
+import { isGlassEffectActive } from '../../../shared/glass-theme'
 
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
@@ -49,6 +50,8 @@ export function resolveEffectiveTerminalAppearance(
   >,
   systemPrefersDark = getSystemPrefersDark()
 ): EffectiveTerminalAppearance {
+  // Why: theme is now narrow (system/dark/light) thanks to the glassEffect
+  // split — earlier glass-* clamp logic is no longer needed at this site.
   const sourceTheme =
     settings.theme === 'system' ? (systemPrefersDark ? 'dark' : 'light') : settings.theme
   const useLightVariant = sourceTheme === 'light' && settings.terminalUseSeparateLightTheme
@@ -108,11 +111,20 @@ export function resolvePaneStyleOptions(
     | 'terminalPaneOpacityTransitionMs'
     | 'terminalDividerThicknessPx'
     | 'terminalFocusFollowsMouse'
+    | 'glassEffect'
   >
 ) {
+  // Why: under glass themes the pane background is already a translucent
+  // rgba. Layering a CSS opacity on top of that (which is what the
+  // active/inactive pane opacity settings produce) multiplies into the
+  // alpha — so clicking to focus a pane flips the terminal's visible
+  // wallpaper bleed, looking like a colour change. Force both opacities
+  // to 1 so focus state never changes the rendered alpha. Non-glass
+  // themes still honour the user's preference.
+  const themeIsGlass = isGlassEffectActive(settings)
   return {
-    inactivePaneOpacity: clampNumber(settings.terminalInactivePaneOpacity, 0, 1),
-    activePaneOpacity: clampNumber(settings.terminalActivePaneOpacity, 0, 1),
+    inactivePaneOpacity: themeIsGlass ? 1 : clampNumber(settings.terminalInactivePaneOpacity, 0, 1),
+    activePaneOpacity: themeIsGlass ? 1 : clampNumber(settings.terminalActivePaneOpacity, 0, 1),
     opacityTransitionMs: clampNumber(settings.terminalPaneOpacityTransitionMs, 0, 5000),
     dividerThicknessPx: clampNumber(settings.terminalDividerThicknessPx, 1, 32),
     // Why no clamping: boolean pass-through. Both true and false are valid.

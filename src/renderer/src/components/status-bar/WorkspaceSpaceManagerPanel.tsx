@@ -347,7 +347,7 @@ function CheckButton({
         className={cn(
           'flex size-4 items-center justify-center rounded-sm border transition-colors',
           isChecked || isMixed
-            ? 'border-foreground bg-foreground text-background'
+            ? 'border-foreground bg-foreground text-background-opaque'
             : 'border-muted-foreground/50 bg-background/40 text-transparent'
         )}
       >

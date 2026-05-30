@@ -40,7 +40,7 @@ export function useContextualCopySetup() {
 
   const toastNode = copyToast ? (
     <div
-      className="pointer-events-none fixed z-50 rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm"
+      className="pointer-events-none fixed z-50 rounded-md bg-foreground px-2 py-1 text-xs text-background-opaque shadow-sm"
       style={{ left: copyToast.left, top: copyToast.top }}
     >
       Context copied

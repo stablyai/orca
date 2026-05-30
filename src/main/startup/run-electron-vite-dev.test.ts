@@ -162,6 +162,9 @@ describe('run-electron-vite-dev', () => {
       badgeLabel: string | null
       dockTitle: string
       stableName: string | null
+      devRelaunchExecPath: string | null
+      devRelaunchScript: string | null
+      devRelaunchArgs: string | null
       electronExecPath: string | null
     }
     expect(envSnapshot.args).toContain('--remote-debugging-port=9444')
@@ -172,6 +175,11 @@ describe('run-electron-vite-dev', () => {
     expect(envSnapshot.badgeLabel).toBeNull()
     expect(envSnapshot.dockTitle).toBe('Orca: feature/billing-shell')
     expect(envSnapshot.stableName).toBeNull()
+    expect(envSnapshot.devRelaunchExecPath).toBe(process.execPath)
+    expect(envSnapshot.devRelaunchScript).toBe(wrapperPath)
+    expect(JSON.parse(envSnapshot.devRelaunchArgs ?? 'null')).toEqual([
+      '--remote-debugging-port=9444'
+    ])
     expect(envSnapshot.electronExecPath).toBeNull()
 
     wrapper.kill('SIGINT')

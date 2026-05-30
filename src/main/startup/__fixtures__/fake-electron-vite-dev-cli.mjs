@@ -30,6 +30,9 @@ if (envFile) {
         badgeLabel: process.env.ORCA_DEV_DOCK_BADGE_LABEL ?? null,
         dockTitle: process.env.ORCA_DEV_DOCK_TITLE ?? null,
         stableName: process.env.ORCA_DEV_STABLE_NAME ?? null,
+        devRelaunchExecPath: process.env.ORCA_DEV_RELAUNCH_EXEC_PATH ?? null,
+        devRelaunchScript: process.env.ORCA_DEV_RELAUNCH_SCRIPT ?? null,
+        devRelaunchArgs: process.env.ORCA_DEV_RELAUNCH_ARGS ?? null,
         electronExecPath: process.env.ELECTRON_EXEC_PATH ?? null
       },
       null,

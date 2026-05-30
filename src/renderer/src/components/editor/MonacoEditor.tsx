@@ -10,6 +10,7 @@ import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-ca
 import '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
+import { resolveMonacoThemeName } from '@/lib/monaco-theme-resolution'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
@@ -691,6 +692,8 @@ export default function MonacoEditor({
     })
   }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
 
+  const monacoTheme = resolveMonacoThemeName(settings, isDark)
+
   return (
     <div
       ref={editorContainerRef}
@@ -737,7 +740,7 @@ export default function MonacoEditor({
         height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
         language={language}
         value={content}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={monacoTheme}
         onChange={handleChange}
         onMount={handleMount}
         options={{

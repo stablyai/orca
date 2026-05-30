@@ -47,6 +47,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     theme: 'system',
+    glassEffect: false,
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
     editorMinimapEnabled: false,

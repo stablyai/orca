@@ -106,6 +106,37 @@ Orca uses shadows sparingly. Three levels in practice:
 
 Don't add a fourth level. If something needs more emphasis than "floating," you're probably reaching for the focus `ring` instead.
 
+## Glass surfaces (macOS 26 themes)
+
+When the user picks the `glass-light` or `glass-dark` theme on macOS, surfaces that should "be glass" wear the `.glass-surface` utility class. The class reads two CSS variables — `--glass-blur` and `--glass-saturate` — that the glass theme blocks set to non-zero values. Outside glass themes the variables stay at no-op defaults (`blur(0)`), so the utility is safe to apply unconditionally.
+
+```css
+.glass-surface {
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+```
+
+Use `.glass-surface` on the root of any "panel" surface: sidebar, card, popover, dialog, sheet, tooltip, command palette. Do **not** nest one `.glass-surface` inside another — Radix portals all of the floating primitives to the document body, so by default they're siblings of the app root. If you build a custom floating surface, portal it (or accept the double-blur cost).
+
+The titlebar applies `backdrop-filter` directly in CSS (rather than via the utility class) because it's rendered from CSS-only selectors `.titlebar` and `.titlebar-left`, not from a single React root.
+
+### Documented exceptions: dropdown and context menus
+
+`DropdownMenuContent`, `DropdownMenuSubContent`, `ContextMenuContent`, and `ContextMenuSubContent` deliberately do **not** use `.glass-surface`. They carry bespoke `backdrop-blur-2xl` (40px frost) hand-tuned for their semi-transparent RGBA backgrounds (alpha 0.10–0.82). The two approaches don't compose cleanly: `.glass-surface` is defined unlayered, which beats Tailwind's layered `backdrop-blur-*` per CSS layer specificity, so adding both to the same element would override the menu's hand-tuned blur with `blur(0)` outside glass themes.
+
+Practical consequence: under glass themes, dropdown and context menus stay at 40px while other floating surfaces use `--glass-blur: 28px`. The visual delta is small (12px) and intentional. If you add a new menu primitive or extend an existing one, follow this exception — keep the bespoke `backdrop-blur-*` and skip `.glass-surface`. For any other floating surface, use `.glass-surface`.
+
+### Glass token re-mapping
+
+Glass themes re-map existing role tokens (`--background`, `--card`, `--sidebar`, `--popover`, `--editor-surface`, etc.) to semi-transparent RGBA values. **Do not introduce new glass-specific surface tokens** — keep components referencing the same role tokens, and let the theme block under `.glass-light` / `.glass-dark` swap the values.
+
+The theme blocks declare four `--glass-*` controls: `--glass-blur` and `--glass-saturate` (consumed by `.glass-surface` and the titlebar CSS), plus `--glass-inner-glow` and `--glass-shadow` (declared for future per-surface refinements — e.g., a custom glass surface that wants its own edge highlight or drop shadow tint — but unused today). Add new `--glass-*` tokens only when a new surface needs a different blur/saturation level than the global one.
+
+### `prefers-reduced-transparency`
+
+Both `.glass-light` and `.glass-dark` honor `@media (prefers-reduced-transparency: reduce)` by flattening to opaque tinted colors. macOS independently pauses window-level vibrancy when this preference is on, so the OS and renderer layers degrade together. Do not write a separate code path for reduced-transparency users — adding new role-token overrides under the glass selectors is enough.
+
 ## Components
 
 Use the shadcn primitives in `src/renderer/src/components/ui/` before writing anything custom. The shadcn-style wrappers in this folder follow a consistent pattern:

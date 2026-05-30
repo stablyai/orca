@@ -204,17 +204,27 @@ function RightSidebarInner(): React.JSX.Element {
         rightSidebarOpen ? 'overflow-visible' : 'overflow-hidden'
       )}
     >
-      {/* Panel content area */}
+      {/* Panel content area
+          Why: the left border is a class instead of inline style so the
+          glass theme override in main.css (right-sidebar-panel-content)
+          can suppress it. Inline styles cannot be overridden by external
+          CSS without !important, which is harder to reason about. */}
       <div
-        className="flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
-        style={{
-          borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
-        }}
+        className={cn(
+          'right-sidebar-panel-content flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden',
+          rightSidebarOpen && 'border-l border-[var(--sidebar-border)]'
+        )}
       >
         {activityBarPosition === 'top' ? (
-          /* ── Top activity bar: horizontal icon row ── */
+          /* ── Top activity bar: horizontal icon row
+              Why: explicit 'right-sidebar-top-activity-bar' class so the
+              glass override in main.css can paint this bar with the same
+              bg as the titlebar (var(--bg-titlebar, var(--card))) — that
+              way the top of the right rail visually continues the
+              titlebar instead of looking like a slightly different
+              region due to bg-sidebar inheritance stacking. */
           <ContextMenu>
-            <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
+            <div className="right-sidebar-top-activity-bar flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
               {!isWindows && (
                 <TooltipProvider delayDuration={400}>
                   <ContextMenuTrigger asChild>
@@ -318,9 +328,13 @@ function RightSidebarInner(): React.JSX.Element {
 
         {panelContent}
 
-        {/* Resize handle on LEFT side */}
+        {/* Resize handle on LEFT side
+            Why: 'bg-sidebar' matches the rest of the right rail's surface
+            color so the 4px handle stops looking like a transparent gap
+            between the terminal and the rail under glass themes. The
+            hover/active accents still show. */}
         <div
-          className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
+          className="absolute top-0 left-0 w-1 h-full cursor-col-resize bg-sidebar hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
           onMouseDown={onResizeStart}
         />
       </div>

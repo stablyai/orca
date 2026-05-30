@@ -1126,6 +1126,7 @@ app.whenReady().then(async () => {
       onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
     })
   )
+  // Why: theme is system/dark/light only; glassEffect is a separate setting.
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   if (shouldInstallManagedHooks(is.dev)) {
     // Why: the persisted off switch must run before any auto-install path so

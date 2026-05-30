@@ -36,6 +36,8 @@ import { cn } from '@/lib/utils'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { Button } from '@/components/ui/button'
 import { installEditorSaveShortcut } from './editor-shortcuts'
+import { resolveMonacoThemeName } from '@/lib/monaco-theme-resolution'
+import type { GlobalSettings } from '../../../../shared/types'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -69,7 +71,12 @@ export function DiffSectionItem({
   isBranchMode: boolean
   sideBySide: boolean
   isDark: boolean
-  settings: { terminalFontSize?: number; terminalFontFamily?: string } | null
+  settings:
+    | (Pick<GlobalSettings, 'theme' | 'glassEffect'> & {
+        terminalFontSize?: number
+        terminalFontFamily?: string
+      })
+    | null
   sectionHeight: number | undefined
   worktreeId?: string
   loadSection: (index: number) => void
@@ -417,6 +424,8 @@ export function DiffSectionItem({
     loadSection(index)
   }, [index, loadSection])
 
+  const monacoTheme = resolveMonacoThemeName(settings, isDark)
+
   return (
     <div className="border-b border-border">
       <DiffSectionHeader
@@ -510,7 +519,7 @@ export function DiffSectionItem({
               language={language}
               original={section.originalContent}
               modified={section.modifiedContent}
-              theme={isDark ? 'vs-dark' : 'vs'}
+              theme={monacoTheme}
               onMount={handleMount}
               // Why: @monaco-editor/react can dispose models before widget teardown.
               // Keep them through unmount and dispose unattached models next tick.

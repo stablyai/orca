@@ -12,6 +12,7 @@ import {
   normalizeExternalBrowserUrl
 } from '../../shared/browser-url'
 import { isCrashReportReason } from '../../shared/crash-reporting'
+import { isGlassEffectActive } from '../../shared/glass-theme'
 import {
   getWindowShortcutActionId,
   matchesRecentTabSwitcherChord,
@@ -214,7 +215,14 @@ export function createMainWindow(
     // dictation session whose final text would be dropped.
     return false
   })
-  const blur = settings?.windowBackgroundBlur ?? false
+  // Why: glassEffect (macOS-only) requires the same vibrancy chain as the
+  // windowBackgroundBlur setting. Force vibrancy on when the user has
+  // glass effect enabled so they don't also need to toggle the standalone
+  // blur switch.
+  const themeRequiresGlass = isGlassEffectActive(settings, {
+    isDarwin: process.platform === 'darwin'
+  })
+  const blur = themeRequiresGlass || (settings?.windowBackgroundBlur ?? false)
   // Why: native blur requires platform-specific Electron APIs. macOS uses
   // vibrancy (needs transparent: true), Windows uses backgroundMaterial.
   // Linux has no native equivalent. Blur only applies at window creation;
@@ -242,7 +250,14 @@ export function createMainWindow(
     // Window/Help menus by pressing Alt, matching native Windows/Linux
     // conventions (File Explorer, Firefox, etc.).
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    // Why: when vibrancy is enabled (glass theme or explicit windowBackgroundBlur),
+    // the BrowserWindow must be visually transparent so the renderer's rgba surfaces
+    // composite over the vibrancy layer. With an opaque backgroundColor, Electron
+    // still paints it behind the renderer — backdrop-filter then blurs an opaque
+    // fallback fill (no-op) and rgba colors composite over solid white/black instead
+    // of the wallpaper. When blur is off, keep the opaque fallback to avoid
+    // flash-of-unstyled-content on launch.
+    backgroundColor: blur ? '#00000000' : nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     // Why: on macOS 'hiddenInset' keeps the native traffic lights positioned
     // inside our custom 42px titlebar. On Windows 'hidden' removes the default
     // OS title bar (which would otherwise stack on top of our renderer titlebar

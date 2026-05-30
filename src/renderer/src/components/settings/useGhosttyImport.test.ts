@@ -6,6 +6,7 @@ let mockStateIndex = 0
 
 const baseSettings: GlobalSettings = {
   theme: 'system',
+  glassEffect: false,
   terminalFontFamily: 'Menlo',
   terminalFontSize: 12,
   terminalFontWeight: 400,

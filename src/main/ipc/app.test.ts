@@ -34,6 +34,13 @@ vi.mock('@electron-toolkit/utils', () => ({
 
 import { registerAppHandlers } from './app'
 
+const devRelaunchEnvKeys = [
+  'ORCA_DEV_RELAUNCH_EXEC_PATH',
+  'ORCA_DEV_RELAUNCH_SCRIPT',
+  'ORCA_DEV_RELAUNCH_ARGS'
+] as const
+const originalDevRelaunchEnv = new Map<string, string | undefined>()
+
 describe('registerAppHandlers', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -41,10 +48,23 @@ describe('registerAppHandlers', () => {
     appExitMock.mockReset()
     appQuitMock.mockReset()
     appRelaunchMock.mockReset()
+    for (const key of devRelaunchEnvKeys) {
+      originalDevRelaunchEnv.set(key, process.env[key])
+      delete process.env[key]
+    }
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    for (const key of devRelaunchEnvKeys) {
+      const originalValue = originalDevRelaunchEnv.get(key)
+      if (originalValue === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = originalValue
+      }
+    }
+    originalDevRelaunchEnv.clear()
   })
 
   it('marks relaunch as expected shutdown before exiting', () => {
@@ -60,6 +80,42 @@ describe('registerAppHandlers', () => {
     vi.advanceTimersByTime(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
+  it('relaunches through the dev runner when dev relaunch env is present', () => {
+    process.env.ORCA_DEV_RELAUNCH_EXEC_PATH = '/usr/local/bin/node'
+    process.env.ORCA_DEV_RELAUNCH_SCRIPT = '/repo/config/scripts/run-electron-vite-dev.mjs'
+    process.env.ORCA_DEV_RELAUNCH_ARGS = JSON.stringify([
+      '--stable-name',
+      '--remote-debugging-port=9333'
+    ])
+    registerAppHandlers({} as never)
+
+    handlers.get('app:relaunch')?.(null)
+    vi.advanceTimersByTime(150)
+
+    expect(appRelaunchMock).toHaveBeenCalledWith({
+      execPath: '/usr/local/bin/node',
+      args: [
+        '/repo/config/scripts/run-electron-vite-dev.mjs',
+        '--stable-name',
+        '--remote-debugging-port=9333'
+      ]
+    })
+    expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
+  it('falls back to Electron relaunch when dev relaunch args are malformed', () => {
+    process.env.ORCA_DEV_RELAUNCH_EXEC_PATH = '/usr/local/bin/node'
+    process.env.ORCA_DEV_RELAUNCH_SCRIPT = '/repo/config/scripts/run-electron-vite-dev.mjs'
+    process.env.ORCA_DEV_RELAUNCH_ARGS = 'not-json'
+    registerAppHandlers({} as never)
+
+    handlers.get('app:relaunch')?.(null)
+    vi.advanceTimersByTime(150)
+
+    expect(appRelaunchMock).toHaveBeenCalledWith()
     expect(appExitMock).toHaveBeenCalledWith(0)
   })
 

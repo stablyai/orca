@@ -1,7 +1,10 @@
 /* eslint-disable max-lines -- Why: AppearancePane keeps theme, typography, zoom, and status-bar
    visibility settings together so the searchable settings rows share one filtered surface. */
 import type React from 'react'
+import { useState } from 'react'
+import { RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
+import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -34,9 +37,11 @@ export { APPEARANCE_PANE_SEARCH_ENTRIES }
 type AppearancePaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  applyTheme: (theme: 'system' | 'dark' | 'light') => void
+  applyTheme: (theme: GlobalSettings['theme']) => void
   fontSuggestions: string[]
 }
+
+let glassEffectAtRendererBoot: boolean | null = null
 
 function ShortcutHintList({ combos }: { combos: string[][] }): React.JSX.Element {
   if (combos.length === 0) {
@@ -71,6 +76,28 @@ export function AppearancePane({
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(STATUS_BAR_TOGGLES)
 
+  const isMac = navigator.userAgent.includes('Mac')
+  if (glassEffectAtRendererBoot === null) {
+    // Why: vibrancy + transparent: true are window-creation-only Electron
+    // options. Keep this snapshot for the renderer lifetime, not the pane
+    // mount lifetime, so the restart banner survives settings navigation.
+    glassEffectAtRendererBoot = settings.glassEffect
+  }
+  const glassBoundaryCrossed = settings.glassEffect !== glassEffectAtRendererBoot
+  const [relaunching, setRelaunching] = useState(false)
+
+  const handleRelaunch = async (): Promise<void> => {
+    if (relaunching) {
+      return
+    }
+    setRelaunching(true)
+    try {
+      await window.api.app.relaunch()
+    } catch {
+      setRelaunching(false)
+    }
+  }
+
   const visibleSections = [
     matchesSettingsSearch(searchQuery, THEME_ENTRIES) ||
     matchesSettingsSearch(searchQuery, ZOOM_ENTRIES) ||
@@ -102,6 +129,44 @@ export function AppearancePane({
               }
             />
           </SearchableSetting>
+        ) : null}
+
+        {isMac && matchesSettingsSearch(searchQuery, THEME_ENTRIES) ? (
+          <SearchableSetting
+            title="Glass effect"
+            description="Frosted glass surfaces over the desktop wallpaper. macOS only."
+            keywords={['glass', 'vibrancy', 'transparent', 'blur', 'frosted']}
+          >
+            <SettingsSwitchRow
+              label="Glass effect"
+              description="Frosted glass surfaces over the desktop wallpaper. Works with any theme; requires relaunch."
+              checked={settings.glassEffect}
+              onChange={() => updateSettings({ glassEffect: !settings.glassEffect })}
+            />
+          </SearchableSetting>
+        ) : null}
+
+        {glassBoundaryCrossed ? (
+          <div className="mx-4 mt-2 flex items-center justify-between gap-3 rounded-md border border-yellow-500/50 bg-yellow-500/10 px-3 py-2.5">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
+                Restart required
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Toggling the glass effect requires relaunching Orca to update window vibrancy.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="default"
+              className="shrink-0 gap-1.5"
+              disabled={relaunching}
+              onClick={() => void handleRelaunch()}
+            >
+              <RotateCw className={`size-3 ${relaunching ? 'animate-spin' : ''}`} />
+              {relaunching ? 'Restarting…' : 'Restart now'}
+            </Button>
+          </div>
         ) : null}
 
         {matchesSettingsSearch(searchQuery, ZOOM_ENTRIES) ? (

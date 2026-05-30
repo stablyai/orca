@@ -48,13 +48,20 @@ function CommandDialog({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           className={cn(
-            'fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+            // Why: 'dialog-overlay-dim' lets glass themes lighten the dim
+            // (see main.css). CommandDialog is used by Cmd+P and the
+            // sidebar Search palette — without this they black out the
+            // whole window under glass.
+            'dialog-overlay-dim fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
             overlayClassName
           )}
         />
         <DialogPrimitive.Content
           className={cn(
-            'fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-border bg-popover shadow-lg outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+            // Why: glass-surface-strong (3× blur) matches the modal Dialog tier.
+            // The shared --popover bg is only 0.65 alpha, so the search palette
+            // needs the stronger frost to read as glass rather than see-through.
+            'glass-surface-strong fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-border bg-popover shadow-lg outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
             contentClassName
           )}
           onOpenAutoFocus={onOpenAutoFocus}

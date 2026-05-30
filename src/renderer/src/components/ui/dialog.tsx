@@ -31,7 +31,11 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        'fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        // Why: 'dialog-overlay-dim' lets a glass-theme override drop the
+        // opacity. bg-black/50 is right for opaque light/dark themes but
+        // blacks out the entire window under glass (where the app surface
+        // is already translucent over the wallpaper).
+        'dialog-overlay-dim fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
         className
       )}
       {...props}
@@ -55,7 +59,14 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-border/50 bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg',
+          // Why: bg-popover (frosted floating tier) + glass-surface-strong
+          // (3× the base --glass-blur) so dialogs read as heavy frosted glass
+          // — translucent but blurred enough that content behind isn't
+          // legible. Not opaque (kills the glass feel) and not clear (lets
+          // text bleed through). Outside glass, bg-popover resolves to the
+          // same opaque hex as the rest of dark/light, so non-glass is
+          // unchanged.
+          'glass-surface-strong fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-border/50 bg-popover text-popover-foreground p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg',
           className
         )}
         {...props}

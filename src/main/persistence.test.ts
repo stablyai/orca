@@ -1810,6 +1810,7 @@ describe('Store', () => {
 
     const updated = store.updateSettings({
       theme: 'dark',
+      glassEffect: false,
       editorAutoSave: true,
       editorAutoSaveDelayMs: 1500,
       appFontFamily: 'Inter',

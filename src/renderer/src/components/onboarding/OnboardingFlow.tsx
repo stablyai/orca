@@ -170,7 +170,9 @@ export default function OnboardingFlow({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground backdrop-blur-[2px]"
+      // Why: onboarding must fully block worktrees / terminals behind it
+      // under glass themes while users configure their initial setup.
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-background-opaque p-4 text-foreground"
       data-onboarding-overlay
       onPointerDown={(event) => {
         if (!shouldRequestOnboardingSkipConfirmation(event)) {

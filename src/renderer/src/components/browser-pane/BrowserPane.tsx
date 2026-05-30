@@ -4428,7 +4428,7 @@ function BrowserPagePane({
                   'h-8 w-8',
                   grab.state !== 'idle' &&
                     grabIntent === 'copy' &&
-                    'bg-foreground/80 text-background hover:bg-foreground/90'
+                    'bg-foreground/80 text-background-opaque hover:bg-foreground/90'
                 )}
                 onClick={() => startGrabIntent('copy')}
                 disabled={isBlankTab}
@@ -4457,7 +4457,7 @@ function BrowserPagePane({
                   'relative h-8 w-8',
                   grab.state !== 'idle' &&
                     grabIntent === 'annotate' &&
-                    'bg-foreground/80 text-background hover:bg-foreground/90'
+                    'bg-foreground/80 text-background-opaque hover:bg-foreground/90'
                 )}
                 onClick={() => startGrabIntent('annotate')}
                 disabled={isBlankTab}

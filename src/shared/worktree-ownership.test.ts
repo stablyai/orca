@@ -77,6 +77,7 @@ function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
     branchPrefixCustom: '',
     enableGitHubAttribution: false,
     theme: 'system',
+    glassEffect: false,
     appFontFamily: 'Geist',
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,

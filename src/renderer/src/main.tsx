@@ -17,7 +17,10 @@ if (
   void import('react-grab/styles.css')
 }
 
-applyDocumentTheme('system', { disableTransitions: false })
+// Why: bootstrap with system + no glass before settings load — App.tsx's
+// effect re-applies with the user's persisted glass preference once
+// settings arrive.
+applyDocumentTheme('system', false, { disableTransitions: false })
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

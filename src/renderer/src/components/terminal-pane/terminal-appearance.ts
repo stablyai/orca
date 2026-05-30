@@ -3,6 +3,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
+import { isGlassEffectActive } from '../../../../shared/glass-theme'
 import {
   getBuiltinTheme,
   resolvePaneStyleOptions,
@@ -202,7 +203,14 @@ export function applyTerminalAppearance(
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
   const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
+  // Why: glass themes default to the sidebar's see-through level so there is
+  // no sharp seam where the sidebar meets the terminal. Explicit user opacity wins.
+  const effectiveOpacity =
+    settings.terminalBackgroundOpacity ?? (isGlassEffectActive(settings) ? 0.15 : undefined)
+  const theme = composeActiveTerminalTheme(baseTheme, {
+    ...settings,
+    terminalBackgroundOpacity: effectiveOpacity
+  })
   const paneBackground = theme?.background ?? '#000000'
 
   const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
@@ -218,8 +226,9 @@ export function applyTerminalAppearance(
     // Why: xterm's allowTransparency has measurable rendering cost, so clear
     // it explicitly when opacity is at (or above) 1 to avoid a stale `true`
     // bleeding in from a prior opacity setting that has since been reset.
-    pane.terminal.options.allowTransparency =
-      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+    // Why: enable xterm transparency whenever the effective opacity (user
+    // setting or glass-theme default) is below 1.
+    pane.terminal.options.allowTransparency = effectiveOpacity !== undefined && effectiveOpacity < 1
     const cursorStyle = settings.terminalCursorStyle ?? 'bar'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)

@@ -288,7 +288,7 @@ export function SectionDetail({
               className={cn(
                 'flex-1 rounded px-2 py-1 transition',
                 reviewerMode === 'requested'
-                  ? 'bg-foreground/90 text-background'
+                  ? 'bg-foreground/90 text-background-opaque'
                   : 'text-muted-foreground hover:bg-muted/50'
               )}
             >
@@ -300,7 +300,7 @@ export function SectionDetail({
               className={cn(
                 'flex-1 rounded px-2 py-1 transition',
                 reviewerMode === 'reviewed-by'
-                  ? 'bg-foreground/90 text-background'
+                  ? 'bg-foreground/90 text-background-opaque'
                   : 'text-muted-foreground hover:bg-muted/50'
               )}
             >

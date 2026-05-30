@@ -99,8 +99,12 @@ playwright-report/
 
 # Agent skill installations (machine-local, populated by agent tooling)
 /.claude/skills/
+/.claude/settings.local.json
 /.agents/skills/
 /skills-lock.json
 
 # Agent hook runtime endpoints (machine-local secrets)
 /agent-hooks/
+
+# Superpowers / brainstorm runtime artifacts (machine-local)
+/.superpowers/

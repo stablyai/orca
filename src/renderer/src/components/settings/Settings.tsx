@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import { Info } from 'lucide-react'
-import type { OrcaHooks } from '../../../../shared/types'
+import type { GlobalSettings, OrcaHooks } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { useAppStore } from '../../store'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
@@ -388,9 +388,13 @@ function Settings(): React.JSX.Element {
     }
   }
 
-  const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
-    applyDocumentTheme(theme)
-  }, [])
+  const glassEffect = settings?.glassEffect ?? false
+  const applyTheme = useCallback(
+    (theme: GlobalSettings['theme']) => {
+      applyDocumentTheme(theme, glassEffect)
+    },
+    [glassEffect]
+  )
 
   const displayedGitUsername = repos[0]?.gitUsername ?? ''
   const navSections = useSettingsNavigationMetadata()

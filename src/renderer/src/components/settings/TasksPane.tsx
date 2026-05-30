@@ -124,7 +124,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                   className={cn(
                     'flex size-4 shrink-0 items-center justify-center rounded border text-[10px]',
                     enabled
-                      ? 'border-foreground/50 bg-foreground text-background'
+                      ? 'border-foreground/50 bg-foreground text-background-opaque'
                       : 'border-border bg-background'
                   )}
                 >

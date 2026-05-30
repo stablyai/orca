@@ -67,6 +67,11 @@ export const THEME_ENTRIES: SettingsSearchEntry[] = [
     title: 'Theme',
     description: 'Choose how Orca looks in the app window.',
     keywords: ['dark', 'light', 'system']
+  },
+  {
+    title: 'Glass effect',
+    description: 'Frosted glass surfaces over the desktop wallpaper. macOS only.',
+    keywords: ['glass', 'vibrancy', 'transparent', 'blur', 'frosted', 'macos']
   }
 ]
 
