@@ -14,8 +14,13 @@ describe('detectLanguage', () => {
     expect(detectLanguage('src/routes/index.astro')).toBe('astro')
   })
 
-  it('maps Windows Batch files to the custom batch language id', () => {
-    expect(detectLanguage('scripts/setup.bat')).toBe('batch')
-    expect(detectLanguage('C:\\repo\\scripts\\bootstrap.CMD')).toBe('batch')
+  it('maps exact filenames from Windows paths', () => {
+    expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
+    expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')
+  })
+
+  it('maps Windows Batch files to Monaco built-in Batch language id', () => {
+    expect(detectLanguage('scripts/setup.bat')).toBe('bat')
+    expect(detectLanguage('C:\\repo\\scripts\\bootstrap.CMD')).toBe('bat')
   })
 })
