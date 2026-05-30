@@ -216,41 +216,23 @@ function TabBarInner({
       ),
     [agentCmdOverrides, defaultAgent, detectedIds]
   )
-  const [runtimeHostPlatform, setRuntimeHostPlatform] = useState<NodeJS.Platform | null>(null)
-  useEffect(() => {
-    if (
-      !(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ ||
-      !activeRuntimeEnvironmentId
-    ) {
-      setRuntimeHostPlatform(null)
-      return
-    }
-    let cancelled = false
-    void window.api.runtime
-      .getStatus()
-      .then((status) => {
-        if (!cancelled) {
-          setRuntimeHostPlatform(status.hostPlatform ?? null)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRuntimeHostPlatform(null)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [activeRuntimeEnvironmentId])
+  const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
+  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
+    activeRuntimeEnvironmentId
+  )
+  const shouldProbeWindowsShellCapabilities =
+    (isWindows || (isWebClient && activeRuntimeEnvironmentId !== null)) &&
+    !worktreeHasRemoteConnection
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
+    shouldProbeWindowsShellCapabilities,
+    false,
+    windowsTerminalCapabilityOwnerKey
+  )
   // Why: SSH-backed PTYs ignore local Windows shell overrides; showing these
   // entries there promises PowerShell/CMD/Git Bash but opens the remote shell.
   const shouldShowWindowsShellMenu =
-    (isWindows || runtimeHostPlatform === 'win32') && !worktreeHasRemoteConnection
-  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
-    shouldShowWindowsShellMenu,
-    false,
-    getWindowsTerminalCapabilityOwnerKey(activeRuntimeEnvironmentId)
-  )
+    (isWindows || windowsTerminalCapabilities.hostPlatform === 'win32') &&
+    !worktreeHasRemoteConnection
   const resolvedGroupId = groupId ?? worktreeId
 
   const statusByRelativePath = useMemo(() => buildStatusMap(gitStatusEntries), [gitStatusEntries])

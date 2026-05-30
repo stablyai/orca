@@ -16,7 +16,6 @@ const appStoreSnapshot: {
   repos: [],
   worktreesByRepo: {}
 }
-let runtimeHostPlatformState: NodeJS.Platform | null | undefined
 
 const useAppStoreMock = vi.fn(
   (
@@ -58,9 +57,6 @@ vi.mock('react', async () => {
     useRef: <T>(current: T) => ({ current }),
     useState: <T>(initial: T | (() => T)) => {
       const value = typeof initial === 'function' ? (initial as () => T)() : initial
-      if (value === null && runtimeHostPlatformState !== undefined) {
-        return [runtimeHostPlatformState as T, vi.fn()] as const
-      }
       return [value, vi.fn()] as const
     }
   }
@@ -251,7 +247,6 @@ describe('TabBar PowerShell launch wiring', () => {
     appStoreSnapshot.activeRuntimeEnvironmentId = null
     appStoreSnapshot.repos = []
     appStoreSnapshot.worktreesByRepo = {}
-    runtimeHostPlatformState = undefined
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
   })
 
@@ -267,7 +262,8 @@ describe('TabBar PowerShell launch wiring', () => {
           listDistros: vi.fn().mockResolvedValue([])
         },
         pwsh: { isAvailable: vi.fn().mockResolvedValue(true) },
-        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) }
+        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
+        runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
     })
     const capabilities = await import('@/lib/windows-terminal-capabilities')
@@ -318,7 +314,8 @@ describe('TabBar PowerShell launch wiring', () => {
           listDistros: vi.fn().mockResolvedValue(['Ubuntu'])
         },
         pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
-        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) }
+        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
+        runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
     })
     const capabilities = await import('@/lib/windows-terminal-capabilities')
@@ -364,11 +361,11 @@ describe('TabBar PowerShell launch wiring', () => {
           listDistros: vi.fn().mockResolvedValue(['Ubuntu'])
         },
         pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
-        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) }
+        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
+        runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
     })
     appStoreSnapshot.activeRuntimeEnvironmentId = 'web-env-1'
-    runtimeHostPlatformState = 'win32'
     const capabilities = await import('@/lib/windows-terminal-capabilities')
     await capabilities.loadWindowsTerminalCapabilities({
       force: true,
@@ -419,7 +416,8 @@ describe('TabBar PowerShell launch wiring', () => {
           listDistros: vi.fn().mockResolvedValue([])
         },
         pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
-        gitBash: { isAvailable: vi.fn().mockResolvedValue(true) }
+        gitBash: { isAvailable: vi.fn().mockResolvedValue(true) },
+        runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
     })
     const capabilities = await import('@/lib/windows-terminal-capabilities')
@@ -474,7 +472,8 @@ describe('TabBar PowerShell launch wiring', () => {
           listDistros: vi.fn().mockResolvedValue(['Ubuntu'])
         },
         pwsh: { isAvailable: vi.fn().mockResolvedValue(true) },
-        gitBash: { isAvailable: vi.fn().mockResolvedValue(true) }
+        gitBash: { isAvailable: vi.fn().mockResolvedValue(true) },
+        runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
     })
     const capabilities = await import('@/lib/windows-terminal-capabilities')

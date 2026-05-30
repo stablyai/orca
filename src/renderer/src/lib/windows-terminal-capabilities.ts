@@ -5,6 +5,7 @@ export type WindowsTerminalCapabilities = {
   wslDistros: string[]
   pwshAvailable: boolean
   gitBashAvailable: boolean
+  hostPlatform: NodeJS.Platform | null
   isLoading: boolean
 }
 
@@ -13,6 +14,7 @@ const UNAVAILABLE_CAPABILITIES: WindowsTerminalCapabilities = {
   wslDistros: [],
   pwshAvailable: false,
   gitBashAvailable: false,
+  hostPlatform: null,
   isLoading: false
 }
 
@@ -81,22 +83,27 @@ export function loadWindowsTerminalCapabilities(
     return pendingCapabilities
   }
 
-  // Why: Settings and the tab bar need one shared answer. Separate probes can
-  // leave Settings rendering without WSL while the "+" menu already shows it.
+  // Why: Settings, status bar, and paired web tab bars need one shared answer.
+  // Separate probes can leave one surface showing stale Windows shell choices.
   const requestId = ++nextCapabilityRequestId
   latestCapabilityRequestIdByOwnerKey.set(ownerKey, requestId)
   const nextPendingCapabilities = Promise.all([
     window.api.wsl.isAvailable().catch(() => false),
     window.api.wsl.listDistros().catch(() => []),
     window.api.pwsh.isAvailable().catch(() => false),
-    window.api.gitBash.isAvailable().catch(() => false)
+    window.api.gitBash.isAvailable().catch(() => false),
+    window.api.runtime
+      .getStatus()
+      .then((status) => status.hostPlatform ?? null)
+      .catch(() => null)
   ])
-    .then(([wslAvailable, wslDistros, pwshAvailable, gitBashAvailable]) => {
+    .then(([wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, hostPlatform]) => {
       const capabilities = {
         wslAvailable,
         wslDistros,
         pwshAvailable,
         gitBashAvailable,
+        hostPlatform,
         isLoading: false
       }
       if (requestId === latestCapabilityRequestIdByOwnerKey.get(ownerKey)) {
