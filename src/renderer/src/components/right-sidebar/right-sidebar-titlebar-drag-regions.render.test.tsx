@@ -133,7 +133,7 @@ describe('rendered right sidebar titlebar drag regions', () => {
     mockAppState.activityBarPosition = 'top'
   })
 
-  it('keeps the rendered top activity strip draggable and only controls no-drag', () => {
+  it('keeps the rendered top activity strip draggable, context-menuable, and only controls no-drag', () => {
     const markup = renderToStaticMarkup(<RightSidebar />)
     const header = openingTag(markup, 'right-sidebar-header-drag')
     const activityStrip = openingTag(markup, 'right-sidebar-activity-strip')

@@ -227,29 +227,36 @@ function RightSidebarInner(): React.JSX.Element {
                       ref={topActivityStripRef}
                       className={RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME}
                     >
-                      {/* Why: the top strip shares a narrow titlebar with the close
-                          button and Windows controls. Overflow goes behind More
-                          instead of creating a horizontally scrollable toolbar. */}
-                      <div className="flex min-w-0 shrink">
-                        {topActivityLayout.visibleItems.map((item) => (
-                          <ActivityBarButton
-                            key={item.id}
-                            item={item}
-                            active={effectiveTab === item.id}
-                            onClick={() => setRightSidebarTab(item.id)}
-                            layout="top"
-                            statusIndicator={item.id === 'checks' ? checksStatus : null}
+                      <div
+                        className={cn(
+                          'flex min-w-0 shrink',
+                          RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
+                        )}
+                      >
+                        {/* Why: the top strip shares a narrow titlebar with the close
+                            button and Windows controls. Overflow goes behind More
+                            instead of creating a horizontally scrollable toolbar. */}
+                        <div className="flex min-w-0 shrink">
+                          {topActivityLayout.visibleItems.map((item) => (
+                            <ActivityBarButton
+                              key={item.id}
+                              item={item}
+                              active={effectiveTab === item.id}
+                              onClick={() => setRightSidebarTab(item.id)}
+                              layout="top"
+                              statusIndicator={item.id === 'checks' ? checksStatus : null}
+                            />
+                          ))}
+                        </div>
+                        {topActivityLayout.overflowItems.length > 0 && (
+                          <TopActivityOverflowMenu
+                            items={topActivityLayout.overflowItems}
+                            activeTab={effectiveTab}
+                            onSelect={setRightSidebarTab}
+                            checksStatus={checksStatus}
                           />
-                        ))}
+                        )}
                       </div>
-                      {topActivityLayout.overflowItems.length > 0 && (
-                        <TopActivityOverflowMenu
-                          items={topActivityLayout.overflowItems}
-                          activeTab={effectiveTab}
-                          onSelect={setRightSidebarTab}
-                          checksStatus={checksStatus}
-                        />
-                      )}
                     </div>
                   </ContextMenuTrigger>
                   <div
