@@ -128,6 +128,7 @@ export function createPaneDOM(
     ligaturesAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
+    pendingSplitScrollBufferDisposable: null,
     debugLabel: options.debugLabel ?? null
   }
 
@@ -293,6 +294,12 @@ export function disposePane(
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null
+  }
+  try {
+    pane.pendingSplitScrollBufferDisposable?.dispose()
+    pane.pendingSplitScrollBufferDisposable = null
+  } catch {
+    /* ignore */
   }
   try {
     pane.ligaturesAddon?.dispose()

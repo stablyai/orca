@@ -10,6 +10,11 @@ function refreshAfterReparent(pane: ManagedPaneInternal): void {
   }
 }
 
+function clearPendingSplitScrollBufferDisposable(pane: ManagedPaneInternal): void {
+  pane.pendingSplitScrollBufferDisposable?.dispose()
+  pane.pendingSplitScrollBufferDisposable = null
+}
+
 function runAfterNormalBuffer(
   pane: ManagedPaneInternal,
   getPaneById: (id: number) => ManagedPaneInternal | undefined,
@@ -17,10 +22,14 @@ function runAfterNormalBuffer(
   isDestroyed: () => boolean,
   callback: (pane: ManagedPaneInternal) => void
 ): void {
+  clearPendingSplitScrollBufferDisposable(pane)
   let disposable: IDisposable | null = null
   disposable = pane.terminal.buffer.onBufferChange((buffer: IBuffer) => {
     if (buffer.type === 'alternate') {
       return
+    }
+    if (pane.pendingSplitScrollBufferDisposable === disposable) {
+      pane.pendingSplitScrollBufferDisposable = null
     }
     disposable?.dispose()
     disposable = null
@@ -32,6 +41,7 @@ function runAfterNormalBuffer(
       callback(live)
     }
   })
+  pane.pendingSplitScrollBufferDisposable = disposable
 }
 
 function restoreCapturedScrollState(
@@ -39,6 +49,7 @@ function restoreCapturedScrollState(
   scrollState: ScrollState,
   reattachWebgl?: (pane: ManagedPaneInternal) => void
 ): void {
+  clearPendingSplitScrollBufferDisposable(pane)
   pane.pendingSplitScrollState = null
   if (reattachWebgl) {
     reattachWebgl(pane)
@@ -104,6 +115,7 @@ export function scheduleSplitScrollRestore(
     // alternate buffer. Alt-screen has no scrollback, so scroll restore has
     // nothing legitimate to do.
     if (scrollState.bufferType === 'alternate') {
+      clearPendingSplitScrollBufferDisposable(live)
       live.pendingSplitScrollState = null
       if (live.terminal.buffer.active.type === 'alternate' && reattachWebgl) {
         runAfterNormalBuffer(live, getPaneById, paneId, isDestroyed, reattachWebgl)
