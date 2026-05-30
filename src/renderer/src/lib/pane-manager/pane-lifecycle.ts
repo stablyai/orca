@@ -23,7 +23,12 @@ import {
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
-import { ENABLE_WEBGL_RENDERER, attachWebgl, disposeWebgl } from './pane-webgl-renderer'
+import {
+  ENABLE_WEBGL_RENDERER,
+  attachWebgl,
+  cancelPendingWebglRefresh,
+  disposeWebgl
+} from './pane-webgl-renderer'
 import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 
 // ---------------------------------------------------------------------------
@@ -120,6 +125,7 @@ export function createPaneDOM(
     fitAddon,
     fitResizeObserver: null,
     pendingInitialFitRafId: null,
+    pendingWebglRefreshRafId: null,
     pendingObservedFitRafId: null,
     searchAddon,
     serializeAddon,
@@ -299,6 +305,7 @@ export function disposePane(
     cancelAnimationFrame(pane.pendingInitialFitRafId)
     pane.pendingInitialFitRafId = null
   }
+  cancelPendingWebglRefresh(pane)
   detachPaneFitResizeObserver(pane)
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)

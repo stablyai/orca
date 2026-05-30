@@ -107,6 +107,8 @@ export type ManagedPaneInternal = {
   fitResizeObserver: ResizeObserver | null
   // Stored so disposePane() can cancel the first post-open fit if a pane closes before paint.
   pendingInitialFitRafId?: number | null
+  // Stored so disposePane() can cancel the post-WebGL-teardown refresh frame.
+  pendingWebglRefreshRafId?: number | null
   pendingObservedFitRafId: number | null
   serializeAddon: SerializeAddon
   unicode11Addon: Unicode11Addon
