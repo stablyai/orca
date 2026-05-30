@@ -44,19 +44,48 @@ export function registerSshBrowseHandler(
         let stdout = ''
         let stderr = ''
         let exitCode: number | null = null
+        let settled = false
 
-        channel.on('data', (data: Buffer) => {
+        const cleanup = (): void => {
+          channel.off('data', onStdoutData)
+          channel.stderr.off('data', onStderrData)
+          channel.off('exit', onExit)
+          channel.off('close', onClose)
+          channel.off('error', onError)
+          channel.stderr.off('error', onError)
+        }
+        const rejectOnce = (error: Error): void => {
+          if (settled) {
+            return
+          }
+          settled = true
+          cleanup()
+          reject(error)
+        }
+        const resolveOnce = (result: { entries: RemoteDirEntry[]; resolvedPath: string }): void => {
+          if (settled) {
+            return
+          }
+          settled = true
+          cleanup()
+          resolve(result)
+        }
+
+        const onStdoutData = (data: Buffer): void => {
           stdout += data.toString()
-        })
-        channel.stderr.on('data', (data: Buffer) => {
+        }
+        const onStderrData = (data: Buffer): void => {
           stderr += data.toString()
-        })
+        }
         // `exit` fires before `close`; capture the code so we can distinguish
         // a failed `ls` that still produced `pwd` output from an empty listing.
-        channel.on('exit', (code: number | null) => {
+        const onExit = (code: number | null): void => {
           exitCode = code
-        })
-        channel.on('close', () => {
+        }
+        const onError = (error: Error): void => {
+          rejectOnce(error)
+        }
+        const onClose = (): void => {
           // A null exitCode means the server closed the channel without
           // sending an exit-status message (or signalled termination). We
           // can't assume success — falling back to "empty stdout = empty
@@ -70,17 +99,17 @@ export function registerSshBrowseHandler(
               (exitCode === null
                 ? 'Remote listing failed (channel closed without exit status)'
                 : `Remote listing failed (exit ${exitCode})`)
-            reject(new Error(msg))
+            rejectOnce(new Error(msg))
             return
           }
           if (stderr.trim() && !stdout.trim()) {
-            reject(new Error(stderr.trim()))
+            rejectOnce(new Error(stderr.trim()))
             return
           }
 
           const lines = stdout.trim().split('\n')
           if (lines.length === 0) {
-            reject(new Error('Empty response from remote'))
+            rejectOnce(new Error('Empty response from remote'))
             return
           }
 
@@ -107,8 +136,17 @@ export function registerSshBrowseHandler(
             return a.name.localeCompare(b.name)
           })
 
-          resolve({ entries, resolvedPath })
-        })
+          resolveOnce({ entries, resolvedPath })
+        }
+
+        channel.on('data', onStdoutData)
+        channel.stderr.on('data', onStderrData)
+        channel.on('exit', onExit)
+        channel.on('close', onClose)
+        // Why: SSH exec streams emit `error` on transport loss; without a
+        // scoped listener, a disappearing remote can become process-fatal.
+        channel.on('error', onError)
+        channel.stderr.on('error', onError)
       })
     }
   )
