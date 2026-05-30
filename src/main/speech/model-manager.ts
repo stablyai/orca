@@ -179,6 +179,11 @@ export class ModelManager {
         this.updateState(modelId, 'error', undefined, String(err))
       }
       this.cleanup(modelId, archivePath)
+      if (!aborted) {
+        // Why: the settings UI awaits this promise to show download failures;
+        // cancellation stays quiet, but real failures must reach the caller.
+        throw err
+      }
     } finally {
       this.activeDownloads.delete(modelId)
       try {
