@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,6 +36,7 @@ export function UntitledFileRenameDialog({
   const [dir, setDir] = useState(worktreePath)
   const [error, setError] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
+  const focusFrameRef = useRef<number | null>(null)
   const seededOpenStateRef = useRef({ open: false, baseName, worktreePath })
 
   const displayError = externalError ?? error
@@ -53,6 +54,15 @@ export function UntitledFileRenameDialog({
   } else if (seededOpenStateRef.current.open) {
     seededOpenStateRef.current = { open: false, baseName, worktreePath }
   }
+
+  useEffect(() => {
+    return () => {
+      if (focusFrameRef.current !== null) {
+        cancelAnimationFrame(focusFrameRef.current)
+        focusFrameRef.current = null
+      }
+    }
+  }, [])
 
   const handleBrowse = useCallback(async () => {
     const picked = await window.api.shell.pickDirectory({ defaultPath: dir || worktreePath })
@@ -98,7 +108,11 @@ export function UntitledFileRenameDialog({
         className="max-w-[340px]"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
-          requestAnimationFrame(() => {
+          if (focusFrameRef.current !== null) {
+            cancelAnimationFrame(focusFrameRef.current)
+          }
+          focusFrameRef.current = requestAnimationFrame(() => {
+            focusFrameRef.current = null
             nameInputRef.current?.focus()
             nameInputRef.current?.select()
           })
