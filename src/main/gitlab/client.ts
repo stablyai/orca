@@ -368,14 +368,6 @@ export async function getWorkItemByProjectRef(
   }
 }
 
-// Why: combined MR + issue list for the Tasks-screen and picker
-// surfaces. Centralizes the merge logic that TaskPage previously did
-// inline so the IPC layer has a single function to call. Pagination is
-// approximate — the v1 contract is "page 1 of perPage MRs + perPage
-// issues, mixed by updatedAt desc" which is good enough for a typical
-// project's <100 active items.
-export type ListWorkItemsState = MRListState
-
 function mrStateToIssueState(state: MRListState): IssueListState | null {
   // Why: GitLab issues don't have a 'merged' state. When the user is
   // filtering MRs to merged, return null so listWorkItems can skip the

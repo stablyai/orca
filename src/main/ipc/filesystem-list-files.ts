@@ -59,18 +59,6 @@ export async function listQuickOpenFiles(
       let buf = ''
       let done = false
       let parseablePathCount = 0
-      const finish = (err?: Error): void => {
-        if (done) {
-          return
-        }
-        done = true
-        clearTimeout(timer)
-        if (err) {
-          reject(err)
-        } else {
-          resolve()
-        }
-      }
 
       const processLine = (rawLine: string): void => {
         const translated =
@@ -94,8 +82,8 @@ export async function listQuickOpenFiles(
         stdio: ['ignore', 'pipe', 'pipe']
       })
       children.push(child)
-      child.stdout!.setEncoding('utf-8')
-      child.stdout!.on('data', (chunk: string) => {
+      let timer: ReturnType<typeof setTimeout>
+      const handleStdoutData = (chunk: string): void => {
         buf += chunk
         let start = 0
         let newlineIdx = buf.indexOf('\n', start)
@@ -105,17 +93,17 @@ export async function listQuickOpenFiles(
           newlineIdx = buf.indexOf('\n', start)
         }
         buf = start < buf.length ? buf.substring(start) : ''
-      })
-      child.stderr!.on('data', () => {
+      }
+      const handleStderrData = (): void => {
         /* drain */
-      })
-      child.once('error', () => {
+      }
+      const handleError = (): void => {
         // Why: treat spawn errors like an abnormal exit — discard residual
         // buffer so a truncated final byte sequence cannot leak as a path.
         buf = ''
         finish(new Error('rg failed to start'))
-      })
-      child.once('close', (code, signal) => {
+      }
+      const handleClose = (code: number | null, signal: NodeJS.Signals | null): void => {
         if (signal) {
           // Why: a signal exit means timeout/OOM/external kill. Returning the
           // already-streamed prefix would recreate the false-empty bug this
@@ -136,8 +124,32 @@ export async function listQuickOpenFiles(
         } else {
           finish(new Error(`rg exited with code ${code}`))
         }
-      })
-      const timer = setTimeout(() => {
+      }
+      const finish = (err?: Error): void => {
+        if (done) {
+          return
+        }
+        done = true
+        clearTimeout(timer)
+        // Why: child.kill() is advisory. If rg ignores it, detach our
+        // closures so repeated Quick Open attempts do not retain old scans.
+        child.stdout!.off('data', handleStdoutData)
+        child.stderr!.off('data', handleStderrData)
+        child.off('error', handleError)
+        child.off('close', handleClose)
+        if (err) {
+          reject(err)
+        } else {
+          resolve()
+        }
+      }
+
+      child.stdout!.setEncoding('utf-8')
+      child.stdout!.on('data', handleStdoutData)
+      child.stderr!.on('data', handleStderrData)
+      child.once('error', handleError)
+      child.once('close', handleClose)
+      timer = setTimeout(() => {
         // Why: on timeout, the buffer is likely truncated mid-path. Discard
         // it so Quick Open never displays a malformed entry.
         buf = ''
@@ -185,14 +197,6 @@ function listFilesWithGit(
     return new Promise((resolve) => {
       let buf = ''
       let done = false
-      const finish = (): void => {
-        if (done) {
-          return
-        }
-        done = true
-        clearTimeout(timer)
-        resolve()
-      }
 
       const processLine = (line: string): void => {
         if (line.charCodeAt(line.length - 1) === 13 /* \r */) {
@@ -218,8 +222,8 @@ function listFilesWithGit(
         cwd: rootPath,
         stdio: ['ignore', 'pipe', 'pipe']
       })
-      child.stdout!.setEncoding('utf-8')
-      child.stdout!.on('data', (chunk: string) => {
+      let timer: ReturnType<typeof setTimeout>
+      const handleStdoutData = (chunk: string): void => {
         buf += chunk
         let start = 0
         let newlineIdx = buf.indexOf('\n', start)
@@ -229,23 +233,44 @@ function listFilesWithGit(
           newlineIdx = buf.indexOf('\n', start)
         }
         buf = start < buf.length ? buf.substring(start) : ''
-      })
-      child.stderr!.on('data', () => {
+      }
+      const handleStderrData = (): void => {
         /* drain */
-      })
-      child.once('error', () => {
+      }
+      const handleError = (): void => {
         buf = ''
         finish()
-      })
-      child.once('close', () => {
+      }
+      const handleClose = (): void => {
         if (buf) {
           processLine(buf)
         }
         finish()
-      })
-      const timer = setTimeout(() => {
+      }
+      const finish = (): void => {
+        if (done) {
+          return
+        }
+        done = true
+        clearTimeout(timer)
+        // Why: child.kill() is advisory. If git ignores it, detach our
+        // closures so repeated Quick Open attempts do not retain old scans.
+        child.stdout!.off('data', handleStdoutData)
+        child.stderr!.off('data', handleStderrData)
+        child.off('error', handleError)
+        child.off('close', handleClose)
+        resolve()
+      }
+
+      child.stdout!.setEncoding('utf-8')
+      child.stdout!.on('data', handleStdoutData)
+      child.stderr!.on('data', handleStderrData)
+      child.once('error', handleError)
+      child.once('close', handleClose)
+      timer = setTimeout(() => {
         buf = ''
         child.kill()
+        finish()
       }, 10000)
     })
   }

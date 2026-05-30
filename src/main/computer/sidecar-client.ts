@@ -171,8 +171,8 @@ class ComputerSidecarProcess {
     })
 
     child.on('message', (message) => this.handleMessage(message))
-    child.on('exit', (code, signal) => this.handleExit(code, signal))
-    child.on('error', (error) => this.handleError(error))
+    child.on('exit', (code, signal) => this.handleExit(child, code, signal))
+    child.on('error', (error) => this.handleError(child, error))
     this.child = child
     return child
   }
@@ -194,7 +194,16 @@ class ComputerSidecarProcess {
     pending.reject(new RuntimeClientError(message.error.code, message.error.message))
   }
 
-  private handleExit(code: number | null, signal: NodeJS.Signals | null): void {
+  private handleExit(
+    child: ChildProcess,
+    code: number | null,
+    signal: NodeJS.Signals | null
+  ): void {
+    // Why: a timed-out child can exit after a replacement has started; stale
+    // exits must not clear the live child or reject its in-flight requests.
+    if (this.child !== child) {
+      return
+    }
     this.child = null
     const detail = signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`
     const error = new RuntimeClientError(
@@ -208,7 +217,15 @@ class ComputerSidecarProcess {
     }
   }
 
-  private handleError(error: Error): void {
+  private handleError(child: ChildProcess, error: Error): void {
+    // Why: late errors from a prior child should not poison the current sidecar.
+    if (this.child !== child) {
+      return
+    }
+    // Why: an active process error makes the IPC sidecar unreliable; restart
+    // on the next call instead of reusing a broken helper.
+    this.child = null
+    child.kill('SIGTERM')
     const wrapped = new RuntimeClientError('accessibility_error', error.message)
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer)

@@ -19,6 +19,7 @@ import { pipeline } from 'stream/promises'
 import type { Store } from '../persistence'
 import { authorizeExternalPath, resolveAuthorizedPath, isENOENT } from './filesystem-auth'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 import { importExternalPathsSsh } from './filesystem-import-ssh'
 import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 
@@ -209,7 +210,11 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // Why: `== null` (not `!args.connectionId`) so an empty string is
       // treated as a renderer error, not silently routed to the local branch.
       if (args.connectionId == null) {
-        return { resolvedPaths: args.paths, skipped: [], failed: [] }
+        return {
+          resolvedPaths: resolveLocalDroppedPathsForAgent(args.paths, args.worktreePath),
+          skipped: [],
+          failed: []
+        }
       }
       const worktreePath = args.worktreePath.replace(/\/+$/, '')
       const destDir = `${worktreePath}/.orca/drops`

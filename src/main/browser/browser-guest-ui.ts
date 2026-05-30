@@ -389,6 +389,8 @@ export function setupGuestShortcutForwarding(args: {
       renderer.reloadIgnoringCache()
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
+    } else if (action?.type === 'jumpToTabIndex') {
+      renderer.send('ui:jumpToTabIndex', action.index)
     } else if (action?.type === 'dictationKeyDown') {
       if (!shouldForwardDictationShortcut?.()) {
         return

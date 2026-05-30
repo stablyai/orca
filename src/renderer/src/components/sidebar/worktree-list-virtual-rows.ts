@@ -1,9 +1,11 @@
-import type { VirtualItem } from '@tanstack/react-virtual'
+import { defaultRangeExtractor } from '@tanstack/react-virtual'
+import type { Range, VirtualItem } from '@tanstack/react-virtual'
 import type { Row } from './worktree-list-groups'
 import { PINNED_GROUP_KEY } from './worktree-list-groups'
 
 export const GROUP_HEADER_ROW_HEIGHT = 28
 const SECONDARY_GROUP_HEADER_TOP_MARGIN = 8
+const IMPORTED_WORKTREES_CARD_ROW_HEIGHT = 224
 
 type WorktreeItemRow = Extract<Row, { type: 'item' }>
 export type RenderRow = Row | { type: 'lineage-group'; key: string; rows: WorktreeItemRow[] }
@@ -40,6 +42,9 @@ export function estimateRenderRowSize(
   }
   if (row?.type === 'lineage-group') {
     return 100 + Math.max(0, row.rows.length - 1) * 96
+  }
+  if (row?.type === 'imported-worktrees-card') {
+    return IMPORTED_WORKTREES_CARD_ROW_HEIGHT
   }
   return 116
 }
@@ -80,6 +85,31 @@ export function getPreviousStickyHeaderIndex(
     return null
   }
   return stickyHeaderIndexes[currentPosition - 1] ?? null
+}
+
+export function extractWorktreeVirtualRowIndexes(args: {
+  range: Range
+  stickyHeaderIndexes: readonly number[]
+}): number[] {
+  const activeStickyHeaderIndex = getActiveStickyHeaderIndex(
+    args.stickyHeaderIndexes,
+    args.range.startIndex
+  )
+  if (activeStickyHeaderIndex === null) {
+    return defaultRangeExtractor(args.range)
+  }
+
+  const previousStickyHeaderIndex = getPreviousStickyHeaderIndex(
+    args.stickyHeaderIndexes,
+    activeStickyHeaderIndex
+  )
+  return Array.from(
+    new Set([
+      activeStickyHeaderIndex,
+      ...(previousStickyHeaderIndex === null ? [] : [previousStickyHeaderIndex]),
+      ...defaultRangeExtractor(args.range)
+    ])
+  ).sort((a, b) => a - b)
 }
 
 export function getActiveStickyHeaderIndexForScroll(args: {

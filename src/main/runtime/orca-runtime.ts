@@ -54,7 +54,8 @@ import type {
   ProjectGroupImportMode,
   ProjectGroupImportResult,
   TabGroupLayoutNode,
-  TuiAgent
+  TuiAgent,
+  WorkspaceCreateTelemetrySource
 } from '../../shared/types'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
@@ -170,6 +171,7 @@ import {
   updatePRTitle,
   updatePRDetails,
   mergePR,
+  setPRAutoMerge,
   updatePRState,
   requestPRReviewers,
   removePRReviewers,
@@ -306,6 +308,7 @@ import {
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
+  isForEachRefExcludeUnsupportedError,
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
@@ -553,6 +556,31 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   lastOscTitle: string | null
 }
 
+function isCursorAgentOrchestrationTarget(
+  leaf: RuntimeLeafRecord,
+  tabTitle: string | null | undefined
+): boolean {
+  return [leaf.lastOscTitle, leaf.paneTitle, tabTitle].some(isCursorAgentTitle)
+}
+
+function isCursorAgentTitle(title: string | null | undefined): boolean {
+  if (typeof title !== 'string') {
+    return false
+  }
+  const trimmed = title.trim()
+  const lower = trimmed.toLowerCase()
+  if (
+    lower === 'cursor agent' ||
+    lower === 'cursor ready' ||
+    lower === 'cursor - action required'
+  ) {
+    return true
+  }
+  // Why: display labels can mention Cursor in another agent's task text. Only
+  // treat the controlled synthetic Cursor spinner title as Cursor identity.
+  return /^[\u2800-\u28ff] Cursor Agent$/u.test(trimmed)
+}
+
 type RuntimePtyWorktreeRecord = {
   ptyId: string
   worktreeId: string
@@ -713,6 +741,7 @@ type MessageWaiter = {
   typeFilter: string[] | undefined
   resolve: (result: void) => void
   timeout: NodeJS.Timeout | null
+  abortCleanup: (() => void) | null
 }
 
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {
@@ -1027,6 +1056,9 @@ export class OrcaRuntimeService {
   private mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
   private mobileSessionTabListeners = new Set<(snapshot: RuntimeMobileSessionTabsResult) => void>()
   private leaves = new Map<string, RuntimeLeafRecord>()
+  // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
+  // ptyId keeps active TUI redraws independent of the total open terminal count.
+  private leavesByPtyId = new Map<string, RuntimeLeafRecord[]>()
   private handles = new Map<string, TerminalHandleRecord>()
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
@@ -1625,6 +1657,7 @@ export class OrcaRuntimeService {
       runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
       capabilities: [...RUNTIME_CAPABILITIES],
+      hostPlatform: process.platform,
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
     }
@@ -1744,6 +1777,7 @@ export class OrcaRuntimeService {
     }
 
     this.leaves = nextLeaves
+    this.rebuildLeafPtyIndex()
     this.notifyMobileSessionTabSnapshots()
     this.graphStatus = 'ready'
     this.refreshWritableFlags()
@@ -2110,6 +2144,8 @@ export class OrcaRuntimeService {
   pullRuntimeGit: RuntimeGitCommands['pullRuntimeGit'] = this.gitCommands.pullRuntimeGit.bind(
     this.gitCommands
   )
+  fastForwardRuntimeGit: RuntimeGitCommands['fastForwardRuntimeGit'] =
+    this.gitCommands.fastForwardRuntimeGit.bind(this.gitCommands)
   rebaseRuntimeGitFromBase: RuntimeGitCommands['rebaseRuntimeGitFromBase'] =
     this.gitCommands.rebaseRuntimeGitFromBase.bind(this.gitCommands)
   pushRuntimeGit: RuntimeGitCommands['pushRuntimeGit'] = this.gitCommands.pushRuntimeGit.bind(
@@ -2185,10 +2221,8 @@ export class OrcaRuntimeService {
 
   registerPreAllocatedHandleForPty(ptyId: string, handle: string): void {
     this.handleByPtyId.set(ptyId, handle)
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId === ptyId) {
-        this.adoptPreAllocatedHandle(leaf)
-      }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      this.adoptPreAllocatedHandle(leaf)
     }
   }
 
@@ -2197,12 +2231,10 @@ export class OrcaRuntimeService {
     if (pty) {
       pty.connected = true
     }
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId === ptyId) {
-        leaf.connected = true
-        leaf.writable = this.graphStatus === 'ready'
-        this.adoptPreAllocatedHandle(leaf)
-      }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      leaf.connected = true
+      leaf.writable = this.graphStatus === 'ready'
+      this.adoptPreAllocatedHandle(leaf)
     }
   }
 
@@ -2280,10 +2312,7 @@ export class OrcaRuntimeService {
       }
     }
 
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId !== ptyId) {
-        continue
-      }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
       this.recordPtyWorktree(ptyId, leaf.worktreeId, {
         connected: true,
         lastOutputAt: pty?.lastOutputAt ?? at,
@@ -2578,15 +2607,13 @@ export class OrcaRuntimeService {
       return
     }
     const status = detectAgentStatusFromTitle(title)
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId === ptyId) {
-        // Why: seed lastOscTitle even when the seeded title doesn't classify
-        // as an agent state, so worktree.ps recomputes status from the live
-        // title rather than treating the leaf as agentless.
-        leaf.lastOscTitle = title
-        if (status !== null) {
-          leaf.lastAgentStatus = status
-        }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      // Why: seed lastOscTitle even when the seeded title doesn't classify
+      // as an agent state, so worktree.ps recomputes status from the live
+      // title rather than treating the leaf as agentless.
+      leaf.lastOscTitle = title
+      if (status !== null) {
+        leaf.lastAgentStatus = status
       }
     }
   }
@@ -3441,10 +3468,7 @@ export class OrcaRuntimeService {
       this.pruneDisconnectedPtyTranscript(pty)
     }
 
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId !== ptyId) {
-        continue
-      }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
       this.detachedPreAllocatedLeaves.delete(ptyId)
       leaf.connected = false
       leaf.writable = false
@@ -5796,14 +5820,21 @@ export class OrcaRuntimeService {
       return []
     }
     const normalizedQuery = normalizeRefSearchQuery(query)
-    if (!normalizedQuery) {
-      return []
-    }
     try {
-      const [result, remotesResult] = await Promise.all([
-        provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path),
-        provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      ])
+      const remotesPromise = provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
+      let result: { stdout: string }
+      try {
+        result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery, limit), repo.path)
+      } catch (err) {
+        if (!isForEachRefExcludeUnsupportedError(err)) {
+          throw err
+        }
+        result = await provider.exec(
+          buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
+          repo.path
+        )
+      }
+      const remotesResult = await remotesPromise
       const remotes = remotesResult.stdout
         .split('\n')
         .map((line) => line.trim())
@@ -6414,6 +6445,16 @@ export class OrcaRuntimeService {
   ): Promise<Awaited<ReturnType<typeof mergePR>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     return mergePR(repo.path, prNumber, method, repo.connectionId ?? null, prRepo ?? null)
+  }
+
+  async setRepoPRAutoMerge(
+    repoSelector: string,
+    prNumber: number,
+    enabled: boolean,
+    prRepo?: GitHubOwnerRepo | null
+  ): Promise<Awaited<ReturnType<typeof setPRAutoMerge>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return setPRAutoMerge(repo.path, prNumber, enabled, repo.connectionId ?? null, prRepo ?? null)
   }
 
   async updateRepoPRState(
@@ -7366,6 +7407,7 @@ export class OrcaRuntimeService {
     linkedGitLabIssue?: number | null
     comment?: string
     displayName?: string
+    telemetrySource?: WorkspaceCreateTelemetrySource
     workspaceStatus?: string
     manualOrder?: number
     sparseCheckout?: { directories: string[]; presetId?: string }
@@ -9280,10 +9322,17 @@ export class OrcaRuntimeService {
 
   async createMobileSessionTerminal(
     worktreeSelector: string,
-    opts: { afterTabId?: string; targetGroupId?: string; command?: string; activate?: boolean } = {}
+    opts: {
+      afterTabId?: string
+      targetGroupId?: string
+      command?: string
+      agent?: TuiAgent
+      activate?: boolean
+    } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.assertGraphReady()
-    const worktreeId = (await this.resolveWorktreeSelector(worktreeSelector)).id
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktreeId = worktree.id
     let afterDesktopTabId: string | undefined
     if (opts.afterTabId) {
       const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
@@ -9293,6 +9342,7 @@ export class OrcaRuntimeService {
       }
       afterDesktopTabId = anchor.type === 'terminal' ? anchor.parentTabId : anchor.id
     }
+    const command = await this.resolveMobileSessionTerminalCommand(worktree, opts)
 
     const win = this.getAvailableAuthoritativeWindow()
     if (!win) {
@@ -9300,7 +9350,7 @@ export class OrcaRuntimeService {
         worktreeId,
         opts.activate !== false,
         opts.afterTabId,
-        opts.command
+        command
       )
     }
     const requestId = randomUUID()
@@ -9331,7 +9381,7 @@ export class OrcaRuntimeService {
         worktreeId,
         afterTabId: afterDesktopTabId,
         targetGroupId: opts.targetGroupId,
-        command: opts.command,
+        command,
         activate: opts.activate
       })
     })
@@ -9340,6 +9390,42 @@ export class OrcaRuntimeService {
       this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
     }
     return await this.waitForMobileTerminalSurface(worktreeId, reply.tabId)
+  }
+
+  private async resolveMobileSessionTerminalCommand(
+    worktree: Worktree,
+    opts: { command?: string; agent?: TuiAgent }
+  ): Promise<string | undefined> {
+    if (opts.command || !opts.agent) {
+      return opts.command
+    }
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const settings = this.store.getSettings()
+    if (!isTuiAgentEnabled(opts.agent, settings.disabledTuiAgents)) {
+      throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+    }
+    const repo = this.store.getRepo(worktree.repoId)
+    // Why: mobile may be running on iOS while the actual terminal shell is
+    // Windows/macOS/Linux or an SSH Linux host; quote for the host shell.
+    const platform: NodeJS.Platform = repo?.connectionId ? 'linux' : process.platform
+    const startupPlan = buildAgentStartupPlan({
+      agent: opts.agent,
+      prompt: '',
+      cmdOverrides: settings.agentCmdOverrides ?? {},
+      platform,
+      allowEmptyPromptLaunch: true
+    })
+    if (!startupPlan) {
+      throw new Error(`Could not build launch command for ${opts.agent}.`)
+    }
+    if (repo?.connectionId) {
+      await this.markRemoteWorkspaceTrustedForAgent(opts.agent, repo.connectionId, worktree.path)
+    } else {
+      this.markLocalWorkspaceTrustedForAgent(opts.agent, worktree.path)
+    }
+    return startupPlan.launchCommand
   }
 
   private async createHeadlessMobileSessionTerminal(
@@ -9500,7 +9586,7 @@ export class OrcaRuntimeService {
   // Why: mobile clients may subscribe before the PTY spawns (the left pane
   // of a new workspace). Instead of bailing with a bare scrollback+end,
   // wait for the PTY to appear so the subscribe can proceed with phone-fit.
-  waitForLeafPtyId(handle: string, timeoutMs = 10_000): Promise<string> {
+  waitForLeafPtyId(handle: string, timeoutMs = 10_000, signal?: AbortSignal): Promise<string> {
     const leaf = this.resolveLeafForHandle(handle)
     if (leaf?.ptyId) {
       return Promise.resolve(leaf.ptyId)
@@ -9514,15 +9600,40 @@ export class OrcaRuntimeService {
     const savedLeafId = record?.leafId ?? null
 
     return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
+      let timer: ReturnType<typeof setTimeout> | null = null
+      let check: () => void = () => {}
+      const cleanup = (): void => {
+        if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
         const idx = this.graphSyncCallbacks.indexOf(check)
         if (idx !== -1) {
           this.graphSyncCallbacks.splice(idx, 1)
         }
-        reject(new Error('Timed out waiting for PTY to spawn'))
+        signal?.removeEventListener('abort', onAbort)
+      }
+      const finish = (ptyId: string): void => {
+        cleanup()
+        resolve(ptyId)
+      }
+      const fail = (error: Error): void => {
+        cleanup()
+        reject(error)
+      }
+      const onAbort = (): void => {
+        fail(new Error('request_aborted'))
+      }
+      if (signal?.aborted) {
+        reject(new Error('request_aborted'))
+        return
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
+      timer = setTimeout(() => {
+        fail(new Error('Timed out waiting for PTY to spawn'))
       }, timeoutMs)
 
-      const check = (): void => {
+      check = (): void => {
         // Try the handle first (works if handle wasn't invalidated yet)
         let ptyId = this.resolveLeafForHandle(handle)?.ptyId
         // Why: when ptyId transitions null→real, issueHandle invalidates the
@@ -9532,12 +9643,7 @@ export class OrcaRuntimeService {
           ptyId = directLeaf?.ptyId ?? null
         }
         if (ptyId) {
-          clearTimeout(timer)
-          const idx = this.graphSyncCallbacks.indexOf(check)
-          if (idx !== -1) {
-            this.graphSyncCallbacks.splice(idx, 1)
-          }
-          resolve(ptyId)
+          finish(ptyId)
         }
       }
       this.graphSyncCallbacks.push(check)
@@ -9854,6 +9960,7 @@ export class OrcaRuntimeService {
     this.rememberDetachedPreAllocatedLeaves()
     this.tabs.clear()
     this.leaves.clear()
+    this.leavesByPtyId.clear()
     this.handles.clear()
     this.handleByLeafKey.clear()
     // Why: same as markRendererReloading — pre-allocated CLI handles must
@@ -10623,12 +10730,27 @@ export class OrcaRuntimeService {
   }
 
   private leafExistsForPty(ptyId: string): boolean {
+    return (this.leavesByPtyId.get(ptyId)?.length ?? 0) > 0
+  }
+
+  private rebuildLeafPtyIndex(): void {
+    const next = new Map<string, RuntimeLeafRecord[]>()
     for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId === ptyId) {
-        return true
+      if (!leaf.ptyId) {
+        continue
+      }
+      const leaves = next.get(leaf.ptyId)
+      if (leaves) {
+        leaves.push(leaf)
+      } else {
+        next.set(leaf.ptyId, [leaf])
       }
     }
-    return false
+    this.leavesByPtyId = next
+  }
+
+  private getLeavesForPty(ptyId: string): RuntimeLeafRecord[] {
+    return this.leavesByPtyId.get(ptyId) ?? []
   }
 
   private getSummaryForRuntimeWorktreeId(
@@ -11163,7 +11285,8 @@ export class OrcaRuntimeService {
         handle,
         typeFilter: options?.typeFilter,
         resolve,
-        timeout: null
+        timeout: null,
+        abortCleanup: null
       }
 
       // Why: if the caller aborts (socket closed on the RPC side — see design
@@ -11180,13 +11303,11 @@ export class OrcaRuntimeService {
           resolve()
           return
         }
+        waiter.abortCleanup = () => signal.removeEventListener('abort', onAbort)
         signal.addEventListener('abort', onAbort, { once: true })
       }
 
       waiter.timeout = setTimeout(() => {
-        if (signal) {
-          signal.removeEventListener('abort', onAbort)
-        }
         this.removeMessageWaiter(waiter)
         resolve()
       }, timeoutMs)
@@ -11209,6 +11330,10 @@ export class OrcaRuntimeService {
     if (waiter.timeout) {
       clearTimeout(waiter.timeout)
       waiter.timeout = null
+    }
+    if (waiter.abortCleanup) {
+      waiter.abortCleanup()
+      waiter.abortCleanup = null
     }
     const waiters = this.messageWaitersByHandle.get(waiter.handle)
     if (waiters) {
@@ -11686,6 +11811,15 @@ export class OrcaRuntimeService {
     const payload = formatMessagesForInjection(unread)
     const wrote = this.ptyController?.write(leaf.ptyId, payload) ?? false
     if (!wrote) {
+      return
+    }
+
+    const tabTitle = this.tabs.get(leaf.tabId)?.title
+    if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
+      // Why: Cursor Agent treats injected PTY text as editable prompt input.
+      // Push-on-idle may surface the message, but submitting it must stay
+      // under user control.
+      this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
       return
     }
 

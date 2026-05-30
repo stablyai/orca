@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -16,18 +16,30 @@ import {
 } from '../../../../shared/browser-url'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
-import { BROWSER_PANE_SEARCH_ENTRIES as BROWSER_CORE_SEARCH_ENTRIES } from './browser-search'
+import {
+  BROWSER_PANE_SEARCH_ENTRIES as BROWSER_CORE_SEARCH_ENTRIES,
+  getBrowserLinkRoutingDescription
+} from './browser-search'
 import { BROWSER_USE_PANE_SEARCH_ENTRIES } from './browser-use-search'
 import { BROWSER_PANE_SEARCH_ENTRIES } from './browser-pane-search'
 import { BrowserProfileRow } from './BrowserProfileRow'
 import { BrowserUseSetup } from './BrowserUsePane'
 import { KagiSessionLinkForm } from './KagiSessionLinkForm'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 export { BROWSER_PANE_SEARCH_ENTRIES }
 
 type BrowserPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   onOpenComputerUse?: () => void
+}
+
+function cancelBrowserSessionCookieScrollFrames(frameIds: MutableRefObject<number[]>): void {
+  for (const frameId of frameIds.current) {
+    cancelAnimationFrame(frameId)
+  }
+  frameIds.current = []
 }
 
 export function BrowserPane({
@@ -47,10 +59,12 @@ export function BrowserPane({
   const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
+  const mountedRef = useMountedRef()
   const [homePageDraft, setHomePageDraft] = useState(browserDefaultUrl ?? '')
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
+  const sessionCookieScrollFrameIdsRef = useRef<number[]>([])
 
   // Why: sync draft with store value whenever it changes externally (e.g. the
   // in-app browser tab's address bar saves a home page). Without this, the
@@ -59,6 +73,10 @@ export function BrowserPane({
     setHomePageDraft(browserDefaultUrl ?? '')
   }, [browserDefaultUrl])
 
+  useEffect(() => {
+    return () => cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
+  }, [])
+
   const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
 
   const showHomePage = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[0]])
@@ -66,8 +84,28 @@ export function BrowserPane({
   const showLinkRouting = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[2]])
   const showCookies = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[3]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, BROWSER_USE_PANE_SEARCH_ENTRIES)
+  const isMac = isMacUserAgent()
+  const linkRoutingDescription = getBrowserLinkRoutingDescription({ isMac })
+
+  const requestSessionCookieScrollFrame = (callback: FrameRequestCallback): void => {
+    let completed = false
+    let frameId: number | undefined
+    frameId = requestAnimationFrame((timestamp) => {
+      completed = true
+      if (frameId !== undefined) {
+        sessionCookieScrollFrameIdsRef.current = sessionCookieScrollFrameIdsRef.current.filter(
+          (pendingFrameId) => pendingFrameId !== frameId
+        )
+      }
+      callback(timestamp)
+    })
+    if (!completed) {
+      sessionCookieScrollFrameIdsRef.current.push(frameId)
+    }
+  }
 
   const scrollToSessionCookies = (): void => {
+    cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
     // Why: the "Session & Cookies" block is search-gated, so if the user has
     // filtered to a query that excludes it the target element won't be in the
     // DOM. Clear the search first, then scroll on the next frame so the block
@@ -76,8 +114,8 @@ export function BrowserPane({
     // Why: double RAF to ensure React has committed the re-render triggered by
     // the store update before we query the DOM — a single RAF can fire before
     // commit and miss the newly-mounted element.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    requestSessionCookieScrollFrame(() => {
+      requestSessionCookieScrollFrame(() => {
         const el = document.getElementById('browser-session-cookies')
         if (!el) {
           return
@@ -194,7 +232,7 @@ export function BrowserPane({
       {showLinkRouting ? (
         <SearchableSetting
           title="Link Routing"
-          description="Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. Shift+Cmd/Ctrl+click always uses your system browser."
+          description={linkRoutingDescription}
           keywords={[
             'browser',
             'preview',
@@ -202,6 +240,7 @@ export function BrowserPane({
             'localhost',
             'webview',
             'markdown',
+            isMac ? 'cmd' : 'ctrl',
             'file',
             'editor'
           ]}
@@ -209,10 +248,7 @@ export function BrowserPane({
         >
           <div className="space-y-0.5">
             <Label>Link Routing</Label>
-            <p className="text-xs text-muted-foreground">
-              Open http(s) links in Orca&apos;s built-in browser — from the terminal, markdown, and
-              the editor. Shift+Cmd/Ctrl+click always uses your system browser.
-            </p>
+            <p className="text-xs text-muted-foreground">{linkRoutingDescription}</p>
           </div>
           <button
             role="switch"
@@ -324,6 +360,9 @@ export function BrowserPane({
                 const profile = await useAppStore
                   .getState()
                   .createBrowserSessionProfile('isolated', trimmed)
+                if (!mountedRef.current) {
+                  return
+                }
                 if (profile) {
                   setNewProfileDialogOpen(false)
                   setNewProfileName('')
@@ -332,7 +371,9 @@ export function BrowserPane({
                   toast.error('Failed to create profile.')
                 }
               } finally {
-                setIsCreatingProfile(false)
+                if (mountedRef.current) {
+                  setIsCreatingProfile(false)
+                }
               }
             }}
           >

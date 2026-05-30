@@ -32,19 +32,33 @@ function canConnectSocket(socketPath: string): Promise<boolean> {
       return
     }
     const sock = connect({ path: socketPath })
+    let settled = false
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      sock.off('connect', onConnect)
+      sock.off('error', onError)
+    }
+    const settle = (result: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      resolve(result)
+    }
+    const onConnect = (): void => {
+      settle(true)
+      sock.destroy()
+    }
+    const onError = (): void => {
+      settle(false)
+    }
     const timer = setTimeout(() => {
+      settle(false)
       sock.destroy()
-      resolve(false)
     }, 500)
-    sock.on('connect', () => {
-      clearTimeout(timer)
-      sock.destroy()
-      resolve(true)
-    })
-    sock.on('error', () => {
-      clearTimeout(timer)
-      resolve(false)
-    })
+    sock.on('connect', onConnect)
+    sock.on('error', onError)
   })
 }
 
@@ -71,14 +85,17 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
       }
       settled = true
       clearTimeout(timer)
+      removeSocketListeners()
       sock?.destroy()
       resolve(result)
     }
-    const timer = setTimeout(() => settle(false), HEALTH_CHECK_TIMEOUT_MS)
-
-    sock = connect({ path: socketPath })
-    sock.on('error', () => settle(false))
-    sock.on('connect', () => {
+    const removeSocketListeners = (): void => {
+      sock?.off('error', onError)
+      sock?.off('connect', onConnect)
+      sock?.off('data', onData)
+    }
+    const onError = (): void => settle(false)
+    const onConnect = (): void => {
       const hello: HelloMessage = {
         type: 'hello',
         version: PROTOCOL_VERSION,
@@ -87,10 +104,8 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
         role: 'control'
       }
       sock?.write(encodeNdjson(hello))
-    })
-
-    let buffer = ''
-    sock.on('data', (chunk: Buffer) => {
+    }
+    const onData = (chunk: Buffer): void => {
       if (settled) {
         return
       }
@@ -128,7 +143,15 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
           return
         }
       }
-    })
+    }
+    const timer = setTimeout(() => settle(false), HEALTH_CHECK_TIMEOUT_MS)
+
+    sock = connect({ path: socketPath })
+    sock.on('error', onError)
+    sock.on('connect', onConnect)
+
+    let buffer = ''
+    sock.on('data', onData)
   })
 }
 
@@ -167,14 +190,17 @@ export function getMacDaemonSystemResolverHealth(
       }
       settled = true
       clearTimeout(timer)
+      removeSocketListeners()
       sock?.destroy()
       resolve(result)
     }
-    const timer = setTimeout(() => settle('unknown'), RESOLVER_HEALTH_CHECK_TIMEOUT_MS)
-
-    sock = connect({ path: socketPath })
-    sock.on('error', () => settle('unknown'))
-    sock.on('connect', () => {
+    const removeSocketListeners = (): void => {
+      sock?.off('error', onError)
+      sock?.off('connect', onConnect)
+      sock?.off('data', onData)
+    }
+    const onError = (): void => settle('unknown')
+    const onConnect = (): void => {
       const hello: HelloMessage = {
         type: 'hello',
         version: protocolVersion,
@@ -183,10 +209,8 @@ export function getMacDaemonSystemResolverHealth(
         role: 'control'
       }
       sock?.write(encodeNdjson(hello))
-    })
-
-    let buffer = ''
-    sock.on('data', (chunk: Buffer) => {
+    }
+    const onData = (chunk: Buffer): void => {
       if (settled) {
         return
       }
@@ -231,7 +255,15 @@ export function getMacDaemonSystemResolverHealth(
           return
         }
       }
-    })
+    }
+    const timer = setTimeout(() => settle('unknown'), RESOLVER_HEALTH_CHECK_TIMEOUT_MS)
+
+    sock = connect({ path: socketPath })
+    sock.on('error', onError)
+    sock.on('connect', onConnect)
+
+    let buffer = ''
+    sock.on('data', onData)
   })
 }
 

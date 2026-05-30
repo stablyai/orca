@@ -18,6 +18,7 @@ import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 
 const ERROR_TOAST_DURATION = 60_000
 
@@ -145,8 +146,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           repos,
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
-          setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds.filter(
-            (projectId) => validRepoIds.has(projectId)
+          setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+            s.setupScriptPromptDismissedRepoIds,
+            validRepoIds
           )
         }
       })

@@ -749,6 +749,52 @@ describe('runHook', () => {
       })
     }
   })
+
+  it('settles WSL hooks when wsl.exe never reports completion', async () => {
+    vi.useFakeTimers()
+    execMock.mockReset()
+    execFileMock.mockReset()
+    const killMock = vi.fn()
+    execFileMock.mockImplementation(() => ({ kill: killMock }) as never)
+
+    const fs = await import('fs')
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo hello\n')
+
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    try {
+      const { runHook } = await import('./hooks')
+      const promise = runHook('setup', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\feature', {
+        ...makeRepo(),
+        path: 'C:\\Users\\jinwo\\git\\orca'
+      })
+      let settled = false
+      void promise.finally(() => {
+        settled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(120_000)
+      await Promise.resolve()
+
+      expect(settled).toBe(true)
+      await expect(promise).resolves.toMatchObject({
+        success: false,
+        output: expect.stringContaining('Hook timed out')
+      })
+      expect(killMock).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
 })
 
 describe('shouldRunSetupForCreate', () => {

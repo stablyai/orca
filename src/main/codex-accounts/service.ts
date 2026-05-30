@@ -2,9 +2,9 @@
 account lifecycle, path safety, login, and identity parsing in one audited
 main-process module so the managed-account boundary stays explicit. */
 import { randomUUID } from 'node:crypto'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { app } from 'electron'
 import { getSpawnArgsForWindows } from '../win32-utils'
@@ -18,6 +18,19 @@ import { writeFileAtomically } from './fs-utils'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { toWindowsWslPath } from '../wsl'
+import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+import {
+  getCodexSelectionTargetForAccount,
+  getSelectedCodexAccountIdForTarget,
+  normalizeCodexAccountSelectionTarget,
+  normalizeCodexRuntimeSelection,
+  pruneInvalidCodexRuntimeSelection,
+  removeCodexAccountIdFromSelection,
+  setSelectedCodexAccountIdForTarget,
+  type CodexAccountSelectionTarget
+} from './runtime-selection'
 
 const LOGIN_TIMEOUT_MS = 120_000
 const MAX_LOGIN_OUTPUT_CHARS = 4_000
@@ -32,6 +45,22 @@ type ResolvedCodexIdentity = {
   providerAccountId: string | null
   workspaceLabel: string | null
   workspaceAccountId: string | null
+}
+
+export type CodexAccountAddTarget = {
+  runtime?: 'host' | 'wsl'
+  wslDistro?: string | null
+}
+
+type ManagedHomeLocation = {
+  managedHomePath: string
+  managedHomeRuntime: 'host' | 'wsl'
+  wslDistro: string | null
+  wslLinuxHomePath: string | null
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
 }
 
 export class CodexAccountService {
@@ -59,8 +88,8 @@ export class CodexAccountService {
     return this.getSnapshot()
   }
 
-  async addAccount(): Promise<CodexRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doAddAccount())
+  async addAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
+    return this.serializeMutation(() => this.doAddAccount(target))
   }
 
   async reauthenticateAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
@@ -75,9 +104,17 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.doSelectAccount(accountId))
   }
 
-  private async doAddAccount(): Promise<CodexRateLimitAccountsState> {
+  async selectAccountForTarget(
+    accountId: string | null,
+    target?: CodexAccountSelectionTarget
+  ): Promise<CodexRateLimitAccountsState> {
+    return this.serializeMutation(() => this.doSelectAccount(accountId, target))
+  }
+
+  private async doAddAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
     const accountId = randomUUID()
-    const managedHomePath = this.createManagedHome(accountId)
+    const managedHome = this.createManagedHome(accountId, target)
+    const { managedHomePath } = managedHome
 
     try {
       this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath)
@@ -92,6 +129,9 @@ export class CodexAccountService {
         id: accountId,
         email: identity.email,
         managedHomePath,
+        managedHomeRuntime: managedHome.managedHomeRuntime,
+        wslDistro: managedHome.wslDistro,
+        wslLinuxHomePath: managedHome.wslLinuxHomePath,
         providerAccountId: identity.providerAccountId,
         workspaceLabel: identity.workspaceLabel,
         workspaceAccountId: identity.workspaceAccountId,
@@ -101,9 +141,17 @@ export class CodexAccountService {
       }
 
       const settings = this.store.getSettings()
+      const selection = normalizeCodexRuntimeSelection(settings)
+      const targetSelection = getCodexSelectionTargetForAccount(account)
       this.store.updateSettings({
         codexManagedAccounts: [...settings.codexManagedAccounts, account],
-        activeCodexManagedAccountId: account.id
+        activeCodexManagedAccountId:
+          targetSelection.runtime === 'host' ? account.id : selection.host,
+        activeCodexManagedAccountIdsByRuntime: setSelectedCodexAccountIdForTarget(
+          selection,
+          account.id,
+          targetSelection
+        )
       })
       this.safeSyncCanonicalConfigToManagedHomes()
       this.runtimeHome.clearLastWrittenAuthJson(account.id)
@@ -111,8 +159,8 @@ export class CodexAccountService {
 
       // Why: the new account becomes active, so the previous active account is
       // now inactive and its last-known usage should be cached for the switcher.
-      const outgoingAccountId = settings.activeCodexManagedAccountId
-      await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId)
+      const outgoingAccountId = getSelectedCodexAccountIdForTarget(settings, targetSelection)
+      await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, targetSelection)
       return this.getSnapshot()
     } catch (error) {
       this.safeRemoveManagedHome(managedHomePath)
@@ -151,12 +199,15 @@ export class CodexAccountService {
     })
     this.safeSyncCanonicalConfigToManagedHomes()
     this.runtimeHome.clearLastWrittenAuthJson(accountId)
-    this.runtimeHome.syncForCurrentSelection()
+    this.runtimeHome.syncForCurrentSelection(getCodexSelectionTargetForAccount(account))
 
     // Why: re-auth can change which actual Codex identity the managed home
     // points at. Force a fresh read immediately so the status bar cannot keep
     // showing the previous account's quota under the updated label.
-    await this.rateLimits.refreshForCodexAccountChange()
+    await this.rateLimits.refreshForCodexAccountChange(
+      undefined,
+      getCodexSelectionTargetForAccount(account)
+    )
     return this.getSnapshot()
   }
 
@@ -164,14 +215,17 @@ export class CodexAccountService {
     const account = this.requireAccount(accountId)
     const settings = this.store.getSettings()
     const nextAccounts = settings.codexManagedAccounts.filter((entry) => entry.id !== accountId)
+    const nextSelection = removeCodexAccountIdFromSelection(
+      normalizeCodexRuntimeSelection(settings),
+      accountId
+    )
     const nextActiveId =
-      settings.activeCodexManagedAccountId === accountId
-        ? null
-        : settings.activeCodexManagedAccountId
+      settings.activeCodexManagedAccountId === accountId ? null : nextSelection.host
 
     this.store.updateSettings({
       codexManagedAccounts: nextAccounts,
-      activeCodexManagedAccountId: nextActiveId
+      activeCodexManagedAccountId: nextActiveId,
+      activeCodexManagedAccountIdsByRuntime: nextSelection
     })
     this.runtimeHome.syncForCurrentSelection()
 
@@ -180,28 +234,49 @@ export class CodexAccountService {
     // so purge its cached usage to avoid stale entries.
     this.rateLimits.evictInactiveCodexCache(accountId)
     await this.rateLimits.refreshForCodexAccountChange(
-      settings.activeCodexManagedAccountId === accountId
-        ? settings.activeCodexManagedAccountId
-        : undefined
+      getSelectedCodexAccountIdForTarget(settings, getCodexSelectionTargetForAccount(account)) ===
+        accountId
+        ? accountId
+        : undefined,
+      getCodexSelectionTargetForAccount(account)
     )
     return this.getSnapshot()
   }
 
-  private async doSelectAccount(accountId: string | null): Promise<CodexRateLimitAccountsState> {
+  private async doSelectAccount(
+    accountId: string | null,
+    target?: CodexAccountSelectionTarget
+  ): Promise<CodexRateLimitAccountsState> {
+    let effectiveTarget = target
     if (accountId !== null) {
-      this.requireAccount(accountId)
+      const account = this.requireAccount(accountId)
+      const accountTarget = getCodexSelectionTargetForAccount(account)
+      const requestedTarget = normalizeCodexAccountSelectionTarget(target ?? accountTarget)
+      const normalizedAccountTarget = normalizeCodexAccountSelectionTarget(accountTarget)
+      if (
+        requestedTarget.runtime !== normalizedAccountTarget.runtime ||
+        (requestedTarget.wslDistro !== null &&
+          requestedTarget.wslDistro !== normalizedAccountTarget.wslDistro)
+      ) {
+        throw new Error('That Codex account belongs to a different runtime.')
+      }
+      effectiveTarget = accountTarget
     }
 
     const previousSettings = this.store.getSettings()
-    const outgoingAccountId = previousSettings.activeCodexManagedAccountId
+    const selection = normalizeCodexRuntimeSelection(previousSettings)
+    const outgoingAccountId = getSelectedCodexAccountIdForTarget(previousSettings, effectiveTarget)
+    const nextSelection = setSelectedCodexAccountIdForTarget(selection, accountId, effectiveTarget)
 
     this.store.updateSettings({
-      activeCodexManagedAccountId: accountId
+      activeCodexManagedAccountId:
+        effectiveTarget?.runtime === 'wsl' ? nextSelection.host : accountId,
+      activeCodexManagedAccountIdsByRuntime: nextSelection
     })
     this.safeSyncCanonicalConfigToManagedHomes()
-    this.runtimeHome.syncForCurrentSelection()
+    this.runtimeHome.syncForCurrentSelection(effectiveTarget)
 
-    await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId)
+    await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, effectiveTarget)
     return this.getSnapshot()
   }
 
@@ -211,7 +286,8 @@ export class CodexAccountService {
       accounts: settings.codexManagedAccounts
         .map((account) => this.toSummary(account))
         .sort((a, b) => b.updatedAt - a.updatedAt),
-      activeAccountId: settings.activeCodexManagedAccountId
+      activeAccountId: normalizeCodexRuntimeSelection(settings).host,
+      activeAccountIdsByRuntime: normalizeCodexRuntimeSelection(settings)
     }
   }
 
@@ -219,6 +295,8 @@ export class CodexAccountService {
     return {
       id: account.id,
       email: account.email,
+      managedHomeRuntime: account.managedHomeRuntime ?? 'host',
+      wslDistro: account.wslDistro ?? null,
       providerAccountId: account.providerAccountId ?? null,
       workspaceLabel: account.workspaceLabel ?? null,
       workspaceAccountId: account.workspaceAccountId ?? null,
@@ -239,25 +317,99 @@ export class CodexAccountService {
 
   private normalizeActiveSelection(): void {
     const settings = this.store.getSettings()
-    if (!settings.activeCodexManagedAccountId) {
-      return
-    }
-    const hasActiveAccount = settings.codexManagedAccounts.some(
-      (entry) => entry.id === settings.activeCodexManagedAccountId
+    const selection = normalizeCodexRuntimeSelection(settings)
+    const nextSelection = pruneInvalidCodexRuntimeSelection(
+      selection,
+      settings.codexManagedAccounts
     )
-    if (!hasActiveAccount) {
-      this.store.updateSettings({ activeCodexManagedAccountId: null })
+    const changed =
+      nextSelection.host !== selection.host ||
+      JSON.stringify(nextSelection.wsl) !== JSON.stringify(selection.wsl)
+    if (changed) {
+      this.store.updateSettings({
+        activeCodexManagedAccountId: nextSelection.host,
+        activeCodexManagedAccountIdsByRuntime: nextSelection
+      })
     }
   }
 
-  private createManagedHome(accountId: string): string {
+  private createManagedHome(
+    accountId: string,
+    target?: CodexAccountAddTarget
+  ): ManagedHomeLocation {
+    const wslHome = this.tryCreateWslManagedHome(accountId, target)
+    if (wslHome) {
+      return wslHome
+    }
+
     const managedHomePath = join(this.getManagedAccountsRoot(), accountId, 'home')
     mkdirSync(managedHomePath, { recursive: true })
     // Why: Codex expects CODEX_HOME to be a concrete directory it can own. We
     // pre-create the directory and leave a marker so future cleanup code can
     // prove the path belongs to Orca before deleting anything.
     writeFileSync(join(managedHomePath, '.orca-managed-home'), `${accountId}\n`, 'utf-8')
-    return this.assertManagedHomePath(managedHomePath)
+    return {
+      managedHomePath: this.assertManagedHomePath(managedHomePath),
+      managedHomeRuntime: 'host',
+      wslDistro: null,
+      wslLinuxHomePath: null
+    }
+  }
+
+  private tryCreateWslManagedHome(
+    accountId: string,
+    target?: CodexAccountAddTarget
+  ): ManagedHomeLocation | null {
+    if (process.platform !== 'win32' || target?.runtime !== 'wsl') {
+      return null
+    }
+
+    const distroArgs = target.wslDistro?.trim() ? ['-d', target.wslDistro.trim()] : []
+    const infoOutput = execFileSync(
+      'wsl.exe',
+      [...distroArgs, '--', 'bash', '-lc', 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"'],
+      { encoding: 'utf-8', timeout: 5000 }
+    )
+    const [rawDistro, rawHome] = infoOutput
+      .replaceAll(String.fromCharCode(0), '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+    const distro = target.wslDistro?.trim() || rawDistro
+    const home = rawHome
+    if (!distro || !home?.startsWith('/')) {
+      throw new Error('Could not resolve the active WSL home directory for Codex login.')
+    }
+
+    const wslLinuxHomePath = `${home.replace(/\/$/, '')}/.local/share/orca/codex-accounts/${accountId}/home`
+    const markerPath = `${wslLinuxHomePath}/.orca-managed-home`
+    execFileSync(
+      'wsl.exe',
+      [
+        '-d',
+        distro,
+        '--',
+        'bash',
+        '-lc',
+        `mkdir -p ${shellQuote(wslLinuxHomePath)} && printf '%s\\n' ${shellQuote(accountId)} > ${shellQuote(markerPath)}`
+      ],
+      { encoding: 'utf-8', timeout: 5000 }
+    )
+
+    const managedHomePath = toWindowsWslPath(wslLinuxHomePath, distro)
+    let trustedManagedHomePath: string
+    try {
+      trustedManagedHomePath = this.assertManagedHomePath(managedHomePath)
+    } catch (error) {
+      this.safeRemoveWslManagedHomeCandidate(distro, wslLinuxHomePath, accountId)
+      throw error
+    }
+
+    return {
+      managedHomePath: trustedManagedHomePath,
+      managedHomeRuntime: 'wsl',
+      wslDistro: distro,
+      wslLinuxHomePath
+    }
   }
 
   private safeSyncCanonicalConfigToManagedHomes(): void {
@@ -277,15 +429,10 @@ export class CodexAccountService {
   }
 
   private syncCanonicalConfigToManagedHomes(): void {
-    const canonicalConfig = this.readCanonicalConfig()
-    if (canonicalConfig === null) {
-      return
-    }
-
     const settings = this.store.getSettings()
     for (const account of settings.codexManagedAccounts) {
       try {
-        this.syncCanonicalConfigIntoManagedHome(account.managedHomePath, canonicalConfig)
+        this.syncCanonicalConfigIntoManagedHome(account.managedHomePath)
       } catch (error) {
         console.warn('[codex-accounts] Failed to sync managed config:', error)
       }
@@ -294,7 +441,7 @@ export class CodexAccountService {
 
   private syncCanonicalConfigIntoManagedHome(
     managedHomePath: string,
-    canonicalConfig = this.readCanonicalConfig()
+    canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
   ): void {
     if (canonicalConfig === null) {
       return
@@ -322,6 +469,31 @@ export class CodexAccountService {
     }
   }
 
+  private readCanonicalConfigForManagedHome(managedHomePath: string): string | null {
+    const wslInfo = parseWslUncPath(managedHomePath)
+    if (!wslInfo) {
+      return this.readCanonicalConfig()
+    }
+
+    const managedRootMarker = '/.local/share/orca/codex-accounts/'
+    const markerIndex = wslInfo.linuxPath.indexOf(managedRootMarker)
+    if (markerIndex < 0) {
+      return null
+    }
+    const wslHome = wslInfo.linuxPath.slice(0, markerIndex)
+    const configPath = toWindowsWslPath(`${wslHome}/.codex/config.toml`, wslInfo.distro)
+    if (!existsSync(configPath)) {
+      return null
+    }
+
+    try {
+      return readFileSync(configPath, 'utf-8')
+    } catch (error) {
+      console.warn('[codex-accounts] Failed to read WSL canonical config:', error)
+      return null
+    }
+  }
+
   private writeManagedConfig(managedHomePath: string, contents: string): void {
     writeFileAtomically(join(managedHomePath, 'config.toml'), contents)
   }
@@ -333,6 +505,62 @@ export class CodexAccountService {
   }
 
   private assertManagedHomePath(candidatePath: string): string {
+    const wslInfo = parseWslUncPath(candidatePath)
+    if (wslInfo) {
+      if (
+        !wslInfo.linuxPath.includes('/.local/share/orca/codex-accounts/') ||
+        !wslInfo.linuxPath.endsWith('/home')
+      ) {
+        throw new Error('Managed WSL Codex home is outside Orca account storage.')
+      }
+
+      if (process.platform === 'win32') {
+        try {
+          const canonicalLinuxPath = execFileSync(
+            'wsl.exe',
+            [
+              '-d',
+              wslInfo.distro,
+              '--',
+              'bash',
+              '-lc',
+              buildEncodedWslBashCommand(
+                [
+                  'set -euo pipefail',
+                  `candidate=${shellQuote(wslInfo.linuxPath)}`,
+                  'managed_root="${HOME%/}/.local/share/orca/codex-accounts"',
+                  'candidate_real=$(readlink -f -- "$candidate")',
+                  'managed_root_real=$(readlink -f -- "$managed_root")',
+                  'test -f "$candidate_real/.orca-managed-home"',
+                  'case "$candidate_real" in "$managed_root_real"/*/home) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
+                ].join('\n')
+              )
+            ],
+            { encoding: 'utf-8', timeout: 5000 }
+          ).trim()
+          if (!canonicalLinuxPath) {
+            throw new Error('Managed Codex home directory does not exist on disk.')
+          }
+          return toWindowsWslPath(canonicalLinuxPath, wslInfo.distro)
+        } catch (error) {
+          throw new Error('Managed WSL Codex home is outside Orca account storage.', {
+            cause: error
+          })
+        }
+      }
+
+      if (wslInfo.linuxPath.split('/').includes('..')) {
+        throw new Error('Managed WSL Codex home is outside Orca account storage.')
+      }
+      if (!existsSync(candidatePath)) {
+        throw new Error('Managed Codex home directory does not exist on disk.')
+      }
+      if (!existsSync(join(candidatePath, '.orca-managed-home'))) {
+        throw new Error('Managed Codex home is missing Orca ownership marker.')
+      }
+      return candidatePath
+    }
+
     const rootPath = this.getManagedAccountsRoot()
     const resolvedCandidate = resolve(candidatePath)
     const resolvedRoot = resolve(rootPath)
@@ -376,6 +604,48 @@ export class CodexAccountService {
     return canonicalCandidate
   }
 
+  private safeRemoveWslManagedHomeCandidate(
+    distro: string,
+    linuxHomePath: string,
+    expectedAccountId: string
+  ): void {
+    // Why: WSL home creation can fail after mkdir/marker write but before the
+    // path is trusted. Cleanup must prove the marker/account ID inside WSL.
+    try {
+      execFileSync(
+        'wsl.exe',
+        [
+          '-d',
+          distro,
+          '--',
+          'bash',
+          '-lc',
+          buildEncodedWslBashCommand(
+            [
+              'set -euo pipefail',
+              `candidate=${shellQuote(linuxHomePath)}`,
+              `expected_marker=${shellQuote(expectedAccountId)}`,
+              'managed_root="${HOME%/}/.local/share/orca/codex-accounts"',
+              'candidate_real=$(readlink -f -- "$candidate" 2>/dev/null || true)',
+              'managed_root_real=$(readlink -f -- "$managed_root" 2>/dev/null || true)',
+              'test -n "$candidate_real"',
+              'test -n "$managed_root_real"',
+              'case "$candidate_real" in "$managed_root_real"/*/home) ;; *) exit 0 ;; esac',
+              'test -f "$candidate_real/.orca-managed-home"',
+              'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"',
+              'rm -rf -- "$candidate_real"',
+              'parent_dir=$(dirname -- "$candidate_real")',
+              'case "$parent_dir" in "$managed_root_real"/*) rmdir -- "$parent_dir" 2>/dev/null || true ;; esac'
+            ].join('\n')
+          )
+        ],
+        { encoding: 'utf-8', timeout: 5000 }
+      )
+    } catch (error) {
+      console.warn('[codex-accounts] Failed to clean up WSL managed home candidate:', error)
+    }
+  }
+
   private safeRemoveManagedHome(candidatePath: string): void {
     let managedHomePath: string
     try {
@@ -386,6 +656,15 @@ export class CodexAccountService {
     }
 
     rmSync(managedHomePath, { recursive: true, force: true })
+
+    if (parseWslUncPath(managedHomePath)) {
+      try {
+        rmSync(dirname(managedHomePath), { recursive: true, force: true })
+      } catch {
+        // Best-effort cleanup
+      }
+      return
+    }
 
     // Why: managed homes live at <accounts-root>/<uuid>/home. Removing
     // just the home/ leaf leaves an empty <uuid>/ directory behind.
@@ -405,22 +684,45 @@ export class CodexAccountService {
 
   private async runCodexLogin(managedHomePath: string): Promise<void> {
     await new Promise<void>((resolvePromise, rejectPromise) => {
-      const codexCommand = resolveCodexCommand()
-      // Why: on Windows, resolveCodexCommand() may return a .cmd/.bat file
-      // (e.g. codex.cmd from npm). Node's child_process.spawn cannot execute
-      // batch scripts directly without shell:true, but shell:true with an args
-      // array causes DEP0190 because args are concatenated, not escaped.
-      // Fix: detect batch scripts and invoke cmd.exe /c explicitly.
-      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, ['login'])
-      const child = spawn(spawnCmd, spawnArgs, {
+      const wslInfo = parseWslUncPath(managedHomePath)
+      const spawnConfig = wslInfo
+        ? {
+            command: 'wsl.exe',
+            args: [
+              '-d',
+              wslInfo.distro,
+              '--',
+              'bash',
+              '-lc',
+              `export CODEX_HOME=${shellQuote(wslInfo.linuxPath)}; exec codex login`
+            ],
+            env: process.env,
+            codexCommand: 'codex'
+          }
+        : (() => {
+            const codexCommand = resolveCodexCommand()
+            // Why: on Windows, resolveCodexCommand() may return a .cmd/.bat file
+            // (e.g. codex.cmd from npm). Node's child_process.spawn cannot execute
+            // batch scripts directly without shell:true, but shell:true with an args
+            // array causes DEP0190 because args are concatenated, not escaped.
+            // Fix: detect batch scripts and invoke cmd.exe /c explicitly.
+            const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, ['login'])
+            return {
+              command: spawnCmd,
+              args: spawnArgs,
+              env: {
+                ...process.env,
+                CODEX_HOME: managedHomePath
+              },
+              codexCommand
+            }
+          })()
+      const child = spawn(spawnConfig.command, spawnConfig.args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         // Why: route through cmd.exe for .cmd/.bat entrypoints would otherwise
         // flash a console window in the packaged GUI app on Windows.
         windowsHide: true,
-        env: {
-          ...process.env,
-          CODEX_HOME: managedHomePath
-        }
+        env: spawnConfig.env
       })
 
       let settled = false
@@ -432,32 +734,42 @@ export class CodexAccountService {
         }
       }
 
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      const cleanupListeners = (): void => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        child.stdout.off('data', appendOutput)
+        child.stderr.off('data', appendOutput)
+        child.off('error', onError)
+        child.off('close', onClose)
+      }
+
       const settle = (callback: () => void): void => {
         if (settled) {
           return
         }
         settled = true
-        clearTimeout(timeout)
+        cleanupListeners()
         callback()
       }
 
-      const timeout = setTimeout(() => {
+      const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
+      timeout = setTimeout(() => {
         child.kill()
         settle(() => {
-          rejectPromise(new Error('Codex sign-in took too long to finish. Please try again.'))
+          rejectPromise(timeoutError)
         })
       }, LOGIN_TIMEOUT_MS)
 
-      child.stdout.on('data', appendOutput)
-      child.stderr.on('data', appendOutput)
-
-      child.on('error', (error) => {
+      const onError = (error: Error): void => {
         settle(() => {
           const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
           // Why: ENOENT can mean either the codex binary doesn't exist OR the
           // script's shebang interpreter (node) isn't in PATH. When we resolved
           // codex to a full path, ENOENT almost certainly means node is missing.
-          const isBareCommand = codexCommand === 'codex'
+          const isBareCommand = spawnConfig.codexCommand === 'codex'
           const message = isEnoent
             ? isBareCommand
               ? 'Codex CLI not found.'
@@ -465,9 +777,9 @@ export class CodexAccountService {
             : error.message
           rejectPromise(new Error(message))
         })
-      })
+      }
 
-      child.on('close', (code) => {
+      const onClose = (code: number | null): void => {
         settle(() => {
           if (code === 0) {
             resolvePromise()
@@ -482,7 +794,12 @@ export class CodexAccountService {
             )
           )
         })
-      })
+      }
+
+      child.stdout.on('data', appendOutput)
+      child.stderr.on('data', appendOutput)
+      child.on('error', onError)
+      child.on('close', onClose)
     })
   }
 

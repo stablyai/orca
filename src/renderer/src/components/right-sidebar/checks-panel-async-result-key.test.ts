@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   checksPanelAsyncResultKey,
+  checksPanelHostedReviewAsyncResultKey,
   shouldCommitChecksPanelAsyncResult
 } from './checks-panel-async-result-key'
 
@@ -30,6 +31,18 @@ describe('checksPanelAsyncResultKey', () => {
     expect(checksPanelAsyncResultKey('repo-id', 'feature/test', 12, null, 'head-a')).toBe(
       'repo-id::feature/test::none::12::head-a'
     )
+  })
+
+  it('includes hosted-review provider identity for non-GitHub review results', () => {
+    expect(
+      checksPanelHostedReviewAsyncResultKey(
+        'local::repo-id::feature/test',
+        'feature/test',
+        'gitlab',
+        12,
+        'head-a'
+      )
+    ).toBe('local::repo-id::feature/test::feature/test::gitlab::12::head-a')
   })
 })
 

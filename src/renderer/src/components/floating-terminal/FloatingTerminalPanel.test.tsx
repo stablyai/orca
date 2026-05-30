@@ -6,6 +6,13 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { BrowserTab, Tab, TabGroup, TerminalTab } from '../../../../shared/types'
 import type { OpenFile } from '@/store/slices/editor'
 import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
+import {
+  FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
+  clampFloatingTerminalBounds,
+  getDefaultFloatingTerminalBounds,
+  getMaximizedFloatingTerminalBounds,
+  type FloatingTerminalPanelBounds
+} from './floating-terminal-panel-bounds'
 
 type EffectCallback = () => void | (() => void)
 
@@ -59,6 +66,7 @@ type FloatingPanelStoreState = {
 
 const hookRuntime = vi.hoisted(() => ({
   effects: [] as EffectCallback[],
+  layoutEffects: [] as EffectCallback[],
   index: 0,
   values: [] as unknown[]
 }))
@@ -104,6 +112,9 @@ vi.mock('react', async () => {
     useCallback: <T,>(callback: T) => callback,
     useEffect: (effect: EffectCallback) => {
       hookRuntime.effects.push(effect)
+    },
+    useLayoutEffect: (effect: EffectCallback) => {
+      hookRuntime.layoutEffects.push(effect)
     },
     useMemo: <T,>(factory: () => T) => factory(),
     useRef: <T,>(initialValue: T) => {
@@ -288,12 +299,6 @@ vi.mock('./FloatingTerminalWindowControls', () => ({
   }
 }))
 
-vi.mock('./floating-terminal-panel-bounds', () => ({
-  clampFloatingTerminalBounds: (bounds: unknown) => bounds,
-  getDefaultFloatingTerminalBounds: () => ({ height: 480, left: 20, top: 20, width: 720 }),
-  getMaximizedFloatingTerminalBounds: () => ({ height: 700, left: 0, top: 0, width: 1000 })
-}))
-
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
     id: overrides.id ?? 'tab-1',
@@ -465,10 +470,22 @@ function findByProp(node: unknown, propName: string): ReactElementLike {
 }
 
 function runEffects(): void {
+  const layoutEffects = hookRuntime.layoutEffects.splice(0)
+  for (const effect of layoutEffects) {
+    effect()
+  }
   const effects = hookRuntime.effects.splice(0)
   for (const effect of effects) {
     effect()
   }
+}
+
+function attachRef(ref: unknown, value: unknown): void {
+  if (typeof ref === 'function') {
+    ref(value)
+    return
+  }
+  ;(ref as { current: unknown }).current = value
 }
 
 async function flushAsyncWork(): Promise<void> {
@@ -480,6 +497,33 @@ async function renderPanel(open: boolean, onOpenChange = vi.fn()): Promise<unkno
   hookRuntime.index = 0
   const { FloatingTerminalPanel } = await import('./FloatingTerminalPanel')
   return FloatingTerminalPanel({ open, onOpenChange })
+}
+
+function getPanelStyleBounds(element: unknown): FloatingTerminalPanelBounds {
+  const panel = findByProp(element, 'data-floating-terminal-panel')
+  const style = panel.props.style as Record<string, number>
+  return {
+    left: style.left,
+    top: style.top,
+    width: style.width,
+    height: style.height
+  }
+}
+
+function getMockedLocalStorage(): {
+  getItem: ReturnType<typeof vi.fn>
+  setItem: ReturnType<typeof vi.fn>
+} {
+  return window.localStorage as unknown as {
+    getItem: ReturnType<typeof vi.fn>
+    setItem: ReturnType<typeof vi.fn>
+  }
+}
+
+function setViewport(width: number, height: number): void {
+  const viewport = window as unknown as { innerHeight: number; innerWidth: number }
+  viewport.innerWidth = width
+  viewport.innerHeight = height
 }
 
 function makeMacShortcutKeyEvent({
@@ -515,6 +559,7 @@ describe('FloatingTerminalPanel close behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     hookRuntime.effects = []
+    hookRuntime.layoutEffects = []
     hookRuntime.index = 0
     hookRuntime.values = []
     saveDialogBox.fileId = null
@@ -527,6 +572,11 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.getInstallStatus.mockResolvedValue({ state: 'installed', pathConfigured: true })
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
     mocks.pickFloatingMarkdownDocument.mockResolvedValue(null)
+    const localStorage = {
+      getItem: vi.fn(() => null),
+      removeItem: vi.fn(),
+      setItem: vi.fn()
+    }
     vi.stubGlobal('window', {
       addEventListener: vi.fn(),
       api: {
@@ -539,7 +589,9 @@ describe('FloatingTerminalPanel close behavior', () => {
         cli: { getInstallStatus: mocks.getInstallStatus },
         ui: { setFloatingTerminalInputFocused: vi.fn() }
       },
+      innerHeight: 800,
       innerWidth: 1200,
+      localStorage,
       requestAnimationFrame: vi.fn((callback: FrameRequestCallback) => {
         callback(0)
         return 1
@@ -548,11 +600,153 @@ describe('FloatingTerminalPanel close behavior', () => {
     })
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     vi.stubGlobal('HTMLElement', class {})
-    vi.stubGlobal('localStorage', { setItem: vi.fn() })
+    vi.stubGlobal('localStorage', localStorage)
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('starts from persisted user bounds when storage has valid geometry', async () => {
+    const savedBounds = { left: 120, top: 96, width: 760, height: 420 }
+    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
+      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
+    )
+
+    const element = await renderPanel(true)
+
+    expect(getPanelStyleBounds(element)).toEqual(savedBounds)
+  })
+
+  it('falls back to default bounds when persisted geometry is malformed', async () => {
+    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
+      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY
+        ? '{"left":120,"top":96,"width":760}'
+        : null
+    )
+
+    const element = await renderPanel(true)
+
+    expect(getPanelStyleBounds(element)).toEqual(getDefaultFloatingTerminalBounds())
+  })
+
+  it('defers saved user-bound clamping while the startup viewport is zero-sized', async () => {
+    const savedBounds = { left: 900, top: 500, width: 760, height: 420 }
+    setViewport(0, 0)
+    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
+      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
+    )
+
+    let element = await renderPanel(true)
+    expect(getPanelStyleBounds(element)).toEqual(savedBounds)
+
+    runEffects()
+    element = await renderPanel(true)
+
+    expect(getPanelStyleBounds(element)).toEqual(savedBounds)
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+  })
+
+  it('re-anchors default bounds when the viewport becomes usable', async () => {
+    setViewport(0, 0)
+    await renderPanel(true)
+    setViewport(1200, 800)
+
+    runEffects()
+    const element = await renderPanel(true)
+
+    expect(getPanelStyleBounds(element)).toEqual(getDefaultFloatingTerminalBounds())
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+  })
+
+  it('clamps saved user bounds into the current viewport and persists the clamped result', async () => {
+    const savedBounds = { left: 2000, top: 1200, width: 1000, height: 700 }
+    setViewport(800, 600)
+    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
+      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
+    )
+    const expectedBounds = clampFloatingTerminalBounds(savedBounds)
+
+    let element = await renderPanel(true)
+    expect(getPanelStyleBounds(element)).toEqual(savedBounds)
+
+    runEffects()
+    element = await renderPanel(true)
+
+    expect(getPanelStyleBounds(element)).toEqual(expectedBounds)
+    expect(getMockedLocalStorage().setItem).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
+      JSON.stringify(expectedBounds)
+    )
+  })
+
+  it('does not persist a plain click on a default-positioned panel', async () => {
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+
+    ;(panel.props.onMouseUp as (event: unknown) => void)({
+      currentTarget: {
+        getBoundingClientRect: () => ({ height: 560, width: 920 })
+      }
+    })
+
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+  })
+
+  it('commits the last dragged bounds on pointer cancellation', async () => {
+    const element = await renderPanel(true)
+    const titlebar = findByProp(element, 'data-floating-terminal-shortcut-surface')
+    const titlebarTarget = { closest: vi.fn().mockReturnValue(null) }
+    Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
+    vi.stubGlobal('document', { activeElement: null })
+    const startBounds = getDefaultFloatingTerminalBounds()
+    const expectedBounds = clampFloatingTerminalBounds({
+      ...startBounds,
+      left: startBounds.left + 24,
+      top: startBounds.top + 12
+    })
+
+    ;(titlebar.props.onPointerDown as (event: unknown) => void)({
+      button: 0,
+      clientX: 10,
+      clientY: 20,
+      currentTarget: { setPointerCapture: vi.fn() },
+      pointerId: 1,
+      target: titlebarTarget
+    })
+    ;(titlebar.props.onPointerMove as (event: unknown) => void)({
+      clientX: 34,
+      clientY: 32,
+      pointerId: 1
+    })
+    ;(titlebar.props.onPointerCancel as (event: unknown) => void)({ pointerId: 1 })
+
+    expect(getMockedLocalStorage().setItem).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
+      JSON.stringify(expectedBounds)
+    )
+  })
+
+  it('does not persist maximized bounds over the saved normal bounds', async () => {
+    const savedBounds = { left: 120, top: 96, width: 760, height: 420 }
+    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
+      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
+    )
+
+    let element = await renderPanel(true)
+    const controls = findByTypeName(element, 'FloatingTerminalWindowControls')
+    ;(controls.props.onToggleMaximized as () => void)()
+
+    element = await renderPanel(true)
+    expect(getPanelStyleBounds(element)).toEqual(getMaximizedFloatingTerminalBounds())
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+
+    const restoredControls = findByTypeName(element, 'FloatingTerminalWindowControls')
+    ;(restoredControls.props.onToggleMaximized as () => void)()
+    element = await renderPanel(true)
+
+    expect(getPanelStyleBounds(element)).toEqual(savedBounds)
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
   })
 
   it('does not bootstrap a terminal tab when the panel opens empty', async () => {
@@ -583,7 +777,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
     const panel = findByProp(element, 'data-floating-terminal-panel')
     const panelElement = { focus: vi.fn() }
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
 
     runEffects()
 
@@ -702,7 +896,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     Object.setPrototypeOf(target, HTMLElement.prototype)
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', {
       activeElement,
       addEventListener: vi.fn(),
@@ -753,7 +947,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const target = { classList: { contains: vi.fn().mockReturnValue(true) }, closest: vi.fn() }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     Object.setPrototypeOf(target, HTMLElement.prototype)
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', {
       activeElement,
       addEventListener: vi.fn(),
@@ -787,6 +981,54 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
+  it('cancels pending shortcut focus when the panel root unmounts', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const cancelAnimationFrame = vi.fn()
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
+    vi.mocked(window.requestAnimationFrame).mockReturnValue(42)
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    const target = { classList: { contains: vi.fn().mockReturnValue(true) }, closest: vi.fn() }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    Object.setPrototypeOf(target, HTMLElement.prototype)
+    attachRef(panel.props.ref, panelElement)
+    vi.stubGlobal('document', {
+      activeElement,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    runEffects()
+    const keydownListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
+      | ((event: unknown) => void)
+      | undefined
+    if (!keydownListener) {
+      throw new Error('keydown listener not registered')
+    }
+
+    keydownListener({
+      altKey: false,
+      ctrlKey: false,
+      defaultPrevented: false,
+      key: 'w',
+      metaKey: true,
+      preventDefault: vi.fn(),
+      repeat: false,
+      shiftKey: false,
+      stopImmediatePropagation: vi.fn(),
+      stopPropagation: vi.fn(),
+      target
+    })
+    attachRef(panel.props.ref, null)
+
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42)
+    expect(panelElement.focus).not.toHaveBeenCalled()
+  })
+
   it('does not steal focus from the next floating tab after Cmd+W closes one of many tabs', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
     const element = await renderPanel(true)
@@ -796,7 +1038,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const target = { classList: { contains: vi.fn().mockReturnValue(true) }, closest: vi.fn() }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     Object.setPrototypeOf(target, HTMLElement.prototype)
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', {
       activeElement,
       addEventListener: vi.fn(),
@@ -840,7 +1082,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const titlebarTarget = { closest: vi.fn().mockReturnValue(null) }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', { activeElement })
 
     ;(titlebar.props.onPointerDown as (event: unknown) => void)({
@@ -865,7 +1107,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const titlebarTarget = { closest: vi.fn().mockReturnValue(null) }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', { activeElement })
 
     ;(titlebar.props.onPointerDown as (event: unknown) => void)({

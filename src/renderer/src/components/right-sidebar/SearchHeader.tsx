@@ -5,7 +5,7 @@ import { SearchFilters } from './SearchFilters'
 import { ToggleButton } from './SearchResultItems'
 
 type SearchHeaderProps = {
-  inputRef: React.RefObject<HTMLInputElement | null>
+  inputRef: React.Ref<HTMLInputElement>
   includeInputRef: React.RefObject<HTMLInputElement | null>
   excludeInputRef: React.RefObject<HTMLInputElement | null>
   query: string

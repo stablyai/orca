@@ -19,6 +19,7 @@ export type CreateOrAttachOptions = {
    *  daemon path honors per-tab shell selection the same way LocalPtyProvider
    *  does. */
   shellOverride?: string
+  terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
   streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
@@ -42,6 +43,7 @@ export type TerminalHostOptions = {
     envToDelete?: string[]
     command?: string
     shellOverride?: string
+    terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   }) => SubprocessHandle
   // Why: on graceful shutdown, the host writes final checkpoints for all live
@@ -106,6 +108,7 @@ export class TerminalHost {
       envToDelete: opts.envToDelete,
       command: opts.command,
       shellOverride: opts.shellOverride,
+      terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
     })
 
@@ -180,6 +183,16 @@ export class TerminalHost {
     // lsof (macOS). Matches the LocalPtyProvider.getCwd fallback.
     const resolved = await resolveProcessCwd(session.pid)
     return resolved || null
+  }
+
+  // Why: returns null (not throws) for a dead/missing session — this is fetched
+  // for the tab-bar icon, so a vanished pane should quietly yield "no agent".
+  getForegroundProcess(sessionId: string): string | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.getForegroundProcess()
   }
 
   clearScrollback(sessionId: string): void {

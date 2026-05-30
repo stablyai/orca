@@ -11,6 +11,9 @@ let connectBehavior: 'ready' | 'error' = 'ready'
 let connectErrorMessage = ''
 let destroyErrorMessage = ''
 let connectSequence: ('ready' | Error)[] = []
+let execBehavior: 'callback' | 'pending' = 'callback'
+let pendingExecCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
+let sftpBehavior: 'callback' | 'pending' = 'callback'
 
 type MockSshClient = {
   setNoDelay: ReturnType<typeof vi.fn>
@@ -83,9 +86,18 @@ vi.mock('ssh2', () => {
     }
     exec(cmd: string, cb: (err: Error | undefined, channel: unknown) => void) {
       this.lastExecCommand = cmd
+      if (execBehavior === 'pending') {
+        pendingExecCallback = cb
+        return
+      }
       cb(undefined, {})
     }
-    sftp() {}
+    sftp(cb: (err: Error | undefined, channel: unknown) => void) {
+      if (sftpBehavior === 'pending') {
+        return
+      }
+      cb(undefined, {})
+    }
   }
   return {
     BaseAgent: MockBaseAgent,
@@ -173,6 +185,9 @@ describe('SshConnection', () => {
     connectErrorMessage = ''
     destroyErrorMessage = ''
     connectSequence = []
+    execBehavior = 'callback'
+    pendingExecCallback = null
+    sftpBehavior = 'callback'
     clientInstances = []
     spawnSystemSshCommandMock.mockReset()
     spawnSystemSshCommandMock.mockImplementation(() => createSystemCommandChannel())
@@ -544,6 +559,69 @@ describe('SshConnection', () => {
     )
   })
 
+  it('times out when ssh2 never opens an exec channel', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    execBehavior = 'pending'
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .exec('printf ready')
+        .then(() => 'opened')
+        .catch((error: Error) => error.message)
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toBe('SSH exec channel timed out')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores a late exec callback after the channel-open timeout settles', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    execBehavior = 'pending'
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .exec('printf ready')
+        .then(() => 'opened')
+        .catch((error: Error) => error.message)
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      pendingExecCallback?.(undefined, {})
+
+      await expect(outcomePromise).resolves.toBe('SSH exec channel timed out')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('times out when ssh2 never opens an SFTP channel', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .sftp()
+        .then(() => 'opened')
+        .catch((error: Error) => error.message)
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toBe('SSH SFTP channel timed out')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce({
       hostname: 'example.com',
@@ -564,6 +642,41 @@ describe('SshConnection', () => {
       expect.objectContaining({ configHost: 'fdpass-host' }),
       'printf ORCA-SYSTEM-SSH-OK'
     )
+  })
+
+  it('removes system SSH probe listeners after timeout', async () => {
+    vi.useFakeTimers()
+    const channel = new EventEmitter() as ReturnType<typeof createSystemCommandChannel>
+    channel.stdin = { end: vi.fn(), write: vi.fn() }
+    channel.stderr = new EventEmitter()
+    channel.close = vi.fn()
+    spawnSystemSshCommandMock.mockReturnValueOnce(channel)
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce({
+      hostname: 'example.com',
+      port: 22,
+      identityFile: [],
+      forwardAgent: false,
+      identitiesOnly: false,
+      proxyUseFdpass: true
+    })
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    try {
+      const connect = expect(conn.connect()).rejects.toThrow('System SSH connection timed out')
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      await connect
+      expect(channel.close).toHaveBeenCalled()
+      expect(channel.listenerCount('data')).toBe(0)
+      expect(channel.listenerCount('error')).toBe(1)
+      expect(channel.listenerCount('close')).toBe(1)
+      expect(channel.stderr.listenerCount('data')).toBe(0)
+      expect(
+        (conn as unknown as { systemCommandChannels: Set<unknown> }).systemCommandChannels.size
+      ).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

@@ -428,28 +428,60 @@ function execBridge(
         ]
       : [scriptPath, operationPath]
   return new Promise((resolve, reject) => {
-    execFile(
-      command,
-      args,
-      {
-        env: process.env,
-        maxBuffer: 20 * 1024 * 1024,
-        timeout: REQUEST_TIMEOUT_MS,
-        windowsHide: true
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          const message = stderr.trim() || stdout.trim() || error.message
-          reject(
-            error.killed
-              ? new RuntimeClientError('action_timeout', message)
-              : mapBridgeError(message)
-          )
-          return
-        }
-        resolve({ stdout, stderr })
+    let child: ReturnType<typeof execFile> | null = null
+    let settled = false
+
+    const finish = (error: Error | null, result?: { stdout: string; stderr: string }): void => {
+      if (settled) {
+        return
       }
-    )
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(result ?? { stdout: '', stderr: '' })
+    }
+
+    // Why: Node's execFile timeout only sends a signal; a provider process that
+    // ignores it can still leave the computer-use action promise pending.
+    const timeout = setTimeout(() => {
+      child?.kill()
+      finish(
+        new RuntimeClientError(
+          'action_timeout',
+          `desktop provider timed out after ${REQUEST_TIMEOUT_MS}ms`
+        )
+      )
+    }, REQUEST_TIMEOUT_MS)
+
+    try {
+      child = execFile(
+        command,
+        args,
+        {
+          env: process.env,
+          maxBuffer: 20 * 1024 * 1024,
+          timeout: REQUEST_TIMEOUT_MS,
+          windowsHide: true
+        },
+        (error, stdout, stderr) => {
+          if (error) {
+            const message = stderr.trim() || stdout.trim() || error.message
+            finish(
+              error.killed
+                ? new RuntimeClientError('action_timeout', message)
+                : mapBridgeError(message)
+            )
+            return
+          }
+          finish(null, { stdout, stderr })
+        }
+      )
+    } catch (error) {
+      finish(mapBridgeError(error instanceof Error ? error.message : String(error)))
+    }
   })
 }
 

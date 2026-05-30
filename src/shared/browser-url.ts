@@ -9,6 +9,7 @@ const LOCAL_ADDRESS_PATTERN =
 // a URL attempt, not a search query.
 const LOOKS_LIKE_URL_PATTERN = /^[^\s]+\.[a-z]{2,}(\/.*)?$/i
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/][^\s]*$/
+const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\s\\/]+[\\/][^\\/]+(?:[\\/].*)?$/
 const UNIX_ABSOLUTE_PATH_PATTERN = /^\/[^\s]*$/
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing' | 'kagi'
@@ -146,6 +147,12 @@ function absolutePathToFileUrl(filePath: string): string {
     : `file:///${segments.join('/')}`
 }
 
+function windowsUncPathToFileUrl(filePath: string): string {
+  const normalizedPath = filePath.replaceAll('\\', '/').replace(/^\/+/, '')
+  const [host, ...pathSegments] = normalizedPath.split('/')
+  return `file://${host}/${pathSegments.map(encodeURIComponent).join('/')}`
+}
+
 export function normalizeBrowserNavigationUrl(
   rawUrl: string,
   searchEngine?: SearchEngine | null,
@@ -162,6 +169,10 @@ export function normalizeBrowserNavigationUrl(
     } catch {
       return null
     }
+  }
+
+  if (WINDOWS_UNC_PATH_PATTERN.test(trimmed)) {
+    return windowsUncPathToFileUrl(trimmed)
   }
 
   if (UNIX_ABSOLUTE_PATH_PATTERN.test(trimmed) || WINDOWS_ABSOLUTE_PATH_PATTERN.test(trimmed)) {

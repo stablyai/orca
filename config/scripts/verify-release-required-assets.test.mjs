@@ -44,6 +44,16 @@ describe('getRequiredReleaseAssetNames', () => {
       ])
     )
   })
+
+  it('includes the Linux RPM alongside the existing AppImage and deb names', () => {
+    expect(getRequiredReleaseAssetNames('v1.4.27')).toEqual(
+      expect.arrayContaining([
+        'orca-linux.AppImage',
+        'orca-ide_1.4.27_amd64.deb',
+        'orca-ide-1.4.27.x86_64.rpm'
+      ])
+    )
+  })
 })
 
 describe('extractManifestAssetNames', () => {

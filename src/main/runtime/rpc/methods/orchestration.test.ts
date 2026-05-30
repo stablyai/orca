@@ -949,6 +949,38 @@ describe('orchestration RPC methods', () => {
       expect(outbound).toBeTruthy()
     })
 
+    it('returns promptly when the RPC signal aborts while waiting', async () => {
+      setup()
+      vi.useFakeTimers()
+      const controller = new AbortController()
+      const method = findMethod('orchestration.ask')
+      const parsed = method.params!.parse({
+        from: 'term_worker',
+        to: 'term_coord',
+        question: 'still there?',
+        timeoutMs: 60_000
+      })
+
+      try {
+        const promise = method.handler(parsed, {
+          runtime,
+          signal: controller.signal
+        }) as Promise<{ timedOut: boolean }>
+
+        controller.abort()
+        const outcomePromise = Promise.race([
+          promise.then((result) => (result.timedOut ? 'aborted' : 'answered')),
+          new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0))
+        ])
+        await vi.advanceTimersByTimeAsync(0)
+        const outcome = await outcomePromise
+
+        expect(outcome).toBe('aborted')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('rejects group addresses with a dedicated error (no message persisted)', async () => {
       setup()
       await expect(

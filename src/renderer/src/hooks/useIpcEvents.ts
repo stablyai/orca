@@ -12,6 +12,7 @@ import {
 } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
+import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type {
   TerminalLayoutSnapshot,
@@ -42,7 +43,8 @@ import {
 } from './ipc-tab-switch'
 import {
   normalizeAgentStatusPayload,
-  type AgentStatusIpcPayload
+  type AgentStatusIpcPayload,
+  type ParsedAgentStatusPayload
 } from '../../../shared/agent-status-types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
@@ -76,6 +78,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import {
   createFloatingWorkspaceTerminalTab,
+  isEmptyFloatingWorkspacePanelVisible,
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
@@ -798,6 +801,12 @@ export function useIpcEvents(): void {
         if (index < visibleIds.length) {
           activateAndRevealWorktree(visibleIds[index])
         }
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onJumpToTabIndex((index) => {
+        activateTabNumberShortcut(index)
       })
     )
 
@@ -1650,6 +1659,10 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onCloseActiveTab(() => {
+        if (isEmptyFloatingWorkspacePanelVisible()) {
+          window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
+          return
+        }
         const store = useAppStore.getState()
         if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
           if (isRuntimeEnvironmentActive() && store.activeWorktreeId) {
@@ -2061,8 +2074,14 @@ export function useIpcEvents(): void {
       if (!payload) {
         return 'dropped'
       }
-      const { exists, title, repoConnectionId, repoConnectionResolved, owningWorktreeId } =
-        resolvePaneKey(store, data.paneKey)
+      const {
+        exists,
+        title,
+        identityTitle,
+        repoConnectionId,
+        repoConnectionResolved,
+        owningWorktreeId
+      } = resolvePaneKey(store, data.paneKey)
       if (!exists) {
         // Why: empty paneKeys are dropped in main before IPC fanout. Reaching
         // this branch means a non-empty paneKey escaped without a matching
@@ -2116,9 +2135,10 @@ export function useIpcEvents(): void {
       ) {
         return 'dropped'
       }
+      const resolvedPayload = resolveHookPayloadAgentType(payload, identityTitle ?? title)
       const statusPayload = data.orchestration
-        ? { ...payload, orchestration: data.orchestration }
-        : payload
+        ? { ...resolvedPayload, orchestration: data.orchestration }
+        : resolvedPayload
       store.setAgentStatus(data.paneKey, statusPayload, title, {
         updatedAt: data.receivedAt,
         stateStartedAt: data.stateStartedAt
@@ -2131,7 +2151,7 @@ export function useIpcEvents(): void {
         observeAgentHookCompletionForNotification({
           paneKey: data.paneKey,
           worktreeId: statusWorktreeId,
-          payload
+          payload: resolvedPayload
         })
       }
       return 'applied'
@@ -2370,6 +2390,7 @@ function resolvePaneKey(
 ): {
   exists: boolean
   title: string | undefined
+  identityTitle: string | undefined
   repoConnectionId: string | null
   repoConnectionResolved: boolean
   owningWorktreeId: string | undefined
@@ -2379,6 +2400,7 @@ function resolvePaneKey(
     return {
       exists: false,
       title: undefined,
+      identityTitle: undefined,
       repoConnectionId: null,
       repoConnectionResolved: false,
       owningWorktreeId: undefined
@@ -2388,6 +2410,7 @@ function resolvePaneKey(
   const layout = store.terminalLayoutsByTabId?.[tabId]
   let exists = false
   let tabTitle: string | undefined
+  let unifiedTabLabel: string | undefined
   let owningWorktreeId: string | undefined
   for (const [worktreeId, tabs] of Object.entries(store.tabsByWorktree)) {
     for (const tab of tabs) {
@@ -2395,6 +2418,12 @@ function resolvePaneKey(
         exists = true
         tabTitle = tab.title
         owningWorktreeId = worktreeId
+        const visibleTab = (store.unifiedTabsByWorktree?.[worktreeId] ?? []).find(
+          (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
+        )
+        const rawVisibleLabel = visibleTab?.label?.trim()
+        unifiedTabLabel =
+          rawVisibleLabel && rawVisibleLabel.length > 0 ? rawVisibleLabel : undefined
         break
       }
     }
@@ -2420,6 +2449,7 @@ function resolvePaneKey(
     return {
       exists: false,
       title: undefined,
+      identityTitle: undefined,
       repoConnectionId,
       repoConnectionResolved,
       owningWorktreeId
@@ -2433,6 +2463,7 @@ function resolvePaneKey(
     return {
       exists: false,
       title: undefined,
+      identityTitle: undefined,
       repoConnectionId,
       repoConnectionResolved,
       owningWorktreeId
@@ -2449,8 +2480,24 @@ function resolvePaneKey(
   return {
     exists,
     title: paneTitle ?? tabTitle,
+    // Why: some agents (OpenClaude in practice) keep the low-level terminal
+    // title generic while the unified tab label carries the launched agent
+    // identity. Use only the non-custom label as evidence for hook attribution.
+    identityTitle: paneTitle ?? unifiedTabLabel ?? tabTitle,
     repoConnectionId,
     repoConnectionResolved,
     owningWorktreeId
   }
+}
+
+function resolveHookPayloadAgentType(
+  payload: ParsedAgentStatusPayload,
+  terminalTitle: string | undefined
+): ParsedAgentStatusPayload {
+  if (payload.agentType !== 'claude' || !terminalTitle?.toLowerCase().includes('openclaude')) {
+    return payload
+  }
+  // Why: OpenClaude emits Claude-compatible hooks, so title identity is the
+  // renderer's last chance to keep OpenClaude out of Claude-only status paths.
+  return { ...payload, agentType: 'openclaude' }
 }

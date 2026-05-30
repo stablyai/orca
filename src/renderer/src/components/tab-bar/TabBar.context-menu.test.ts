@@ -15,7 +15,7 @@ const useAppStoreMock = vi.fn(
       activeTabType: 'terminal' | 'editor' | 'browser' | null
       gitStatusByWorktree: Record<string, never[]>
       settings: {
-        terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
+        terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | 'git-bash'
         terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
       }
     }) => unknown

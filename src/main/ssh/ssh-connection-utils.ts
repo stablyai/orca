@@ -198,16 +198,43 @@ export function spawnProxyCommand(
 
   // Why: a single PassThrough for both directions creates a feedback loop.
   // Reads come from the proxy's stdout; writes go to its stdin.
+  let cleanedUp = false
+  const cleanup = (): void => {
+    if (cleanedUp) {
+      return
+    }
+    cleanedUp = true
+    proc.stdout!.off('data', onStdoutData)
+    proc.stdout!.off('end', onStdoutEnd)
+    proc.stdin!.off('error', onInputError)
+    proc.off('error', onProcessError)
+  }
+  const onStdoutData = (data: Buffer): void => {
+    stream.push(data)
+  }
+  const onStdoutEnd = (): void => {
+    stream.push(null)
+  }
+  const onInputError = (err: Error): void => {
+    stream.destroy(err)
+  }
+  const onProcessError = (err: Error): void => {
+    stream.destroy(err)
+  }
   const stream = new Duplex({
     read() {},
     write(chunk, _encoding, cb) {
       proc.stdin!.write(chunk, cb)
+    },
+    destroy(err, cb) {
+      cleanup()
+      cb(err)
     }
   })
-  proc.stdout!.on('data', (data) => stream.push(data))
-  proc.stdout!.on('end', () => stream.push(null))
-  proc.stdin!.on('error', (err) => stream.destroy(err))
-  proc.on('error', (err) => stream.destroy(err))
+  proc.stdout!.on('data', onStdoutData)
+  proc.stdout!.on('end', onStdoutEnd)
+  proc.stdin!.on('error', onInputError)
+  proc.on('error', onProcessError)
 
   return { process: proc, sock: stream as unknown as NetSocket }
 }

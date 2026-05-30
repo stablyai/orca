@@ -37,6 +37,7 @@ export type WindowShortcutAction =
   | { type: 'openTasks' }
   | { type: 'switchRecentTab' }
   | { type: 'jumpToWorktreeIndex'; index: number }
+  | { type: 'jumpToTabIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
   | { type: 'dictationKeyDown' }
 
@@ -105,6 +106,21 @@ function implicitWorktreeIndexShortcutAllowed(options: WindowShortcutResolveOpti
     return true
   }
   return normalizeTerminalShortcutPolicy(options.terminalShortcutPolicy) === 'orca-first'
+}
+
+function implicitTabIndexShortcutAllowed(options: WindowShortcutResolveOptions): boolean {
+  return implicitWorktreeIndexShortcutAllowed(options)
+}
+
+function tabIndexModifierPressed(input: WindowShortcutInput, platform: NodeJS.Platform): boolean {
+  const meta = Boolean(input.meta ?? input.metaKey)
+  const control = Boolean(input.control ?? input.ctrlKey)
+  const alt = Boolean(input.alt ?? input.altKey)
+
+  // Why: Ctrl+1-9 is free on macOS because workspace jumps use Cmd+1-9.
+  // On Windows/Linux Ctrl+1-9 is already the workspace jump, so Alt+1-9
+  // gives tab indexing a non-conflicting hardcoded chord.
+  return platform === 'darwin' ? control && !meta && !alt : alt && !meta && !control
 }
 
 export function resolveWindowShortcutAction(
@@ -205,6 +221,17 @@ export function resolveWindowShortcutAction(
     return { type: 'jumpToWorktreeIndex', index: parseInt(input.key, 10) - 1 }
   }
 
+  if (
+    implicitTabIndexShortcutAllowed(options) &&
+    tabIndexModifierPressed(input, platform) &&
+    !input.shift &&
+    input.key &&
+    input.key >= '1' &&
+    input.key <= '9'
+  ) {
+    return { type: 'jumpToTabIndex', index: parseInt(input.key, 10) - 1 }
+  }
+
   // Why: this helper is the explicit allowlist for main-process interception.
   // Anything not listed here must keep flowing to the renderer/PTTY so readline
   // chords like Ctrl+R, Ctrl+U, and Ctrl+E are not accidentally stolen while
@@ -247,12 +274,13 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
     case 'dictationKeyDown':
       return 'voice.dictation'
     case 'jumpToWorktreeIndex':
+    case 'jumpToTabIndex':
       return null
   }
 }
 
 export function windowShortcutActionCapturesTerminal(action: WindowShortcutAction): boolean {
-  if (action.type === 'jumpToWorktreeIndex') {
+  if (action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex') {
     return true
   }
   const actionId = getWindowShortcutActionId(action)
