@@ -123,6 +123,18 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     expect(watcher.lookup(WORKTREE, 3001)?.origin).toBe('https://local.getmontecarlo.com:3001')
   })
 
+  it('does not scan buffered PTY text until a line break arrives', () => {
+    const watcher = bindFresh()
+    const charCodeAtSpy = vi.spyOn(String.prototype, 'charCodeAt')
+    watcher.ingest(PTY, '  Network: https://local.getmontecarlo')
+    const charCodeAtCalls = charCodeAtSpy.mock.calls.length
+    charCodeAtSpy.mockRestore()
+
+    expect(charCodeAtCalls).toBe(0)
+    watcher.ingest(PTY, '.com:3001/\n')
+    expect(watcher.lookup(WORKTREE, 3001)?.origin).toBe('https://local.getmontecarlo.com:3001')
+  })
+
   it('reassembles an ANSI escape split across two chunks', () => {
     const watcher = bindFresh()
     watcher.ingest(PTY, '\x1b[32mhttps://example.com:3001/\x1b')

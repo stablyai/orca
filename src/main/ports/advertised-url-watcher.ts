@@ -82,9 +82,13 @@ class PtyBuffer {
    *  and including the last newline). Whatever follows the last newline stays
    *  buffered so that a URL or ANSI sequence split across chunks survives. */
   ingest(chunk: string): string {
+    const chunkHasLineBreak = chunk.includes('\n') || chunk.includes('\r')
     this.raw += chunk
     if (this.raw.length > PER_PTY_BUFFER_LIMIT) {
       this.raw = this.raw.slice(-PER_PTY_BUFFER_LIMIT)
+    }
+    if (!chunkHasLineBreak) {
+      return ''
     }
     const lastNewline = lastLineBreak(this.raw)
     if (lastNewline === -1) {
