@@ -22,6 +22,7 @@ import { BROWSER_PANE_SEARCH_ENTRIES } from './browser-pane-search'
 import { BrowserProfileRow } from './BrowserProfileRow'
 import { BrowserUseSetup } from './BrowserUsePane'
 import { KagiSessionLinkForm } from './KagiSessionLinkForm'
+import { useMountedRef } from '@/hooks/useMountedRef'
 export { BROWSER_PANE_SEARCH_ENTRIES }
 
 type BrowserPaneProps = {
@@ -54,6 +55,7 @@ export function BrowserPane({
   const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
+  const mountedRef = useMountedRef()
   const [homePageDraft, setHomePageDraft] = useState(browserDefaultUrl ?? '')
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
@@ -354,6 +356,9 @@ export function BrowserPane({
                 const profile = await useAppStore
                   .getState()
                   .createBrowserSessionProfile('isolated', trimmed)
+                if (!mountedRef.current) {
+                  return
+                }
                 if (profile) {
                   setNewProfileDialogOpen(false)
                   setNewProfileName('')
@@ -362,7 +367,9 @@ export function BrowserPane({
                   toast.error('Failed to create profile.')
                 }
               } finally {
-                setIsCreatingProfile(false)
+                if (mountedRef.current) {
+                  setIsCreatingProfile(false)
+                }
               }
             }}
           >
