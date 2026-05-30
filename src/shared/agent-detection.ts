@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Shared agent-title detection keeps related token rules together. */
 /**
  * Shared agent detection utilities — used by both the main process (stats
  * collection) and the renderer (activity indicators, unread badges).
@@ -503,10 +504,8 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   return null
 }
 
-// Why: shared between the runtime (dispatch guard, tui-idle fallback) and the
-// renderer (agent-ready-wait, new-workspace). A bare shell is the only process
-// type that garbles injected preambles, so this is the negative signal for
-// "is an agent running".
+// Why: shared runtime/renderer signal for "is an agent running"; bare shells
+// garble injected preambles, so they are treated as the negative signal.
 const SHELL_NAMES = new Set([
   '',
   'bash',
