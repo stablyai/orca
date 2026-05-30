@@ -36,6 +36,23 @@ describe('Bitbucket repository refs', () => {
     expect(parseBitbucketRepoRef('https://github.com/team/project.git')).toBeNull()
   })
 
+  it('keeps malformed percent sequences as literal repo path text', async () => {
+    expect(parseBitbucketRepoRef('git@bitbucket.org:team/project%zz.git')).toEqual({
+      workspace: 'team',
+      repoSlug: 'project%zz'
+    })
+
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'git@bitbucket.org:team/project%zz.git\n',
+      stderr: ''
+    })
+
+    await expect(getBitbucketRepoRef('/repo')).resolves.toEqual({
+      workspace: 'team',
+      repoSlug: 'project%zz'
+    })
+  })
+
   it('resolves origin through the WSL-aware git runner and caches the result', async () => {
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'git@bitbucket.org:team/project.git\n',

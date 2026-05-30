@@ -255,7 +255,7 @@ export function setupContextualCopy({
     return true
   }
 
-  editorInstance.onDidChangeCursorSelection((event) => {
+  const selectionListener = editorInstance.onDidChangeCursorSelection((event) => {
     if (event.source !== 'restoreState') {
       schedulePrimarySelectionBufferUpdate()
     }
@@ -264,13 +264,13 @@ export function setupContextualCopy({
     }
     updateCopyHint()
   })
-  editorInstance.onDidScrollChange(() => {
+  const scrollListener = editorInstance.onDidScrollChange(() => {
     updateCopyHint()
   })
-  editorInstance.onDidFocusEditorText(() => {
+  const focusListener = editorInstance.onDidFocusEditorText(() => {
     startCopyHintPolling()
   })
-  editorInstance.onDidBlurEditorText(() => {
+  const blurListener = editorInstance.onDidBlurEditorText(() => {
     stopCopyHintPolling()
     copyHintNode.style.display = 'none'
     copyHintWidgetPosition = null
@@ -294,6 +294,12 @@ export function setupContextualCopy({
   editorDomNode.addEventListener('mouseup', updateCopyHint, true)
   editorDomNode.addEventListener('keyup', updateCopyHint, true)
   editorInstance.onDidDispose(() => {
+    // Why: Monaco owns these emitters, but disposing explicitly keeps this
+    // feature's lifecycle symmetrical with the DOM listener cleanup below.
+    selectionListener.dispose()
+    scrollListener.dispose()
+    focusListener.dispose()
+    blurListener.dispose()
     if (primarySelectionTimer !== null) {
       window.clearTimeout(primarySelectionTimer)
       primarySelectionTimer = null

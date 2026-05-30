@@ -42,6 +42,24 @@ describe('browser-url helpers', () => {
     expect(normalizeBrowserNavigationUrl('C:\\Users\\me\\Downloads\\Example.ipynb')).toBe(
       'file:///C:/Users/me/Downloads/Example.ipynb'
     )
+    expect(normalizeBrowserNavigationUrl('\\\\server\\share\\Example.ipynb')).toBe(
+      'file://server/share/Example.ipynb'
+    )
+    expect(
+      normalizeBrowserNavigationUrl('\\\\wsl.localhost\\Ubuntu\\home\\me\\Example.ipynb')
+    ).toBe('file://wsl.localhost/Ubuntu/home/me/Example.ipynb')
+  })
+
+  it('normalizes absolute local paths with spaces and reserved URL characters', () => {
+    expect(normalizeBrowserNavigationUrl('/Users/me/My Site/index #1.html')).toBe(
+      'file:///Users/me/My%20Site/index%20%231.html'
+    )
+    expect(normalizeBrowserNavigationUrl('C:\\Users\\me\\My Site\\index #1.html')).toBe(
+      'file:///C:/Users/me/My%20Site/index%20%231.html'
+    )
+    expect(normalizeBrowserNavigationUrl('C:\\tmp\\orca & 100% ! ^\\index.html')).toBe(
+      'file:///C:/tmp/orca%20%26%20100%25%20!%20%5E/index.html'
+    )
   })
 
   // Why: in-app preview is fine (sandboxed webview), but handing file:// to
@@ -49,6 +67,7 @@ describe('browser-url helpers', () => {
   // arbitrary paths. External-open paths must still refuse file://.
   it('rejects file:// for external opens even though it is allowed in-app', () => {
     expect(normalizeExternalBrowserUrl('file:///etc/passwd')).toBeNull()
+    expect(normalizeExternalBrowserUrl('\\\\server\\share\\Example.ipynb')).toBeNull()
   })
 
   it('returns null for non-URL input without search engine opt-in', () => {

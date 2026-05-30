@@ -253,6 +253,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -456,6 +457,7 @@ describe('useIpcEvents updater integration', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -691,6 +693,7 @@ describe('useIpcEvents updater integration', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -1039,6 +1042,7 @@ describe('useIpcEvents updater integration', () => {
     }))
     vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
       createFloatingWorkspaceTerminalTab,
+      isEmptyFloatingWorkspacePanelVisible: () => false,
       isFloatingWorkspacePanelFocused: () => floatingPanelFocused
     }))
     vi.doMock('@/runtime/web-runtime-session', () => ({
@@ -1072,6 +1076,7 @@ describe('useIpcEvents updater integration', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onActivateWorktree: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onCreateTerminal: (
@@ -1588,6 +1593,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -1800,6 +1806,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -2007,6 +2014,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -2232,6 +2240,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: (
             listener: (data: {
@@ -2429,6 +2438,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       repos: [],
       worktreesByRepo: {},
       tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
       workspaceSessionReady: false,
       settings: { terminalFontSize: 13 },
       ...overrides
@@ -2460,6 +2470,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -2737,6 +2748,92 @@ describe('useIpcEvents agent status snapshot integration', () => {
         lastAssistantMessage: 'inactive completion'
       }),
       'Inactive Tab',
+      { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 }
+    )
+  })
+
+  it('keeps OpenClaude hook status distinct when it arrives through Claude-compatible hooks', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: false } },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 2' }]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-future',
+            entityId: 'tab-future',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'terminal',
+            label: 'OpenClaude',
+            customLabel: null,
+            sortOrder: 0,
+            createdAt: 1_700_000_000_000
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'OpenClaude prompt',
+      agentType: 'claude',
+      receivedAt: 1_700_000_000_200,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({
+        state: 'working',
+        prompt: 'OpenClaude prompt',
+        agentType: 'openclaude'
+      }),
+      'Terminal 2',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 }
     )
   })

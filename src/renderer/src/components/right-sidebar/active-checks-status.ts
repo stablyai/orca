@@ -2,12 +2,13 @@ import type { AppState } from '../../store/types'
 import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
 import type { CheckStatus } from '../../../../shared/types'
 import { getGitHubPRCacheKey } from '../../store/slices/github-cache-key'
+import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
 
 type ActiveChecksStatusState = Pick<
   AppState,
   'activeWorktreeId' | 'worktreesByRepo' | 'repos' | 'prCache'
 > &
-  Partial<Pick<AppState, 'settings'>>
+  Partial<Pick<AppState, 'settings' | 'hostedReviewCache'>>
 
 function branchDisplayName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
@@ -40,5 +41,19 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
     state.settings,
     activeRepo.connectionId
   )
-  return state.prCache[prCacheKey]?.data?.checksStatus ?? null
+  const hostedReviewCacheKey = getHostedReviewCacheKey(
+    activeRepo.path,
+    branch,
+    state.settings,
+    activeRepo.id,
+    activeRepo.connectionId
+  )
+  const hostedReview = state.hostedReviewCache?.[hostedReviewCacheKey]?.data ?? null
+  if (hostedReview && hostedReview.provider !== 'github') {
+    return hostedReview.status
+  }
+  if ((activeWorktree.linkedGitLabMR ?? null) !== null) {
+    return null
+  }
+  return state.prCache[prCacheKey]?.data?.checksStatus ?? hostedReview?.status ?? null
 }

@@ -13,7 +13,7 @@ function stripTrailingSeparators(p: string): string {
 // Why: cross-platform path basename — handles both POSIX ("/") and Windows
 // ("\\") separators, mirroring src/renderer/src/lib/path.ts so the mobile
 // suggestion logic agrees with the desktop's collision check.
-export function pathBasename(p: string): string {
+function pathBasename(p: string): string {
   const normalized = stripTrailingSeparators(p)
   const idx = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'))
   return idx === -1 ? normalized : normalized.slice(idx + 1)

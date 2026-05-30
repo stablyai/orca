@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
 import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
@@ -113,6 +114,7 @@ function TargetRow({
   syncStatus: RemoteWorkspaceSyncStatus | undefined
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
+  const mountedRef = useMountedRef()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const handleConnect = useCallback(async () => {
@@ -123,9 +125,11 @@ function TargetRow({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Connection failed')
     } finally {
-      setBusy(false)
+      if (mountedRef.current) {
+        setBusy(false)
+      }
     }
-  }, [recordFeatureInteraction, targetId])
+  }, [mountedRef, recordFeatureInteraction, targetId])
 
   const handleDisconnect = useCallback(async () => {
     setBusy(true)
@@ -135,9 +139,11 @@ function TargetRow({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Disconnect failed')
     } finally {
-      setBusy(false)
+      if (mountedRef.current) {
+        setBusy(false)
+      }
     }
-  }, [recordFeatureInteraction, targetId])
+  }, [mountedRef, recordFeatureInteraction, targetId])
 
   return (
     <div className="flex items-center gap-2.5 px-2 py-1.5">

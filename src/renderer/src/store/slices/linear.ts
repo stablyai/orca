@@ -8,6 +8,7 @@ import type {
   LinearConnectionStatus,
   LinearIssue,
   LinearTeam,
+  LinearWorkspace,
   LinearWorkspaceSelection
 } from '../../../../shared/types'
 import type { CacheEntry } from './github'
@@ -54,17 +55,30 @@ function looksLikeAuthError(error: unknown): boolean {
   return /authenticat|unauthorized|401/i.test(msg)
 }
 
-const inflightIssueRequests = new Map<string, Promise<LinearIssue | null>>()
+type InflightLinearIssueRequest = {
+  promise: Promise<LinearIssue | null>
+  generation: number
+}
+
+const inflightIssueRequests = new Map<string, InflightLinearIssueRequest>()
 type InflightLinearListRequest = {
   promise: Promise<LinearIssue[]>
   force: boolean
+  generation: number
 }
 
 const inflightSearchRequests = new Map<string, InflightLinearListRequest>()
 const inflightListRequests = new Map<string, InflightLinearListRequest>()
-const inflightTeamRequests = new Map<string, Promise<LinearTeam[]>>()
+type InflightLinearTeamRequest = {
+  promise: Promise<LinearTeam[]>
+  force: boolean
+  generation: number
+}
+
+const inflightTeamRequests = new Map<string, InflightLinearTeamRequest>()
 let inflightStatusRequest: Promise<void> | null = null
 let statusRequestGeneration = 0
+let linearCacheGeneration = 0
 
 function getSelectedWorkspaceId(status: LinearConnectionStatus): LinearWorkspaceSelection | null {
   return status.selectedWorkspaceId ?? status.activeWorkspaceId ?? null
@@ -88,6 +102,55 @@ function linearListCacheKey(
 
 function linearTeamsCacheKey(workspaceId: LinearWorkspaceSelection | null | undefined): string {
   return `${workspaceId ?? 'default'}::teams`
+}
+
+function linearWorkspaceSignature(workspace: LinearWorkspace): string {
+  return [
+    workspace.id,
+    workspace.organizationId,
+    workspace.organizationName,
+    workspace.organizationUrlKey ?? '',
+    workspace.displayName,
+    workspace.email ?? '',
+    workspace.credentialRevision ?? 0
+  ].join('\u001f')
+}
+
+function linearStatusScopeSignature(status: LinearConnectionStatus): string {
+  return JSON.stringify({
+    connected: status.connected,
+    activeWorkspaceId: status.activeWorkspaceId ?? null,
+    selectedWorkspaceId: getSelectedWorkspaceId(status),
+    viewer: status.viewer
+      ? [
+          status.viewer.organizationId ?? '',
+          status.viewer.organizationName,
+          status.viewer.organizationUrlKey ?? '',
+          status.viewer.displayName,
+          status.viewer.email ?? ''
+        ]
+      : null,
+    workspaces: (status.workspaces ?? []).map(linearWorkspaceSignature)
+  })
+}
+
+function clearLinearRequestMaps(): void {
+  inflightIssueRequests.clear()
+  inflightSearchRequests.clear()
+  inflightListRequests.clear()
+  inflightTeamRequests.clear()
+}
+
+function invalidateLinearCaches(): void {
+  linearCacheGeneration += 1
+  clearLinearRequestMaps()
+  clearLinearMetadataCache()
+}
+
+function shouldRefreshStatusAfterRead(
+  workspaceId: LinearWorkspaceSelection | null | undefined
+): boolean {
+  return workspaceId === 'all'
 }
 
 type LinearIssueReadArgs =
@@ -164,13 +227,17 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
         const typedStatus = status as LinearConnectionStatus
         const prev = get().linearStatus
-        if (
-          prev.connected !== typedStatus.connected ||
-          prev.viewer?.email !== typedStatus.viewer?.email ||
-          getSelectedWorkspaceId(prev) !== getSelectedWorkspaceId(typedStatus) ||
-          (prev.workspaces?.length ?? 0) !== (typedStatus.workspaces?.length ?? 0)
-        ) {
-          set({ linearStatus: typedStatus, linearStatusChecked: true })
+        const prevScopeSignature = linearStatusScopeSignature(prev)
+        const nextScopeSignature = linearStatusScopeSignature(typedStatus)
+        if (prevScopeSignature !== nextScopeSignature) {
+          invalidateLinearCaches()
+          set({
+            linearStatus: typedStatus,
+            linearIssueCache: {},
+            linearSearchCache: {},
+            linearTeamCache: {},
+            linearStatusChecked: true
+          })
         } else if (!get().linearStatusChecked) {
           set({ linearStatusChecked: true })
         }
@@ -202,7 +269,19 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         | { ok: false; error: string }
       const status = await linearStatus(get().settings)
       if (isCurrentStatusOperation(requestGeneration)) {
-        set({ linearStatus: status, linearStatusChecked: true })
+        const prev = get().linearStatus
+        if (linearStatusScopeSignature(prev) !== linearStatusScopeSignature(status)) {
+          invalidateLinearCaches()
+          set({
+            linearStatus: status,
+            linearIssueCache: {},
+            linearSearchCache: {},
+            linearTeamCache: {},
+            linearStatusChecked: true
+          })
+        } else {
+          set({ linearStatus: status, linearStatusChecked: true })
+        }
       }
       return result
     } catch (error) {
@@ -216,13 +295,20 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     try {
       const result = await linearConnect(get().settings, apiKey)
       if (result.ok && isCurrentStatusOperation(requestGeneration)) {
+        invalidateLinearCaches()
         set({
-          linearStatus: {
-            connected: true,
-            viewer: result.viewer as LinearViewer
-          }
+          linearIssueCache: {},
+          linearSearchCache: {},
+          linearTeamCache: {}
         })
-        void get().checkLinearConnection(true)
+        const status = await linearStatus(get().settings)
+        if (!isCurrentStatusOperation(requestGeneration)) {
+          return result as { ok: true; viewer: LinearViewer } | { ok: false; error: string }
+        }
+        set({
+          linearStatus: status,
+          linearStatusChecked: true
+        })
       }
       return result as { ok: true; viewer: LinearViewer } | { ok: false; error: string }
     } catch (error) {
@@ -237,11 +323,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     if (!isCurrentStatusOperation(requestGeneration)) {
       return
     }
-    inflightIssueRequests.clear()
-    inflightSearchRequests.clear()
-    inflightListRequests.clear()
-    inflightTeamRequests.clear()
-    clearLinearMetadataCache()
+    invalidateLinearCaches()
     set({
       linearStatus: status,
       linearIssueCache: {},
@@ -257,16 +339,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     if (!isCurrentStatusOperation(requestGeneration)) {
       return
     }
-    inflightIssueRequests.clear()
-    inflightSearchRequests.clear()
-    inflightListRequests.clear()
-    inflightTeamRequests.clear()
-    clearLinearMetadataCache()
+    invalidateLinearCaches()
     set({
       linearStatus: { connected: false, viewer: null },
       linearIssueCache: {},
       linearSearchCache: {},
-      linearTeamCache: {}
+      linearTeamCache: {},
+      linearStatusChecked: true
     })
   },
 
@@ -277,11 +356,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     if (!isCurrentStatusOperation(requestGeneration)) {
       return
     }
-    inflightIssueRequests.clear()
-    inflightSearchRequests.clear()
-    inflightListRequests.clear()
-    inflightTeamRequests.clear()
-    clearLinearMetadataCache()
+    invalidateLinearCaches()
     set({
       linearStatus: status,
       linearIssueCache: {},
@@ -300,32 +375,42 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
     const inflight = inflightIssueRequests.get(issueCacheKey)
     if (inflight) {
-      return inflight
+      return inflight.promise
     }
 
+    let entry: InflightLinearIssueRequest
+    const requestCacheGeneration = linearCacheGeneration
     const promise = linearGetIssue(get().settings, id, workspaceId)
       .then((issue) => {
         const data = issue as LinearIssue | null
-        set((s) => ({
-          linearIssueCache: evictStaleEntries({
-            ...s.linearIssueCache,
-            [issueCacheKey]: { data, fetchedAt: Date.now() }
-          })
-        }))
+        if (
+          inflightIssueRequests.get(issueCacheKey) === entry &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
+          set((s) => ({
+            linearIssueCache: evictStaleEntries({
+              ...s.linearIssueCache,
+              [issueCacheKey]: { data, fetchedAt: Date.now() }
+            })
+          }))
+        }
         return data
       })
       .catch((error) => {
         console.warn('[linear] fetchLinearIssue failed:', error)
         if (looksLikeAuthError(error)) {
-          set({ linearStatus: { connected: false, viewer: null } })
+          void get().checkLinearConnection(true)
         }
         return null
       })
       .finally(() => {
-        inflightIssueRequests.delete(issueCacheKey)
+        if (inflightIssueRequests.get(issueCacheKey) === entry) {
+          inflightIssueRequests.delete(issueCacheKey)
+        }
       })
 
-    inflightIssueRequests.set(issueCacheKey, promise)
+    entry = { promise, generation: requestCacheGeneration }
+    inflightIssueRequests.set(issueCacheKey, entry)
     return promise
   },
 
@@ -374,10 +459,14 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     let entry: InflightLinearListRequest
+    const requestCacheGeneration = linearCacheGeneration
     const promise = linearSearchIssues(get().settings, query, limit, workspaceId)
       .then((issues) => {
         const data = issues as LinearIssue[]
-        if (inflightSearchRequests.get(cacheKey) === entry) {
+        if (
+          inflightSearchRequests.get(cacheKey) === entry &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
           set((s) => ({
             linearSearchCache: evictStaleEntries({
               ...s.linearSearchCache,
@@ -390,7 +479,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] searchLinearIssues failed:', error)
         if (looksLikeAuthError(error)) {
-          set({ linearStatus: { connected: false, viewer: null } })
+          if (!shouldRefreshStatusAfterRead(workspaceId)) {
+            void get().checkLinearConnection(true)
+          }
           return []
         }
         return get().linearSearchCache[cacheKey]?.data ?? []
@@ -399,9 +490,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         if (inflightSearchRequests.get(cacheKey) === entry) {
           inflightSearchRequests.delete(cacheKey)
         }
+        if (
+          shouldRefreshStatusAfterRead(workspaceId) &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
+          void get().checkLinearConnection(true)
+        }
       })
 
-    entry = { promise, force: Boolean(options?.force) }
+    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
     inflightSearchRequests.set(cacheKey, entry)
     return promise
   },
@@ -420,10 +517,14 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     let entry: InflightLinearListRequest
+    const requestCacheGeneration = linearCacheGeneration
     const promise = linearListIssues(get().settings, filter, limit, workspaceId)
       .then((issues) => {
         const data = issues as LinearIssue[]
-        if (inflightListRequests.get(cacheKey) === entry) {
+        if (
+          inflightListRequests.get(cacheKey) === entry &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
           set((s) => ({
             linearSearchCache: evictStaleEntries({
               ...s.linearSearchCache,
@@ -436,7 +537,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] listLinearIssues failed:', error)
         if (looksLikeAuthError(error)) {
-          set({ linearStatus: { connected: false, viewer: null } })
+          if (!shouldRefreshStatusAfterRead(workspaceId)) {
+            void get().checkLinearConnection(true)
+          }
           return []
         }
         return get().linearSearchCache[cacheKey]?.data ?? []
@@ -445,9 +548,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         if (inflightListRequests.get(cacheKey) === entry) {
           inflightListRequests.delete(cacheKey)
         }
+        if (
+          shouldRefreshStatusAfterRead(workspaceId) &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
+          void get().checkLinearConnection(true)
+        }
       })
 
-    entry = { promise, force: Boolean(options?.force) }
+    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
     inflightListRequests.set(cacheKey, entry)
     return promise
   },
@@ -466,34 +575,52 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     const inflight = inflightTeamRequests.get(cacheKey)
-    if (inflight && !options?.force) {
-      return inflight
+    if (inflight && (!options?.force || inflight.force)) {
+      return inflight.promise
     }
 
+    let entry: InflightLinearTeamRequest
+    const requestCacheGeneration = linearCacheGeneration
     const promise = linearListTeams(get().settings, resolvedWorkspaceId)
       .then((teams) => {
         const data = teams as LinearTeam[]
-        set((s) => ({
-          linearTeamCache: evictStaleEntries({
-            ...s.linearTeamCache,
-            [cacheKey]: { data, fetchedAt: Date.now() }
-          })
-        }))
+        if (
+          inflightTeamRequests.get(cacheKey) === entry &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
+          set((s) => ({
+            linearTeamCache: evictStaleEntries({
+              ...s.linearTeamCache,
+              [cacheKey]: { data, fetchedAt: Date.now() }
+            })
+          }))
+        }
         return data
       })
       .catch((error) => {
         console.warn('[linear] listLinearTeams failed:', error)
         if (looksLikeAuthError(error)) {
-          set({ linearStatus: { connected: false, viewer: null } })
+          if (!shouldRefreshStatusAfterRead(resolvedWorkspaceId)) {
+            void get().checkLinearConnection(true)
+          }
           return []
         }
         return get().linearTeamCache[cacheKey]?.data ?? []
       })
       .finally(() => {
-        inflightTeamRequests.delete(cacheKey)
+        if (inflightTeamRequests.get(cacheKey) === entry) {
+          inflightTeamRequests.delete(cacheKey)
+        }
+        if (
+          shouldRefreshStatusAfterRead(resolvedWorkspaceId) &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
+          void get().checkLinearConnection(true)
+        }
       })
 
-    inflightTeamRequests.set(cacheKey, promise)
+    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
+    inflightTeamRequests.set(cacheKey, entry)
     return promise
   },
 

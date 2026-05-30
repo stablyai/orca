@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines */
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import { readFile, rm } from 'fs/promises'
+import { readFile, rm, stat } from 'fs/promises'
 import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -12,10 +12,12 @@ import type {
   CreateWorktreeResult,
   DetectedWorktree,
   DetectedWorktreeListResult,
+  ForceDeleteWorktreeBranchResult,
   GitPushTarget,
   GitWorktreeInfo,
   OrcaHooks,
   Repo,
+  RemoveWorktreeResult,
   Worktree,
   WorktreeMeta
 } from '../../shared/types'
@@ -26,6 +28,7 @@ import {
 } from '../../shared/worktree-ownership'
 import {
   assertWorktreeCleanForRemoval,
+  forceDeleteLocalBranch,
   listWorktrees as listGitWorktrees,
   removeWorktree
 } from '../git/worktree'
@@ -199,7 +202,66 @@ async function runRemoteArchiveHook(
 
 type WorktreeRemovalInFlight = {
   optionsKey: string
-  promise: Promise<void>
+  promise: Promise<RemoveWorktreeResult>
+}
+
+type PreservedBranchCleanupTarget = {
+  branchName: string
+  head: string
+  pushTarget?: GitPushTarget
+}
+
+const preservedBranchCleanupByWorktreeId = new Map<string, PreservedBranchCleanupTarget>()
+
+function rememberPreservedBranchCleanupTarget(
+  worktreeId: string,
+  result: RemoveWorktreeResult | undefined,
+  fallbackHead: string | undefined,
+  pushTarget: GitPushTarget | undefined
+): void {
+  if (result?.preservedBranch) {
+    const head = result.preservedBranch.head ?? fallbackHead
+    if (!head) {
+      throw new Error(
+        `Cannot safely offer force-delete for preserved branch "${result.preservedBranch.branchName}" without its saved commit.`
+      )
+    }
+    preservedBranchCleanupByWorktreeId.set(worktreeId, {
+      branchName: result.preservedBranch.branchName,
+      head,
+      ...(pushTarget ? { pushTarget } : {})
+    })
+    return
+  }
+  preservedBranchCleanupByWorktreeId.delete(worktreeId)
+}
+
+function preserveBranchHeadFallback(
+  result: RemoveWorktreeResult | undefined,
+  fallbackHead: string | undefined
+): RemoveWorktreeResult {
+  if (!result?.preservedBranch || result.preservedBranch.head || !fallbackHead) {
+    return result ?? {}
+  }
+  return {
+    ...result,
+    preservedBranch: {
+      ...result.preservedBranch,
+      head: fallbackHead
+    }
+  }
+}
+
+function getPreservedBranchCleanupTarget(
+  worktreeId: string,
+  branchName: string,
+  expectedHead: string
+): PreservedBranchCleanupTarget {
+  const target = preservedBranchCleanupByWorktreeId.get(worktreeId)
+  if (!target || target.branchName !== branchName || target.head !== expectedHead) {
+    throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
+  }
+  return target
 }
 
 const loggedUnavailableSshGitProviders = new Set<string>()
@@ -547,6 +609,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:resolvePrBase')
   ipcMain.removeHandler('worktrees:resolveMrBase')
   ipcMain.removeHandler('worktrees:remove')
+  ipcMain.removeHandler('worktrees:forceDeletePreservedBranch')
   ipcMain.removeHandler('worktrees:updateMeta')
   ipcMain.removeHandler('worktrees:listLineage')
   ipcMain.removeHandler('worktrees:updateLineage')
@@ -911,7 +974,7 @@ export function registerWorktreeHandlers(
       // Why: stale toast actions, double-clicks, and Space/sidebar races can
       // target the same worktree concurrently. Share the destructive backend
       // operation so only one path touches Git and the filesystem.
-      const removal = (async (): Promise<void> => {
+      const removal = (async (): Promise<RemoveWorktreeResult> => {
         const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
         const repo = store.getRepo(repoId)
         if (!repo) {
@@ -933,8 +996,9 @@ export function registerWorktreeHandlers(
           })
           store.removeWorktreeMeta(args.worktreeId)
           deleteWorktreeHistoryDir(args.worktreeId)
+          preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
           notifyWorktreesChanged(mainWindow, repoId)
-          return
+          return {}
         }
 
         // Why: the renderer-supplied worktreeId contains a filesystem path.
@@ -1011,8 +1075,9 @@ export function registerWorktreeHandlers(
             runtime.clearOptimisticReconcileToken(args.worktreeId)
             store.removeWorktreeMeta(args.worktreeId)
             deleteWorktreeHistoryDir(args.worktreeId)
+            preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
             notifyWorktreesChanged(mainWindow, repoId)
-            return
+            return {}
           }
           if (args.force && (await isAlreadyRemovedWorktreePath(repo, worktreePath))) {
             // Why: Force-delete can be retried from stale UI after a prior delete
@@ -1038,8 +1103,9 @@ export function registerWorktreeHandlers(
             runtime.clearOptimisticReconcileToken(args.worktreeId)
             store.removeWorktreeMeta(args.worktreeId)
             deleteWorktreeHistoryDir(args.worktreeId)
+            preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
             notifyWorktreesChanged(mainWindow, repoId)
-            return
+            return {}
           }
           throw new Error(`Refusing to delete unregistered worktree path: ${worktreePath}`)
         }
@@ -1074,9 +1140,13 @@ export function registerWorktreeHandlers(
             }
           }
 
-          await (deleteBranch
+          const rawRemovalResult = await (deleteBranch
             ? provider!.removeWorktree(canonicalWorktreePath, args.force)
             : provider!.removeWorktree(canonicalWorktreePath, args.force, { deleteBranch }))
+          const removalResult = preserveBranchHeadFallback(
+            rawRemovalResult,
+            registeredWorktree.head
+          )
           await cleanupUnusedWorktreePushTargetRemoteSsh(
             provider!,
             repo.path,
@@ -1084,11 +1154,17 @@ export function registerWorktreeHandlers(
             removedPushTarget,
             store
           )
+          rememberPreservedBranchCleanupTarget(
+            args.worktreeId,
+            removalResult,
+            registeredWorktree.head,
+            removedPushTarget
+          )
           runtime.clearOptimisticReconcileToken(args.worktreeId)
           store.removeWorktreeMeta(args.worktreeId)
           deleteWorktreeHistoryDir(args.worktreeId)
           notifyWorktreesChanged(mainWindow, repoId)
-          return
+          return removalResult ?? {}
         }
 
         // Why: `git worktree remove` (non-force) refuses to delete a worktree
@@ -1133,12 +1209,16 @@ export function registerWorktreeHandlers(
             })
         }
 
+        let removalResult: RemoveWorktreeResult | undefined
         try {
-          await (deleteBranch
-            ? removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)
-            : removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false, {
-                deleteBranch
-              }))
+          removalResult = preserveBranchHeadFallback(
+            await (deleteBranch
+              ? removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)
+              : removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false, {
+                  deleteBranch
+                })),
+            registeredWorktree.head
+          )
         } catch (error) {
           // If git no longer tracks this worktree, clean up the directory and metadata
           if (isOrphanedWorktreeError(error)) {
@@ -1166,9 +1246,10 @@ export function registerWorktreeHandlers(
             runtime.clearOptimisticReconcileToken(args.worktreeId)
             store.removeWorktreeMeta(args.worktreeId)
             deleteWorktreeHistoryDir(args.worktreeId)
+            preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
             invalidateAuthorizedRootsCache()
             notifyWorktreesChanged(mainWindow, repoId)
-            return
+            return {}
           }
           throw new Error(
             formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
@@ -1180,21 +1261,78 @@ export function registerWorktreeHandlers(
           removedPushTarget,
           store
         )
+        rememberPreservedBranchCleanupTarget(
+          args.worktreeId,
+          removalResult,
+          registeredWorktree.head,
+          removedPushTarget
+        )
         runtime.clearOptimisticReconcileToken(args.worktreeId)
         store.removeWorktreeMeta(args.worktreeId)
         deleteWorktreeHistoryDir(args.worktreeId)
         invalidateAuthorizedRootsCache()
 
         notifyWorktreesChanged(mainWindow, repoId)
+        return removalResult ?? {}
       })()
       worktreeRemovalsInFlight.set(args.worktreeId, { optionsKey, promise: removal })
       try {
-        await removal
+        return await removal
       } finally {
         if (worktreeRemovalsInFlight.get(args.worktreeId)?.promise === removal) {
           worktreeRemovalsInFlight.delete(args.worktreeId)
         }
       }
+    }
+  )
+
+  ipcMain.handle(
+    'worktrees:forceDeletePreservedBranch',
+    async (
+      _event,
+      args: { worktreeId: string; branchName: string; expectedHead: string }
+    ): Promise<ForceDeleteWorktreeBranchResult> => {
+      const { repoId } = parseWorktreeId(args.worktreeId)
+      const cleanupTarget = getPreservedBranchCleanupTarget(
+        args.worktreeId,
+        args.branchName,
+        args.expectedHead
+      )
+      const repo = store.getRepo(repoId)
+      if (!repo) {
+        throw new Error(`Repo not found: ${repoId}`)
+      }
+      if (isFolderRepo(repo)) {
+        throw new Error('Folder workspaces do not have local Git branches.')
+      }
+
+      if (repo.connectionId) {
+        const provider = requireSshGitProvider(repo.connectionId)
+        await forceDeleteLocalBranch(
+          repo.path,
+          cleanupTarget.branchName,
+          cleanupTarget.head,
+          (argv, cwd) => provider.exec(argv, cwd)
+        )
+        await cleanupUnusedWorktreePushTargetRemoteSsh(
+          provider,
+          repo.path,
+          args.worktreeId,
+          cleanupTarget.pushTarget,
+          store
+        )
+      } else {
+        await forceDeleteLocalBranch(repo.path, cleanupTarget.branchName, cleanupTarget.head)
+        await cleanupUnusedWorktreePushTargetRemote(
+          repo.path,
+          args.worktreeId,
+          cleanupTarget.pushTarget,
+          store
+        )
+      }
+
+      preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
+      return { deleted: true }
     }
   )
 
@@ -1258,23 +1396,29 @@ export function registerWorktreeHandlers(
   ipcMain.handle('hooks:check', async (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
     if (!repo || isFolderRepo(repo)) {
-      return { hasHooks: false, hooks: null, mayNeedUpdate: false }
+      return { status: 'ok', hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
 
     if (repo.connectionId) {
       const fsProvider = getSshFilesystemProvider(repo.connectionId)
       if (!fsProvider) {
-        return { hasHooks: false, hooks: null, mayNeedUpdate: false }
+        return { status: 'error', hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
       try {
         const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
         return {
+          status: 'ok',
           hasHooks: !result.isBinary,
           hooks: result.isBinary ? null : parseOrcaYaml(result.content),
           mayNeedUpdate: false
         }
-      } catch {
-        return { hasHooks: false, hooks: null, mayNeedUpdate: false }
+      } catch (error) {
+        return {
+          status: isENOENT(error) ? 'ok' : 'error',
+          hasHooks: false,
+          hooks: null,
+          mayNeedUpdate: false
+        }
       }
     }
 
@@ -1286,6 +1430,7 @@ export function registerWorktreeHandlers(
     // instead of implying the file is broken.
     const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
     return {
+      status: 'ok',
       hasHooks: has,
       hooks,
       mayNeedUpdate
@@ -1310,36 +1455,66 @@ export function registerWorktreeHandlers(
       return []
     }
 
-    return inspectSetupScriptImportCandidates(async (relativePath) => {
-      const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-      if (repo.connectionId) {
-        const fsProvider = getSshFilesystemProvider(repo.connectionId)
-        if (!fsProvider) {
-          return null
+    return inspectSetupScriptImportCandidates(
+      async (relativePath) => {
+        const filePath = joinWorktreeRelativePath(repo.path, relativePath)
+        if (repo.connectionId) {
+          const fsProvider = getSshFilesystemProvider(repo.connectionId)
+          if (!fsProvider) {
+            return null
+          }
+          try {
+            const result = await fsProvider.readFile(filePath)
+            return result.isBinary ? null : result.content
+          } catch {
+            return null
+          }
         }
-        try {
-          const result = await fsProvider.readFile(filePath)
-          return result.isBinary ? null : result.content
-        } catch {
-          return null
-        }
-      }
 
-      try {
-        return await readFile(filePath, 'utf-8')
-      } catch (error) {
-        if (!isENOENT(error)) {
-          console.warn('[hooks] Failed to inspect setup script import candidate:', error)
+        try {
+          return await readFile(filePath, 'utf-8')
+        } catch (error) {
+          if (!isENOENT(error)) {
+            console.warn('[hooks] Failed to inspect setup script import candidate:', error)
+          }
+          return null
         }
-        return null
+      },
+      {
+        fileExists: async (relativePath) => {
+          const filePath = joinWorktreeRelativePath(repo.path, relativePath)
+          if (repo.connectionId) {
+            const fsProvider = getSshFilesystemProvider(repo.connectionId)
+            if (!fsProvider) {
+              return false
+            }
+            try {
+              const fileStat = await fsProvider.stat(filePath)
+              return fileStat.type !== 'directory'
+            } catch {
+              return false
+            }
+          }
+
+          try {
+            const fileStat = await stat(filePath)
+            return !fileStat.isDirectory()
+          } catch (error) {
+            if (!isENOENT(error)) {
+              console.warn('[hooks] Failed to stat setup script import candidate:', error)
+            }
+            return false
+          }
+        }
       }
-    })
+    )
   })
 
-  ipcMain.handle('hooks:readIssueCommand', (_event, args: { repoId: string }) => {
+  ipcMain.handle('hooks:readIssueCommand', async (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
     if (!repo || isFolderRepo(repo)) {
       return {
+        status: 'ok',
         localContent: null,
         sharedContent: null,
         effectiveContent: null,
@@ -1347,14 +1522,100 @@ export function registerWorktreeHandlers(
         source: 'none' as const
       }
     }
+    if (repo.connectionId) {
+      const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+      const fsProvider = getSshFilesystemProvider(repo.connectionId)
+      if (!fsProvider) {
+        return {
+          status: 'error',
+          localContent: null,
+          sharedContent: null,
+          effectiveContent: null,
+          localFilePath: issueCommandPath,
+          source: 'none' as const
+        }
+      }
+
+      let status: 'ok' | 'error' = 'ok'
+      let localContent: string | null = null
+      let sharedContent: string | null = null
+      try {
+        const result = await fsProvider.readFile(issueCommandPath)
+        localContent = result.isBinary ? null : result.content.trim() || null
+      } catch (error) {
+        if (!isENOENT(error)) {
+          status = 'error'
+        }
+      }
+      try {
+        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
+        sharedContent = result.isBinary
+          ? null
+          : parseOrcaYaml(result.content)?.issueCommand?.trim() || null
+      } catch (error) {
+        if (!isENOENT(error)) {
+          status = 'error'
+        }
+      }
+      const effectiveContent = localContent ?? sharedContent
+      return {
+        status: localContent ? 'ok' : status,
+        localContent,
+        sharedContent,
+        effectiveContent,
+        localFilePath: issueCommandPath,
+        source: localContent
+          ? ('local' as const)
+          : sharedContent
+            ? ('shared' as const)
+            : ('none' as const)
+      }
+    }
     return readIssueCommand(repo.path)
   })
 
-  ipcMain.handle('hooks:writeIssueCommand', (_event, args: { repoId: string; content: string }) => {
-    const repo = store.getRepo(args.repoId)
-    if (!repo || isFolderRepo(repo)) {
-      return
+  ipcMain.handle(
+    'hooks:writeIssueCommand',
+    async (_event, args: { repoId: string; content: string }) => {
+      const repo = store.getRepo(args.repoId)
+      if (!repo || isFolderRepo(repo)) {
+        return
+      }
+      if (repo.connectionId) {
+        const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+        const fsProvider = getSshFilesystemProvider(repo.connectionId)
+        if (!fsProvider) {
+          throw new Error(
+            'Remote filesystem unavailable. Reconnect the SSH target before retrying.'
+          )
+        }
+        const trimmed = args.content.trim()
+        if (!trimmed) {
+          await fsProvider.deletePath(issueCommandPath, false).catch((error: unknown) => {
+            if (!isENOENT(error)) {
+              throw error
+            }
+          })
+          return
+        }
+        await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
+        const gitignorePath = joinWorktreeRelativePath(repo.path, '.gitignore')
+        try {
+          const result = await fsProvider.readFile(gitignorePath)
+          if (!result.isBinary && !/^\.orca\/?$/m.test(result.content)) {
+            const separator = result.content.endsWith('\n') ? '' : '\n'
+            await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
+          }
+        } catch (error) {
+          if (!isENOENT(error)) {
+            throw error
+          }
+          await fsProvider.writeFile(gitignorePath, '.orca\n')
+        }
+        await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
+        return
+      }
+      writeIssueCommand(repo.path, args.content)
     }
-    writeIssueCommand(repo.path, args.content)
-  })
+  )
 }

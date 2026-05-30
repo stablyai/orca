@@ -3,12 +3,14 @@ import type { SetupScriptImportCandidate } from '../../../shared/setup-script-im
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 
 export type HookCheckResult = {
+  status?: 'ok' | 'error'
   hasHooks: boolean
   hooks: OrcaHooks | null
   mayNeedUpdate: boolean
 }
 
 export type IssueCommandReadResult = {
+  status?: 'ok' | 'error'
   localContent: string | null
   sharedContent: string | null
   effectiveContent: string | null

@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalQuickCommand } from '../../../../shared/types'
+import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -15,7 +19,9 @@ type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneCwdRef: React.RefObject<PaneCwdMap>
+  tabId: string
   worktreeId: string
+  groupId: string | null
   fallbackCwd: string
   toggleExpandPane: (paneId: number) => void
   onRequestClosePane: (paneId: number) => void
@@ -33,6 +39,7 @@ type TerminalMenuState = {
   menuPaneId: number | null
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onCopy: () => Promise<void>
+  onCopyPaneId: () => Promise<void>
   onPaste: () => Promise<void>
   onSplitRight: () => void
   onSplitDown: () => void
@@ -48,7 +55,9 @@ export function useTerminalPaneContextMenu({
   managerRef,
   paneTransportsRef,
   paneCwdRef,
+  tabId,
   worktreeId,
+  groupId,
   fallbackCwd,
   toggleExpandPane,
   onRequestClosePane,
@@ -100,6 +109,18 @@ export function useTerminalPaneContextMenu({
     // close, but xterm.js only accepts input when its own helper textarea is
     // focused. Without this, the user has to click the pane again before
     // typing works (see #592).
+    pane.terminal.focus()
+  }
+
+  const onCopyPaneId = async (): Promise<void> => {
+    const pane = resolveMenuPane()
+    if (!pane) {
+      return
+    }
+    // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
+    // remounts; the numeric PaneManager id is only a local runtime handle.
+    await window.api.ui.writeClipboardText(makePaneKey(tabId, pane.leafId))
+    toast.success('Pane ID copied')
     pane.terminal.focus()
   }
 
@@ -183,6 +204,11 @@ export function useTerminalPaneContextMenu({
   }
 
   const onQuickCommand = (command: TerminalQuickCommand): void => {
+    if (isTerminalAgentQuickCommand(command)) {
+      runQuickCommandInNewTab({ command, worktreeId, groupId })
+      return
+    }
+
     const pane = resolveMenuPane()
     if (!pane) {
       return
@@ -258,6 +284,7 @@ export function useTerminalPaneContextMenu({
     menuPaneId,
     onContextMenuCapture,
     onCopy,
+    onCopyPaneId,
     onPaste,
     onSplitRight,
     onSplitDown,

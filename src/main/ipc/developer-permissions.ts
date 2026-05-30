@@ -32,6 +32,7 @@ const DEVELOPER_PERMISSION_IDS: DeveloperPermissionId[] = [
   'usb',
   'bluetooth'
 ]
+const APPLE_EVENTS_PROMPT_TIMEOUT_MS = 3_000
 
 function unsupportedOffMac(): DeveloperPermissionStatus | null {
   return process.platform === 'darwin' ? null : 'unsupported'
@@ -86,12 +87,38 @@ async function openPrivacyPane(id: DeveloperPermissionId): Promise<boolean> {
 
 function triggerAppleEventsPrompt(): Promise<void> {
   return new Promise((resolve) => {
-    execFile(
-      'osascript',
-      ['-e', 'tell application "System Events" to return 1'],
-      { timeout: 3000 },
-      () => resolve()
-    )
+    let child: ReturnType<typeof execFile> | null = null
+    let settled = false
+
+    const finish = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      resolve()
+    }
+
+    // Why: this request only nudges macOS to show the Automation prompt; a
+    // stuck osascript process should not keep the permission IPC pending.
+    const timeout = setTimeout(() => {
+      child?.kill()
+      finish()
+    }, APPLE_EVENTS_PROMPT_TIMEOUT_MS)
+    if (typeof timeout.unref === 'function') {
+      timeout.unref()
+    }
+
+    try {
+      child = execFile(
+        'osascript',
+        ['-e', 'tell application "System Events" to return 1'],
+        { timeout: APPLE_EVENTS_PROMPT_TIMEOUT_MS },
+        finish
+      )
+    } catch {
+      finish()
+    }
   })
 }
 
@@ -99,11 +126,17 @@ function triggerLocalNetworkPrompt(): Promise<void> {
   return new Promise((resolve) => {
     const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true })
     let settled = false
-    const finish = (): void => {
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    function finish(): void {
       if (settled) {
         return
       }
       settled = true
+      socket.removeListener('error', finish)
+      if (timeout) {
+        clearTimeout(timeout)
+        timeout = null
+      }
       try {
         socket.close()
       } catch {
@@ -116,7 +149,10 @@ function triggerLocalNetworkPrompt(): Promise<void> {
       const message = Buffer.from([0])
       socket.send(message, 0, message.length, 5353, '224.0.0.251', finish)
     })
-    setTimeout(finish, 1000)
+    timeout = setTimeout(finish, 1000)
+    if (typeof timeout.unref === 'function') {
+      timeout.unref()
+    }
   })
 }
 

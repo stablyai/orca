@@ -16,7 +16,9 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import type {
   PersistedState,
+  ProjectGroup,
   Repo,
+  TerminalPaneLayoutNode,
   TerminalTab,
   WorktreeLineage,
   WorkspaceSessionState
@@ -216,6 +218,19 @@ function makeSessionWithBrowserHistory(count: number): WorkspaceSessionState {
       lastVisitedAt: 1_700_000_000_000 - index,
       visitCount: 1
     }))
+  }
+}
+
+function makeBalancedLegacyPaneLayout(start: number, end: number): TerminalPaneLayoutNode {
+  if (end - start === 1) {
+    return { type: 'leaf', leafId: `pane:${start + 1}` }
+  }
+  const midpoint = Math.floor((start + end) / 2)
+  return {
+    type: 'split',
+    direction: 'horizontal',
+    first: makeBalancedLegacyPaneLayout(start, midpoint),
+    second: makeBalancedLegacyPaneLayout(midpoint, end)
   }
 }
 
@@ -1502,6 +1517,35 @@ describe('Store', () => {
     expect(store.getRepo('direct')?.projectGroupId).toBeNull()
     expect(store.getRepo('nested')?.projectGroupId).toBeNull()
     expect(store.getRepo('sibling')?.projectGroupId).toBe(sibling.id)
+  })
+
+  it('creates a project group when persisted group history is very large', async () => {
+    const projectGroups: ProjectGroup[] = Array.from({ length: 130_000 }, (_, index) => ({
+      id: `group-${index}`,
+      name: `Group ${index}`,
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual',
+      tabOrder: index,
+      isCollapsed: false,
+      color: null,
+      createdAt: index,
+      updatedAt: index
+    }))
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups
+    })
+    const store = await createStore()
+
+    const group = store.createProjectGroup({ name: 'New group', createdFrom: 'manual' })
+
+    expect(group.tabOrder).toBe(projectGroups.length)
   })
 
   it('sanitizes invalid project group updates before persisting a repo', async () => {
@@ -3624,6 +3668,62 @@ describe('Store', () => {
         ])
       })
     )
+  })
+
+  it('loads legacy pane aliases from very large persisted split layouts', async () => {
+    const leafCount = 130_000
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {
+        activeRepoId: 'r1',
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [
+            {
+              id: 'tab1',
+              worktreeId: 'wt1',
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'large-pty'
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: makeBalancedLegacyPaneLayout(0, leafCount),
+            activeLeafId: 'pane:1',
+            expandedLeafId: null
+          }
+        }
+      }
+    })
+
+    const store = await createStore()
+    store.flush()
+
+    const persisted = readDataFile() as PersistedState
+    const aliasEntries = persisted.legacyPaneKeyAliasEntries
+    expect(aliasEntries).toHaveLength(leafCount + 1)
+    expect(
+      aliasEntries.some((entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === 'tab1:0')
+    ).toBe(true)
+    expect(
+      aliasEntries.some((entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === 'tab1:1')
+    ).toBe(true)
+    expect(
+      aliasEntries.some(
+        (entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === `tab1:${leafCount}`
+      )
+    ).toBe(true)
   })
 
   it('converts unambiguous dev migration rows into persisted aliases', async () => {

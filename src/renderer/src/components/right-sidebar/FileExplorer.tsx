@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- File Explorer coordinates tree state, selection, drag/drop, and toolbar actions in one component. */
+/* eslint-disable max-lines -- Why: FileExplorer coordinates tree data, selection, drag/drop, and virtual rows; splitting it during this merge would obscure the interaction invariants. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
@@ -8,6 +8,7 @@ import { folderRelativePathToIncludeGlob } from './file-search-include-pattern'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { shouldResetFileExplorerForVisibleWorktree } from './file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
@@ -27,9 +28,13 @@ import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
+import {
+  buildAddProjectFromFolderModalData,
+  canShowAddAsProjectAction
+} from './file-explorer-add-project-action'
+import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerGitIgnoredRows } from './useFileExplorerGitIgnoredRows'
-import type { TreeNode } from './file-explorer-types'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -48,6 +53,7 @@ function FileExplorerInner(): React.JSX.Element {
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
+  const openModal = useAppStore((s) => s.openModal)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
 
   const worktreePath = activeWorktree?.path ?? null
@@ -110,13 +116,6 @@ function FileExplorerInner(): React.JSX.Element {
     copyPathsForNode
   } = useFileExplorerSelection(visibleFlatRows, isMac)
 
-  const clearFlashTimeout = useCallback(() => {
-    if (flashTimeoutRef.current !== null) {
-      window.clearTimeout(flashTimeoutRef.current)
-      flashTimeoutRef.current = null
-    }
-  }, [])
-
   const entries = useMemo(
     () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
     [activeWorktreeId, gitStatusByWorktree]
@@ -157,12 +156,22 @@ function FileExplorerInner(): React.JSX.Element {
     scrollRef
   })
 
+  const lastResetWorktreePathRef = useRef<string | null>(null)
   useEffect(() => {
     if (!visibleWorktreePath) {
       return
     }
     // Why: the sidebar remains mounted while closed to preserve caches, but
     // loading the hidden tree would probe every clicked workspace on macOS.
+    if (
+      !shouldResetFileExplorerForVisibleWorktree(
+        lastResetWorktreePathRef.current,
+        visibleWorktreePath
+      )
+    ) {
+      return
+    }
+    lastResetWorktreePathRef.current = visibleWorktreePath
     resetSelection()
     resetAndLoad()
     clearFileExplorerUndoHistory()
@@ -182,8 +191,6 @@ function FileExplorerInner(): React.JSX.Element {
       }
     }
   }, [sshConnectedGeneration, visibleWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => clearFlashTimeout, [clearFlashTimeout])
 
   useEffect(() => {
     if (!visibleWorktreePath) {
@@ -365,6 +372,19 @@ function FileExplorerInner(): React.JSX.Element {
     [activeWorktreeId, seedFileSearchIncludePattern, setRightSidebarTab, setRightSidebarOpen]
   )
 
+  const handleAddFolderAsProject = useCallback(
+    (node: TreeNode) => {
+      if (!activeRepo || !canShowAddAsProjectAction(node, activeRepo)) {
+        return
+      }
+      openModal(
+        'confirm-add-project-from-folder',
+        buildAddProjectFromFolderModalData(node, activeRepo)
+      )
+    },
+    [activeRepo, openModal]
+  )
+
   if (!worktreePath) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
@@ -476,6 +496,8 @@ function FileExplorerInner(): React.JSX.Element {
               onStartNew={startNew}
               onStartRename={startRename}
               onDuplicate={handleDuplicate}
+              onAddFolderAsProject={handleAddFolderAsProject}
+              canAddFolderAsProject={(node) => canShowAddAsProjectAction(node, activeRepo)}
               onRequestDelete={handleContextMenuDelete}
               onCollapseFolderSubtree={handleCollapseFolderSubtree}
               onFindInFolder={handleFindInFolder}

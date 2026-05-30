@@ -8,6 +8,7 @@ export type WorktreeDragUnitGroup = WorktreeDragGroup & {
 type WorktreeDragUnitRow =
   | { type: 'header'; key: string }
   | { type: 'item'; worktree: { id: string }; depth: number }
+  | { type: 'imported-worktrees-card' }
 
 export function getWorktreeDragUnitGroups(
   rows: readonly WorktreeDragUnitRow[]
@@ -23,6 +24,9 @@ export function getWorktreeDragUnitGroups(
         units: current.units,
         worktreeIds: current.units.map((unit) => unit.worktreeId)
       })
+      continue
+    }
+    if (row.type === 'imported-worktrees-card') {
       continue
     }
     if (!current) {

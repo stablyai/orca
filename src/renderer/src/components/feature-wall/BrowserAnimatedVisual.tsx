@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type JSX, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { ClaudeIcon } from '@/components/status-bar/icons'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
 
 // Why: this animation tells the full Orca story end-to-end — the user opens a
@@ -152,6 +153,7 @@ const TERM_ENTRIES: readonly { entry: TermEntry; minPhase: Phase }[] = [
 
 export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
   const { reducedMotion } = props
+  const newBrowserShortcutLabel = useShortcutLabel('tab.newBrowser')
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [typedChars, setTypedChars] = useState(0)
@@ -524,7 +526,9 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
                     <GlobeGlyph />
                   </span>
                   <span className="text-[11.5px] text-foreground">New Browser Tab</span>
-                  <span className="font-mono text-[10.5px] text-muted-foreground">⌘⇧B</span>
+                  <span className="font-mono text-[10.5px] text-muted-foreground">
+                    {newBrowserShortcutLabel}
+                  </span>
                 </div>
                 <DropdownSkeletonRow widthPct={52} />
               </div>

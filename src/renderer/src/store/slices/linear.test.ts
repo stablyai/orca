@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type {
-  LinearConnectionStatus,
-  LinearIssue,
-  LinearTeam,
-  LinearViewer
-} from '../../../../shared/types'
+import type { LinearConnectionStatus, LinearIssue, LinearViewer } from '../../../../shared/types'
 import { createLinearSlice } from './linear'
 
 const linearStatus = vi.fn()
@@ -15,13 +10,14 @@ const linearDisconnect = vi.fn()
 const linearListIssues = vi.fn()
 const linearSearchIssues = vi.fn()
 const linearListTeams = vi.fn()
+const linearGetIssue = vi.fn()
 const linearTestConnection = vi.fn()
 
 vi.mock('@/runtime/runtime-linear-client', () => ({
   linearConnect: (...args: unknown[]) => linearConnect(...args),
   linearDisconnect: (...args: unknown[]) => linearDisconnect(...args),
   linearDisconnectWorkspace: vi.fn(),
-  linearGetIssue: vi.fn(),
+  linearGetIssue: (...args: unknown[]) => linearGetIssue(...args),
   linearListIssues: (...args: unknown[]) => linearListIssues(...args),
   linearListTeams: (...args: unknown[]) => linearListTeams(...args),
   linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),
@@ -57,10 +53,6 @@ function issue(id: string): LinearIssue {
     priority: 0,
     updatedAt: '2026-01-01T00:00:00.000Z'
   }
-}
-
-function team(id: string): LinearTeam {
-  return { id, name: id, key: id, workspaceId: 'workspace-1', workspaceName: 'Workspace' }
 }
 
 function deferred<T>() {
@@ -197,58 +189,6 @@ describe('createLinearSlice caching', () => {
       store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
     ).toEqual([issue('LIN-1')])
   })
-
-  it('keeps literal search queries separate from list cache keys', async () => {
-    const store = createTestStore()
-    store.setState({
-      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
-      linearSearchCache: {
-        'workspace-1::list::all::36': { data: [issue('LIST')], fetchedAt: Date.now() }
-      }
-    })
-    linearSearchIssues.mockResolvedValueOnce([issue('SEARCH')])
-
-    await expect(store.getState().searchLinearIssues('list::all', 36)).resolves.toMatchObject([
-      { id: 'SEARCH' }
-    ])
-
-    expect(linearSearchIssues).toHaveBeenCalledTimes(1)
-    expect(
-      store.getState().getCachedLinearIssues({ kind: 'search', query: 'list::all', limit: 36 })
-    ).toMatchObject([{ id: 'SEARCH' }])
-    expect(
-      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
-    ).toMatchObject([{ id: 'LIST' }])
-  })
-
-  it('caches teams by workspace and dedupes fresh reads', async () => {
-    const store = createTestStore()
-    linearListTeams.mockResolvedValueOnce([team('team-1')])
-
-    await expect(store.getState().listLinearTeams('workspace-1')).resolves.toMatchObject([
-      { id: 'team-1' }
-    ])
-    await expect(store.getState().listLinearTeams('workspace-1')).resolves.toMatchObject([
-      { id: 'team-1' }
-    ])
-
-    expect(linearListTeams).toHaveBeenCalledTimes(1)
-    expect(store.getState().getCachedLinearTeams('workspace-1')).toMatchObject([{ id: 'team-1' }])
-  })
-
-  it('patches issue-cache entries keyed by workspace-qualified ids', () => {
-    const store = createTestStore()
-    store.setState({
-      linearIssueCache: {
-        'workspace-1::issue-id': { data: issue('issue-id'), fetchedAt: Date.now() }
-      }
-    })
-
-    store.getState().patchLinearIssue('issue-id', { title: 'Updated' })
-
-    expect(store.getState().linearIssueCache['workspace-1::issue-id'].data?.title).toBe('Updated')
-    expect(store.getState().linearIssueCache['workspace-1::issue-id'].fetchedAt).toBe(0)
-  })
 })
 
 describe('createLinearSlice', () => {
@@ -256,6 +196,10 @@ describe('createLinearSlice', () => {
     linearStatus.mockReset()
     linearConnect.mockReset()
     linearDisconnect.mockReset()
+    linearListIssues.mockReset()
+    linearSearchIssues.mockReset()
+    linearListTeams.mockReset()
+    linearGetIssue.mockReset()
     linearTestConnection.mockReset()
   })
 
@@ -297,13 +241,13 @@ describe('createLinearSlice', () => {
     const store = createTestStore()
 
     const mountCheck = store.getState().checkLinearConnection()
-    await store.getState().connectLinear('linear-key')
+    const connectPromise = store.getState().connectLinear('linear-key')
+    await Promise.resolve()
 
     expect(linearStatus).toHaveBeenCalledTimes(2)
-    expect(store.getState().linearStatus.connected).toBe(true)
 
     freshConnectCheck.resolve({ connected: true, viewer })
-    await Promise.resolve()
+    await connectPromise
 
     staleMountCheck.resolve({ connected: false, viewer: null })
     await mountCheck

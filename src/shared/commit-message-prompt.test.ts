@@ -19,13 +19,13 @@ describe('buildCommitPrompt', () => {
 
   it('appends a custom suffix when non-empty', () => {
     const prompt = buildCommitPrompt('diff', 'Use Conventional Commits.')
-    expect(prompt).toContain('Additional instructions from user:')
+    expect(prompt).toContain('Additional user prompt:')
     expect(prompt.endsWith('Use Conventional Commits.')).toBe(true)
   })
 
   it('does not append the suffix block for whitespace-only suffixes', () => {
     const prompt = buildCommitPrompt('diff', '   \n  ')
-    expect(prompt).not.toContain('Additional instructions from user:')
+    expect(prompt).not.toContain('Additional user prompt:')
   })
 })
 

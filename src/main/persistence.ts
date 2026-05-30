@@ -61,6 +61,7 @@ import {
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
+  normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
@@ -1013,8 +1014,14 @@ function normalizeWorkspaceSessionPaneIdentities(
       normalizedLayout: normalized.snapshot,
       leafIdByInputLeafId: normalized.leafIdByInputLeafId
     })
-    migrationUnsupportedEntries.push(...migrationEntries.migrationUnsupportedEntries)
-    legacyPaneKeyAliasEntries.push(...migrationEntries.legacyPaneKeyAliasEntries)
+    // Why: old persisted split layouts can generate enough alias rows to
+    // exceed V8's argument limit if the arrays are spread into push().
+    for (const entry of migrationEntries.migrationUnsupportedEntries) {
+      migrationUnsupportedEntries.push(entry)
+    }
+    for (const entry of migrationEntries.legacyPaneKeyAliasEntries) {
+      legacyPaneKeyAliasEntries.push(entry)
+    }
     const leafIdByPtyId = new Map<string, string>()
     const duplicatePtyIds = new Set<string>()
     for (const [leafId, ptyId] of Object.entries(normalized.snapshot.ptyIdsByLeafId ?? {})) {
@@ -2120,10 +2127,11 @@ export class Store {
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
-    const maxOrder = Math.max(
-      -1,
-      ...(this.state.projectGroups ?? []).map((group) => group.tabOrder)
-    )
+    let maxOrder = -1
+    // Why: persisted group lists can be large enough to exceed spread limits.
+    for (const existingGroup of this.state.projectGroups ?? []) {
+      maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
+    }
     const group = createProjectGroup({
       ...input,
       tabOrder: maxOrder + 1
@@ -2802,6 +2810,9 @@ export class Store {
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
       ),
+      agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
+        this.state.ui?.agentActivityDisplayMode
+      ),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
       workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
@@ -2831,6 +2842,10 @@ export class Store {
         updates.worktreeCardProperties !== undefined
           ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)
           : normalizeWorktreeCardProperties(this.state.ui?.worktreeCardProperties),
+      agentActivityDisplayMode:
+        updates.agentActivityDisplayMode !== undefined
+          ? normalizeAgentActivityDisplayMode(updates.agentActivityDisplayMode)
+          : normalizeAgentActivityDisplayMode(this.state.ui?.agentActivityDisplayMode),
       workspaceStatuses:
         updates.workspaceStatuses !== undefined
           ? normalizeWorkspaceStatuses(updates.workspaceStatuses)

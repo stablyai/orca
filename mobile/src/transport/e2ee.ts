@@ -73,7 +73,7 @@ export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null
   return plaintext ? new TextDecoder().decode(plaintext) : null
 }
 
-export function encryptBytes(plaintext: Uint8Array, sharedKey: Uint8Array): Uint8Array {
+function encryptBytes(plaintext: Uint8Array, sharedKey: Uint8Array): Uint8Array {
   const nonce = u8(nacl.randomBytes(nacl.box.nonceLength))
   const ciphertext = nacl.box.after(u8(plaintext), nonce, u8(sharedKey))
 

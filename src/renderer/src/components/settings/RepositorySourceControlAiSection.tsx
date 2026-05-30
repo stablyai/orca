@@ -28,6 +28,7 @@ import { useAppStore } from '../../store'
 import { getRuntimeGitScope } from '../../runtime/runtime-git-client'
 import { getRepositorySourceControlAiSectionId } from './repository-settings-targets'
 import { Button } from '../ui/button'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 type RepositorySourceControlAiSectionProps = {
   repo: Repo
@@ -47,20 +48,20 @@ const OPERATIONS: {
   {
     operation: 'commitMessage',
     modelLabel: 'Commit message model',
-    instructionLabel: 'Commit message instructions',
-    globalPlaceholder: 'Global commit message instructions are empty.'
+    instructionLabel: 'Commit message prompt',
+    globalPlaceholder: 'Global commit message prompt is empty.'
   },
   {
     operation: 'pullRequest',
     modelLabel: 'PR details model',
-    instructionLabel: 'Pull request instructions',
-    globalPlaceholder: 'Global pull request instructions are empty.'
+    instructionLabel: 'Pull request prompt',
+    globalPlaceholder: 'Global pull request prompt is empty.'
   },
   {
     operation: 'branchName',
     modelLabel: 'Branch name model',
-    instructionLabel: 'Branch name instructions',
-    globalPlaceholder: 'Global branch name instructions are empty.'
+    instructionLabel: 'Branch name prompt',
+    globalPlaceholder: 'Global branch name prompt is empty.'
   }
 ]
 
@@ -71,11 +72,11 @@ type RepoAiDraftState = {
   baseSerialized: string
 }
 
-function hasOwnInstruction(
-  instructions: RepoSourceControlAiOverrides['instructionsByOperation'],
+function hasOwnPrompt(
+  prompts: RepoSourceControlAiOverrides['instructionsByOperation'],
   operation: SourceControlAiOperation
 ): boolean {
-  return typeof instructions?.[operation] === 'string'
+  return typeof prompts?.[operation] === 'string'
 }
 
 function triStateValue(value: boolean | null | undefined): 'inherit' | 'on' | 'off' {
@@ -102,6 +103,7 @@ export function RepositorySourceControlAiSection({
   repo,
   updateRepo
 }: RepositorySourceControlAiSectionProps): React.JSX.Element {
+  const mountedRef = useMountedRef()
   const settings = useAppStore((state) => state.settings)
   const source = normalizeSourceControlAiSettings(
     settings?.sourceControlAi,
@@ -188,6 +190,9 @@ export function RepositorySourceControlAiSection({
     setSaveError(null)
     try {
       const result = await updateRepo(repo.id, { sourceControlAi: next })
+      if (!mountedRef.current) {
+        return
+      }
       if (result === false) {
         setSaveError('Failed to save Source Control AI settings.')
         return
@@ -204,9 +209,13 @@ export function RepositorySourceControlAiSection({
         }
       })
     } catch {
-      setSaveError('Failed to save Source Control AI settings.')
+      if (mountedRef.current) {
+        setSaveError('Failed to save Source Control AI settings.')
+      }
     } finally {
-      setIsSaving(false)
+      if (mountedRef.current) {
+        setIsSaving(false)
+      }
     }
   }
 
@@ -270,13 +279,13 @@ export function RepositorySourceControlAiSection({
     inheritedValue: string
   ): void => {
     updateDraftRepoAi((current) => {
-      const nextInstructions = { ...current.instructionsByOperation }
+      const nextPrompts = { ...current.instructionsByOperation }
       if (mode === PROMPT_MODE_INHERIT) {
-        delete nextInstructions[operation]
-      } else if (!hasOwnInstruction(nextInstructions, operation)) {
-        nextInstructions[operation] = inheritedValue
+        delete nextPrompts[operation]
+      } else if (!hasOwnPrompt(nextPrompts, operation)) {
+        nextPrompts[operation] = inheritedValue
       }
-      return { ...current, instructionsByOperation: nextInstructions }
+      return { ...current, instructionsByOperation: nextPrompts }
     })
   }
 
@@ -450,7 +459,7 @@ export function RepositorySourceControlAiSection({
       <div className="space-y-3">
         {OPERATIONS.map((row) => {
           const inherited = source.instructionsByOperation[row.operation]?.trim() ?? ''
-          const hasOverride = hasOwnInstruction(repoAi.instructionsByOperation, row.operation)
+          const hasOverride = hasOwnPrompt(repoAi.instructionsByOperation, row.operation)
           const value = hasOverride ? (repoAi.instructionsByOperation?.[row.operation] ?? '') : ''
           return (
             <div key={row.instructionLabel} className="space-y-2">

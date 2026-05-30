@@ -18,7 +18,8 @@ export default function WorkspaceKanbanPinDropTarget({
       data-workspace-pin-drop-target=""
       className={cn(
         'mb-3 flex h-8 shrink-0 items-center gap-2 rounded-md border border-dashed border-sidebar-border bg-background/45 px-3 text-[12px] text-muted-foreground transition-colors',
-        isDragOver && 'border-sidebar-ring bg-sidebar-accent text-foreground'
+        isDragOver && 'border-sidebar-ring bg-sidebar-accent text-foreground',
+        'data-[workspace-board-external-drag-target=true]:border-sidebar-ring data-[workspace-board-external-drag-target=true]:bg-sidebar-accent data-[workspace-board-external-drag-target=true]:text-foreground'
       )}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}

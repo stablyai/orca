@@ -18,6 +18,7 @@ import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
 import { FEATURE_WALL_EXIT_ACTIONS, FEATURE_WALL_TOUR_DEPTH_STEPS } from './feature-wall-tour-depth'
 import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
+import { appStarSourceSchema } from './gh-star-source'
 import {
   NESTED_REPO_COUNT_BUCKETS,
   NESTED_REPO_IMPORT_ACTIONS,
@@ -49,6 +50,7 @@ import type {
 // should map to concrete values; see `tuiAgentToAgentKind`.
 export const AGENT_KIND_VALUES = [
   'claude-code',
+  'openclaude',
   'codex',
   'autohand',
   'opencode',
@@ -150,6 +152,7 @@ export type { WorkspaceSource }
 export const launchSourceSchema = z.enum([
   'command_palette',
   'sidebar',
+  'quick_command',
   'tab_bar_quick_launch',
   'task_page',
   'new_workspace_composer',
@@ -239,6 +242,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalActivity',
   'experimentalTerminalAttention',
   'experimentalWorktreeSymlinks',
+  'experimentalUnifiedNewTabLauncher',
   'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
@@ -265,6 +269,13 @@ const repoAddedSchema = z
   .object({ method: repoMethodSchema, nth_repo_added: nthRepoAddedSchema })
   .strict()
 
+const appStarredOrcaSchema = z
+  .object({
+    source: appStarSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+
 const workspaceCreatedSchema = z
   .object({
     source: workspaceSourceSchema,
@@ -274,6 +285,14 @@ const workspaceCreatedSchema = z
   .strict()
 
 const agentStartedSchema = z
+  .object({
+    agent_kind: agentKindSchema,
+    launch_source: launchSourceSchema,
+    request_kind: requestKindSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const agentPromptSentSchema = z
   .object({
     agent_kind: agentKindSchema,
     launch_source: launchSourceSchema,
@@ -304,6 +323,27 @@ const settingsChangedSchema = z
 
 const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
+
+const orcaCliFeatureTipSourceSchema = z.enum(['app_open', 'manual'])
+const orcaCliFeatureTipShownSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const orcaCliFeatureTipSetupClickedSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const orcaCliFeatureTipSetupResultSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    result: z.enum(['installed', 'needs_attention', 'dev_preview', 'failed']),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
 
 const featureWallOpenedSchema = z
   .object({
@@ -420,30 +460,79 @@ function validateSetupScriptPromptProvider(
     ctx.addIssue({
       code: 'custom',
       path: ['provider'],
-      message: 'provider is required when setup import is available'
+      message: 'provider is required when a setup candidate is available'
     })
   }
   if (props.mode === 'configure_needed' && props.provider !== undefined) {
     ctx.addIssue({
       code: 'custom',
       path: ['provider'],
-      message: 'provider is only valid when setup import is available'
+      message: 'provider is only valid when a setup candidate is available'
     })
   }
 }
-// Why: setup-import telemetry is for a retention cohort, not debugging a
+// Why: setup-candidate telemetry is for a retention cohort, not debugging a
 // user's repo, so it carries only closed enums and count buckets.
 const setupScriptPromptShownSchema = z
   .object(setupScriptPromptContextSchema)
   .strict()
   .superRefine(validateSetupScriptPromptProvider)
+const setupScriptDetectedSaveActions = [
+  'save_detected_setup_clicked',
+  'save_detected_setup_completed',
+  'save_detected_setup_failed'
+] as const
+
+function isSetupScriptDetectedSaveAction(action: unknown): boolean {
+  return setupScriptDetectedSaveActions.includes(action as never)
+}
+
+function validateSetupScriptPromptAction(
+  props: SetupScriptPromptContextTelemetry & {
+    action?: string
+    edited_before_save?: boolean
+  },
+  ctx: z.RefinementCtx
+): void {
+  validateSetupScriptPromptProvider(props, ctx)
+  const isDetectedSave = isSetupScriptDetectedSaveAction(props.action)
+  if (isDetectedSave && props.provider !== 'package-manager') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['provider'],
+      message: 'detected setup save actions require the package-manager provider'
+    })
+  }
+  if (isDetectedSave && props.edited_before_save === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['edited_before_save'],
+      message: 'edited_before_save is required for detected setup save actions'
+    })
+  }
+  if (!isDetectedSave && props.edited_before_save !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['edited_before_save'],
+      message: 'edited_before_save is only valid for detected setup save actions'
+    })
+  }
+}
+
 const setupScriptPromptActionSchema = z
   .object({
     ...setupScriptPromptContextSchema,
-    action: z.enum(['import_completed', 'import_failed', 'configure_clicked', 'dismissed'])
+    action: z.enum([
+      'import_completed',
+      'import_failed',
+      'configure_clicked',
+      'dismissed',
+      ...setupScriptDetectedSaveActions
+    ]),
+    edited_before_save: z.boolean().optional()
   })
   .strict()
-  .superRefine(validateSetupScriptPromptProvider)
+  .superRefine(validateSetupScriptPromptAction)
 
 // Managed-hook installer per-agent label. Distinct from `AGENT_KIND_VALUES`:
 // hook installation only targets the agents in `AGENT_HOOK_TARGETS` and the
@@ -1004,6 +1093,7 @@ const onboardingFeatureSetupTerminalInteractedSchema = z
 // which cannot be unmixed after the fact.
 export const eventSchemas = {
   app_opened: appOpenedSchema,
+  app_starred_orca: appStarredOrcaSchema,
 
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
@@ -1017,6 +1107,7 @@ export const eventSchemas = {
   setup_script_prompt_action: setupScriptPromptActionSchema,
 
   agent_started: agentStartedSchema,
+  agent_prompt_sent: agentPromptSentSchema,
   agent_error: agentErrorSchema,
   agent_hook_install_failed: agentHookInstallFailedSchema,
   agent_hook_unattributed: agentHookUnattributedSchema,
@@ -1025,6 +1116,10 @@ export const eventSchemas = {
 
   telemetry_opted_in: telemetryOptedInSchema,
   telemetry_opted_out: telemetryOptedOutSchema,
+
+  orca_cli_feature_tip_shown: orcaCliFeatureTipShownSchema,
+  orca_cli_feature_tip_setup_clicked: orcaCliFeatureTipSetupClickedSchema,
+  orca_cli_feature_tip_setup_result: orcaCliFeatureTipSetupResultSchema,
 
   feature_wall_opened: featureWallOpenedSchema,
   feature_wall_closed: featureWallClosedSchema,
@@ -1096,6 +1191,7 @@ export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_
 // injection set against silent schema drift.
 type _CohortExtendedRoster =
   | 'app_opened'
+  | 'app_starred_orca'
   | 'repo_added'
   | 'add_repo_setup_step_action'
   | 'add_repo_existing_workspaces_detected'
@@ -1107,7 +1203,11 @@ type _CohortExtendedRoster =
   | 'setup_script_prompt_shown'
   | 'setup_script_prompt_action'
   | 'agent_started'
+  | 'agent_prompt_sent'
   | 'agent_error'
+  | 'orca_cli_feature_tip_shown'
+  | 'orca_cli_feature_tip_setup_clicked'
+  | 'orca_cli_feature_tip_setup_result'
 // Why: `z.object({}).strict()` infers a string index signature, which would
 // make every key appear present. Ignore index-signature-only keys here so
 // strict empty event payloads do not get pulled into keyed telemetry rosters.

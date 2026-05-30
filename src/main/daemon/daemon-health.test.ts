@@ -17,6 +17,7 @@ import type { SubprocessHandle } from './session'
 function createMockSubprocess(): SubprocessHandle {
   return {
     pid: 55555,
+    getForegroundProcess: () => null,
     write() {},
     resize() {},
     kill() {},

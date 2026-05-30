@@ -61,7 +61,7 @@ export function isSafePtySessionId(id: string, userDataPath: string): boolean {
   // from C:\userdata to D:\evil yields "D:\evil", which does NOT start with
   // ".."). Reject any absolute result — a legitimate subpath under
   // userData always produces a relative result on every platform.
-  if (rel === '' || isAbsolute(rel) || rel.startsWith('..') || rel.includes(`..${sep}`)) {
+  if (rel === '' || isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) {
     return false
   }
   return true

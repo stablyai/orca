@@ -52,10 +52,6 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
     }
   }, [])
 
-  useEffect(() => {
-    activeBundleSubmissionIdRef.current = bundle?.bundleSubmissionId ?? null
-  }, [bundle])
-
   const handleOpenFolder = useCallback(async (): Promise<void> => {
     try {
       await window.api.diagnostics.openTraceFolder()
@@ -91,6 +87,9 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
         await window.api.diagnostics.discardBundlePreview(nextBundle.bundleSubmissionId)
         return
       }
+      // Why: unmount cleanup may run before a passive ref mirror would fire;
+      // keep the retained preview id in sync at the creation/clear sites.
+      activeBundleSubmissionIdRef.current = nextBundle.bundleSubmissionId
       setBundle(nextBundle)
       setPreviewOpened(false)
       setTicketId(null)

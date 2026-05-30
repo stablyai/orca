@@ -33,6 +33,8 @@ export class RemoteRuntimeClientError extends Error {
   }
 }
 
+function ignoreSettledRemoteRuntimeSocketError(): void {}
+
 export type RemoteRuntimeSubscription = {
   requestId: string
   close: () => void
@@ -61,6 +63,22 @@ export async function sendRemoteRuntimeRequest<TResult>(
     let settled = false
     let ws: WebSocket | null = null
 
+    const cleanupSocketListeners = (): void => {
+      const socket = ws
+      if (!socket) {
+        return
+      }
+      socket.off('open', onOpen)
+      socket.off('error', onError)
+      socket.off('close', onClose)
+      socket.off('message', onMessage)
+      // Why: the settled one-shot no longer needs Orca callbacks, but a ws
+      // can still report a late transport error after close is requested.
+      if (socket.readyState !== WebSocket.CLOSED) {
+        socket.on('error', ignoreSettledRemoteRuntimeSocketError)
+      }
+    }
+
     const timeout = setTimeout(() => {
       finish({
         ok: false,
@@ -80,6 +98,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
       settled = true
       clearTimeout(timeout)
       try {
+        cleanupSocketListeners()
         ws?.close()
       } catch {
         // ignore best-effort close
@@ -105,16 +124,16 @@ export async function sendRemoteRuntimeRequest<TResult>(
       return
     }
 
-    ws.once('open', () => {
+    function onOpen(): void {
       ws?.send(
         JSON.stringify({
           type: 'e2ee_hello',
           publicKeyB64: publicKeyToBase64(keyPair.publicKey)
         })
       )
-    })
+    }
 
-    ws.once('error', () => {
+    function onError(): void {
       finish({
         ok: false,
         error: new RemoteRuntimeClientError(
@@ -122,9 +141,9 @@ export async function sendRemoteRuntimeRequest<TResult>(
           'Could not connect to the remote Orca runtime.'
         )
       })
-    })
+    }
 
-    ws.on('close', () => {
+    function onClose(): void {
       if (!settled) {
         finish({
           ok: false,
@@ -134,9 +153,9 @@ export async function sendRemoteRuntimeRequest<TResult>(
           )
         })
       }
-    })
+    }
 
-    ws.on('message', (data, isBinary) => {
+    function onMessage(data: WebSocket.RawData, isBinary: boolean): void {
       if (settled) {
         return
       }
@@ -175,7 +194,12 @@ export async function sendRemoteRuntimeRequest<TResult>(
       }
 
       handleRpcFrame(plaintext)
-    })
+    }
+
+    ws.once('open', onOpen)
+    ws.once('error', onError)
+    ws.on('close', onClose)
+    ws.on('message', onMessage)
 
     function handleReadyFrame(frame: string): void {
       let ready: unknown
@@ -317,6 +341,33 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     let settled = false
     let ws: WebSocket | null = null
 
+    const cleanupSocketListeners = (): WebSocket | null => {
+      const socket = ws
+      if (!socket) {
+        return null
+      }
+      socket.off('open', onOpen)
+      socket.off('error', onError)
+      socket.off('close', onClose)
+      socket.off('message', onMessage)
+      ws = null
+      // Why: startup failures detach Orca callbacks before closing the ws,
+      // but ws can still emit a late transport error while close is in flight.
+      if (socket.readyState !== WebSocket.CLOSED) {
+        socket.on('error', ignoreSettledRemoteRuntimeSocketError)
+      }
+      return socket
+    }
+
+    const closeSocketAfterCleanup = (): void => {
+      const socket = cleanupSocketListeners()
+      try {
+        socket?.close()
+      } catch {
+        // ignore best-effort close
+      }
+    }
+
     const timeout = setTimeout(() => {
       fail(
         new RemoteRuntimeClientError(
@@ -355,7 +406,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       if (!settled) {
         settled = true
         clearTimeout(timeout)
-        close()
+        closeSocketAfterCleanup()
         reject(error)
         return
       }
@@ -370,27 +421,29 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       return
     }
 
-    ws.once('open', () => {
+    function onOpen(): void {
       ws?.send(
         JSON.stringify({
           type: 'e2ee_hello',
           publicKeyB64: publicKeyToBase64(keyPair.publicKey)
         })
       )
-    })
+    }
 
-    ws.once('error', () => {
+    function onError(): void {
       fail(
         new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
           'Could not connect to the remote Orca runtime.'
         )
       )
-    })
+    }
 
-    ws.on('close', () => {
+    function onClose(): void {
       clearTimeout(timeout)
+      cleanupSocketListeners()
       if (!settled) {
+        settled = true
         reject(
           new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
@@ -400,9 +453,9 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         return
       }
       callbacks.onClose?.()
-    })
+    }
 
-    ws.on('message', (data, isBinary) => {
+    function onMessage(data: WebSocket.RawData, isBinary: boolean): void {
       if (isBinary) {
         handleBinaryFrame(new Uint8Array(data as Buffer))
         return
@@ -431,7 +484,12 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       }
 
       handleRpcFrame(plaintext)
-    })
+    }
+
+    ws.once('open', onOpen)
+    ws.once('error', onError)
+    ws.on('close', onClose)
+    ws.on('message', onMessage)
 
     function handleReadyFrame(frame: string): void {
       let ready: unknown

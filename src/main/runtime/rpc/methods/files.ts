@@ -4,6 +4,13 @@ import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import { createFileWatchEventBatcher } from './file-watch-event-batcher'
 
 let filesWatchSubscriptionSeq = 0
+const RUNTIME_FILE_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
+
+function isValidRuntimeFileBase64(value: unknown): value is string {
+  return (
+    typeof value === 'string' && value.length % 4 !== 1 && RUNTIME_FILE_BASE64_PATTERN.test(value)
+  )
+}
 
 const WorktreeSelector = z.object({
   worktree: z
@@ -43,6 +50,9 @@ const FileWriteBase64 = FileOpen.extend({
   contentBase64: z
     .unknown()
     .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
+    // Why: Buffer.from(..., 'base64') accepts malformed input by dropping
+    // invalid bytes, which can silently create empty or corrupt uploaded files.
+    .refine(isValidRuntimeFileBase64, 'File content must be base64')
 })
 
 const FileWriteBase64Chunk = FileWriteBase64.extend({

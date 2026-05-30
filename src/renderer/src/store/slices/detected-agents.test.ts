@@ -112,6 +112,71 @@ describe('createDetectedAgentsSlice WSL context', () => {
     expect(refreshAgents).toHaveBeenCalledWith({ wslDistro: 'Debian' })
   })
 
+  it('detects local agents in the default WSL distro when the default Windows shell is WSL', async () => {
+    const store = createTestStore({
+      settings: {
+        terminalWindowsShell: 'wsl.exe'
+      } as AppState['settings'],
+      repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null
+    })
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
+
+    expect(detectAgents).toHaveBeenCalledWith({ wslDefault: true })
+  })
+
+  it('detects local agents in the selected WSL distro when the default Windows shell is WSL', async () => {
+    const store = createTestStore({
+      settings: {
+        terminalWindowsShell: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian'
+      } as AppState['settings'],
+      repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null
+    })
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
+
+    expect(detectAgents).toHaveBeenCalledWith({ wslDistro: 'Debian' })
+  })
+
+  it('detects Windows agents when explicit agent location is Windows', async () => {
+    const store = createTestStore({
+      settings: {
+        terminalWindowsShell: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian',
+        localAgentRuntime: 'host'
+      } as AppState['settings'],
+      repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null
+    })
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
+
+    expect(detectAgents).toHaveBeenCalledWith(undefined)
+  })
+
+  it('detects WSL agents when explicit agent location is WSL', async () => {
+    const store = createTestStore({
+      settings: {
+        terminalWindowsShell: 'powershell.exe',
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Fedora'
+      } as AppState['settings'],
+      repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null
+    })
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
+
+    expect(detectAgents).toHaveBeenCalledWith({ wslDistro: 'Fedora' })
+  })
+
   it('does not keep previous context agents when detection fails after a context switch', async () => {
     detectAgents
       .mockReset()

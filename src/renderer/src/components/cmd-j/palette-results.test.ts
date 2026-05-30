@@ -53,6 +53,16 @@ const actions: CmdJQuickAction[] = [
     run: noopRun
   },
   {
+    id: 'delete-workspace',
+    kind: 'action',
+    title: 'Delete Workspace',
+    description: 'Delete the current workspace.',
+    icon: Globe,
+    verbKeywords: ['delete workspace', 'delete current workspace', 'remove workspace'],
+    isAvailable: available,
+    run: noopRun
+  },
+  {
     id: 'add-quick-command',
     kind: 'action',
     title: 'Add Quick Command',
@@ -65,6 +75,22 @@ const actions: CmdJQuickAction[] = [
 ]
 
 const sections: SettingsNavSection[] = [
+  {
+    id: 'general',
+    title: 'General',
+    description: 'Workspace defaults.',
+    icon: Settings,
+    searchEntries: [
+      {
+        title: 'Orca CLI',
+        description: 'Register or remove the orca shell command.',
+        keywords: ['cli', 'path', 'terminal', 'command', 'shell command'],
+        cmdJKeywords: ['cli', 'path', 'command', 'shell command'],
+        targetSectionId: 'cli'
+      }
+    ],
+    group: 'setup'
+  },
   {
     id: 'terminal',
     title: 'Terminal',
@@ -131,6 +157,8 @@ describe('Cmd+J palette middle-band ranking', () => {
     ['create workspace', 'create-workspace'],
     ['add workspace', 'create-workspace'],
     ['new workspace', 'create-workspace'],
+    ['delete workspace', 'delete-workspace'],
+    ['remove workspace', 'delete-workspace'],
     ['terminal settings', 'settings:terminal'],
     ['browser settings', 'settings:browser'],
     ['ssh', 'settings:ssh'],
@@ -141,9 +169,24 @@ describe('Cmd+J palette middle-band ranking', () => {
     ['terminal', 'settings:terminal'],
     ['browser', 'settings:browser'],
     ['quick commands', 'settings:quick-commands'],
-    ['add quick command', 'add-quick-command']
+    ['add quick command', 'add-quick-command'],
+    ['orca cli', 'settings:general:cli'],
+    ['shell command', 'settings:general:cli']
   ])('ranks %s first', (query, expectedId) => {
     expect(top(query)).toBe(expectedId)
+  })
+
+  it('builds targeted settings rows for Settings subsections', () => {
+    const cliResult = buildCmdJSettingsResults(sections).find(
+      (result) => result.id === 'settings:general:cli'
+    )
+
+    expect(cliResult).toMatchObject({
+      title: 'Orca CLI',
+      description: 'Register or remove the orca shell command.',
+      sectionId: 'general',
+      targetSectionId: 'cli'
+    })
   })
 
   it('does not match settings on one-character or description-only queries', () => {

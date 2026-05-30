@@ -34,6 +34,7 @@ import {
   advertisedBrowserUrlForForwardedRow,
   browserUrlForPortForwardEntry
 } from '@/lib/workspace-port-urls'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   Dialog,
   DialogContent,
@@ -863,6 +864,7 @@ function ForwardedPortRow({
   onOpenInBrowser: () => void
 }): React.JSX.Element {
   const [removing, setRemoving] = useState(false)
+  const mountedRef = useMountedRef()
   const forwardedAddress = addressForPortForwardEntry(entry)
 
   const handleRemove = useCallback(async () => {
@@ -872,8 +874,10 @@ function ForwardedPortRow({
     } catch {
       // broadcast will update state
     }
-    setRemoving(false)
-  }, [entry.id])
+    if (mountedRef.current) {
+      setRemoving(false)
+    }
+  }, [entry.id, mountedRef])
 
   const handleCopy = useCallback(() => {
     void window.api.ui.writeClipboardText(forwardedAddress)

@@ -525,30 +525,53 @@ export function runHook(
     }
 
     return new Promise((resolve) => {
-      execFile(
-        'wsl.exe',
-        ['-d', wslInfo.distro, '--', 'bash', '-c', bashCmd],
-        {
-          timeout: HOOK_TIMEOUT,
-          encoding: 'utf-8',
-          env: { ...process.env, ...wslEnv }
-        },
-        (error, stdout, stderr) => {
-          if (error) {
-            console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, error.message)
-            resolve({
-              success: false,
-              output: `${stdout}\n${stderr}\n${error.message}`.trim()
-            })
-          } else {
-            console.log(`[hooks] ${hookName} hook completed in ${cwd}`)
-            resolve({
-              success: true,
-              output: `${stdout}\n${stderr}`.trim()
-            })
-          }
+      let child: ReturnType<typeof execFile> | null = null
+      let settled = false
+
+      const finish = (error: Error | null, stdout = '', stderr = ''): void => {
+        if (settled) {
+          return
         }
-      )
+        settled = true
+        clearTimeout(timeout)
+        if (error) {
+          console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, error.message)
+          resolve({
+            success: false,
+            output: `${stdout}\n${stderr}\n${error.message}`.trim()
+          })
+        } else {
+          console.log(`[hooks] ${hookName} hook completed in ${cwd}`)
+          resolve({
+            success: true,
+            output: `${stdout}\n${stderr}`.trim()
+          })
+        }
+      }
+
+      // Why: Node's execFile timeout only signals wsl.exe; if no callback
+      // arrives, hook setup/archive must still unblock after HOOK_TIMEOUT.
+      const timeout = setTimeout(() => {
+        child?.kill()
+        finish(new Error(`Hook timed out after ${HOOK_TIMEOUT}ms.`))
+      }, HOOK_TIMEOUT)
+
+      try {
+        child = execFile(
+          'wsl.exe',
+          ['-d', wslInfo.distro, '--', 'bash', '-c', bashCmd],
+          {
+            timeout: HOOK_TIMEOUT,
+            encoding: 'utf-8',
+            env: { ...process.env, ...wslEnv }
+          },
+          (error, stdout, stderr) => {
+            finish(error ?? null, stdout, stderr)
+          }
+        )
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)))
+      }
     })
   }
 

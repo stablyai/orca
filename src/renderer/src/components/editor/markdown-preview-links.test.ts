@@ -48,6 +48,12 @@ describe('getMarkdownPreviewImageSrc', () => {
     )
   })
 
+  it('resolves relative paths for Windows UNC markdown files', () => {
+    expect(
+      getMarkdownPreviewImageSrc('./diagram.png', '\\\\server\\share\\repo\\docs\\README.md')
+    ).toBe('file://server/share/repo/docs/diagram.png')
+  })
+
   it('leaves unsupported schemes unchanged', () => {
     expect(getMarkdownPreviewImageSrc('data:image/png;base64,abc', '/repo/docs/README.md')).toBe(
       'data:image/png;base64,abc'
@@ -107,6 +113,12 @@ describe('resolveImageAbsolutePath', () => {
     )
   })
 
+  it('resolves Windows UNC paths without dropping the server name', () => {
+    expect(
+      resolveImageAbsolutePath('./diagram.png', '\\\\server\\share\\repo\\docs\\README.md')
+    ).toBe('//server/share/repo/docs/diagram.png')
+  })
+
   it('returns null for http URLs', () => {
     expect(resolveImageAbsolutePath('https://example.com/img.png', '/repo/README.md')).toBeNull()
   })
@@ -129,6 +141,18 @@ describe('fileUrlToAbsolutePath', () => {
 
   it('converts windows file URLs to absolute paths', () => {
     expect(fileUrlToAbsolutePath(new URL('file:///C:/repo/docs/README.md'))).toBe(
+      'C:/repo/docs/README.md'
+    )
+  })
+
+  it('converts UNC file URLs to absolute paths with the server name', () => {
+    expect(fileUrlToAbsolutePath(new URL('file://server/share/repo/docs/README.md'))).toBe(
+      '//server/share/repo/docs/README.md'
+    )
+  })
+
+  it('treats localhost file URLs as local paths', () => {
+    expect(fileUrlToAbsolutePath(new URL('file://localhost/C:/repo/docs/README.md'))).toBe(
       'C:/repo/docs/README.md'
     )
   })

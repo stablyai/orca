@@ -26,6 +26,20 @@ function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index])
 }
 
+function appendWorktreeIds(target: string[], ids: readonly string[]): void {
+  // Why: generated workspace fleets can exceed V8's argument limit for
+  // `push(...ids)` while manual ordering still needs the full visible order.
+  for (const id of ids) {
+    target.push(id)
+  }
+}
+
+function insertWorktreeIds(target: string[], index: number, ids: readonly string[]): void {
+  const tail = target.splice(index)
+  appendWorktreeIds(target, ids)
+  appendWorktreeIds(target, tail)
+}
+
 export function expandDraggedWorktreeIdsForVisibleLineage(
   rows: readonly WorktreeDragLineageRow[],
   draggedIds: readonly string[]
@@ -101,7 +115,7 @@ export function moveWorktreeIdsWithinGroup(
   const remaining = groupIds.filter((id) => !draggedSet.has(id))
   const insertAt = Math.max(0, Math.min(remaining.length, boundedDropIndex - removedBeforeDrop))
   const next = remaining.slice()
-  next.splice(insertAt, 0, ...orderedDraggedIds)
+  insertWorktreeIds(next, insertAt, orderedDraggedIds)
   return next
 }
 
@@ -128,7 +142,7 @@ export function buildManualOrderUpdatesForVisibleGroups(args: {
     if (group.key === args.sourceGroupKey && !arraysEqual(ids, group.worktreeIds)) {
       changed = true
     }
-    orderedIds.push(...ids)
+    appendWorktreeIds(orderedIds, ids)
   }
 
   if (!changed) {
@@ -194,10 +208,10 @@ export function buildManualOrderUpdatesForGroupDrop(args: {
         }
       }
       ids = group.worktreeIds.filter((id) => !draggedSet.has(id))
-      ids.splice(
+      insertWorktreeIds(
+        ids,
         Math.max(0, Math.min(ids.length, boundedDropIndex - removedBeforeDrop)),
-        0,
-        ...orderedDraggedIds
+        orderedDraggedIds
       )
     } else {
       ids = group.worktreeIds.filter((id) => !draggedSet.has(id))
@@ -206,7 +220,7 @@ export function buildManualOrderUpdatesForGroupDrop(args: {
     if (!arraysEqual(ids, group.worktreeIds)) {
       changed = true
     }
-    orderedIds.push(...ids)
+    appendWorktreeIds(orderedIds, ids)
   }
 
   if (!changed) {

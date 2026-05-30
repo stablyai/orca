@@ -166,23 +166,25 @@ export function runWorktreeDeleteWithToast(
  * running the delete immediately with toast feedback, or opening the
  * confirmation modal.
  *
- * Why folder-root removal is handled at the call site: disconnecting the
- * folder project branches to a different modal (`confirm-remove-folder`).
- * Keeping that decision adjacent to the caller avoids mixing project removal
- * into what is otherwise a workspace delete confirmation flow.
- *
- * The main-worktree / missing-record guard here is defense-in-depth — the
- * caller is responsible for disabling UI when this is known ahead of time,
- * but we still refuse to act if the record disappeared between render and
- * click (e.g. a concurrent delete or state reset).
+ * The missing-record guard here is defense-in-depth — the caller is
+ * responsible for disabling UI when this is known ahead of time, but we still
+ * refuse to act if the record disappeared between render and click (e.g. a
+ * concurrent delete or state reset).
  */
 export function runWorktreeDelete(worktreeId: string): void {
   const state = useAppStore.getState()
   const target = getWorktreeMapFromState(state).get(worktreeId) ?? null
-  // Guard: main worktrees cannot be deleted, and a missing record means the
-  // worktree was removed out from under us — either way, no-op silently
-  // rather than opening a modal with stale/invalid context.
-  if (!target || target.isMainWorktree) {
+  if (!target) {
+    return
+  }
+  if (target.isMainWorktree) {
+    const repo = state.repos.find((entry) => entry.id === target.repoId)
+    // Why: git refuses to delete the primary checkout, but users can still
+    // remove the owning project from Orca without deleting disk contents.
+    state.openModal('confirm-remove-folder', {
+      repoId: target.repoId,
+      displayName: repo?.displayName ?? target.displayName
+    })
     return
   }
   state.clearWorktreeDeleteState(worktreeId)
