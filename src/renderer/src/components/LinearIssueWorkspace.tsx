@@ -112,6 +112,7 @@ function LinearIssueSubIssueButton({
   const [subIssues, setSubIssues] = useState<LinearIssueChildSummary[]>(issue.subIssues ?? [])
   const [submitting, setSubmitting] = useState(false)
   const [openingSubIssueId, setOpeningSubIssueId] = useState<string | null>(null)
+  const mountedRef = useMountedRef()
 
   useEffect(() => {
     setSubIssues(issue.subIssues ?? [])
@@ -122,18 +123,25 @@ function LinearIssueSubIssueButton({
       setOpeningSubIssueId(subIssue.id)
       try {
         const fullIssue = await fetchLinearIssue(subIssue.id, issue.workspaceId)
+        if (!mountedRef.current) {
+          return
+        }
         if (fullIssue) {
           onOpenIssue(fullIssue)
         } else {
           toast.error('Failed to load sub-issue')
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to load sub-issue')
+        if (mountedRef.current) {
+          toast.error(error instanceof Error ? error.message : 'Failed to load sub-issue')
+        }
       } finally {
-        setOpeningSubIssueId(null)
+        if (mountedRef.current) {
+          setOpeningSubIssueId(null)
+        }
       }
     },
-    [fetchLinearIssue, issue.workspaceId, onOpenIssue]
+    [fetchLinearIssue, issue.workspaceId, mountedRef, onOpenIssue]
   )
 
   const handleCreate = useCallback(async () => {
