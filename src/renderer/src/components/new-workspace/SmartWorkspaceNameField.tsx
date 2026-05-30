@@ -198,6 +198,8 @@ export default function SmartWorkspaceNameField({
   const tabsListRef = useRef<HTMLDivElement | null>(null)
   const repoSlugCacheRef = useRef<Map<string, RepoSlug | null>>(new Map())
   const handledCrossRepoUrlRef = useRef<string | null>(null)
+  const selectedSourceFocusFrameRef = useRef<number | null>(null)
+  const localInputFocusFrameRef = useRef<number | null>(null)
   const [crossRepoPrompt, setCrossRepoPrompt] = useState<{
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
     matchingRepo: RepoOption | null
@@ -237,6 +239,30 @@ export default function SmartWorkspaceNameField({
       }
     },
     [inputRef]
+  )
+
+  const cancelSelectedSourceFocusFrame = useCallback((): void => {
+    if (selectedSourceFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(selectedSourceFocusFrameRef.current)
+    selectedSourceFocusFrameRef.current = null
+  }, [])
+
+  const cancelLocalInputFocusFrame = useCallback((): void => {
+    if (localInputFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(localInputFocusFrameRef.current)
+    localInputFocusFrameRef.current = null
+  }, [])
+
+  useEffect(
+    () => () => {
+      cancelSelectedSourceFocusFrame()
+      cancelLocalInputFocusFrame()
+    },
+    [cancelLocalInputFocusFrame, cancelSelectedSourceFocusFrame]
   )
 
   useEffect(() => {
@@ -308,9 +334,14 @@ export default function SmartWorkspaceNameField({
       setOpen(false)
       // Why: after Enter accepts a PR/issue row, the input unmounts. Keep the
       // keyboard flow on the source field so the next Enter advances to Agent.
-      requestAnimationFrame(() => selectedSourceRef.current?.focus({ preventScroll: true }))
+      cancelSelectedSourceFocusFrame()
+      selectedSourceFocusFrameRef.current = requestAnimationFrame(() => {
+        selectedSourceFocusFrameRef.current = null
+        selectedSourceRef.current?.focus({ preventScroll: true })
+      })
     }
-  }, [selectedSource])
+    return cancelSelectedSourceFocusFrame
+  }, [cancelSelectedSourceFocusFrame, selectedSource])
 
   const normalizedGhQuery = useMemo(
     () => normalizeGitHubLinkQuery(debouncedQuery),
@@ -886,7 +917,11 @@ export default function SmartWorkspaceNameField({
           const nextMode = next as SmartNameMode
           setMode(nextMode)
           setOpen(!disabled && nextMode !== 'text')
-          requestAnimationFrame(() => localInputRef.current?.focus({ preventScroll: true }))
+          cancelLocalInputFocusFrame()
+          localInputFocusFrameRef.current = requestAnimationFrame(() => {
+            localInputFocusFrameRef.current = null
+            localInputRef.current?.focus({ preventScroll: true })
+          })
         }}
         className="gap-0"
       >

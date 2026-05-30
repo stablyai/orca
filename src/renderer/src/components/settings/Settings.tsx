@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import { Info } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
@@ -130,6 +130,15 @@ function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | nu
   container.scrollTo({ top: Math.min(Math.max(0, targetTop - 16), maxScrollTop) })
 }
 
+function cancelPendingSettingsSubsectionScrollFrame(
+  frameRef: MutableRefObject<number | null>
+): void {
+  if (frameRef.current !== null) {
+    cancelAnimationFrame(frameRef.current)
+    frameRef.current = null
+  }
+}
+
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false
@@ -199,6 +208,7 @@ function Settings(): React.JSX.Element {
   const terminalFontsLoadedRef = useRef(false)
   const pendingNavSectionRef = useRef<string | null>(null)
   const pendingScrollTargetRef = useRef<string | null>(null)
+  const pendingSubsectionScrollFrameRef = useRef<number | null>(null)
   const repoHooksRequestSeqRef = useRef(0)
   const repoHooksRuntimeIdentityRef = useRef<string>('local')
   const shortcutsEscapeConfirmUntilRef = useRef(0)
@@ -563,6 +573,10 @@ function Settings(): React.JSX.Element {
   }, [neededRepoIds, repos, runtimeTargetIdentity])
 
   useEffect(() => {
+    return () => cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
+  }, [])
+
+  useEffect(() => {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
 
@@ -595,7 +609,19 @@ function Settings(): React.JSX.Element {
           scrollSubsectionIntoView(scrollTargetId, contentScrollRef.current)
         }
         scrollToSubsection()
-        requestAnimationFrame(scrollToSubsection)
+        cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
+        let completed = false
+        let frameId: number | undefined
+        frameId = requestAnimationFrame(() => {
+          completed = true
+          if (pendingSubsectionScrollFrameRef.current === frameId) {
+            pendingSubsectionScrollFrameRef.current = null
+          }
+          scrollToSubsection()
+        })
+        if (!completed) {
+          pendingSubsectionScrollFrameRef.current = frameId
+        }
       }
       setActiveSectionId(pendingNavSectionId)
       pendingNavSectionRef.current = null

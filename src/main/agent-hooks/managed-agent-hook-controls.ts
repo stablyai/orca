@@ -1,6 +1,7 @@
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { HookInstallAgent } from '../../shared/telemetry-events'
 import type { GlobalSettings } from '../../shared/types'
+import { ampHookService } from '../amp/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
@@ -21,6 +22,7 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['codex', () => codexHookService.install()],
   ['gemini', () => geminiHookService.install()],
   ['antigravity', () => antigravityHookService.install()],
+  ['amp', () => ampHookService.install()],
   ['cursor', () => cursorHookService.install()],
   ['droid', () => droidHookService.install()],
   ['command-code', () => commandCodeHookService.install()],
@@ -34,6 +36,7 @@ const LOCAL_MANAGED_HOOK_REMOVERS: readonly ManagedHookRemover[] = [
   ['codex', () => codexHookService.remove()],
   ['gemini', () => geminiHookService.remove()],
   ['antigravity', () => antigravityHookService.remove()],
+  ['amp', () => ampHookService.remove()],
   ['cursor', () => cursorHookService.remove()],
   ['droid', () => droidHookService.remove()],
   ['command-code', () => commandCodeHookService.remove()],
@@ -47,6 +50,7 @@ const LOCAL_MANAGED_HOOK_STATUS_READERS: readonly ManagedHookStatusReader[] = [
   ['codex', () => codexHookService.getStatus()],
   ['gemini', () => geminiHookService.getStatus()],
   ['antigravity', () => antigravityHookService.getStatus()],
+  ['amp', () => ampHookService.getStatus()],
   ['cursor', () => cursorHookService.getStatus()],
   ['droid', () => droidHookService.getStatus()],
   ['command-code', () => commandCodeHookService.getStatus()],

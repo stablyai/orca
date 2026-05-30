@@ -143,22 +143,44 @@ export function ProjectAddedContent({
     getInitialProjectAddedChoice(hiddenWorktreeCount, primaryBranchName)
   )
   const radioGroupRef = useRef<HTMLDivElement>(null)
+  const radioFocusFrameRef = useRef<number | null>(null)
   const trimmedName = worktreeName.trim()
   const hasHiddenWorktrees = hiddenWorktreeCount > 0
   const normalizedPrimaryBranchName = primaryBranchName.trim()
   const choices = getProjectAddedChoiceOrder(hiddenWorktreeCount, normalizedPrimaryBranchName)
   const selectedChoice = choices.includes(choice) ? choice : (choices[0] ?? 'create')
 
+  const cancelRadioFocusFrame = useCallback((): void => {
+    if (radioFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(radioFocusFrameRef.current)
+    radioFocusFrameRef.current = null
+  }, [])
+
+  const setRadioGroupNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued arrow-key focus is only valid while this radiogroup is mounted.
+      if (!node) {
+        cancelRadioFocusFrame()
+      }
+      radioGroupRef.current = node
+    },
+    [cancelRadioFocusFrame]
+  )
+
   const cycleChoice = useCallback(() => {
     const index = choices.indexOf(selectedChoice)
     const nextChoice = choices[(index + 1) % choices.length] ?? 'create'
     setChoice(nextChoice)
-    requestAnimationFrame(() => {
+    cancelRadioFocusFrame()
+    radioFocusFrameRef.current = requestAnimationFrame(() => {
+      radioFocusFrameRef.current = null
       radioGroupRef.current
         ?.querySelector<HTMLButtonElement>(`[data-choice="${nextChoice}"]`)
         ?.focus()
     })
-  }, [choices, selectedChoice])
+  }, [cancelRadioFocusFrame, choices, selectedChoice])
 
   const handlePrimaryAction = (): void => {
     if (selectedChoice === 'primary') {
@@ -185,7 +207,7 @@ export function ProjectAddedContent({
       <div className="space-y-3 pt-1">
         {choices.length > 1 ? (
           <div
-            ref={radioGroupRef}
+            ref={setRadioGroupNode}
             role="radiogroup"
             aria-label="How to start working"
             className="space-y-2"

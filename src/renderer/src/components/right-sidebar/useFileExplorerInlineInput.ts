@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -40,6 +40,25 @@ export function useFileExplorerInlineInput({
   const toggleDir = useAppStore((s) => s.toggleDir)
   const openFile = useAppStore((s) => s.openFile)
   const [inlineInput, setInlineInput] = useState<InlineInput | null>(null)
+  const scrollFocusFrameRef = useRef<number | null>(null)
+
+  const cancelScrollFocusFrame = useCallback((): void => {
+    if (scrollFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(scrollFocusFrameRef.current)
+    scrollFocusFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelScrollFocusFrame, [cancelScrollFocusFrame])
+
+  const scheduleScrollFocus = useCallback((): void => {
+    cancelScrollFocusFrame()
+    scrollFocusFrameRef.current = requestAnimationFrame(() => {
+      scrollFocusFrameRef.current = null
+      scrollRef.current?.focus()
+    })
+  }, [cancelScrollFocusFrame, scrollRef])
 
   const inlineInputIndex = useMemo(() => {
     if (!inlineInput || inlineInput.type === 'rename') {
@@ -94,8 +113,8 @@ export function useFileExplorerInlineInput({
 
   const dismissInlineInput = useCallback(() => {
     setInlineInput(null)
-    requestAnimationFrame(() => scrollRef.current?.focus())
-  }, [scrollRef])
+    scheduleScrollFocus()
+  }, [scheduleScrollFocus])
 
   const handleInlineSubmit = useCallback(
     (value: string) => {
@@ -176,9 +195,9 @@ export function useFileExplorerInlineInput({
       }
       void run()
       setInlineInput(null)
-      requestAnimationFrame(() => scrollRef.current?.focus())
+      scheduleScrollFocus()
     },
-    [inlineInput, activeWorktreeId, worktreePath, refreshDir, openFile, scrollRef]
+    [inlineInput, activeWorktreeId, worktreePath, refreshDir, openFile, scheduleScrollFocus]
   )
 
   return {

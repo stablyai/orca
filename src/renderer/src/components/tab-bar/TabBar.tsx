@@ -171,6 +171,9 @@ function TabBarInner({
   const defaultWindowsPowerShellImplementation = useAppStore(
     (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
   )
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId?.trim() || null
+  )
   const unifiedNewTabLauncherEnabled = useAppStore(
     (s) => s.settings?.experimentalUnifiedNewTabLauncher === true
   )
@@ -199,7 +202,34 @@ function TabBarInner({
       ),
     [agentCmdOverrides, defaultAgent, detectedIds]
   )
-  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(isWindows)
+  const [runtimeHostPlatform, setRuntimeHostPlatform] = useState<NodeJS.Platform | null>(null)
+  useEffect(() => {
+    if (
+      !(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ ||
+      !activeRuntimeEnvironmentId
+    ) {
+      setRuntimeHostPlatform(null)
+      return
+    }
+    let cancelled = false
+    void window.api.runtime
+      .getStatus()
+      .then((status) => {
+        if (!cancelled) {
+          setRuntimeHostPlatform(status.hostPlatform ?? null)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRuntimeHostPlatform(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeRuntimeEnvironmentId])
+  const shouldShowWindowsShellMenu = isWindows || runtimeHostPlatform === 'win32'
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(shouldShowWindowsShellMenu)
   const resolvedGroupId = groupId ?? worktreeId
   const acceptsTerminal = !groupKind || groupKind === 'mixed' || groupKind === 'terminal'
   const acceptsBrowser = !groupKind || groupKind === 'mixed' || groupKind === 'browser'
@@ -628,7 +658,7 @@ function TabBarInner({
            *  "New Terminal" item so a browser-locked group hides every
            *  terminal entry.
            */}
-          {acceptsTerminal && isWindows && onNewTerminalWithShell ? (
+          {acceptsTerminal && shouldShowWindowsShellMenu && onNewTerminalWithShell ? (
             // Why: previously the Windows path nested shell choices under a
             // Radix submenu. In practice the submenu frequently failed to open
             // on hover/click, and even when it worked the two-step expansion
