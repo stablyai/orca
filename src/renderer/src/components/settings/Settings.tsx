@@ -13,6 +13,7 @@ import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConst
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { GeneralPane } from './GeneralPane'
 import { BrowserPane } from './BrowserPane'
+import { BrowserPermissionsPane } from './BrowserPermissionsPane'
 import { AppearancePane } from './AppearancePane'
 import { InputPane } from './InputPane'
 import { ShortcutsPane } from './ShortcutsPane'
@@ -983,11 +984,17 @@ function Settings(): React.JSX.Element {
                     searchEntries={getSectionSearchEntries('browser')}
                   >
                     {isSectionMounted('browser') ? (
-                      <BrowserPane
-                        settings={settings}
-                        updateSettings={updateSettings}
-                        onOpenComputerUse={openComputerUseFromBrowser}
-                      />
+                      <div className="space-y-6">
+                        <BrowserPane
+                          settings={settings}
+                          updateSettings={updateSettings}
+                          onOpenComputerUse={openComputerUseFromBrowser}
+                        />
+                        <BrowserPermissionsPane
+                          settings={settings}
+                          updateSettings={updateSettings}
+                        />
+                      </div>
                     ) : null}
                   </SettingsSection>
                 ) : null}

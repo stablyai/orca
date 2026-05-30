@@ -501,6 +501,19 @@ export type BrowserLoadError = {
   validatedUrl: string
 }
 
+export type BrowserInteractionMode = 'agent' | 'human'
+export type BrowserPermissionAction = 'allow' | 'deny' | 'prompt'
+export type BrowserPermissionDefaults = Record<string, BrowserPermissionAction>
+export type BrowserSitePermissionRule = {
+  /** Why: browser profiles map to separate Electron partitions; remembered
+   *  grants must not cross cookie/storage profiles for the same origin. */
+  profileId: string
+  origin: string
+  permission: string
+  action: Exclude<BrowserPermissionAction, 'prompt'>
+}
+export type BrowserPermissionNoticePolicy = 'all' | 'important-only' | 'silent-auto-deny'
+
 // Why: BrowserPage persists the active viewport preset so CDP emulation can be
 // reapplied on reload/navigation without the user re-picking from the toolbar.
 export type BrowserViewportPresetId =
@@ -1801,6 +1814,16 @@ export type GlobalSettings = {
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
+  /** Browser interaction mode controls whether the in-app browser behaves like
+   *  an automation surface ('agent') or a human-driven browser ('human'). */
+  browserInteractionMode: BrowserInteractionMode
+  /** Per-permission overrides layered on top of the mode-derived defaults.
+   *  Keys are Electron permission strings such as `notifications` or `media`. */
+  browserPermissionDefaults: BrowserPermissionDefaults
+  /** Remembered site-specific permission overrides captured from prompt flows. */
+  browserSitePermissionRules: BrowserSitePermissionRule[]
+  /** Controls whether repeated auto-deny notices are shown in the browser UI. */
+  browserPermissionNoticePolicy: BrowserPermissionNoticePolicy
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */

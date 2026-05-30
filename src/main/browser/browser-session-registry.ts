@@ -16,7 +16,17 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
-import type { BrowserSessionProfile, BrowserSessionProfileScope } from '../../shared/types'
+import type {
+  BrowserPermissionAction,
+  BrowserSessionProfile,
+  BrowserSessionProfileScope
+} from '../../shared/types'
+import {
+  normalizePermissionOrigin,
+  resolveBrowserPermissionDecision,
+  shouldNotifyPermissionDenied,
+  type BrowserPermissionSettingsSnapshot
+} from '../../shared/browser-permissions'
 import { browserManager } from './browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'
@@ -30,6 +40,19 @@ type BrowserSessionMeta = {
   profiles: BrowserSessionProfile[]
 }
 
+type BrowserPermissionPromptResult = {
+  action: Exclude<BrowserPermissionAction, 'prompt'>
+}
+
+type BrowserPermissionContext = {
+  getSettings: () => BrowserPermissionSettingsSnapshot
+  promptPermission: (args: {
+    origin: string
+    permission: string
+    profileId: string
+  }) => Promise<BrowserPermissionPromptResult>
+}
+
 // Why: the registry is the single source of truth for which Electron partitions
 // are valid. will-attach-webview consults it to decide whether a guest's
 // requested partition is allowed. This prevents a compromised renderer from
@@ -37,6 +60,7 @@ type BrowserSessionMeta = {
 
 class BrowserSessionRegistry {
   private readonly profiles = new Map<string, BrowserSessionProfile>()
+  private permissionContext: BrowserPermissionContext | null = null
 
   constructor() {
     const persisted = this.loadPersistedSource()
@@ -294,6 +318,28 @@ class BrowserSessionRegistry {
     return [...this.profiles.values()]
   }
 
+  private getProfileIdForPartition(partition: string): string | null {
+    if (partition === ORCA_BROWSER_PARTITION) {
+      return 'default'
+    }
+    return (
+      [...this.profiles.values()].find((profile) => profile.partition === partition)?.id ?? null
+    )
+  }
+
+  setPermissionContext(context: BrowserPermissionContext | null): void {
+    this.permissionContext = context
+  }
+
+  applyPermissionPolicies(partition: string): void {
+    this.setupSessionPolicies(partition)
+  }
+
+  resetPermissionPolicyForTests(): void {
+    this.permissionContext = null
+    this.configuredPartitions.clear()
+  }
+
   isAllowedPartition(partition: string): boolean {
     if (partition === ORCA_BROWSER_PARTITION) {
       return true
@@ -471,58 +517,74 @@ class BrowserSessionRegistry {
       sess.setUserAgent(cleanUA)
       setupClientHintsOverride(sess, cleanUA)
     }
-    // Why: clipboard-read and clipboard-sanitized-write are required for agent-browser's
-    // clipboard commands to work. Without these, navigator.clipboard.writeText/readText
-    // throws NotAllowedError even when invoked via CDP with userGesture:true.
-    const autoGranted = new Set(['fullscreen', 'clipboard-read', 'clipboard-sanitized-write'])
     sess.setPermissionRequestHandler((webContents, permission, callback, details) => {
-      // Why: `media` (camera/mic) must defer to macOS TCC instead of being
-      // denied outright. Denying at the session layer would make pages inside
-      // isolated browser profiles throw NotAllowedError even after the user
-      // granted Camera/Microphone to Orca — the same bug we fixed for the
-      // default partition. macOS TCC still gates the actual stream, so
-      // granting here only forwards what the OS has already authorized.
-      if (permission === 'media') {
-        void requestSystemMediaAccess(
-          details as Electron.MediaAccessPermissionRequest | undefined
-        ).then(
-          (granted) => {
-            if (!granted) {
-              browserManager.notifyPermissionDenied({
-                guestWebContentsId: webContents.id,
-                permission,
-                rawUrl: webContents.getURL()
-              })
-            }
-            callback(granted)
-          },
-          (error: unknown) => {
-            console.error('[permissions] Browser media access failed:', error)
-            browserManager.notifyPermissionDenied({
-              guestWebContentsId: webContents.id,
-              permission,
-              rawUrl: webContents.getURL()
-            })
-            callback(false)
-          }
-        )
+      const settings = this.permissionContext?.getSettings() ?? {
+        browserInteractionMode: 'agent',
+        browserPermissionDefaults: {},
+        browserSitePermissionRules: [],
+        browserPermissionNoticePolicy: 'important-only'
+      }
+      const profileId = this.getProfileIdForPartition(partition)
+      if (!profileId) {
+        callback(false)
         return
       }
-      const allowed = autoGranted.has(permission)
-      if (!allowed) {
-        browserManager.notifyPermissionDenied({
-          guestWebContentsId: webContents.id,
-          permission,
-          rawUrl: webContents.getURL()
-        })
+      const origin = this.getPermissionRequestUrl(webContents, details)
+      const decision = resolveBrowserPermissionDecision({ origin, permission, profileId, settings })
+      if (decision === 'prompt') {
+        const prompt = this.permissionContext?.promptPermission
+        if (!prompt) {
+          callback(false)
+          return
+        }
+        const promptOrigin = normalizePermissionOrigin(origin) ?? origin
+        void prompt({ origin: promptOrigin, permission, profileId })
+          .then((result) =>
+            this.resolvePermissionOutcome(
+              webContents,
+              permission,
+              result.action,
+              settings,
+              details as Electron.MediaAccessPermissionRequest | undefined,
+              callback
+            )
+          )
+          .catch(() => callback(false))
+        return
       }
-      callback(allowed)
+      void this.resolvePermissionOutcome(
+        webContents,
+        permission,
+        decision,
+        settings,
+        details as Electron.MediaAccessPermissionRequest | undefined,
+        callback
+      )
     })
     sess.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
+      const settings = this.permissionContext?.getSettings() ?? {
+        browserInteractionMode: 'agent',
+        browserPermissionDefaults: {},
+        browserSitePermissionRules: [],
+        browserPermissionNoticePolicy: 'important-only'
+      }
+      const profileId = this.getProfileIdForPartition(partition)
+      if (!profileId) {
+        return false
+      }
+      const decision = resolveBrowserPermissionDecision({
+        origin: _origin ?? '',
+        permission,
+        profileId,
+        settings
+      })
+      if (decision !== 'allow') {
+        return false
+      }
       if (permission === 'media') {
         return hasSystemMediaAccess(details?.mediaType)
       }
-      return autoGranted.has(permission)
+      return true
     })
     sess.setDisplayMediaRequestHandler((_request, callback) => {
       callback({ video: undefined, audio: undefined })
@@ -540,6 +602,91 @@ class BrowserSessionRegistry {
     sess.setPermissionRequestHandler(null)
     sess.setPermissionCheckHandler(null)
     sess.setDisplayMediaRequestHandler(null)
+  }
+
+  private getPermissionRequestUrl(
+    webContents: Electron.WebContents,
+    details:
+      | Electron.PermissionRequest
+      | Electron.FilesystemPermissionRequest
+      | Electron.MediaAccessPermissionRequest
+      | Electron.OpenExternalPermissionRequest
+      | undefined
+  ): string {
+    const requestingUrl =
+      details && 'requestingUrl' in details && typeof details.requestingUrl === 'string'
+        ? details.requestingUrl
+        : null
+    if (requestingUrl) {
+      return requestingUrl
+    }
+    try {
+      return webContents.isDestroyed() ? '' : webContents.getURL()
+    } catch {
+      return ''
+    }
+  }
+
+  private notifyPermissionDenied(
+    webContents: Electron.WebContents,
+    permission: string,
+    settings: BrowserPermissionSettingsSnapshot
+  ): void {
+    if (!shouldNotifyPermissionDenied(permission, settings.browserPermissionNoticePolicy)) {
+      return
+    }
+    if (webContents.isDestroyed()) {
+      return
+    }
+    try {
+      browserManager.notifyPermissionDenied({
+        guestWebContentsId: webContents.id,
+        permission,
+        rawUrl: webContents.getURL()
+      })
+    } catch {
+      // The guest may be torn down between the destroyed check and getURL().
+    }
+  }
+
+  private async resolvePermissionOutcome(
+    webContents: Electron.WebContents,
+    permission: string,
+    decision: Exclude<BrowserPermissionAction, 'prompt'>,
+    settings: BrowserPermissionSettingsSnapshot,
+    details: Electron.MediaAccessPermissionRequest | undefined,
+    callback: (allowed: boolean) => void
+  ): Promise<void> {
+    if (webContents.isDestroyed()) {
+      callback(false)
+      return
+    }
+    if (decision === 'deny') {
+      this.notifyPermissionDenied(webContents, permission, settings)
+      callback(false)
+      return
+    }
+
+    if (permission === 'media') {
+      try {
+        const granted = await requestSystemMediaAccess(details)
+        if (webContents.isDestroyed()) {
+          callback(false)
+          return
+        }
+        if (!granted) {
+          this.notifyPermissionDenied(webContents, permission, settings)
+        }
+        callback(granted)
+      } catch (error: unknown) {
+        console.error('[permissions] Browser media access failed:', error)
+        this.notifyPermissionDenied(webContents, permission, settings)
+        callback(false)
+      }
+      return
+    }
+
+    callback(true)
   }
 }
 

@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  dialogShowMessageBoxMock,
   onMock,
   removeAllListenersMock,
   setPermissionRequestHandlerMock,
@@ -20,6 +21,7 @@ const {
   browserManagerNotifyPermissionDeniedMock,
   browserManagerHandleGuestWillDownloadMock
 } = vi.hoisted(() => ({
+  dialogShowMessageBoxMock: vi.fn(),
   onMock: vi.fn(),
   removeAllListenersMock: vi.fn(),
   setPermissionRequestHandlerMock: vi.fn(),
@@ -42,6 +44,9 @@ const {
 vi.mock('electron', () => ({
   app: {},
   clipboard: {},
+  dialog: {
+    showMessageBox: dialogShowMessageBoxMock
+  },
   session: {
     fromPartition: sessionFromPartitionMock
   },
@@ -91,6 +96,7 @@ vi.mock('../updater', () => ({
 }))
 
 import { attachMainWindowServices } from './attach-main-window-services'
+import { browserSessionRegistry } from '../browser/browser-session-registry'
 
 type MockFn = ReturnType<typeof vi.fn>
 
@@ -136,7 +142,26 @@ function createMainWindow(extraWebContents: { on?: MockFn; send?: MockFn } = {})
 }
 
 function createStore(): never {
-  return { flush: vi.fn() } as never
+  let settings = {
+    browserInteractionMode: 'agent',
+    browserPermissionDefaults: {},
+    browserSitePermissionRules: [],
+    browserPermissionNoticePolicy: 'important-only'
+  }
+  return {
+    flush: vi.fn(),
+    getSettings: vi.fn(() => settings),
+    updateSettings: vi.fn((updates: Record<string, unknown>) => {
+      settings = { ...settings, ...updates }
+      return settings
+    }),
+    getUI: vi.fn(() => ({
+      lastUpdateCheckAt: null,
+      pendingUpdateNudgeId: null,
+      dismissedUpdateNudgeId: null
+    })),
+    updateUI: vi.fn()
+  } as never
 }
 
 function createRuntime(): RuntimeStub {
@@ -150,6 +175,7 @@ function createRuntime(): RuntimeStub {
 
 describe('attachMainWindowServices', () => {
   beforeEach(() => {
+    browserSessionRegistry.resetPermissionPolicyForTests()
     onMock.mockReset()
     removeAllListenersMock.mockReset()
     handleMock.mockReset()
@@ -167,6 +193,7 @@ describe('attachMainWindowServices', () => {
     browserManagerUnregisterAllMock.mockReset()
     browserManagerNotifyPermissionDeniedMock.mockReset()
     browserManagerHandleGuestWillDownloadMock.mockReset()
+    dialogShowMessageBoxMock.mockReset()
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
@@ -334,7 +361,11 @@ describe('attachMainWindowServices', () => {
       details?: unknown
     ) => void
     const cb = vi.fn()
-    const guestWc = { id: 401, getURL: vi.fn(() => 'https://example.com/account') }
+    const guestWc = {
+      id: 401,
+      isDestroyed: vi.fn(() => false),
+      getURL: vi.fn(() => 'https://example.com/account')
+    }
     browserPermissionHandler(guestWc, 'fullscreen', cb)
     browserPermissionHandler(guestWc, 'notifications', cb)
     // Why: `media` routes through macOS TCC instead of being denied outright,
@@ -357,7 +388,9 @@ describe('attachMainWindowServices', () => {
     ) => boolean
     expect(browserCheckHandler(null, 'fullscreen', '')).toBe(true)
     expect(browserCheckHandler(null, 'notifications', '')).toBe(false)
-    expect(browserCheckHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
+    expect(browserCheckHandler(null, 'media', 'https://example.com', { mediaType: 'video' })).toBe(
+      true
+    )
 
     const displayMediaHandler = setDisplayMediaRequestHandlerMock.mock.calls[0][0]
     const displayCb = vi.fn()
@@ -380,7 +413,7 @@ describe('attachMainWindowServices', () => {
     })
   })
 
-  it('replaces the persistent browser-session download handler on re-attach', () => {
+  it('does not stack the persistent browser-session download handler on re-attach', () => {
     const browserSessionOnMock = vi.fn()
     const browserSessionRemoveListenerMock = vi.fn()
     sessionFromPartitionMock.mockReturnValue({
@@ -400,9 +433,9 @@ describe('attachMainWindowServices', () => {
     const downloadRemoveCalls = browserSessionRemoveListenerMock.mock.calls.filter(
       ([eventName]) => eventName === 'will-download'
     )
-    expect(downloadOnCalls).toHaveLength(2)
-    expect(downloadRemoveCalls).toHaveLength(2)
-    expect(downloadRemoveCalls[1][1]).toBe(downloadOnCalls[0][1])
+    expect(downloadOnCalls).toHaveLength(1)
+    expect(downloadRemoveCalls).toHaveLength(1)
+    expect(downloadRemoveCalls[0][1]).toBe(downloadOnCalls[0][1])
   })
 
   it('clears browser guest registrations when the main window closes', () => {
@@ -425,6 +458,42 @@ describe('attachMainWindowServices', () => {
     expect(closedHandler).toBeTypeOf('function')
     closedHandler?.()
     expect(browserManagerUnregisterAllMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('prompts in human mode and remembers allow decisions for browser tabs', async () => {
+    const store = createStore() as unknown as {
+      updateSettings: (...args: unknown[]) => unknown
+      getSettings: () => Record<string, unknown>
+    }
+    store.updateSettings({ browserInteractionMode: 'human' })
+    dialogShowMessageBoxMock.mockResolvedValue({ response: 2 })
+
+    attachMainWindowServices(createMainWindow() as never, store as never, createRuntime() as never)
+
+    const browserPermissionHandler = setPermissionRequestHandlerMock.mock.calls[1][0] as (
+      wc: { id: number; isDestroyed: () => boolean; getURL: () => string },
+      permission: string,
+      callback: (allowed: boolean) => void
+    ) => void
+    const callback = vi.fn()
+    browserPermissionHandler(
+      { id: 401, isDestroyed: () => false, getURL: () => 'https://app.slack.com/client' },
+      'notifications',
+      callback
+    )
+
+    await vi.waitFor(() => expect(callback).toHaveBeenCalledWith(true))
+    expect(dialogShowMessageBoxMock).toHaveBeenCalled()
+    expect(store.updateSettings).toHaveBeenCalledWith({
+      browserSitePermissionRules: [
+        {
+          profileId: 'default',
+          origin: 'https://app.slack.com',
+          permission: 'notifications',
+          action: 'allow'
+        }
+      ]
+    })
   })
 
   it('forwards runtime notifier events to the renderer', () => {

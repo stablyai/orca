@@ -31,6 +31,7 @@ import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 
 describe('BrowserSessionRegistry', () => {
   beforeEach(() => {
+    browserSessionRegistry.resetPermissionPolicyForTests()
     sessionFromPartitionMock.mockReset()
     askForMediaAccessMock.mockReset()
     getMediaAccessStatusMock.mockReset()
@@ -198,12 +199,52 @@ describe('BrowserSessionRegistry', () => {
     const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
 
     const cb = vi.fn()
-    const guestWc = { id: 7, getURL: vi.fn(() => 'https://example.com/') }
+    const guestWc = {
+      id: 7,
+      isDestroyed: vi.fn(() => false),
+      getURL: vi.fn(() => 'https://example.com/')
+    }
     requestHandler(guestWc, 'media', cb, { mediaTypes: ['video'] })
     await vi.waitFor(() => expect(cb).toHaveBeenCalledWith(true))
 
-    expect(checkHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
+    expect(checkHandler(null, 'media', 'https://example.com', { mediaType: 'video' })).toBe(true)
     expect(checkHandler(null, 'notifications', '', {})).toBe(false)
+  })
+
+  it('applies remembered permission rules only to the matching browser profile', async () => {
+    const profile = browserSessionRegistry.createProfile('isolated', 'Scoped Permissions')
+    expect(profile).not.toBeNull()
+    browserSessionRegistry.setPermissionContext({
+      getSettings: () => ({
+        browserInteractionMode: 'agent',
+        browserPermissionDefaults: {},
+        browserSitePermissionRules: [
+          {
+            profileId: profile!.id,
+            origin: 'https://example.com',
+            permission: 'notifications',
+            action: 'allow'
+          }
+        ],
+        browserPermissionNoticePolicy: 'important-only'
+      }),
+      promptPermission: vi.fn(async () => ({ action: 'deny' as const }))
+    })
+
+    const mockSession = sessionFromPartitionMock.mock.results[0]?.value
+    const requestHandler = mockSession.setPermissionRequestHandler.mock.calls[0][0]
+    const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
+    const cb = vi.fn()
+    const guestWc = {
+      id: 8,
+      isDestroyed: vi.fn(() => false),
+      getURL: vi.fn(() => 'https://example.com/settings')
+    }
+
+    requestHandler(guestWc, 'notifications', cb)
+    await vi.waitFor(() => expect(cb).toHaveBeenCalledWith(true))
+    expect(checkHandler(null, 'notifications', 'https://example.com', {})).toBe(true)
+    expect(checkHandler(null, 'notifications', 'https://other.example', {})).toBe(false)
   })
 
   describe('setupClientHintsOverride', () => {
