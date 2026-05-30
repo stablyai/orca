@@ -76,6 +76,7 @@
   );
   --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
   --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
+  --color-ai-action-accent: var(--ai-action-accent);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -124,6 +125,7 @@
   --input: #e5e5e5;
   --ring: #a1a1a1;
   --terminal-pane-locate: var(--color-blue-600);
+  --ai-action-accent: var(--color-violet-500);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -193,6 +195,7 @@
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
   --terminal-pane-locate: var(--color-blue-400);
+  --ai-action-accent: var(--color-violet-400);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -831,18 +834,18 @@
 
 .worktree-agent-send-target-button {
   /* Why: the row remains an ordinary agent row during send-target mode; the
-     action itself carries the blue target outline so the clickable affordance
+     action itself carries the AI target outline so the clickable affordance
      is explicit without boxing the whole session. */
-  border-color: color-mix(in srgb, var(--terminal-pane-locate) 72%, transparent);
-  background: color-mix(in srgb, var(--terminal-pane-locate) 12%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--terminal-pane-locate) 22%, transparent);
+  border-color: color-mix(in srgb, var(--ai-action-accent) 72%, transparent);
+  background: color-mix(in srgb, var(--ai-action-accent) 12%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ai-action-accent) 22%, transparent);
   color: var(--foreground);
 }
 
 .worktree-agent-send-target-button:hover {
-  border-color: color-mix(in srgb, var(--terminal-pane-locate) 88%, transparent);
-  background: color-mix(in srgb, var(--terminal-pane-locate) 18%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent);
+  border-color: color-mix(in srgb, var(--ai-action-accent) 88%, transparent);
+  background: color-mix(in srgb, var(--ai-action-accent) 18%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ai-action-accent) 34%, transparent);
 }
 
 .worktree-agent-send-target-button:focus-visible {
@@ -868,6 +871,13 @@
     0 0 0 1px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent),
     0 0 14px color-mix(in srgb, var(--terminal-pane-locate) 36%, transparent);
   animation: scroll-to-current-workspace-reveal-glow 1.5s ease-out forwards;
+}
+
+.scroll-to-current-workspace-reveal-highlight--ai::before {
+  border-color: color-mix(in srgb, var(--ai-action-accent) 68%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ai-action-accent) 34%, transparent),
+    0 0 14px color-mix(in srgb, var(--ai-action-accent) 36%, transparent);
 }
 
 @keyframes scroll-to-current-workspace-reveal-glow {

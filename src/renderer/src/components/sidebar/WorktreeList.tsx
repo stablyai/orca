@@ -2594,6 +2594,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               const paddingLeft = basePadding + paddingDepth * LINEAGE_INDENT
               const worktreeDragGroupKey = groupKeyByWorktreeId.get(itemRow.worktree.id)
               const worktreeDragGroupIndex = groupIndexByWorktreeId.get(itemRow.worktree.id)
+              const revealHighlightTone =
+                agentSendTargetWorktreeId === itemRow.worktree.id ? 'ai' : 'default'
               return (
                 <div
                   key={itemRow.worktree.id}
@@ -2637,6 +2639,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     isActiveSurface={forceActiveSurface || activeWorktreeId === itemRow.worktree.id}
                     isMultiSelected={selectedWorktreeIds.has(itemRow.worktree.id)}
                     revealHighlight={highlightedRevealWorktreeId === itemRow.worktree.id}
+                    revealHighlightTone={revealHighlightTone}
                     selectedWorktrees={selectedWorktrees}
                     nativeDragEnabled={false}
                     onSelectionGesture={onSelectionGesture}
@@ -2663,6 +2666,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
             const renderLineageChildCard = (child: WorktreeItemRow) => {
               const isActive = activeWorktreeId === child.worktree.id
+              const revealHighlightTone =
+                agentSendTargetWorktreeId === child.worktree.id ? 'ai' : 'default'
               const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
                 event.preventDefault()
                 event.stopPropagation()
@@ -2698,8 +2703,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       aria-current={isActive ? 'page' : undefined}
                       className={cn(
                         'relative flex cursor-pointer items-start gap-1.5 rounded-md border border-transparent px-2 py-1.5 transition-colors',
-                        highlightedRevealWorktreeId === child.worktree.id &&
+                        highlightedRevealWorktreeId === child.worktree.id && [
                           'scroll-to-current-workspace-reveal-highlight',
+                          revealHighlightTone === 'ai' &&
+                            'scroll-to-current-workspace-reveal-highlight--ai'
+                        ],
                         isActive
                           ? 'border-black/[0.015] bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-border/40 dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
                           : 'worktree-sidebar-card-hover'
