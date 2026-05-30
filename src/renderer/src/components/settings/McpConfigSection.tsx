@@ -212,10 +212,6 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     }
   }, [connectionId, isWindows, missingInspections, sshConnectionStatus, targetRootPath])
 
-  useEffect(() => {
-    void loadConfigs()
-  }, [loadConfigs])
-
   const clearCreateConfirmResetTimer = useCallback((): void => {
     if (createConfirmResetTimerRef.current !== null) {
       window.clearTimeout(createConfirmResetTimerRef.current)
@@ -223,7 +219,10 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     }
   }, [])
 
-  useEffect(() => clearCreateConfirmResetTimer, [clearCreateConfirmResetTimer])
+  useEffect(() => {
+    void loadConfigs()
+    return clearCreateConfirmResetTimer
+  }, [clearCreateConfirmResetTimer, loadConfigs])
 
   const handleOpen = (config: LoadedMcpConfigInspection): void => {
     setActiveWorktree(targetWorktreeId)
