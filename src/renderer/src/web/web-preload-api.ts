@@ -70,6 +70,9 @@ const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
 // Why: browser-paired clients need desktop parity for large dev sessions; the
 // runtime's no-limit default remains capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
+const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = 24 * 1024 * 1024
+export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
+export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
 const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
@@ -1618,14 +1621,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       if (!contentBase64) {
         return null
       }
-      return callRuntimeResult<string>(
-        'clipboard.saveImageAsTempFile',
-        {
-          contentBase64,
-          connectionId: args?.connectionId ?? null
-        },
-        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
-      )
+      return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
     writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
     writeSelectionClipboardText: () =>
@@ -2056,6 +2052,70 @@ async function callRuntimeResult<TResult>(
     throw new Error(response.error.message)
   }
   return response.result as TResult
+}
+
+async function saveClipboardImageAsTempFileInRuntime(
+  contentBase64: string,
+  args?: { connectionId?: string | null }
+): Promise<string> {
+  if (contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
+    throw new Error('Clipboard image is too large')
+  }
+  const connectionId = args?.connectionId ?? null
+  const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(
+    'clipboard.startImageUpload',
+    { expectedBase64Length: contentBase64.length, connectionId },
+    CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+  )
+  if (!startResponse.ok) {
+    if (
+      startResponse.error.code === 'method_not_found' &&
+      contentBase64.length <= CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
+    ) {
+      return callRuntimeResult<string>(
+        'clipboard.saveImageAsTempFile',
+        { contentBase64, connectionId },
+        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+      )
+    }
+    throw new Error(startResponse.error.message)
+  }
+
+  const { uploadId } = startResponse.result
+  try {
+    for (
+      let offset = 0;
+      offset < contentBase64.length;
+      offset += CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+    ) {
+      await callRuntimeResult(
+        'clipboard.appendImageUploadChunk',
+        {
+          uploadId,
+          offset,
+          contentBase64: contentBase64.slice(
+            offset,
+            offset + CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+          )
+        },
+        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+      )
+    }
+    return await callRuntimeResult<string>(
+      'clipboard.commitImageUpload',
+      { uploadId },
+      CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+    )
+  } catch (error) {
+    // Why: once chunked paste has created server-side state, failed append or
+    // commit must not wait for TTL cleanup before releasing the bounded slot.
+    await callRuntimeResult(
+      'clipboard.abortImageUpload',
+      { uploadId },
+      CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+    ).catch(() => {})
+    throw error
+  }
 }
 
 async function getRemoteRuntimeStatus(): Promise<RuntimeStatus> {
