@@ -485,7 +485,7 @@ function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High
 }
 
 // Why: these runtime feature tests only need message-queue semantics; using
-// SQLite here makes them fail on unrelated better-sqlite3 native ABI drift.
+// SQLite here makes them fail on unrelated native runtime ABI drift.
 class InMemoryOrchestrationMessages {
   private sequence = 0
 

@@ -169,6 +169,12 @@ function waitForNotificationDisplay(notification: Notification): Promise<boolean
   })
 }
 
+function logNativeNotificationFailure(context: string, error?: string): void {
+  console.warn(
+    `[notifications] ${context} notification failed to show${error ? `: ${error}` : '.'}`
+  )
+}
+
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const recentNotifications = new Map<string, number>()
 
@@ -281,12 +287,26 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       // Why: prevent GC from collecting the notification (and its click
       // handler) while it's still visible in macOS Notification Center.
       let clickHandler: (() => void) | null = null
+      let failedHandler: ((_event: unknown, error?: string) => void) | null = null
       const release = retainNotificationUntilRelease(notification, () => {
         if (clickHandler) {
           notification.removeListener('click', clickHandler)
           clickHandler = null
         }
+        if (failedHandler) {
+          notification.removeListener('failed', failedHandler)
+          failedHandler = null
+        }
       })
+
+      failedHandler = (_event, error) => {
+        // Why: Electron 42's macOS UNNotification backend reports unsigned
+        // apps and native delivery errors here; release immediately instead
+        // of retaining a dead notification until the fallback timer.
+        logNativeNotificationFailure(args.source, error)
+        release()
+      }
+      notification.on('failed', failedHandler)
 
       // Why: clicking a notification should bring Orca to the foreground and
       // switch to the worktree/pane that triggered it. Worktree activation owns
@@ -456,6 +476,7 @@ export function triggerStartupNotificationRegistration(store: Store): void {
     activeNotifications.delete(notification)
     notification.removeListener('click', onClick)
     notification.removeListener('show', onShow)
+    notification.removeListener('failed', onFailed)
     notification.close()
   }
 
@@ -478,8 +499,16 @@ export function triggerStartupNotificationRegistration(store: Store): void {
     }
   }
 
+  function onFailed(_event: unknown, error?: string): void {
+    // Why: Electron 42 requires code-signed macOS apps for UNNotification
+    // delivery. Unsigned builds fail here instead of producing the permission UI.
+    logNativeNotificationFailure('startup registration', error)
+    cleanup()
+  }
+
   notification.on('click', onClick)
   notification.on('show', onShow)
+  notification.on('failed', onFailed)
 
   // Fallback in case macOS doesn't fire the 'show' event (e.g. user denies).
   fallbackTimer = setTimeout(cleanup, 10_000)
