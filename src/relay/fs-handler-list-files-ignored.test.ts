@@ -12,6 +12,7 @@ import { EventEmitter } from 'events'
 import type { ChildProcess } from 'child_process'
 import { listFilesWithGit } from './fs-handler-git-fallback'
 import { listFilesWithRg } from './fs-handler-list-files'
+import { searchWithRg } from './fs-handler-utils'
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
@@ -153,6 +154,31 @@ describe('relay quick open ignored file listing', () => {
       expect(outcome).toContain('git ls-files timed out')
       expect(primaryProc.kill).toHaveBeenCalled()
       expect(ignoredProc.kill).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rg search settles and detaches when a timed-out child does not emit close', async () => {
+    vi.useFakeTimers()
+    try {
+      const proc = createMockProcess()
+      spawnMock.mockReturnValue(proc)
+
+      const promise = searchWithRg('/remote/root', 'ok', { maxResults: 100 })
+      const outcomePromise = promise.then((result) =>
+        result.truncated ? `truncated:${result.totalMatches}` : 'not-truncated'
+      )
+
+      await vi.runOnlyPendingTimersAsync()
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toBe('truncated:0')
+      expect(proc.kill).toHaveBeenCalled()
+      expect((proc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((proc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(proc.listenerCount('error')).toBe(0)
+      expect(proc.listenerCount('close')).toBe(0)
     } finally {
       vi.useRealTimers()
     }

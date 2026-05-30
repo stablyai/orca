@@ -116,45 +116,64 @@ export function searchWithRg(
       return
     }
 
-    const resolveOnce = (): void => {
+    let killTimeout: ReturnType<typeof setTimeout>
+
+    function resolveOnce(): void {
       if (resolved) {
         return
       }
       resolved = true
       clearTimeout(killTimeout)
+      // Why: child.kill() is advisory over SSH; detach listeners if the
+      // process ignores timeout kill so old searches cannot retain closures.
+      child.stdout!.off('data', handleStdoutData)
+      child.stderr!.off('data', handleStderrData)
+      child.off('error', handleError)
+      child.off('close', handleClose)
       resolve(finalize(acc))
     }
 
-    const processLine = (line: string): void => {
+    function processLine(line: string): void {
       const verdict = ingestRgJsonLine(line, rootPath, acc, opts.maxResults)
       if (verdict === 'stop') {
         child.kill()
       }
     }
 
-    child.stdout!.setEncoding('utf-8')
-    child.stdout!.on('data', (chunk: string) => {
+    function handleStdoutData(chunk: string): void {
       buffer += chunk
       const lines = buffer.split('\n')
       buffer = lines.pop() ?? ''
       for (const line of lines) {
         processLine(line)
       }
-    })
-    child.stderr!.on('data', () => {
+    }
+
+    function handleStderrData(): void {
       /* drain */
-    })
-    child.once('error', () => resolveOnce())
-    child.once('close', () => {
+    }
+
+    function handleError(): void {
+      resolveOnce()
+    }
+
+    function handleClose(): void {
       if (buffer) {
         processLine(buffer)
       }
       resolveOnce()
-    })
+    }
 
-    const killTimeout = setTimeout(() => {
+    child.stdout!.setEncoding('utf-8')
+    child.stdout!.on('data', handleStdoutData)
+    child.stderr!.on('data', handleStderrData)
+    child.once('error', handleError)
+    child.once('close', handleClose)
+
+    killTimeout = setTimeout(() => {
       acc.truncated = true
       child.kill()
+      resolveOnce()
     }, SEARCH_TIMEOUT_MS)
   })
 }
