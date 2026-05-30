@@ -565,6 +565,41 @@ describe('SshConnection', () => {
       'printf ORCA-SYSTEM-SSH-OK'
     )
   })
+
+  it('removes system SSH probe listeners after timeout', async () => {
+    vi.useFakeTimers()
+    const channel = new EventEmitter() as ReturnType<typeof createSystemCommandChannel>
+    channel.stdin = { end: vi.fn(), write: vi.fn() }
+    channel.stderr = new EventEmitter()
+    channel.close = vi.fn()
+    spawnSystemSshCommandMock.mockReturnValueOnce(channel)
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce({
+      hostname: 'example.com',
+      port: 22,
+      identityFile: [],
+      forwardAgent: false,
+      identitiesOnly: false,
+      proxyUseFdpass: true
+    })
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    try {
+      const connect = expect(conn.connect()).rejects.toThrow('System SSH connection timed out')
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      await connect
+      expect(channel.close).toHaveBeenCalled()
+      expect(channel.listenerCount('data')).toBe(0)
+      expect(channel.listenerCount('error')).toBe(1)
+      expect(channel.listenerCount('close')).toBe(1)
+      expect(channel.stderr.listenerCount('data')).toBe(0)
+      expect(
+        (conn as unknown as { systemCommandChannels: Set<unknown> }).systemCommandChannels.size
+      ).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('shouldUseSystemSshTransport', () => {
