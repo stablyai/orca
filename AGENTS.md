@@ -2,7 +2,7 @@
 
 ## Design System
 
-All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. When STYLEGUIDE.md is silent, follow the resolution order in its final section.
+All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow `[docs/STYLEGUIDE.md](./docs/STYLEGUIDE.md)`. Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. When STYLEGUIDE.md is silent, follow the rewe solution order in its final section.
 
 ## Code Comments: Document the "Why", Briefly
 
@@ -37,6 +37,7 @@ Source-control and review changes must consider GitLab and other supported git p
 ## GitHub CLI Usage
 
 Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.
+
 Never commit PR evidence images; attach them to the PR conversation instead.
 
 ## Type Declarations: Prefer `.ts` Over `.d.ts`

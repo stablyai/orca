@@ -70,9 +70,9 @@ type ZoneEntry = {
 // Why: card chrome (header/meta/border/padding) plus per-line body height. Used
 // in two places — the initial heightInPx estimate and the live resize during
 // inline edit — so keep them in lockstep.
-const ZONE_CHROME_PX = 52
-const ZONE_LINE_PX = 18
-const ZONE_MIN_PX = 72
+const ZONE_CHROME_PX = 68
+const ZONE_LINE_PX = 20
+const ZONE_MIN_PX = 88
 
 function getRenderSignature(comment: DecoratedDiffComment): string {
   return JSON.stringify({
@@ -463,7 +463,6 @@ export function useDiffCommentDecorator({
           body={comment.body}
           sentAt={comment.sentAt}
           author={comment.author}
-          authorAvatarUrl={comment.authorAvatarUrl}
           createdAtLabel={comment.createdAtLabel}
           url={comment.url}
           onDelete={
@@ -524,11 +523,10 @@ export function useDiffCommentDecorator({
         // insertion and does not re-measure the DOM node, so an underestimate
         // lets the card bleed into the following editor line. The constant
         // covers fixed chrome (inline wrapper padding ~10, card border 2, card
-        // padding 12, header+meta ~22, trailing breathing room) and the
-        // per-line factor matches the 12px/1.4 body line-height.
+        // padding 12, header+meta ~24, body margin 2) and the per-line factor
+        // matches the 13.5px/1.5 body line-height.
         const lineCount = c.body.split('\n').length
-        const chromePx = c.author ? ZONE_CHROME_PX + 24 : ZONE_CHROME_PX
-        const heightInPx = Math.max(ZONE_MIN_PX, chromePx + lineCount * ZONE_LINE_PX)
+        const heightInPx = Math.max(ZONE_MIN_PX, ZONE_CHROME_PX + lineCount * ZONE_LINE_PX)
 
         // Why: suppressMouseDown: false so clicks inside the zone (Delete
         // button) reach our DOM listeners. With true, Monaco intercepts the
