@@ -829,6 +829,27 @@
   background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
+.worktree-agent-send-target-button {
+  /* Why: the row remains an ordinary agent row during send-target mode; the
+     action itself carries the blue target outline so the clickable affordance
+     is explicit without boxing the whole session. */
+  border-color: color-mix(in srgb, var(--terminal-pane-locate) 72%, transparent);
+  background: color-mix(in srgb, var(--terminal-pane-locate) 12%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--terminal-pane-locate) 22%, transparent);
+  color: var(--foreground);
+}
+
+.worktree-agent-send-target-button:hover {
+  border-color: color-mix(in srgb, var(--terminal-pane-locate) 88%, transparent);
+  background: color-mix(in srgb, var(--terminal-pane-locate) 18%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent);
+}
+
+.worktree-agent-send-target-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 50%, transparent);
+}
+
 .scroll-to-current-workspace-reveal-highlight {
   position: relative;
   isolation: isolate;

@@ -89,7 +89,7 @@ describe('running agent send targets', () => {
     expect(targets[0]).not.toHaveProperty('disabledReason')
   })
 
-  it('disables working and stale agents', () => {
+  it('allows any visible agent state when the pane has a leaf PTY', () => {
     const workingPaneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
     const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
     const targets = deriveRunningAgentSendTargets(
@@ -121,12 +121,12 @@ describe('running agent send targets', () => {
 
     expect(resolveRunningAgentSendTarget(state(), WORKTREE_ID, 'missing', NOW)).toBeNull()
     expect(targets.find((target) => target.paneKey === workingPaneKey)).toMatchObject({
-      status: 'disabled',
-      disabledReason: 'Agent is working'
+      status: 'eligible',
+      ptyId: 'pty-left'
     })
     expect(targets.find((target) => target.paneKey === stalePaneKey)).toMatchObject({
-      status: 'disabled',
-      disabledReason: 'Agent status is stale'
+      status: 'eligible',
+      ptyId: 'pty-right'
     })
   })
 

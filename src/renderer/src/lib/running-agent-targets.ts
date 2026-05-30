@@ -1,10 +1,5 @@
 import type { AppState } from '@/store/types'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
-  type AgentStatusState
-} from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 
@@ -24,22 +19,9 @@ export type RunningAgentSendTarget = {
   disabledReason?: string
 }
 
-const ELIGIBLE_AGENT_STATES = new Set<AgentStatusState>(['done', 'waiting', 'blocked'])
-
-function disabledReasonForState(state: AgentStatusState): string | null {
-  if (state === 'working') {
-    return 'Agent is working'
-  }
-  if (!ELIGIBLE_AGENT_STATES.has(state)) {
-    return 'Agent is not ready'
-  }
-  return null
-}
-
 export function deriveRunningAgentSendTargets(
   state: RunningAgentTargetState,
-  worktreeId: string,
-  now = Date.now()
+  worktreeId: string
 ): RunningAgentSendTarget[] {
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   if (tabs.length === 0) {
@@ -61,14 +43,9 @@ export function deriveRunningAgentSendTargets(
 
     const ptyId =
       state.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
-    const stateReason = disabledReasonForState(entry.state)
     let disabledReason: string | undefined
 
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-      disabledReason = 'Agent status is stale'
-    } else if (stateReason) {
-      disabledReason = stateReason
-    } else if (!ptyId) {
+    if (!ptyId) {
       disabledReason = 'Terminal is no longer available'
     }
 
@@ -90,10 +67,7 @@ export function deriveRunningAgentSendTargets(
 export function resolveRunningAgentSendTarget(
   state: RunningAgentTargetState,
   worktreeId: string,
-  paneKey: string,
-  now = Date.now()
+  paneKey: string
 ): RunningAgentSendTarget | null {
-  return (
-    deriveRunningAgentSendTargets(state, worktreeId, now).find((t) => t.paneKey === paneKey) ?? null
-  )
+  return deriveRunningAgentSendTargets(state, worktreeId).find((t) => t.paneKey === paneKey) ?? null
 }

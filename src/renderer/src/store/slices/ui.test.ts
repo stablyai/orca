@@ -180,8 +180,8 @@ describe('createUISlice agent send target mode', () => {
 
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
       id: 'send-1',
-      eligiblePaneKeys: [readyPaneKey],
-      disabledPaneKeys: { [workingPaneKey]: 'Agent is working' },
+      eligiblePaneKeys: [readyPaneKey, workingPaneKey],
+      disabledPaneKeys: {},
       status: 'open'
     })
     expect(store.getState().pendingRevealWorktree).toMatchObject({
@@ -194,15 +194,21 @@ describe('createUISlice agent send target mode', () => {
   it('does not reveal the sidebar when the current workspace has no eligible targets', () => {
     const store = createUIStore()
     seedAgentSendState(store)
-    store.setState((s) => ({
-      agentStatusByPaneKey: {
-        ...s.agentStatusByPaneKey,
-        [readyPaneKey]: {
-          ...s.agentStatusByPaneKey[readyPaneKey],
-          state: 'working'
+    store.setState({
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: readyLeafId },
+            second: { type: 'leaf', leafId: workingLeafId }
+          },
+          activeLeafId: readyLeafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
         }
       }
-    }))
+    })
 
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
@@ -217,8 +223,8 @@ describe('createUISlice agent send target mode', () => {
       id: 'send-1',
       eligiblePaneKeys: [],
       disabledPaneKeys: {
-        [readyPaneKey]: 'Agent is working',
-        [workingPaneKey]: 'Agent is working'
+        [readyPaneKey]: 'Terminal is no longer available',
+        [workingPaneKey]: 'Terminal is no longer available'
       }
     })
     expect(store.getState().pendingRevealWorktree).toBeNull()
@@ -284,9 +290,10 @@ describe('createUISlice agent send target mode', () => {
     })
   })
 
-  it('revalidates eligibility at click time without closing or showing an error toast', async () => {
+  it('can send to a working agent row', async () => {
     const store = createUIStore()
     seedAgentSendState(store)
+    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(true)
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
       worktreeId,
@@ -297,16 +304,15 @@ describe('createUISlice agent send target mode', () => {
     })
 
     await expect(store.getState().sendPromptToSidebarAgentTarget(workingPaneKey)).resolves.toBe(
-      false
+      true
     )
 
-    expect(mocks.sendBracketedPasteToRunningAgent).not.toHaveBeenCalled()
-    expect(mocks.toastMessage).not.toHaveBeenCalled()
-    expect(mocks.toastError).not.toHaveBeenCalled()
-    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
-      id: 'send-1',
-      status: 'open'
+    expect(mocks.sendBracketedPasteToRunningAgent).toHaveBeenCalledWith({
+      ptyId: 'pty-working',
+      content: 'Review this'
     })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Sent to Codex')
+    expect(store.getState().agentSendPopoverTargetMode).toBeNull()
   })
 
   it('does not let an older send close a reopened popover with the same id', async () => {
