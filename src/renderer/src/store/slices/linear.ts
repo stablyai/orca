@@ -77,7 +77,8 @@ type InflightLinearTeamRequest = {
 
 const inflightTeamRequests = new Map<string, InflightLinearTeamRequest>()
 let inflightStatusRequest: Promise<void> | null = null
-let statusRequestGeneration = 0
+let linearStatusReadGeneration = 0
+let linearMutationGeneration = 0
 let linearCacheGeneration = 0
 
 function getSelectedWorkspaceId(status: LinearConnectionStatus): LinearWorkspaceSelection | null {
@@ -159,14 +160,14 @@ type LinearIssueReadArgs =
 
 type LinearFetchOptions = { force?: boolean }
 
-function beginStatusOperation(): number {
-  statusRequestGeneration += 1
+function beginLinearMutation(): number {
+  linearMutationGeneration += 1
   inflightStatusRequest = null
-  return statusRequestGeneration
+  return linearMutationGeneration
 }
 
-function isCurrentStatusOperation(generation: number): boolean {
-  return generation === statusRequestGeneration
+function isCurrentLinearMutation(generation: number): boolean {
+  return generation === linearMutationGeneration
 }
 
 export type LinearSlice = {
@@ -219,10 +220,14 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return inflightStatusRequest
     }
 
-    const requestGeneration = beginStatusOperation()
+    const mutationGeneration = linearMutationGeneration
+    const statusReadGeneration = (linearStatusReadGeneration += 1)
     inflightStatusRequest = linearStatus(get().settings)
       .then((status) => {
-        if (!isCurrentStatusOperation(requestGeneration)) {
+        if (
+          mutationGeneration !== linearMutationGeneration ||
+          statusReadGeneration !== linearStatusReadGeneration
+        ) {
           return
         }
         const typedStatus = status as LinearConnectionStatus
@@ -243,7 +248,10 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
       .catch(() => {
-        if (!isCurrentStatusOperation(requestGeneration)) {
+        if (
+          mutationGeneration !== linearMutationGeneration ||
+          statusReadGeneration !== linearStatusReadGeneration
+        ) {
           return
         }
         if (get().linearStatus.connected) {
@@ -253,7 +261,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
       .finally(() => {
-        if (isCurrentStatusOperation(requestGeneration)) {
+        if (statusReadGeneration === linearStatusReadGeneration) {
           inflightStatusRequest = null
         }
       })
@@ -262,13 +270,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   testLinearConnection: async (workspaceId) => {
-    const requestGeneration = beginStatusOperation()
+    const requestGeneration = beginLinearMutation()
     try {
       const result = (await linearTestConnection(get().settings, workspaceId)) as
         | { ok: true; viewer: LinearViewer }
         | { ok: false; error: string }
       const status = await linearStatus(get().settings)
-      if (isCurrentStatusOperation(requestGeneration)) {
+      if (isCurrentLinearMutation(requestGeneration)) {
         const prev = get().linearStatus
         if (linearStatusScopeSignature(prev) !== linearStatusScopeSignature(status)) {
           invalidateLinearCaches()
@@ -291,10 +299,10 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   connectLinear: async (apiKey: string) => {
-    const requestGeneration = beginStatusOperation()
+    const requestGeneration = beginLinearMutation()
     try {
       const result = await linearConnect(get().settings, apiKey)
-      if (result.ok && isCurrentStatusOperation(requestGeneration)) {
+      if (result.ok && isCurrentLinearMutation(requestGeneration)) {
         invalidateLinearCaches()
         set({
           linearIssueCache: {},
@@ -302,7 +310,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           linearTeamCache: {}
         })
         const status = await linearStatus(get().settings)
-        if (!isCurrentStatusOperation(requestGeneration)) {
+        if (!isCurrentLinearMutation(requestGeneration)) {
           return result as { ok: true; viewer: LinearViewer } | { ok: false; error: string }
         }
         set({
@@ -318,9 +326,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   selectLinearWorkspace: async (workspaceId) => {
-    const requestGeneration = beginStatusOperation()
+    const requestGeneration = beginLinearMutation()
     const status = await linearSelectWorkspace(get().settings, workspaceId)
-    if (!isCurrentStatusOperation(requestGeneration)) {
+    if (!isCurrentLinearMutation(requestGeneration)) {
       return
     }
     invalidateLinearCaches()
@@ -334,9 +342,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   disconnectLinear: async () => {
-    const requestGeneration = beginStatusOperation()
+    const requestGeneration = beginLinearMutation()
     await linearDisconnect(get().settings)
-    if (!isCurrentStatusOperation(requestGeneration)) {
+    if (!isCurrentLinearMutation(requestGeneration)) {
       return
     }
     invalidateLinearCaches()
@@ -350,10 +358,10 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   disconnectLinearWorkspace: async (workspaceId) => {
-    const requestGeneration = beginStatusOperation()
+    const requestGeneration = beginLinearMutation()
     await linearDisconnectWorkspace(get().settings, workspaceId)
     const status = await linearStatus(get().settings)
-    if (!isCurrentStatusOperation(requestGeneration)) {
+    if (!isCurrentLinearMutation(requestGeneration)) {
       return
     }
     invalidateLinearCaches()

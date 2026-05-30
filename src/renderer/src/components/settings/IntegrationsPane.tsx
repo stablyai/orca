@@ -635,7 +635,7 @@ export function IntegrationsPane(): React.JSX.Element {
           {linearStatus.connected ? (
             <div className="flex shrink-0 items-center gap-1.5">
               <Button variant="outline" size="sm" onClick={() => setLinearDialogOpen(true)}>
-                Update access
+                Add workspace access
               </Button>
               <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
                 Connected
@@ -719,7 +719,7 @@ export function IntegrationsPane(): React.JSX.Element {
       <LinearApiKeyDialog
         open={linearDialogOpen}
         onOpenChange={setLinearDialogOpen}
-        connectLabel={linearStatus.connected ? 'Update access' : 'Add Linear access'}
+        connectLabel="Add Linear access"
         onConnected={() => setLinearTestResultByWorkspace({})}
       />
     </div>

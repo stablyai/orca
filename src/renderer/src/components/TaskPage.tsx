@@ -4271,6 +4271,7 @@ export default function TaskPage(): React.JSX.Element {
           setLinearTeamRefreshNonce((n) => n + 1)
         })
         .catch(() => {
+          setLinearLoading(false)
           toast.error('Failed to switch Linear workspace.')
         })
     },
@@ -6900,7 +6901,7 @@ export default function TaskPage(): React.JSX.Element {
         open={linearConnectOpen}
         onOpenChange={setLinearConnectOpen}
         workspace={selectedLinearWorkspace}
-        connectLabel={linearStatus.connected ? 'Update access' : 'Add Linear access'}
+        connectLabel={selectedLinearWorkspace ? 'Update access' : 'Add Linear access'}
         onConnected={handleLinearAccessConnected}
       />
     </div>

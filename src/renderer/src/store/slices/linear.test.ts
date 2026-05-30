@@ -226,6 +226,29 @@ describe('createLinearSlice', () => {
     expect(store.getState().linearStatusChecked).toBe(true)
   })
 
+  it('ignores stale forced connection checks when a newer forced check finishes first', async () => {
+    const staleCheck = deferred<LinearConnectionStatus>()
+    const freshCheck = deferred<LinearConnectionStatus>()
+    const viewer = {
+      displayName: 'Test User',
+      email: 'test@example.com',
+      organizationName: 'Test Org'
+    }
+    linearStatus.mockReturnValueOnce(staleCheck.promise).mockReturnValueOnce(freshCheck.promise)
+    const store = createTestStore()
+
+    const stalePromise = store.getState().checkLinearConnection(true)
+    const freshPromise = store.getState().checkLinearConnection(true)
+
+    freshCheck.resolve({ connected: true, viewer })
+    await freshPromise
+    staleCheck.resolve({ connected: false, viewer: null })
+    await stalePromise
+
+    expect(store.getState().linearStatus.connected).toBe(true)
+    expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')
+  })
+
   it('ignores stale status checks after a successful connect', async () => {
     const staleMountCheck = deferred<LinearConnectionStatus>()
     const freshConnectCheck = deferred<LinearConnectionStatus>()
@@ -251,6 +274,38 @@ describe('createLinearSlice', () => {
 
     staleMountCheck.resolve({ connected: false, viewer: null })
     await mountCheck
+
+    expect(store.getState().linearStatus.connected).toBe(true)
+    expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')
+  })
+
+  it('does not let a background status refresh cancel an in-flight connect', async () => {
+    const connectResult = deferred<{ ok: true; viewer: LinearViewer }>()
+    const backgroundStatus = deferred<LinearConnectionStatus>()
+    const connectStatus = deferred<LinearConnectionStatus>()
+    const viewer = {
+      displayName: 'Test User',
+      email: 'test@example.com',
+      organizationName: 'Test Org'
+    }
+    linearConnect.mockReturnValueOnce(connectResult.promise)
+    linearStatus
+      .mockReturnValueOnce(backgroundStatus.promise)
+      .mockReturnValueOnce(connectStatus.promise)
+    const store = createTestStore()
+
+    const connectPromise = store.getState().connectLinear('linear-key')
+    const refreshPromise = store.getState().checkLinearConnection(true)
+
+    backgroundStatus.resolve({ connected: false, viewer: null })
+    await refreshPromise
+
+    connectResult.resolve({ ok: true, viewer })
+    await Promise.resolve()
+    expect(linearStatus).toHaveBeenCalledTimes(2)
+
+    connectStatus.resolve({ connected: true, viewer })
+    await connectPromise
 
     expect(store.getState().linearStatus.connected).toBe(true)
     expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')

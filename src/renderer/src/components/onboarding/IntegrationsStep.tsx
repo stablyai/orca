@@ -131,7 +131,7 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
               </div>
               <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                 {linearStatus.connected
-                  ? `${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'} linked. Update restricted access any time.`
+                  ? `${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'} linked. Add another workspace or replace a restricted key any time.`
                   : 'Add Linear access with a Personal API key. Full-access keys can show every team the key owner can access.'}
               </p>
             </div>
@@ -139,7 +139,7 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
           <div className={cn('flex items-center gap-2', compact ? 'flex-wrap' : 'shrink-0')}>
             {linearStatus.connected ? (
               <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>
-                Update access
+                Add workspace access
               </Button>
             ) : (
               <Button size="sm" onClick={() => setDialogOpen(true)}>
@@ -160,7 +160,7 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
         onOpenChange={setDialogOpen}
         overlayClassName="z-[110]"
         contentClassName="z-[120]"
-        connectLabel={linearStatus.connected ? 'Update access' : 'Add Linear access'}
+        connectLabel="Add Linear access"
       />
     </>
   )
