@@ -136,19 +136,35 @@ function waitForNotificationDisplay(notification: Notification): Promise<boolean
   return new Promise((resolve) => {
     let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
-    const settle = (displayed: boolean): void => {
+
+    function cleanup(): void {
+      notification.removeListener('show', onShow)
+      notification.removeListener('failed', onFailed)
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+    }
+
+    function settle(displayed: boolean): void {
       if (settled) {
         return
       }
       settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
+      cleanup()
       resolve(displayed)
     }
 
-    notification.once('show', () => settle(true))
-    notification.once('failed', () => settle(false))
+    function onShow(): void {
+      settle(true)
+    }
+
+    function onFailed(): void {
+      settle(false)
+    }
+
+    notification.once('show', onShow)
+    notification.once('failed', onFailed)
     timer = setTimeout(() => settle(false), NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS)
   })
 }
