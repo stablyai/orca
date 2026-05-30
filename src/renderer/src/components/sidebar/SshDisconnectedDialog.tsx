@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Server, ServerOff } from 'lucide-react'
 import {
@@ -41,16 +41,28 @@ export function SshDisconnectedDialog({
   status
 }: SshDisconnectedDialogProps): React.JSX.Element {
   const [connecting, setConnecting] = useState(false)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const handleReconnect = useCallback(async () => {
     setConnecting(true)
     try {
       await window.api.ssh.connect({ targetId })
-      onOpenChange(false)
+      if (mountedRef.current) {
+        onOpenChange(false)
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Reconnection failed')
     } finally {
-      setConnecting(false)
+      if (mountedRef.current) {
+        setConnecting(false)
+      }
     }
   }, [targetId, onOpenChange])
 

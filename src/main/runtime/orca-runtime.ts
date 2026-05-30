@@ -1057,6 +1057,9 @@ export class OrcaRuntimeService {
   private mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
   private mobileSessionTabListeners = new Set<(snapshot: RuntimeMobileSessionTabsResult) => void>()
   private leaves = new Map<string, RuntimeLeafRecord>()
+  // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
+  // ptyId keeps active TUI redraws independent of the total open terminal count.
+  private leavesByPtyId = new Map<string, RuntimeLeafRecord[]>()
   private handles = new Map<string, TerminalHandleRecord>()
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
@@ -1775,6 +1778,7 @@ export class OrcaRuntimeService {
     }
 
     this.leaves = nextLeaves
+    this.rebuildLeafPtyIndex()
     this.notifyMobileSessionTabSnapshots()
     this.graphStatus = 'ready'
     this.refreshWritableFlags()
@@ -2141,6 +2145,8 @@ export class OrcaRuntimeService {
   pullRuntimeGit: RuntimeGitCommands['pullRuntimeGit'] = this.gitCommands.pullRuntimeGit.bind(
     this.gitCommands
   )
+  fastForwardRuntimeGit: RuntimeGitCommands['fastForwardRuntimeGit'] =
+    this.gitCommands.fastForwardRuntimeGit.bind(this.gitCommands)
   rebaseRuntimeGitFromBase: RuntimeGitCommands['rebaseRuntimeGitFromBase'] =
     this.gitCommands.rebaseRuntimeGitFromBase.bind(this.gitCommands)
   pushRuntimeGit: RuntimeGitCommands['pushRuntimeGit'] = this.gitCommands.pushRuntimeGit.bind(
@@ -2216,10 +2222,8 @@ export class OrcaRuntimeService {
 
   registerPreAllocatedHandleForPty(ptyId: string, handle: string): void {
     this.handleByPtyId.set(ptyId, handle)
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId === ptyId) {
-        this.adoptPreAllocatedHandle(leaf)
-      }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      this.adoptPreAllocatedHandle(leaf)
     }
   }
 
@@ -2228,12 +2232,10 @@ export class OrcaRuntimeService {
     if (pty) {
       pty.connected = true
     }
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId === ptyId) {
-        leaf.connected = true
-        leaf.writable = this.graphStatus === 'ready'
-        this.adoptPreAllocatedHandle(leaf)
-      }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      leaf.connected = true
+      leaf.writable = this.graphStatus === 'ready'
+      this.adoptPreAllocatedHandle(leaf)
     }
   }
 
@@ -2311,10 +2313,7 @@ export class OrcaRuntimeService {
       }
     }
 
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId !== ptyId) {
-        continue
-      }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
       this.recordPtyWorktree(ptyId, leaf.worktreeId, {
         connected: true,
         lastOutputAt: pty?.lastOutputAt ?? at,
@@ -2609,15 +2608,13 @@ export class OrcaRuntimeService {
       return
     }
     const status = detectAgentStatusFromTitle(title)
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId === ptyId) {
-        // Why: seed lastOscTitle even when the seeded title doesn't classify
-        // as an agent state, so worktree.ps recomputes status from the live
-        // title rather than treating the leaf as agentless.
-        leaf.lastOscTitle = title
-        if (status !== null) {
-          leaf.lastAgentStatus = status
-        }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      // Why: seed lastOscTitle even when the seeded title doesn't classify
+      // as an agent state, so worktree.ps recomputes status from the live
+      // title rather than treating the leaf as agentless.
+      leaf.lastOscTitle = title
+      if (status !== null) {
+        leaf.lastAgentStatus = status
       }
     }
   }
@@ -3472,10 +3469,7 @@ export class OrcaRuntimeService {
       this.pruneDisconnectedPtyTranscript(pty)
     }
 
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId !== ptyId) {
-        continue
-      }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
       this.detachedPreAllocatedLeaves.delete(ptyId)
       leaf.connected = false
       leaf.writable = false
@@ -9997,6 +9991,7 @@ export class OrcaRuntimeService {
     this.rememberDetachedPreAllocatedLeaves()
     this.tabs.clear()
     this.leaves.clear()
+    this.leavesByPtyId.clear()
     this.handles.clear()
     this.handleByLeafKey.clear()
     // Why: same as markRendererReloading — pre-allocated CLI handles must
@@ -10766,12 +10761,27 @@ export class OrcaRuntimeService {
   }
 
   private leafExistsForPty(ptyId: string): boolean {
+    return (this.leavesByPtyId.get(ptyId)?.length ?? 0) > 0
+  }
+
+  private rebuildLeafPtyIndex(): void {
+    const next = new Map<string, RuntimeLeafRecord[]>()
     for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId === ptyId) {
-        return true
+      if (!leaf.ptyId) {
+        continue
+      }
+      const leaves = next.get(leaf.ptyId)
+      if (leaves) {
+        leaves.push(leaf)
+      } else {
+        next.set(leaf.ptyId, [leaf])
       }
     }
-    return false
+    this.leavesByPtyId = next
+  }
+
+  private getLeavesForPty(ptyId: string): RuntimeLeafRecord[] {
+    return this.leavesByPtyId.get(ptyId) ?? []
   }
 
   private getSummaryForRuntimeWorktreeId(

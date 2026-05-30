@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   CircleStop,
   Loader2,
@@ -85,13 +85,27 @@ export function SshTargetCard({
   const terminateInFlight = actionInFlight === 'terminate' || busyAction === 'terminate'
   const resetInFlight = actionInFlight === 'reset' || busyAction === 'reset'
   const removeInFlight = busyAction === 'remove'
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  const clearActionInFlight = (): void => {
+    if (mountedRef.current) {
+      setActionInFlight(null)
+    }
+  }
 
   const handleConnect = (): void => {
     if (actionInFlight) {
       return
     }
     setActionInFlight('connect')
-    Promise.resolve(onConnect(target.id)).finally(() => setActionInFlight(null))
+    void Promise.resolve(onConnect(target.id)).finally(clearActionInFlight)
   }
 
   const handleDisconnect = (): void => {
@@ -99,7 +113,7 @@ export function SshTargetCard({
       return
     }
     setActionInFlight('disconnect')
-    Promise.resolve(onDisconnect(target.id)).finally(() => setActionInFlight(null))
+    void Promise.resolve(onDisconnect(target.id)).finally(clearActionInFlight)
   }
 
   const handleTerminateSessions = (): void => {
@@ -107,7 +121,7 @@ export function SshTargetCard({
       return
     }
     setActionInFlight('terminate')
-    Promise.resolve(onTerminateSessions(target.id)).finally(() => setActionInFlight(null))
+    void Promise.resolve(onTerminateSessions(target.id)).finally(clearActionInFlight)
   }
 
   const handleResetRelay = (): void => {
@@ -115,7 +129,7 @@ export function SshTargetCard({
       return
     }
     setActionInFlight('reset')
-    Promise.resolve(onResetRelay(target.id)).finally(() => setActionInFlight(null))
+    void Promise.resolve(onResetRelay(target.id)).finally(clearActionInFlight)
   }
 
   const renderEndRemoteTerminalsButton = (): React.JSX.Element => (

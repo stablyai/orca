@@ -324,8 +324,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return false
   }
 
-  async getForegroundProcess(_id: string): Promise<string | null> {
-    return null
+  async getForegroundProcess(id: string): Promise<string | null> {
+    try {
+      const result = await this.client.request<{ foregroundProcess: string | null }>(
+        'getForegroundProcess',
+        { sessionId: id }
+      )
+      return result.foregroundProcess
+    } catch {
+      return null
+    }
   }
 
   async serialize(ids: string[]): Promise<string> {

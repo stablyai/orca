@@ -94,11 +94,20 @@ type ExecParams = {
   stdin: unknown
   timeoutMs: unknown
   env: unknown
+  operation: unknown
 }
 
 type CancelParams = {
   cwd: unknown
+  operation: unknown
 }
+
+function laneKeyFor(cwd: string, operation: unknown): string {
+  const op = typeof operation === 'string' && operation ? operation : 'default'
+  return JSON.stringify([op, cwd])
+}
+
+type InFlightExec = { child: ChildProcess; markCanceled: () => void }
 
 type ExecResult = {
   stdout: string
@@ -119,10 +128,13 @@ type ExecResult = {
  * and a clean exit code instead of an interactive session.
  */
 export class AgentExecHandler {
-  // Why: a single in-flight exec per cwd is enough — the renderer prevents
-  // double-clicks. Keying by cwd lets `agent.cancelExec({cwd})` find the
-  // child without the client having to track relay-internal request ids.
-  private inFlightByCwd = new Map<string, { child: ChildProcess; markCanceled: () => void }>()
+  // Why: commit-message and PR-field generation can run together for one cwd;
+  // operation lanes let cancel target only the user-visible job that stopped.
+  private inFlightByLane = new Map<string, InFlightExec>()
+
+  private laneKey(cwd: string, operation: unknown): string {
+    return laneKeyFor(cwd, operation)
+  }
 
   constructor(dispatcher: RelayDispatcher) {
     dispatcher.onRequest('agent.execNonInteractive', (p) => this.exec(p as ExecParams))
@@ -131,7 +143,7 @@ export class AgentExecHandler {
 
   private async cancel(params: CancelParams): Promise<{ canceled: boolean }> {
     const cwd = typeof params.cwd === 'string' ? params.cwd : ''
-    const entry = this.inFlightByCwd.get(cwd)
+    const entry = this.inFlightByLane.get(this.laneKey(cwd, params.operation))
     if (!entry) {
       return { canceled: false }
     }
@@ -185,24 +197,26 @@ export class AgentExecHandler {
       let timedOut = false
       let canceled = false
       let settled = false
-      const laneKey = typeof cwd === 'string' ? cwd : ''
+      const laneKey = typeof cwd === 'string' ? this.laneKey(cwd, params.operation) : ''
+      let entry: InFlightExec | null = null
       const finish = (result: ExecResult): void => {
         if (settled) {
           return
         }
         settled = true
-        if (laneKey) {
-          this.inFlightByCwd.delete(laneKey)
+        if (laneKey && entry && this.inFlightByLane.get(laneKey) === entry) {
+          this.inFlightByLane.delete(laneKey)
         }
         resolve(result)
       }
       if (laneKey) {
-        this.inFlightByCwd.set(laneKey, {
+        entry = {
           child,
           markCanceled: () => {
             canceled = true
           }
-        })
+        }
+        this.inFlightByLane.set(laneKey, entry)
       }
 
       const timer = setTimeout(() => {

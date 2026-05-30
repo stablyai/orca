@@ -181,6 +181,9 @@ export default function CombinedDiffViewer({
   const [clearNotesDialogOpen, setClearNotesDialogOpen] = useState(false)
   const [isClearingNotes, setIsClearingNotes] = useState(false)
   const [notesCopied, setNotesCopied] = useState(false)
+  // Why: clipboard IPC can resolve after the combined diff unmounts; skip
+  // copied feedback instead of starting a reset timer on a stale viewer.
+  const notesCopyMountedRef = useRef(false)
   const [fileTreeCollapsed, setFileTreeCollapsedState] = useState(() =>
     getInitialCombinedDiffFileTreeCollapsed(settings?.combinedDiffFileTreeVisibleByDefault)
   )
@@ -196,6 +199,10 @@ export default function CombinedDiffViewer({
   const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
+  const setScrollContainerRef = useCallback((node: HTMLDivElement | null) => {
+    scrollContainerRef.current = node
+    notesCopyMountedRef.current = node !== null
+  }, [])
   const loadSchedulerRef = useRef(
     createCombinedDiffLoadScheduler({
       loadSection: (index) => loadSectionRef.current(index)
@@ -882,6 +889,9 @@ export default function CombinedDiffViewer({
     }
     try {
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
+      if (!notesCopyMountedRef.current) {
+        return
+      }
       setNotesCopied(true)
     } catch {
       // Why: clipboard writes can fail while the app is not focused; this
@@ -1130,7 +1140,10 @@ export default function CombinedDiffViewer({
             onCollapsedChange={setFileTreeCollapsed}
             onNavigate={handleTreeNavigate}
           />
-          <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
+          <div
+            ref={setScrollContainerRef}
+            className="min-w-0 flex-1 overflow-auto scrollbar-editor"
+          >
             {skippedConflictNotice}
             <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
               {virtualizer.getVirtualItems().map((virtualItem) => {

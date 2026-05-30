@@ -357,6 +357,9 @@ export function ChecksList({
 function CopyButton({ text }: { text: string }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after this row action unmounts; avoid
+  // starting a reset timer that will outlive the component.
+  const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
     if (copiedResetTimerRef.current !== null) {
@@ -365,10 +368,23 @@ function CopyButton({ text }: { text: string }): React.JSX.Element {
     }
   }, [])
 
+  const setCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
+      if (node === null) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
+
   const handleCopy = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
       void window.api.ui.writeClipboardText(text).then(() => {
+        if (!isMountedRef.current) {
+          return
+        }
         clearCopiedResetTimer()
         setCopied(true)
         copiedResetTimerRef.current = window.setTimeout(() => {
@@ -382,6 +398,7 @@ function CopyButton({ text }: { text: string }): React.JSX.Element {
 
   return (
     <button
+      ref={setCopyButtonRef}
       className="p-1 rounded hover:bg-accent text-muted-foreground/40 hover:text-foreground transition-colors shrink-0"
       title="Copy comment"
       onClick={handleCopy}
@@ -410,6 +427,15 @@ function ResolveButton({
     }
   }, [])
 
+  const setResolveButtonRootRef = useCallback(
+    (node: HTMLSpanElement | null) => {
+      if (node === null) {
+        clearLoadingResetTimer()
+      }
+    },
+    [clearLoadingResetTimer]
+  )
+
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -424,17 +450,19 @@ function ResolveButton({
     [clearLoadingResetTimer, threadId, isResolved, onResolve]
   )
 
-  if (loading) {
-    return <LoaderCircle className="size-3 animate-spin text-muted-foreground shrink-0" />
-  }
-
   return (
-    <button
-      className="text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent"
-      onClick={handleClick}
-    >
-      {isResolved ? 'Unresolve' : 'Resolve'}
-    </button>
+    <span ref={setResolveButtonRootRef} className="contents">
+      {loading ? (
+        <LoaderCircle className="size-3 animate-spin text-muted-foreground shrink-0" />
+      ) : (
+        <button
+          className="text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+          onClick={handleClick}
+        >
+          {isResolved ? 'Unresolve' : 'Resolve'}
+        </button>
+      )}
+    </span>
   )
 }
 

@@ -139,6 +139,8 @@ export function FloatingTerminalPanel({
   const pendingEditorCloseQueueRef = useRef<string[]>([])
   const saveDialogFileIdRef = useRef<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const shortcutFocusFrameRef = useRef<number | null>(null)
+  const shortcutFocusTimeoutRef = useRef<number | null>(null)
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -354,15 +356,31 @@ export function FloatingTerminalPanel({
   }, [bounds.left, bounds.width, open])
 
   useEffect(() => {
+    let cancelled = false
     void window.api.app
       .getFloatingTerminalCwd({
         path: floatingTerminalCwd
       })
-      .then(setCwd)
+      .then((nextCwd) => {
+        if (!cancelled) {
+          setCwd(nextCwd)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
   }, [floatingTerminalCwd])
 
   useEffect(() => {
-    void window.api.app.getFloatingMarkdownDirectory().then(setMarkdownCwd)
+    let cancelled = false
+    void window.api.app.getFloatingMarkdownDirectory().then((nextMarkdownCwd) => {
+      if (!cancelled) {
+        setMarkdownCwd(nextMarkdownCwd)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -690,17 +708,35 @@ export function FloatingTerminalPanel({
     panelRef.current?.focus({ preventScroll: true })
   }, [])
 
+  const cancelShortcutFocusFrame = useCallback((): void => {
+    if (shortcutFocusFrameRef.current !== null) {
+      cancelAnimationFrame(shortcutFocusFrameRef.current)
+      shortcutFocusFrameRef.current = null
+    }
+    if (shortcutFocusTimeoutRef.current !== null) {
+      window.clearTimeout(shortcutFocusTimeoutRef.current)
+      shortcutFocusTimeoutRef.current = null
+    }
+  }, [])
+
+  useEffect(() => cancelShortcutFocusFrame, [cancelShortcutFocusFrame])
+
   const focusPanelForShortcutsAfterClose = useCallback(() => {
     if (typeof window === 'undefined') {
       return
     }
-    const focusPanel = (): void => focusPanelForShortcuts(false)
+    cancelShortcutFocusFrame()
+    const focusPanel = (): void => {
+      shortcutFocusFrameRef.current = null
+      shortcutFocusTimeoutRef.current = null
+      focusPanelForShortcuts(false)
+    }
     if (typeof window.requestAnimationFrame === 'function') {
-      window.requestAnimationFrame(focusPanel)
+      shortcutFocusFrameRef.current = window.requestAnimationFrame(focusPanel)
       return
     }
-    globalThis.setTimeout(focusPanel, 0)
-  }, [focusPanelForShortcuts])
+    shortcutFocusTimeoutRef.current = window.setTimeout(focusPanel, 0)
+  }, [cancelShortcutFocusFrame, focusPanelForShortcuts])
 
   const setFloatingTerminalInputFocused = useCallback((target: EventTarget | null): void => {
     window.api.ui.setFloatingTerminalInputFocused(isFloatingWorkspaceTerminalInputTarget(target))

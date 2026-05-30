@@ -13,9 +13,11 @@ import type {
   BrowserWorkspace,
   TabGroupLayoutNode,
   TerminalPaneLayoutNode,
+  TuiAgent,
   WorkspaceSessionState
 } from './types'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { isTuiAgent } from './tui-agent-config'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
@@ -65,7 +67,15 @@ const terminalTabSchema = z.object({
   color: z.string().nullable(),
   sortOrder: z.number(),
   createdAt: z.number(),
-  generation: z.number().optional()
+  generation: z.number().optional(),
+  // Why: persist the launched agent so a restored idle agent tab keeps its
+  // provider icon before any hook fires. `.catch(undefined)` keeps a stale or
+  // unknown agent id from failing the whole-session parse (which would reset
+  // every terminal/editor/browser to defaults).
+  launchAgent: z
+    .custom<TuiAgent>((v) => isTuiAgent(v))
+    .optional()
+    .catch(undefined)
 })
 
 // ─── Unified tab model ──────────────────────────────────────────────

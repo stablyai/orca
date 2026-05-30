@@ -10,6 +10,7 @@ import type {
   TabGroupLayoutNode,
   TerminalColorOverrides,
   TerminalLayoutSnapshot,
+  TuiAgent,
   Worktree,
   WorktreeLineage,
   WorktreeLineageWarning
@@ -108,6 +109,7 @@ export type RuntimeMobileSessionTerminalTab = {
   ptyId?: string | null
   terminalTheme?: RuntimeMobileTerminalTheme
   agentStatus?: AgentStatusEntry | null
+  launchAgent?: TuiAgent
   parentLayout?: TerminalLayoutSnapshot
   isActive: boolean
 }

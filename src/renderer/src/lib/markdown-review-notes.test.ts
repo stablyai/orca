@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { DiffComment } from '../../../shared/types'
 import {
+  formatMarkdownReviewCardQuote,
   formatMarkdownReviewNotes,
+  getMarkdownReviewCardQuote,
   getMarkdownReviewExcerpt,
   getMarkdownReviewHighlightedText,
   sortMarkdownReviewNotes,
@@ -59,6 +61,16 @@ describe('markdown review notes', () => {
     )
 
     expect(highlighted).toBe('two\nthree')
+  })
+
+  it('normalizes card quote text into a short single-line preview', () => {
+    expect(formatMarkdownReviewCardQuote('  Hiring\nupdate   for the team  ')).toBe(
+      'Hiring update for the team'
+    )
+    expect(
+      getMarkdownReviewCardQuote('one\ntwo broad line\nthree', note({ selectedText: 'broad' }))
+    ).toBe('broad')
+    expect(formatMarkdownReviewCardQuote('a'.repeat(120))).toBe(`${'a'.repeat(93)}...`)
   })
 
   it('formats a deterministic prompt for terminal agents', () => {

@@ -695,6 +695,7 @@ export function ResourceUsageStatusSegment({
   // somewhere stable for keyboard users.
   const popoverBodyRef = useRef<HTMLDivElement | null>(null)
   const popoverBodyFocusFrameRef = useRef<number | null>(null)
+  const mountedRef = useRef(true)
 
   const cancelPopoverBodyFocusFrame = useCallback((): void => {
     if (popoverBodyFocusFrameRef.current === null) {
@@ -702,6 +703,15 @@ export function ResourceUsageStatusSegment({
     }
     cancelAnimationFrame(popoverBodyFocusFrameRef.current)
     popoverBodyFocusFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelPopoverBodyFocusFrame, [cancelPopoverBodyFocusFrame])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
   }, [])
 
   const setPopoverBodyNode = useCallback(
@@ -717,16 +727,23 @@ export function ResourceUsageStatusSegment({
 
   const refreshSessions = useCallback(async () => {
     if (runtimeEnvironmentActive) {
-      setSessions([])
-      setSessionsError(false)
+      if (mountedRef.current) {
+        setSessions([])
+        setSessionsError(false)
+      }
       return
     }
     try {
       const result = await window.api.pty.listSessions()
+      if (!mountedRef.current) {
+        return
+      }
       setSessions(result)
       setSessionsError(false)
     } catch {
-      setSessionsError(true)
+      if (mountedRef.current) {
+        setSessionsError(true)
+      }
     }
   }, [runtimeEnvironmentActive])
 

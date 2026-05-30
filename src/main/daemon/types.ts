@@ -1,10 +1,10 @@
 // ─── Protocol Version ────────────────────────────────────────────────
 // Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
-// Why: bumped from 9 -> 10 so affected v9 daemons are preserved as legacy
-// instead of being resolver-health replaced while they own live PTY sessions.
-export const PROTOCOL_VERSION = 10
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
+// Why: bump when adding daemon wire behavior so same-version old daemons do
+// not silently accept the handshake and then reject new RPCs.
+export const PROTOCOL_VERSION = 11
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -147,6 +147,14 @@ export type GetCwdRequest = {
   }
 }
 
+export type GetForegroundProcessRequest = {
+  id: string
+  type: 'getForegroundProcess'
+  payload: {
+    sessionId: string
+  }
+}
+
 export type ClearScrollbackRequest = {
   id: string
   type: 'clearScrollback'
@@ -191,6 +199,7 @@ export type DaemonRequest =
   | ListSessionsRequest
   | DetachRequest
   | GetCwdRequest
+  | GetForegroundProcessRequest
   | ClearScrollbackRequest
   | ShutdownRequest
   | PingRequest

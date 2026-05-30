@@ -37,6 +37,7 @@ describe('resolveDropdownItems', () => {
       'create_pr',
       'push_create_pr',
       'pull',
+      'fast_forward',
       'sync',
       'rebase_base',
       'fetch',
@@ -173,6 +174,10 @@ describe('resolveDropdownItems', () => {
     expect(byKind.pull.disabled).toBe(true)
     expect(byKind.pull.title).toBe(
       'Nothing new to pull — remote only has older copies of local commits'
+    )
+    expect(byKind.fast_forward.disabled).toBe(true)
+    expect(byKind.fast_forward.title).toBe(
+      'Nothing new to fast-forward — remote only has older copies of local commits'
     )
     expect(byKind.commit_sync.label).toBe('Commit & Sync')
     expect(byKind.commit_sync.disabled).toBe(true)
@@ -322,6 +327,7 @@ describe('resolveDropdownItems', () => {
       'commit_sync',
       'push',
       'pull',
+      'fast_forward',
       'sync',
       'fetch',
       'publish'
@@ -347,6 +353,7 @@ describe('resolveDropdownItems', () => {
     )
     expect(byKind.push.title).toBe('Publish the branch first to push commits')
     expect(byKind.pull.title).toBe('Publish the branch first to pull commits')
+    expect(byKind.fast_forward.title).toBe('Publish the branch first to fast-forward')
     expect(byKind.sync.title).toBe('Publish the branch first to sync commits')
     expect(byKind.fetch.title).toBe('Fetch from remote without merging')
     expect(byKind.fetch.disabled).toBe(false)
@@ -415,6 +422,7 @@ describe('resolveDropdownItems', () => {
     )
     expect(byKind.push.title).toBe('PR is already merged')
     expect(byKind.pull.title).toBe('PR is already merged')
+    expect(byKind.fast_forward.title).toBe('PR is already merged')
     expect(byKind.sync.title).toBe('PR is already merged')
     expect(byKind.publish.label).toBe('PR Status')
     expect(byKind.publish.title).toBe('PR is already merged')
@@ -455,6 +463,27 @@ describe('resolveDropdownItems', () => {
     // Sanity check: plain counterparts still carry counts.
     expect(byKind.push.label).toBe('Push (2)')
     expect(byKind.sync.label).toBe('Sync (↓3 ↑2)')
+  })
+
+  it('enables fast-forward only when the branch is behind with no local commits', () => {
+    const behindOnly = resolveDropdownItems(
+      inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 2 } })
+    )
+    const diverged = resolveDropdownItems(
+      inputs({ upstreamStatus: { hasUpstream: true, ahead: 1, behind: 2 } })
+    )
+    const behindOnlyByKind = Object.fromEntries(
+      behindOnly.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    const divergedByKind = Object.fromEntries(
+      diverged.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+
+    expect(behindOnlyByKind.fast_forward.label).toBe('Fast-forward (2)')
+    expect(behindOnlyByKind.fast_forward.title).toBe('Fast-forward 2 commits')
+    expect(behindOnlyByKind.fast_forward.disabled).toBe(false)
+    expect(divergedByKind.fast_forward.disabled).toBe(true)
+    expect(divergedByKind.fast_forward.title).toBe('Local commits prevent a fast-forward pull')
   })
 
   it('enables the push-before-PR recovery action when review creation is only blocked by unpushed commits', () => {

@@ -67,10 +67,10 @@ import {
 } from './settings-load-performance'
 
 const SETTINGS_NAV_GROUPS = [
+  { id: 'capabilities', title: 'AI Capabilities' },
   { id: 'setup', title: 'Set Up' },
   { id: 'workflows', title: 'Workflows' },
   { id: 'interface', title: 'Interface' },
-  { id: 'capabilities', title: 'AI Capabilities' },
   { id: 'remote', title: 'Remote Access' },
   { id: 'safety', title: 'Safety' },
   { id: 'experimental', title: 'Experimental' }
@@ -755,17 +755,6 @@ function Settings(): React.JSX.Element {
             ) : (
               <ActiveSettingsSectionProvider value={activeSectionId}>
                 <SettingsSection
-                  id="general"
-                  title="General"
-                  description="Workspace defaults, app setup, and maintenance."
-                  searchEntries={getSectionSearchEntries('general')}
-                >
-                  {isSectionMounted('general') ? (
-                    <GeneralPane settings={settings} updateSettings={updateSettings} />
-                  ) : null}
-                </SettingsSection>
-
-                <SettingsSection
                   id="agents"
                   title="Agents"
                   description="Manage AI agents, set a default, and customize commands."
@@ -797,6 +786,75 @@ function Settings(): React.JSX.Element {
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
                     />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="orchestration"
+                  title="Orchestration"
+                  description="Coordinate multiple coding agents through Orca."
+                  searchEntries={getSectionSearchEntries('orchestration')}
+                >
+                  {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
+                </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <>
+                    <SettingsSection
+                      id="computer-use"
+                      title="Computer Use"
+                      badge="Beta"
+                      badgeAccessory={
+                        showComputerUsePreviewTooltip ? (
+                          <TooltipProvider delayDuration={250}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="text-muted-foreground transition-colors hover:text-foreground"
+                                  aria-label={`${computerUsePlatform} Computer Use preview details`}
+                                >
+                                  <Info className="size-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" sideOffset={6} className="max-w-72">
+                                <span>
+                                  {computerUsePlatform} Computer Use is an early preview. Some apps
+                                  and desktop environments may behave inconsistently.
+                                </span>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : null
+                      }
+                      description="Enable agents to control any app on your computer."
+                      searchEntries={getSectionSearchEntries('computer-use')}
+                    >
+                      {isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
+                    </SettingsSection>
+
+                    <SettingsSection
+                      id="voice"
+                      title="Voice"
+                      badge="Beta"
+                      description="Local speech-to-text dictation with on-device models."
+                      searchEntries={getSectionSearchEntries('voice')}
+                    >
+                      {isSectionMounted('voice') ? (
+                        <VoicePane settings={settings} updateSettings={updateSettings} />
+                      ) : null}
+                    </SettingsSection>
+                  </>
+                ) : null}
+
+                <SettingsSection
+                  id="general"
+                  title="General"
+                  description="Workspace defaults, app setup, and maintenance."
+                  searchEntries={getSectionSearchEntries('general')}
+                >
+                  {isSectionMounted('general') ? (
+                    <GeneralPane settings={settings} updateSettings={updateSettings} />
                   ) : null}
                 </SettingsSection>
 
@@ -986,64 +1044,6 @@ function Settings(): React.JSX.Element {
                 >
                   {isSectionMounted('stats') ? <StatsPane /> : null}
                 </SettingsSection>
-
-                <SettingsSection
-                  id="orchestration"
-                  title="Orchestration"
-                  description="Coordinate multiple coding agents through Orca."
-                  searchEntries={getSectionSearchEntries('orchestration')}
-                >
-                  {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
-                </SettingsSection>
-
-                {showDesktopOnlySettings ? (
-                  <>
-                    <SettingsSection
-                      id="computer-use"
-                      title="Computer Use"
-                      badge="Beta"
-                      badgeAccessory={
-                        showComputerUsePreviewTooltip ? (
-                          <TooltipProvider delayDuration={250}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="text-muted-foreground transition-colors hover:text-foreground"
-                                  aria-label={`${computerUsePlatform} Computer Use preview details`}
-                                >
-                                  <Info className="size-3.5" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" sideOffset={6} className="max-w-72">
-                                <span>
-                                  {computerUsePlatform} Computer Use is an early preview. Some apps
-                                  and desktop environments may behave inconsistently.
-                                </span>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ) : null
-                      }
-                      description="Enable agents to control any app on your computer."
-                      searchEntries={getSectionSearchEntries('computer-use')}
-                    >
-                      {isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
-                    </SettingsSection>
-
-                    <SettingsSection
-                      id="voice"
-                      title="Voice"
-                      badge="Beta"
-                      description="Local speech-to-text dictation with on-device models."
-                      searchEntries={getSectionSearchEntries('voice')}
-                    >
-                      {isSectionMounted('voice') ? (
-                        <VoicePane settings={settings} updateSettings={updateSettings} />
-                      ) : null}
-                    </SettingsSection>
-                  </>
-                ) : null}
 
                 <SettingsSection
                   id="servers"

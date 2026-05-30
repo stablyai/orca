@@ -56,6 +56,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.fetchRemoteTrackingRef')
     expect(methods).toContain('git.push')
     expect(methods).toContain('git.pull')
+    expect(methods).toContain('git.fastForward')
     expect(methods).toContain('git.rebaseFromBase')
     expect(methods).toContain('git.branchDiff')
     expect(methods).toContain('git.listWorktrees')
@@ -829,6 +830,54 @@ describe('GitHandler', () => {
         await expect(fs.access(path.join(tmpDir, '.git', 'FETCH_HEAD'))).resolves.toBeUndefined()
       } finally {
         await fs.rm(bareDir, { recursive: true, force: true })
+      }
+    })
+
+    it('fast-forwards the tracked branch with ff-only pull semantics', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
+      const producerParent = mkdtempSync(path.join(tmpdir(), 'relay-git-producer-'))
+      const producerDir = path.join(producerParent, 'repo')
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+        gitCommit(tmpDir, 'initial')
+        const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['push', '--set-upstream', 'origin', branch], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+
+        execFileSync('git', ['clone', bareDir, producerDir], { stdio: 'pipe' })
+        execFileSync('git', ['config', 'user.email', 'test@test.com'], {
+          cwd: producerDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['config', 'user.name', 'Test'], {
+          cwd: producerDir,
+          stdio: 'pipe'
+        })
+        writeFileSync(path.join(producerDir, 'remote.txt'), 'remote')
+        gitCommit(producerDir, 'remote commit')
+        execFileSync('git', ['push', 'origin', branch], {
+          cwd: producerDir,
+          stdio: 'pipe'
+        })
+
+        await dispatcher.callRequest('git.fastForward', { worktreePath: tmpDir })
+
+        await expect(fs.readFile(path.join(tmpDir, 'remote.txt'), 'utf-8')).resolves.toBe('remote')
+      } finally {
+        await fs.rm(bareDir, { recursive: true, force: true })
+        await fs.rm(producerParent, { recursive: true, force: true })
       }
     })
 

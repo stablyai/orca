@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DiscoveredSkill, SkillDiscoveryResult, SkillSourceKind } from '../../../shared/skills'
 
 const INSTALLED_AGENT_SKILLS_CHANGED_EVENT = 'orca:installed-agent-skills-changed'
@@ -118,24 +118,46 @@ export function useInstalledAgentSkill(
   const [result, setResult] = useState<SkillDiscoveryResult | null>(cachedDiscovery)
   const [loading, setLoading] = useState(enabled && !cachedDiscovery)
   const [error, setError] = useState<string | null>(null)
+  // Why: skill scans can outlive transient settings/onboarding panels; keep
+  // the module cache update but skip React state writes after unmount.
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const refresh = useCallback(
     async (force = true): Promise<void> => {
       if (!enabled) {
-        setLoading(false)
+        if (mountedRef.current) {
+          setLoading(false)
+        }
         return
       }
-      setLoading(true)
+      if (mountedRef.current) {
+        setLoading(true)
+      }
       try {
         const next = await discoverInstalledAgentSkills(force)
+        if (!mountedRef.current) {
+          return
+        }
         setResult(next)
         setError(null)
       } catch (refreshError) {
+        if (!mountedRef.current) {
+          return
+        }
         setError(
           refreshError instanceof Error ? refreshError.message : 'Could not scan installed skills.'
         )
       } finally {
-        setLoading(false)
+        if (mountedRef.current) {
+          setLoading(false)
+        }
       }
     },
     [enabled]

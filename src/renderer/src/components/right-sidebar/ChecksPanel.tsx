@@ -131,6 +131,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const [titleDraft, setTitleDraft] = useState('')
   const [titleSaving, setTitleSaving] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const titleInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollIntervalRef = useRef(30_000) // start at 30s, backs off to 120s
   const prevChecksRef = useRef<string>('')
   const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
@@ -160,6 +161,22 @@ export default function ChecksPanel(): React.JSX.Element {
   const panelContextKeyRef = useRef(panelContextKey)
   panelContextKeyRef.current = panelContextKey
 
+  const clearTitleInputFocusTimer = useCallback((): void => {
+    if (titleInputFocusTimerRef.current !== null) {
+      clearTimeout(titleInputFocusTimerRef.current)
+      titleInputFocusTimerRef.current = null
+    }
+  }, [])
+
+  const setChecksPanelContentRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node === null) {
+        clearTitleInputFocusTimer()
+      }
+    },
+    [clearTitleInputFocusTimer]
+  )
+
   // Why: the sidebar no longer uses key={activeWorktreeId} to force a full
   // remount on worktree switch (that caused an IPC storm on Windows). Reset
   // branch-specific local state so stale UI from the previous context doesn't
@@ -172,6 +189,7 @@ export default function ChecksPanel(): React.JSX.Element {
     setEditingTitle(false)
     setTitleDraft('')
     setTitleSaving(false)
+    clearTitleInputFocusTimer()
     setChecks([])
     setChecksLoading(false)
     setComments([])
@@ -1008,16 +1026,22 @@ export default function ChecksPanel(): React.JSX.Element {
     }
     setTitleDraft(pr.title)
     setEditingTitle(true)
-    setTimeout(() => titleInputRef.current?.focus(), 0)
-  }, [pr])
+    clearTitleInputFocusTimer()
+    titleInputFocusTimerRef.current = setTimeout(() => {
+      titleInputFocusTimerRef.current = null
+      titleInputRef.current?.focus()
+    }, 0)
+  }, [clearTitleInputFocusTimer, pr])
 
   const handleCancelEdit = useCallback(() => {
+    clearTitleInputFocusTimer()
     setEditingTitle(false)
     setTitleDraft('')
-  }, [])
+  }, [clearTitleInputFocusTimer])
 
   const handleSaveTitle = useCallback(async () => {
     if (!repo || !pr || !titleDraft.trim() || titleDraft === pr.title) {
+      clearTitleInputFocusTimer()
       setEditingTitle(false)
       return
     }
@@ -1040,10 +1064,20 @@ export default function ChecksPanel(): React.JSX.Element {
         })
       }
     } finally {
+      clearTitleInputFocusTimer()
       setTitleSaving(false)
       setEditingTitle(false)
     }
-  }, [repo, pr, titleDraft, branch, linkedPR, fallbackGitHubPRNumber, fetchPRForBranch])
+  }, [
+    repo,
+    pr,
+    titleDraft,
+    branch,
+    linkedPR,
+    fallbackGitHubPRNumber,
+    fetchPRForBranch,
+    clearTitleInputFocusTimer
+  ])
 
   const handleTitleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -1558,7 +1592,7 @@ export default function ChecksPanel(): React.JSX.Element {
   }
 
   return (
-    <div className="flex-1 overflow-auto scrollbar-sleek">
+    <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {/* PR Header */}
       <div className="px-3 py-3 border-b border-border space-y-2.5">
         {/* PR number + state badge + refresh + open link */}

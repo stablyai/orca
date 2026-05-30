@@ -76,6 +76,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
     this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
+    this.dispatcher.onRequest('git.fastForward', (p) => this.fastForward(p))
     this.dispatcher.onRequest('git.rebaseFromBase', (p) => this.rebaseFromBase(p))
     this.dispatcher.onRequest('git.branchDiff', (p) => this.branchDiff(p))
     this.dispatcher.onRequest('git.commitDiff', (p) => this.commitDiff(p))
@@ -460,31 +461,45 @@ export class GitHandler {
     }
   }
 
-  private async pull(params: Record<string, unknown>) {
+  private async pullWithArgs(params: Record<string, unknown>, pullArgs: string[]) {
     const worktreePath = params.worktreePath as string
-    // Why: plain `git pull` uses the user's configured pull strategy (merge by
-    // default) so diverged branches reconcile instead of erroring out.
     try {
       if (params.pushTarget !== undefined) {
         assertGitPushTargetShape(params.pushTarget)
         const pushTarget = params.pushTarget as GitPushTarget
         await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
-        await this.git(['pull', pushTarget.remoteName, pushTarget.branchName], worktreePath)
+        await this.git(
+          ['pull', ...pullArgs, pushTarget.remoteName, pushTarget.branchName],
+          worktreePath
+        )
         return
       }
       const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
       if (upstream && !upstream.isConfiguredUpstream) {
         // Why: legacy Orca branches may still track origin/main while pushes
         // target origin/<branch>. Pull the same effective branch the UI reports.
-        await this.git(['pull', upstream.remoteName, upstream.branchName], worktreePath)
+        await this.git(
+          ['pull', ...pullArgs, upstream.remoteName, upstream.branchName],
+          worktreePath
+        )
         return
       }
-      await this.git(['pull'], worktreePath)
+      await this.git(['pull', ...pullArgs], worktreePath)
     } catch (error) {
       // Why: mirror the local gitPull normalization so SSH users see the same
       // actionable messages instead of raw git stderr.
       throw new Error(normalizeGitErrorMessage(error, 'pull'))
     }
+  }
+
+  private async pull(params: Record<string, unknown>) {
+    // Why: plain `git pull` uses the user's configured pull strategy (merge by
+    // default) so diverged branches reconcile instead of erroring out.
+    await this.pullWithArgs(params, [])
+  }
+
+  private async fastForward(params: Record<string, unknown>) {
+    await this.pullWithArgs(params, ['--ff-only'])
   }
 
   private async rebaseFromBase(params: Record<string, unknown>) {

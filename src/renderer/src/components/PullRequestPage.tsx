@@ -478,6 +478,34 @@ function PRReviewersPanel({
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const settings = useAppStore((s) => s.settings)
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
+  const reviewerInputFocusFrameRef = useRef<number | null>(null)
+  const reviewerPanelMountedRef = useRef(true)
+
+  const cancelReviewerInputFocusFrame = useCallback((): void => {
+    if (reviewerInputFocusFrameRef.current !== null) {
+      cancelAnimationFrame(reviewerInputFocusFrameRef.current)
+      reviewerInputFocusFrameRef.current = null
+    }
+  }, [])
+
+  const scheduleReviewerInputFocus = useCallback((): void => {
+    if (!reviewerPanelMountedRef.current) {
+      return
+    }
+    cancelReviewerInputFocusFrame()
+    reviewerInputFocusFrameRef.current = requestAnimationFrame(() => {
+      reviewerInputFocusFrameRef.current = null
+      reviewerInputRef.current?.focus()
+    })
+  }, [cancelReviewerInputFocusFrame])
+
+  useEffect(() => {
+    reviewerPanelMountedRef.current = true
+    return () => {
+      reviewerPanelMountedRef.current = false
+      cancelReviewerInputFocusFrame()
+    }
+  }, [cancelReviewerInputFocusFrame])
 
   useEffect(() => {
     setLocalReviewRequests(item.reviewRequests ?? [])
@@ -736,7 +764,7 @@ function PRReviewersPanel({
     await (selectedReviewerLogins.has(reviewer.login.toLowerCase())
       ? handleRemoveReviewers([reviewer.login])
       : handleRequestReview([reviewer.login]))
-    requestAnimationFrame(() => reviewerInputRef.current?.focus())
+    scheduleReviewerInputFocus()
   }
 
   const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
@@ -745,7 +773,7 @@ function PRReviewersPanel({
     }
     setOpen(nextOpen)
     if (nextOpen) {
-      requestAnimationFrame(() => reviewerInputRef.current?.focus())
+      scheduleReviewerInputFocus()
       return
     }
     setReviewerInput('')
@@ -2447,6 +2475,7 @@ function ConversationTab({
   const [bodyEditing, setBodyEditing] = useState(false)
   const [bodySaving, setBodySaving] = useState(false)
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const bodyTextareaFocusFrameRef = useRef<number | null>(null)
   const repoAssignees = useRepoAssignees(repoPath, item.repoId)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = useMemo(
@@ -2465,6 +2494,13 @@ function ConversationTab({
     [comments, detailsParticipants, item, repoAssignees.data]
   )
 
+  const cancelBodyTextareaFocusFrame = useCallback((): void => {
+    if (bodyTextareaFocusFrameRef.current !== null) {
+      cancelAnimationFrame(bodyTextareaFocusFrameRef.current)
+      bodyTextareaFocusFrameRef.current = null
+    }
+  }, [])
+
   useEffect(() => {
     if (replyingTo !== null && !visibleComments.some((comment) => comment.id === replyingTo)) {
       setReplyingTo(null)
@@ -2478,10 +2514,17 @@ function ConversationTab({
   }, [body, bodyEditing, item.id])
 
   useEffect(() => {
-    if (bodyEditing) {
-      requestAnimationFrame(() => bodyTextareaRef.current?.focus())
+    if (!bodyEditing) {
+      cancelBodyTextareaFocusFrame()
+      return cancelBodyTextareaFocusFrame
     }
-  }, [bodyEditing])
+    cancelBodyTextareaFocusFrame()
+    bodyTextareaFocusFrameRef.current = requestAnimationFrame(() => {
+      bodyTextareaFocusFrameRef.current = null
+      bodyTextareaRef.current?.focus()
+    })
+    return cancelBodyTextareaFocusFrame
+  }, [bodyEditing, cancelBodyTextareaFocusFrame])
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const markdownGitHubRepo = useMemo(
@@ -5282,6 +5325,12 @@ export default function PullRequestPage({
   const files = details?.files ?? []
   const checks = details?.checks ?? []
   const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
+  // Why: clipboard IPC can resolve after the page unmounts; skip copied-state
+  // feedback instead of starting its reset timer on a stale surface.
+  const linkCopyMountedRef = useRef(false)
+  const setLinkCopyButtonRef = useCallback((node: HTMLButtonElement | null) => {
+    linkCopyMountedRef.current = node !== null
+  }, [])
 
   useEffect(() => {
     setLinkCopied(false)
@@ -5303,6 +5352,9 @@ export default function PullRequestPage({
       // Why: Electron's clipboard IPC is reliable even when browser clipboard
       // APIs lose focus/activation inside nested overlay surfaces.
       await window.api.ui.writeClipboardText(workItem.url)
+      if (!linkCopyMountedRef.current) {
+        return
+      }
       setLinkCopied(true)
       toast.success('GitHub link copied')
     } catch {
@@ -5428,6 +5480,7 @@ export default function PullRequestPage({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  ref={setLinkCopyButtonRef}
                   type="button"
                   variant="ghost"
                   size="icon-sm"

@@ -297,11 +297,16 @@ function CodeCell({
         void onSaveRequestRef.current()
       }
     )
-    editorInstance.onDidDispose(() => cleanupSaveShortcut())
-    editorInstance.addCommand(monacoInstance.KeyCode.Escape, () => {
+    const blurSub = editorInstance.onDidBlurEditorWidget(() => {
       onDeactivateRef.current()
     })
-    editorInstance.onDidBlurEditorWidget(() => {
+    editorInstance.onDidDispose(() => {
+      // Why: the inline source editor owns both the save shortcut and blur
+      // subscription for this Monaco editor instance.
+      cleanupSaveShortcut()
+      blurSub.dispose()
+    })
+    editorInstance.addCommand(monacoInstance.KeyCode.Escape, () => {
       onDeactivateRef.current()
     })
   }, [])

@@ -33,7 +33,7 @@
 // off), the notice never returns, because the cohort condition
 // (`optedIn === null`) clears in all three resolving paths.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 
 import { Button } from './ui/button'
@@ -57,6 +57,14 @@ export function FirstLaunchBanner({
   // wasted IPC round-trip, but the guard also blocks a Turn-off click
   // arriving mid-flight after an acknowledge (or vice versa).
   const [inFlight, setInFlight] = useState(false)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const handleAcknowledge = async (): Promise<void> => {
     if (inFlight) {
@@ -74,13 +82,17 @@ export function FirstLaunchBanner({
     try {
       await acknowledgeBanner()
       await fetchSettings()
-      onResolve()
+      if (mountedRef.current) {
+        onResolve()
+      }
     } finally {
       // Why: if `fetchSettings` rejects (IPC error during shutdown,
       // settings file lock, etc.), `onResolve` never runs and the banner
       // stays mounted. Without resetting `inFlight`, every button stays
       // permanently disabled for the rest of the session.
-      setInFlight(false)
+      if (mountedRef.current) {
+        setInFlight(false)
+      }
     }
   }
 
@@ -97,9 +109,13 @@ export function FirstLaunchBanner({
     try {
       await telemetrySetOptIn(false)
       await fetchSettings()
-      onResolve()
+      if (mountedRef.current) {
+        onResolve()
+      }
     } finally {
-      setInFlight(false)
+      if (mountedRef.current) {
+        setInFlight(false)
+      }
     }
   }
 

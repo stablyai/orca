@@ -1,6 +1,10 @@
 import type { App } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
-import { acquireSingleInstanceLock } from './single-instance-lock'
+import {
+  acquireSingleInstanceLock,
+  logSingleInstanceLockFailure,
+  SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE
+} from './single-instance-lock'
 
 type Listener = (...args: unknown[]) => void
 
@@ -63,5 +67,16 @@ describe('acquireSingleInstanceLock', () => {
     registered?.()
 
     expect(onSecondInstance).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('logSingleInstanceLockFailure', () => {
+  it('emits a production-visible diagnostic for the early quit path', () => {
+    const logger = { error: vi.fn() }
+
+    logSingleInstanceLockFailure(logger)
+
+    expect(logger.error).toHaveBeenCalledWith(SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE)
+    expect(logger.error.mock.calls[0]?.[0]).toContain('Electron/macOS single-instance lock failure')
   })
 })
