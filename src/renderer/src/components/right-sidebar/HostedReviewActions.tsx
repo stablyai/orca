@@ -136,8 +136,7 @@ export default function HostedReviewActions({
     })
   }, [githubPR, isGitLab, review])
   const mergeMethods = useMemo(
-    () =>
-      resolveGitHubPRMergeMethods(isGitLab ? null : (githubPR?.mergeMethodSettings ?? null)),
+    () => resolveGitHubPRMergeMethods(isGitLab ? null : (githubPR?.mergeMethodSettings ?? null)),
     [githubPR?.mergeMethodSettings, isGitLab]
   )
   const isUpdatingReviewState = stateUpdating !== null

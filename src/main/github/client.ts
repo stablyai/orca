@@ -361,9 +361,9 @@ const WORK_ITEM_PR_LIST_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
 
 // Why: these fields are intentionally excluded from `gh pr list` because
-// statusCheckRollup/review decision/merge metadata fan out into expensive
-// GraphQL work across every row. Requested reviewers are kept in the list
-// payload because the Tasks table renders that column on first paint.
+// statusCheckRollup/review decision/PR-specific merge metadata fan out into
+// expensive GraphQL work across every row. Requested reviewers are kept in the
+// list payload because the Tasks table renders that column on first paint.
 const WORK_ITEM_PR_DETAIL_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,additions,deletions,changedFiles,reviewDecision,reviewRequests,latestReviews,assignees,statusCheckRollup,mergeable,mergeStateStatus,autoMergeRequest,maintainerCanModify'
 
@@ -694,6 +694,26 @@ function mapPullRequestWorkItem(
   }
 }
 
+async function hydrateWorkItemMergeMethodSettings(
+  items: MainWorkItem[],
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<MainWorkItem[]> {
+  const hasPullRequest = items.some((item) => item.type === 'pr')
+  if (!ownerRepo || !hasPullRequest) {
+    return items
+  }
+  // Why: merge method settings are repository-level, so one cached metadata
+  // probe can keep Tasks rows accurate without per-PR GraphQL fan-out.
+  const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, undefined, ghOptions)
+  if (!mergeMetadata.mergeMethodSettings) {
+    return items
+  }
+  return items.map((item) =>
+    item.type === 'pr' ? { ...item, mergeMethodSettings: mergeMetadata.mergeMethodSettings } : item
+  )
+}
+
 async function fetchIssueWorkItem(
   repoPath: string,
   ownerRepo: OwnerRepo | null,
@@ -947,6 +967,7 @@ async function listRecentWorkItems(
       prs = (JSON.parse(prsSettled.value.stdout) as Record<string, unknown>[]).map((item) =>
         mapPullRequestWorkItem(item, prOwnerRepo)
       )
+      prs = await hydrateWorkItemMergeMethodSettings(prs, prOwnerRepo, ghOptions)
     } else {
       // Why: PR-side failures must preserve the pre-diff behavior of
       // Promise.all by re-throwing so the rejection propagates up through
@@ -1088,10 +1109,11 @@ async function listQueriedWorkItems(
       const mapped = (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
         mapPullRequestWorkItem(item, prOwnerRepo)
       )
+      const hydrated = await hydrateWorkItemMergeMethodSettings(mapped, prOwnerRepo, ghOptions)
       if (query.state === 'closed') {
-        return mapped.filter((item) => item.state !== 'merged')
+        return hydrated.filter((item) => item.state !== 'merged')
       }
-      return mapped
+      return hydrated
     } catch (err) {
       console.warn('listQueriedWorkItems PRs partial failure:', err)
       return []
