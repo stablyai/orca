@@ -12753,8 +12753,13 @@ export function appendNormalizedToTailBuffer(
     }
     let totalChars =
       nextLines.reduce((sum, line) => sum + line.length, 0) + retainedPartialLine.length
-    while (nextLines.length > 0 && totalChars > MAX_TAIL_CHARS) {
-      totalChars -= nextLines.shift()!.length
+    let trimStartIndex = 0
+    while (trimStartIndex < nextLines.length && totalChars > MAX_TAIL_CHARS) {
+      totalChars -= nextLines[trimStartIndex].length
+      trimStartIndex += 1
+    }
+    if (trimStartIndex > 0) {
+      nextLines = nextLines.slice(trimStartIndex)
       truncated = true
     }
   }

@@ -3953,6 +3953,26 @@ describe('OrcaRuntimeService', () => {
     expect(shiftCallCount).toBe(0)
   })
 
+  it('trims terminal tail character budget without per-line array shifts', () => {
+    const shiftSpy = vi.spyOn(Array.prototype, 'shift')
+    const lines = Array.from({ length: 1000 }, (_, index) => `line-${index}-${'x'.repeat(300)}`)
+    const result = appendNormalizedToTailBuffer([], '', `${lines.join('\n')}\n`)
+    const shiftCallCount = shiftSpy.mock.calls.length
+    shiftSpy.mockRestore()
+
+    let retainedChars = lines.reduce((sum, line) => sum + line.length, 0)
+    let expectedStartIndex = 0
+    while (expectedStartIndex < lines.length && retainedChars > 256 * 1024) {
+      retainedChars -= lines[expectedStartIndex].length
+      expectedStartIndex += 1
+    }
+
+    expect(result.truncated).toBe(true)
+    expect(result.lines).toEqual(lines.slice(expectedStartIndex))
+    expect(result.lines.reduce((sum, line) => sum + line.length, 0)).toBeLessThanOrEqual(256 * 1024)
+    expect(shiftCallCount).toBe(0)
+  })
+
   it('builds terminal previews without mapping the full retained tail', () => {
     const lines = Array.from({ length: 5000 }, (_, index) =>
       index % 2 === 0 ? `line-${index}` : '   '
