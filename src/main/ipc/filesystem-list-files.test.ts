@@ -279,6 +279,46 @@ describe('filesystem-list-files', () => {
       expect(result).toEqual(['.github/workflows/ci.yml', 'valid.ts'])
     })
 
+    it('settles and detaches git fallback scans that ignore timeout kills', async () => {
+      checkRgAvailableMock.mockResolvedValue(false)
+      vi.useFakeTimers()
+
+      try {
+        const gitP1 = createMockProcess()
+        const gitP2 = createMockProcess()
+        let callIndex = 0
+
+        spawnMock.mockImplementation((cmd: string) => {
+          if (cmd === 'git') {
+            callIndex++
+            return callIndex === 1 ? gitP1 : gitP2
+          }
+          return createMockProcess()
+        })
+
+        const storeMock = {} as unknown as Store
+        const promise = listQuickOpenFiles('/mock/root', storeMock)
+
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\npartial')
+
+        await vi.advanceTimersByTimeAsync(10000)
+
+        await expect(promise).resolves.toEqual(['src/index.ts'])
+        expect(gitP1.kill).toHaveBeenCalled()
+        expect(gitP2.kill).toHaveBeenCalled()
+        expect((gitP1.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+        expect((gitP1.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+        expect(gitP1.listenerCount('error')).toBe(0)
+        expect(gitP1.listenerCount('close')).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('does not fall back to git when rg is available', async () => {
       checkRgAvailableMock.mockResolvedValue(true)
 
