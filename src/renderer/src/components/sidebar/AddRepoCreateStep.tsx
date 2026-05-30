@@ -5,7 +5,7 @@
  * oxlint limit, following the same pattern as useRemoteRepo.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Folder, GitBranch, Home, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -301,7 +301,16 @@ export function CreateStep({
     radioFocusFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelRadioFocusFrame, [cancelRadioFocusFrame])
+  const setRadioGroupNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued arrow-key focus is only valid while this radiogroup is mounted.
+      if (!node) {
+        cancelRadioFocusFrame()
+      }
+      radioGroupRef.current = node
+    },
+    [cancelRadioFocusFrame]
+  )
 
   // Arrow keys cycle selection within the radiogroup (WAI-ARIA radio pattern).
   const cycleKind = useCallback(() => {
@@ -336,7 +345,7 @@ export function CreateStep({
       <div className="space-y-3.5 pt-1 min-w-0">
         {/* Kind toggle. Real radiogroup so screen readers announce it as a choice. */}
         <div
-          ref={radioGroupRef}
+          ref={setRadioGroupNode}
           role="radiogroup"
           aria-label="Project kind"
           className="grid grid-cols-2 gap-2"

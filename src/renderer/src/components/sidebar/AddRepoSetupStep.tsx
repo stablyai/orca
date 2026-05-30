@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { GitBranch, GitBranchPlus, Settings } from 'lucide-react'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -158,7 +158,16 @@ export function ProjectAddedContent({
     radioFocusFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelRadioFocusFrame, [cancelRadioFocusFrame])
+  const setRadioGroupNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued arrow-key focus is only valid while this radiogroup is mounted.
+      if (!node) {
+        cancelRadioFocusFrame()
+      }
+      radioGroupRef.current = node
+    },
+    [cancelRadioFocusFrame]
+  )
 
   const cycleChoice = useCallback(() => {
     const index = choices.indexOf(selectedChoice)
@@ -198,7 +207,7 @@ export function ProjectAddedContent({
       <div className="space-y-3 pt-1">
         {choices.length > 1 ? (
           <div
-            ref={radioGroupRef}
+            ref={setRadioGroupNode}
             role="radiogroup"
             aria-label="How to start working"
             className="space-y-2"
