@@ -1447,6 +1447,43 @@ export type LinearLabel = {
   color: string
 }
 
+export type LinearIssueLabel = {
+  id: string
+  workspaceId?: string
+  workspaceName?: string
+  name: string
+  color: string
+  description?: string | null
+  teamId?: string
+  teamName?: string
+  parentId?: string
+  parentName?: string
+  isGroup: boolean
+  archivedAt?: string | null
+  retiredAt?: string | null
+}
+
+export type LinearIssueLabelCreateInput = {
+  name: string
+  color?: string
+  description?: string | null
+  teamId?: string | null
+  parentId?: string | null
+  isGroup?: boolean
+}
+
+export type LinearIssueLabelUpdateInput = {
+  name?: string
+  color?: string
+  description?: string | null
+  parentId?: string | null
+  isGroup?: boolean
+}
+
+export type LinearIssueLabelMutationResult =
+  | { ok: true; label: LinearIssueLabel }
+  | { ok: false; error: string }
+
 export type LinearMember = {
   id: string
   displayName: string
