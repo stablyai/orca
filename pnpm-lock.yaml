@@ -119,8 +119,8 @@ importers:
         specifier: 6.1.0-beta.220
         version: 6.1.0-beta.220
       agent-browser:
-        specifier: ~0.24.1
-        version: 0.24.1
+        specifier: ~0.27.0
+        version: 0.27.0
       better-sqlite3:
         specifier: ^12.9.0
         version: 12.9.0
@@ -3077,8 +3077,8 @@ packages:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
 
-  agent-browser@0.24.1:
-    resolution: {integrity: sha512-csWJtYEQow52b+p93zVZfNrcNBwbxGCZDXDMNWl2ij2i0MFKubIzN+icUeX2/NrkZe5iIau8px+HQlxata2oPw==}
+  agent-browser@0.27.0:
+    resolution: {integrity: sha512-mmHzVsYFVA6nshNNGJzg83aVMgKpf4h98ytY3pvtJB1Cot0ZyA2bfnkbSngGD56Azkj+GlhVH6qx9DfKOVE0yg==}
     hasBin: true
 
   ajv-formats@3.0.1:
@@ -8966,7 +8966,7 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  agent-browser@0.24.1: {}
+  agent-browser@0.27.0: {}
 
   ajv-formats@3.0.1(ajv@8.20.0):
     optionalDependencies:

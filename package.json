@@ -91,7 +91,7 @@
     "@xterm/addon-webgl": "0.20.0-beta.219",
     "@xterm/headless": "6.1.0-beta.220",
     "@xterm/xterm": "6.1.0-beta.220",
-    "agent-browser": "~0.24.1",
+    "agent-browser": "~0.27.0",
     "better-sqlite3": "^12.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
