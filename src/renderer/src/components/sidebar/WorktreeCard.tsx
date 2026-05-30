@@ -58,6 +58,7 @@ type WorktreeCardProps = {
   isCurrentWorktree?: boolean
   isActiveSurface?: boolean
   isMultiSelected?: boolean
+  revealHighlight?: boolean
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
   lineageChildCount?: number
@@ -94,6 +95,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   isCurrentWorktree = isActive,
   isActiveSurface = isActive,
   isMultiSelected = false,
+  revealHighlight = false,
   selectedWorktrees,
   onActivate,
   onSelectionGesture,
@@ -646,6 +648,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             ? 'border border-sidebar-ring/35 bg-sidebar-accent/70 ring-1 ring-sidebar-ring/30'
             : 'border border-transparent worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-sidebar-ring/35',
+        revealHighlight && 'scroll-to-current-workspace-reveal-highlight',
         titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
         isSshDisconnected && !isDeleting && 'opacity-60'

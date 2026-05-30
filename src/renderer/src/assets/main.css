@@ -859,14 +859,14 @@
 .scroll-to-current-workspace-reveal-highlight::before {
   content: '';
   position: absolute;
-  inset: -2px;
+  inset: 0;
   z-index: 30;
   pointer-events: none;
   border: 1.5px solid color-mix(in srgb, var(--terminal-pane-locate) 68%, transparent);
-  border-radius: calc(var(--radius-md) + 2px);
+  border-radius: inherit;
   box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent),
-    0 0 18px color-mix(in srgb, var(--terminal-pane-locate) 36%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent),
+    0 0 14px color-mix(in srgb, var(--terminal-pane-locate) 36%, transparent);
   animation: scroll-to-current-workspace-reveal-glow 1.5s ease-out forwards;
 }
 

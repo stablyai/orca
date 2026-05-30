@@ -2606,8 +2606,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   data-worktree-drag-group-index={worktreeDragGroupIndex}
                   className={cn(
                     'relative transition-[opacity,transform,filter] duration-150 ease-out',
-                    highlightedRevealWorktreeId === itemRow.worktree.id &&
-                      'scroll-to-current-workspace-reveal-highlight',
                     worktreeDragState.draggingWorktreeId === itemRow.worktree.id &&
                       // Why: the fixed drag preview is the visible affordance; leaving the
                       // source row translucent lets it bleed through sticky headers/footers.
@@ -2638,6 +2636,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     // running active-card side effects such as SSH reconnect UI.
                     isActiveSurface={forceActiveSurface || activeWorktreeId === itemRow.worktree.id}
                     isMultiSelected={selectedWorktreeIds.has(itemRow.worktree.id)}
+                    revealHighlight={highlightedRevealWorktreeId === itemRow.worktree.id}
                     selectedWorktrees={selectedWorktrees}
                     nativeDragEnabled={false}
                     onSelectionGesture={onSelectionGesture}
