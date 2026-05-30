@@ -61,6 +61,7 @@ export function RemoteFileBrowser({
   // Why: paste resolution intentionally runs next tick; closing the picker
   // before then should cancel stale preview work.
   const pasteResolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Cache directory listings by absolute resolved path for the lifetime of
   // the picker so ordinary typing issues at most one remote call per newly
   // committed segment. targetId does not change within a picker instance.
@@ -100,6 +101,10 @@ export function RemoteFileBrowser({
       if (pasteResolveTimerRef.current) {
         clearTimeout(pasteResolveTimerRef.current)
         pasteResolveTimerRef.current = null
+      }
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current)
+        clickTimerRef.current = null
       }
     }
   }, [invalidateBrowseRequests])
@@ -423,15 +428,6 @@ export function RemoteFileBrowser({
   }, [resolvedPath, onSelect])
 
   // Single-click navigates; double-click on a folder selects it.
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    return () => {
-      if (clickTimerRef.current) {
-        clearTimeout(clickTimerRef.current)
-      }
-    }
-  }, [])
-
   // When preview is active, row clicks must be relative to the preview path,
   // not the committed `resolvedPath`.
   const listParentPath = preview?.resolvedPath ?? resolvedPath
