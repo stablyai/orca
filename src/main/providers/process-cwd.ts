@@ -1,8 +1,5 @@
 import { execFile as execFileCb } from 'child_process'
 import { readlink } from 'fs/promises'
-import { promisify } from 'util'
-
-const execFile = promisify(execFileCb)
 
 /**
  * Resolve the current working directory of a local process by pid.
@@ -92,10 +89,7 @@ async function doResolve(pid: number): Promise<string> {
     // and emits cwd records for every process on the system, so the n-line
     // scan below picks up the first unrelated process (often pid ~391 with
     // cwd `/`) and returns `/` regardless of the target pid's real cwd.
-    const { stdout } = await execFile('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'], {
-      encoding: 'utf-8',
-      timeout: LSOF_TIMEOUT_MS
-    })
+    const stdout = await readCwdWithLsof(pid)
     for (const line of stdout.split('\n')) {
       if (line.startsWith('n') && line.includes('/')) {
         // Why: lsof -d cwd is authoritative — don't second-guess it with
@@ -110,4 +104,50 @@ async function doResolve(pid: number): Promise<string> {
   }
 
   return ''
+}
+
+function readCwdWithLsof(pid: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let child: ReturnType<typeof execFileCb> | undefined
+    const timer = setTimeout(() => {
+      if (settled) {
+        return
+      }
+      settled = true
+      child?.kill()
+      reject(new Error(`lsof timed out after ${LSOF_TIMEOUT_MS}ms`))
+    }, LSOF_TIMEOUT_MS)
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      callback()
+    }
+
+    // Why: execFile's timeout only signals lsof; a missing callback would
+    // otherwise leave the shared per-pid cwd lookup promise cached forever.
+    try {
+      child = execFileCb(
+        'lsof',
+        ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'],
+        {
+          encoding: 'utf-8',
+          timeout: LSOF_TIMEOUT_MS
+        },
+        (error, stdout) => {
+          if (error) {
+            settle(() => reject(error))
+            return
+          }
+          settle(() => resolve(String(stdout)))
+        }
+      )
+    } catch (error) {
+      settle(() => reject(error))
+    }
+  })
 }
