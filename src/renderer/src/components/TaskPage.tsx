@@ -1222,6 +1222,17 @@ function PRReviewCell({
   const [submitting, setSubmitting] = useState(false)
   const settings = useAppStore((s) => s.settings)
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
+  const reviewerInputFocusFrameRef = useRef<number | null>(null)
+
+  const cancelReviewerInputFocusFrame = useCallback((): void => {
+    if (reviewerInputFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(reviewerInputFocusFrameRef.current)
+    reviewerInputFocusFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelReviewerInputFocusFrame, [cancelReviewerInputFocusFrame])
 
   useEffect(() => {
     setLocalReviewRequests(item.reviewRequests ?? [])
@@ -1412,9 +1423,14 @@ function PRReviewCell({
   const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
     setOpen(nextOpen)
     if (nextOpen) {
-      requestAnimationFrame(() => reviewerInputRef.current?.focus())
+      cancelReviewerInputFocusFrame()
+      reviewerInputFocusFrameRef.current = requestAnimationFrame(() => {
+        reviewerInputFocusFrameRef.current = null
+        reviewerInputRef.current?.focus()
+      })
       return
     }
+    cancelReviewerInputFocusFrame()
     setReviewerInput('')
   }
 
