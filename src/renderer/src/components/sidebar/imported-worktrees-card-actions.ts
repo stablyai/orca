@@ -33,7 +33,7 @@ export async function showImportedWorktreesCard(
   args.setCardState(args.projectId, {
     pending: true,
     error: null,
-    ...(forceVisible ? { forceVisible: true } : {})
+    forceVisible: true
   })
   const updated = await args.updateRepo(args.projectId, { externalWorktreeVisibility: 'show' })
   if (!updated) {

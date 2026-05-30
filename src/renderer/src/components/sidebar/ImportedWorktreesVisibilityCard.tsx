@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { Ellipsis } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { dirname } from '@/lib/path'
 import { cn } from '@/lib/utils'
 
 export type ImportedWorktreesVisibilityPlacement = 'repo-group' | 'pinned-fallback'
@@ -48,15 +50,11 @@ function getParentPath(path: string | undefined): string {
   if (!path) {
     return UNKNOWN_LOCATION_LABEL
   }
-  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '')
-  const separatorIndex = normalized.lastIndexOf('/')
-  if (separatorIndex < 0) {
+  const parentPath = dirname(path)
+  if (!parentPath || parentPath === '.') {
     return UNKNOWN_LOCATION_LABEL
   }
-  if (separatorIndex === 0) {
-    return '/'
-  }
-  return normalized.slice(0, separatorIndex)
+  return parentPath
 }
 
 function groupWorktreesByParentPath(
@@ -127,12 +125,19 @@ export default function ImportedWorktreesVisibilityCard({
       <div className="mt-2 grid gap-1.5" aria-label="Imported worktree preview">
         {visibleWorktreeGroups.map((group) => (
           <div key={group.path} className="grid min-w-0 gap-1">
-            <div
-              className="min-w-0 truncate px-1 text-[10px] font-medium uppercase leading-4 text-muted-foreground"
-              title={group.path}
-            >
-              {group.path}
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  tabIndex={0}
+                  className="block w-full min-w-0 truncate px-1 font-mono text-[10px] leading-4 text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
+                >
+                  {group.path}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {group.path}
+              </TooltipContent>
+            </Tooltip>
             {group.worktrees.map((worktree, index) => (
               <div
                 key={getWorktreeKey(worktree, index, 'preview')}

@@ -3,6 +3,7 @@ import type { ComponentProps } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import ImportedWorktreesVisibilityCard from './ImportedWorktreesVisibilityCard'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 const hiddenWorktrees = [
   {
@@ -35,16 +36,18 @@ function renderCard(
   overrides: Partial<ComponentProps<typeof ImportedWorktreesVisibilityCard>> = {}
 ): string {
   return renderToStaticMarkup(
-    <ImportedWorktreesVisibilityCard
-      repoDisplayName="orca"
-      hiddenWorktrees={hiddenWorktrees}
-      placement="repo-group"
-      pending={false}
-      error={null}
-      onShow={vi.fn()}
-      onKeepHidden={vi.fn()}
-      {...overrides}
-    />
+    <TooltipProvider>
+      <ImportedWorktreesVisibilityCard
+        repoDisplayName="orca"
+        hiddenWorktrees={hiddenWorktrees}
+        placement="repo-group"
+        pending={false}
+        error={null}
+        onShow={vi.fn()}
+        onKeepHidden={vi.fn()}
+        {...overrides}
+      />
+    </TooltipProvider>
   )
 }
 
@@ -78,6 +81,21 @@ describe('ImportedWorktreesVisibilityCard', () => {
     expect(markup).toContain('imported them automatically into orca.')
     expect(markup).toContain('Showing them restores the imported worktrees to the repo list.')
     expect(markup).not.toContain('repo options')
+  })
+
+  it('preserves Windows parent path separators in the preview', () => {
+    const markup = renderCard({
+      hiddenWorktrees: [
+        {
+          id: 'windows-hidden',
+          displayName: 'FeatureX',
+          path: 'C:\\Repos\\Orca\\FeatureX'
+        }
+      ]
+    })
+
+    expect(markup).toContain('C:\\Repos\\Orca')
+    expect(markup).not.toContain('C:/Repos/Orca')
   })
 
   it('does not expose Keep hidden in the pinned-only fallback state', () => {

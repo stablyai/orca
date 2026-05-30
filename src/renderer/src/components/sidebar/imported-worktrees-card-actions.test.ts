@@ -27,7 +27,11 @@ describe('imported worktrees card actions', () => {
 
     expect(updateRepo).toHaveBeenCalledWith(projectId, { externalWorktreeVisibility: 'show' })
     expect(fetchWorktrees).toHaveBeenCalledWith(projectId, { requireAuthoritative: true })
-    expect(setCardState).toHaveBeenNthCalledWith(1, projectId, { pending: true, error: null })
+    expect(setCardState).toHaveBeenNthCalledWith(1, projectId, {
+      pending: true,
+      error: null,
+      forceVisible: true
+    })
     expect(setCardState).toHaveBeenLastCalledWith(projectId, null)
   })
 
