@@ -39,6 +39,7 @@ import {
   addPRReviewCommentReply,
   updatePRTitle,
   mergePR,
+  setPRAutoMerge,
   updatePRState,
   rerunPRChecks,
   requestPRReviewers,
@@ -670,6 +671,35 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.prNumber,
         args.method,
+        repoConnectionId(repo),
+        args.prRepo ?? null
+      )
+      if (result.ok) {
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
+          event.sender.id
+        )
+      }
+      return result
+    }
+  )
+
+  ipcMain.handle(
+    'gh:setPRAutoMerge',
+    async (
+      event,
+      args: {
+        repoPath: string
+        prNumber: number
+        enabled: boolean
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args, store)
+      const result = await setPRAutoMerge(
+        repo.path,
+        args.prNumber,
+        args.enabled,
         repoConnectionId(repo),
         args.prRepo ?? null
       )

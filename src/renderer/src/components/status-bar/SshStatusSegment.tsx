@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Cloud, Loader2, MonitorSmartphone, Server, ServerOff } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -113,7 +113,15 @@ function TargetRow({
   syncStatus: RemoteWorkspaceSyncStatus | undefined
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
+  const mountedRef = useRef(true)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const handleConnect = useCallback(async () => {
     setBusy(true)
@@ -123,7 +131,9 @@ function TargetRow({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Connection failed')
     } finally {
-      setBusy(false)
+      if (mountedRef.current) {
+        setBusy(false)
+      }
     }
   }, [recordFeatureInteraction, targetId])
 
@@ -135,7 +145,9 @@ function TargetRow({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Disconnect failed')
     } finally {
-      setBusy(false)
+      if (mountedRef.current) {
+        setBusy(false)
+      }
     }
   }, [recordFeatureInteraction, targetId])
 

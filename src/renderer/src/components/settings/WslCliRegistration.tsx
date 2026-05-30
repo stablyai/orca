@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -26,17 +26,32 @@ export function WslCliRegistration({
   const [loading, setLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [busyAction, setBusyAction] = useState<'install' | 'remove' | null>(null)
+  const mountedRef = useRef(true)
   const { wslAvailable } = useWindowsTerminalCapabilities(currentPlatform === 'win32')
   const showWslCli = currentPlatform === 'win32' && wslAvailable
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const refreshStatus = async (): Promise<void> => {
     setLoading(true)
     try {
-      setStatus(await window.api.cli.getWslInstallStatus())
+      const next = await window.api.cli.getWslInstallStatus()
+      if (mountedRef.current) {
+        setStatus(next)
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to load WSL CLI status.')
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to load WSL CLI status.')
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
   }
 
@@ -58,15 +73,22 @@ export function WslCliRegistration({
     setBusyAction('install')
     try {
       const next = await window.api.cli.installWsl()
+      if (!mountedRef.current) {
+        return
+      }
       setStatus(next)
       setDialogOpen(false)
       toast.success(`Registered \`${next.commandName}\` in WSL.`)
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : `Failed to register \`${commandName}\` in WSL.`
-      )
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error ? error.message : `Failed to register \`${commandName}\` in WSL.`
+        )
+      }
     } finally {
-      setBusyAction(null)
+      if (mountedRef.current) {
+        setBusyAction(null)
+      }
     }
   }
 
@@ -74,15 +96,22 @@ export function WslCliRegistration({
     setBusyAction('remove')
     try {
       const next = await window.api.cli.removeWsl()
+      if (!mountedRef.current) {
+        return
+      }
       setStatus(next)
       setDialogOpen(false)
       toast.success(`Removed \`${next.commandName}\` from WSL.`)
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : `Failed to remove \`${commandName}\` from WSL.`
-      )
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error ? error.message : `Failed to remove \`${commandName}\` from WSL.`
+        )
+      }
     } finally {
-      setBusyAction(null)
+      if (mountedRef.current) {
+        setBusyAction(null)
+      }
     }
   }
 

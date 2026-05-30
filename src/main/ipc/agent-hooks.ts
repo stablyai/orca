@@ -6,6 +6,7 @@ import type {
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
+import { ampHookService } from '../amp/hook-service'
 import {
   clearMigrationUnsupportedPtysForPaneKey,
   getMigrationUnsupportedPtySnapshot
@@ -36,6 +37,7 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentHooks:codexStatus')
   ipcMain.removeHandler('agentHooks:geminiStatus')
   ipcMain.removeHandler('agentHooks:antigravityStatus')
+  ipcMain.removeHandler('agentHooks:ampStatus')
   ipcMain.removeHandler('agentHooks:cursorStatus')
   ipcMain.removeHandler('agentHooks:droidStatus')
   ipcMain.removeHandler('agentHooks:commandCodeStatus')
@@ -131,6 +133,19 @@ export function registerAgentHookHandlers(): void {
     } catch (err) {
       return {
         agent: 'antigravity',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:ampStatus', (): AgentHookInstallStatus => {
+    try {
+      return ampHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'amp',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

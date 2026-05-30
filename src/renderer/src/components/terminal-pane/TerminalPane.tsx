@@ -23,6 +23,7 @@ import { EMPTY_LAYOUT, serializeTerminalLayout } from './layout-serialization'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   applyExpandedLayoutTo,
+  cancelPendingPaneSizeRefreshFrames,
   createExpandCollapseActions,
   restoreExpandedLayoutFrom
 } from './expand-collapse'
@@ -126,6 +127,7 @@ export default function TerminalPane({
   const expandedStyleSnapshotRef = useRef<Map<HTMLElement, { display: string; flex: string }>>(
     new Map()
   )
+  const pendingPaneSizeRefreshFrameIdsRef = useRef<number[]>([])
   // Why (separate from expandedStyleSnapshotRef): Activity isolation is a
   // transient view override that must not collide with the user-facing
   // expanded-pane state or the layout snapshot. Keeping its own snapshot
@@ -181,75 +183,104 @@ export default function TerminalPane({
   // (desktop-fit), we also trigger safeFit on affected panes so the terminal
   // resizes back to desktop dimensions.
   const [, setOverrideTick] = useState(0)
-  useEffect(
-    () =>
-      onOverrideChange((event) => {
-        setOverrideTick((n) => n + 1)
-        if (event.mode === 'desktop-fit') {
-          const manager = managerRef.current
-          if (!manager) {
-            return
-          }
-          // Why: pane IDs are per-tab, so resolve the affected PTY through this
-          // tab's live transport bindings instead of global numeric pane IDs.
-          const getAffectedPanes = (): ReturnType<typeof manager.getPanes> =>
-            manager
-              .getPanes()
-              .filter((pane) => paneTransportsRef.current.get(pane.id)?.getPtyId() === event.ptyId)
-          // Why: fitAddon.fit() measures DOM dimensions, so it must run after
-          // the browser has settled layout. Running synchronously inside the
-          // IPC callback can produce stale measurements. rAF ensures the DOM
-          // is ready. The follow-up timeout acts as a safety net: if
-          // fitAddon.fit() silently threw (its errors are caught), the timeout
-          // falls back to a direct terminal.resize() using the restored
-          // dimensions from the runtime. This guarantees xterm exits mobile
-          // dims even when the DOM-based fit path fails.
-          const fitAffectedPanes = (): void => {
-            for (const pane of getAffectedPanes()) {
-              safeFit(pane)
-            }
-          }
-          requestAnimationFrame(fitAffectedPanes)
-          // Why: belt-and-suspenders — if safeFit's fitAddon.fit() threw or
-          // was a no-op due to stale dimensions, fall back to a direct
-          // resize. ONLY fire if xterm is still parked at the prior
-          // mobile-fit dims, meaning safeFit failed to move it. Previously
-          // we also fired when xterm had moved to *any* size other than
-          // the captured baseline, which clobbered safeFit's correct
-          // DOM-measured fit when the desktop pane geometry had changed
-          // since mobile-fit started (e.g. user closed a split or resized
-          // the window while the phone was active). In that scenario the
-          // event.cols/rows is the stale baseline from the moment
-          // mobile-fit started, not the current pane geometry — applying
-          // it would shrink the terminal back to e.g. half-width.
-          setTimeout(() => {
-            for (const pane of getAffectedPanes()) {
-              // Why: skip the fallback for hidden/unmounted panes whose
-              // container is 0×0. Force-resizing xterm to the server's
-              // desktop dims while the DOM has no geometry leaves xterm
-              // with cols/rows that won't match when the tab is later
-              // activated (the activation refit will correct it). The
-              // fallback is for the *visible* pane that legitimately
-              // failed to refit via the rAF safeFit.
-              const rect = pane.container.getBoundingClientRect()
-              if (rect.width === 0 || rect.height === 0) {
-                continue
-              }
-              safeFit(pane)
-              const stuckAtMobile =
-                event.priorCols != null &&
-                event.priorRows != null &&
-                pane.terminal.cols === event.priorCols &&
-                pane.terminal.rows === event.priorRows
-              if (stuckAtMobile && event.cols > 0 && event.rows > 0) {
-                pane.terminal.resize(event.cols, event.rows)
-              }
-            }
-          }, 100)
+  useEffect(() => {
+    const pendingFitFrames = new Set<number>()
+    const pendingFallbackTimers = new Set<number>()
+
+    const scheduleFitFrame = (callback: () => void): void => {
+      const frameId = window.requestAnimationFrame(() => {
+        pendingFitFrames.delete(frameId)
+        callback()
+      })
+      pendingFitFrames.add(frameId)
+    }
+
+    const scheduleFallbackTimer = (callback: () => void): void => {
+      const timerId = window.setTimeout(() => {
+        pendingFallbackTimers.delete(timerId)
+        callback()
+      }, 100)
+      pendingFallbackTimers.add(timerId)
+    }
+
+    const unsubscribe = onOverrideChange((event) => {
+      setOverrideTick((n) => n + 1)
+      if (event.mode === 'desktop-fit') {
+        const manager = managerRef.current
+        if (!manager) {
+          return
         }
-      }),
-    []
-  )
+        // Why: pane IDs are per-tab, so resolve the affected PTY through this
+        // tab's live transport bindings instead of global numeric pane IDs.
+        const getAffectedPanes = (): ReturnType<typeof manager.getPanes> =>
+          manager
+            .getPanes()
+            .filter((pane) => paneTransportsRef.current.get(pane.id)?.getPtyId() === event.ptyId)
+        // Why: fitAddon.fit() measures DOM dimensions, so it must run after
+        // the browser has settled layout. Running synchronously inside the
+        // IPC callback can produce stale measurements. rAF ensures the DOM
+        // is ready. The follow-up timeout acts as a safety net: if
+        // fitAddon.fit() silently threw (its errors are caught), the timeout
+        // falls back to a direct terminal.resize() using the restored
+        // dimensions from the runtime. This guarantees xterm exits mobile
+        // dims even when the DOM-based fit path fails.
+        const fitAffectedPanes = (): void => {
+          for (const pane of getAffectedPanes()) {
+            safeFit(pane)
+          }
+        }
+        scheduleFitFrame(fitAffectedPanes)
+        // Why: belt-and-suspenders — if safeFit's fitAddon.fit() threw or
+        // was a no-op due to stale dimensions, fall back to a direct
+        // resize. ONLY fire if xterm is still parked at the prior
+        // mobile-fit dims, meaning safeFit failed to move it. Previously
+        // we also fired when xterm had moved to *any* size other than
+        // the captured baseline, which clobbered safeFit's correct
+        // DOM-measured fit when the desktop pane geometry had changed
+        // since mobile-fit started (e.g. user closed a split or resized
+        // the window while the phone was active). In that scenario the
+        // event.cols/rows is the stale baseline from the moment
+        // mobile-fit started, not the current pane geometry — applying
+        // it would shrink the terminal back to e.g. half-width.
+        scheduleFallbackTimer(() => {
+          for (const pane of getAffectedPanes()) {
+            // Why: skip the fallback for hidden/unmounted panes whose
+            // container is 0×0. Force-resizing xterm to the server's
+            // desktop dims while the DOM has no geometry leaves xterm
+            // with cols/rows that won't match when the tab is later
+            // activated (the activation refit will correct it). The
+            // fallback is for the *visible* pane that legitimately
+            // failed to refit via the rAF safeFit.
+            const rect = pane.container.getBoundingClientRect()
+            if (rect.width === 0 || rect.height === 0) {
+              continue
+            }
+            safeFit(pane)
+            const stuckAtMobile =
+              event.priorCols != null &&
+              event.priorRows != null &&
+              pane.terminal.cols === event.priorCols &&
+              pane.terminal.rows === event.priorRows
+            if (stuckAtMobile && event.cols > 0 && event.rows > 0) {
+              pane.terminal.resize(event.cols, event.rows)
+            }
+          }
+        })
+      }
+    })
+
+    return () => {
+      unsubscribe()
+      for (const frameId of pendingFitFrames) {
+        window.cancelAnimationFrame(frameId)
+      }
+      pendingFitFrames.clear()
+      for (const timerId of pendingFallbackTimers) {
+        window.clearTimeout(timerId)
+      }
+      pendingFallbackTimers.clear()
+    }
+  }, [])
 
   // Why: presence-lock banner re-render. Driver state lives in a plain Map
   // for perf; this counter forces a re-render when the driver flips so the
@@ -600,6 +631,7 @@ export default function TerminalPane({
     expandedStyleSnapshotRef,
     containerRef,
     managerRef,
+    pendingPaneSizeRefreshFrameIdsRef,
     setExpandedPaneId,
     setTabPaneExpanded,
     tabId,
@@ -870,6 +902,7 @@ export default function TerminalPane({
     const snapshots = activityIsolationSnapshotRef.current
     return () => {
       restoreExpandedLayoutFrom(snapshots)
+      cancelPendingPaneSizeRefreshFrames({ pendingPaneSizeRefreshFrameIdsRef })
     }
   }, [])
 
@@ -1106,6 +1139,7 @@ export default function TerminalPane({
         ? 'win32'
         : 'linux'
     let suppressNextNativePaste = false
+    let pasteSuppressionTimerId: number | null = null
     const shouldSuppressNativePaste = (e: KeyboardEvent): boolean => {
       const key = e.key.toLowerCase()
       return (
@@ -1132,7 +1166,11 @@ export default function TerminalPane({
           // Chromium turns it into a native paste event, suppress that follow-up
           // paste while still letting xterm receive the original keydown.
           suppressNextNativePaste = true
-          window.setTimeout(() => {
+          if (pasteSuppressionTimerId !== null) {
+            window.clearTimeout(pasteSuppressionTimerId)
+          }
+          pasteSuppressionTimerId = window.setTimeout(() => {
+            pasteSuppressionTimerId = null
             suppressNextNativePaste = false
           }, 0)
         }
@@ -1160,6 +1198,10 @@ export default function TerminalPane({
       }
       if (suppressNextNativePaste) {
         suppressNextNativePaste = false
+        if (pasteSuppressionTimerId !== null) {
+          window.clearTimeout(pasteSuppressionTimerId)
+          pasteSuppressionTimerId = null
+        }
         e.preventDefault()
         e.stopPropagation()
         return
@@ -1180,6 +1222,9 @@ export default function TerminalPane({
     container.addEventListener('keydown', onKeyPaste, { capture: true })
     container.addEventListener('paste', onPaste, { capture: true })
     return () => {
+      if (pasteSuppressionTimerId !== null) {
+        window.clearTimeout(pasteSuppressionTimerId)
+      }
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
     }

@@ -253,6 +253,72 @@ describe('AgentExecHandler', () => {
     })
   })
 
+  it('cancels only the matching operation lane for a cwd', async () => {
+    const commitChild = createFakeChild()
+    const pullRequestChild = createFakeChild()
+    pullRequestChild.pid = 12346
+    spawnMock
+      .mockReturnValueOnce(commitChild as never)
+      .mockReturnValueOnce(pullRequestChild as never)
+    const handlers = createHandlers()
+
+    const commit = handlers.get('agent.execNonInteractive')!(
+      {
+        binary: 'agent',
+        args: [],
+        cwd: '/repo',
+        stdin: null,
+        timeoutMs: 5_000,
+        operation: 'commit-message'
+      },
+      requestContext()
+    )
+    const pullRequest = handlers.get('agent.execNonInteractive')!(
+      {
+        binary: 'agent',
+        args: [],
+        cwd: '/repo',
+        stdin: null,
+        timeoutMs: 5_000,
+        operation: 'pull-request-fields'
+      },
+      requestContext()
+    )
+
+    await expect(
+      handlers.get('agent.cancelExec')!(
+        { cwd: '/repo', operation: 'commit-message' },
+        requestContext()
+      )
+    ).resolves.toEqual({ canceled: true })
+
+    if (process.platform === 'win32') {
+      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+      expect(execMock).not.toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+    } else {
+      expect(commitChild.kill).toHaveBeenCalledWith('SIGKILL')
+      expect(pullRequestChild.kill).not.toHaveBeenCalled()
+    }
+
+    commitChild.emit('close', null)
+    pullRequestChild.stdout.emit(
+      'data',
+      Buffer.from('{"base":"main","title":"Update README","body":"Details","draft":false}')
+    )
+    pullRequestChild.emit('close', 0)
+
+    await expect(commit).resolves.toMatchObject({
+      exitCode: null,
+      timedOut: false,
+      canceled: true
+    })
+    await expect(pullRequest).resolves.toMatchObject({
+      exitCode: 0,
+      timedOut: false,
+      canceled: false
+    })
+  })
+
   it('reports when cancellation has no matching in-flight command', async () => {
     const handlers = createHandlers()
 

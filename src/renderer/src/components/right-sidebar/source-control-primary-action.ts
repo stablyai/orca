@@ -31,7 +31,14 @@ export type PrimaryActionKind =
 // because Fetch participates in the busy flag, but it is intentionally NOT
 // in PrimaryActionKind — Fetch is dropdown-only, so when fetch is in flight
 // the primary keeps its natural label and CommitArea suppresses the spinner.
-export type RemoteOpKind = 'push' | 'pull' | 'sync' | 'fetch' | 'publish' | 'rebase'
+export type RemoteOpKind =
+  | 'push'
+  | 'pull'
+  | 'sync'
+  | 'fetch'
+  | 'fast_forward'
+  | 'publish'
+  | 'rebase'
 
 export type PrimaryAction = {
   kind: PrimaryActionKind

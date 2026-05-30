@@ -153,6 +153,10 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       undefined
     )
 
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      launchAgent: 'claude'
+    })
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: 'claude',
       telemetry: {

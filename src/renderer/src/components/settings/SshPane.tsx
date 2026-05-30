@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
 import {
@@ -29,6 +29,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
+  const mountedRef = useRef(true)
 
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
   const clearRemovedSshTargetState = useAppStore((s) => s.clearRemovedSshTargetState)
@@ -37,19 +38,26 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     async (opts?: { signal?: AbortSignal }) => {
       try {
         const result = (await window.api.ssh.listTargets()) as SshTarget[]
-        if (opts?.signal?.aborted) {
+        if (opts?.signal?.aborted || !mountedRef.current) {
           return
         }
         setTargets(result)
         setSshTargetsMetadata(result)
       } catch {
-        if (!opts?.signal?.aborted) {
+        if (!opts?.signal?.aborted && mountedRef.current) {
           toast.error('Failed to load SSH targets')
         }
       }
     },
     [setSshTargetsMetadata]
   )
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -97,20 +105,22 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     }
 
     try {
-      if (editingId) {
-        await window.api.ssh.updateTarget({ id: editingId, updates: target })
-        toast.success('Target updated')
-      } else {
-        await window.api.ssh.addTarget({ target })
-        toast.success('Target added')
-      }
+      await (editingId
+        ? window.api.ssh.updateTarget({ id: editingId, updates: target })
+        : window.api.ssh.addTarget({ target }))
       recordFeatureInteraction('ssh')
+      if (!mountedRef.current) {
+        return
+      }
+      toast.success(editingId ? 'Target updated' : 'Target added')
       setShowForm(false)
       setEditingId(null)
       setForm(EMPTY_FORM)
       await loadTargets()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save target')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to save target')
+      }
     }
   }
 
@@ -135,10 +145,14 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       // Why: a deleted passphrase-gated target may still have deferred
       // reconnect metadata; clear it so focused SSH tabs stop retrying it.
       clearRemovedSshTargetState(id)
-      toast.success('Target removed')
+      if (mountedRef.current) {
+        toast.success('Target removed')
+      }
       await loadTargets()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to remove target')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to remove target')
+      }
     }
   }
 
@@ -193,10 +207,14 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const handleResetRelay = async (targetId: string): Promise<void> => {
     try {
       await window.api.ssh.resetRelay({ targetId })
-      toast.success('Remote relay reset')
+      if (mountedRef.current) {
+        toast.success('Remote relay reset')
+      }
       await loadTargets()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to reset remote relay')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to reset remote relay')
+      }
     }
   }
 
@@ -205,19 +223,25 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     try {
       const result = await window.api.ssh.testConnection({ targetId })
       recordFeatureInteraction('ssh')
-      if (result.success) {
-        toast.success('Connection successful')
-      } else {
-        toast.error(result.error ?? 'Connection test failed')
+      if (mountedRef.current) {
+        if (result.success) {
+          toast.success('Connection successful')
+        } else {
+          toast.error(result.error ?? 'Connection test failed')
+        }
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Test failed')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Test failed')
+      }
     } finally {
-      setTestingIds((prev) => {
-        const next = new Set(prev)
-        next.delete(targetId)
-        return next
-      })
+      if (mountedRef.current) {
+        setTestingIds((prev) => {
+          const next = new Set(prev)
+          next.delete(targetId)
+          return next
+        })
+      }
     }
   }
 
@@ -225,14 +249,18 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     try {
       const imported = (await window.api.ssh.importConfig()) as SshTarget[]
       recordFeatureInteraction('ssh')
-      if (imported.length === 0) {
-        toast('No new hosts found in ~/.ssh/config')
-      } else {
-        toast.success(`Imported ${imported.length} host${imported.length > 1 ? 's' : ''}`)
+      if (mountedRef.current) {
+        if (imported.length === 0) {
+          toast('No new hosts found in ~/.ssh/config')
+        } else {
+          toast.success(`Imported ${imported.length} host${imported.length > 1 ? 's' : ''}`)
+        }
       }
       await loadTargets()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Import failed')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Import failed')
+      }
     }
   }
 

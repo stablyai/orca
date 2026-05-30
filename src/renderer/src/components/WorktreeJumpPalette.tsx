@@ -257,6 +257,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const wasVisibleRef = useRef(false)
   const skipRestoreFocusRef = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const fallbackFocusOuterFrameRef = useRef<number | null>(null)
+  const fallbackFocusInnerFrameRef = useRef<number | null>(null)
   const createLookupGuard = useMemo(() => createWorktreePaletteRequestGuard(), [])
   const preserveCreateLookupOnCloseRef = useRef(false)
 
@@ -727,9 +729,25 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     listRef.current?.scrollTo(0, 0)
   }, [])
 
+  const cancelFallbackFocusFrames = useCallback((): void => {
+    if (fallbackFocusOuterFrameRef.current !== null) {
+      cancelAnimationFrame(fallbackFocusOuterFrameRef.current)
+      fallbackFocusOuterFrameRef.current = null
+    }
+    if (fallbackFocusInnerFrameRef.current !== null) {
+      cancelAnimationFrame(fallbackFocusInnerFrameRef.current)
+      fallbackFocusInnerFrameRef.current = null
+    }
+  }, [])
+
+  useEffect(() => cancelFallbackFocusFrames, [cancelFallbackFocusFrames])
+
   const focusFallbackSurface = useCallback(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    cancelFallbackFocusFrames()
+    fallbackFocusOuterFrameRef.current = requestAnimationFrame(() => {
+      fallbackFocusOuterFrameRef.current = null
+      fallbackFocusInnerFrameRef.current = requestAnimationFrame(() => {
+        fallbackFocusInnerFrameRef.current = null
         const xterm = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
         if (xterm) {
           xterm.focus()
@@ -741,7 +759,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
       })
     })
-  }, [])
+  }, [cancelFallbackFocusFrames])
 
   const requestBrowserFocus = useCallback(
     (detail: { pageId: string; target: 'webview' | 'address-bar' }) => {

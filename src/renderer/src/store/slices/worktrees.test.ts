@@ -1858,6 +1858,99 @@ describe('worktree remote runtime mutations', () => {
     })
   })
 
+  it('optimistically links a terminal-observed GitHub PR for the same repo', () => {
+    const store = createTestStore()
+    const fetchPRForBranch = vi.fn().mockResolvedValue(null)
+    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/worktrees/orca',
+      branch: 'refs/heads/feature/pr-link'
+    })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchPRForBranch,
+      fetchHostedReviewForBranch
+    } as unknown as Partial<AppState>)
+
+    store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
+      url: 'https://github.com/acme/orca/pull/42',
+      slug: { owner: 'acme', repo: 'orca' },
+      number: 42
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBe(42)
+    expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      updates: { linkedPR: 42 }
+    })
+    expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
+      force: true,
+      repoId: 'repo1',
+      linkedPRNumber: 42,
+      fallbackPRNumber: null,
+      fallbackPRSource: null
+    })
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledWith(
+      '/repos/orca',
+      'feature/pr-link',
+      expect.objectContaining({
+        force: true,
+        repoId: 'repo1',
+        linkedGitHubPR: 42,
+        linkedGitLabMR: null
+      })
+    )
+  })
+
+  it('waits for exact lookup before linking a terminal PR URL for a differently named repo', async () => {
+    const store = createTestStore()
+    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/worktrees/orca',
+      branch: 'refs/heads/feature/pr-link'
+    })
+    mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({ baseBranch: 'main' })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchPRForBranch
+    } as unknown as Partial<AppState>)
+
+    store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
+      url: 'https://github.com/acme/docs/pull/42',
+      slug: { owner: 'acme', repo: 'docs' },
+      number: 42
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
+    expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
+      force: true,
+      repoId: 'repo1',
+      linkedPRNumber: null,
+      fallbackPRNumber: 42,
+      fallbackPRSource: 'explicit'
+    })
+
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve()
+    }
+
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      updates: { linkedPR: 42 }
+    })
+  })
+
   it('does not surface remote selector misses while persisting activity timestamps', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const store = createTestStore()

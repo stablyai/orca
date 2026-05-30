@@ -75,14 +75,14 @@ describe('discardChanges', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['ls-files', '--error-unmatch', '--', 'src/file.ts'],
+      ['ls-files', '--error-unmatch', '--', ':(literal)src/file.ts'],
       {
         cwd: '/repo'
       }
     )
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', 'src/file.ts'],
+      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)src/file.ts'],
       {
         cwd: '/repo'
       }
@@ -98,7 +98,7 @@ describe('discardChanges', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['clean', '-ffdx', '--', 'src/new-file.ts'],
+      ['clean', '-ffdx', '--', ':(literal)src/new-file.ts'],
       {
         cwd: '/repo'
       }
@@ -178,7 +178,15 @@ describe('bulk git helpers', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['ls-files', '-z', '--', 'src/file.ts', 'src/new-file.ts', 'docs', 'scratch'],
+      [
+        'ls-files',
+        '-z',
+        '--',
+        ':(literal)src/file.ts',
+        ':(literal)src/new-file.ts',
+        ':(literal)docs',
+        ':(literal)scratch'
+      ],
       {
         cwd: '/repo'
       }
@@ -187,14 +195,14 @@ describe('bulk git helpers', () => {
     // tracked descendant, which keeps directory pathspecs on the restore path.
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', 'src/file.ts', 'docs'],
+      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)src/file.ts', ':(literal)docs'],
       {
         cwd: '/repo'
       }
     )
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       3,
-      ['clean', '-ffdx', '--', 'src/new-file.ts', 'scratch'],
+      ['clean', '-ffdx', '--', ':(literal)src/new-file.ts', ':(literal)scratch'],
       {
         cwd: '/repo'
       }

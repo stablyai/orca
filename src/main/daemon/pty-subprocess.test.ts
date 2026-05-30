@@ -147,6 +147,34 @@ describe('createPtySubprocess', () => {
     expect(handle.pid).toBe(42)
   })
 
+  it('normalizes foreground process names from node-pty', () => {
+    const proc = mockPtyProcess()
+    proc.process = '/opt/homebrew/bin/codex'
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({
+      sessionId: 'test',
+      cols: 80,
+      rows: 24
+    })
+
+    expect(handle.getForegroundProcess()).toBe('codex')
+  })
+
+  it('treats node-pty terminal name as inconclusive foreground process', () => {
+    const proc = mockPtyProcess()
+    proc.process = 'xterm-256color'
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({
+      sessionId: 'test',
+      cols: 80,
+      rows: 24
+    })
+
+    expect(handle.getForegroundProcess()).toBeNull()
+  })
+
   it('does not inherit parent Orca pane identity when caller omits pane env', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

@@ -174,6 +174,14 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
   return formatted
 }
 
+function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
+  const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
+  if (!trimmed || trimmed === 'xterm-256color') {
+    return null
+  }
+  return trimmed.split(/[\\/]/).pop() || null
+}
+
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
@@ -386,6 +394,20 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   return {
     pid: proc.pid,
+    getForegroundProcess: () => {
+      // Why: node-pty's `.process` getter reports the PTY's live foreground
+      // process name (the agent running in the shell, or the shell itself) and
+      // updates as it changes. Null once the child is gone — `.process` on a
+      // reaped pty can read a recycled pid.
+      if (dead) {
+        return null
+      }
+      try {
+        return normalizeForegroundProcessName(proc.process)
+      } catch {
+        return null
+      }
+    },
     write: (data) => {
       if (dead) {
         return

@@ -35,7 +35,14 @@ export function ProjectGroupNameDialog({
   const [name, setName] = useState(initialName)
   const [submitting, setSubmitting] = useState(false)
   const [previousOpenState, setPreviousOpenState] = useState({ open, initialName })
+  const mountedRef = useRef(true)
   const trimmedName = name.trim()
+
+  const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
+    // Why: save can finish after the dialog closes; the content ref keeps late
+    // completions from mutating stale dialog state without an Effect.
+    mountedRef.current = node !== null
+  }, [])
 
   // Why: the input should mount already seeded and selectable for the active
   // group; Effect-based hydration shows one frame with the prior draft.
@@ -56,10 +63,14 @@ export function ProjectGroupNameDialog({
       setSubmitting(true)
       try {
         await onSubmit(trimmedName)
-        onOpenChange(false)
+        if (mountedRef.current) {
+          onOpenChange(false)
+        }
       } catch (error) {
         console.error('Failed to save project group name:', error)
-        setSubmitting(false)
+        if (mountedRef.current) {
+          setSubmitting(false)
+        }
       }
     },
     [onOpenChange, onSubmit, submitting, trimmedName]
@@ -68,6 +79,7 @@ export function ProjectGroupNameDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        ref={handleDialogContentRef}
         className="max-w-sm sm:max-w-sm"
         onOpenAutoFocus={(event) => {
           event.preventDefault()

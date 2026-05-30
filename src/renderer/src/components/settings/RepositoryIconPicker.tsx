@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Github, Image, Link2, RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../shared/types'
@@ -27,6 +27,7 @@ export function RepositoryIconPicker({
 }): React.JSX.Element {
   const [website, setWebsite] = useState('')
   const [loadingGitHub, setLoadingGitHub] = useState(false)
+  const mountedRef = useRef(true)
   const activeRuntimeEnvironmentId = useAppStore(
     (state) => state.settings?.activeRuntimeEnvironmentId ?? null
   )
@@ -58,10 +59,17 @@ export function RepositoryIconPicker({
   const setIcon = (repoIcon: RepoIcon | null) => updateRepo(repo.id, { repoIcon })
   const setBadgeColor = (badgeColor: string) => updateRepo(repo.id, { badgeColor })
 
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   const handleUploadImage = async () => {
     try {
       const result = await window.api.shell.pickRepoIconImage()
-      if (!result) {
+      if (!result || !mountedRef.current) {
         return
       }
       setIcon({
@@ -99,7 +107,12 @@ export function RepositoryIconPicker({
             )
           : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
       if (!slug) {
-        toast.error('No GitHub remote found for this repo.')
+        if (mountedRef.current) {
+          toast.error('No GitHub remote found for this repo.')
+        }
+        return
+      }
+      if (!mountedRef.current) {
         return
       }
       setIcon({
@@ -109,9 +122,13 @@ export function RepositoryIconPicker({
         label: `${slug.owner}/${slug.repo}`
       })
     } catch {
-      toast.error('Failed to resolve the GitHub repo.')
+      if (mountedRef.current) {
+        toast.error('Failed to resolve the GitHub repo.')
+      }
     } finally {
-      setLoadingGitHub(false)
+      if (mountedRef.current) {
+        setLoadingGitHub(false)
+      }
     }
   }
 

@@ -60,6 +60,7 @@ import {
 } from './terminal-bracketed-paste'
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
 import type { PtyDataMeta } from './pty-dispatcher'
+import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-link-detector'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -689,6 +690,7 @@ export function connectPanePty(
     onWorking: seedCommandCodeOutputWorkingStatus,
     onDone: scheduleCommandCodeOutputDoneStatus
   })
+  const observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
 
   const onPtySpawn = (ptyId: string): void => {
     bindPanePtyId(pane.id, ptyId, deps.tabId)
@@ -1683,6 +1685,9 @@ export function connectPanePty(
     const dataCallback = (data: string, meta?: PtyDataMeta): void => {
       resetHiddenOutputRestoreIfPtyChanged()
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
+      for (const link of observeTerminalGitHubPRLink(data)) {
+        useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link)
+      }
       commandCodeOutputStatusDetector.observe(data)
       commandLifecycle.handlePtyData(data)
       // Why: split-pane layouts have multiple visible-but-inactive panes whose

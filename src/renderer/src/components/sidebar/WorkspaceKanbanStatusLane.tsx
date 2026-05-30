@@ -88,7 +88,8 @@ export default function WorkspaceKanbanStatusLane({
         'relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-t-2 border-sidebar-border transition-colors',
         meta.border,
         meta.laneTint,
-        isDragTarget && 'border-sidebar-ring bg-sidebar-accent/70'
+        isDragTarget && 'border-sidebar-ring bg-sidebar-accent/70',
+        'data-[workspace-board-external-drag-target=true]:border-sidebar-ring data-[workspace-board-external-drag-target=true]:bg-sidebar-accent/70'
       )}
       onDragOver={(event) => onDragOver(event, status.id)}
       onDragLeave={onDragLeave}

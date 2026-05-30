@@ -337,6 +337,27 @@ export async function pullRuntimeGit(
   )
 }
 
+export async function fastForwardRuntimeGit(
+  context: RuntimeGitContext,
+  pushTarget?: GitPushTarget
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.fastForward({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId,
+      ...(pushTarget ? { pushTarget } : {})
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.fastForward',
+    { worktree: context.worktreeId, ...(pushTarget ? { pushTarget } : {}) },
+    { timeoutMs: 30_000 }
+  )
+}
+
 export async function rebaseRuntimeGitFromBase(
   context: RuntimeGitContext,
   baseRef: string

@@ -8,7 +8,7 @@ vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-import { gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from './remote'
+import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from './remote'
 
 describe('git remote operations', () => {
   beforeEach(() => {
@@ -199,6 +199,37 @@ describe('git remote operations', () => {
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
       [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
       [['pull', 'fork', 'feature/fix'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('fast-forwards with --ff-only using the configured upstream', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitFastForward('/repo')
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
+      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['pull', '--ff-only'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('fast-forwards from the explicit publish target when one is provided', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitFastForward('/repo', {
+      remoteName: 'fork',
+      branchName: 'feature/fix'
+    })
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
+      [['pull', '--ff-only', 'fork', 'feature/fix'], { cwd: '/repo' }]
     ])
   })
 

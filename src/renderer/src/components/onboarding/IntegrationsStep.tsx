@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ExternalLink, Github, Loader2, Terminal } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
@@ -123,6 +123,14 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [connectState, setConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
   const [connectError, setConnectError] = useState<string | null>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const workspaceCount = linearStatus.workspaces?.length ?? (linearStatus.connected ? 1 : 0)
 
@@ -135,6 +143,9 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
     setConnectError(null)
     try {
       const result = await connectLinear(apiKey)
+      if (!mountedRef.current) {
+        return
+      }
       if (result.ok) {
         setApiKeyDraft('')
         setConnectState('idle')
@@ -144,8 +155,10 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
       setConnectState('error')
       setConnectError(result.error)
     } catch (error) {
-      setConnectState('error')
-      setConnectError(error instanceof Error ? error.message : 'Connection failed')
+      if (mountedRef.current) {
+        setConnectState('error')
+        setConnectError(error instanceof Error ? error.message : 'Connection failed')
+      }
     }
   }
 

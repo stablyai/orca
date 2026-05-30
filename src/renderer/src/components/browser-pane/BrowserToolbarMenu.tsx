@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, Ellipsis, Import, Monitor, Plus, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -71,6 +71,7 @@ export function BrowserToolbarMenu({
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
   )
+  const mountedRef = useRef(true)
 
   const effectiveProfileId = currentProfileId ?? 'default'
 
@@ -80,6 +81,13 @@ export function BrowserToolbarMenu({
   const allProfiles = defaultProfile
     ? [defaultProfile, ...browserSessionProfiles.filter((p) => p.id !== 'default')]
     : browserSessionProfiles
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const handleSwitchProfile = (profileId: string | null): void => {
     const targetId = profileId ?? 'default'
@@ -114,7 +122,13 @@ export function BrowserToolbarMenu({
     try {
       const profile = await createBrowserSessionProfile('isolated', trimmed)
       if (!profile) {
-        toast.error('Failed to create profile.')
+        if (mountedRef.current) {
+          toast.error('Failed to create profile.')
+        }
+        return
+      }
+
+      if (!mountedRef.current) {
         return
       }
 
@@ -125,7 +139,9 @@ export function BrowserToolbarMenu({
       switchBrowserTabProfile(workspaceId, profile.id)
       toast.success(`Created and switched to ${profile.label} profile`)
     } finally {
-      setIsCreatingProfile(false)
+      if (mountedRef.current) {
+        setIsCreatingProfile(false)
+      }
     }
   }
 

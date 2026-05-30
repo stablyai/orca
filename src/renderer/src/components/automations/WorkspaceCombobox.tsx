@@ -28,23 +28,32 @@ export function WorkspaceCombobox({
   const focusFrameRef = React.useRef<number | null>(null)
   const selected = worktrees.find((worktree) => worktree.id === value) ?? null
 
-  const focusSearchInput = React.useCallback(() => {
+  const cancelFocusFrame = React.useCallback((): void => {
     if (focusFrameRef.current !== null) {
       cancelAnimationFrame(focusFrameRef.current)
+      focusFrameRef.current = null
     }
+  }, [])
+
+  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+
+  const focusSearchInput = React.useCallback(() => {
+    cancelFocusFrame()
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       inputRef.current?.focus()
     })
-  }, [])
+  }, [cancelFocusFrame])
 
-  const handleOpenChange = React.useCallback((nextOpen: boolean) => {
-    setOpen(nextOpen)
-    if (!nextOpen && focusFrameRef.current !== null) {
-      cancelAnimationFrame(focusFrameRef.current)
-      focusFrameRef.current = null
-    }
-  }, [])
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen)
+      if (!nextOpen) {
+        cancelFocusFrame()
+      }
+    },
+    [cancelFocusFrame]
+  )
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
