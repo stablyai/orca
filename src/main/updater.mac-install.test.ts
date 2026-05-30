@@ -44,7 +44,7 @@ const {
     eventHandlers.clear()
     on.mockClear()
     autoUpdaterMock.checkForUpdates.mockReset()
-    autoUpdaterMock.downloadUpdate.mockReset()
+    autoUpdaterMock.downloadUpdate.mockReset().mockResolvedValue([])
     autoUpdaterMock.quitAndInstall.mockReset()
   }
 
@@ -207,4 +207,120 @@ describe('updater mac install handoff', () => {
       expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
     }
   )
+
+  it('keeps staged mac updates pending through same-version fast paths until native readiness', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'darwin' })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+      ([eventName]) => eventName === 'update-downloaded'
+    )?.[1] as (() => void) | undefined
+    expect(nativeDownloadedHandler).toBeTypeOf('function')
+
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+
+    sendMock.mockClear()
+    autoUpdaterMock.emit('checking-for-update')
+    sendMock.mockClear()
+    autoUpdaterMock.emit('update-not-available')
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'downloading',
+      percent: 100,
+      version: '1.0.61'
+    })
+    expect(sendMock).not.toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'downloaded' })
+    )
+
+    sendMock.mockClear()
+    autoUpdaterMock.emit('checking-for-update')
+    sendMock.mockClear()
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'downloading',
+      percent: 100,
+      version: '1.0.61'
+    })
+    expect(sendMock).not.toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'downloaded' })
+    )
+
+    nativeDownloadedHandler?.()
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'downloaded',
+      version: '1.0.61',
+      releaseUrl: undefined
+    })
+  })
+
+  it('does not let stale native macOS readiness mark a replacement update ready', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'darwin' })
+    autoUpdaterMock.downloadUpdate.mockImplementation(() => new Promise(() => {}))
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+      ([eventName]) => eventName === 'update-downloaded'
+    )?.[1] as (() => void) | undefined
+    expect(nativeDownloadedHandler).toBeTypeOf('function')
+
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+    sendMock.mockClear()
+
+    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
+
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.62' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
+
+    nativeDownloadedHandler?.()
+
+    expect(sendMock).not.toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'downloaded' })
+    )
+    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(2)
+
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.62' })
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'downloading',
+      percent: 100,
+      version: '1.0.62'
+    })
+    expect(sendMock).not.toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'downloaded', version: '1.0.62' })
+    )
+
+    nativeDownloadedHandler?.()
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'downloaded',
+      version: '1.0.62',
+      releaseUrl: undefined
+    })
+  })
 })

@@ -91,6 +91,8 @@ export function UpdateCard() {
   const dismissUpdate = useAppStore((s) => s.dismissUpdate)
   const collapsed = useAppStore((s) => s.updateCardCollapsed)
   const setCollapsed = useAppStore((s) => s.setUpdateCardCollapsed)
+  const downloadIntentVersion = useAppStore((s) => s.updateDownloadIntentVersion)
+  const markDownloadIntent = useAppStore((s) => s.markUpdateDownloadIntent)
   const reassuranceSeen = useAppStore((s) => s.updateReassuranceSeen)
   const markReassuranceSeen = useAppStore((s) => s.markUpdateReassuranceSeen)
   const hasStartedDownload = useRef(false)
@@ -120,6 +122,9 @@ export function UpdateCard() {
   // dismissed.  This ref tracks whether the current check cycle was user-initiated
   // so the dismiss gate can let the result through.
   const userInitiatedCycleRef = useRef(false)
+  // Why: status.userInitiated can outlive an explicit close click. Track that
+  // local close so dismissing a visible card wins until a new check/version.
+  const locallyDismissedVersionRef = useRef<string | null>(null)
 
   const changelog: ChangelogData | null = storeChangelog
 
@@ -149,6 +154,7 @@ export function UpdateCard() {
   if (status.state === 'available' && status.version !== prevVersionRef.current) {
     prevVersionRef.current = status.version
     hasStartedDownload.current = false
+    locallyDismissedVersionRef.current = null
     setMediaFailed(false)
     setMediaLoaded(false)
     setInstallError(null)
@@ -220,9 +226,15 @@ export function UpdateCard() {
   // ── Visibility gates ──────────────────────────────────────────────
 
   const isUserInitiated = 'userInitiated' in status && status.userInitiated
+  const isNudgeDriven = 'activeNudgeId' in status && Boolean(status.activeNudgeId)
   const cachedVersion = versionRef.current
+  const hasExplicitDownloadIntent =
+    cachedVersion !== null && downloadIntentVersion === cachedVersion
+  const isLocallyDismissedVersion =
+    cachedVersion !== null && locallyDismissedVersionRef.current === cachedVersion
   const shouldShowDetailedErrorCard =
-    status.state === 'error' && (hasStartedDownload.current || cachedVersion !== null)
+    status.state === 'error' &&
+    (isUserInitiated || isNudgeDriven || hasStartedDownload.current || hasExplicitDownloadIntent)
 
   // Why: track whether the current check cycle was user-initiated so the
   // dismiss gate doesn't hide the result of an explicit "Check for Updates"
@@ -232,8 +244,10 @@ export function UpdateCard() {
   // even though the user explicitly asked to see the result.
   if (status.state === 'checking' && isUserInitiated) {
     userInitiatedCycleRef.current = true
+    locallyDismissedVersionRef.current = null
   } else if (status.state === 'idle' || (status.state === 'checking' && !isUserInitiated)) {
     userInitiatedCycleRef.current = false
+    locallyDismissedVersionRef.current = null
   }
 
   // Compact transient states: only show for user-initiated checks.
@@ -252,6 +266,37 @@ export function UpdateCard() {
     return null
   }
 
+  // Why: ordinary background checks now pre-download updates; keep that path
+  // quiet until the user explicitly checks, while explicit/nudge cycles stay visible.
+  if (
+    status.state === 'available' &&
+    !userInitiatedCycleRef.current &&
+    !isUserInitiated &&
+    !isNudgeDriven
+  ) {
+    return null
+  }
+  if (
+    status.state === 'downloading' &&
+    !userInitiatedCycleRef.current &&
+    !isUserInitiated &&
+    !hasStartedDownload.current &&
+    !hasExplicitDownloadIntent &&
+    !isNudgeDriven
+  ) {
+    return null
+  }
+  // Why: closing the available card is also a request to keep the automatic
+  // pre-download quiet; explicit downloads and nudge campaigns still surface.
+  if (
+    status.state === 'downloading' &&
+    isLocallyDismissedVersion &&
+    !hasStartedDownload.current &&
+    !hasExplicitDownloadIntent &&
+    !isNudgeDriven
+  ) {
+    return null
+  }
   // Error: show card for user-initiated check failures or for failures tied to
   // a concrete cached update version (card-initiated and Settings-initiated
   // download/install flows). Background check failures stay silent.
@@ -267,17 +312,25 @@ export function UpdateCard() {
   }
 
   // Dismiss gate: if the user previously dismissed this version, hide the card
-  // for passive reminder states. Keep active in-progress/error states visible so
-  // explicit install actions can still surface progress and failures.
+  // for passive reminder states. Keep in-progress/error and ready-to-install
+  // states visible so users can always finish or recover an update.
   // Why: bypass the gate when the current cycle was user-initiated — the user
   // explicitly asked to check, so they expect to see the result even if they
   // dismissed the same version earlier.
   if (
     versionRef.current &&
-    dismissedVersion === versionRef.current &&
-    !userInitiatedCycleRef.current
+    (dismissedVersion === versionRef.current || isLocallyDismissedVersion) &&
+    (isLocallyDismissedVersion ||
+      (!userInitiatedCycleRef.current &&
+        !isUserInitiated &&
+        !hasExplicitDownloadIntent &&
+        !isNudgeDriven))
   ) {
-    if (status.state !== 'downloading' && status.state !== 'error') {
+    if (
+      status.state !== 'downloading' &&
+      status.state !== 'downloaded' &&
+      status.state !== 'error'
+    ) {
       return null
     }
   }
@@ -295,6 +348,9 @@ export function UpdateCard() {
 
   const handleUpdate = () => {
     hasStartedDownload.current = true
+    if (cachedVersion) {
+      markDownloadIntent(cachedVersion)
+    }
     // Why: clicking "Update" implies the user is not worried about interruption,
     // so dismiss the reassurance tip permanently.
     if (!reassuranceSeen) {
@@ -310,6 +366,7 @@ export function UpdateCard() {
     // immediately — otherwise the card would reappear on the next render
     // because the bypass ref still overrides the persisted dismissal.
     userInitiatedCycleRef.current = false
+    locallyDismissedVersionRef.current = cachedVersion
     if (status.state === 'error') {
       setErrorDismissed(true)
       if (cachedVersion) {

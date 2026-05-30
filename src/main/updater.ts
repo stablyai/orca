@@ -47,6 +47,8 @@ let autoUpdaterInitialized = false
 let includePrereleaseActive = false
 let availableVersion: string | null = null
 let availableReleaseUrl: string | null = null
+let stagedUpdateVersion: string | null = null
+let stagedUpdateReleaseUrl: string | null = null
 let pendingCheckFailureKey: string | null = null
 let pendingCheckFailurePromise: Promise<void> | null = null
 let autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
@@ -82,10 +84,11 @@ let _getPendingUpdateNudgeId: (() => string | null) | null = null
 let _getDismissedUpdateNudgeId: (() => string | null) | null = null
 let _setPendingUpdateNudgeId: ((id: string | null) => void) | null = null
 let _setDismissedUpdateNudgeId: ((id: string | null) => void) | null = null
-// Why: guards against duplicate download() calls when both the card and
-// Settings trigger a download before the first download-progress event
-// flips the status to 'downloading'.
-let downloadInFlight = false
+// Why: updater events can briefly move back to 'available'/'checking' while a
+// background download is still active, so the duplicate-download guard must be
+// version-scoped instead of tied to the visible status.
+let activeDownloadVersion: string | null = null
+let pendingReplacementDownloadVersion: string | null = null
 /** Guards against the macOS `activate` handler re-opening the old version
  *  while Squirrel's ShipIt is replacing the .app bundle. */
 let quittingForUpdate = false
@@ -101,6 +104,44 @@ function getAutoUpdater(): ElectronAutoUpdater {
 function clearAvailableUpdateContext(): void {
   availableVersion = null
   availableReleaseUrl = null
+}
+
+function clearStagedUpdateContext(): void {
+  stagedUpdateVersion = null
+  stagedUpdateReleaseUrl = null
+}
+
+function getStagedUpdateVersion(): string | null {
+  return stagedUpdateVersion
+}
+
+function markStagedUpdate(version: string, releaseUrl?: string): void {
+  stagedUpdateVersion = version
+  stagedUpdateReleaseUrl = releaseUrl ?? null
+}
+
+function getActiveDownloadVersion(): string | null {
+  return activeDownloadVersion
+}
+
+function clearActiveUpdateDownload(version?: string): void {
+  if (!version || !activeDownloadVersion || compareVersions(version, activeDownloadVersion) >= 0) {
+    activeDownloadVersion = null
+  }
+}
+
+function startPendingReplacementDownload(): boolean {
+  const pendingVersion = pendingReplacementDownloadVersion
+  if (!pendingVersion) {
+    return false
+  }
+  const targetVersion = getPendingDownloadVersion()
+  if (!targetVersion || compareVersions(targetVersion, pendingVersion) < 0) {
+    pendingReplacementDownloadVersion = null
+    return false
+  }
+  startAvailableUpdateDownload()
+  return activeDownloadVersion === targetVersion
 }
 
 function clearPrereleaseFallbackContext(): void {
@@ -149,11 +190,12 @@ function sendStatus(status: UpdateStatus): void {
     (status.state === 'idle' ||
       status.state === 'not-available' ||
       status.state === 'available' ||
+      status.state === 'downloaded' ||
       status.state === 'error')
   if (awaitingNudgeCheckOutcome) {
-    if (status.state === 'available') {
+    if (status.state === 'available' || status.state === 'downloaded') {
       if (shouldPreserveNudgeForPublishingWindow) {
-        // Why: a last-good available update is only a temporary fallback; don't
+        // Why: a last-good ready update is only a temporary fallback; don't
         // let dismissing that card consume the newest-release nudge campaign.
         deferPendingUpdateNudgeUntilRetry()
       } else {
@@ -189,20 +231,12 @@ function sendStatus(status: UpdateStatus): void {
     status.state === 'idle' ||
     status.state === 'not-available' ||
     status.state === 'available' ||
+    status.state === 'downloaded' ||
     status.state === 'error'
   ) {
     clearPublishingWindowLastGoodCheck()
   }
 
-  // Why: reset the in-flight guard when the status moves past the
-  // window where duplicate download() calls are possible.
-  if (
-    decoratedStatus.state === 'downloading' ||
-    decoratedStatus.state === 'error' ||
-    decoratedStatus.state === 'idle'
-  ) {
-    downloadInFlight = false
-  }
   if (statusesEqual(currentStatus, decoratedStatus)) {
     return
   }
@@ -226,21 +260,95 @@ function sendErrorStatus(message: string, userInitiated?: boolean): void {
 }
 
 function getKnownReleaseUrl(): string | undefined {
-  return availableReleaseUrl ?? undefined
+  return availableReleaseUrl ?? stagedUpdateReleaseUrl ?? undefined
 }
 
 function hasNewerDownloadedVersion(): boolean {
-  return availableVersion !== null && compareVersions(availableVersion, app.getVersion()) > 0
+  if (!stagedUpdateVersion || compareVersions(stagedUpdateVersion, app.getVersion()) <= 0) {
+    return false
+  }
+  // Why: a newer feed result means the older staged installer is stale until
+  // its replacement is actually downloaded; don't let macOS readiness or quit
+  // flows report/install the wrong version.
+  if (availableVersion && compareVersions(availableVersion, stagedUpdateVersion) > 0) {
+    return false
+  }
+  if (activeDownloadVersion && compareVersions(activeDownloadVersion, stagedUpdateVersion) > 0) {
+    return false
+  }
+  if (
+    pendingReplacementDownloadVersion &&
+    compareVersions(pendingReplacementDownloadVersion, stagedUpdateVersion) > 0
+  ) {
+    return false
+  }
+  return true
 }
 
 function getPendingInstallVersion(): string {
-  if (availableVersion) {
-    return availableVersion
+  if (hasNewerDownloadedVersion() && stagedUpdateVersion) {
+    return stagedUpdateVersion
   }
   if (currentStatus.state === 'downloading' || currentStatus.state === 'downloaded') {
     return currentStatus.version
   }
   return ''
+}
+
+function getPendingDownloadVersion(): string | null {
+  if (availableVersion && compareVersions(availableVersion, app.getVersion()) > 0) {
+    return availableVersion
+  }
+  if (
+    (currentStatus.state === 'available' || currentStatus.state === 'downloading') &&
+    compareVersions(currentStatus.version, app.getVersion()) > 0
+  ) {
+    return currentStatus.version
+  }
+  // Why: a follow-up freshness check can clear availableVersion while an older
+  // artifact is still finishing; the queued replacement remains the target.
+  if (
+    pendingReplacementDownloadVersion &&
+    compareVersions(pendingReplacementDownloadVersion, app.getVersion()) > 0
+  ) {
+    return pendingReplacementDownloadVersion
+  }
+  return null
+}
+
+function hasNewerAvailableVersion(): boolean {
+  return getPendingDownloadVersion() !== null
+}
+
+function shouldAcceptDownloadedUpdate(version: string): boolean {
+  if (activeDownloadVersion && compareVersions(version, activeDownloadVersion) < 0) {
+    return false
+  }
+  if (
+    pendingReplacementDownloadVersion &&
+    compareVersions(version, pendingReplacementDownloadVersion) < 0
+  ) {
+    return false
+  }
+  if (availableVersion && compareVersions(version, availableVersion) < 0) {
+    return false
+  }
+  if (stagedUpdateVersion && compareVersions(version, stagedUpdateVersion) < 0) {
+    return false
+  }
+  return true
+}
+
+function getCurrentActionableUpdateUserInitiated(): boolean | undefined {
+  if (
+    currentStatus.state === 'checking' ||
+    currentStatus.state === 'available' ||
+    currentStatus.state === 'downloading' ||
+    currentStatus.state === 'downloaded'
+  ) {
+    return currentStatus.userInitiated || undefined
+  }
+  return undefined
 }
 
 function getCheckFailureKey(message: string, userInitiated?: boolean): string {
@@ -605,7 +713,7 @@ function retryPrereleaseFallbackAfterMissingManifest(
 function runBackgroundUpdateCheck(
   nudgeId: string | null = getPersistedPendingUpdateNudgeId()
 ): void {
-  if (backgroundCheckLaunchPending || currentStatus.state === 'checking') {
+  if (backgroundCheckLaunchPending || currentStatus.state === 'checking' || activeDownloadVersion) {
     return
   }
   if (!app.isPackaged || is.dev) {
@@ -684,7 +792,8 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
     enableIncludePrerelease()
   }
 
-  const checkAlreadyInFlight = backgroundCheckLaunchPending || currentStatus.state === 'checking'
+  const checkAlreadyInFlight =
+    backgroundCheckLaunchPending || currentStatus.state === 'checking' || activeDownloadVersion
   userInitiatedCheck = true
   // Why: a manual check is independent of any active nudge campaign. Reset the
   // nudge marker so the resulting status is not decorated with activeNudgeId,
@@ -758,7 +867,11 @@ async function checkForUpdateNudge(): Promise<void> {
       return
     }
 
-    if (currentStatus.state === 'checking' || currentStatus.state === 'downloading') {
+    if (
+      currentStatus.state === 'checking' ||
+      currentStatus.state === 'downloading' ||
+      activeDownloadVersion
+    ) {
       return
     }
 
@@ -831,6 +944,8 @@ export function setupAutoUpdater(
   }
 
   const autoUpdater = getAutoUpdater()
+  // Why: Orca fetches changelog and pins release context before downloading;
+  // letting electron-updater auto-start can race progress events ahead of that.
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
@@ -885,24 +1000,32 @@ export function setupAutoUpdater(
 
   registerAutoUpdaterHandlers({
     autoUpdater,
+    clearActiveUpdateDownload,
     clearAvailableUpdateContext,
+    clearStagedUpdateContext,
     consumeMissingManifestPrereleaseFallbackResult,
+    getActiveDownloadVersion,
     getMissingManifestPrereleaseFallbackUserInitiated,
     getPublishingWindowLastGoodCheck,
     getCurrentStatus: () => currentStatus,
     getKnownReleaseUrl,
     getPendingInstallVersion,
+    getStagedUpdateVersion,
     getUserInitiatedCheck: () => userInitiatedCheck,
     hasNewerDownloadedVersion,
     performQuitAndInstall,
     sendCheckFailureStatus,
     sendErrorStatus,
     markMissingManifestPrereleaseFallbackChecking,
+    markStagedUpdate,
     shouldSuppressMissingManifestPrereleaseFallbackEvent,
     suppressMissingManifestPrereleaseFallbackPromiseFailure,
     recordCompletedUpdateCheck,
     sendStatus,
     scheduleAutomaticUpdateCheck,
+    startPendingReplacementDownload,
+    startAvailableUpdateDownload,
+    shouldAcceptDownloadedUpdate,
     clearBackgroundCheckLaunchPending,
     setAvailableReleaseUrl: (releaseUrl) => {
       availableReleaseUrl = releaseUrl
@@ -923,7 +1046,8 @@ export function setupAutoUpdater(
     if (
       backgroundCheckLaunchPending ||
       currentStatus.state === 'checking' ||
-      currentStatus.state === 'downloading'
+      currentStatus.state === 'downloading' ||
+      activeDownloadVersion
     ) {
       return
     }
@@ -950,8 +1074,22 @@ export function setupAutoUpdater(
   }
 }
 
-export function downloadUpdate(): void {
-  if (downloadInFlight) {
+function startAvailableUpdateDownload(): void {
+  const targetVersion = getPendingDownloadVersion()
+  if (!targetVersion) {
+    return
+  }
+  if (activeDownloadVersion === targetVersion) {
+    return
+  }
+  if (activeDownloadVersion) {
+    if (
+      compareVersions(targetVersion, activeDownloadVersion) > 0 &&
+      (!pendingReplacementDownloadVersion ||
+        compareVersions(targetVersion, pendingReplacementDownloadVersion) >= 0)
+    ) {
+      pendingReplacementDownloadVersion = targetVersion
+    }
     return
   }
   // Why: permit retry from 'error' when we still have a cached availableVersion —
@@ -960,16 +1098,49 @@ export function downloadUpdate(): void {
   // download. Without this, the button would appear to do nothing.
   const canStart =
     currentStatus.state === 'available' ||
-    (currentStatus.state === 'error' && hasNewerDownloadedVersion())
+    (currentStatus.state === 'error' && hasNewerAvailableVersion()) ||
+    pendingReplacementDownloadVersion === targetVersion
   if (!canStart) {
     return
   }
-  downloadInFlight = true
+  pendingReplacementDownloadVersion = null
+  activeDownloadVersion = targetVersion
+  // Why: electron-updater can emit 'error' before downloadUpdate() rejects;
+  // capture launch intent, then merge any manual promotion observed by catch.
+  const downloadUserInitiated = getCurrentActionableUpdateUserInitiated()
   beginMacUpdateDownload()
   getAutoUpdater()
     .downloadUpdate()
-    .catch((err) => {
-      downloadInFlight = false
-      sendErrorStatus(String(err?.message ?? err))
+    .then(() => {
+      clearActiveUpdateDownload(targetVersion)
+      startPendingReplacementDownload()
     })
+    .catch((err) => {
+      const message = String(err?.message ?? err)
+      const existingMatchingErrorUserInitiated =
+        currentStatus.state === 'error' && currentStatus.message === message
+          ? currentStatus.userInitiated
+          : undefined
+      // Why: a manual check can promote an active background download while
+      // the download promise is still pending; preserve that promotion.
+      const wasUserInitiated =
+        downloadUserInitiated ||
+        getCurrentActionableUpdateUserInitiated() ||
+        existingMatchingErrorUserInitiated ||
+        userInitiatedCheck ||
+        backgroundCheckPromotedToUserInitiated ||
+        undefined
+      clearActiveUpdateDownload(targetVersion)
+      if (startPendingReplacementDownload()) {
+        return
+      }
+      if (activeDownloadVersion && compareVersions(activeDownloadVersion, targetVersion) > 0) {
+        return
+      }
+      sendErrorStatus(message, wasUserInitiated)
+    })
+}
+
+export function downloadUpdate(): void {
+  startAvailableUpdateDownload()
 }

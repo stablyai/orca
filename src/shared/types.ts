@@ -1455,6 +1455,7 @@ export type UpdateStatus =
       // release-notes link fallback and for potential future use if the main
       // process starts extracting release URLs from electron-updater metadata.
       releaseUrl?: string
+      userInitiated?: boolean
       // Why: changelog is always explicitly set by the main process — null means
       // the fetch failed or the version wasn't in the JSON (simple mode), and a
       // populated object means rich mode. Using `| null` (not `?`) avoids a
@@ -1463,8 +1464,20 @@ export type UpdateStatus =
       changelog: ChangelogData | null
     }
   | { state: 'not-available'; userInitiated?: boolean }
-  | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
-  | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
+  | {
+      state: 'downloading'
+      percent: number
+      version: string
+      userInitiated?: boolean
+      activeNudgeId?: string
+    }
+  | {
+      state: 'downloaded'
+      version: string
+      releaseUrl?: string
+      userInitiated?: boolean
+      activeNudgeId?: string
+    }
   | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
 
 // ─── Settings ────────────────────────────────────────────────────────
