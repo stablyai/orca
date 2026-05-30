@@ -108,8 +108,13 @@ export function listFilesWithGit(
         resolve()
       })
       const timer = setTimeout(() => {
+        if (done) {
+          return
+        }
+        done = true
         buf = ''
         child.kill()
+        reject(new Error('git ls-files timed out'))
       }, 10_000)
     })
   }
