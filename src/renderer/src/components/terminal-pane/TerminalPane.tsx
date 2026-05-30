@@ -89,6 +89,7 @@ import {
   subscribeTerminalPaneAttention
 } from './terminal-pane-attention-subscriptions'
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
+import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
 import { useRepoById } from '@/store/selectors'
 
 type TerminalPaneProps = {
@@ -437,9 +438,7 @@ export default function TerminalPane({
   const quickCommandGroupId =
     useAppStore(
       (s) =>
-        s.unifiedTabsByWorktree[worktreeId]?.find(
-          (tab) => tab.entityId === tabId && tab.contentType === 'terminal'
-        )?.groupId ??
+        getCachedTerminalGroupIdForWorktree(s.unifiedTabsByWorktree, worktreeId, tabId) ??
         s.activeGroupIdByWorktree[worktreeId] ??
         null
     ) ?? null
