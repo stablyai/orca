@@ -252,7 +252,43 @@ export class ModelManager {
         return
       }
 
-      let request: ReturnType<typeof httpsGet>
+      let settled = false
+      let request: ReturnType<typeof httpsGet> | null = null
+      const cleanupRequestListeners = (): void => {
+        const activeRequest = request
+        if (!activeRequest) {
+          return
+        }
+        activeRequest.off('error', onRequestError)
+        activeRequest.off('timeout', onRequestTimeout)
+        request = null
+      }
+      const resolveOnce = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanupRequestListeners()
+        resolve()
+      }
+      const rejectOnce = (error: Error): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanupRequestListeners()
+        reject(error)
+      }
+      const onRequestError = (error: Error): void => rejectOnce(error)
+      const onRequestTimeout = (): void => {
+        const activeRequest = request
+        rejectOnce(
+          new Error(
+            `Model download timed out after ${DOWNLOAD_IDLE_TIMEOUT_MS / 1000} seconds without network activity`
+          )
+        )
+        activeRequest?.destroy()
+      }
       const onResponse = (response: IncomingMessage): void => {
         if (
           response.statusCode === 301 ||
@@ -264,12 +300,12 @@ export class ModelManager {
           const redirectUrl = response.headers.location
           if (!redirectUrl) {
             response.resume()
-            reject(new Error('Redirect without location'))
+            rejectOnce(new Error('Redirect without location'))
             return
           }
           if (redirectCount >= 5) {
             response.resume()
-            reject(new Error('Too many redirects'))
+            rejectOnce(new Error('Too many redirects'))
             return
           }
           let resolvedRedirect: URL
@@ -277,12 +313,12 @@ export class ModelManager {
             resolvedRedirect = new URL(redirectUrl, parsedUrl)
           } catch {
             response.resume()
-            reject(new Error('Invalid redirect URL'))
+            rejectOnce(new Error('Invalid redirect URL'))
             return
           }
           if (resolvedRedirect.protocol !== 'https:') {
             response.resume()
-            reject(new Error('Model download redirect must use HTTPS'))
+            rejectOnce(new Error('Model download redirect must use HTTPS'))
             return
           }
           response.resume()
@@ -295,14 +331,14 @@ export class ModelManager {
             signal,
             redirectCount + 1
           )
-            .then(resolve)
-            .catch(reject)
+            .then(resolveOnce)
+            .catch(rejectOnce)
           return
         }
 
         if (response.statusCode !== 200) {
           response.resume()
-          reject(new Error(`HTTP ${response.statusCode}`))
+          rejectOnce(new Error(`HTTP ${response.statusCode}`))
           return
         }
 
@@ -313,7 +349,7 @@ export class ModelManager {
 
         response.on('data', (chunk: Buffer) => {
           if (isAborted()) {
-            request.destroy(new Error('Aborted'))
+            request?.destroy(new Error('Aborted'))
             response.destroy()
             fileStream.destroy()
             return
@@ -326,12 +362,12 @@ export class ModelManager {
         pipeline(response, fileStream)
           .then(() => {
             if (isAborted()) {
-              reject(new Error('Aborted'))
+              rejectOnce(new Error('Aborted'))
             } else {
-              resolve()
+              resolveOnce()
             }
           })
-          .catch(reject)
+          .catch(rejectOnce)
       }
 
       request = signal
@@ -341,14 +377,8 @@ export class ModelManager {
       // Why: cancellation only helps after the user presses cancel; a peer
       // that accepts the socket and goes silent must not leave the model stuck
       // in "downloading" forever.
-      request.setTimeout(DOWNLOAD_IDLE_TIMEOUT_MS, () => {
-        request.destroy(
-          new Error(
-            `Model download timed out after ${DOWNLOAD_IDLE_TIMEOUT_MS / 1000} seconds without network activity`
-          )
-        )
-      })
-      request.on('error', reject)
+      request.setTimeout(DOWNLOAD_IDLE_TIMEOUT_MS, onRequestTimeout)
+      request.on('error', onRequestError)
     })
   }
 
