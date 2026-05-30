@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const APP_STAR_SOURCE_VALUES = ['star_nag', 'settings', 'landing'] as const
+const APP_STAR_SOURCE_VALUES = ['star_nag', 'settings', 'landing'] as const
 
 // Why: renderer-originated IPC is untrusted, so main validates against this
 // closed enum before attaching source context to successful star telemetry.
