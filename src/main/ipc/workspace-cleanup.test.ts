@@ -344,6 +344,33 @@ describe('workspace cleanup scan', () => {
     })
   })
 
+  it('summarizes large diff-note lists without hitting argument limits', async () => {
+    const diffComments = Array.from(
+      { length: 150_000 },
+      (_, index): DiffComment => ({
+        id: `comment-${index}`,
+        worktreeId: 'repo-1::/repo-feature',
+        filePath: 'src/file.ts',
+        lineNumber: 12,
+        body: 'Follow up before deleting',
+        createdAt: NOW - index,
+        side: 'modified'
+      })
+    )
+
+    const result = await scanWorkspaceCleanup(
+      makeStore({
+        baseRef: undefined,
+        diffComments
+      })
+    )
+
+    expect(result.candidates[0]?.localContext).toMatchObject({
+      diffCommentCount: 150_000,
+      newestDiffCommentAt: NOW
+    })
+  })
+
   it('does not expose PR cache state in inactivity cleanup results', async () => {
     const result = await scanWorkspaceCleanup(
       makeStore({
