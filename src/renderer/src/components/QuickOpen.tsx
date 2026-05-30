@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
@@ -75,7 +75,14 @@ function InstallRgGuidance({
     }
   }, [])
 
-  useEffect(() => clearCopiedResetTimer, [clearCopiedResetTimer])
+  const setCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (node === null) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
 
   const handleCopy = useCallback(() => {
     if (!command) {
@@ -118,6 +125,7 @@ function InstallRgGuidance({
         <div className="flex items-center gap-2 rounded border border-border bg-muted/50 px-3 py-2 font-mono text-xs text-foreground">
           <span className="flex-1 truncate">{command}</span>
           <button
+            ref={setCopyButtonRef}
             type="button"
             onClick={handleCopy}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

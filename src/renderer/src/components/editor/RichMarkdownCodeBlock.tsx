@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
@@ -59,7 +59,14 @@ export function RichMarkdownCodeBlock({
     }
   }, [])
 
-  useEffect(() => clearCopiedResetTimer, [clearCopiedResetTimer])
+  const setCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (node === null) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
 
   const onChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -108,6 +115,7 @@ export function RichMarkdownCodeBlock({
         ) : null}
       </select>
       <button
+        ref={setCopyButtonRef}
         type="button"
         className="code-block-copy-btn"
         contentEditable={false}

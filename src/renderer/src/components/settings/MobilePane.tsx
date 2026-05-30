@@ -61,7 +61,14 @@ export function MobilePane(): React.JSX.Element {
     }
   }, [])
 
-  useEffect(() => clearCodeCopiedResetTimer, [clearCodeCopiedResetTimer])
+  const setPairingCodeButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (node === null) {
+        clearCodeCopiedResetTimer()
+      }
+    },
+    [clearCodeCopiedResetTimer]
+  )
 
   const loadDevices = useCallback(async () => {
     try {
@@ -206,6 +213,7 @@ export function MobilePane(): React.JSX.Element {
                 Or paste this code in the mobile app:
               </div>
               <Button
+                ref={setPairingCodeButtonRef}
                 variant="outline"
                 size="sm"
                 onClick={() => void copyPairingCode()}
