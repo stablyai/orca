@@ -253,7 +253,7 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows[0]).toMatchObject({ type: 'header', label: 'c15t' })
   })
 
-  it('emits an imported worktrees card after repo-group visible rows', () => {
+  it('emits an imported worktrees card at the top of repo-group rows', () => {
     const hidden = [
       makeDetectedWorktree({ id: 'hidden-1', displayName: 'payments-refactor' }),
       makeDetectedWorktree({ id: 'hidden-2', displayName: 'auth-cache-debug' }),
@@ -279,14 +279,14 @@ describe('buildRows with pinned worktrees', () => {
 
     expect(rows).toMatchObject([
       { type: 'header', key: 'repo:repo-1' },
-      { type: 'item', worktree: { id: 'wt-1' } },
       {
         type: 'imported-worktrees-card',
         key: 'imported-worktrees-card:repo-group:repo-1',
         placement: 'repo-group',
         repo: { id: 'repo-1' },
         hiddenWorktrees: [{ id: 'hidden-1' }, { id: 'hidden-2' }, { id: 'hidden-3' }]
-      }
+      },
+      { type: 'item', worktree: { id: 'wt-1' } }
     ])
   })
 

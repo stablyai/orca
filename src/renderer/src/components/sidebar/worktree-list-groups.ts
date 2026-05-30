@@ -583,16 +583,16 @@ export function buildRows(
 
       result.push(header)
       if (!isCollapsed) {
-        appendWorktreeRows(result, group.items, repoMap, lineageById, worktreeMap, {
-          nestLineage,
-          collapsedGroups
-        })
         if (groupBy === 'repo' && repo) {
           const candidate = importedWorktreesByRepo.get(repo.id)
           if (candidate) {
             result.push(buildImportedWorktreesCardRow(candidate, 'repo-group'))
           }
         }
+        appendWorktreeRows(result, group.items, repoMap, lineageById, worktreeMap, {
+          nestLineage,
+          collapsedGroups
+        })
       }
     }
   }
