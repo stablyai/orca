@@ -19,6 +19,7 @@ import {
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   Dialog,
   DialogContent,
@@ -96,6 +97,7 @@ export function IntegrationsPane(): React.JSX.Element {
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const testLinearConnection = useAppStore((s) => s.testLinearConnection)
   const linearWorkspaces = linearStatus.workspaces ?? []
+  const mountedRef = useMountedRef()
 
   const [ghStatus, setGhStatus] = useState<GhStatus>('checking')
   const [glabStatus, setGlabStatus] = useState<GlabStatus>('checking')
@@ -169,6 +171,9 @@ export function IntegrationsPane(): React.JSX.Element {
     setLinearConnectError(null)
     try {
       const result = await connectLinear(linearApiKeyDraft.trim())
+      if (!mountedRef.current) {
+        return
+      }
       if (result.ok) {
         setLinearApiKeyDraft('')
         setLinearConnectState('idle')
@@ -179,13 +184,18 @@ export function IntegrationsPane(): React.JSX.Element {
         setLinearConnectError(result.error)
       }
     } catch (error) {
-      setLinearConnectState('error')
-      setLinearConnectError(error instanceof Error ? error.message : 'Connection failed')
+      if (mountedRef.current) {
+        setLinearConnectState('error')
+        setLinearConnectError(error instanceof Error ? error.message : 'Connection failed')
+      }
     }
   }
 
   const handleLinearDisconnect = async (workspaceId?: string): Promise<void> => {
     await (workspaceId ? disconnectLinearWorkspace(workspaceId) : disconnectLinear())
+    if (!mountedRef.current) {
+      return
+    }
     setLinearConnectState('idle')
     setLinearConnectError(null)
     setLinearTestResultByWorkspace({})
@@ -203,6 +213,9 @@ export function IntegrationsPane(): React.JSX.Element {
       return next
     })
     const result = await testLinearConnection(workspaceId)
+    if (!mountedRef.current) {
+      return
+    }
     if (result.ok) {
       setLinearTestResultByWorkspace((prev) => ({
         ...prev,
