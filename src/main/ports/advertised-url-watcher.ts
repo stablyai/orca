@@ -281,8 +281,11 @@ export class AdvertisedUrlWatcher {
   }
 
   bindPty(ptyId: string, worktreeId: string): void {
-    this.ptyToWorktree.set(ptyId, worktreeId)
     const pending = this.pending.get(ptyId)
+    if (this.ptyToWorktree.get(ptyId) === worktreeId && pending === undefined) {
+      return
+    }
+    this.ptyToWorktree.set(ptyId, worktreeId)
     if (pending !== undefined) {
       this.pending.delete(ptyId)
       this.ingest(ptyId, pending)

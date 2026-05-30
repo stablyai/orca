@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   AdvertisedUrlWatcher,
   classifyHost,
@@ -183,6 +183,25 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     watcher.ingest('pty-X', 'early https://app.example.com:3001/\n')
     expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
     watcher.bindPty('pty-X', WORKTREE)
+    expect(watcher.lookup(WORKTREE, 3001)?.host).toBe('app.example.com')
+  })
+
+  it('keeps repeated PTY binds as no-ops once pending data is drained', () => {
+    const watcher = new AdvertisedUrlWatcher({ now: () => 1_000 })
+    watcher.ingest(PTY, 'early https://app.example.com:3001/\n')
+    watcher.bindPty(PTY, WORKTREE)
+
+    const internals = watcher as unknown as { ptyToWorktree: Map<string, string> }
+    const originalSet = internals.ptyToWorktree.set
+    const setSpy = vi.fn(originalSet.bind(internals.ptyToWorktree))
+    internals.ptyToWorktree.set = setSpy
+    try {
+      watcher.bindPty(PTY, WORKTREE)
+    } finally {
+      internals.ptyToWorktree.set = originalSet
+    }
+
+    expect(setSpy).not.toHaveBeenCalled()
     expect(watcher.lookup(WORKTREE, 3001)?.host).toBe('app.example.com')
   })
 
