@@ -549,6 +549,42 @@ describe('repos:addRemote', () => {
     expect(result).toHaveProperty('repo.path', '/home/user/project')
   })
 
+  it('uses the resolved git root basename for the default remote display name', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({
+      isRepo: true,
+      rootPath: '/home/user/project'
+    })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/home/user/project/src'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/home/user/project',
+        displayName: 'project'
+      })
+    )
+    expect(result).toHaveProperty('repo.displayName', 'project')
+  })
+
+  it('derives default remote display names from Windows path separators', async () => {
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: 'C:\\Users\\alice\\project',
+      kind: 'folder'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: 'C:\\Users\\alice\\project',
+        displayName: 'project'
+      })
+    )
+    expect(result).toHaveProperty('repo.displayName', 'project')
+  })
+
   it('notifies renderer when remote repo is added', async () => {
     await handlers.get('repos:addRemote')!(null, {
       connectionId: 'conn-1',
