@@ -706,10 +706,10 @@ export class AgentBrowserBridge {
     // directly via JS and dispatch input/change events for React/framework compat.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       await this.execAgentBrowser(sessionName, ['focus', element])
-      const escaped = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+      const serializedValue = JSON.stringify(value)
       await this.execAgentBrowser(sessionName, [
         'eval',
-        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, '${escaped}'); } else { el.value = '${escaped}'; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
+        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, ${serializedValue}); } else { el.value = ${serializedValue}; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
       ])
       return { filled: element } as BrowserFillResult
     })

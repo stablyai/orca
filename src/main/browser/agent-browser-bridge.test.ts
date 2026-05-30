@@ -526,9 +526,9 @@ describe('AgentBrowserBridge', () => {
         expect(wc.on).toHaveBeenCalledWith('did-finish-load', expect.any(Function))
       })
 
-      const finishListener = wc.on.mock.calls.find(
-        ([event]) => event === 'did-finish-load'
-      )?.[1] as (() => void) | undefined
+      const finishListener = wc.on.mock.calls.find(([event]) => event === 'did-finish-load')?.[1] as
+        | (() => void)
+        | undefined
       const failListener = wc.on.mock.calls.find(([event]) => event === 'did-fail-load')?.[1] as
         | (() => void)
         | undefined
@@ -1105,6 +1105,20 @@ describe('AgentBrowserBridge', () => {
     const args = execFileMock.mock.calls.at(-1)![1] as string[]
     expect(args).toContain('goto')
     expect(args).toContain('https://example.com')
+  })
+
+  it('builds valid fill eval JavaScript for multiline values', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@textarea', "line one\nline two with 'quote' and \\ slash")
+
+    const evalCall = execFileMock.mock.calls.find((call: unknown[]) =>
+      (call[1] as string[]).includes('eval')
+    )
+    expect(evalCall).toBeDefined()
+    const args = evalCall![1] as string[]
+    const expression = args[args.indexOf('eval') + 1]
+    expect(() => new Function(expression)).not.toThrow()
   })
 
   // ── Cookie command arg building ──
