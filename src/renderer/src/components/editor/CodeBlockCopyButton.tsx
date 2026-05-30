@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { Copy, Check } from 'lucide-react'
 
 type CodeBlockCopyButtonProps = React.HTMLAttributes<HTMLPreElement> & {
@@ -10,6 +10,14 @@ export default function CodeBlockCopyButton({
   ...props
 }: CodeBlockCopyButtonProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (!copied) {
+      return
+    }
+    const timeout = window.setTimeout(() => setCopied(false), 1500)
+    return () => window.clearTimeout(timeout)
+  }, [copied])
 
   const handleCopy = useCallback(() => {
     // Extract the text content from the nested <code> element rendered by
@@ -29,7 +37,6 @@ export default function CodeBlockCopyButton({
       .writeClipboardText(text)
       .then(() => {
         setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
       })
       .catch(() => {
         // Silently swallow clipboard write failures (e.g. permission denied).

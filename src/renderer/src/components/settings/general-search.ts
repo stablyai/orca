@@ -81,14 +81,14 @@ export const GENERAL_NAVIGATION_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 export const GENERAL_CLI_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Orca CLI',
-    description: 'Register or remove the orca shell command.',
+    description: 'Register or remove the Orca CLI command.',
     keywords: ['cli', 'path', 'terminal', 'command', 'shell command'],
     cmdJKeywords: ['cli', 'path', 'command', 'shell command'],
     targetSectionId: 'cli'
   },
   {
     title: 'Agent skill',
-    description: 'Install the Orca skill so agents know to use the orca CLI.',
+    description: 'Install the Orca skill so agents know to use the Orca CLI.',
     keywords: ['skill', 'agents', 'npx']
   }
 ]

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import { Check, Copy, Share2 } from 'lucide-react'
 import { Button } from '../ui/button'
@@ -21,6 +21,14 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
   const [copied, setCopied] = useState(false)
   const [capturing, setCapturing] = useState(false)
 
+  useEffect(() => {
+    if (!copied) {
+      return
+    }
+    const timeout = window.setTimeout(() => setCopied(false), 2000)
+    return () => window.clearTimeout(timeout)
+  }, [copied])
+
   const captureToClipboard = useCallback(async () => {
     if (!cardRef.current || capturing) {
       return
@@ -42,7 +50,6 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
     const ok = await captureToClipboard()
     if (ok) {
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
     }
   }, [captureToClipboard])
 

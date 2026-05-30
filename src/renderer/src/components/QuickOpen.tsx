@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import React, { useCallback, useDeferredValue, useMemo, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
@@ -66,6 +66,15 @@ function InstallRgGuidance({
   guidance?: string | null
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (!copied) {
+      return
+    }
+    const timeout = window.setTimeout(() => setCopied(false), 1500)
+    return () => window.clearTimeout(timeout)
+  }, [copied])
+
   const handleCopy = useCallback(() => {
     if (!command) {
       return
@@ -78,7 +87,6 @@ function InstallRgGuidance({
       .writeClipboardText(command)
       .then(() => {
         setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
       })
       .catch(() => {
         /* best-effort */

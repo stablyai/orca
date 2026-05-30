@@ -47,12 +47,16 @@ function getInstallDescription(platform: string): string {
     return 'Register `orca` in /usr/local/bin.'
   }
   if (platform === 'linux') {
-    return 'Register `orca` in ~/.local/bin.'
+    return 'Register `orca-ide` in ~/.local/bin.'
   }
   if (platform === 'win32') {
     return 'Register `orca` in your user PATH.'
   }
   return 'CLI registration is not yet available on this platform.'
+}
+
+function getFallbackCommandName(platform: string): string {
+  return platform === 'linux' ? 'orca-ide' : 'orca'
 }
 
 export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Element {
@@ -88,6 +92,7 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
   const isSupported = status?.supported ?? false
   const isBrowserManaged = status?.unsupportedReason === 'launch_mode_unavailable'
   const revealLabel = getRevealLabel(currentPlatform)
+  const commandName = status?.commandName ?? getFallbackCommandName(currentPlatform)
   const canRevealCommandPath =
     status?.commandPath != null && ['installed', 'stale', 'conflict'].includes(status.state)
 
@@ -97,9 +102,11 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
       const next = await window.api.cli.install()
       setStatus(next)
       setDialogOpen(false)
-      toast.success('Registered `orca` in PATH.')
+      toast.success(`Registered \`${next.commandName}\` in PATH.`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to register `orca` in PATH.')
+      toast.error(
+        error instanceof Error ? error.message : `Failed to register \`${commandName}\` in PATH.`
+      )
     } finally {
       setBusyAction(null)
     }
@@ -111,9 +118,11 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
       const next = await window.api.cli.remove()
       setStatus(next)
       setDialogOpen(false)
-      toast.success('Removed `orca` from PATH.')
+      toast.success(`Removed \`${next.commandName}\` from PATH.`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to remove `orca` from PATH.')
+      toast.error(
+        error instanceof Error ? error.message : `Failed to remove \`${commandName}\` from PATH.`
+      )
     } finally {
       setBusyAction(null)
     }
@@ -253,12 +262,14 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {isEnabled ? 'Remove `orca` from PATH?' : 'Register `orca` in PATH?'}
+              {isEnabled
+                ? `Remove \`${commandName}\` from PATH?`
+                : `Register \`${commandName}\` in PATH?`}
             </DialogTitle>
             <DialogDescription>
               {isEnabled
                 ? 'This removes the shell command symlink. Orca itself remains installed.'
-                : `Orca will register ${status?.commandPath ?? '`orca`'} so the command works from your terminal.`}
+                : `Orca will register ${status?.commandPath ?? commandName} so the command works from your terminal.`}
             </DialogDescription>
           </DialogHeader>
           {status?.commandPath ? (

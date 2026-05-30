@@ -1680,7 +1680,7 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
 function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
   const status = {
     platform: getBrowserPlatform(),
-    commandName: 'orca',
+    commandName: getBrowserPlatform() === 'linux' ? 'orca-ide' : 'orca',
     commandPath: null,
     pathDirectory: null,
     pathConfigured: false,
