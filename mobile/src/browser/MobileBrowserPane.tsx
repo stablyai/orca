@@ -1,5 +1,13 @@
 import { Buffer } from 'buffer'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 import {
   ActivityIndicator,
   AppState,
@@ -209,12 +217,14 @@ export function MobileBrowserPane({
     }
   }, [addressFocused, tab.url])
 
-  // Why: gesture and stream handlers read these refs before passive Effects
-  // flush. Assigning during render keeps them current without extra commits.
-  frameMetadataRef.current = frameMetadata
-  layoutRef.current = layout
-  dialogRef.current = dialog
-  zoomRef.current = zoom
+  useLayoutEffect(() => {
+    // Why: gesture and stream handlers need committed values before passive
+    // Effects flush, without leaking refs from an uncommitted render.
+    frameMetadataRef.current = frameMetadata
+    layoutRef.current = layout
+    dialogRef.current = dialog
+    zoomRef.current = zoom
+  }, [dialog, frameMetadata, layout, zoom])
 
   useEffect(() => {
     lastZoomResetUrlRef.current = tab.url || 'about:blank'
