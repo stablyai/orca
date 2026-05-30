@@ -163,21 +163,16 @@ describe('runWorktreeBatchDelete', () => {
 
   it('notifies onDeleted after a skip-confirm force delete succeeds', async () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
-    mocks.state.deleteStateByWorktreeId = {
-      'wt-1': { canForceDelete: true }
-    }
+    mocks.state.deleteStateByWorktreeId = { 'wt-1': { canForceDelete: true } }
     mocks.state.removeWorktree
       .mockResolvedValueOnce({ ok: false, error: 'changed files' })
       .mockResolvedValueOnce({ ok: true })
     setWorktrees([{ id: 'wt-1', displayName: 'one' }])
     const onDeleted = vi.fn()
 
-    const started = runWorktreeBatchDelete(['wt-1'], { onDeleted })
+    expect(runWorktreeBatchDelete(['wt-1'], { onDeleted })).toBe(true)
 
-    expect(started).toBe(true)
-    await vi.waitFor(() => {
-      expect(toast.info).toHaveBeenCalled()
-    })
+    await vi.waitFor(() => expect(toast.info).toHaveBeenCalled())
     const toastOptions = vi.mocked(toast.info).mock.calls[0]?.[1] as
       | { action?: { onClick?: () => void } }
       | undefined
