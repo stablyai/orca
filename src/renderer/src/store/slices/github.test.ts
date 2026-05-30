@@ -581,6 +581,89 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     expect(store.getState().prCache[repoScopedKey]?.data?.checksStatus).toBe('success')
     expect(store.getState().prCache[pathScopedKey]?.data?.checksStatus).toBe('pending')
   })
+
+  it('lets a forced checks refresh bypass a non-forced inflight request and keep the newer cache result', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const branch = 'feature/test'
+    const headSha = 'head-old'
+    const prCacheKey = `${repoId}::${branch}`
+    const checksCacheKey = `${repoId}::${prChecksCacheSuffix(12, null, headSha)}`
+    const staleChecks = [
+      { name: 'build', status: 'completed', conclusion: 'success', url: null } as const
+    ]
+    const freshChecks = [
+      { name: 'build', status: 'in_progress', conclusion: 'pending', url: null } as const
+    ]
+    let resolveInitial: (value: typeof staleChecks) => void = () => {}
+    const initialRequest = new Promise<typeof staleChecks>((resolve) => {
+      resolveInitial = resolve
+    })
+
+    store.setState({
+      prCache: {
+        [prCacheKey]: {
+          data: makePR({ headSha, checksStatus: 'pending' }),
+          fetchedAt: 1
+        }
+      }
+    })
+    mockApi.gh.prChecks.mockReturnValueOnce(initialRequest).mockResolvedValueOnce(freshChecks)
+
+    const initialFetch = store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, headSha, null, { repoId })
+    await Promise.resolve()
+    const forcedFetch = store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, headSha, null, { force: true, repoId })
+
+    await expect(forcedFetch).resolves.toEqual(freshChecks)
+    expect(mockApi.gh.prChecks).toHaveBeenCalledTimes(2)
+    expect(mockApi.gh.prChecks).toHaveBeenNthCalledWith(2, {
+      repoPath,
+      repoId,
+      prNumber: 12,
+      headSha,
+      prRepo: null,
+      noCache: true
+    })
+
+    resolveInitial(staleChecks)
+    await expect(initialFetch).resolves.toEqual(staleChecks)
+
+    expect(store.getState().checksCache[checksCacheKey]?.data).toEqual(freshChecks)
+    expect(store.getState().prCache[prCacheKey]?.data?.checksStatus).toBe('pending')
+  })
+
+  it('dedupes concurrent forced checks refreshes to avoid duplicate API calls', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const branch = 'feature/test'
+    const checks = [
+      { name: 'build', status: 'completed', conclusion: 'success', url: null } as const
+    ]
+    let resolveChecks: (value: typeof checks) => void = () => {}
+    const request = new Promise<typeof checks>((resolve) => {
+      resolveChecks = resolve
+    })
+
+    mockApi.gh.prChecks.mockReturnValueOnce(request)
+    const firstFetch = store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, 'head-a', null, { force: true, repoId })
+    const secondFetch = store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, 'head-a', null, { force: true, repoId })
+
+    resolveChecks(checks)
+    await expect(firstFetch).resolves.toEqual(checks)
+    await expect(secondFetch).resolves.toEqual(checks)
+
+    expect(mockApi.gh.prChecks).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('createGitHubSlice.fetchPRComments', () => {
@@ -2594,6 +2677,107 @@ describe('createGitHubSlice.refreshGitHubForWorktree', () => {
       params: { repo: 'repo-1', branch, linkedPRNumber: null },
       timeoutMs: 30_000
     })
+  })
+
+  it('invalidates cached PR checks and bumps a post-push nonce for a cached GitHub PR', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/checks'
+    const worktreeId = 'wt-checks'
+    const prRepo = { owner: 'Acme', repo: 'Widgets' }
+    const headChecksKey = `${repoId}::${prChecksCacheSuffix(12, prRepo, 'head-a')}`
+    const legacyChecksKey = `${repoId}::${prChecksCacheSuffix(12, prRepo)}`
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [
+          {
+            id: worktreeId,
+            repoId,
+            path: '/repo/worktrees/checks',
+            branch,
+            displayName: 'checks',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false
+          }
+        ]
+      },
+      prCache: {
+        [`${repoId}::${branch}`]: {
+          data: makePR({ number: 12, headSha: 'head-a', prRepo }),
+          fetchedAt: 100
+        }
+      },
+      checksCache: {
+        [headChecksKey]: {
+          data: [{ name: 'build', status: 'completed', conclusion: 'success', url: null }],
+          fetchedAt: 100,
+          headSha: 'head-a'
+        },
+        [legacyChecksKey]: {
+          data: [{ name: 'legacy', status: 'completed', conclusion: 'success', url: null }],
+          fetchedAt: 100,
+          headSha: 'head-a'
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshGitHubForWorktree(worktreeId)
+
+    expect(store.getState().checksCache[headChecksKey]?.fetchedAt).toBe(0)
+    expect(store.getState().checksCache[legacyChecksKey]?.fetchedAt).toBe(0)
+    expect(store.getState().checksPostPushNonceByWorktree[worktreeId]).toBe(1)
+  })
+
+  it('does not emit a GitHub checks post-push nonce for a GitLab-only worktree', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/gitlab'
+    const worktreeId = 'wt-gitlab'
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [
+          {
+            id: worktreeId,
+            repoId,
+            path: '/repo/worktrees/gitlab',
+            branch,
+            displayName: 'gitlab',
+            isMainWorktree: false,
+            isBare: false,
+            isArchived: false,
+            linkedGitLabMR: 7
+          }
+        ]
+      },
+      hostedReviewCache: {
+        [hostedReviewCacheKey]: {
+          data: {
+            provider: 'gitlab',
+            number: 7,
+            title: 'GitLab MR',
+            state: 'open',
+            url: 'https://gitlab.com/acme/widgets/-/merge_requests/7',
+            status: 'pending',
+            updatedAt: '2026-05-26T00:00:00Z',
+            mergeable: 'UNKNOWN'
+          },
+          fetchedAt: 100
+        }
+      },
+      checksPostPushNonceByWorktree: { [worktreeId]: 3 }
+    } as unknown as Partial<AppState>)
+
+    store.getState().refreshGitHubForWorktree(worktreeId)
+
+    expect(store.getState().checksPostPushNonceByWorktree[worktreeId]).toBe(3)
   })
 })
 
