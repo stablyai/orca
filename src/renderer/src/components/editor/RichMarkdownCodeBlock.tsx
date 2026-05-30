@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
@@ -45,6 +45,9 @@ export function RichMarkdownCodeBlock({
   const language = (node.attrs.language as string) || ''
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after the node view unmounts; avoid
+  // starting a reset timer that will outlive the component.
+  const isMountedRef = useRef(false)
   const settings = useAppStore((s) => s.settings)
   const isDark =
     settings?.theme === 'dark' ||
@@ -68,6 +71,14 @@ export function RichMarkdownCodeBlock({
     [clearCopiedResetTimer]
   )
 
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      clearCopiedResetTimer()
+    }
+  }, [clearCopiedResetTimer])
+
   const onChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       updateAttributes({ language: e.target.value })
@@ -82,6 +93,9 @@ export function RichMarkdownCodeBlock({
       void window.api.ui
         .writeClipboardText(text)
         .then(() => {
+          if (!isMountedRef.current) {
+            return
+          }
           clearCopiedResetTimer()
           setCopied(true)
           copiedResetTimerRef.current = window.setTimeout(() => {

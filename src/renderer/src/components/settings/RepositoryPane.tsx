@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { Button } from '../ui/button'
@@ -56,6 +56,9 @@ export function RepositoryPane({
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
   const copiedTemplateResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after settings navigation; avoid starting
+  // a reset timer that will outlive this pane.
+  const isMountedRef = useRef(false)
   // Why: searching a project name is navigation to that project, not a
   // request to hide every child row that does not repeat the project name.
   const forceFullPaneForRepoMatch = matchesRepositoryIdentitySearch(searchQuery, repo)
@@ -75,6 +78,14 @@ export function RepositoryPane({
     },
     [clearCopiedTemplateResetTimer]
   )
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      clearCopiedTemplateResetTimer()
+    }
+  }, [clearCopiedTemplateResetTimer])
 
   const handleRemoveProject = (repoId: string) => {
     if (confirmingRemove === repoId) {
@@ -100,6 +111,9 @@ export function RepositoryPane({
     pnpm worktree:setup
   archive: |
     echo "Cleaning up before archive"`)
+    if (!isMountedRef.current) {
+      return
+    }
     clearCopiedTemplateResetTimer()
     setCopiedTemplate(true)
     copiedTemplateResetTimerRef.current = window.setTimeout(() => {

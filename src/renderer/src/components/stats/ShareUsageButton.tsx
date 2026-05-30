@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import { Check, Copy, Share2 } from 'lucide-react'
 import { Button } from '../ui/button'
@@ -21,6 +21,9 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
   const [copied, setCopied] = useState(false)
   const [capturing, setCapturing] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: image capture/clipboard IPC can resolve after dialog teardown; avoid
+  // state writes and reset timers after this control unmounts.
+  const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
     if (copiedResetTimerRef.current !== null) {
@@ -38,6 +41,14 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
     [clearCopiedResetTimer]
   )
 
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      clearCopiedResetTimer()
+    }
+  }, [clearCopiedResetTimer])
+
   const captureToClipboard = useCallback(async () => {
     if (!cardRef.current || capturing) {
       return
@@ -51,13 +62,15 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
       await window.api.ui.writeClipboardImage(dataUrl)
       return true
     } finally {
-      setCapturing(false)
+      if (isMountedRef.current) {
+        setCapturing(false)
+      }
     }
   }, [capturing])
 
   const handleCopy = useCallback(async () => {
     const ok = await captureToClipboard()
-    if (ok) {
+    if (ok && isMountedRef.current) {
       clearCopiedResetTimer()
       setCopied(true)
       copiedResetTimerRef.current = window.setTimeout(() => {

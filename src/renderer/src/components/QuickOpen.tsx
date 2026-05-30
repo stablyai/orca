@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import React, { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
@@ -67,6 +67,9 @@ function InstallRgGuidance({
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after this guidance unmounts; avoid
+  // starting a reset timer that will outlive the component.
+  const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
     if (copiedResetTimerRef.current !== null) {
@@ -84,6 +87,14 @@ function InstallRgGuidance({
     [clearCopiedResetTimer]
   )
 
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      clearCopiedResetTimer()
+    }
+  }, [clearCopiedResetTimer])
+
   const handleCopy = useCallback(() => {
     if (!command) {
       return
@@ -95,6 +106,9 @@ function InstallRgGuidance({
     void window.api.ui
       .writeClipboardText(command)
       .then(() => {
+        if (!isMountedRef.current) {
+          return
+        }
         clearCopiedResetTimer()
         setCopied(true)
         copiedResetTimerRef.current = window.setTimeout(() => {

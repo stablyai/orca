@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Copy, Check } from 'lucide-react'
 
 type CodeBlockCopyButtonProps = React.HTMLAttributes<HTMLPreElement> & {
@@ -11,6 +11,9 @@ export default function CodeBlockCopyButton({
 }: CodeBlockCopyButtonProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after this button unmounts; avoid starting
+  // a reset timer that will outlive the component.
+  const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
     if (copiedResetTimerRef.current !== null) {
@@ -27,6 +30,14 @@ export default function CodeBlockCopyButton({
     },
     [clearCopiedResetTimer]
   )
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      clearCopiedResetTimer()
+    }
+  }, [clearCopiedResetTimer])
 
   const handleCopy = useCallback(() => {
     // Extract the text content from the nested <code> element rendered by
@@ -45,6 +56,9 @@ export default function CodeBlockCopyButton({
     void window.api.ui
       .writeClipboardText(text)
       .then(() => {
+        if (!isMountedRef.current) {
+          return
+        }
         clearCopiedResetTimer()
         setCopied(true)
         copiedResetTimerRef.current = window.setTimeout(() => {
