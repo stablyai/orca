@@ -721,6 +721,7 @@ export default function TerminalPane({
     setupSplit,
     issueCommandSplit,
     isActive,
+    isVisible,
     systemPrefersDark,
     settings,
     settingsRef,

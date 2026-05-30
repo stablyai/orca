@@ -449,6 +449,7 @@ describe('connectPanePty', () => {
         },
         pty: {
           signal: vi.fn(),
+          pauseOutput: vi.fn(),
           getMainBufferSnapshot: vi.fn().mockResolvedValue(null),
           getForegroundProcess: vi.fn().mockResolvedValue(null),
           hasChildProcesses: vi.fn().mockResolvedValue(false),
@@ -2702,6 +2703,46 @@ describe('connectPanePty', () => {
     expect(pane.terminal.write).toHaveBeenCalledWith(`${hidden}${live}`, expect.any(Function))
     expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
     disposable.dispose()
+  })
+
+  it('pauses renderer PTY output while hidden and restores from main snapshot on show', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    transport.connect.mockResolvedValue('pty-id')
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    const pauseOutput = window.api.pty.pauseOutput as unknown as ReturnType<typeof vi.fn>
+    getMainBufferSnapshot.mockResolvedValue({
+      data: 'hidden while paused\r\n',
+      cols: 120,
+      rows: 40,
+      seq: 21
+    })
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    expect(pauseOutput).toHaveBeenCalledWith('pty-id', true)
+
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    binding.syncRendererOutputVisibility()
+    await flushAsyncTicks(20)
+
+    expect(pauseOutput).toHaveBeenCalledWith('pty-id', false)
+    expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      'hidden while paused\r\n',
+      expect.any(Function)
+    )
+
+    binding.dispose()
   })
 
   it('restores hidden backlog overflow from the main terminal snapshot on foreground output', async () => {

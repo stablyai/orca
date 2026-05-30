@@ -78,6 +78,9 @@ const ptySizes = new Map<string, { cols: number; rows: number }>()
 // is PTY-scoped and must be cleared by every teardown path, including SSH and
 // daemon shutdowns that do not flow through the local provider exit listener.
 const lastInputAtByPty = new Map<string, number>()
+// Why: hidden renderer panes restore from main-owned snapshots, so ordinary
+// PTY bytes do not need to wake the renderer while a pane is hidden.
+const rendererPausedOutputPtys = new Set<string>()
 // Why: the agent-hooks server caches per-paneKey state (last prompt, last
 // tool) that otherwise grows unbounded as panes come and go. Track the
 // spawn-time paneKey so clearProviderPtyState can clear that cache on PTY
@@ -103,6 +106,10 @@ const AGENT_HOOK_RUNTIME_ENV_KEYS = [
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
   return paneKeyPtyId.get(paneKey)
+}
+
+export function isRendererPtyOutputPaused(ptyId: string): boolean {
+  return rendererPausedOutputPtys.has(ptyId)
 }
 
 // Why: consumers (currently the cursor-agent synthesized-spinner loop in
@@ -724,6 +731,7 @@ export function clearProviderPtyState(id: string): void {
   piTitlebarExtensionService.clearPty(id)
   ptySizes.delete(id)
   lastInputAtByPty.delete(id)
+  rendererPausedOutputPtys.delete(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
@@ -849,6 +857,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:getMainBufferSnapshot')
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
+  ipcMain.removeAllListeners('pty:pauseOutput')
   ipcMain.removeAllListeners('pty:ackColdRestore')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
 
@@ -1081,6 +1090,16 @@ export function registerPtyHandlers(
     flushTimer = null
   }
 
+  function setRendererPtyOutputPaused(id: string, paused: boolean): void {
+    if (paused) {
+      rendererPausedOutputPtys.add(id)
+      pendingData.delete(id)
+      clearFlushTimerIfIdle()
+      return
+    }
+    rendererPausedOutputPtys.delete(id)
+  }
+
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
   // adapter after replaceDaemonProvider runs. Both the startup registration
   // and the post-restart rebind go through the same code path — no risk of
@@ -1111,6 +1130,11 @@ export function registerPtyHandlers(
           flushTimer = null
         }
         pendingData.clear()
+        return
+      }
+      if (rendererPausedOutputPtys.has(payload.id)) {
+        pendingData.delete(payload.id)
+        clearFlushTimerIfIdle()
         return
       }
       const existing = pendingData.get(payload.id)
@@ -1163,6 +1187,7 @@ export function registerPtyHandlers(
         if (lastRendererInputPtyId === payload.id) {
           lastRendererInputPtyId = null
         }
+        rendererPausedOutputPtys.delete(payload.id)
         mainWindow.webContents.send('pty:exit', payload)
       }
     })
@@ -2176,6 +2201,14 @@ export function registerPtyHandlers(
   ipcMain.on('pty:write', (_event, args: { id: string; data: string }) => {
     writePtyInput(args)
   })
+
+  ipcMain.on('pty:pauseOutput', (_event, args: { id?: string; paused?: boolean }) => {
+    if (typeof args?.id !== 'string') {
+      return
+    }
+    setRendererPtyOutputPaused(args.id, args.paused === true)
+  })
+
   ipcMain.handle('pty:writeAccepted', (_event, args: { id: string; data: string }): boolean => {
     return writePtyInputAccepted(args)
   })
