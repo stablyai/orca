@@ -1,7 +1,16 @@
 /* eslint-disable max-lines -- Why: SSH connection utility tests share mocked filesystem and environment setup across auth, proxy, and retry helpers. */
+import { EventEmitter } from 'events'
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 import { join } from 'path'
 import { BaseAgent, utils, type ParsedKey } from 'ssh2'
+
+const { spawnMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn()
+}))
+
+vi.mock('child_process', () => ({
+  spawn: spawnMock
+}))
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser'
@@ -33,10 +42,27 @@ import {
   CONNECT_TIMEOUT_MS,
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
-  RECONNECT_BACKOFF_MS
+  RECONNECT_BACKOFF_MS,
+  spawnProxyCommand
 } from './ssh-connection-utils'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
+
+type MockProxyProcess = EventEmitter & {
+  stdin: EventEmitter & { write: ReturnType<typeof vi.fn> }
+  stdout: EventEmitter
+  stderr: EventEmitter
+}
+
+function createMockProxyProcess(): MockProxyProcess {
+  const proc = new EventEmitter() as MockProxyProcess
+  proc.stdin = Object.assign(new EventEmitter(), {
+    write: vi.fn((_chunk, cb?: (error?: Error | null) => void) => cb?.())
+  })
+  proc.stdout = new EventEmitter()
+  proc.stderr = new EventEmitter()
+  return proc
+}
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -549,5 +575,37 @@ describe('resolveEffectiveProxy', () => {
 
   it('returns undefined when no proxy is configured', () => {
     expect(resolveEffectiveProxy(makeTarget(), null)).toBeUndefined()
+  })
+})
+
+// ── spawnProxyCommand ───────────────────────────────────────────────
+
+describe('spawnProxyCommand', () => {
+  beforeEach(() => {
+    spawnMock.mockReset()
+  })
+
+  it('removes proxy process listeners when the socket is destroyed', () => {
+    const proc = createMockProxyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const { sock } = spawnProxyCommand(
+      { kind: 'jump-host', jumpHost: 'bastion.example.com' },
+      'target.example.com',
+      22,
+      'deploy'
+    )
+
+    expect(proc.stdout.listenerCount('data')).toBe(1)
+    expect(proc.stdout.listenerCount('end')).toBe(1)
+    expect(proc.stdin.listenerCount('error')).toBe(1)
+    expect(proc.listenerCount('error')).toBe(1)
+
+    sock.destroy()
+
+    expect(proc.stdout.listenerCount('data')).toBe(0)
+    expect(proc.stdout.listenerCount('end')).toBe(0)
+    expect(proc.stdin.listenerCount('error')).toBe(0)
+    expect(proc.listenerCount('error')).toBe(0)
   })
 })
