@@ -1,6 +1,5 @@
 import React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
-import ampLogoDark from '../../../../resources/amp-logo-dark.svg'
 import type { TuiAgent } from '../../../shared/types'
 
 export type AgentCatalogEntry = {
@@ -336,18 +335,6 @@ function CopilotIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   )
 }
 
-function AmpIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  return (
-    <span
-      aria-hidden
-      className="inline-flex shrink-0 items-center justify-center overflow-hidden"
-      style={{ width: size, height: size }}
-    >
-      <img src={ampLogoDark} alt="" style={{ width: size, height: size, objectFit: 'contain' }} />
-    </span>
-  )
-}
-
 function AgentLetterIcon({
   letter,
   size = 14
@@ -417,9 +404,6 @@ export function AgentIcon({
   }
   if (agent === 'copilot') {
     return <CopilotIcon size={size} />
-  }
-  if (agent === 'amp') {
-    return <AmpIcon size={size} />
   }
   const catalogEntry = AGENT_CATALOG.find((a) => a.id === agent)
   if (catalogEntry?.faviconDomain) {

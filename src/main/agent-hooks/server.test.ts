@@ -2272,6 +2272,183 @@ describe('Amp hook normalization', () => {
     })
   })
 
+  it('does not let Amp tool result messages overwrite the cached prompt', () => {
+    _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'agent.start',
+        message: 'run tests'
+      }),
+      'production'
+    )
+
+    const result = _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'tool.result',
+        tool: 'shell_command',
+        input: { command: 'pnpm test' },
+        message: 'tests passed'
+      }),
+      'production'
+    )
+
+    expect(result?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'run tests',
+      agentType: 'amp',
+      lastAssistantMessage: 'tests passed'
+    })
+
+    const done = _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'agent.end',
+        status: 'done'
+      }),
+      'production'
+    )
+
+    expect(done?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'run tests',
+      agentType: 'amp'
+    })
+  })
+
+  it('keeps Amp prompt and tool caches isolated by thread id within one pane', () => {
+    _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'agent.start',
+        threadId: 'thread-a',
+        message: 'first task'
+      }),
+      'production'
+    )
+
+    _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'agent.start',
+        threadId: 'thread-b',
+        message: 'second task'
+      }),
+      'production'
+    )
+
+    const threadAResult = _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'tool.result',
+        threadId: 'thread-a',
+        tool: 'shell_command',
+        input: { command: 'pnpm test:a' },
+        output: 'first done'
+      }),
+      'production'
+    )
+
+    expect(threadAResult?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'first task',
+      agentType: 'amp',
+      toolName: 'shell_command',
+      toolInput: 'pnpm test:a',
+      lastAssistantMessage: 'first done'
+    })
+
+    const threadBDone = _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'agent.end',
+        threadId: 'thread-b',
+        status: 'done'
+      }),
+      'production'
+    )
+
+    expect(threadBDone?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'second task',
+      agentType: 'amp'
+    })
+  })
+
+  it('drops stale Amp tool events that arrive after the thread ended', () => {
+    _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'agent.start',
+        threadId: 'thread-a',
+        message: 'run tests'
+      }),
+      'production'
+    )
+
+    const done = _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'agent.end',
+        threadId: 'thread-a',
+        status: 'done'
+      }),
+      'production'
+    )
+
+    expect(done?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'run tests',
+      agentType: 'amp'
+    })
+
+    const staleToolResult = _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'tool.result',
+        threadId: 'thread-a',
+        tool: 'shell_command',
+        input: { command: 'pnpm test' },
+        message: 'tests passed'
+      }),
+      'production'
+    )
+
+    expect(staleToolResult).toBeNull()
+  })
+
+  it('does not mark Amp tool result messages as explicit prompts', () => {
+    _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'agent.start',
+        threadId: 'thread-a',
+        message: 'run tests'
+      }),
+      'production'
+    )
+
+    const result = _internals.normalizeHookPayload(
+      'amp',
+      buildBody({
+        hook_event_name: 'tool.result',
+        threadId: 'thread-a',
+        tool: 'shell_command',
+        input: { command: 'pnpm test' },
+        message: 'tests passed'
+      }),
+      'production'
+    )
+
+    expect(result?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'run tests',
+      agentType: 'amp',
+      lastAssistantMessage: 'tests passed'
+    })
+    expect(result?.hasExplicitPrompt).toBeUndefined()
+  })
+
   it('marks cancelled Amp turns as interrupted done states', () => {
     const cancelled = _internals.normalizeHookPayload(
       'amp',
