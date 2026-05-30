@@ -523,6 +523,7 @@ export function registerFilesystemHandlers(
         let stdoutBuffer = ''
         let resolved = false
         let child: ChildProcess | null = null
+        let killTimeout: ReturnType<typeof setTimeout>
 
         // Why: when rg runs inside WSL, output paths are Linux-native
         // (e.g. /home/user/repo/src/file.ts). Translate them back to
@@ -541,6 +542,12 @@ export function registerFilesystemHandlers(
             activeTextSearches.delete(searchKey)
           }
           clearTimeout(killTimeout)
+          // Why: child.kill() is advisory. If rg ignores it, detach our
+          // closures so repeated local searches do not retain old scans.
+          child?.stdout?.off('data', handleStdoutData)
+          child?.stderr?.off('data', handleStderrData)
+          child?.off('error', handleError)
+          child?.off('close', handleClose)
           resolvePromise(finalize(acc))
         }
 
@@ -558,35 +565,39 @@ export function registerFilesystemHandlers(
         child = nextChild
         activeTextSearches.set(searchKey, nextChild)
 
-        nextChild.stdout!.setEncoding('utf-8')
-        nextChild.stdout!.on('data', (chunk: string) => {
+        const handleStdoutData = (chunk: string): void => {
           stdoutBuffer += chunk
           const lines = stdoutBuffer.split('\n')
           stdoutBuffer = lines.pop() ?? ''
           for (const line of lines) {
             processLine(line)
           }
-        })
-        nextChild.stderr!.on('data', () => {
+        }
+        const handleStderrData = (): void => {
           // Drain stderr so rg cannot block on a full pipe.
-        })
-
-        nextChild.once('error', () => {
+        }
+        const handleError = (): void => {
           resolveOnce()
-        })
-
-        nextChild.once('close', () => {
+        }
+        const handleClose = (): void => {
           if (stdoutBuffer) {
             processLine(stdoutBuffer)
           }
           resolveOnce()
-        })
+        }
+
+        nextChild.stdout!.setEncoding('utf-8')
+        nextChild.stdout!.on('data', handleStdoutData)
+        nextChild.stderr!.on('data', handleStderrData)
+        nextChild.once('error', handleError)
+        nextChild.once('close', handleClose)
 
         // Why: if the timeout fires, the child is killed and results are partial.
         // We must mark them as truncated so the UI can indicate incomplete results.
-        const killTimeout = setTimeout(() => {
+        killTimeout = setTimeout(() => {
           acc.truncated = true
           child?.kill()
+          resolveOnce()
         }, SEARCH_TIMEOUT_MS)
       })
     }
