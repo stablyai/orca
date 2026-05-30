@@ -5440,6 +5440,16 @@ export default function GitHubItemDialog({
   const files = details?.files ?? []
   const checks = details?.checks ?? []
   const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
+  // Why: clipboard IPC can resolve after the dialog unmounts; skip copied-state
+  // feedback instead of starting its reset timer on a stale surface.
+  const linkCopyMountedRef = useRef(false)
+
+  useEffect(() => {
+    linkCopyMountedRef.current = true
+    return () => {
+      linkCopyMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     setLinkCopied(false)
@@ -5461,6 +5471,9 @@ export default function GitHubItemDialog({
       // Why: Electron's clipboard IPC is reliable even when browser clipboard
       // APIs lose focus/activation inside nested overlay surfaces.
       await window.api.ui.writeClipboardText(workItem.url)
+      if (!linkCopyMountedRef.current) {
+        return
+      }
       setLinkCopied(true)
       toast.success('GitHub link copied')
     } catch {
