@@ -276,7 +276,13 @@ export class GitHandler {
         ['ls-files', '-z', '--', ...chunk.map((p) => this.literalPathspec(p))],
         worktreePath
       )
-      trackedPathSpecs.push(...stdout.split('\0').filter(Boolean))
+      // Why: selecting a tracked directory can make `ls-files -z` return
+      // enough descendants for push(...split) to exceed the argument limit.
+      for (const trackedPathSpec of stdout.split('\0')) {
+        if (trackedPathSpec) {
+          trackedPathSpecs.push(trackedPathSpec)
+        }
+      }
     }
 
     const trackedPaths = filePaths.filter((filePath) =>

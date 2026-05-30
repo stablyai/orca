@@ -20,14 +20,14 @@ import {
 
 describe('GitHandler', () => {
   let dispatcher: MockDispatcher
+  let handler: GitHandler
   let tmpDir: string
 
   beforeEach(() => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-git-'))
     dispatcher = createMockDispatcher()
     const ctx = new RelayContext()
-    // eslint-disable-next-line no-new
-    new GitHandler(dispatcher as unknown as RelayDispatcher, ctx)
+    handler = new GitHandler(dispatcher as unknown as RelayDispatcher, ctx)
   })
 
   afterEach(async () => {
@@ -496,6 +496,32 @@ describe('GitHandler', () => {
       await expect(fs.readFile(path.join(tmpDir, 'a.txt'), 'utf-8')).resolves.toBe('a')
       await expect(fs.readFile(path.join(tmpDir, 'b.txt'), 'utf-8')).resolves.toBe('b')
       await expect(fs.access(path.join(tmpDir, 'new.txt'))).rejects.toThrow()
+    })
+
+    it('handles large tracked path lists during bulk discard classification', async () => {
+      const trackedStdout = Array.from({ length: 150_000 }, (_, index) => `docs/file-${index}.ts`)
+        .join('\0')
+        .concat('\0')
+      const gitMock = vi
+        .spyOn(
+          handler as unknown as {
+            git: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>
+          },
+          'git'
+        )
+        .mockResolvedValueOnce({ stdout: trackedStdout, stderr: '' })
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+      await dispatcher.callRequest('git.bulkDiscard', {
+        worktreePath: tmpDir,
+        filePaths: ['docs']
+      })
+
+      expect(gitMock).toHaveBeenNthCalledWith(
+        2,
+        ['restore', '--worktree', '--source=HEAD', '--', ':(literal)docs'],
+        tmpDir
+      )
     })
 
     it('rejects path traversal', async () => {
