@@ -71,6 +71,9 @@ vi.mock('electron', () => ({
     isPackaged: true,
     getPath: getPathMock
   },
+  nativeTheme: {
+    shouldUseDarkColors: true
+  },
   ipcMain: {
     handle: handleMock,
     on: onMock,
@@ -2893,6 +2896,65 @@ describe('registerPtyHandlers', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('answers mode 2031 subscribes while renderer PTY output is paused', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    registerPtyHandlers(mainWindow as never)
+    const spawnResult = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp'
+    })) as { id: string }
+    const pauseCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:pauseOutput')
+    if (!pauseCall) {
+      throw new Error('missing pty:pauseOutput listener')
+    }
+    const pauseRendererOutput = pauseCall[1] as (
+      event: unknown,
+      args: { id: string; paused: boolean }
+    ) => void
+    mainWindow.webContents.send.mockClear()
+
+    pauseRendererOutput(null, { id: spawnResult.id, paused: true })
+    mockProc.emitData('\x1b[?2031h')
+
+    expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b[?997;1n')
+    expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+      'pty:data',
+      expect.objectContaining({ id: spawnResult.id })
+    )
+  })
+
+  it('answers split paused mode 2031 subscribes using current app color scheme', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+      theme: 'light'
+    })) as never)
+    const spawnResult = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp'
+    })) as { id: string }
+    const pauseCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:pauseOutput')
+    if (!pauseCall) {
+      throw new Error('missing pty:pauseOutput listener')
+    }
+    const pauseRendererOutput = pauseCall[1] as (
+      event: unknown,
+      args: { id: string; paused: boolean }
+    ) => void
+
+    pauseRendererOutput(null, { id: spawnResult.id, paused: true })
+    mockProc.emitData('\x1b[?20')
+    expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+    mockProc.emitData('31h')
+    expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b[?997;2n')
   })
 
   it('keeps 250 paused background PTYs off the renderer input path', async () => {

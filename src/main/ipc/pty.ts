@@ -5,7 +5,7 @@ boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
 import { join, delimiter } from 'path'
 import { randomUUID } from 'crypto'
-import { type BrowserWindow, ipcMain, app } from 'electron'
+import { type BrowserWindow, ipcMain, app, nativeTheme } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
@@ -44,6 +44,11 @@ import {
 } from '../../shared/telemetry-events'
 import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
 import { createTerminalSessionStateSaveFailureMessage } from '../../shared/terminal-session-state-save-failure'
+import {
+  mode2031SequenceFor,
+  resolveTerminalColorSchemeMode,
+  scanMode2031Sequences
+} from '../../shared/terminal-color-scheme-protocol'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 import {
   isTerminalLeafId,
@@ -81,6 +86,7 @@ const lastInputAtByPty = new Map<string, number>()
 // Why: hidden renderer panes restore from main-owned snapshots, so ordinary
 // PTY bytes do not need to wake the renderer while a pane is hidden.
 const rendererPausedOutputPtys = new Set<string>()
+const rendererPausedMode2031ScanTailByPty = new Map<string, string>()
 // Why: the agent-hooks server caches per-paneKey state (last prompt, last
 // tool) that otherwise grows unbounded as panes come and go. Track the
 // spawn-time paneKey so clearProviderPtyState can clear that cache on PTY
@@ -732,6 +738,7 @@ export function clearProviderPtyState(id: string): void {
   ptySizes.delete(id)
   lastInputAtByPty.delete(id)
   rendererPausedOutputPtys.delete(id)
+  rendererPausedMode2031ScanTailByPty.delete(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
@@ -1098,6 +1105,32 @@ export function registerPtyHandlers(
       return
     }
     rendererPausedOutputPtys.delete(id)
+    rendererPausedMode2031ScanTailByPty.delete(id)
+  }
+
+  function respondToPausedRendererMode2031Subscribe(id: string, data: string): void {
+    const scan = scanMode2031Sequences(rendererPausedMode2031ScanTailByPty.get(id) ?? '', data)
+    if (scan.tail) {
+      rendererPausedMode2031ScanTailByPty.set(id, scan.tail)
+    } else {
+      rendererPausedMode2031ScanTailByPty.delete(id)
+    }
+    if (!scan.subscribe) {
+      return
+    }
+    const provider = tryGetProviderForPty(id)
+    if (!provider) {
+      return
+    }
+    const mode = resolveTerminalColorSchemeMode(getSettings?.(), nativeTheme.shouldUseDarkColors)
+    try {
+      // Why: paused renderer panes still need protocol replies that affect how
+      // TUIs draw into the main-owned snapshot. Without this, Codex starts in a
+      // fallback prompt style and the restored composer loses its background.
+      provider.write(id, mode2031SequenceFor(mode))
+    } catch {
+      // Best effort; renderer restore will continue from whatever the TUI emits.
+    }
   }
 
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
@@ -1133,6 +1166,7 @@ export function registerPtyHandlers(
         return
       }
       if (rendererPausedOutputPtys.has(payload.id)) {
+        respondToPausedRendererMode2031Subscribe(payload.id, payload.data)
         pendingData.delete(payload.id)
         clearFlushTimerIfIdle()
         return
