@@ -688,6 +688,9 @@ function PRReviewersPanel({
               prNumber: item.number,
               reviewers: logins
             })
+      if (!reviewerPanelMountedRef.current) {
+        return
+      }
       if (!result.ok) {
         toast.error(result.error ?? 'Failed to request reviewer')
         return
@@ -703,9 +706,13 @@ function PRReviewersPanel({
       setReviewerInput('')
       toast.success(logins.length === 1 ? 'Reviewer requested' : 'Reviewers requested')
     } catch {
-      toast.error('Failed to request reviewer')
+      if (reviewerPanelMountedRef.current) {
+        toast.error('Failed to request reviewer')
+      }
     } finally {
-      setSubmitting(false)
+      if (reviewerPanelMountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
