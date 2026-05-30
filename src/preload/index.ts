@@ -1922,8 +1922,8 @@ const api = {
 
   cache: {
     getGitHub: () => ipcRenderer.invoke('cache:getGitHub'),
-    setGitHub: (args: { cache: unknown }) => ipcRenderer.invoke('cache:setGitHub', args)
-  },
+    setGitHub: (args) => ipcRenderer.invoke('cache:setGitHub', args)
+  } satisfies PreloadApi['cache'],
 
   session: {
     get: () => ipcRenderer.invoke('session:get'),
@@ -2286,10 +2286,9 @@ const api = {
   },
 
   ui: {
-    get: (): Promise<unknown> => ipcRenderer.invoke('ui:get'),
-    set: (args: Record<string, unknown>): Promise<void> => ipcRenderer.invoke('ui:set', args),
-    recordFeatureInteraction: (id: string): Promise<unknown> =>
-      ipcRenderer.invoke('ui:recordFeatureInteraction', id),
+    get: () => ipcRenderer.invoke('ui:get'),
+    set: (args) => ipcRenderer.invoke('ui:set', args),
+    recordFeatureInteraction: (id) => ipcRenderer.invoke('ui:recordFeatureInteraction', id),
     onOpenSettings: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openSettings', listener)
@@ -2828,7 +2827,7 @@ const api = {
     confirmWindowClose: (): void => {
       ipcRenderer.send('window:confirm-close')
     }
-  },
+  } satisfies PreloadApi['ui'],
 
   stats: {
     getSummary: (): Promise<{
