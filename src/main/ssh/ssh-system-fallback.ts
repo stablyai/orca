@@ -109,25 +109,25 @@ export async function uploadDirectoryViaSystemSsh(
     }
   )
 
-  const abort = (): void => {
-    killProcess(tarCreate)
-    killProcess(sshExtract)
-  }
-  options?.signal?.addEventListener('abort', abort, { once: true })
   let tarResult: ProcessResult | null = null
   let sshResult: ProcessResult | null = null
   try {
-    ;[tarResult, sshResult] = await Promise.all([
-      waitForProcess(tarCreate, 'local tar relay upload'),
-      waitForProcess(sshExtract, 'system ssh relay upload'),
-      pipeline(tarCreate.stdout!, sshExtract.stdin!)
-    ]).then(([tar, ssh]) => [tar, ssh])
+    ;[tarResult, sshResult] = await awaitWithSystemSshAbort(
+      options?.signal,
+      () => {
+        killProcess(tarCreate)
+        killProcess(sshExtract)
+      },
+      Promise.all([
+        waitForProcess(tarCreate, 'local tar relay upload'),
+        waitForProcess(sshExtract, 'system ssh relay upload'),
+        pipeline(tarCreate.stdout!, sshExtract.stdin!)
+      ]).then(([tar, ssh]) => [tar, ssh] as const)
+    )
   } catch (err) {
     killProcess(tarCreate)
     killProcess(sshExtract)
     throw err
-  } finally {
-    options?.signal?.removeEventListener('abort', abort)
   }
 
   if (tarResult?.stderr.trim()) {
@@ -146,17 +146,15 @@ export async function writeFileViaSystemSsh(
 ): Promise<void> {
   throwIfAborted(options?.signal)
   const channel = spawnSystemSshCommand(target, `cat > ${shellEscape(remotePath)}`)
-  const abort = (): void => {
-    channel.close()
+  const closePromise = awaitWithSystemSshAbort(
+    options?.signal,
+    () => channel.close(),
+    waitForChannelClose(channel, `write ${remotePath}`)
+  )
+  if (!options?.signal?.aborted) {
+    channel.stdin.end(contents)
   }
-  options?.signal?.addEventListener('abort', abort, { once: true })
-  const closePromise = waitForChannelClose(channel, `write ${remotePath}`)
-  channel.stdin.end(contents)
-  try {
-    await closePromise
-  } finally {
-    options?.signal?.removeEventListener('abort', abort)
-  }
+  await closePromise
 }
 
 export function buildSshArgs(target: SshTarget): string[] {
@@ -368,11 +366,54 @@ function killProcess(proc: ChildProcess): void {
   }
 }
 
+async function awaitWithSystemSshAbort<T>(
+  signal: AbortSignal | undefined,
+  abortChildren: () => void,
+  operation: Promise<T>
+): Promise<T> {
+  if (!signal) {
+    return operation
+  }
+  let abortReject: ((error: Error) => void) | null = null
+  let suppressLateOperationError = false
+  const abortPromise = new Promise<never>((_resolve, reject) => {
+    abortReject = reject
+  })
+  const abort = (): void => {
+    // Why: abort is connection teardown; do not wait for stubborn system ssh/tar
+    // children to emit close after we've already signaled them.
+    abortChildren()
+    suppressLateOperationError = true
+    abortReject?.(createAbortError())
+  }
+  signal.addEventListener('abort', abort, { once: true })
+  if (signal.aborted) {
+    abort()
+  }
+  try {
+    return await Promise.race([
+      operation.catch((error: unknown) => {
+        if (suppressLateOperationError) {
+          return new Promise<never>(() => {})
+        }
+        throw error
+      }),
+      abortPromise
+    ])
+  } finally {
+    signal.removeEventListener('abort', abort)
+  }
+}
+
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (!signal?.aborted) {
     return
   }
+  throw createAbortError()
+}
+
+function createAbortError(): Error & { name: string } {
   const error = new Error('System SSH operation was cancelled') as Error & { name: string }
   error.name = 'AbortError'
-  throw error
+  return error
 }
