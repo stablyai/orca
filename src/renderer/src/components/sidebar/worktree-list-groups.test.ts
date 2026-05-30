@@ -405,6 +405,22 @@ describe('buildRows project grouping order', () => {
     const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
     expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
   })
+
+  it('builds rows for a very large repo-group list', () => {
+    const count = 130_000
+    const repos = new Map<string, Repo>()
+    const worktrees = Array.from({ length: count }, (_, index) => {
+      const repoId = `repo-${index}`
+      repos.set(repoId, { ...repo, id: repoId, displayName: `repo ${index}` })
+      return { ...worktree, id: `wt-${index}`, repoId, displayName: `workspace ${index}` }
+    })
+
+    const rows = buildRows('repo', worktrees, repos, null, new Set())
+
+    expect(rows).toHaveLength(count * 2)
+    expect(rows[0]).toMatchObject({ type: 'header', key: 'repo:repo-0' })
+    expect(rows.at(-1)).toMatchObject({ type: 'item', worktree: { id: 'wt-129999' } })
+  })
 })
 
 describe('getProjectGroupOrdering', () => {
