@@ -81,8 +81,7 @@ describe('running agent send targets', () => {
           }
         }
       }),
-      WORKTREE_ID,
-      NOW
+      WORKTREE_ID
     )
 
     expect(targets).toMatchObject([{ paneKey, ptyId: 'pty-left', status: 'eligible' }])
@@ -115,11 +114,10 @@ describe('running agent send targets', () => {
           }
         }
       }),
-      WORKTREE_ID,
-      NOW
+      WORKTREE_ID
     )
 
-    expect(resolveRunningAgentSendTarget(state(), WORKTREE_ID, 'missing', NOW)).toBeNull()
+    expect(resolveRunningAgentSendTarget(state(), WORKTREE_ID, 'missing')).toBeNull()
     expect(targets.find((target) => target.paneKey === workingPaneKey)).toMatchObject({
       status: 'eligible',
       ptyId: 'pty-left'
@@ -150,8 +148,7 @@ describe('running agent send targets', () => {
         }
       }),
       WORKTREE_ID,
-      paneKey,
-      NOW
+      paneKey
     )
 
     expect(target).toMatchObject({
@@ -186,10 +183,8 @@ describe('running agent send targets', () => {
       }
     })
 
-    expect(deriveRunningAgentSendTargets(base, WORKTREE_ID, NOW)).toHaveLength(1)
-    expect(
-      resolveRunningAgentSendTarget(base, OTHER_WORKTREE_ID, remotePaneKey, NOW)
-    ).toMatchObject({
+    expect(deriveRunningAgentSendTargets(base, WORKTREE_ID)).toHaveLength(1)
+    expect(resolveRunningAgentSendTarget(base, OTHER_WORKTREE_ID, remotePaneKey)).toMatchObject({
       status: 'eligible',
       ptyId: 'remote:env@@terminal-1'
     })
@@ -215,8 +210,7 @@ describe('running agent send targets', () => {
           }
         }
       }),
-      WORKTREE_ID,
-      NOW
+      WORKTREE_ID
     )
 
     expect(targets.map((target) => target.paneKey)).toEqual([validPaneKey])
