@@ -5583,12 +5583,14 @@ export default function PullRequestPage({
                   type="button"
                   size="sm"
                   onClick={handleOpenOrUsePR}
-                  className="gap-1.5 whitespace-nowrap"
+                  className="gap-1.5 whitespace-nowrap font-semibold"
                   aria-label={
-                    attachedWorkspace ? 'Open workspace attached to PR' : 'Start workspace from PR'
+                    attachedWorkspace
+                      ? 'Resume workspace attached to PR'
+                      : 'Start workspace from PR'
                   }
                 >
-                  {attachedWorkspace ? 'Open workspace' : 'Start workspace from PR'}
+                  {attachedWorkspace ? 'Resume workspace' : 'Start workspace from PR'}
                   <ArrowRight className="size-3.5" />
                 </Button>
                 <DropdownMenuTrigger asChild>
