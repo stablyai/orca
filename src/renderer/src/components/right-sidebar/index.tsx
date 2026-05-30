@@ -29,6 +29,11 @@ import {
 import { getActiveChecksStatus } from './active-checks-status'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import {
+  RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
+  RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME,
+  RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME
+} from './right-sidebar-titlebar-drag-regions'
 
 const MIN_WIDTH = 220
 // Why: long file names (e.g. construction drawing sheets, multi-part document
@@ -220,7 +225,7 @@ function RightSidebarInner(): React.JSX.Element {
                   <ContextMenuTrigger asChild>
                     <div
                       ref={topActivityStripRef}
-                      className="right-sidebar-activity-strip flex min-w-0 flex-1 items-center overflow-hidden pl-2 right-sidebar-header-no-drag"
+                      className={RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME}
                     >
                       {/* Why: the top strip shares a narrow titlebar with the close
                           button and Windows controls. Overflow goes behind More
@@ -247,14 +252,24 @@ function RightSidebarInner(): React.JSX.Element {
                       )}
                     </div>
                   </ContextMenuTrigger>
-                  <div className="flex shrink-0 items-center pr-1 right-sidebar-header-no-drag">
+                  <div
+                    className={cn(
+                      'flex shrink-0 items-center pr-1',
+                      RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
+                    )}
+                  >
                     {closeButton}
                   </div>
                 </TooltipProvider>
               )}
               {isWindows && (
                 <TooltipProvider delayDuration={400}>
-                  <div className="ml-auto flex shrink-0 items-center pr-1 right-sidebar-header-no-drag">
+                  <div
+                    className={cn(
+                      'ml-auto flex shrink-0 items-center pr-1',
+                      RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
+                    )}
+                  >
                     {closeButton}
                   </div>
                 </TooltipProvider>
@@ -265,7 +280,7 @@ function RightSidebarInner(): React.JSX.Element {
                 <ContextMenuTrigger asChild>
                   <div
                     ref={topActivityStripRef}
-                    className="right-sidebar-activity-strip flex h-10 min-h-10 items-center border-b border-border px-2 right-sidebar-header-no-drag"
+                    className={RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME}
                   >
                     {/* Why: Windows has fixed native-style controls in the titlebar
                         area; keep sidebar navigation in the sidebar body so the
