@@ -3,16 +3,15 @@
    status-surface icons do not drift. */
 import React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
+import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
-
-const OPENCLAUDE_ICON_URL = 'https://openclaude.gitlawb.com/openclaude.png'
 
 export type AgentCatalogEntry = {
   id: TuiAgent
   label: string
   /** Default CLI binary name used for PATH detection. */
   cmd: string
-  /** Direct image URL for agents whose project identity is not represented by their favicon. */
+  /** Direct or bundled image URL for agents whose project identity is not represented by a favicon service. */
   iconUrl?: string
   /** Domain for Google's favicon service — used for agents without an SVG icon. */
   faviconDomain?: string
@@ -31,7 +30,9 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     id: 'openclaude',
     label: 'OpenClaude',
     cmd: 'openclaude',
-    iconUrl: OPENCLAUDE_ICON_URL,
+    // Why: OpenClaude's published favicon has a padded 500px canvas; Orca
+    // uses a cropped derivative of that official asset so 12px tab icons stay legible.
+    iconUrl: openClaudeLogoUrl,
     homepageUrl: 'https://openclaude.gitlawb.com/'
   },
   {
