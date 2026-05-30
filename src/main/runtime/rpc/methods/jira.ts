@@ -49,7 +49,8 @@ const CreateIssue = z.object({
   projectId: requiredString('Project is required'),
   issueTypeId: requiredString('Issue type is required'),
   title: requiredString('Title is required'),
-  description: OptionalPlainString
+  description: OptionalPlainString,
+  customFields: z.record(z.string(), z.unknown()).optional()
 })
 
 const IssueUpdate = z.object({
@@ -72,6 +73,12 @@ const IssueComment = z.object({
 
 const ProjectIssueTypes = z.object({
   projectIdOrKey: requiredString('Project is required'),
+  siteId: OptionalString
+})
+
+const ProjectIssueTypeFields = z.object({
+  projectIdOrKey: requiredString('Project is required'),
+  issueTypeId: requiredString('Issue type is required'),
   siteId: OptionalString
 })
 
@@ -138,7 +145,8 @@ export const JIRA_METHODS: RpcMethod[] = [
         projectId: params.projectId.trim(),
         issueTypeId: params.issueTypeId.trim(),
         title: params.title.trim(),
-        description: params.description?.trim() || undefined
+        description: params.description?.trim() || undefined,
+        customFields: params.customFields
       })
   }),
   defineMethod({
@@ -169,6 +177,16 @@ export const JIRA_METHODS: RpcMethod[] = [
     params: ProjectIssueTypes,
     handler: async (params, { runtime }) =>
       runtime.jiraListIssueTypes(params.projectIdOrKey.trim(), params.siteId)
+  }),
+  defineMethod({
+    name: 'jira.listCreateFields',
+    params: ProjectIssueTypeFields,
+    handler: async (params, { runtime }) =>
+      runtime.jiraListCreateFields(
+        params.projectIdOrKey.trim(),
+        params.issueTypeId.trim(),
+        params.siteId
+      )
   }),
   defineMethod({
     name: 'jira.listPriorities',

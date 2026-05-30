@@ -134,7 +134,6 @@ import {
   buildTaskPageRepoSourceState,
   deriveTaskPageGitHubWorkItemsFetchOptions,
   findTaskPageDialogWorkItem,
-  findTaskPageJiraIssue,
   findTaskPageLinearIssue,
   reconcileTaskPageLinearIssuesAfterLandingRefresh,
   reconcileTaskPagePagesAfterLandingRefresh,
@@ -144,6 +143,7 @@ import {
   shouldReplaceTaskPageItemsAfterRefresh,
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
+import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
 import {
   createTaskPageGitHubStatusStateDraft,
   resolveTaskPageGitHubStatusStateDraft,
@@ -162,6 +162,7 @@ import type {
   GitHubWorkItem,
   GitLabTodo,
   GitLabWorkItem,
+  JiraCreateField,
   LinearCollectionResult,
   LinearCustomViewModel,
   LinearCustomViewSummary,
@@ -197,6 +198,7 @@ import {
 import {
   jiraCreateIssue,
   jiraGetIssue,
+  jiraListCreateFields,
   jiraListIssueTypes,
   jiraListProjects
 } from '@/runtime/runtime-jira-client'
@@ -769,6 +771,95 @@ function getJiraStatusTone(categoryKey: string): string {
 
 function getJiraProjectSelectionKey(project: JiraProject): string {
   return `${project.siteId ?? 'selected'}:${project.id}`
+}
+
+const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set(['project', 'issuetype', 'summary', 'description'])
+
+function isVisibleJiraCreateField(field: JiraCreateField): boolean {
+  return field.required && !JIRA_CREATE_SYSTEM_FIELD_KEYS.has(field.key)
+}
+
+function getJiraCreateAllowedValueLabel(
+  value: NonNullable<JiraCreateField['allowedValues']>[number]
+): string {
+  return value.name ?? value.value ?? value.id ?? 'Option'
+}
+
+function findJiraCreateAllowedValue(field: JiraCreateField, draftValue: string) {
+  return field.allowedValues?.find((value) => {
+    return value.id === draftValue || value.value === draftValue || value.name === draftValue
+  })
+}
+
+function jiraCreateTextToAdf(text: string): Record<string, unknown> {
+  return {
+    type: 'doc',
+    version: 1,
+    content: text.split(/\r?\n/).map((line) => ({
+      type: 'paragraph',
+      content: line ? [{ type: 'text', text: line }] : []
+    }))
+  }
+}
+
+function getJiraCreateOptionPayload(
+  value: NonNullable<JiraCreateField['allowedValues']>[number] | undefined,
+  fallback: string
+): Record<string, string> | string {
+  if (value?.id) {
+    return { id: value.id }
+  }
+  if (value?.value) {
+    return { value: value.value }
+  }
+  if (value?.name) {
+    return { name: value.name }
+  }
+  return fallback
+}
+
+function buildJiraCreateFieldValue(field: JiraCreateField, draftValue: string): unknown {
+  const trimmed = draftValue.trim()
+  if (!trimmed) {
+    return undefined
+  }
+  if (field.schema?.type === 'array') {
+    const parts = trimmed
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+    if (field.allowedValues?.length) {
+      return parts.map((part) =>
+        getJiraCreateOptionPayload(findJiraCreateAllowedValue(field, part), part)
+      )
+    }
+    return parts
+  }
+  if (field.allowedValues?.length) {
+    return getJiraCreateOptionPayload(findJiraCreateAllowedValue(field, trimmed), trimmed)
+  }
+  if (field.schema?.type === 'number') {
+    const numberValue = Number(trimmed)
+    return Number.isFinite(numberValue) ? numberValue : trimmed
+  }
+  if (field.schema?.custom?.includes(':textarea') || field.schema?.type === 'textarea') {
+    return jiraCreateTextToAdf(trimmed)
+  }
+  return trimmed
+}
+
+function buildJiraCreateCustomFields(
+  fields: readonly JiraCreateField[],
+  values: Record<string, string>
+): Record<string, unknown> | undefined {
+  const customFields: Record<string, unknown> = {}
+  for (const field of fields) {
+    const value = buildJiraCreateFieldValue(field, values[field.key] ?? '')
+    if (value !== undefined) {
+      customFields[field.key] = value
+    }
+  }
+  return Object.keys(customFields).length > 0 ? customFields : undefined
 }
 
 function GHStatusCell({
@@ -3904,6 +3995,12 @@ export default function TaskPage(): React.JSX.Element {
   const [newJiraIssueSubmitting, setNewJiraIssueSubmitting] = useState(false)
   const [availableJiraIssueTypes, setAvailableJiraIssueTypes] = useState<JiraIssueType[]>([])
   const [jiraIssueTypesLoading, setJiraIssueTypesLoading] = useState(false)
+  const [jiraCreateFields, setJiraCreateFields] = useState<JiraCreateField[]>([])
+  const [jiraCreateFieldsLoading, setJiraCreateFieldsLoading] = useState(false)
+  const [jiraCreateFieldsError, setJiraCreateFieldsError] = useState<string | null>(null)
+  const [newJiraIssueCustomFieldValues, setNewJiraIssueCustomFieldValues] = useState<
+    Record<string, string>
+  >({})
   const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
   const [jiraSiteUrlDraft, setJiraSiteUrlDraft] = useState('')
   const [jiraEmailDraft, setJiraEmailDraft] = useState('')
@@ -3927,6 +4024,19 @@ export default function TaskPage(): React.JSX.Element {
       availableJiraIssueTypes[0] ??
       null,
     [availableJiraIssueTypes, newJiraIssueTypeId]
+  )
+
+  const visibleJiraCreateFields = useMemo(
+    () => jiraCreateFields.filter(isVisibleJiraCreateField),
+    [jiraCreateFields]
+  )
+
+  const hasMissingJiraCreateField = useMemo(
+    () =>
+      visibleJiraCreateFields.some(
+        (field) => !(newJiraIssueCustomFieldValues[field.key] ?? '').trim()
+      ),
+    [newJiraIssueCustomFieldValues, visibleJiraCreateFields]
   )
 
   useEffect(() => {
@@ -3964,6 +4074,47 @@ export default function TaskPage(): React.JSX.Element {
       cancelled = true
     }
   }, [settings, newJiraIssueOpen, newJiraIssueTargetProject])
+
+  useEffect(() => {
+    if (!newJiraIssueOpen || !newJiraIssueTargetProject || !newJiraIssueTargetType) {
+      setJiraCreateFields([])
+      setJiraCreateFieldsLoading(false)
+      setJiraCreateFieldsError(null)
+      setNewJiraIssueCustomFieldValues({})
+      return
+    }
+    let cancelled = false
+    setJiraCreateFields([])
+    setJiraCreateFieldsLoading(true)
+    setJiraCreateFieldsError(null)
+    setNewJiraIssueCustomFieldValues({})
+    void jiraListCreateFields(
+      settings,
+      newJiraIssueTargetProject.id,
+      newJiraIssueTargetType.id,
+      newJiraIssueTargetProject.siteId
+    )
+      .then((fields) => {
+        if (!cancelled) {
+          setJiraCreateFields(fields)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setJiraCreateFieldsError('Failed to load required Jira fields.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setJiraCreateFieldsLoading(false)
+        }
+      })
+    return () => {
+      // Why: create fields are scoped to project + issue type; ignore late
+      // responses after the user switches either selector.
+      cancelled = true
+    }
+  }, [settings, newJiraIssueOpen, newJiraIssueTargetProject, newJiraIssueTargetType])
 
   // Why: defense-in-depth safety net applied to the current page's items.
   // The active tab scopes requests to issues or PRs, and this keeps stale
@@ -4813,9 +4964,13 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
     const title = newJiraIssueTitle.trim()
-    if (!title || newJiraIssueSubmitting) {
+    if (!title || newJiraIssueSubmitting || hasMissingJiraCreateField || jiraCreateFieldsLoading) {
       return
     }
+    const customFields = buildJiraCreateCustomFields(
+      visibleJiraCreateFields,
+      newJiraIssueCustomFieldValues
+    )
     setNewJiraIssueSubmitting(true)
     try {
       const result = await jiraCreateIssue(settings, {
@@ -4823,7 +4978,8 @@ export default function TaskPage(): React.JSX.Element {
         projectId: newJiraIssueTargetProject.id,
         issueTypeId: newJiraIssueTargetType.id,
         title,
-        description: newJiraIssueBody || undefined
+        description: newJiraIssueBody || undefined,
+        customFields
       })
       if (!result.ok) {
         toast.error(result.error || 'Failed to create Jira issue.')
@@ -4840,6 +4996,7 @@ export default function TaskPage(): React.JSX.Element {
       setNewJiraIssueOpen(false)
       setNewJiraIssueTitle('')
       setNewJiraIssueBody('')
+      setNewJiraIssueCustomFieldValues({})
       setJiraRefreshNonce((n) => n + 1)
 
       void jiraGetIssue(settings, result.key, newJiraIssueTargetProject.siteId)
@@ -4856,13 +5013,17 @@ export default function TaskPage(): React.JSX.Element {
       setNewJiraIssueSubmitting(false)
     }
   }, [
+    hasMissingJiraCreateField,
+    jiraCreateFieldsLoading,
     newJiraIssueBody,
+    newJiraIssueCustomFieldValues,
     newJiraIssueSubmitting,
     newJiraIssueTargetProject,
     newJiraIssueTargetType,
     newJiraIssueTitle,
     settings,
-    setSelectedJiraIssue
+    setSelectedJiraIssue,
+    visibleJiraCreateFields
   ])
 
   const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
@@ -9057,9 +9218,77 @@ export default function TaskPage(): React.JSX.Element {
                 placeholder="What's going on?"
                 rows={6}
                 disabled={newJiraIssueSubmitting}
-                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto"
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
               />
             </div>
+            {jiraCreateFieldsLoading ? (
+              <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <LoaderCircle className="size-3.5 animate-spin" />
+                Loading required Jira fields…
+              </div>
+            ) : null}
+            {jiraCreateFieldsError ? (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {jiraCreateFieldsError}
+              </p>
+            ) : null}
+            {visibleJiraCreateFields.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {visibleJiraCreateFields.map((field) => {
+                  const fieldValue = newJiraIssueCustomFieldValues[field.key] ?? ''
+                  return (
+                    <div key={field.key} className="flex min-w-0 flex-col gap-1">
+                      <label className="text-[11px] font-medium text-muted-foreground">
+                        {field.name}
+                      </label>
+                      {field.allowedValues?.length && field.schema?.type !== 'array' ? (
+                        <Select
+                          value={fieldValue}
+                          onValueChange={(value) =>
+                            setNewJiraIssueCustomFieldValues((prev) => ({
+                              ...prev,
+                              [field.key]: value
+                            }))
+                          }
+                          disabled={newJiraIssueSubmitting}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={`Select ${field.name}`} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.allowedValues.map((value) => {
+                              const optionValue = value.id ?? value.value ?? value.name ?? ''
+                              return optionValue ? (
+                                <SelectItem key={optionValue} value={optionValue}>
+                                  {getJiraCreateAllowedValueLabel(value)}
+                                </SelectItem>
+                              ) : null
+                            })}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={fieldValue}
+                          onChange={(event) =>
+                            setNewJiraIssueCustomFieldValues((prev) => ({
+                              ...prev,
+                              [field.key]: event.target.value
+                            }))
+                          }
+                          type={field.schema?.type === 'number' ? 'number' : 'text'}
+                          placeholder={
+                            field.schema?.type === 'array'
+                              ? 'Comma-separated values'
+                              : `Enter ${field.name}`
+                          }
+                          disabled={newJiraIssueSubmitting}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
             <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
           </div>
           <DialogFooter>
@@ -9076,6 +9305,8 @@ export default function TaskPage(): React.JSX.Element {
                 !newJiraIssueTargetProject ||
                 !newJiraIssueTargetType ||
                 !newJiraIssueTitle.trim() ||
+                hasMissingJiraCreateField ||
+                jiraCreateFieldsLoading ||
                 newJiraIssueSubmitting
               }
             >

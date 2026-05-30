@@ -1328,6 +1328,7 @@ const api = {
       issueTypeId: string
       title: string
       description?: string
+      customFields?: Record<string, unknown>
     }): Promise<
       { ok: true; id: string; key: string; url: string } | { ok: false; error: string }
     > => ipcRenderer.invoke('jira:createIssue', args),
@@ -1354,6 +1355,12 @@ const api = {
 
     listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('jira:listIssueTypes', args),
+
+    listCreateFields: (args: {
+      projectIdOrKey: string
+      issueTypeId: string
+      siteId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('jira:listCreateFields', args),
 
     listPriorities: (args?: { siteId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('jira:listPriorities', args),

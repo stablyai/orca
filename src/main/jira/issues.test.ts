@@ -99,6 +99,81 @@ describe('Jira issue operations', () => {
     )
   })
 
+  it('maps required Jira create fields from create field metadata', async () => {
+    jiraRequestMock.mockResolvedValueOnce({
+      startAt: 0,
+      maxResults: 100,
+      total: 1,
+      values: [
+        {
+          fieldId: 'customfield_10010',
+          name: 'Severity',
+          required: true,
+          schema: {
+            type: 'option',
+            custom: 'com.atlassian.jira.plugin.system.customfieldtypes:select'
+          },
+          allowedValues: [{ id: 'option-1', value: 'High' }]
+        }
+      ]
+    })
+
+    const { listCreateFields } = await import('./issues')
+
+    await expect(listCreateFields('10000', '10001', 'site-1')).resolves.toEqual([
+      {
+        key: 'customfield_10010',
+        name: 'Severity',
+        required: true,
+        schema: {
+          type: 'option',
+          custom: 'com.atlassian.jira.plugin.system.customfieldtypes:select',
+          items: undefined
+        },
+        allowedValues: [{ id: 'option-1', value: 'High', name: undefined }]
+      }
+    ])
+
+    expect(String(jiraRequestMock.mock.calls[0][1])).toContain(
+      '/rest/api/3/issue/createmeta/10000/issuetypes/10001?'
+    )
+  })
+
+  it('includes custom create fields when creating Jira issues', async () => {
+    jiraRequestMock.mockResolvedValueOnce({
+      id: 'issue-1',
+      key: 'ALP-1',
+      self: 'https://example.atlassian.net/rest/api/3/issue/issue-1'
+    })
+
+    const { createIssue } = await import('./issues')
+
+    await expect(
+      createIssue({
+        siteId: 'site-1',
+        projectId: '10000',
+        issueTypeId: '10001',
+        title: 'Fix Jira create',
+        customFields: {
+          customfield_10010: { id: 'option-1' }
+        }
+      })
+    ).resolves.toEqual({
+      ok: true,
+      id: 'issue-1',
+      key: 'ALP-1',
+      url: 'https://example.atlassian.net/browse/ALP-1'
+    })
+
+    const requestInit = jiraRequestMock.mock.calls[0][2] as { body: string }
+    expect(JSON.parse(requestInit.body).fields).toMatchObject({
+      project: { id: '10000' },
+      issuetype: { id: '10001' },
+      summary: 'Fix Jira create',
+      customfield_10010: { id: 'option-1' }
+    })
+  })
+
   it('maps comments from the Jira comments page key', async () => {
     jiraRequestMock.mockResolvedValueOnce({
       comments: [

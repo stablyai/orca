@@ -7,6 +7,7 @@ import {
   getIssue,
   getIssueComments,
   listAssignableUsers,
+  listCreateFields,
   listIssueTypes,
   listIssues,
   listPriorities,
@@ -163,7 +164,9 @@ export function registerJiraHandlers(): void {
       projectId: args.projectId.trim(),
       issueTypeId: args.issueTypeId.trim(),
       title: args.title.trim(),
-      description: args.description?.trim() || undefined
+      description: args.description?.trim() || undefined,
+      customFields:
+        args.customFields && typeof args.customFields === 'object' ? args.customFields : undefined
     })
   })
 
@@ -212,6 +215,23 @@ export function registerJiraHandlers(): void {
         return []
       }
       return listIssueTypes(args.projectIdOrKey.trim(), normalizeSiteId(args.siteId))
+    }
+  )
+
+  ipcMain.handle(
+    'jira:listCreateFields',
+    async (_event, args: { projectIdOrKey: string; issueTypeId: string; siteId?: string }) => {
+      if (typeof args?.projectIdOrKey !== 'string' || !args.projectIdOrKey.trim()) {
+        return []
+      }
+      if (typeof args?.issueTypeId !== 'string' || !args.issueTypeId.trim()) {
+        return []
+      }
+      return listCreateFields(
+        args.projectIdOrKey.trim(),
+        args.issueTypeId.trim(),
+        normalizeSiteId(args.siteId)
+      )
     }
   )
 

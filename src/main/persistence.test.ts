@@ -1067,7 +1067,7 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().defaultTaskSource).toBe('github')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear', 'jira'])
   })
 
   it('normalizes invalid task provider defaults on load', async () => {
@@ -1075,7 +1075,7 @@ describe('Store', () => {
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { visibleTaskProviders: ['gitlab'], defaultTaskSource: 'jira' as never },
+      settings: { visibleTaskProviders: ['gitlab'], defaultTaskSource: 'bitbucket' as never },
       ui: {},
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -1083,7 +1083,7 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().defaultTaskSource).toBe('gitlab')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
   })
 
   it('normalizes persisted open-in applications on load', async () => {

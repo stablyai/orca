@@ -3,6 +3,8 @@
    boundary together avoids subtle drift between operations. */
 import type {
   JiraComment,
+  JiraCreateField,
+  JiraCreateFieldAllowedValue,
   JiraCreateIssueArgs,
   JiraCreateIssueResult,
   JiraIssue,
@@ -56,6 +58,7 @@ type JiraPagedResponse<T> = {
   values?: T[]
   issueTypes?: T[]
   comments?: T[]
+  fields?: T[] | Record<string, T>
 }
 
 type JiraPageItemKey = 'values' | 'issueTypes' | 'comments'
@@ -181,6 +184,59 @@ function mapIssueType(value: unknown): JiraIssueType {
     iconUrl: asString(issueType.iconUrl) || undefined,
     subtask: typeof issueType.subtask === 'boolean' ? issueType.subtask : undefined
   }
+}
+
+function mapCreateFieldAllowedValue(value: unknown): JiraCreateFieldAllowedValue {
+  const option = asRecord(value)
+  return {
+    id: asString(option.id) || undefined,
+    value: asString(option.value) || undefined,
+    name: asString(option.name) || undefined
+  }
+}
+
+function mapCreateField(value: unknown, fallbackKey = ''): JiraCreateField | null {
+  const field = asRecord(value)
+  const schema = asRecord(field.schema)
+  const key =
+    asString(field.key) ||
+    asString(field.fieldId) ||
+    asString(field.id) ||
+    asString(field.fieldKey) ||
+    fallbackKey
+  if (!key) {
+    return null
+  }
+  const allowedValues = Array.isArray(field.allowedValues)
+    ? field.allowedValues.map(mapCreateFieldAllowedValue)
+    : undefined
+  return {
+    key,
+    name: asString(field.name, key),
+    required: field.required === true,
+    schema: {
+      type: asString(schema.type) || undefined,
+      items: asString(schema.items) || undefined,
+      custom: asString(schema.custom) || undefined
+    },
+    allowedValues
+  }
+}
+
+function getCreateFieldRecords(response: JiraPagedResponse<JiraRecord>): JiraRecord[] {
+  if (Array.isArray(response.values)) {
+    return response.values
+  }
+  if (Array.isArray(response.fields)) {
+    return response.fields
+  }
+  if (response.fields && typeof response.fields === 'object') {
+    return Object.entries(response.fields).map(([key, value]) => ({
+      key,
+      ...asRecord(value)
+    }))
+  }
+  return []
 }
 
 function mapPriority(value: unknown): JiraPriority | undefined {
@@ -425,6 +481,12 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
     if (args.description?.trim()) {
       fields.description = textToAdf(args.description.trim())
     }
+    for (const [fieldKey, value] of Object.entries(args.customFields ?? {})) {
+      if (!fieldKey || value === undefined || value === null || value === '') {
+        continue
+      }
+      fields[fieldKey] = value
+    }
     const created = await jiraRequest<{ id: string; key: string; self: string }>(
       entry,
       '/rest/api/3/issue',
@@ -629,6 +691,55 @@ export async function listIssueTypes(
       throw error
     }
     console.warn('[jira] listIssueTypes failed:', error)
+    return []
+  } finally {
+    release()
+  }
+}
+
+export async function listCreateFields(
+  projectIdOrKey: string,
+  issueTypeId: string,
+  siteId?: string | null
+): Promise<JiraCreateField[]> {
+  const entry = getClients(siteId)[0]
+  if (!entry) {
+    return []
+  }
+  await acquire()
+  try {
+    const fields: JiraCreateField[] = []
+    let startAt = 0
+    const maxResults = 100
+    for (let guard = 0; guard < 100; guard += 1) {
+      const params = new URLSearchParams({
+        maxResults: String(maxResults),
+        startAt: String(startAt)
+      })
+      const response = await jiraRequest<JiraPagedResponse<JiraRecord>>(
+        entry,
+        `/rest/api/3/issue/createmeta/${encodeURIComponent(
+          projectIdOrKey
+        )}/issuetypes/${encodeURIComponent(issueTypeId)}?${params.toString()}`
+      )
+      const records = getCreateFieldRecords(response)
+      fields.push(
+        ...records
+          .map((record) => mapCreateField(record))
+          .filter((field): field is JiraCreateField => field !== null)
+      )
+      if (!shouldFetchNextPage(response, startAt, records, maxResults)) {
+        break
+      }
+      startAt += asFiniteNumber(response.maxResults) ?? maxResults
+    }
+    return fields
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken(entry.site.id)
+      throw error
+    }
+    console.warn('[jira] listCreateFields failed:', error)
     return []
   } finally {
     release()

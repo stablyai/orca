@@ -69,7 +69,8 @@ describe('jira RPC methods', () => {
         projectId: 'project-1',
         issueTypeId: 'type-1',
         title: 'Fix bug',
-        description: 'Details'
+        description: 'Details',
+        customFields: { customfield_10010: { id: 'option-1' } }
       })
     )
     await dispatcher.dispatch(
@@ -98,7 +99,8 @@ describe('jira RPC methods', () => {
       projectId: 'project-1',
       issueTypeId: 'type-1',
       title: 'Fix bug',
-      description: 'Details'
+      description: 'Details',
+      customFields: { customfield_10010: { id: 'option-1' } }
     })
     expect(runtime.jiraUpdateIssue).toHaveBeenCalledWith(
       'ABC-3',
@@ -120,6 +122,7 @@ describe('jira RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       jiraListProjects: vi.fn().mockResolvedValue([{ id: 'project-1' }]),
       jiraListIssueTypes: vi.fn().mockResolvedValue([{ id: 'type-1' }]),
+      jiraListCreateFields: vi.fn().mockResolvedValue([{ key: 'customfield_10010' }]),
       jiraListPriorities: vi.fn().mockResolvedValue([{ id: 'priority-1' }]),
       jiraListAssignableUsers: vi.fn().mockResolvedValue([{ accountId: 'user-1' }]),
       jiraListTransitions: vi.fn().mockResolvedValue([{ id: 'transition-1' }])
@@ -129,6 +132,13 @@ describe('jira RPC methods', () => {
     await dispatcher.dispatch(makeRequest('jira.listProjects', { siteId: 'all' }))
     await dispatcher.dispatch(
       makeRequest('jira.listIssueTypes', { projectIdOrKey: 'project-1', siteId: 'site-1' })
+    )
+    await dispatcher.dispatch(
+      makeRequest('jira.listCreateFields', {
+        projectIdOrKey: 'project-1',
+        issueTypeId: 'type-1',
+        siteId: 'site-1'
+      })
     )
     await dispatcher.dispatch(makeRequest('jira.listPriorities', { siteId: 'site-1' }))
     await dispatcher.dispatch(
@@ -144,6 +154,7 @@ describe('jira RPC methods', () => {
 
     expect(runtime.jiraListProjects).toHaveBeenCalledWith('all')
     expect(runtime.jiraListIssueTypes).toHaveBeenCalledWith('project-1', 'site-1')
+    expect(runtime.jiraListCreateFields).toHaveBeenCalledWith('project-1', 'type-1', 'site-1')
     expect(runtime.jiraListPriorities).toHaveBeenCalledWith('site-1')
     expect(runtime.jiraListAssignableUsers).toHaveBeenCalledWith('ABC-3', 'Ada', 'site-1')
     expect(runtime.jiraListTransitions).toHaveBeenCalledWith('ABC-3', 'site-1')

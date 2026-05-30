@@ -35,7 +35,7 @@ describe('task providers', () => {
     expect(
       normalizeTaskProviderSettings({
         visibleTaskProviders: ['gitlab'],
-        defaultTaskSource: 'jira'
+        defaultTaskSource: 'bitbucket'
       })
     ).toEqual({
       defaultTaskSource: 'gitlab',
@@ -103,7 +103,7 @@ describe('task providers', () => {
           gitlabInstalled: false,
           linearConnected: true
         },
-        'jira'
+        'bitbucket'
       )
     ).toEqual(['github'])
   })

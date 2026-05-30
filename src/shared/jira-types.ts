@@ -39,6 +39,24 @@ export type JiraIssueType = {
   subtask?: boolean
 }
 
+export type JiraCreateFieldAllowedValue = {
+  id?: string
+  value?: string
+  name?: string
+}
+
+export type JiraCreateField = {
+  key: string
+  name: string
+  required: boolean
+  schema?: {
+    type?: string
+    items?: string
+    custom?: string
+  }
+  allowedValues?: JiraCreateFieldAllowedValue[]
+}
+
 export type JiraUser = {
   accountId: string
   displayName: string
@@ -115,6 +133,7 @@ export type JiraCreateIssueArgs = {
   issueTypeId: string
   title: string
   description?: string
+  customFields?: Record<string, unknown>
 }
 
 export type JiraCreateIssueResult =

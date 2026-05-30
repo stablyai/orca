@@ -2,6 +2,7 @@ import type {
   GlobalSettings,
   JiraComment,
   JiraConnectionStatus,
+  JiraCreateField,
   JiraCreateIssueArgs,
   JiraCreateIssueResult,
   JiraIssue,
@@ -197,6 +198,21 @@ export async function jiraListIssueTypes(
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraIssueType[]>(target, 'jira.listIssueTypes', args, { timeoutMs: 30_000 })
     : window.api.jira.listIssueTypes(args)
+}
+
+export async function jiraListCreateFields(
+  settings: RuntimeJiraSettings,
+  projectIdOrKey: string,
+  issueTypeId: string,
+  siteId?: string | null
+): Promise<JiraCreateField[]> {
+  const target = getActiveRuntimeTarget(settings)
+  const args = { projectIdOrKey, issueTypeId, siteId: siteId ?? undefined }
+  return target.kind === 'environment'
+    ? callRuntimeRpc<JiraCreateField[]>(target, 'jira.listCreateFields', args, {
+        timeoutMs: 30_000
+      })
+    : window.api.jira.listCreateFields(args)
 }
 
 export async function jiraListPriorities(

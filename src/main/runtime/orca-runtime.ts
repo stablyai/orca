@@ -297,6 +297,7 @@ import {
   getIssue as getJiraIssue,
   getIssueComments as getJiraIssueComments,
   listAssignableUsers as listJiraAssignableUsers,
+  listCreateFields as listJiraCreateFields,
   listIssueTypes as listJiraIssueTypes,
   listIssues as listJiraIssues,
   listPriorities as listJiraPriorities,
@@ -12545,6 +12546,14 @@ export class OrcaRuntimeService {
     siteId?: string
   ): ReturnType<typeof listJiraIssueTypes> {
     return listJiraIssueTypes(projectIdOrKey, siteId)
+  }
+
+  jiraListCreateFields(
+    projectIdOrKey: string,
+    issueTypeId: string,
+    siteId?: string
+  ): ReturnType<typeof listJiraCreateFields> {
+    return listJiraCreateFields(projectIdOrKey, issueTypeId, siteId)
   }
 
   jiraListPriorities(siteId?: string): ReturnType<typeof listJiraPriorities> {
