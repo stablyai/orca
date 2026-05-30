@@ -373,8 +373,9 @@ function registerRuntimeWindowLifecycle(
 }
 
 function registerFileDropRelay(mainWindow: BrowserWindow): void {
-  ipcMain.removeAllListeners('terminal:file-dropped-from-preload')
-  ipcMain.on('terminal:file-dropped-from-preload', (_event, args: NativeFileDropPayload) => {
+  const channel = 'terminal:file-dropped-from-preload'
+  ipcMain.removeAllListeners(channel)
+  const relayFileDrop = (_event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
     if (mainWindow.isDestroyed()) {
       return
     }
@@ -382,6 +383,12 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
     // Why: relay exactly one IPC event per drop gesture so the renderer
     // receives the full batch of paths without timer-based reconstruction.
     mainWindow.webContents.send('terminal:file-drop', args)
+  }
+  ipcMain.on(channel, relayFileDrop)
+  mainWindow.on('closed', () => {
+    // Why: macOS can keep the app process alive after the window closes; drop
+    // the relay closure so a destroyed BrowserWindow is not retained.
+    ipcMain.removeListener(channel, relayFileDrop)
   })
 }
 
