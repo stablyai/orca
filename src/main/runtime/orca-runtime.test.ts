@@ -6181,9 +6181,10 @@ describe('OrcaRuntimeService', () => {
       expect.arrayContaining([
         '--exclude=refs/remotes/**/HEAD',
         '--count=12',
-        'refs/remotes/**/*',
-        'refs/remotes/*/**',
-        'refs/heads/**'
+        'refs/heads/**/**',
+        'refs/heads/**/**/**',
+        'refs/remotes/**/**',
+        'refs/remotes/**/**/**'
       ]),
       '/home/user/repo'
     )

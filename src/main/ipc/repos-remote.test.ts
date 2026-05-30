@@ -1362,9 +1362,10 @@ describe('repos:searchBaseRefs SSH relay', () => {
     )!
     expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
     expect(argv).toContain('--count=100')
-    expect(argv).toContain('refs/remotes/**/*')
-    expect(argv).toContain('refs/remotes/*/**')
-    expect(argv).toContain('refs/heads/**')
+    expect(argv).toContain('refs/heads/**/**')
+    expect(argv).toContain('refs/heads/**/**/**')
+    expect(argv).toContain('refs/remotes/**/**')
+    expect(argv).toContain('refs/remotes/**/**/**')
   })
 
   it('sanitizes glob metacharacter-only queries into the empty-query branch list', async () => {
@@ -1388,9 +1389,10 @@ describe('repos:searchBaseRefs SSH relay', () => {
     )!
     expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
     expect(argv).toContain('--count=100')
-    expect(argv).toContain('refs/remotes/**/*')
-    expect(argv).toContain('refs/remotes/*/**')
-    expect(argv).toContain('refs/heads/**')
+    expect(argv).toContain('refs/heads/**/**')
+    expect(argv).toContain('refs/heads/**/**/**')
+    expect(argv).toContain('refs/remotes/**/**')
+    expect(argv).toContain('refs/remotes/**/**/**')
   })
 
   it('rejects invalid limits before building broad relay searches', async () => {
