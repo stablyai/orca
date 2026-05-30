@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Columns2, Rows2 } from 'lucide-react'
 import { ShellIcon } from './shell-icons'
+import { AgentIcon } from '@/lib/agent-catalog'
+import { useTabAgent } from '@/lib/use-tab-agent'
+import { stripLeadingAgentTitleDecoration } from '@/lib/agent-title-decoration'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,11 +74,6 @@ export default function SortableTab({
   dragData,
   dropIndicator
 }: SortableTabProps): React.JSX.Element {
-  const { attributes, listeners, setNodeRef } = useSortable({
-    id: tab.id,
-    data: dragData
-  })
-
   // Why: subscribe to the per-tab boolean directly so only the tab whose unread
   // status actually flipped re-renders. Reading the whole `unreadTerminalTabs`
   // map in TabBar would invalidate every SortableTab on every bell event
@@ -86,6 +84,26 @@ export default function SortableTab({
   // default shell later does not repaint existing tabs as a different shell.
   // Older persisted tabs without this field fall back to the generic icon.
   const shellForIcon = tab.shellOverride
+
+  // Why: a tab running a coding harness shows the provider's icon instead of
+  // the terminal glyph. useTabAgent samples the pane's live foreground process
+  // (the ground truth for what's running now) and falls back to hook status for
+  // remote panes, returning a stable string|null.
+  const tabAgent = useTabAgent(tab)
+
+  // Why: when the provider icon is shown, strip the agent's own leading status
+  // glyph (e.g. Claude's "✳") from the auto title so it doesn't read as a
+  // second icon. A user-set customTitle is shown verbatim.
+  const displayTitle =
+    tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
+
+  const { attributes, listeners, setNodeRef } = useSortable({
+    id: tab.id,
+    // Why: fold the resolved agent into the drag data so the DragOverlay ghost
+    // shows the provider glyph instead of a generic terminal icon, keeping the
+    // dnd payload in sync without a second store read at the TabBar level.
+    data: { ...dragData, agent: tabAgent }
+  })
 
   // Why: intentionally no transform/transition/opacity here. The PR's
   // design is that tabs stay visually anchored during a drag — only the
@@ -262,6 +280,17 @@ export default function SortableTab({
             <span data-testid="tab-activity-bell" className="inline-flex shrink-0">
               <FilledBellIcon className="w-3 h-3 mr-1 text-amber-500 drop-shadow-sm" />
             </span>
+          ) : tabAgent ? (
+            // Why: a coding-harness tab leads with its provider glyph (Claude,
+            // Codex, …) so the tab reads as that session at a glance, and the
+            // terminal tile is reserved for tabs that are actually a shell.
+            <span
+              className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}
+              data-agent-icon={tabAgent}
+              aria-hidden
+            >
+              <AgentIcon agent={tabAgent} size={12} />
+            </span>
           ) : (
             // Why: ShellIcon renders a colored brand-style tile for PowerShell,
             // CMD, and WSL so Windows users can distinguish shells at a glance.
@@ -321,7 +350,7 @@ export default function SortableTab({
               spellCheck={false}
             />
           ) : (
-            <span className="truncate max-w-[72px] mr-1">{tab.customTitle ?? tab.title}</span>
+            <span className="truncate max-w-[72px] mr-1">{displayTitle}</span>
           )}
           {tab.color && !isEditing && (
             <span
