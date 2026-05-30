@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,14 @@ export function ProjectGroupDeleteDialog({
 }: ProjectGroupDeleteDialogProps): React.JSX.Element {
   const [deleting, setDeleting] = useState(false)
   const [wasOpen, setWasOpen] = useState(open)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   // Why: opening the dialog must clear a stale in-flight state before the
   // destructive button renders; an Effect would leave one disabled frame.
@@ -41,11 +49,15 @@ export function ProjectGroupDeleteDialog({
     setDeleting(true)
     try {
       await onConfirm()
-      setDeleting(false)
-      onOpenChange(false)
+      if (mountedRef.current) {
+        setDeleting(false)
+        onOpenChange(false)
+      }
     } catch (error) {
       console.error('Failed to delete project group:', error)
-      setDeleting(false)
+      if (mountedRef.current) {
+        setDeleting(false)
+      }
     }
   }, [deleting, onConfirm, onOpenChange])
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
@@ -41,9 +41,17 @@ export function WorktreeTitleInlineRename({
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
   const editingRef = useRef(false)
   const savingRef = useRef(false)
+  const mountedRef = useRef(true)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(displayName)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const setEditingMode = useCallback(
     (nextEditing: boolean) => {
@@ -104,12 +112,18 @@ export function WorktreeTitleInlineRename({
     setSaving(true)
     try {
       await onRename(commit.displayName)
-      setEditingMode(false)
+      if (mountedRef.current) {
+        setEditingMode(false)
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+      }
     } finally {
       savingRef.current = false
-      setSaving(false)
+      if (mountedRef.current) {
+        setSaving(false)
+      }
     }
   }, [cancelRename, displayName, onRename, setEditingMode, value])
 
