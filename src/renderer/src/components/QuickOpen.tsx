@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
@@ -80,20 +80,13 @@ function InstallRgGuidance({
 
   const setCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
       if (node === null) {
         clearCopiedResetTimer()
       }
     },
     [clearCopiedResetTimer]
   )
-
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-      clearCopiedResetTimer()
-    }
-  }, [clearCopiedResetTimer])
 
   const handleCopy = useCallback(() => {
     if (!command) {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { Copy, Check } from 'lucide-react'
 
 type CodeBlockCopyButtonProps = React.HTMLAttributes<HTMLPreElement> & {
@@ -24,20 +24,13 @@ export default function CodeBlockCopyButton({
 
   const setCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
       if (node === null) {
         clearCopiedResetTimer()
       }
     },
     [clearCopiedResetTimer]
   )
-
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-      clearCopiedResetTimer()
-    }
-  }, [clearCopiedResetTimer])
 
   const handleCopy = useCallback(() => {
     // Extract the text content from the nested <code> element rendered by

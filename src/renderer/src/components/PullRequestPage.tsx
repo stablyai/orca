@@ -5328,12 +5328,8 @@ export default function PullRequestPage({
   // Why: clipboard IPC can resolve after the page unmounts; skip copied-state
   // feedback instead of starting its reset timer on a stale surface.
   const linkCopyMountedRef = useRef(false)
-
-  useEffect(() => {
-    linkCopyMountedRef.current = true
-    return () => {
-      linkCopyMountedRef.current = false
-    }
+  const setLinkCopyButtonRef = useCallback((node: HTMLButtonElement | null) => {
+    linkCopyMountedRef.current = node !== null
   }, [])
 
   useEffect(() => {
@@ -5484,6 +5480,7 @@ export default function PullRequestPage({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  ref={setLinkCopyButtonRef}
                   type="button"
                   variant="ghost"
                   size="icon-sm"

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { Button } from '../ui/button'
@@ -72,20 +72,13 @@ export function RepositoryPane({
 
   const setRepositoryPaneRootRef = useCallback(
     (node: HTMLDivElement | null) => {
+      isMountedRef.current = node !== null
       if (node === null) {
         clearCopiedTemplateResetTimer()
       }
     },
     [clearCopiedTemplateResetTimer]
   )
-
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-      clearCopiedTemplateResetTimer()
-    }
-  }, [clearCopiedTemplateResetTimer])
 
   const handleRemoveProject = (repoId: string) => {
     if (confirmingRemove === repoId) {

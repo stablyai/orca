@@ -66,20 +66,13 @@ export function MobilePane(): React.JSX.Element {
 
   const setPairingCodeButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
       if (node === null) {
         clearCodeCopiedResetTimer()
       }
     },
     [clearCodeCopiedResetTimer]
   )
-
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-      clearCodeCopiedResetTimer()
-    }
-  }, [clearCodeCopiedResetTimer])
 
   const loadDevices = useCallback(async () => {
     try {

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: co-locating all checks-panel sub-components (checks list,
 conflict sections, threaded PR comments) keeps the shared icon/color maps in one place. */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import {
   CircleCheck,
   CircleX,
@@ -370,20 +370,13 @@ function CopyButton({ text }: { text: string }): React.JSX.Element {
 
   const setCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
       if (node === null) {
         clearCopiedResetTimer()
       }
     },
     [clearCopiedResetTimer]
   )
-
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-      clearCopiedResetTimer()
-    }
-  }, [clearCopiedResetTimer])
 
   const handleCopy = useCallback(
     (e: React.MouseEvent) => {

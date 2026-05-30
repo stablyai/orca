@@ -5443,12 +5443,8 @@ export default function GitHubItemDialog({
   // Why: clipboard IPC can resolve after the dialog unmounts; skip copied-state
   // feedback instead of starting its reset timer on a stale surface.
   const linkCopyMountedRef = useRef(false)
-
-  useEffect(() => {
-    linkCopyMountedRef.current = true
-    return () => {
-      linkCopyMountedRef.current = false
-    }
+  const setLinkCopyButtonRef = useCallback((node: HTMLButtonElement | null) => {
+    linkCopyMountedRef.current = node !== null
   }, [])
 
   useEffect(() => {
@@ -5593,6 +5589,7 @@ export default function GitHubItemDialog({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
+                      ref={setLinkCopyButtonRef}
                       type="button"
                       variant="ghost"
                       size="icon-sm"
@@ -5735,6 +5732,7 @@ export default function GitHubItemDialog({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    ref={setLinkCopyButtonRef}
                     type="button"
                     variant="ghost"
                     size="icon-sm"
