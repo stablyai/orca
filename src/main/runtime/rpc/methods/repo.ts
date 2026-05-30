@@ -56,6 +56,19 @@ const RepoUpdate = RepoSelector.extend({
     worktreeBaseRef: OptionalString,
     kind: z.enum(['git', 'folder']).optional(),
     symlinkPaths: z.array(z.string()).optional(),
+    autoSleepInactiveWorkspacesAfterMs: z
+      .unknown()
+      .transform((value) => {
+        if (value === null) {
+          return null
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          return value
+        }
+        return undefined
+      })
+      .pipe(z.union([z.number(), z.null(), z.undefined()]))
+      .optional(),
     issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
     externalWorktreeVisibility: z.enum(['hide', 'show']).optional(),
     externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),

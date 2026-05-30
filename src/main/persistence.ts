@@ -2267,6 +2267,7 @@ export class Store {
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
+        | 'autoSleepInactiveWorkspacesAfterMs'
         | 'externalWorktreeVisibility'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'projectGroupId'

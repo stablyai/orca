@@ -31,6 +31,7 @@ type RepoUpdate = Partial<
     | 'worktreeBaseRef'
     | 'kind'
     | 'symlinkPaths'
+    | 'autoSleepInactiveWorkspacesAfterMs'
     | 'issueSourcePreference'
     | 'externalWorktreeVisibility'
     | 'externalWorktreeVisibilityPromptDismissedAt'

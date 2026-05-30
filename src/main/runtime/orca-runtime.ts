@@ -5668,6 +5668,7 @@ export class OrcaRuntimeService {
         | 'worktreeBaseRef'
         | 'kind'
         | 'symlinkPaths'
+        | 'autoSleepInactiveWorkspacesAfterMs'
         | 'issueSourcePreference'
         | 'externalWorktreeVisibility'
         | 'externalWorktreeVisibilityPromptDismissedAt'

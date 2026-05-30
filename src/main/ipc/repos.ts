@@ -911,6 +911,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'worktreeBaseRef'
             | 'kind'
             | 'symlinkPaths'
+            | 'autoSleepInactiveWorkspacesAfterMs'
             | 'issueSourcePreference'
             | 'externalWorktreeVisibility'
             | 'externalWorktreeVisibilityPromptDismissedAt'
@@ -948,6 +949,15 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         if (!Array.isArray(v) || !v.every((e) => typeof e === 'string')) {
           delete updates.symlinkPaths
         }
+      }
+      if (
+        'autoSleepInactiveWorkspacesAfterMs' in updates &&
+        updates.autoSleepInactiveWorkspacesAfterMs !== null &&
+        updates.autoSleepInactiveWorkspacesAfterMs !== undefined &&
+        (typeof updates.autoSleepInactiveWorkspacesAfterMs !== 'number' ||
+          !Number.isFinite(updates.autoSleepInactiveWorkspacesAfterMs))
+      ) {
+        delete updates.autoSleepInactiveWorkspacesAfterMs
       }
       if ('repoIcon' in updates) {
         const repoIcon = sanitizeRepoIcon(updates.repoIcon)

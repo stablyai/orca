@@ -1659,6 +1659,21 @@ describe('Store', () => {
     expect(reloaded.getRepo('r1')!.issueSourcePreference).toBe('upstream')
   })
 
+  it('updateRepo persists auto-sleep inactivity threshold updates', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const enabled = store.updateRepo('r1', { autoSleepInactiveWorkspacesAfterMs: 30 * 60_000 })
+    expect(enabled!.autoSleepInactiveWorkspacesAfterMs).toBe(30 * 60_000)
+
+    const disabled = store.updateRepo('r1', { autoSleepInactiveWorkspacesAfterMs: null })
+    expect(disabled!.autoSleepInactiveWorkspacesAfterMs).toBeNull()
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.autoSleepInactiveWorkspacesAfterMs).toBeNull()
+  })
+
   it('updateRepo with issueSourcePreference=undefined clears the preference', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ issueSourcePreference: 'origin' }))
