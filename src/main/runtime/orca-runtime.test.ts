@@ -837,6 +837,60 @@ describe('OrcaRuntimeService', () => {
     expect(shown.ptyId).toBe('pty-1')
   })
 
+  it('routes PTY output through the PTY leaf index in large terminal graphs', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const liveLeafCount = 2773
+    const targetIndex = liveLeafCount - 17
+    const tabs = Array.from({ length: liveLeafCount }, (_, index) => ({
+      tabId: `tab-${index}`,
+      worktreeId: `repo-1::/tmp/worktree-${index}`,
+      title: `Terminal ${index}`,
+      activeLeafId: 'pane:1',
+      layout: null
+    }))
+    const leaves = Array.from({ length: liveLeafCount }, (_, index) => ({
+      tabId: `tab-${index}`,
+      worktreeId: `repo-1::/tmp/worktree-${index}`,
+      leafId: 'pane:1',
+      paneRuntimeId: 1,
+      ptyId: `pty-${index}`
+    }))
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs, leaves })
+
+    const runtimePrivate = runtime as unknown as {
+      leaves: Map<string, unknown>
+      leavesByPtyId: Map<string, { preview?: string; lastOutputAt?: number | null }[]>
+    }
+    const originalLeaves = runtimePrivate.leaves
+    runtimePrivate.leaves = new Proxy(originalLeaves, {
+      get(target, prop) {
+        if (
+          prop === 'values' ||
+          prop === 'entries' ||
+          prop === 'keys' ||
+          prop === Symbol.iterator
+        ) {
+          return () => {
+            throw new Error('onPtyData should use the PTY leaf index')
+          }
+        }
+        const value = Reflect.get(target, prop, target)
+        return typeof value === 'function' ? value.bind(target) : value
+      }
+    }) as Map<string, unknown>
+
+    runtime.onPtyData(`pty-${targetIndex}`, 'hello indexed\n', 123)
+
+    const [targetLeaf] = runtimePrivate.leavesByPtyId.get(`pty-${targetIndex}`) ?? []
+    expect(targetLeaf).toMatchObject({
+      preview: 'hello indexed',
+      lastOutputAt: 123
+    })
+    expect(runtime.getStatus().liveLeafCount).toBe(liveLeafCount)
+  })
+
   it('resolves branch selectors when worktrees store refs/heads-prefixed branches', async () => {
     vi.mocked(listWorktrees).mockResolvedValueOnce([
       {
