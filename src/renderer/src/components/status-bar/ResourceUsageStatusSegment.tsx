@@ -60,7 +60,10 @@ import {
   getResourceUsageRuntimePaneTitlesByTabId,
   getResourceUsageTabsByWorktree
 } from './resource-usage-open-slices'
-import { resolveResourceUsageSpaceScanReady } from './resource-usage-space-scan-ready'
+import {
+  resolveResourceUsageSpaceScanReady,
+  type ResourceUsageSpaceScanSnapshot
+} from './resource-usage-space-scan-ready'
 
 const POLL_MS = 2_000
 const SESSIONS_POLL_MS = 10_000
@@ -670,7 +673,13 @@ export function ResourceUsageStatusSegment({
   const [sessionsError, setSessionsError] = useState(false)
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)
-  const [spaceScanReady, setSpaceScanReady] = useState(false)
+  const [spaceScanSnapshot, setSpaceScanSnapshot] = useState<ResourceUsageSpaceScanSnapshot>(
+    () => ({
+      ready: false,
+      previousScanning: workspaceSpaceScanning,
+      lastSeenScannedAt: workspaceSpaceScannedAt
+    })
+  )
   // Why: tab titles can update on terminal keystrokes. The resource popover's
   // merged tree needs them only while open, so closed status-bar badges should
   // not subscribe to those high-churn maps.
@@ -684,8 +693,6 @@ export function ResourceUsageStatusSegment({
   const tabsByWorktree = useAppStore((s) =>
     getResourceUsageTabsByWorktree(s, open, runtimeEnvironmentActive)
   )
-  const previousSpaceScanningRef = useRef(workspaceSpaceScanning)
-  const lastSeenSpaceScanAtRef = useRef<number | null>(workspaceSpaceScannedAt)
   // Why: this segment only understands the local Electron PTY/resource daemon.
   // While a runtime server is active, hiding local samples avoids showing or
   // killing sessions from the wrong machine.
@@ -724,23 +731,24 @@ export function ResourceUsageStatusSegment({
 
   // Why: Space scans can finish after the user backs out of the full page or
   // closes this popover; the status-bar trigger becomes the handoff point.
-  const nextSpaceScanReady = resolveResourceUsageSpaceScanReady({
-    snapshot: {
-      ready: spaceScanReady,
-      previousScanning: previousSpaceScanningRef.current,
-      lastSeenScannedAt: lastSeenSpaceScanAtRef.current
-    },
+  const nextSpaceScanSnapshot = resolveResourceUsageSpaceScanReady({
+    snapshot: spaceScanSnapshot,
     runtimeEnvironmentActive,
     open,
     activeView,
     scannedAt: workspaceSpaceScannedAt,
     scanning: workspaceSpaceScanning
   })
-  previousSpaceScanningRef.current = nextSpaceScanReady.previousScanning
-  lastSeenSpaceScanAtRef.current = nextSpaceScanReady.lastSeenScannedAt
-  if (nextSpaceScanReady.ready !== spaceScanReady) {
-    setSpaceScanReady(nextSpaceScanReady.ready)
+  if (
+    nextSpaceScanSnapshot.ready !== spaceScanSnapshot.ready ||
+    nextSpaceScanSnapshot.previousScanning !== spaceScanSnapshot.previousScanning ||
+    nextSpaceScanSnapshot.lastSeenScannedAt !== spaceScanSnapshot.lastSeenScannedAt
+  ) {
+    // Why: keep the scan transition render-time without mutating refs during
+    // render; React can safely retry this guarded state update before commit.
+    setSpaceScanSnapshot(nextSpaceScanSnapshot)
   }
+  const spaceScanReady = nextSpaceScanSnapshot.ready
 
   // Poll memory + sessions when popover is open. Sessions also poll in the
   // background at a slower rate so the badge count stays reasonably fresh
