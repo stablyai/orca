@@ -1158,7 +1158,13 @@ async function listTrackedPathSpecs(
         cwd: worktreePath
       }
     )
-    trackedPaths.push(...stdout.split('\0').filter(Boolean))
+    // Why: a tracked directory can contain enough paths for push(...split)
+    // to exceed the JavaScript argument limit before discard decisions run.
+    for (const trackedPath of stdout.split('\0')) {
+      if (trackedPath) {
+        trackedPaths.push(trackedPath)
+      }
+    }
   }
   return trackedPaths
 }
