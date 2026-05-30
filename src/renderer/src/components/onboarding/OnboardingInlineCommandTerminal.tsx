@@ -62,7 +62,15 @@ export function OnboardingInlineCommandTerminal({
   }, [onOpened])
 
   useEffect(() => {
-    void window.api.app.getFloatingTerminalCwd({ path: '~' }).then(setCwd)
+    let cancelled = false
+    void window.api.app.getFloatingTerminalCwd({ path: '~' }).then((nextCwd) => {
+      if (!cancelled) {
+        setCwd(nextCwd)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
