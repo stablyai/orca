@@ -121,6 +121,13 @@ describe('buildGuestOverlayScript', () => {
     expect(script).toContain("return '';")
   })
 
+  it('arm script rejects executable and embedded URL schemes', () => {
+    const script = buildGuestOverlayScript('arm')
+
+    expect(script).toContain('SAFE_URL_PROTOCOLS')
+    expect(script).toContain('!SAFE_URL_PROTOCOLS.has(u.protocol)')
+  })
+
   it('arm script slices text nodes before normalizing bounded text', () => {
     const script = buildGuestOverlayScript('arm')
 
