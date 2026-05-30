@@ -5,6 +5,8 @@ import React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import type { TuiAgent } from '../../../shared/types'
 
+const OPENCLAUDE_ICON_URL = 'https://openclaude.gitlawb.com/openclaude.png'
+
 export type AgentCatalogEntry = {
   id: TuiAgent
   label: string
@@ -29,8 +31,8 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     id: 'openclaude',
     label: 'OpenClaude',
     cmd: 'openclaude',
-    iconUrl: 'https://github.com/Gitlawb.png?size=256',
-    homepageUrl: 'https://github.com/Gitlawb/openclaude'
+    iconUrl: OPENCLAUDE_ICON_URL,
+    homepageUrl: 'https://openclaude.gitlawb.com/'
   },
   {
     id: 'codex',

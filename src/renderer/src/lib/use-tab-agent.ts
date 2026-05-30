@@ -12,6 +12,7 @@ import type { TerminalTab, TuiAgent } from '../../../shared/types'
 // name already matches (codex, etc.) never reach this path.
 const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'Claude Code': 'claude',
+  OpenClaude: 'openclaude',
   Codex: 'codex',
   'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',

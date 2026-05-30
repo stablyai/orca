@@ -19,10 +19,12 @@ describe('AgentCombobox', () => {
     expect(markup).toContain('flex-1')
   })
 
-  it('uses the Gitlawb avatar for OpenClaude instead of the GitHub favicon', () => {
+  it('uses the OpenClaude favicon instead of Claude or GitHub artwork', () => {
     const markup = renderToStaticMarkup(<AgentIcon agent="openclaude" />)
 
-    expect(markup).toContain('https://github.com/Gitlawb.png?size=256')
-    expect(markup).not.toContain('https://www.google.com/s2/favicons?domain=github.com')
+    expect(markup).toContain('https://openclaude.gitlawb.com/openclaude.png')
+    expect(markup).toContain('<img')
+    expect(markup).not.toContain('https://github.com/Gitlawb.png')
+    expect(markup).not.toContain('<svg')
   })
 })

@@ -47,6 +47,21 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('claude')
   })
 
+  it('maps OpenClaude titles to the distinct OpenClaude tab icon', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: false,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
+        title: '⠋ OpenClaude',
+        hookAgent: null,
+        hasCompletedHook: false,
+        launchAgent: 'claude'
+      })
+    ).toBe('openclaude')
+  })
+
   it('lets shell foreground clear the icon after an agent was observed running', () => {
     expect(
       resolveTabAgentFromSignals({
