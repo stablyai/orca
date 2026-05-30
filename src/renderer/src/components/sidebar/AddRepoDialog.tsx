@@ -115,6 +115,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   // Why: server path adds share the same dialog but run against a runtime
   // server; resetState cancels their stale scan/add/fetch continuations.
   const serverAddGenRef = useRef(0)
+  // Why: setup actions can await settings/worktree refreshes; resetState
+  // cancels stale continuations when the setup step is dismissed.
+  const setupActionGenRef = useRef(0)
   // Why: a dropped path is modal data, so ordinary state updates must not
   // re-run the import while the Add Project dialog advances through steps.
   const droppedLocalPathHandledRef = useRef<string | null>(null)
@@ -248,6 +251,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     cloneGenRef.current++
     localAddGenRef.current++
     serverAddGenRef.current++
+    setupActionGenRef.current++
     // Why: kill the git clone process if one is running, so backing out
     // or closing the dialog doesn't leave a clone running on disk.
     void window.api.repos.cloneAbort()
@@ -722,13 +726,20 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     if (!projectId) {
       return
     }
+    const gen = ++setupActionGenRef.current
     trackSetupAction('open_existing')
     if (!otherWorktreesVisible) {
       const updated = await updateRepo(projectId, { externalWorktreeVisibility: 'show' })
+      if (gen !== setupActionGenRef.current) {
+        return
+      }
       if (updated && addedRepo) {
         setAddedRepo({ ...addedRepo, externalWorktreeVisibility: 'show' })
       }
       await fetchWorktrees(projectId)
+      if (gen !== setupActionGenRef.current) {
+        return
+      }
     }
     await finishImportedRepoWithoutOpening()
   }, [
