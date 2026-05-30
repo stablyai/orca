@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this hook owns the Monaco view-zone
 lifecycle, inline React roots, range selection, and scroll-to-comment
 coordination so those invariants stay in one place. */
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor, IDisposable } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
@@ -122,6 +122,7 @@ export function useDiffCommentDecorator({
   // request-effect call the latest version without restructuring the
   // diff-zones effect into a hook-level helper.
   const scrollToZoneRef = useRef<((commentId: string) => void) | null>(null)
+  const scrollToZoneFrameRef = useRef<number | null>(null)
   // Why: stash the consumer callbacks in refs so the decorator effect's
   // cleanup does not run on every parent render. The parent passes inline
   // arrow functions; without this, each render would tear down and re-attach
@@ -134,6 +135,17 @@ export function useDiffCommentDecorator({
   onDeleteCommentRef.current = onDeleteComment
   onUpdateCommentRef.current = onUpdateComment
   onPendingScrollConsumedRef.current = onPendingScrollConsumed
+
+  const cancelScrollToZoneFrame = useCallback((): void => {
+    if (scrollToZoneFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(scrollToZoneFrameRef.current)
+    scrollToZoneFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelScrollToZoneFrame, [cancelScrollToZoneFrame])
+
   const commentableLineSet = useMemo(
     () => (commentableLineNumbers ? new Set(commentableLineNumbers) : null),
     [commentableLineNumbers]
@@ -372,10 +384,11 @@ export function useDiffCommentDecorator({
       }
       // Why: editor went away — drop both the in-flight scroll request and
       // the resolver closure (which captured the now-disposed editor).
+      cancelScrollToZoneFrame()
       pendingScrollRef.current = null
       scrollToZoneRef.current = null
     }
-  }, [addButtonLabel, commentableLineSet, editor])
+  }, [addButtonLabel, cancelScrollToZoneFrame, commentableLineSet, editor])
 
   useEffect(() => {
     if (!editor) {
@@ -434,7 +447,9 @@ export function useDiffCommentDecorator({
     // guarantees we run after restoreViewState, so its cached scroll doesn't
     // snap the editor back from the requested note.
     const scrollToZone = (commentId: string): void => {
-      requestAnimationFrame(() => {
+      cancelScrollToZoneFrame()
+      scrollToZoneFrameRef.current = requestAnimationFrame(() => {
+        scrollToZoneFrameRef.current = null
         const entry = zones.get(commentId)
         if (!entry || !editor.getModel()) {
           return
@@ -601,7 +616,7 @@ export function useDiffCommentDecorator({
     // forcing a full rebuild — exactly the flicker this diff-based pass is
     // meant to avoid. Zone teardown lives in the editor-scoped effect above,
     // which only fires when the editor itself is replaced/unmounted.
-  }, [editor, filePath, worktreeId, comments])
+  }, [cancelScrollToZoneFrame, editor, filePath, worktreeId, comments])
 
   // Why: route a sidebar scroll-to-note request into the decorator. We mirror
   // VS Code's commentsController.revealCommentThread (which awaits
@@ -618,6 +633,7 @@ export function useDiffCommentDecorator({
     // diff) must drop any in-flight pending id so a late onDomNodeTop on a
     // previously-requested zone doesn't snap-scroll the user.
     if (!pendingScrollCommentId) {
+      cancelScrollToZoneFrame()
       pendingScrollRef.current = null
       return
     }
@@ -630,6 +646,7 @@ export function useDiffCommentDecorator({
       // file/worktree). Drop any prior pending id so a late onDomNodeTop on a
       // previously-requested zone in this decorator can't fire scrollToZone and
       // ack — which would clear the global request meant for the owning surface.
+      cancelScrollToZoneFrame()
       pendingScrollRef.current = null
       return
     }
@@ -640,5 +657,5 @@ export function useDiffCommentDecorator({
     }
     // If !laidOut we wait — onDomNodeTop on the zone will pick the request
     // up and call scrollToZone once Monaco's render pass places the zone.
-  }, [editor, comments, pendingScrollCommentId, filePath, worktreeId])
+  }, [cancelScrollToZoneFrame, editor, comments, pendingScrollCommentId, filePath, worktreeId])
 }
