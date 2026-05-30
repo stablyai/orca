@@ -795,6 +795,54 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
+  it('cancels pending shortcut focus when the panel root unmounts', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const cancelAnimationFrame = vi.fn()
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
+    vi.mocked(window.requestAnimationFrame).mockReturnValue(42)
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    const target = { classList: { contains: vi.fn().mockReturnValue(true) }, closest: vi.fn() }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    Object.setPrototypeOf(target, HTMLElement.prototype)
+    attachRef(panel.props.ref, panelElement)
+    vi.stubGlobal('document', {
+      activeElement,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    runEffects()
+    const keydownListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
+      | ((event: unknown) => void)
+      | undefined
+    if (!keydownListener) {
+      throw new Error('keydown listener not registered')
+    }
+
+    keydownListener({
+      altKey: false,
+      ctrlKey: false,
+      defaultPrevented: false,
+      key: 'w',
+      metaKey: true,
+      preventDefault: vi.fn(),
+      repeat: false,
+      shiftKey: false,
+      stopImmediatePropagation: vi.fn(),
+      stopPropagation: vi.fn(),
+      target
+    })
+    attachRef(panel.props.ref, null)
+
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42)
+    expect(panelElement.focus).not.toHaveBeenCalled()
+  })
+
   it('does not steal focus from the next floating tab after Cmd+W closes one of many tabs', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
     const element = await renderPanel(true)
