@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Clipboard, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { formatCrashReportText, type CrashReportRecord } from '../../../../shared/crash-reporting'
 import type { GitHubViewer } from '../../../../shared/types'
 
@@ -21,7 +22,7 @@ function formatSummary(report: CrashReportRecord): string {
 
 export function CrashReportDialog(): React.JSX.Element {
   const promptedThisLaunch = useRef(false)
-  const mountedRef = useRef(true)
+  const mountedRef = useMountedRef()
   const [open, setOpen] = useState(false)
   const [report, setReport] = useState<CrashReportRecord | null>(null)
   const [notes, setNotes] = useState('')
@@ -36,46 +37,42 @@ export function CrashReportDialog(): React.JSX.Element {
     [deferredNotes, report]
   )
 
-  const loadCrashReport = async (promptIfPresent: boolean): Promise<void> => {
-    setLoading(true)
-    try {
-      const nextReport = promptIfPresent
-        ? await window.api.crashReports.getLatestPending()
-        : await window.api.crashReports.getLatestReport()
-      let displayedReport = nextReport
-      if (nextReport?.status === 'pending' && promptIfPresent) {
-        try {
-          // Why: startup crash prompts are one-shot. The open dialog keeps the
-          // report data locally if the user chooses to send immediately, while
-          // Help > Report Crash can still reopen dismissed unsent reports.
-          await window.api.crashReports.dismiss({ reportId: nextReport.id })
-          displayedReport = { ...nextReport, status: 'dismissed' as const }
-        } catch (error) {
-          console.error('Failed to dismiss crash report after startup prompt:', error)
+  const loadCrashReport = useCallback(
+    async (promptIfPresent: boolean): Promise<void> => {
+      setLoading(true)
+      try {
+        const nextReport = promptIfPresent
+          ? await window.api.crashReports.getLatestPending()
+          : await window.api.crashReports.getLatestReport()
+        let displayedReport = nextReport
+        if (nextReport?.status === 'pending' && promptIfPresent) {
+          try {
+            // Why: startup crash prompts are one-shot. The open dialog keeps the
+            // report data locally if the user chooses to send immediately, while
+            // Help > Report Crash can still reopen dismissed unsent reports.
+            await window.api.crashReports.dismiss({ reportId: nextReport.id })
+            displayedReport = { ...nextReport, status: 'dismissed' as const }
+          } catch (error) {
+            console.error('Failed to dismiss crash report after startup prompt:', error)
+          }
+        }
+        if (!mountedRef.current) {
+          return
+        }
+        setReport(displayedReport)
+        if (nextReport && promptIfPresent && mountedRef.current) {
+          setOpen(true)
+        }
+      } catch (error) {
+        console.error('Failed to load crash report:', error)
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false)
         }
       }
-      if (!mountedRef.current) {
-        return
-      }
-      setReport(displayedReport)
-      if (nextReport && promptIfPresent && mountedRef.current) {
-        setOpen(true)
-      }
-    } catch (error) {
-      console.error('Failed to load crash report:', error)
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false)
-      }
-    }
-  }
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
+    },
+    [mountedRef]
+  )
 
   useEffect(() => {
     if (promptedThisLaunch.current) {
@@ -83,7 +80,7 @@ export function CrashReportDialog(): React.JSX.Element {
     }
     promptedThisLaunch.current = true
     void loadCrashReport(true)
-  }, [])
+  }, [loadCrashReport])
 
   useEffect(() => {
     return window.api.ui.onOpenCrashReport(() => {
@@ -93,7 +90,7 @@ export function CrashReportDialog(): React.JSX.Element {
         }
       })
     })
-  }, [])
+  }, [loadCrashReport, mountedRef])
 
   useEffect(() => {
     if (!open) {
