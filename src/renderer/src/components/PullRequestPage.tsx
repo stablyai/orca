@@ -69,6 +69,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 import { setWithLRU } from '@/lib/scroll-cache'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
 import {
   CombinedDiffFileTree,
@@ -3495,6 +3496,7 @@ function ChecksTab({
   const [detailsByCheckKey, setDetailsByCheckKey] = useState<Record<string, CheckDetailsLoadState>>(
     {}
   )
+  const mountedRef = useMountedRef()
   const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
   const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const sorted = [...list].sort(
@@ -3686,6 +3688,9 @@ function ChecksTab({
           prRepo
         })
         .then((details) => {
+          if (!mountedRef.current) {
+            return
+          }
           setDetailsByCheckKey((current) => ({
             ...current,
             [key]: {
@@ -3696,6 +3701,9 @@ function ChecksTab({
           }))
         })
         .catch((err) => {
+          if (!mountedRef.current) {
+            return
+          }
           setDetailsByCheckKey((current) => ({
             ...current,
             [key]: {
@@ -3706,7 +3714,7 @@ function ChecksTab({
           }))
         })
     },
-    [detailsByCheckKey, prRepo, repoId, repoPath]
+    [detailsByCheckKey, mountedRef, prRepo, repoId, repoPath]
   )
 
   const refreshAction = (
