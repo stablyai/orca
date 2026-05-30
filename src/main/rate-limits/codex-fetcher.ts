@@ -8,6 +8,7 @@ import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnost
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
 import { cleanupHiddenRateLimitPty } from './hidden-pty-cleanup'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { extractCodexAuthError, isCodexAuthError } from '../../shared/codex-auth-errors'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -395,7 +396,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: withMacTailscaleDnsHint('PTY timeout', output),
+          error: extractCodexAuthError(output) ?? withMacTailscaleDnsHint('PTY timeout', output),
           status: 'error'
         })
       }
@@ -464,7 +465,8 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           error:
             session || weekly
               ? null
-              : withMacTailscaleDnsHint('CLI exited before status was available', clean),
+              : (extractCodexAuthError(clean) ??
+                withMacTailscaleDnsHint('CLI exited before status was available', clean)),
           status: session || weekly ? 'ok' : 'error'
         })
       }
@@ -486,6 +488,9 @@ export async function fetchCodexRateLimits(
   try {
     const rpcResult = await fetchViaRpc(options)
     if (rpcResult.status === 'ok' || rpcResult.status === 'unavailable') {
+      return rpcResult
+    }
+    if (isCodexAuthError(rpcResult.error)) {
       return rpcResult
     }
     if (options?.allowPtyFallback === false) {
