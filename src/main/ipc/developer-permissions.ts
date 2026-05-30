@@ -99,11 +99,17 @@ function triggerLocalNetworkPrompt(): Promise<void> {
   return new Promise((resolve) => {
     const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true })
     let settled = false
-    const finish = (): void => {
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    function finish(): void {
       if (settled) {
         return
       }
       settled = true
+      socket.removeListener('error', finish)
+      if (timeout) {
+        clearTimeout(timeout)
+        timeout = null
+      }
       try {
         socket.close()
       } catch {
@@ -116,7 +122,10 @@ function triggerLocalNetworkPrompt(): Promise<void> {
       const message = Buffer.from([0])
       socket.send(message, 0, message.length, 5353, '224.0.0.251', finish)
     })
-    setTimeout(finish, 1000)
+    timeout = setTimeout(finish, 1000)
+    if (typeof timeout.unref === 'function') {
+      timeout.unref()
+    }
   })
 }
 

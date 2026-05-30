@@ -8,6 +8,7 @@ import { folderRelativePathToIncludeGlob } from './file-search-include-pattern'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { shouldResetFileExplorerForVisibleWorktree } from './file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
@@ -157,12 +158,22 @@ function FileExplorerInner(): React.JSX.Element {
     scrollRef
   })
 
+  const lastResetWorktreePathRef = useRef<string | null>(null)
   useEffect(() => {
     if (!visibleWorktreePath) {
       return
     }
     // Why: the sidebar remains mounted while closed to preserve caches, but
     // loading the hidden tree would probe every clicked workspace on macOS.
+    if (
+      !shouldResetFileExplorerForVisibleWorktree(
+        lastResetWorktreePathRef.current,
+        visibleWorktreePath
+      )
+    ) {
+      return
+    }
+    lastResetWorktreePathRef.current = visibleWorktreePath
     resetSelection()
     resetAndLoad()
     clearFileExplorerUndoHistory()

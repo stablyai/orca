@@ -642,6 +642,11 @@ export class SshRelaySession {
         env?: unknown
         version?: unknown
         hasExplicitPrompt?: unknown
+        promptInteractionKey?: unknown
+        hookEventName?: unknown
+        toolUseId?: unknown
+        toolAgentId?: unknown
+        toolAgentType?: unknown
         isReplay?: unknown
         payload?: unknown
       }
@@ -661,6 +666,16 @@ export class SshRelaySession {
           env: typeof envelope.env === 'string' ? envelope.env : undefined,
           version: typeof envelope.version === 'string' ? envelope.version : undefined,
           hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
+          promptInteractionKey:
+            typeof envelope.promptInteractionKey === 'string'
+              ? envelope.promptInteractionKey
+              : undefined,
+          hookEventName:
+            typeof envelope.hookEventName === 'string' ? envelope.hookEventName : undefined,
+          toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
+          toolAgentId: typeof envelope.toolAgentId === 'string' ? envelope.toolAgentId : undefined,
+          toolAgentType:
+            typeof envelope.toolAgentType === 'string' ? envelope.toolAgentType : undefined,
           isReplay: envelope.isReplay === true ? true : undefined,
           payload: envelope.payload
         },

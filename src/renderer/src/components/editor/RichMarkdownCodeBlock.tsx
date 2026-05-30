@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
@@ -44,12 +44,20 @@ export function RichMarkdownCodeBlock({
 }: NodeViewProps): React.JSX.Element {
   const language = (node.attrs.language as string) || ''
   const [copied, setCopied] = useState(false)
+  const copiedResetTimerRef = useRef<number | null>(null)
   const settings = useAppStore((s) => s.settings)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const isMermaid = language === 'mermaid'
+
+  const clearCopiedResetTimer = useCallback((): void => {
+    if (copiedResetTimerRef.current !== null) {
+      window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = null
+    }
+  }, [])
 
   const onChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -65,14 +73,18 @@ export function RichMarkdownCodeBlock({
       void window.api.ui
         .writeClipboardText(text)
         .then(() => {
+          clearCopiedResetTimer()
           setCopied(true)
-          setTimeout(() => setCopied(false), 1500)
+          copiedResetTimerRef.current = window.setTimeout(() => {
+            copiedResetTimerRef.current = null
+            setCopied(false)
+          }, 1500)
         })
         .catch(() => {
           // Silently swallow clipboard write failures (e.g. permission denied).
         })
     },
-    [node]
+    [clearCopiedResetTimer, node]
   )
 
   return (

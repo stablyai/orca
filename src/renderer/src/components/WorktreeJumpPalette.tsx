@@ -191,6 +191,7 @@ function findBrowserSelection(
 function getSettingsTargetFromSectionId(sectionId: string): {
   pane: SettingsNavTarget
   repoId: string | null
+  sectionId?: string
 } {
   if (sectionId.startsWith('repo-')) {
     return { pane: 'repo', repoId: sectionId.slice('repo-'.length) }
@@ -831,6 +832,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const handleSelectSettings = useCallback(
     (result: CmdJSettingsResult) => {
       const target = getSettingsTargetFromSectionId(result.sectionId)
+      if (result.targetSectionId) {
+        target.sectionId = result.targetSectionId
+      }
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')

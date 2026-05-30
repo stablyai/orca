@@ -140,6 +140,27 @@ describe('task page cache selectors', () => {
     expect(next).toEqual([refreshedFirst, refreshedSecond])
   })
 
+  it('merges landing refresh auto-merge state changes without reordering GitHub rows', () => {
+    const first = {
+      ...workItem('pr-1', 'repo-1'),
+      type: 'pr' as const,
+      state: 'open' as const,
+      autoMergeEnabled: false,
+      mergeQueueRequired: null,
+      updatedAt: '2026-01-01'
+    }
+    const refreshedFirst = {
+      ...first,
+      autoMergeEnabled: true,
+      mergeQueueRequired: true
+    }
+
+    const next = reconcileTaskPageItemsAfterLandingRefresh([first], [refreshedFirst])
+
+    expect(next).toEqual([refreshedFirst])
+    expect(shouldReplaceTaskPageItemsAfterRefresh([first], [refreshedFirst])).toBe(false)
+  })
+
   it('replaces GitHub landing refresh rows when membership changes', () => {
     const first = workItem('issue-1', 'repo-1')
     const second = workItem('issue-2', 'repo-1')
