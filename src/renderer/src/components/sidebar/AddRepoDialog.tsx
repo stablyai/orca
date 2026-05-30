@@ -109,6 +109,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   // Why: monotonic ID so stale clone callbacks can detect they were superseded.
   const cloneGenRef = useRef(0)
+  // Why: local folder picking/scanning can outlive the dialog; resetState
+  // invalidates stale continuations before they can repopulate closed UI.
+  const localAddGenRef = useRef(0)
   // Why: a dropped path is modal data, so ordinary state updates must not
   // re-run the import while the Add Project dialog advances through steps.
   const droppedLocalPathHandledRef = useRef<string | null>(null)
@@ -240,6 +243,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   const resetState = useCallback(() => {
     cloneGenRef.current++
+    localAddGenRef.current++
     // Why: kill the git clone process if one is running, so backing out
     // or closing the dialog doesn't leave a clone running on disk.
     void window.api.repos.cloneAbort()
@@ -286,10 +290,14 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         closeModal()
         return
       }
+      const gen = ++localAddGenRef.current
       setIsAdding(true)
       try {
         const attemptId = createNestedRepoTelemetryAttemptId()
         const scan = await scanNestedRepos(path)
+        if (gen !== localAddGenRef.current) {
+          return
+        }
         track(
           'add_repo_nested_scan_result',
           buildNestedRepoScanTelemetry({
@@ -310,10 +318,16 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           return
         }
         const repo = await addRepoPath(path)
+        if (gen !== localAddGenRef.current) {
+          return
+        }
         if (repo && isGitRepoKind(repo)) {
           setAddedRepo(repo)
           setExistingWorkspaceSource(source)
           await fetchWorktrees(repo.id)
+          if (gen !== localAddGenRef.current) {
+            return
+          }
           setStep('setup')
         } else if (repo) {
           // Why: folder repos skip the Git worktree setup step and activate
@@ -321,7 +335,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           closeModal()
         }
       } finally {
-        setIsAdding(false)
+        if (gen === localAddGenRef.current) {
+          setIsAdding(false)
+        }
       }
     },
     [addRepoPath, closeModal, fetchWorktrees, scanNestedRepos, settings?.activeRuntimeEnvironmentId]
@@ -339,15 +355,18 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   }, [droppedLocalPath, handleAddLocalPath, isOpen])
 
   const handleBrowse = useCallback(async () => {
+    const gen = ++localAddGenRef.current
     setIsAdding(true)
     try {
       const path = await window.api.repos.pickFolder()
-      if (!path) {
+      if (!path || gen !== localAddGenRef.current) {
         return
       }
       await handleAddLocalPath(path, 'local_folder_picker')
     } finally {
-      setIsAdding(false)
+      if (gen === localAddGenRef.current) {
+        setIsAdding(false)
+      }
     }
   }, [handleAddLocalPath])
 
