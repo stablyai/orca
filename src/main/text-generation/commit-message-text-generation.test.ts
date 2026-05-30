@@ -1064,6 +1064,70 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
+  it('settles local commit-message cancellation even when the killed child does not close', async () => {
+    vi.useFakeTimers()
+    try {
+      const listeners = new Map<string, (value: unknown) => void>()
+      const removeListener = (key: string, callback: (value: unknown) => void): void => {
+        if (listeners.get(key) === callback) {
+          listeners.delete(key)
+        }
+      }
+      const child = {
+        pid: 123,
+        kill: vi.fn(),
+        stdout: {
+          on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)),
+          off: vi.fn((event, callback) => removeListener(`stdout:${event}`, callback))
+        },
+        stderr: {
+          on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)),
+          off: vi.fn((event, callback) => removeListener(`stderr:${event}`, callback))
+        },
+        stdin: { end: vi.fn() },
+        on: vi.fn((event, callback) => listeners.set(event, callback)),
+        off: vi.fn((event, callback) => removeListener(event, callback))
+      }
+      spawnMock.mockReturnValue(child as never)
+
+      const pending = generateCommitMessageFromContext(
+        {
+          branch: 'main',
+          stagedSummary: 'M\tREADME.md',
+          stagedPatch: '+hello'
+        },
+        {
+          agentId: 'custom',
+          model: '',
+          customAgentCommand: 'agent'
+        },
+        {
+          kind: 'local',
+          cwd: '/repo'
+        }
+      )
+      const outcomePromise = pending.then((result) =>
+        !result.success && result.canceled ? 'canceled' : 'other'
+      )
+
+      cancelGenerateCommitMessageLocal('/repo')
+      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toBe('canceled')
+      expect(listeners.has('stdout:data')).toBe(false)
+      expect(listeners.has('stderr:data')).toBe(false)
+      expect(listeners.has('error')).toBe(false)
+      expect(listeners.has('close')).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('routes Windows batch-script agent commands through cmd.exe', async () => {
     const originalComSpec = process.env.ComSpec
     process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe'
