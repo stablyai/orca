@@ -491,7 +491,10 @@ function cleanupLegacySystemManagedHooks(): void {
       definitions,
       isManagedCommand
     )
-    trustEntries.push(...eventTrustEntries)
+    // Why: user hook configs can be large; avoid the argument limit from push(...entries).
+    for (const entry of eventTrustEntries) {
+      trustEntries.push(entry)
+    }
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
     removedManagedHook ||= definitions.some((definition) =>
       hookDefinitionHasManagedCommand(definition, isManagedCommand)
