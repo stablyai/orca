@@ -12,9 +12,7 @@ import type {
   BaseRefSearchResult,
   BaseRefDefaultResult,
   BrowserViewportOverride,
-  CreateWorktreeArgs,
   CustomPet,
-  ForceDeleteWorktreeBranchResult,
   FsChangedPayload,
   GetRateLimitResult,
   GitHubPRRefreshCandidate,
@@ -37,7 +35,6 @@ import type {
   FloatingTerminalCwdRequest,
   MarkdownDocument,
   SearchResult,
-  RemoveWorktreeResult,
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
@@ -526,62 +523,30 @@ const api = {
   } satisfies PreloadApi['sparsePresets'],
 
   worktrees: {
-    list: (args: { repoId: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('worktrees:list', args),
+    list: (args) => ipcRenderer.invoke('worktrees:list', args),
 
-    listDetected: (args: { repoId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('worktrees:listDetected', args),
+    listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
 
-    listAll: (): Promise<unknown[]> => ipcRenderer.invoke('worktrees:listAll'),
+    listAll: () => ipcRenderer.invoke('worktrees:listAll'),
 
-    create: (args: CreateWorktreeArgs): Promise<unknown> =>
-      ipcRenderer.invoke('worktrees:create', args),
+    create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
-    resolvePrBase: (args: {
-      repoId: string
-      prNumber: number
-      headRefName?: string
-      isCrossRepository?: boolean
-    }): Promise<{ baseBranch: string; pushTarget?: unknown } | { error: string }> =>
-      ipcRenderer.invoke('worktrees:resolvePrBase', args),
+    resolvePrBase: (args) => ipcRenderer.invoke('worktrees:resolvePrBase', args),
 
-    resolveMrBase: (args: {
-      repoId: string
-      mrIid: number
-      sourceBranch?: string
-      isCrossRepository?: boolean
-    }): Promise<{ baseBranch: string; pushTarget?: unknown } | { error: string }> =>
-      ipcRenderer.invoke('worktrees:resolveMrBase', args),
+    resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),
 
-    remove: (args: {
-      worktreeId: string
-      force?: boolean
-      skipArchive?: boolean
-    }): Promise<RemoveWorktreeResult> => ipcRenderer.invoke('worktrees:remove', args),
+    remove: (args) => ipcRenderer.invoke('worktrees:remove', args),
 
-    forceDeletePreservedBranch: (args: {
-      worktreeId: string
-      branchName: string
-      expectedHead: string
-    }): Promise<ForceDeleteWorktreeBranchResult> =>
+    forceDeletePreservedBranch: (args) =>
       ipcRenderer.invoke('worktrees:forceDeletePreservedBranch', args),
 
-    updateMeta: (args: {
-      worktreeId: string
-      updates: Record<string, unknown>
-    }): Promise<unknown> => ipcRenderer.invoke('worktrees:updateMeta', args),
+    updateMeta: (args) => ipcRenderer.invoke('worktrees:updateMeta', args),
 
-    listLineage: (): Promise<Record<string, unknown>> =>
-      ipcRenderer.invoke('worktrees:listLineage'),
+    listLineage: () => ipcRenderer.invoke('worktrees:listLineage'),
 
-    updateLineage: (args: {
-      worktreeId: string
-      parentWorktreeId?: string
-      noParent?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('worktrees:updateLineage', args),
+    updateLineage: (args) => ipcRenderer.invoke('worktrees:updateLineage', args),
 
-    persistSortOrder: (args: { orderedIds: string[] }): Promise<void> =>
-      ipcRenderer.invoke('worktrees:persistSortOrder', args),
+    persistSortOrder: (args) => ipcRenderer.invoke('worktrees:persistSortOrder', args),
 
     onChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
@@ -607,7 +572,7 @@ const api = {
       ipcRenderer.on('worktree:remoteBranchConflict', listener)
       return () => ipcRenderer.removeListener('worktree:remoteBranchConflict', listener)
     }
-  },
+  } satisfies PreloadApi['worktrees'],
 
   workspaceCleanup: {
     scan: (args?: { worktreeId?: string; skipGitWorktreeIds?: string[] }): Promise<unknown> =>
