@@ -1033,16 +1033,13 @@ function SourceControlInner(): React.JSX.Element {
   // Why: clipboard IPC can resolve after Source Control unmounts; skip copied
   // feedback instead of starting a reset timer on a stale panel.
   const diffCommentsCopyMountedRef = useRef(false)
-
-  useEffect(() => {
-    return () => cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
+  const setSourceControlRootRef = useCallback((node: HTMLDivElement | null) => {
+    sourceControlRef.current = node
+    diffCommentsCopyMountedRef.current = node !== null
   }, [])
 
   useEffect(() => {
-    diffCommentsCopyMountedRef.current = true
-    return () => {
-      diffCommentsCopyMountedRef.current = false
-    }
+    return () => cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
   }, [])
 
   const handleCopyDiffComments = useCallback(async (): Promise<void> => {
@@ -3939,7 +3936,7 @@ function SourceControlInner(): React.JSX.Element {
 
   return (
     <>
-      <div ref={sourceControlRef} className="relative flex h-full flex-col overflow-hidden">
+      <div ref={setSourceControlRootRef} className="relative flex h-full flex-col overflow-hidden">
         <div className="flex items-center px-3 pt-2 border-b border-border">
           {(['all', 'uncommitted'] as const).map((value) => (
             <button
@@ -5859,12 +5856,8 @@ function DiffCommentsInlineList({
   // Why: clipboard IPC can resolve after the inline notes list unmounts; skip
   // copied feedback instead of starting a reset timer on a stale list.
   const copiedIdMountedRef = useRef(false)
-
-  useEffect(() => {
-    copiedIdMountedRef.current = true
-    return () => {
-      copiedIdMountedRef.current = false
-    }
+  const setInlineDiffCommentsListRef = useCallback((node: HTMLDivElement | null) => {
+    copiedIdMountedRef.current = node !== null
   }, [])
 
   // Why: auto-dismiss the per-row "copied" indicator so the button returns to
@@ -5899,7 +5892,7 @@ function DiffCommentsInlineList({
   }
 
   return (
-    <div className="bg-muted/20">
+    <div ref={setInlineDiffCommentsListRef} className="bg-muted/20">
       {groups.map(([filePath, list]) => (
         <div key={filePath} className="px-3 py-1.5">
           <div className="group/file flex items-center gap-1">
