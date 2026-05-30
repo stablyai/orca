@@ -665,13 +665,16 @@ export default function MarkdownPreview({
     }
   }, [])
 
-  useEffect(() => {
-    reviewNotesCopyMountedRef.current = true
-    return () => {
-      reviewNotesCopyMountedRef.current = false
-      clearReviewNotesCopiedResetTimer()
-    }
-  }, [clearReviewNotesCopiedResetTimer])
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      rootRef.current = node
+      reviewNotesCopyMountedRef.current = node !== null
+      if (node === null) {
+        clearReviewNotesCopiedResetTimer()
+      }
+    },
+    [clearReviewNotesCopiedResetTimer]
+  )
 
   const scrollToAnchor = useCallback((rawAnchor: string): boolean => {
     const container = rootRef.current
@@ -1505,7 +1508,7 @@ export default function MarkdownPreview({
   return (
     <div className="markdown-preview-shell">
       <div
-        ref={rootRef}
+        ref={setRootRef}
         tabIndex={0}
         style={{ fontSize: `${editorFontSize}px` }}
         className={`markdown-preview h-full min-h-0 overflow-auto scrollbar-editor ${isDark ? 'markdown-dark' : 'markdown-light'}`}

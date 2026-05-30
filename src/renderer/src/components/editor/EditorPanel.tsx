@@ -53,6 +53,10 @@ function EditorPanelInner({
   // Why: clipboard IPC can resolve after the editor panel unmounts; skip path
   // toast feedback instead of starting a reset timer on a stale panel.
   const pathCopyMountedRef = useRef(false)
+  const setPanelRef = useCallback((node: HTMLDivElement | null) => {
+    panelRef.current = node
+    pathCopyMountedRef.current = node !== null
+  }, [])
   const [showMarkdownTableOfContents, setShowMarkdownTableOfContents] = useState(false)
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
@@ -92,12 +96,6 @@ function EditorPanelInner({
   useEffect(() => acquireExportPdfListener(), [])
   useClosedEditorTabCleanup(openFiles)
   useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
-  useEffect(() => {
-    pathCopyMountedRef.current = true
-    return () => {
-      pathCopyMountedRef.current = false
-    }
-  }, [])
 
   useEffect(() => {
     if (!copiedPathToast) {
@@ -294,7 +292,7 @@ function EditorPanelInner({
 
   return (
     <EditorPanelShell
-      panelRef={panelRef}
+      panelRef={setPanelRef}
       activeFile={activeFile}
       activeViewStateId={activeViewStateId}
       model={model}

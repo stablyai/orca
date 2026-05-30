@@ -199,6 +199,10 @@ export default function CombinedDiffViewer({
   const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
+  const setScrollContainerRef = useCallback((node: HTMLDivElement | null) => {
+    scrollContainerRef.current = node
+    notesCopyMountedRef.current = node !== null
+  }, [])
   const loadSchedulerRef = useRef(
     createCombinedDiffLoadScheduler({
       loadSection: (index) => loadSectionRef.current(index)
@@ -866,13 +870,6 @@ export default function CombinedDiffViewer({
   }, [branchSummary, file, openAllDiffs, openBranchAllDiffs])
 
   useEffect(() => {
-    notesCopyMountedRef.current = true
-    return () => {
-      notesCopyMountedRef.current = false
-    }
-  }, [])
-
-  useEffect(() => {
     if (diffCommentCount === 0 && !isClearingNotes) {
       setClearNotesDialogOpen(false)
     }
@@ -1143,7 +1140,10 @@ export default function CombinedDiffViewer({
             onCollapsedChange={setFileTreeCollapsed}
             onNavigate={handleTreeNavigate}
           />
-          <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
+          <div
+            ref={setScrollContainerRef}
+            className="min-w-0 flex-1 overflow-auto scrollbar-editor"
+          >
             {skippedConflictNotice}
             <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
               {virtualizer.getVirtualItems().map((virtualItem) => {
