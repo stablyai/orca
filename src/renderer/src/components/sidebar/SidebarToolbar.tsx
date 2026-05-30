@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { showOnboardingFromRenderer } from '../onboarding/show-onboarding-event'
 import { SidebarFeedbackDialog } from './SidebarFeedbackDialog'
 import { ScrollToCurrentWorkspaceToolbarButton } from './ScrollToCurrentWorkspaceToolbarButton'
@@ -44,6 +45,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
   const [showAdminHelpOptions, setShowAdminHelpOptions] = useState(false)
   const [isRestartingOrca, setIsRestartingOrca] = useState(false)
   const lastShowOnboardingAtRef = React.useRef(0)
+  const mountedRef = useMountedRef()
 
   const handleShowOnboarding = (): void => {
     const now = Date.now()
@@ -75,10 +77,12 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
     setIsRestartingOrca(true)
     toast.info('Restarting Orca…')
     void window.api.app.restart().catch((error) => {
-      setIsRestartingOrca(false)
-      toast.error('Couldn’t restart Orca.', {
-        description: error instanceof Error ? error.message : undefined
-      })
+      if (mountedRef.current) {
+        setIsRestartingOrca(false)
+        toast.error('Couldn’t restart Orca.', {
+          description: error instanceof Error ? error.message : undefined
+        })
+      }
     })
   }
 
