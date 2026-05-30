@@ -22,6 +22,8 @@ type DownloadHandle = {
 
 type ProgressCallback = (modelId: string, progress: number) => void
 
+const DOWNLOAD_IDLE_TIMEOUT_MS = 120_000
+
 export class ModelManager {
   private modelsDir: string
   private activeDownloads = new Map<string, DownloadHandle>()
@@ -336,6 +338,16 @@ export class ModelManager {
         ? httpsGet(parsedUrl, { signal }, onResponse)
         : httpsGet(parsedUrl, onResponse)
 
+      // Why: cancellation only helps after the user presses cancel; a peer
+      // that accepts the socket and goes silent must not leave the model stuck
+      // in "downloading" forever.
+      request.setTimeout(DOWNLOAD_IDLE_TIMEOUT_MS, () => {
+        request.destroy(
+          new Error(
+            `Model download timed out after ${DOWNLOAD_IDLE_TIMEOUT_MS / 1000} seconds without network activity`
+          )
+        )
+      })
       request.on('error', reject)
     })
   }
