@@ -1,6 +1,11 @@
 import React from 'react'
 import { Plus } from 'lucide-react'
-import type { Repo, WorkspaceStatusDefinition, Worktree } from '../../../../shared/types'
+import type {
+  Repo,
+  WorkspaceGroupColor,
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/types'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
   WORKSPACE_BOARD_COLUMN_WIDTH_MIN
@@ -14,6 +19,7 @@ import { getWorkspaceStatusVisualMeta } from './workspace-status'
 type WorkspaceKanbanStatusLaneProps = {
   status: WorkspaceStatusDefinition
   items: readonly Worktree[]
+  workspaceGroupColors: ReadonlyMap<string, WorkspaceGroupColor>
   repoMap: Map<string, Repo>
   activeWorktreeId: string | null
   compact: boolean
@@ -41,6 +47,7 @@ type WorkspaceKanbanStatusLaneProps = {
 export default function WorkspaceKanbanStatusLane({
   status,
   items,
+  workspaceGroupColors,
   repoMap,
   activeWorktreeId,
   compact,
@@ -159,6 +166,11 @@ export default function WorkspaceKanbanStatusLane({
                     isSelected && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
                   }
                   compact={compact}
+                  groupColor={
+                    worktree.workspaceGroupId
+                      ? workspaceGroupColors.get(worktree.workspaceGroupId)
+                      : undefined
+                  }
                   onActivate={onActivate}
                   onSelectionGesture={onSelectionGesture}
                   onContextMenuSelect={onContextMenuSelect}

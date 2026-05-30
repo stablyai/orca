@@ -93,4 +93,59 @@ describe('groupWorkspaceKanbanWorktrees', () => {
 
     expect(grouped.get('doing')?.map((item) => item.id)).toEqual(['b', 'a'])
   })
+
+  it('clusters unpinned workspace group members within a lane', () => {
+    const grouped = groupWorkspaceKanbanWorktrees({
+      worktrees: [
+        worktree({
+          id: 'a',
+          displayName: 'A',
+          workspaceStatus: 'doing',
+          workspaceGroupId: 'wg_a',
+          lastActivityAt: 50
+        }),
+        worktree({ id: 'b', displayName: 'B', workspaceStatus: 'doing', lastActivityAt: 40 }),
+        worktree({
+          id: 'c',
+          displayName: 'C',
+          workspaceStatus: 'doing',
+          workspaceGroupId: 'wg_a',
+          lastActivityAt: 30
+        })
+      ],
+      visibleWorktreeIds: new Set(['a', 'b', 'c']),
+      workspaceStatuses: statuses,
+      sortBy: 'recent'
+    })
+
+    expect(grouped.get('doing')?.map((item) => item.id)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('does not pull pinned workspaces into an unpinned group cluster', () => {
+    const grouped = groupWorkspaceKanbanWorktrees({
+      worktrees: [
+        worktree({
+          id: 'a',
+          displayName: 'A',
+          workspaceStatus: 'doing',
+          workspaceGroupId: 'wg_a',
+          isPinned: true,
+          lastActivityAt: 1
+        }),
+        worktree({ id: 'b', displayName: 'B', workspaceStatus: 'doing', lastActivityAt: 50 }),
+        worktree({
+          id: 'c',
+          displayName: 'C',
+          workspaceStatus: 'doing',
+          workspaceGroupId: 'wg_a',
+          lastActivityAt: 40
+        })
+      ],
+      visibleWorktreeIds: new Set(['a', 'b', 'c']),
+      workspaceStatuses: statuses,
+      sortBy: 'recent'
+    })
+
+    expect(grouped.get('doing')?.map((item) => item.id)).toEqual(['a', 'b', 'c'])
+  })
 })

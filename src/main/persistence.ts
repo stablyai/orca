@@ -98,6 +98,7 @@ import {
   normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
+import { clearWorkspaceGroupFromMeta, normalizeWorkspaceGroups } from '../shared/workspace-groups'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
@@ -231,7 +232,8 @@ function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
     groupBy === 'none' ||
     groupBy === 'workspace-status' ||
     groupBy === 'repo' ||
-    groupBy === 'pr-status'
+    groupBy === 'pr-status' ||
+    groupBy === 'group'
   ) {
     return groupBy
   }
@@ -1673,6 +1675,7 @@ export class Store {
                 migrateLegacyDefaultStatusVisuals: !workspaceStatusesDefaultVisualsMigrated
               }
             )
+            const workspaceGroups = normalizeWorkspaceGroups(parsed.ui?.workspaceGroups)
             if (
               !workspaceStatusesDefaultOrderMigrated ||
               !workspaceStatusesDefaultWorkflowMigrated ||
@@ -1766,6 +1769,7 @@ export class Store {
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               sortBy: migrate ? ('smart' as const) : sort,
               workspaceStatuses,
+              workspaceGroups,
               _workspaceStatusesDefaultOrderMigrated: true,
               _workspaceStatusesDefaultWorkflowMigrated: true,
               _workspaceStatusesDefaultVisualsMigrated: true,
@@ -1881,6 +1885,24 @@ export class Store {
       workspaceSession: pruneWorkspaceSessionBrowserHistory(
         pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
       )
+    }
+
+    const validWorkspaceGroupIds = new Set(
+      (result.ui.workspaceGroups ?? []).map((group) => group.id)
+    )
+    const strippedMeta: Record<string, WorktreeMeta> = {}
+    let strippedWorkspaceGroupMeta = false
+    for (const [worktreeId, meta] of Object.entries(result.worktreeMeta ?? {})) {
+      if (meta.workspaceGroupId && !validWorkspaceGroupIds.has(meta.workspaceGroupId)) {
+        strippedMeta[worktreeId] = { ...meta, workspaceGroupId: null }
+        strippedWorkspaceGroupMeta = true
+      } else {
+        strippedMeta[worktreeId] = meta
+      }
+    }
+    if (strippedWorkspaceGroupMeta) {
+      result = { ...result, worktreeMeta: strippedMeta }
+      this.loadNeedsSave = true
     }
 
     return this.migrateTelemetry(result, fileExistedOnLoad)
@@ -2652,6 +2674,15 @@ export class Store {
     this.scheduleSave()
   }
 
+  deleteWorkspaceGroup(groupId: string): void {
+    this.state.ui = {
+      ...this.state.ui,
+      workspaceGroups: (this.state.ui.workspaceGroups ?? []).filter((group) => group.id !== groupId)
+    }
+    this.state.worktreeMeta = clearWorkspaceGroupFromMeta(this.state.worktreeMeta, groupId)
+    this.scheduleSave()
+  }
+
   getWorktreeLineage(worktreeId: string): WorktreeLineage | undefined {
     return this.state.worktreeLineageById[worktreeId]
   }
@@ -2803,6 +2834,7 @@ export class Store {
         this.state.ui?.worktreeCardProperties
       ),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
+      workspaceGroups: normalizeWorkspaceGroups(this.state.ui?.workspaceGroups),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
       workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
@@ -2835,6 +2867,10 @@ export class Store {
         updates.workspaceStatuses !== undefined
           ? normalizeWorkspaceStatuses(updates.workspaceStatuses)
           : normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
+      workspaceGroups:
+        updates.workspaceGroups !== undefined
+          ? normalizeWorkspaceGroups(updates.workspaceGroups)
+          : normalizeWorkspaceGroups(this.state.ui?.workspaceGroups),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(
         updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
       ),
@@ -3532,6 +3568,7 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     isPinned: false,
     sortOrder: Date.now(),
     lastActivityAt: 0,
-    workspaceStatus: DEFAULT_WORKSPACE_STATUS_ID
+    workspaceStatus: DEFAULT_WORKSPACE_STATUS_ID,
+    workspaceGroupId: null
   }
 }

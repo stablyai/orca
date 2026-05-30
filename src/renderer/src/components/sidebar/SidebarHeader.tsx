@@ -15,7 +15,8 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const repos = useAppStore((s) => s.repos)
   const groupBy = useAppStore((s) => s.groupBy)
   const canCreateWorkspace = repos.length > 0
-  const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
+  const sidebarTitle =
+    groupBy === 'repo' ? 'Projects' : groupBy === 'group' ? 'Groups' : 'Workspaces'
 
   const handleWorkspaceBoardOpenChange = useCallback((open: boolean) => {
     setWorkspaceBoardOpen(open)

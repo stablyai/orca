@@ -1,6 +1,7 @@
 import React from 'react'
 import type {
   Repo,
+  WorkspaceGroupColor,
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
@@ -10,6 +11,7 @@ import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'
 type WorkspaceKanbanLaneGridProps = {
   statuses: readonly WorkspaceStatusDefinition[]
   worktreesByStatus: ReadonlyMap<WorkspaceStatus, readonly Worktree[]>
+  workspaceGroupColors: ReadonlyMap<string, WorkspaceGroupColor>
   repoMap: Map<string, Repo>
   activeWorktreeId: string | null
   compact: boolean
@@ -36,6 +38,7 @@ type WorkspaceKanbanLaneGridProps = {
 export default function WorkspaceKanbanLaneGrid({
   statuses,
   worktreesByStatus,
+  workspaceGroupColors,
   repoMap,
   activeWorktreeId,
   compact,
@@ -67,6 +70,7 @@ export default function WorkspaceKanbanLaneGrid({
           key={status.id}
           status={status}
           items={worktreesByStatus.get(status.id) ?? []}
+          workspaceGroupColors={workspaceGroupColors}
           repoMap={repoMap}
           activeWorktreeId={activeWorktreeId}
           compact={compact}

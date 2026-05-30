@@ -32,6 +32,8 @@ import {
 } from './worktree-manual-order'
 import type { WorkspaceStatus, WorktreeMeta } from '../../../../shared/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
+import { expandWorktreeIdsToGroupMembers } from './workspace-group-actions'
+import { buildWorkspaceGroupStatusUpdates } from './workspace-group-status-sync'
 
 type WorkspaceKanbanDrawerProps = {
   open: boolean
@@ -53,6 +55,7 @@ export default function WorkspaceKanbanDrawer({
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const setWorkspaceStatuses = useAppStore((s) => s.setWorkspaceStatuses)
+  const workspaceGroups = useAppStore((s) => s.workspaceGroups)
   const workspaceBoardCompact = useAppStore((s) => s.workspaceBoardCompact)
   const setWorkspaceBoardCompact = useAppStore((s) => s.setWorkspaceBoardCompact)
   const workspaceBoardColumnWidth = useAppStore((s) => s.workspaceBoardColumnWidth)
@@ -82,6 +85,10 @@ export default function WorkspaceKanbanDrawer({
   const worktreeById = useMemo(
     () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
     [allWorktrees]
+  )
+  const workspaceGroupColors = useMemo(
+    () => new Map(workspaceGroups.map((group) => [group.id, group.color])),
+    [workspaceGroups]
   )
   const boardWorktrees = useMemo(
     () => workspaceStatuses.flatMap((status) => worktreesByStatus.get(status.id) ?? []),
@@ -116,14 +123,19 @@ export default function WorkspaceKanbanDrawer({
     useWorkspaceKanbanColumnResize(workspaceBoardColumnWidth, setWorkspaceBoardColumnWidth)
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
-      const current = worktreeById.get(worktreeId)
-      if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
+      const updates = buildWorkspaceGroupStatusUpdates({
+        worktreeIds: [worktreeId],
+        allWorktrees,
+        workspaceStatuses,
+        targetStatus: status
+      })
+      if (updates.size === 0) {
         return
       }
       useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
-      void updateWorktreeMeta(worktreeId, { workspaceStatus: status })
+      void updateWorktreesMeta(updates)
     },
-    [updateWorktreeMeta, workspaceStatuses, worktreeById]
+    [allWorktrees, updateWorktreesMeta, workspaceStatuses]
   )
   const getSourceStatusKeys = useCallback(
     (worktreeIds: readonly string[]): WorkspaceStatus[] =>
@@ -149,9 +161,10 @@ export default function WorkspaceKanbanDrawer({
       dropIndex: number
       writeManualOrder?: boolean
     }) => {
+      const draggedWorktreeIds = expandWorktreeIdsToGroupMembers(args.worktreeIds, allWorktrees)
       const updates = new Map<string, Partial<WorktreeMeta>>()
       const writeManualOrder =
-        args.writeManualOrder ?? shouldWriteDropManualOrder(args.worktreeIds, args.status)
+        args.writeManualOrder ?? shouldWriteDropManualOrder(draggedWorktreeIds, args.status)
       const rankByWorktreeId = writeManualOrder
         ? (() => {
             const ranks = new Map<string, number>()
@@ -170,14 +183,14 @@ export default function WorkspaceKanbanDrawer({
         ? buildManualOrderUpdatesForGroupDrop({
             groups: boardDragGroups,
             targetGroupKey: args.status,
-            draggedIds: args.worktreeIds,
+            draggedIds: draggedWorktreeIds,
             dropIndex: args.dropIndex,
             now: Date.now(),
             rankByWorktreeId
           })
         : { changed: false, updates: new Map<string, { manualOrder: number }>() }
 
-      for (const worktreeId of args.worktreeIds) {
+      for (const worktreeId of draggedWorktreeIds) {
         const current = worktreeById.get(worktreeId)
         if (!current) {
           continue
@@ -217,6 +230,7 @@ export default function WorkspaceKanbanDrawer({
     },
     [
       boardDragGroups,
+      allWorktrees,
       setSortBy,
       shouldWriteDropManualOrder,
       updateWorktreesMeta,
@@ -582,6 +596,7 @@ export default function WorkspaceKanbanDrawer({
             <WorkspaceKanbanLaneGrid
               statuses={workspaceStatuses}
               worktreesByStatus={worktreesByStatus}
+              workspaceGroupColors={workspaceGroupColors}
               repoMap={repoMap}
               activeWorktreeId={activeWorktreeId}
               compact={workspaceBoardCompact}

@@ -7,12 +7,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { cn } from '@/lib/utils'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo, Worktree, WorkspaceGroupColor } from '../../../../shared/types'
 import WorktreeCard from './WorktreeCard'
 import { WorktreeActivityStatusIndicator } from './WorktreeActivityStatusIndicator'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { getWorkspaceKanbanDetailsHoverOpenState } from './workspace-kanban-details-hover'
-import { writeWorkspaceDragData } from './workspace-status'
+import { getWorkspaceGroupSwatchClass, writeWorkspaceDragData } from './workspace-status'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
 import { runWorktreeDelete } from './delete-worktree-flow'
 import {
@@ -27,6 +27,7 @@ type WorkspaceKanbanCardProps = {
   isSelected: boolean
   selectedWorktrees?: readonly Worktree[]
   compact: boolean
+  groupColor?: WorkspaceGroupColor
   nativeDragEnabled?: boolean
   onActivate: () => void
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
@@ -43,6 +44,7 @@ function WorkspaceKanbanCard({
   isSelected,
   selectedWorktrees,
   compact,
+  groupColor,
   nativeDragEnabled = true,
   onActivate,
   onSelectionGesture,
@@ -56,6 +58,7 @@ function WorkspaceKanbanCard({
         isActive={isActive}
         isSelected={isSelected}
         selectedWorktrees={selectedWorktrees}
+        groupColor={groupColor}
         onActivate={onActivate}
         onSelectionGesture={onSelectionGesture}
         onContextMenuSelect={onContextMenuSelect}
@@ -90,6 +93,7 @@ function WorkspaceKanbanCard({
         isActive={isActive}
         isMultiSelected={isSelected}
         selectedWorktrees={contextWorktrees}
+        groupColor={groupColor}
         nativeDragEnabled={nativeDragEnabled}
         onActivate={onActivate}
         onSelectionGesture={onSelectionGesture}
@@ -107,6 +111,7 @@ function WorkspaceKanbanCompactCard({
   isActive,
   isSelected,
   selectedWorktrees,
+  groupColor,
   nativeDragEnabled = true,
   onActivate,
   onSelectionGesture,
@@ -290,6 +295,15 @@ function WorkspaceKanbanCompactCard({
             aria-disabled={isDeleting ? true : undefined}
             aria-busy={isDeleting}
           >
+            {groupColor ? (
+              <span
+                aria-hidden
+                className={cn(
+                  'absolute left-0 top-1 bottom-1 w-1 rounded-full',
+                  getWorkspaceGroupSwatchClass(groupColor)
+                )}
+              />
+            ) : null}
             <WorktreeActivityStatusIndicator worktreeId={worktree.id} className="mr-1" />
             <WorktreeTitleInlineRename
               displayName={worktree.displayName}
@@ -352,6 +366,7 @@ function WorkspaceKanbanCompactCard({
             worktree={worktree}
             repo={repo}
             isActive={isActive}
+            groupColor={groupColor}
             onActivate={onActivate}
           />
         </HoverCardContent>

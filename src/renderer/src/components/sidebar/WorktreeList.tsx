@@ -48,6 +48,9 @@ import type {
   Repo,
   ProjectGroup,
   WorktreeLineage,
+  WorkspaceGroup,
+  WorkspaceGroupColor,
+  WorkspaceGroupId,
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
@@ -61,12 +64,13 @@ import {
 import { track } from '@/lib/telemetry'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
-  type GroupHeaderRow,
+  type GroupHeaderRow as GroupHeaderRowData,
   type ProjectGroupOrdering,
   type Row,
   type WorktreeGroupBy,
   ALL_GROUP_KEY,
   PINNED_GROUP_KEY,
+  WORKSPACE_GROUP_UNGROUPED_KEY,
   buildRows,
   getGroupKeysForWorktree,
   getProjectGroupOrdering,
@@ -86,6 +90,7 @@ import {
 import {
   getWorkspaceStatus,
   getWorkspaceStatusFromGroupKey,
+  getWorkspaceGroupSwatchClass,
   hasWorkspaceDragData,
   readWorkspaceDragDataIds
 } from './workspace-status'
@@ -166,6 +171,16 @@ import {
 } from '../../../../shared/worktree-ownership'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
+import { GroupHeaderRow } from './GroupHeaderRow'
+import {
+  buildRecolorGroup,
+  buildRenameGroup,
+  buildReorderHeaders,
+  buildUngroupChanges,
+  expandWorktreeIdsToGroupMembers
+} from './workspace-group-actions'
+import { useWorkspaceGroupDrop } from './use-workspace-group-drop'
+import { buildWorkspaceGroupStatusUpdates } from './workspace-group-status-sync'
 import {
   buildWorktreeSectionActivitySummaries,
   EMPTY_WORKTREE_SECTION_ACTIVITY,
@@ -372,7 +387,22 @@ type VirtualizedWorktreeViewportProps = {
   reorderRepos: (orderedIds: string[]) => void
   prCache: Record<string, unknown> | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  workspaceGroups: readonly WorkspaceGroup[]
+  renamingWorkspaceGroupId: WorkspaceGroupId | null
+  workspaceGroupRenameDraft: string
   projectGroups?: readonly ProjectGroup[]
+  onWorkspaceGroupRenameDraftChange: (groupId: WorkspaceGroupId, draft: string) => void
+  onToggleWorkspaceGroupCollapsed: (groupId: WorkspaceGroupId) => void
+  onWorkspaceGroupRenameCommit: (groupId: WorkspaceGroupId, name: string) => void
+  onWorkspaceGroupRenameCancel: (groupId: WorkspaceGroupId) => void
+  onWorkspaceGroupRecolor: (groupId: WorkspaceGroupId, color: WorkspaceGroupColor) => void
+  onWorkspaceGroupReorder: (groupId: WorkspaceGroupId, direction: 'up' | 'down') => void
+  onWorkspaceGroupUngroup: (groupId: WorkspaceGroupId) => void
+  onStartRenameWorkspaceGroup: (groupId: WorkspaceGroupId) => void
+  onAssignWorkspaceGroupDrop: (
+    worktreeIds: readonly string[],
+    groupId: WorkspaceGroupId | null
+  ) => void
   onMoveWorktreeToStatus: (worktreeId: string, status: WorkspaceStatus) => void
   onMoveWorktreesToStatus: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onPinWorktree: (worktreeId: string) => void
@@ -480,6 +510,108 @@ const WORKTREE_ROW_DRAG_INITIAL_STATE: WorktreeRowDragState = {
   dropIndicatorY: null,
   previewOffsetsByWorktreeId: EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS,
   pointerY: null
+}
+
+type WorkspaceGroupHeaderDropTargetProps = {
+  row: GroupHeaderRowData
+  collapsed: boolean
+  renamingWorkspaceGroupId: WorkspaceGroupId | null
+  workspaceGroupRenameDraft: string
+  onAssign: (worktreeIds: readonly string[], groupId: WorkspaceGroupId | null) => void
+  onRenameDraftChange: (groupId: WorkspaceGroupId, draft: string) => void
+  onToggleCollapsed: (groupId: WorkspaceGroupId) => void
+  onRenameCommit: (groupId: WorkspaceGroupId, name: string) => void
+  onRenameCancel: (groupId: WorkspaceGroupId) => void
+  onStartRename: (groupId: WorkspaceGroupId) => void
+  onRecolor: (groupId: WorkspaceGroupId, color: WorkspaceGroupColor) => void
+  onReorder: (groupId: WorkspaceGroupId, direction: 'up' | 'down') => void
+  onUngroup: (groupId: WorkspaceGroupId) => void
+  onToggleUngrouped: () => void
+}
+
+function WorkspaceGroupHeaderDropTarget({
+  row,
+  collapsed,
+  renamingWorkspaceGroupId,
+  workspaceGroupRenameDraft,
+  onAssign,
+  onRenameDraftChange,
+  onToggleCollapsed,
+  onRenameCommit,
+  onRenameCancel,
+  onStartRename,
+  onRecolor,
+  onReorder,
+  onUngroup,
+  onToggleUngrouped
+}: WorkspaceGroupHeaderDropTargetProps): React.JSX.Element {
+  const groupId = row.workspaceGroupId ?? null
+  const drop = useWorkspaceGroupDrop({ onAssign, groupId })
+  const dropClassName = drop.isOver
+    ? 'rounded-md bg-sidebar-accent ring-1 ring-sidebar-ring/40'
+    : undefined
+
+  if (row.workspaceGroupId) {
+    const isRenaming = renamingWorkspaceGroupId === row.workspaceGroupId
+    return (
+      <div {...drop.bind} className={dropClassName}>
+        <GroupHeaderRow
+          groupId={row.workspaceGroupId}
+          name={row.label}
+          color={row.workspaceGroupColor ?? 'neutral'}
+          memberCount={row.count}
+          collapsed={collapsed}
+          isRenaming={isRenaming}
+          renameDraft={isRenaming ? workspaceGroupRenameDraft : undefined}
+          onRenameDraftChange={onRenameDraftChange}
+          onToggleCollapsed={onToggleCollapsed}
+          onRenameCommit={onRenameCommit}
+          onRenameCancel={onRenameCancel}
+          onStartRename={onStartRename}
+          onRecolor={onRecolor}
+          onReorder={onReorder}
+          onUngroup={onUngroup}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      {...drop.bind}
+      role="button"
+      tabIndex={0}
+      className={cn(
+        'group flex h-7 w-full cursor-pointer items-center gap-1.5 px-3 text-left transition-all',
+        dropClassName
+      )}
+      onClick={onToggleUngrouped}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onToggleUngrouped()
+        }
+      }}
+      aria-expanded={!collapsed}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <div className="truncate text-[13px] font-semibold leading-none text-muted-foreground">
+            {row.label}
+          </div>
+          <div className="rounded-full bg-black/12 px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/90">
+            {row.count}
+          </div>
+        </div>
+      </div>
+      <ChevronDown
+        className={cn(
+          'size-3.5 text-muted-foreground/60 transition-transform',
+          collapsed && '-rotate-90'
+        )}
+      />
+    </div>
+  )
 }
 
 type VirtualItemBounds = {
@@ -695,7 +827,19 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   reorderRepos,
   prCache,
   workspaceStatuses,
+  workspaceGroups,
+  renamingWorkspaceGroupId,
+  workspaceGroupRenameDraft,
   projectGroups = [],
+  onWorkspaceGroupRenameDraftChange,
+  onToggleWorkspaceGroupCollapsed,
+  onWorkspaceGroupRenameCommit,
+  onWorkspaceGroupRenameCancel,
+  onWorkspaceGroupRecolor,
+  onWorkspaceGroupReorder,
+  onWorkspaceGroupUngroup,
+  onStartRenameWorkspaceGroup,
+  onAssignWorkspaceGroupDrop,
   onMoveWorktreeToStatus,
   onMoveWorktreesToStatus,
   onPinWorktree,
@@ -1318,7 +1462,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         worktreeMap,
         true,
         settings,
-        projectGroups
+        projectGroups,
+        new Set(),
+        workspaceGroups
       ).filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
       if (worktreeRows.length === 0) {
         return
@@ -1365,7 +1511,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       worktreeLineageById,
       worktreeMap,
       settings,
-      projectGroups
+      projectGroups,
+      workspaceGroups
     ]
   )
 
@@ -2384,6 +2531,52 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   })
                 : null
               const projectGroupDepth = row.projectGroupDepth ?? 0
+              if (groupBy === 'group' && (row.workspaceGroupId || row.isUngroupedBucket)) {
+                const workspaceGroupCollapsed = row.workspaceGroupId
+                  ? Boolean(row.collapsed)
+                  : collapsedGroups.has(WORKSPACE_GROUP_UNGROUPED_KEY)
+                return (
+                  <div
+                    key={vItem.key}
+                    role="presentation"
+                    data-worktree-virtual-row
+                    data-worktree-virtual-row-key={String(vItem.key)}
+                    data-worktree-sticky-header=""
+                    data-worktree-sticky-header-active={isActiveStickyHeader ? '' : undefined}
+                    data-index={vItem.index}
+                    ref={measureVirtualRowElement}
+                    className={cn(
+                      'left-0 right-0',
+                      hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-2',
+                      isActiveStickyHeader ? 'sticky -top-px z-20 bg-sidebar' : 'absolute top-0'
+                    )}
+                    style={
+                      isActiveStickyHeader
+                        ? undefined
+                        : { transform: getVirtualRowTransform(vItem.start) }
+                    }
+                  >
+                    <WorkspaceGroupHeaderDropTarget
+                      row={row}
+                      collapsed={workspaceGroupCollapsed}
+                      renamingWorkspaceGroupId={renamingWorkspaceGroupId}
+                      workspaceGroupRenameDraft={workspaceGroupRenameDraft}
+                      onAssign={onAssignWorkspaceGroupDrop}
+                      onRenameDraftChange={onWorkspaceGroupRenameDraftChange}
+                      onToggleCollapsed={onToggleWorkspaceGroupCollapsed}
+                      onRenameCommit={onWorkspaceGroupRenameCommit}
+                      onRenameCancel={onWorkspaceGroupRenameCancel}
+                      onStartRename={onStartRenameWorkspaceGroup}
+                      onRecolor={onWorkspaceGroupRecolor}
+                      onReorder={onWorkspaceGroupReorder}
+                      onUngroup={onWorkspaceGroupUngroup}
+                      onToggleUngrouped={() =>
+                        toggleGroupWithScrollAnchor(WORKSPACE_GROUP_UNGROUPED_KEY)
+                      }
+                    />
+                  </div>
+                )
+              }
               const isCollapsed = collapsedGroups.has(row.key)
               const sectionActivity =
                 sectionActivityByGroupKey.get(row.key) ?? EMPTY_WORKTREE_SECTION_ACTIVITY
@@ -2796,12 +2989,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     isActiveSurface={forceActiveSurface || activeWorktreeId === itemRow.worktree.id}
                     isMultiSelected={selectedWorktreeIds.has(itemRow.worktree.id)}
                     selectedWorktrees={selectedWorktrees}
-                    nativeDragEnabled={false}
+                    nativeDragEnabled={groupBy === 'group'}
                     onSelectionGesture={onSelectionGesture}
                     onContextMenuSelect={(event) => onContextMenuSelect(event, itemRow.worktree)}
                     onCardDragStart={handleWorktreeCardDragStart}
                     onCardDragEnd={clearWorktreeDrag}
                     hideRepoBadge={groupBy === 'repo'}
+                    groupColor={itemRow.groupColor}
                     lineageChildCount={itemRow.lineageChildCount}
                     lineageCollapsed={itemRow.lineageCollapsed}
                     lineageChildren={lineageChildren}
@@ -2868,6 +3062,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       onClick={handleClick}
                       onDoubleClick={(event) => event.stopPropagation()}
                     >
+                      {child.groupColor ? (
+                        <span
+                          aria-hidden
+                          className={cn(
+                            'absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full',
+                            getWorkspaceGroupSwatchClass(child.groupColor)
+                          )}
+                        />
+                      ) : null}
                       <span className="mt-[2px] flex w-4 shrink-0 justify-center pt-[2px]">
                         <WorktreeActivityStatusIndicator worktreeId={child.worktree.id} />
                       </span>
@@ -3068,6 +3271,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const groupBy = useAppStore((s) => s.groupBy)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
+  const workspaceGroups = useAppStore((s) => s.workspaceGroups)
+  const setWorkspaceGroups = useAppStore((s) => s.setWorkspaceGroups)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
@@ -3476,7 +3681,8 @@ const WorktreeList = React.memo(function WorktreeList({
         true,
         settings,
         projectGroups,
-        placeholderRepoIds
+        placeholderRepoIds,
+        workspaceGroups
       ),
     [
       groupBy,
@@ -3491,7 +3697,8 @@ const WorktreeList = React.memo(function WorktreeList({
       worktreeMap,
       settings,
       projectGroups,
-      placeholderRepoIds
+      placeholderRepoIds,
+      workspaceGroups
     ]
   )
   // Why: header/mode changes can shift entire groups, so remount the
@@ -3500,7 +3707,7 @@ const WorktreeList = React.memo(function WorktreeList({
   // to animate upward and for the scroll anchor to hold the viewport steady.
   const viewportResetKey = useMemo(() => {
     const headers = rows
-      .filter((r): r is GroupHeaderRow => r.type === 'header')
+      .filter((r): r is GroupHeaderRowData => r.type === 'header')
       .map((r) => r.key)
       .join(',')
     return `${groupBy}:lineage:${headers}`
@@ -3654,6 +3861,10 @@ const WorktreeList = React.memo(function WorktreeList({
     useState<ProjectGroupNameDialogState | null>(null)
   const [projectGroupDeleteDialog, setProjectGroupDeleteDialog] =
     useState<ProjectGroupDeleteDialogState | null>(null)
+  const [renamingWorkspaceGroupId, setRenamingWorkspaceGroupId] = useState<WorkspaceGroupId | null>(
+    null
+  )
+  const [workspaceGroupRenameDraft, setWorkspaceGroupRenameDraft] = useState('')
 
   const handleCreateGroupFromRepo = useCallback((repo: Repo) => {
     setProjectGroupNameDialog({ type: 'create-from-repo', repo })
@@ -3708,32 +3919,142 @@ const WorktreeList = React.memo(function WorktreeList({
     await deleteProjectGroup(projectGroupDeleteDialog.groupId)
   }, [deleteProjectGroup, projectGroupDeleteDialog])
 
-  const moveWorktreeToStatus = useCallback(
-    (worktreeId: string, status: WorkspaceStatus) => {
-      const current = worktreeMap.get(worktreeId)
-      if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
-        return
-      }
-      void updateWorktreeMeta(worktreeId, { workspaceStatus: status })
+  const handleWorkspaceGroupRenameDraftChange = useCallback(
+    (_groupId: WorkspaceGroupId, draft: string) => {
+      setWorkspaceGroupRenameDraft(draft)
     },
-    [updateWorktreeMeta, worktreeMap, workspaceStatuses]
+    []
   )
 
-  const moveWorktreesToStatus = useCallback(
-    (worktreeIds: readonly string[], status: WorkspaceStatus) => {
-      const updates = new Map<string, { workspaceStatus: WorkspaceStatus }>()
-      for (const worktreeId of worktreeIds) {
-        const current = worktreeMap.get(worktreeId)
-        if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
-          continue
-        }
-        updates.set(worktreeId, { workspaceStatus: status })
+  const handleStartRenameWorkspaceGroup = useCallback(
+    (groupId: WorkspaceGroupId) => {
+      const group = workspaceGroups.find((candidate) => candidate.id === groupId)
+      if (!group) {
+        return
       }
+      setRenamingWorkspaceGroupId(groupId)
+      setWorkspaceGroupRenameDraft(group.name)
+    },
+    [workspaceGroups]
+  )
+
+  const handleWorkspaceGroupRenameCommit = useCallback(
+    (groupId: WorkspaceGroupId, name: string) => {
+      setWorkspaceGroups(buildRenameGroup({ existing: workspaceGroups, groupId, name }))
+      setRenamingWorkspaceGroupId(null)
+      setWorkspaceGroupRenameDraft('')
+    },
+    [setWorkspaceGroups, workspaceGroups]
+  )
+
+  const handleWorkspaceGroupRenameCancel = useCallback((groupId: WorkspaceGroupId) => {
+    setRenamingWorkspaceGroupId((current) => (current === groupId ? null : current))
+    setWorkspaceGroupRenameDraft('')
+  }, [])
+
+  const handleToggleWorkspaceGroupCollapsed = useCallback(
+    (groupId: WorkspaceGroupId) => {
+      setWorkspaceGroups(
+        workspaceGroups.map((group) =>
+          group.id === groupId ? { ...group, collapsed: !group.collapsed } : group
+        )
+      )
+    },
+    [setWorkspaceGroups, workspaceGroups]
+  )
+
+  const handleWorkspaceGroupRecolor = useCallback(
+    (groupId: WorkspaceGroupId, color: WorkspaceGroupColor) => {
+      setWorkspaceGroups(buildRecolorGroup({ existing: workspaceGroups, groupId, color }))
+    },
+    [setWorkspaceGroups, workspaceGroups]
+  )
+
+  const handleWorkspaceGroupReorder = useCallback(
+    (groupId: WorkspaceGroupId, direction: 'up' | 'down') => {
+      const ordered = [...workspaceGroups].sort((a, b) => a.sortOrder - b.sortOrder)
+      const currentIndex = ordered.findIndex((group) => group.id === groupId)
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+      if (currentIndex === -1 || targetIndex < 0 || targetIndex >= ordered.length) {
+        return
+      }
+      const [moved] = ordered.splice(currentIndex, 1)
+      if (!moved) {
+        return
+      }
+      ordered.splice(targetIndex, 0, moved)
+      setWorkspaceGroups(
+        buildReorderHeaders({
+          existing: workspaceGroups,
+          orderedIds: ordered.map((group) => group.id)
+        })
+      )
+    },
+    [setWorkspaceGroups, workspaceGroups]
+  )
+
+  const handleWorkspaceGroupUngroup = useCallback(
+    (groupId: WorkspaceGroupId) => {
+      const memberWorktreeIds = allWorktrees
+        .filter((worktree) => worktree.workspaceGroupId === groupId)
+        .map((worktree) => worktree.id)
+      const { groups, updates } = buildUngroupChanges({
+        existing: workspaceGroups,
+        groupId,
+        memberWorktreeIds
+      })
+      setWorkspaceGroups(groups)
+      if (updates.length > 0) {
+        void updateWorktreesMeta(
+          new Map(updates.map((update) => [update.worktreeId, { workspaceGroupId: null }]))
+        )
+      }
+      setRenamingWorkspaceGroupId((current) => (current === groupId ? null : current))
+    },
+    [allWorktrees, setWorkspaceGroups, updateWorktreesMeta, workspaceGroups]
+  )
+
+  const handleAssignWorkspaceGroupDrop = useCallback(
+    (worktreeIds: readonly string[], groupId: WorkspaceGroupId | null) => {
+      const expandedIds = expandWorktreeIdsToGroupMembers(worktreeIds, allWorktrees)
+      if (expandedIds.length === 0) {
+        return
+      }
+      void updateWorktreesMeta(
+        new Map(expandedIds.map((worktreeId) => [worktreeId, { workspaceGroupId: groupId }]))
+      )
+    },
+    [allWorktrees, updateWorktreesMeta]
+  )
+
+  const moveWorktreeToStatus = useCallback(
+    (worktreeId: string, status: WorkspaceStatus) => {
+      const updates = buildWorkspaceGroupStatusUpdates({
+        worktreeIds: [worktreeId],
+        allWorktrees,
+        workspaceStatuses,
+        targetStatus: status
+      })
       if (updates.size > 0) {
         void updateWorktreesMeta(updates)
       }
     },
-    [updateWorktreesMeta, worktreeMap, workspaceStatuses]
+    [allWorktrees, updateWorktreesMeta, workspaceStatuses]
+  )
+
+  const moveWorktreesToStatus = useCallback(
+    (worktreeIds: readonly string[], status: WorkspaceStatus) => {
+      const updates = buildWorkspaceGroupStatusUpdates({
+        worktreeIds,
+        allWorktrees,
+        workspaceStatuses,
+        targetStatus: status
+      })
+      if (updates.size > 0) {
+        void updateWorktreesMeta(updates)
+      }
+    },
+    [allWorktrees, updateWorktreesMeta, workspaceStatuses]
   )
 
   const pinWorktree = useCallback(
@@ -3993,7 +4314,19 @@ const WorktreeList = React.memo(function WorktreeList({
         }}
         prCache={prCache}
         workspaceStatuses={workspaceStatuses}
+        workspaceGroups={workspaceGroups}
+        renamingWorkspaceGroupId={renamingWorkspaceGroupId}
+        workspaceGroupRenameDraft={workspaceGroupRenameDraft}
         projectGroups={projectGroups}
+        onWorkspaceGroupRenameDraftChange={handleWorkspaceGroupRenameDraftChange}
+        onToggleWorkspaceGroupCollapsed={handleToggleWorkspaceGroupCollapsed}
+        onWorkspaceGroupRenameCommit={handleWorkspaceGroupRenameCommit}
+        onWorkspaceGroupRenameCancel={handleWorkspaceGroupRenameCancel}
+        onWorkspaceGroupRecolor={handleWorkspaceGroupRecolor}
+        onWorkspaceGroupReorder={handleWorkspaceGroupReorder}
+        onWorkspaceGroupUngroup={handleWorkspaceGroupUngroup}
+        onStartRenameWorkspaceGroup={handleStartRenameWorkspaceGroup}
+        onAssignWorkspaceGroupDrop={handleAssignWorkspaceGroupDrop}
         onMoveWorktreeToStatus={moveWorktreeToStatus}
         onMoveWorktreesToStatus={moveWorktreesToStatus}
         onPinWorktree={pinWorktree}

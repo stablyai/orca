@@ -3802,4 +3802,24 @@ describe('registerWorktreeHandlers', () => {
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
     expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
   })
+
+  it('passes workspaceGroupId through to setWorktreeMeta', async () => {
+    store.setWorktreeMeta.mockImplementation((_id, meta) => meta as unknown)
+    const result = await handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'wt1',
+      updates: { workspaceGroupId: 'wg_x' }
+    })
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith('wt1', { workspaceGroupId: 'wg_x' })
+    expect(result).toEqual({ workspaceGroupId: 'wg_x' })
+  })
+
+  it('passes workspaceGroupId=null through to clear membership', async () => {
+    store.setWorktreeMeta.mockImplementation((_id, meta) => meta as unknown)
+    const result = await handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'wt1',
+      updates: { workspaceGroupId: null }
+    })
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith('wt1', { workspaceGroupId: null })
+    expect(result).toEqual({ workspaceGroupId: null })
+  })
 })

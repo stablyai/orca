@@ -6,6 +6,9 @@ import type {
   ProjectGroup,
   Worktree,
   WorktreeLineage,
+  WorkspaceGroup,
+  WorkspaceGroupColor,
+  WorkspaceGroupId,
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
 import { branchName } from '@/lib/git-utils'
@@ -28,7 +31,7 @@ import { UNGROUPED_PROJECT_GROUP_KEY } from '../../../../shared/project-groups'
 
 export { branchName }
 
-export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
+export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status' | 'group'
 export type ProjectGroupOrdering = 'manual' | 'visible-worktree-order'
 
 export function getProjectGroupOrdering(
@@ -50,6 +53,10 @@ export type GroupHeaderRow = {
   repo?: Repo
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
+  workspaceGroupId?: WorkspaceGroupId
+  workspaceGroupColor?: WorkspaceGroupColor
+  collapsed?: boolean
+  isUngroupedBucket?: boolean
 }
 
 export type WorktreeRow = {
@@ -62,6 +69,7 @@ export type WorktreeRow = {
   lineageChildCount: number
   lineageGroupKey?: string
   lineageCollapsed?: boolean
+  groupColor?: WorkspaceGroupColor
 }
 export type Row = GroupHeaderRow | WorktreeRow
 
@@ -106,6 +114,12 @@ export const PROJECT_GROUP_META = {
 
 export function getProjectGroupHeaderKey(groupId: string | null): string {
   return groupId ? `project-group:${groupId}` : UNGROUPED_PROJECT_GROUP_KEY
+}
+
+export const WORKSPACE_GROUP_UNGROUPED_KEY = 'workspace-group:ungrouped'
+
+export function getWorkspaceGroupHeaderKey(groupId: WorkspaceGroupId): string {
+  return `workspace-group:${groupId}`
 }
 
 export const PINNED_GROUP_KEY = 'pinned'
@@ -212,7 +226,8 @@ function emitPinnedGroup(
   lineageById: Record<string, WorktreeLineage>,
   worktreeMap: Map<string, Worktree>,
   collapsedGroups: Set<string>,
-  result: Row[]
+  result: Row[],
+  workspaceGroupById: ReadonlyMap<WorkspaceGroupId, WorkspaceGroup>
 ): Set<string> {
   const pinned = worktrees.filter((w) => w.isPinned)
   if (pinned.length === 0) {
@@ -230,7 +245,8 @@ function emitPinnedGroup(
   if (!collapsedGroups.has(PINNED_GROUP_KEY)) {
     appendWorktreeRows(result, pinned, repoMap, lineageById, worktreeMap, {
       nestLineage: false,
-      collapsedGroups
+      collapsedGroups,
+      workspaceGroupById
     })
   }
   return new Set(pinned.map((w) => w.id))
@@ -239,12 +255,16 @@ function emitPinnedGroup(
 function buildWorktreeRow(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
+  workspaceGroupById: ReadonlyMap<WorkspaceGroupId, WorkspaceGroup>,
   depth: number,
   lineageTrail: boolean[],
   isLastLineageChild: boolean,
   lineageChildCount: number,
   lineageCollapsed: boolean
 ): WorktreeRow {
+  const groupColor = worktree.workspaceGroupId
+    ? workspaceGroupById.get(worktree.workspaceGroupId)?.color
+    : undefined
   return {
     type: 'item',
     worktree,
@@ -254,7 +274,8 @@ function buildWorktreeRow(
     isLastLineageChild,
     lineageChildCount,
     ...(lineageChildCount > 0 ? { lineageGroupKey: getLineageGroupKey(worktree.id) } : {}),
-    ...(lineageChildCount > 0 ? { lineageCollapsed } : {})
+    ...(lineageChildCount > 0 ? { lineageCollapsed } : {}),
+    ...(groupColor ? { groupColor } : {})
   }
 }
 
@@ -267,12 +288,13 @@ function appendWorktreeRows(
   options: {
     nestLineage: boolean
     collapsedGroups: Set<string>
+    workspaceGroupById?: ReadonlyMap<WorkspaceGroupId, WorkspaceGroup>
   }
 ): void {
-  const { nestLineage, collapsedGroups } = options
+  const { nestLineage, collapsedGroups, workspaceGroupById = new Map() } = options
   if (!nestLineage) {
     for (const worktree of worktrees) {
-      result.push(buildWorktreeRow(worktree, repoMap, 0, [], false, 0, false))
+      result.push(buildWorktreeRow(worktree, repoMap, workspaceGroupById, 0, [], false, 0, false))
     }
     return
   }
@@ -309,6 +331,7 @@ function appendWorktreeRows(
       buildWorktreeRow(
         worktree,
         repoMap,
+        workspaceGroupById,
         depth,
         lineageTrail,
         isLastChild,
@@ -364,9 +387,11 @@ export function buildRows(
   nestLineage = false,
   settings?: AppState['settings'],
   projectGroups: readonly ProjectGroup[] = [],
-  placeholderRepoIds: ReadonlySet<string> = new Set()
+  placeholderRepoIds: ReadonlySet<string> = new Set(),
+  workspaceGroups: readonly WorkspaceGroup[] = []
 ): Row[] {
   const result: Row[] = []
+  const workspaceGroupById = new Map(workspaceGroups.map((group) => [group.id, group]))
 
   const pinnedIds = emitPinnedGroup(
     worktrees,
@@ -374,9 +399,65 @@ export function buildRows(
     lineageById,
     worktreeMap,
     collapsedGroups,
-    result
+    result,
+    workspaceGroupById
   )
   const unpinned = pinnedIds.size > 0 ? worktrees.filter((w) => !pinnedIds.has(w.id)) : worktrees
+
+  if (groupBy === 'group') {
+    const sortedGroups = [...workspaceGroups].sort((a, b) => a.sortOrder - b.sortOrder)
+    const validIds = new Set(sortedGroups.map((group) => group.id))
+    const groupedMembers = new Map<WorkspaceGroupId, Worktree[]>()
+    const ungrouped: Worktree[] = []
+    for (const worktree of unpinned) {
+      if (worktree.workspaceGroupId && validIds.has(worktree.workspaceGroupId)) {
+        const members = groupedMembers.get(worktree.workspaceGroupId) ?? []
+        members.push(worktree)
+        groupedMembers.set(worktree.workspaceGroupId, members)
+      } else {
+        ungrouped.push(worktree)
+      }
+    }
+
+    for (const group of sortedGroups) {
+      const members = groupedMembers.get(group.id) ?? []
+      const key = getWorkspaceGroupHeaderKey(group.id)
+      result.push({
+        type: 'header',
+        key,
+        label: group.name,
+        count: members.length,
+        tone: 'text-foreground',
+        workspaceGroupId: group.id,
+        workspaceGroupColor: group.color,
+        collapsed: Boolean(group.collapsed)
+      })
+      if (!group.collapsed) {
+        appendWorktreeRows(result, members, repoMap, lineageById, worktreeMap, {
+          nestLineage,
+          collapsedGroups,
+          workspaceGroupById
+        })
+      }
+    }
+
+    result.push({
+      type: 'header',
+      key: WORKSPACE_GROUP_UNGROUPED_KEY,
+      label: 'Ungrouped',
+      count: ungrouped.length,
+      tone: 'text-muted-foreground',
+      isUngroupedBucket: true
+    })
+    if (!collapsedGroups.has(WORKSPACE_GROUP_UNGROUPED_KEY)) {
+      appendWorktreeRows(result, ungrouped, repoMap, lineageById, worktreeMap, {
+        nestLineage,
+        collapsedGroups,
+        workspaceGroupById
+      })
+    }
+    return result
+  }
 
   if (groupBy === 'none') {
     if (unpinned.length > 0) {
@@ -391,11 +472,12 @@ export function buildRows(
       if (!collapsedGroups.has(ALL_GROUP_KEY)) {
         appendWorktreeRows(result, unpinned, repoMap, lineageById, worktreeMap, {
           nestLineage,
-          collapsedGroups
+          collapsedGroups,
+          workspaceGroupById
         })
       }
     }
-    return result
+    return clusterWorkspaceGroupMembers(result, workspaceGroupById)
   }
 
   const grouped = new Map<string, { label: string; items: Worktree[]; repo?: Repo }>()
@@ -529,7 +611,8 @@ export function buildRows(
       if (!isCollapsed) {
         appendWorktreeRows(result, group.items, repoMap, lineageById, worktreeMap, {
           nestLineage,
-          collapsedGroups
+          collapsedGroups,
+          workspaceGroupById
         })
       }
     }
@@ -537,7 +620,7 @@ export function buildRows(
 
   if (groupBy !== 'repo' || projectGroups.length === 0) {
     appendOrderedGroups(orderedGroups)
-    return result
+    return clusterWorkspaceGroupMembers(result, workspaceGroupById)
   }
 
   const groupByProjectGroupId = new Map<
@@ -626,7 +709,72 @@ export function buildRows(
 
   appendOrderedGroups(sortRepoEntriesWithinGroup(groupByProjectGroupId.get(null) ?? []), 0)
 
-  return result
+  return clusterWorkspaceGroupMembers(result, workspaceGroupById)
+}
+
+export function clusterWorkspaceGroupMembers(
+  rows: Row[],
+  workspaceGroupById: ReadonlyMap<WorkspaceGroupId, WorkspaceGroup>
+): Row[] {
+  if (workspaceGroupById.size === 0) {
+    return rows
+  }
+  const out: Row[] = []
+  let i = 0
+  while (i < rows.length) {
+    const head = rows[i]!
+    if (head.type === 'header') {
+      out.push(head)
+      i++
+      let segmentEnd = i
+      while (segmentEnd < rows.length && rows[segmentEnd]!.type !== 'header') {
+        segmentEnd++
+      }
+      out.push(...clusterSegment(rows.slice(i, segmentEnd) as WorktreeRow[], workspaceGroupById))
+      i = segmentEnd
+    } else {
+      let segmentEnd = i
+      while (segmentEnd < rows.length && rows[segmentEnd]!.type !== 'header') {
+        segmentEnd++
+      }
+      out.push(...clusterSegment(rows.slice(i, segmentEnd) as WorktreeRow[], workspaceGroupById))
+      i = segmentEnd
+    }
+  }
+  return out
+}
+
+function clusterSegment(
+  items: WorktreeRow[],
+  workspaceGroupById: ReadonlyMap<WorkspaceGroupId, WorkspaceGroup>
+): WorktreeRow[] {
+  if (items.length < 2) {
+    return items
+  }
+  const out: WorktreeRow[] = []
+  const consumed = new Set<number>()
+  for (let i = 0; i < items.length; i++) {
+    if (consumed.has(i)) {
+      continue
+    }
+    const item = items[i]!
+    out.push(item)
+    consumed.add(i)
+    const groupId = item.worktree.workspaceGroupId
+    if (!groupId || !workspaceGroupById.has(groupId)) {
+      continue
+    }
+    for (let j = i + 1; j < items.length; j++) {
+      if (consumed.has(j)) {
+        continue
+      }
+      if (items[j]!.worktree.workspaceGroupId === groupId) {
+        out.push(items[j]!)
+        consumed.add(j)
+      }
+    }
+  }
+  return out
 }
 
 export function getGroupKeyForWorktree(
@@ -639,6 +787,11 @@ export function getGroupKeyForWorktree(
 ): string | null {
   if (groupBy === 'none') {
     return ALL_GROUP_KEY
+  }
+  if (groupBy === 'group') {
+    return worktree.workspaceGroupId
+      ? getWorkspaceGroupHeaderKey(worktree.workspaceGroupId)
+      : WORKSPACE_GROUP_UNGROUPED_KEY
   }
   if (groupBy === 'workspace-status') {
     return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))

@@ -5434,3 +5434,93 @@ describe('Store', () => {
     })
   })
 })
+
+describe('workspaceGroups persistence', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('returns empty array when state file lacks workspaceGroups', async () => {
+    writeDataFile({ ui: { workspaceStatuses: [] }, repos: [], worktreeMeta: {} })
+    const store = await createStore()
+    expect(store.getUI().workspaceGroups).toEqual([])
+  })
+
+  it('round-trips a workspaceGroups array through updateUI', async () => {
+    writeDataFile({ ui: {}, repos: [], worktreeMeta: {} })
+    const store = await createStore()
+    const group = {
+      id: 'wg_a',
+      name: 'Acme',
+      color: 'blue' as const,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    store.updateUI({ workspaceGroups: [group] })
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getUI().workspaceGroups).toEqual([{ ...group, collapsed: false }])
+  })
+
+  it('clears workspaceGroupId on meta when its group is deleted', async () => {
+    writeDataFile({
+      ui: {
+        workspaceGroups: [
+          { id: 'wg_a', name: 'A', color: 'blue', sortOrder: 0, createdAt: 0, collapsed: false }
+        ]
+      },
+      repos: [],
+      worktreeMeta: {
+        wt1: {
+          displayName: 'wt1',
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 0,
+          lastActivityAt: 0,
+          linkedIssue: null,
+          linkedPR: null,
+          linkedLinearIssue: null,
+          workspaceGroupId: 'wg_a'
+        }
+      }
+    })
+    const store = await createStore()
+    store.deleteWorkspaceGroup('wg_a')
+    expect(store.getWorktreeMeta('wt1')?.workspaceGroupId).toBeNull()
+    expect(store.getUI().workspaceGroups).toEqual([])
+  })
+
+  it('strips orphan workspaceGroupId references at load', async () => {
+    writeDataFile({
+      ui: {
+        workspaceGroups: [
+          { id: 'wg_a', name: 'A', color: 'blue', sortOrder: 0, createdAt: 0, collapsed: false }
+        ]
+      },
+      repos: [],
+      worktreeMeta: {
+        wt1: {
+          displayName: 'wt1',
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 0,
+          lastActivityAt: 0,
+          linkedIssue: null,
+          linkedPR: null,
+          linkedLinearIssue: null,
+          workspaceGroupId: 'wg_missing'
+        }
+      }
+    })
+    const store = await createStore()
+    expect(store.getWorktreeMeta('wt1')?.workspaceGroupId).toBeNull()
+  })
+})

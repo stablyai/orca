@@ -11,7 +11,11 @@ import {
   Flag,
   Timer
 } from 'lucide-react'
-import type { WorkspaceStatus, WorkspaceStatusDefinition } from '../../../../shared/types'
+import type {
+  WorkspaceGroupColor,
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from '../../../../shared/types'
 import {
   DEFAULT_WORKSPACE_STATUS_COLOR_ID,
   DEFAULT_WORKSPACE_STATUS_ICON_ID,
@@ -283,6 +287,11 @@ export function readWorkspaceDragDataIds(dataTransfer: DataTransfer): string[] {
   }
   const singleId = readWorkspaceDragData(dataTransfer)
   return singleId ? [singleId] : []
+}
+
+export function getWorkspaceGroupSwatchClass(color: WorkspaceGroupColor): string {
+  const option = WORKSPACE_STATUS_COLOR_OPTIONS.find((o) => o.id === color)
+  return option?.swatch ?? FALLBACK_COLOR_OPTION.swatch
 }
 
 export function hasWorkspaceDragData(dataTransfer: DataTransfer): boolean {

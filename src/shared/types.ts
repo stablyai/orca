@@ -219,6 +219,27 @@ export type WorkspaceStatusDefinition = {
   icon?: string
 }
 
+export type WorkspaceGroupId = string
+
+export type WorkspaceGroupColor =
+  | 'neutral'
+  | 'blue'
+  | 'sky'
+  | 'violet'
+  | 'amber'
+  | 'emerald'
+  | 'rose'
+  | 'zinc'
+
+export type WorkspaceGroup = {
+  id: WorkspaceGroupId
+  name: string
+  color: WorkspaceGroupColor
+  collapsed?: boolean
+  sortOrder: number
+  createdAt: number
+}
+
 export type Worktree = {
   id: string // `${repoId}::${path}`
   instanceId?: string
@@ -264,6 +285,7 @@ export type Worktree = {
   /** Remote/branch Orca should publish review commits to when it created this worktree. */
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus
+  workspaceGroupId?: WorkspaceGroupId | null
   diffComments?: DiffComment[]
 } & GitWorktreeInfo
 
@@ -315,6 +337,8 @@ export type WorktreeMeta = {
   orcaCreationWorkspaceLayout?: OrcaWorkspaceLayout
   /** User-assigned workspace board status for manual sidebar organization. */
   workspaceStatus?: WorkspaceStatus
+  /** Single-membership reference to a workspace group. */
+  workspaceGroupId?: WorkspaceGroupId | null
   diffComments?: DiffComment[]
 }
 
@@ -2238,7 +2262,7 @@ export type PersistedUIState = {
   rightSidebarOpen: boolean
   rightSidebarTab: RightSidebarTab
   rightSidebarWidth: number
-  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status' | 'group'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
@@ -2259,6 +2283,7 @@ export type PersistedUIState = {
   editorFontZoomLevel: number
   worktreeCardProperties: WorktreeCardProperty[]
   workspaceStatuses?: WorkspaceStatusDefinition[]
+  workspaceGroups?: WorkspaceGroup[]
   workspaceBoardOpacity?: number
   workspaceBoardCompact?: boolean
   workspaceBoardColumnWidth?: number

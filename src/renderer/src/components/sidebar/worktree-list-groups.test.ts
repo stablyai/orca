@@ -12,7 +12,13 @@ import {
   getPRGroupKey,
   getProjectGroupOrdering
 } from './worktree-list-groups'
-import type { Repo, ProjectGroup, Worktree, WorktreeLineage } from '../../../../shared/types'
+import type {
+  Repo,
+  ProjectGroup,
+  Worktree,
+  WorktreeLineage,
+  WorkspaceGroup
+} from '../../../../shared/types'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -118,6 +124,15 @@ describe('getGroupKeyForWorktree', () => {
       'workspace-status:in-progress'
     )
   })
+
+  it('returns a workspace group key in workspace-group mode', () => {
+    expect(
+      getGroupKeyForWorktree('group', { ...worktree, workspaceGroupId: 'wg_a' }, repoMap, null)
+    ).toBe('workspace-group:wg_a')
+    expect(getGroupKeyForWorktree('group', worktree, repoMap, null)).toBe(
+      'workspace-group:ungrouped'
+    )
+  })
 })
 
 describe('buildRows with pinned worktrees', () => {
@@ -139,6 +154,88 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows).toMatchObject([
       { type: 'header', key: 'all', label: 'All', count: 2 },
       { type: 'item', worktree: { id: 'wt-1' } },
+      { type: 'item', worktree: { id: 'wt-2' } }
+    ])
+  })
+
+  it('clusters workspace group members inside the existing All section', () => {
+    const groups: WorkspaceGroup[] = [
+      { id: 'wg_a', name: 'Feature', color: 'blue', sortOrder: 0, createdAt: 0 }
+    ]
+    const rows = buildRows(
+      'none',
+      [
+        { ...unpinned1, id: 'wt-1', workspaceGroupId: 'wg_a' },
+        { ...unpinned2, id: 'wt-2' },
+        { ...worktree, id: 'wt-3', displayName: 'gamma', workspaceGroupId: 'wg_a' }
+      ],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [],
+      new Set(),
+      groups
+    )
+
+    expect(rows.map((row) => (row.type === 'item' ? row.worktree.id : row.key))).toEqual([
+      'all',
+      'wt-1',
+      'wt-3',
+      'wt-2'
+    ])
+    expect(rows[1]).toMatchObject({ type: 'item', groupColor: 'blue' })
+  })
+
+  it('emits workspace group headers and an ungrouped bucket in groupBy group', () => {
+    const groups: WorkspaceGroup[] = [
+      { id: 'wg_b', name: 'Later', color: 'rose', sortOrder: 10, createdAt: 0 },
+      { id: 'wg_a', name: 'Checkout', color: 'blue', sortOrder: 0, createdAt: 0 }
+    ]
+    const rows = buildRows(
+      'group',
+      [
+        { ...unpinned1, id: 'wt-1', workspaceGroupId: 'wg_a' },
+        { ...unpinned2, id: 'wt-2' },
+        { ...worktree, id: 'wt-3', displayName: 'gamma', workspaceGroupId: 'wg_b' }
+      ],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [],
+      new Set(),
+      groups
+    )
+
+    expect(rows).toMatchObject([
+      {
+        type: 'header',
+        key: 'workspace-group:wg_a',
+        label: 'Checkout',
+        workspaceGroupColor: 'blue'
+      },
+      { type: 'item', worktree: { id: 'wt-1' }, groupColor: 'blue' },
+      {
+        type: 'header',
+        key: 'workspace-group:wg_b',
+        label: 'Later',
+        workspaceGroupColor: 'rose'
+      },
+      { type: 'item', worktree: { id: 'wt-3' }, groupColor: 'rose' },
+      { type: 'header', key: 'workspace-group:ungrouped', label: 'Ungrouped', count: 1 },
       { type: 'item', worktree: { id: 'wt-2' } }
     ])
   })

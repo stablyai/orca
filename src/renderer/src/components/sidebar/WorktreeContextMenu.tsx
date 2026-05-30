@@ -30,9 +30,9 @@ import {
   FolderPlus
 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
+import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo, Worktree, WorkspaceGroupId } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
@@ -43,6 +43,13 @@ import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
+import {
+  buildAssignToGroupChanges,
+  buildNewGroupFromCreate,
+  buildRemoveFromGroupChanges
+} from './workspace-group-actions'
+import { pickAutoCycledColor } from '../../../../shared/workspace-groups'
+import { buildWorkspaceGroupStatusUpdates } from './workspace-group-status-sync'
 
 type Props = {
   worktree: Worktree
@@ -209,7 +216,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   onOpenChange
 }: Props) {
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
+  const workspaceGroups = useAppStore((s) => s.workspaceGroups)
+  const setWorkspaceGroups = useAppStore((s) => s.setWorkspaceGroups)
+  const setGroupBy = useAppStore((s) => s.setGroupBy)
   const openModal = useAppStore((s) => s.openModal)
   const projectGroups = useAppStore((s) => s.projectGroups)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
@@ -220,10 +231,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(selectedWorktrees)
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
+  const [createWorkspaceGroupDialogOpen, setCreateWorkspaceGroupDialogOpen] = useState(false)
   const isDeleting = deleteState?.isDeleting ?? false
   const isFolder = repo ? isFolderRepo(repo) : false
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
+  const allWorktrees = useAllWorktrees()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
@@ -255,6 +268,15 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       ? status
       : ''
   }, [activeContextWorktrees, workspaceStatuses])
+  const contextWorkspaceGroupId = useMemo(() => {
+    const [first, ...rest] = activeContextWorktrees
+    if (!first) {
+      return null
+    }
+    const groupId = first.workspaceGroupId ?? null
+    return rest.every((item) => (item.workspaceGroupId ?? null) === groupId) ? groupId : null
+  }, [activeContextWorktrees])
+  const hasWorkspaceGroupMembership = activeContextWorktrees.some((item) => item.workspaceGroupId)
   const batchDeleteWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter((item) => {
@@ -345,18 +367,68 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     void moveProjectToGroup(repo.id, null)
   }, [moveProjectToGroup, repo])
 
+  const handleSubmitNewWorkspaceGroup = useCallback(
+    (name: string) => {
+      const targetIds = activeContextWorktrees.map((item) => item.id)
+      if (targetIds.length === 0) {
+        return
+      }
+      const { groups, newGroup } = buildNewGroupFromCreate({
+        existing: workspaceGroups,
+        name,
+        autoColor: pickAutoCycledColor(workspaceGroups.map((group) => group.color))
+      })
+      setWorkspaceGroups(groups)
+      setGroupBy('group')
+      const updates = buildAssignToGroupChanges({
+        worktreeIds: targetIds,
+        targetGroupId: newGroup.id
+      })
+      void updateWorktreesMeta(
+        new Map(updates.map((update) => [update.worktreeId, { workspaceGroupId: newGroup.id }]))
+      )
+    },
+    [activeContextWorktrees, setGroupBy, setWorkspaceGroups, updateWorktreesMeta, workspaceGroups]
+  )
+
+  const handleAssignWorkspaceGroup = useCallback(
+    (groupId: WorkspaceGroupId) => {
+      const targetIds = activeContextWorktrees.map((item) => item.id)
+      const updates = buildAssignToGroupChanges({ worktreeIds: targetIds, targetGroupId: groupId })
+      if (updates.length === 0) {
+        return
+      }
+      void updateWorktreesMeta(
+        new Map(updates.map((update) => [update.worktreeId, { workspaceGroupId: groupId }]))
+      )
+    },
+    [activeContextWorktrees, updateWorktreesMeta]
+  )
+
+  const handleRemoveWorkspaceGroup = useCallback(() => {
+    const updates = activeContextWorktrees.flatMap((item) => buildRemoveFromGroupChanges(item.id))
+    if (updates.length === 0) {
+      return
+    }
+    void updateWorktreesMeta(
+      new Map(updates.map((update) => [update.worktreeId, { workspaceGroupId: null }]))
+    )
+  }, [activeContextWorktrees, updateWorktreesMeta])
+
   const handleAssignWorkspaceStatus = useCallback(
     (status: string) => {
       setMenuOpenState(false)
-      void Promise.all(
-        activeContextWorktrees.map((item) =>
-          getWorkspaceStatus(item, workspaceStatuses) === status
-            ? Promise.resolve()
-            : updateWorktreeMeta(item.id, { workspaceStatus: status })
-        )
-      )
+      const updates = buildWorkspaceGroupStatusUpdates({
+        worktreeIds: activeContextWorktrees.map((item) => item.id),
+        allWorktrees,
+        workspaceStatuses,
+        targetStatus: status
+      })
+      if (updates.size > 0) {
+        void updateWorktreesMeta(updates)
+      }
     },
-    [activeContextWorktrees, setMenuOpenState, updateWorktreeMeta, workspaceStatuses]
+    [activeContextWorktrees, allWorktrees, setMenuOpenState, updateWorktreesMeta, workspaceStatuses]
   )
 
   const handleRename = useCallback(() => {
@@ -609,6 +681,40 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               <DropdownMenuSeparator />
             </>
           )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => setCreateWorkspaceGroupDialogOpen(true)}
+            disabled={deletingContext}
+          >
+            <FolderPlus className="size-3.5" />
+            {isMultiContext ? 'New workspace group' : 'Add to new workspace group'}
+          </DropdownMenuItem>
+          {workspaceGroups.length > 0 ? (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger disabled={deletingContext}>
+                <FolderInput className="size-3.5" />
+                Add to workspace group
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {workspaceGroups.map((group) => (
+                  <DropdownMenuItem
+                    key={group.id}
+                    disabled={contextWorkspaceGroupId === group.id}
+                    onSelect={() => handleAssignWorkspaceGroup(group.id)}
+                  >
+                    <span className="max-w-48 truncate">{group.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          ) : null}
+          {hasWorkspaceGroupMembership ? (
+            <DropdownMenuItem onSelect={handleRemoveWorkspaceGroup} disabled={deletingContext}>
+              <CircleX className="size-3.5" />
+              Remove from workspace group
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuSeparator />
           <DropdownMenuSub>
             <DropdownMenuSubTrigger disabled={deletingContext}>
               <Kanban className="size-3.5" />
@@ -692,6 +798,15 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         confirmLabel="Create"
         onOpenChange={setCreateGroupDialogOpen}
         onSubmit={handleSubmitNewProjectGroup}
+      />
+      <ProjectGroupNameDialog
+        open={createWorkspaceGroupDialogOpen}
+        title="New Workspace Group"
+        description="Create a manual group for selected workspaces."
+        initialName={isMultiContext ? 'Workspace group' : `${worktree.displayName} group`}
+        confirmLabel="Create"
+        onOpenChange={setCreateWorkspaceGroupDialogOpen}
+        onSubmit={handleSubmitNewWorkspaceGroup}
       />
     </div>
   )

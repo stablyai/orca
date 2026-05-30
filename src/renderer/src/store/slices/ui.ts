@@ -18,6 +18,7 @@ import type {
   TaskViewPresetId,
   TuiAgent,
   UpdateStatus,
+  WorkspaceGroup,
   WorkspaceStatusDefinition,
   WorktreeCardProperty
 } from '../../../../shared/types'
@@ -53,6 +54,7 @@ import {
   normalizeWorkspaceBoardCompact,
   normalizeWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
+import { normalizeWorkspaceGroups } from '../../../../shared/workspace-groups'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
@@ -511,7 +513,7 @@ export type UISlice = {
   clearOrcaHookTrustForRepo: (repoId: string) => void
   setupScriptPromptDismissedRepoIds: string[]
   dismissSetupScriptPrompt: (repoId: string) => void
-  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status' | 'group'
   setGroupBy: (g: UISlice['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   setSortBy: (s: UISlice['sortBy']) => void
@@ -529,6 +531,8 @@ export type UISlice = {
   toggleWorktreeCardProperty: (prop: WorktreeCardProperty) => void
   workspaceStatuses: WorkspaceStatusDefinition[]
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
+  workspaceGroups: WorkspaceGroup[]
+  setWorkspaceGroups: (groups: WorkspaceGroup[]) => void
   workspaceBoardOpacity: number
   setWorkspaceBoardOpacity: (opacity: number) => void
   workspaceBoardCompact: boolean
@@ -1033,7 +1037,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   // collapsed state from one mode is meaningless in another. Clearing
   // also prevents unbounded accumulation of stale keys across mode switches.
   setGroupBy: (g) => {
-    window.api.ui.set({ collapsedGroups: [] }).catch(console.error)
+    window.api.ui.set({ groupBy: g, collapsedGroups: [] }).catch(console.error)
     set({ groupBy: g, collapsedGroups: new Set<string>() })
   },
 
@@ -1082,6 +1086,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     const normalized = normalizeWorkspaceStatuses(statuses)
     window.api.ui.set({ workspaceStatuses: normalized }).catch(console.error)
     set({ workspaceStatuses: normalized })
+  },
+
+  workspaceGroups: [],
+  setWorkspaceGroups: (groups) => {
+    const normalized = normalizeWorkspaceGroups(groups)
+    window.api.ui.set({ workspaceGroups: normalized }).catch(console.error)
+    set({ workspaceGroups: normalized })
   },
 
   workspaceBoardOpacity: 1,
@@ -1271,6 +1282,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
         worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
+        workspaceGroups: normalizeWorkspaceGroups(ui.workspaceGroups),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),

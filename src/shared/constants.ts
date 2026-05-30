@@ -380,6 +380,7 @@ export function getDefaultUIState(): PersistedUIState {
     editorFontZoomLevel: 0,
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
+    workspaceGroups: [],
     workspaceBoardOpacity: 1,
     workspaceBoardCompact: false,
     workspaceBoardColumnWidth: 308,

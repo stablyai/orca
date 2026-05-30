@@ -31,7 +31,8 @@ import type {
   Worktree,
   Repo,
   IssueInfo,
-  LinearIssue
+  LinearIssue,
+  WorkspaceGroupColor
 } from '../../../../shared/types'
 import { branchDisplayName, CONFLICT_OPERATION_LABELS, FilledBellIcon } from './WorktreeCardHelpers'
 import {
@@ -41,7 +42,7 @@ import {
   type WorktreeCardIssueDisplay
 } from './WorktreeCardMeta'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
-import { writeWorkspaceDragData } from './workspace-status'
+import { getWorkspaceGroupSwatchClass, writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
@@ -77,6 +78,7 @@ type WorktreeCardProps = {
   ) => void
   onCardDragEnd?: (event: React.DragEvent<HTMLDivElement>) => void
   nativeDragEnabled?: boolean
+  groupColor?: WorkspaceGroupColor
 }
 
 const EMPTY_WORKSPACE_PORTS = []
@@ -103,6 +105,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onCardDragStart,
   onCardDragEnd,
   nativeDragEnabled = true,
+  groupColor,
   hideRepoBadge,
   lineageChildCount = 0,
   lineageCollapsed = false,
@@ -653,6 +656,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
       onDragEnd={nativeDragEnabled ? onCardDragEnd : undefined}
       aria-busy={isDeleting}
     >
+      {groupColor ? (
+        <span
+          aria-hidden
+          className={cn(
+            'absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full',
+            getWorkspaceGroupSwatchClass(groupColor)
+          )}
+        />
+      ) : null}
       {isDeleting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">
