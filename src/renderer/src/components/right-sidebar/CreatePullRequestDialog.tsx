@@ -383,7 +383,7 @@ export function CreatePullRequestDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
           <Button onClick={() => void handleSubmit()} disabled={submitDisabled}>
