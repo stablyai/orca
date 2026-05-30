@@ -6,6 +6,7 @@ import { app } from 'electron'
 import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
 
+export const START_DICTATION_TIMEOUT_MS = 60_000
 const STOP_DICTATION_TIMEOUT_MS = 60_000
 export const IDLE_WORKER_TEARDOWN_MS = 60 * 60 * 1000
 
@@ -112,10 +113,23 @@ export class SttService {
 
     const readyPromise = new Promise<void>((resolve, reject) => {
       let settled = false
+      let startupTimeout: ReturnType<typeof setTimeout> | null = null
       const cleanup = () => {
+        if (startupTimeout) {
+          clearTimeout(startupTimeout)
+          startupTimeout = null
+        }
         worker.off('message', onReadyOrError)
         worker.off('error', onStartupError)
         worker.off('exit', onStartupExit)
+      }
+      const failStartup = (error: Error): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(error)
       }
       const onReadyOrError = (msg: { type: string; text?: string; error?: string }) => {
         if (settled) {
@@ -126,30 +140,24 @@ export class SttService {
           cleanup()
           resolve()
         } else if (msg.type === 'error') {
-          settled = true
-          cleanup()
-          reject(new Error(msg.error ?? 'Speech worker failed to initialize'))
+          failStartup(new Error(msg.error ?? 'Speech worker failed to initialize'))
         }
       }
       const onStartupError = (err: Error) => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        reject(err)
+        failStartup(err)
       }
       const onStartupExit = (code: number) => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        reject(new Error(`Speech worker exited before ready: ${code}`))
+        failStartup(new Error(`Speech worker exited before ready: ${code}`))
       }
       worker.on('message', onReadyOrError)
       worker.on('error', onStartupError)
       worker.on('exit', onStartupExit)
+      // Why: a native STT worker can wedge while loading model bindings without
+      // emitting ready/error/exit; startup must leave the UI's Starting state.
+      startupTimeout = setTimeout(() => {
+        failStartup(new Error('Speech worker timed out while starting.'))
+      }, START_DICTATION_TIMEOUT_MS)
+      startupTimeout.unref?.()
     })
 
     worker.on('message', (msg: SttEvent) => {
