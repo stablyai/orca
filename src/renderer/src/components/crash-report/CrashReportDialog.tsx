@@ -21,6 +21,7 @@ function formatSummary(report: CrashReportRecord): string {
 
 export function CrashReportDialog(): React.JSX.Element {
   const promptedThisLaunch = useRef(false)
+  const mountedRef = useRef(true)
   const [open, setOpen] = useState(false)
   const [report, setReport] = useState<CrashReportRecord | null>(null)
   const [notes, setNotes] = useState('')
@@ -53,16 +54,28 @@ export function CrashReportDialog(): React.JSX.Element {
           console.error('Failed to dismiss crash report after startup prompt:', error)
         }
       }
+      if (!mountedRef.current) {
+        return
+      }
       setReport(displayedReport)
-      if (nextReport && promptIfPresent) {
+      if (nextReport && promptIfPresent && mountedRef.current) {
         setOpen(true)
       }
     } catch (error) {
       console.error('Failed to load crash report:', error)
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
   }
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (promptedThisLaunch.current) {
@@ -74,7 +87,11 @@ export function CrashReportDialog(): React.JSX.Element {
 
   useEffect(() => {
     return window.api.ui.onOpenCrashReport(() => {
-      void loadCrashReport(false).then(() => setOpen(true))
+      void loadCrashReport(false).then(() => {
+        if (mountedRef.current) {
+          setOpen(true)
+        }
+      })
     })
   }, [])
 
@@ -118,13 +135,17 @@ export function CrashReportDialog(): React.JSX.Element {
   const dismissReportIfNeeded = async (): Promise<void> => {
     if (report?.status === 'pending') {
       await window.api.crashReports.dismiss({ reportId: report.id })
-      setReport({ ...report, status: 'dismissed' })
+      if (mountedRef.current) {
+        setReport({ ...report, status: 'dismissed' })
+      }
     }
   }
 
   const handleDismiss = async (): Promise<void> => {
     await dismissReportIfNeeded()
-    setOpen(false)
+    if (mountedRef.current) {
+      setOpen(false)
+    }
   }
 
   const handleSubmit = async (): Promise<void> => {
@@ -145,6 +166,9 @@ export function CrashReportDialog(): React.JSX.Element {
       if (!result.ok) {
         throw new Error(result.error)
       }
+      if (!mountedRef.current) {
+        return
+      }
       setReport(result.report)
       setNotes('')
       toast.success('Crash report sent.')
@@ -153,7 +177,9 @@ export function CrashReportDialog(): React.JSX.Element {
       toast.error('Failed to send crash report.')
       console.error('Failed to submit crash report:', error)
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
@@ -165,7 +191,11 @@ export function CrashReportDialog(): React.JSX.Element {
           return
         }
         if (!nextOpen) {
-          void dismissReportIfNeeded().finally(() => setOpen(false))
+          void dismissReportIfNeeded().finally(() => {
+            if (mountedRef.current) {
+              setOpen(false)
+            }
+          })
           return
         }
         setOpen(true)

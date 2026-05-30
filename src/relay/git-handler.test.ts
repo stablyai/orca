@@ -56,6 +56,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.fetchRemoteTrackingRef')
     expect(methods).toContain('git.push')
     expect(methods).toContain('git.pull')
+    expect(methods).toContain('git.fastForward')
     expect(methods).toContain('git.rebaseFromBase')
     expect(methods).toContain('git.branchDiff')
     expect(methods).toContain('git.listWorktrees')
@@ -447,6 +448,37 @@ describe('GitHandler', () => {
       await expect(fs.access(path.join(tmpDir, 'new.txt'))).rejects.toThrow()
     })
 
+    it('treats untracked discard paths with Git glob characters as literal paths', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, '.gitignore'), 'ignored.log\n')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, '*.log'), 'selected')
+      writeFileSync(path.join(tmpDir, 'keep.log'), 'unrelated')
+      writeFileSync(path.join(tmpDir, 'ignored.log'), 'ignored')
+
+      await dispatcher.callRequest('git.discard', { worktreePath: tmpDir, filePath: '*.log' })
+
+      await expect(fs.access(path.join(tmpDir, '*.log'))).rejects.toThrow()
+      await expect(fs.access(path.join(tmpDir, 'keep.log'))).resolves.toBeUndefined()
+      await expect(fs.access(path.join(tmpDir, 'ignored.log'))).resolves.toBeUndefined()
+    })
+
+    it('treats tracked discard paths with Git glob characters as literal paths', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, '*.log'), 'selected')
+      writeFileSync(path.join(tmpDir, 'keep.log'), 'keep')
+      gitCommit(tmpDir, 'track log fixtures')
+      writeFileSync(path.join(tmpDir, '*.log'), 'selected modified')
+      writeFileSync(path.join(tmpDir, 'keep.log'), 'keep modified')
+
+      await dispatcher.callRequest('git.discard', { worktreePath: tmpDir, filePath: '*.log' })
+
+      await expect(fs.readFile(path.join(tmpDir, '*.log'), 'utf-8')).resolves.toBe('selected')
+      await expect(fs.readFile(path.join(tmpDir, 'keep.log'), 'utf-8')).resolves.toBe(
+        'keep modified'
+      )
+    })
+
     it('bulk discards tracked and untracked files', async () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'a.txt'), 'a')
@@ -829,6 +861,54 @@ describe('GitHandler', () => {
         await expect(fs.access(path.join(tmpDir, '.git', 'FETCH_HEAD'))).resolves.toBeUndefined()
       } finally {
         await fs.rm(bareDir, { recursive: true, force: true })
+      }
+    })
+
+    it('fast-forwards the tracked branch with ff-only pull semantics', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
+      const producerParent = mkdtempSync(path.join(tmpdir(), 'relay-git-producer-'))
+      const producerDir = path.join(producerParent, 'repo')
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+        gitCommit(tmpDir, 'initial')
+        const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['push', '--set-upstream', 'origin', branch], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+
+        execFileSync('git', ['clone', bareDir, producerDir], { stdio: 'pipe' })
+        execFileSync('git', ['config', 'user.email', 'test@test.com'], {
+          cwd: producerDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['config', 'user.name', 'Test'], {
+          cwd: producerDir,
+          stdio: 'pipe'
+        })
+        writeFileSync(path.join(producerDir, 'remote.txt'), 'remote')
+        gitCommit(producerDir, 'remote commit')
+        execFileSync('git', ['push', 'origin', branch], {
+          cwd: producerDir,
+          stdio: 'pipe'
+        })
+
+        await dispatcher.callRequest('git.fastForward', { worktreePath: tmpDir })
+
+        await expect(fs.readFile(path.join(tmpDir, 'remote.txt'), 'utf-8')).resolves.toBe('remote')
+      } finally {
+        await fs.rm(bareDir, { recursive: true, force: true })
+        await fs.rm(producerParent, { recursive: true, force: true })
       }
     })
 

@@ -23,6 +23,11 @@ vi.mock('node:os', async () => {
   }
 })
 
+function decodeEncodedWslBashCommand(command: string): string {
+  const encoded = command.match(/^set -o pipefail; printf %s '([^']+)' \| base64 -d \| bash$/)?.[1]
+  return encoded ? Buffer.from(encoded, 'base64').toString('utf8') : command
+}
+
 function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   const appFontFamily = overrides.appFontFamily ?? 'Geist'
   const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
@@ -61,6 +66,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalAllowOsc52Clipboard: false,
     setupScriptLaunchMode: 'split-vertical',
     terminalScrollbackBytes: 10_000_000,
+    localAccountRuntime: 'host',
+    localAccountWslDistro: null,
     openLinksInApp: false,
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
@@ -395,6 +402,7 @@ describe('CodexAccountService config sync', () => {
     )
 
     vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
       spawn: spawnMock
     }))
     vi.doMock('../codex-cli/command', () => ({
@@ -417,6 +425,314 @@ describe('CodexAccountService config sync', () => {
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
+  })
+
+  it('adds a managed Codex account inside WSL when the account context is WSL', async () => {
+    vi.resetModules()
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    const wslManagedHomePath = join(testState.userDataDir, 'wsl-managed-home')
+    const wslConfigPath = join(testState.userDataDir, 'wsl-config.toml')
+    const wslLinuxHomePath = '/home/alice/.local/share/orca/codex-accounts/account-id-for-test/home'
+    writeFileSync(wslConfigPath, 'sandbox_mode = "danger-full-access"\n', 'utf-8')
+
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      const script = decodeEncodedWslBashCommand(String(args.at(-1)))
+      expect(args.slice(0, 2)).toEqual(['-d', 'Debian'])
+      if (script.includes('WSL_DISTRO_NAME')) {
+        return 'Debian\n/home/alice\n'
+      }
+      if (script.includes('readlink -f')) {
+        return `${wslLinuxHomePath}\n`
+      }
+      mkdirSync(wslManagedHomePath, { recursive: true })
+      writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-id-for-test\n')
+      return ''
+    })
+    const spawnMock = vi.fn((command: string, args: string[]) => {
+      expect(command).toBe('wsl.exe')
+      expect(args).toEqual([
+        '-d',
+        'Debian',
+        '--',
+        'bash',
+        '-lc',
+        `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
+      ])
+      expect(readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')).toBe(
+        'sandbox_mode = "danger-full-access"\n'
+      )
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: PassThrough
+        stderr: PassThrough
+        kill: () => void
+      }
+      child.stdout = new PassThrough()
+      child.stderr = new PassThrough()
+      child.kill = vi.fn()
+
+      const payload = Buffer.from(JSON.stringify({ email: 'wsl@example.com' })).toString(
+        'base64url'
+      )
+      writeFileSync(
+        join(wslManagedHomePath, 'auth.json'),
+        JSON.stringify({ tokens: { id_token: `header.${payload}.signature` } }),
+        'utf-8'
+      )
+      queueMicrotask(() => child.emit('close', 0))
+      return child
+    })
+
+    vi.doMock('node:crypto', () => ({
+      randomUUID: () => 'account-id-for-test'
+    }))
+    vi.doMock('node:child_process', () => ({
+      execFileSync: execFileSyncMock,
+      spawn: spawnMock
+    }))
+    vi.doMock('../../shared/wsl-paths', () => ({
+      parseWslUncPath: (path: string) =>
+        path === wslManagedHomePath ? { distro: 'Debian', linuxPath: wslLinuxHomePath } : null
+    }))
+    vi.doMock('../wsl', () => ({
+      toWindowsWslPath: (linuxPath: string) =>
+        linuxPath.endsWith('/.codex/config.toml') ? wslConfigPath : wslManagedHomePath
+    }))
+
+    const settings = createSettings()
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    try {
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
+
+      const result = await service.addAccount({ runtime: 'wsl', wslDistro: 'Debian' })
+
+      expect(result.accounts[0]).toMatchObject({
+        email: 'wsl@example.com',
+        managedHomeRuntime: 'wsl',
+        wslDistro: 'Debian'
+      })
+      expect(store.getSettings().codexManagedAccounts[0]).toMatchObject({
+        managedHomePath: wslManagedHomePath,
+        wslLinuxHomePath,
+        managedHomeRuntime: 'wsl'
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('reauthenticates a WSL managed Codex account inside its distro', async () => {
+    vi.resetModules()
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    const wslManagedHomePath = join(testState.userDataDir, 'wsl-account', 'home')
+    const wslLinuxHomePath = '/home/alice/.local/share/orca/codex-accounts/account-1/home'
+    mkdirSync(wslManagedHomePath, { recursive: true })
+    writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-1\n', 'utf-8')
+    writeFileSync(
+      join(wslManagedHomePath, 'auth.json'),
+      JSON.stringify({
+        tokens: {
+          id_token: `header.${Buffer.from(JSON.stringify({ email: 'old@example.com' })).toString(
+            'base64url'
+          )}.signature`
+        }
+      }),
+      'utf-8'
+    )
+
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      const script = decodeEncodedWslBashCommand(String(args.at(-1)))
+      if (script.includes('readlink -f')) {
+        return `${wslLinuxHomePath}\n`
+      }
+      return ''
+    })
+    const spawnMock = vi.fn((command: string, args: string[]) => {
+      expect(command).toBe('wsl.exe')
+      expect(args).toEqual([
+        '-d',
+        'Ubuntu',
+        '--',
+        'bash',
+        '-lc',
+        `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
+      ])
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: PassThrough
+        stderr: PassThrough
+        kill: () => void
+      }
+      child.stdout = new PassThrough()
+      child.stderr = new PassThrough()
+      child.kill = vi.fn()
+      writeFileSync(
+        join(wslManagedHomePath, 'auth.json'),
+        JSON.stringify({
+          tokens: {
+            id_token: `header.${Buffer.from(JSON.stringify({ email: 'new@example.com' })).toString(
+              'base64url'
+            )}.signature`
+          }
+        }),
+        'utf-8'
+      )
+      queueMicrotask(() => child.emit('close', 0))
+      return child
+    })
+
+    vi.doMock('node:child_process', () => ({
+      execFileSync: execFileSyncMock,
+      spawn: spawnMock
+    }))
+    vi.doMock('../../shared/wsl-paths', () => ({
+      parseWslUncPath: (path: string) =>
+        path === wslManagedHomePath ? { distro: 'Ubuntu', linuxPath: wslLinuxHomePath } : null
+    }))
+    vi.doMock('../wsl', () => ({
+      toWindowsWslPath: () => wslManagedHomePath
+    }))
+
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'old@example.com',
+          managedHomePath: wslManagedHomePath,
+          managedHomeRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    try {
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
+
+      const result = await service.reauthenticateAccount('account-1')
+
+      expect(result.accounts[0]).toMatchObject({
+        email: 'new@example.com',
+        managedHomeRuntime: 'wsl',
+        wslDistro: 'Ubuntu'
+      })
+      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('removes a WSL managed account only after canonical path validation', async () => {
+    vi.resetModules()
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    const wslManagedHomePath = join(testState.userDataDir, 'wsl-account', 'home')
+    const wslLinuxHomePath = '/home/alice/.local/share/orca/codex-accounts/account-1/home'
+    mkdirSync(wslManagedHomePath, { recursive: true })
+    writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-1\n', 'utf-8')
+
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn((_command: string, args: string[]) => {
+        const script = decodeEncodedWslBashCommand(String(args.at(-1)))
+        if (script.includes('readlink -f')) {
+          return `${wslLinuxHomePath}\n`
+        }
+        return ''
+      }),
+      spawn: vi.fn()
+    }))
+    vi.doMock('../../shared/wsl-paths', () => ({
+      parseWslUncPath: (path: string) =>
+        path === wslManagedHomePath ? { distro: 'Ubuntu', linuxPath: wslLinuxHomePath } : null
+    }))
+    vi.doMock('../wsl', () => ({
+      toWindowsWslPath: () => wslManagedHomePath
+    }))
+
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'wsl@example.com',
+          managedHomePath: wslManagedHomePath,
+          managedHomeRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    try {
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
+
+      const result = await service.removeAccount('account-1')
+
+      expect(result.accounts).toHaveLength(0)
+      expect(existsSync(wslManagedHomePath)).toBe(false)
+      expect(existsSync(join(testState.userDataDir, 'wsl-account'))).toBe(false)
+      expect(rateLimits.evictInactiveCodexCache).toHaveBeenCalledWith('account-1')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
   })
 
   it('deselects active account via selectAccount(null)', async () => {
@@ -458,6 +774,80 @@ describe('CodexAccountService config sync', () => {
     expect(result.activeAccountId).toBe(null)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
     expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalled()
+  })
+
+  it('keeps Windows and WSL active Codex account selections separate', async () => {
+    const hostManagedHomePath = createManagedHome(
+      testState.userDataDir,
+      'host-account',
+      '',
+      '{"account":"host"}\n'
+    )
+    const wslManagedHomePath =
+      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-accounts\\wsl-account\\home'
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'host-account',
+          email: 'host@example.com',
+          managedHomePath: hostManagedHomePath,
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          wslLinuxHomePath: null,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'wsl-account',
+          email: 'wsl@example.com',
+          managedHomePath: wslManagedHomePath,
+          managedHomeRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/wsl-account/home',
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: 'host-account',
+      activeCodexManagedAccountIdsByRuntime: {
+        host: 'host-account',
+        wsl: {}
+      }
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeHome as never
+    )
+
+    const result = await service.selectAccountForTarget('wsl-account', {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+
+    expect(result.activeAccountId).toBe('host-account')
+    expect(result.activeAccountIdsByRuntime).toEqual({
+      host: 'host-account',
+      wsl: { Ubuntu: 'wsl-account' }
+    })
+    expect(store.getSettings().activeCodexManagedAccountId).toBe('host-account')
+    expect(store.getSettings().activeCodexManagedAccountIdsByRuntime).toEqual({
+      host: 'host-account',
+      wsl: { Ubuntu: 'wsl-account' }
+    })
   })
 
   it('removes an account and cleans up managed home', async () => {

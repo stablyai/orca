@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: the Agents pane keeps catalog rows, default
-   selection, and per-agent controls together so settings reconciliation stays
-   visible in one file. */
+   selection, per-agent controls, and runtime location together so settings
+   reconciliation stays visible in one file. */
 import { useMemo, useState } from 'react'
 import { Check, ChevronDown, ExternalLink, RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
@@ -11,6 +11,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
+import { AgentLocationSetting } from './AgentLocationSetting'
 import { AGENT_STATUS_HOOKS_DESCRIPTION, AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
 import {
   SettingsBadge,
@@ -27,7 +28,18 @@ export { AGENTS_PANE_SEARCH_ENTRIES } from './agents-search'
 
 type AgentsPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  wslAvailable?: boolean
+  wslDistros?: string[]
+  wslCapabilitiesLoading?: boolean
+}
+
+type AgentAvailabilityUpdateQueueOptions = {
+  getSettings: () => GlobalSettings | null | undefined
+  fallbackSettings: GlobalSettings
+  updateSettings: AgentsPaneProps['updateSettings']
+  agentId: TuiAgent
+  enabled: boolean
 }
 
 type AgentRowProps = {
@@ -40,7 +52,7 @@ type AgentRowProps = {
   isDefault: boolean
   cmdOverride: string | undefined
   onSetDefault: () => void
-  onToggleEnabled: () => void
+  onSetEnabled: (enabled: boolean) => void
   onSaveOverride: (value: string) => void
 }
 
@@ -55,29 +67,52 @@ type AgentAvailability = 'enabled' | 'disabled'
 type AgentAvailabilityControlProps = {
   label: string
   isEnabled: boolean
-  onToggleEnabled: () => void
+  onSetEnabled: (enabled: boolean) => void
 }
 
-export function buildAgentEnabledSettingsUpdate(
+export function buildAgentAvailabilitySettingsUpdate(
   settings: Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>,
-  id: TuiAgent
+  id: TuiAgent,
+  enabled: boolean
 ): Pick<GlobalSettings, 'disabledTuiAgents'> & Partial<Pick<GlobalSettings, 'defaultTuiAgent'>> {
   const latestDisabled = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
-  const wasDisabled = latestDisabled.includes(id)
-  const nextDisabled = wasDisabled
+  const nextDisabled = enabled
     ? latestDisabled.filter((agent) => agent !== id)
-    : [...latestDisabled, id]
+    : latestDisabled.includes(id)
+      ? latestDisabled
+      : [...latestDisabled, id]
 
   return {
     disabledTuiAgents: nextDisabled,
-    ...(settings.defaultTuiAgent === id && !wasDisabled ? { defaultTuiAgent: null } : {})
+    ...(settings.defaultTuiAgent === id && !enabled ? { defaultTuiAgent: null } : {})
   }
 }
+
+export function createAgentAvailabilityUpdateQueue(): (
+  options: AgentAvailabilityUpdateQueueOptions
+) => Promise<void> {
+  let pendingUpdate: Promise<unknown> = Promise.resolve()
+
+  return ({ getSettings, fallbackSettings, updateSettings, agentId, enabled }) => {
+    // Why: serialize full-array replacements so each write sees the store after
+    // the previous IPC has reconciled, while preserving the user's requested state.
+    pendingUpdate = pendingUpdate
+      .catch(() => {})
+      .then(() =>
+        updateSettings(
+          buildAgentAvailabilitySettingsUpdate(getSettings() ?? fallbackSettings, agentId, enabled)
+        )
+      )
+    return pendingUpdate.then(() => undefined)
+  }
+}
+
+const enqueueAgentAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
 
 export function AgentAvailabilityControl({
   label,
   isEnabled,
-  onToggleEnabled
+  onSetEnabled
 }: AgentAvailabilityControlProps): React.JSX.Element {
   const value: AgentAvailability = isEnabled ? 'enabled' : 'disabled'
 
@@ -86,7 +121,7 @@ export function AgentAvailabilityControl({
       value={value}
       onChange={(next) => {
         if (next !== value) {
-          onToggleEnabled()
+          onSetEnabled(next === 'enabled')
         }
       }}
       ariaLabel={`${label} availability`}
@@ -166,7 +201,7 @@ function AgentRow({
   isDefault,
   cmdOverride,
   onSetDefault,
-  onToggleEnabled,
+  onSetEnabled,
   onSaveOverride
 }: AgentRowProps): React.JSX.Element {
   const [cmdOpen, setCmdOpen] = useState(Boolean(cmdOverride))
@@ -212,7 +247,7 @@ function AgentRow({
           <AgentAvailabilityControl
             label={label}
             isEnabled={isEnabled}
-            onToggleEnabled={onToggleEnabled}
+            onSetEnabled={onSetEnabled}
           />
 
           {isDetected && isEnabled && (
@@ -315,7 +350,13 @@ function DefaultAgentPill({ active, onClick, children }: DefaultAgentPillProps):
   )
 }
 
-export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React.JSX.Element {
+export function AgentsPane({
+  settings,
+  updateSettings,
+  wslAvailable = false,
+  wslDistros = [],
+  wslCapabilitiesLoading = false
+}: AgentsPaneProps): React.JSX.Element {
   const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
   // Why: refresh re-spawns the user's login shell to re-capture PATH
   // (preflight:refreshAgents on the main side). This handles the
@@ -336,9 +377,14 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
     updateSettings({ defaultTuiAgent: id })
   }
 
-  const toggleEnabled = (id: TuiAgent): void => {
-    const latestSettings = useAppStore.getState().settings ?? settings
-    updateSettings(buildAgentEnabledSettingsUpdate(latestSettings, id))
+  const setAgentEnabled = (id: TuiAgent, enabled: boolean): void => {
+    void enqueueAgentAvailabilityUpdate({
+      getSettings: () => useAppStore.getState().settings,
+      fallbackSettings: settings,
+      updateSettings,
+      agentId: id,
+      enabled
+    })
   }
 
   const saveOverride = (id: TuiAgent, value: string): void => {
@@ -351,11 +397,14 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
     updateSettings({ agentCmdOverrides: next })
   }
 
-  const enabledDetectedAgents = AGENT_CATALOG.filter(
-    (a) =>
-      (detectedIds === null || detectedIds.has(a.id)) && isTuiAgentEnabled(a.id, disabledAgents)
+  // Why: null means detection is in flight, not "all agents are installed".
+  // Showing the full catalog here makes the default-agent picker flash invalid
+  // options while switching between Windows and WSL detection contexts.
+  const detectedAgents =
+    detectedIds === null ? [] : AGENT_CATALOG.filter((agent) => detectedIds.has(agent.id))
+  const enabledDetectedAgents = detectedAgents.filter((agent) =>
+    isTuiAgentEnabled(agent.id, disabledAgents)
   )
-  const detectedAgents = AGENT_CATALOG.filter((a) => detectedIds === null || detectedIds.has(a.id))
   const undetectedAgents = AGENT_CATALOG.filter(
     (a) => detectedIds !== null && !detectedIds.has(a.id)
   )
@@ -371,6 +420,15 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
 
   return (
     <div className="space-y-8">
+      <AgentLocationSetting
+        settings={settings}
+        updateSettings={updateSettings}
+        refresh={refresh}
+        wslAvailable={wslAvailable}
+        wslDistros={wslDistros}
+        wslCapabilitiesLoading={wslCapabilitiesLoading}
+      />
+
       <section className="space-y-4">
         <SettingsSubsectionHeader
           title="Default Agent"
@@ -452,7 +510,7 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                 isDefault={defaultAgent === agent.id}
                 cmdOverride={cmdOverrides[agent.id]}
                 onSetDefault={() => setDefault(agent.id)}
-                onToggleEnabled={() => toggleEnabled(agent.id)}
+                onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                 onSaveOverride={(v) => saveOverride(agent.id, v)}
               />
             ))}
@@ -484,7 +542,7 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                 isDefault={false}
                 cmdOverride={undefined}
                 onSetDefault={() => {}}
-                onToggleEnabled={() => toggleEnabled(agent.id)}
+                onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                 onSaveOverride={() => {}}
               />
             ))}

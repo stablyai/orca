@@ -22,8 +22,14 @@ import {
   attachPaneFitResizeObserver,
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
+import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
-import { ENABLE_WEBGL_RENDERER, attachWebgl, disposeWebgl } from './pane-webgl-renderer'
+import {
+  ENABLE_WEBGL_RENDERER,
+  attachWebgl,
+  cancelPendingWebglRefresh,
+  disposeWebgl
+} from './pane-webgl-renderer'
 import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 
 // ---------------------------------------------------------------------------
@@ -119,6 +125,8 @@ export function createPaneDOM(
     hasComplexScriptOutput: false,
     fitAddon,
     fitResizeObserver: null,
+    pendingInitialFitRafId: null,
+    pendingWebglRefreshRafId: null,
     pendingObservedFitRafId: null,
     searchAddon,
     serializeAddon,
@@ -128,6 +136,9 @@ export function createPaneDOM(
     ligaturesAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
+    pendingSplitScrollRafIds: [],
+    pendingSplitScrollTimerId: null,
+    pendingSplitScrollBufferDisposable: null,
     debugLabel: options.debugLabel ?? null
   }
 
@@ -229,7 +240,11 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   attachPaneFitResizeObserver(pane)
 
   // Initial fit (deferred to ensure layout has settled)
-  requestAnimationFrame(() => {
+  if (pane.pendingInitialFitRafId != null) {
+    cancelAnimationFrame(pane.pendingInitialFitRafId)
+  }
+  pane.pendingInitialFitRafId = requestAnimationFrame(() => {
+    pane.pendingInitialFitRafId = null
     safeFit(pane)
   })
 }
@@ -289,10 +304,20 @@ export function disposePane(
   pane: ManagedPaneInternal,
   panes: Map<number, ManagedPaneInternal>
 ): void {
+  if (pane.pendingInitialFitRafId != null) {
+    cancelAnimationFrame(pane.pendingInitialFitRafId)
+    pane.pendingInitialFitRafId = null
+  }
+  cancelPendingWebglRefresh(pane)
   detachPaneFitResizeObserver(pane)
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null
+  }
+  try {
+    clearPendingSplitScrollRestore(pane)
+  } catch {
+    /* ignore */
   }
   try {
     pane.ligaturesAddon?.dispose()

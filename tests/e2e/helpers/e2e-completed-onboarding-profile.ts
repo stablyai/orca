@@ -1,6 +1,6 @@
 import { ONBOARDING_FINAL_STEP } from '../../../src/shared/constants'
 
-const SEEN_FIRST_RUN_FEATURE_TIP_IDS = ['voice-dictation'] as const
+const SEEN_FIRST_RUN_FEATURE_TIP_IDS = ['voice-dictation', 'orca-cli'] as const
 
 export function getE2ECompletedOnboardingProfile() {
   return {

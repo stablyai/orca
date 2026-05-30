@@ -14,6 +14,7 @@ import type {
   WorktreeRemoteBranchConflictEvent,
   WorktreeMeta
 } from '../../../../shared/types'
+import type { TerminalGitHubPRLink } from '@/lib/terminal-github-pr-link-detector'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
@@ -106,6 +107,7 @@ export type WorktreeSlice = {
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>
   markWorktreeUnread: (worktreeId: string) => void
+  observeTerminalGitHubPullRequestLink: (worktreeId: string, link: TerminalGitHubPRLink) => void
   /** Clear the worktree's unread dot. Called on user interaction with any
    *  terminal pane inside the worktree (keystroke, click) — matches
    *  ghostty's "show until interact" model. Persists isUnread=false. */

@@ -56,10 +56,17 @@ export default function RepoCombobox({
   )
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
 
-  const focusSearchInput = useCallback(() => {
+  const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
       cancelAnimationFrame(focusFrameRef.current)
+      focusFrameRef.current = null
     }
+  }, [])
+
+  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+
+  const focusSearchInput = useCallback(() => {
+    cancelFocusFrame()
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       const repoSearchInput = inputRef.current
@@ -73,7 +80,7 @@ export default function RepoCombobox({
       const end = repoSearchInput.value.length
       repoSearchInput.setSelectionRange(end, end)
     })
-  }, [])
+  }, [cancelFocusFrame])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -82,16 +89,13 @@ export default function RepoCombobox({
         setCommandValue(value)
         return
       }
-      if (focusFrameRef.current !== null) {
-        cancelAnimationFrame(focusFrameRef.current)
-        focusFrameRef.current = null
-      }
+      cancelFocusFrame()
       // Why: the create-worktree dialog delays its own field reset until after
       // close animation, so the repo picker must clear its local filter here or a
       // stale query can reopen to an apparently missing repo list.
       setQuery('')
     },
-    [value]
+    [cancelFocusFrame, value]
   )
 
   const handleSelect = useCallback(

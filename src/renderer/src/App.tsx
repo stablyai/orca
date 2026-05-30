@@ -115,7 +115,11 @@ import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import { getFeatureTipsAppOpenDecision } from './components/feature-tips/feature-tip-startup-gate'
+import {
+  getFeatureTipsAppOpenDecision,
+  isCliFeatureTipCompleted
+} from './components/feature-tips/feature-tip-startup-gate'
+import { trackOrcaCliFeatureTipShown } from './components/feature-tips/feature-tip-telemetry'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -355,6 +359,17 @@ function App(): React.JSX.Element {
   // Why: the floating workspace is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
+  const floatingTerminalReturnFocusFrameRef = useRef<number | null>(null)
+
+  const cancelFloatingTerminalReturnFocusFrame = useCallback((): void => {
+    if (floatingTerminalReturnFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(floatingTerminalReturnFocusFrameRef.current)
+    floatingTerminalReturnFocusFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelFloatingTerminalReturnFocusFrame, [cancelFloatingTerminalReturnFocusFrame])
 
   const rememberFloatingTerminalReturnFocus = useCallback((): void => {
     const active = document.activeElement
@@ -377,10 +392,15 @@ function App(): React.JSX.Element {
     if (!target || !document.contains(target)) {
       return
     }
-    requestAnimationFrame(() => {
+    cancelFloatingTerminalReturnFocusFrame()
+    floatingTerminalReturnFocusFrameRef.current = requestAnimationFrame(() => {
+      floatingTerminalReturnFocusFrameRef.current = null
+      if (!document.contains(target)) {
+        return
+      }
       target.focus({ preventScroll: true })
     })
-  }, [])
+  }, [cancelFloatingTerminalReturnFocusFrame])
 
   const setFloatingTerminalOpenWithFocus = useCallback(
     (nextOpen: SetStateAction<boolean>): void => {
@@ -446,6 +466,7 @@ function App(): React.JSX.Element {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   const featureTipsPromptedThisSessionRef = useRef(false)
   const featureTipsSuppressedByOnboardingThisSessionRef = useRef(false)
+  const [featureTipCliInstalled, setFeatureTipCliInstalled] = useState<boolean | null>(null)
   const [onboardingSettingsDetour, setOnboardingSettingsDetour] = useState(false)
   const shouldRenderOnboarding = onboarding !== null && shouldShowOnboarding(onboarding)
   const onboardingSettingsDetourActive =
@@ -487,8 +508,34 @@ function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    if (!persistedUIReady) {
+      return
+    }
+
+    let cancelled = false
+    void window.api.cli
+      .getInstallStatus()
+      .then((status) => {
+        if (cancelled) {
+          return
+        }
+        setFeatureTipCliInstalled(isCliFeatureTipCompleted(status))
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFeatureTipCliInstalled(true)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [persistedUIReady])
+
+  useEffect(() => {
     const featureTipsDecision = getFeatureTipsAppOpenDecision({
       activeModal,
+      cliInstalled: featureTipCliInstalled,
       featureTipsSeenIds,
       featureInteractions,
       onboarding,
@@ -510,6 +557,9 @@ function App(): React.JSX.Element {
     }
 
     featureTipsPromptedThisSessionRef.current = true
+    if (featureTipsDecision.tipId === 'orca-cli') {
+      trackOrcaCliFeatureTipShown('app_open')
+    }
     // Why: once a tip is visible, app quit/crash should not make it reappear
     // on the next launch just because the user never clicked a dismiss button.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
@@ -517,6 +567,7 @@ function App(): React.JSX.Element {
   }, [
     activeModal,
     actions,
+    featureTipCliInstalled,
     featureInteractions,
     featureTipsSeenIds,
     onboarding,

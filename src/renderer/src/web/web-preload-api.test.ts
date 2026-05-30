@@ -94,6 +94,36 @@ function writeStoredRuntimeEnvironment(storage: Storage): void {
   )
 }
 
+function installClipboardImageBase64(contentBase64: string): void {
+  vi.stubGlobal(
+    'FileReader',
+    class {
+      result: string | ArrayBuffer | null = null
+      error: DOMException | null = null
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+
+      readAsDataURL(blob: Blob): void {
+        this.result = `data:${blob.type};base64,${contentBase64}`
+        this.onload?.()
+      }
+    }
+  )
+  vi.stubGlobal('navigator', {
+    userAgent: 'Linux',
+    hardwareConcurrency: 8,
+    clipboard: {
+      readText: vi.fn().mockResolvedValue(''),
+      read: vi.fn().mockResolvedValue([
+        {
+          types: ['image/png'],
+          getType: vi.fn().mockResolvedValue(new Blob(['ignored'], { type: 'image/png' }))
+        }
+      ])
+    }
+  })
+}
+
 describe('web keybindings preload API', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -179,6 +209,296 @@ describe('web UI preload API', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.doUnmock('./web-runtime-client')
+  })
+
+  it('saves browser clipboard images through bounded upload chunks', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'clipboard.startImageUpload') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { uploadId: 'upload-1' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'clipboard.appendImageUploadChunk') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { receivedBase64Length: runtimeCalls.length },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: 'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png',
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS, installWebPreloadApi } =
+      await import('./web-preload-api')
+    const contentBase64 = `${'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)}AAAA`
+    installClipboardImageBase64(contentBase64)
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.ui.saveClipboardImageAsTempFile({ connectionId: 'ssh-1' })
+    ).resolves.toBe('C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png')
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'clipboard.startImageUpload',
+        params: {
+          expectedBase64Length: contentBase64.length,
+          connectionId: 'ssh-1'
+        }
+      },
+      {
+        method: 'clipboard.appendImageUploadChunk',
+        params: {
+          uploadId: 'upload-1',
+          offset: 0,
+          contentBase64: 'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)
+        }
+      },
+      {
+        method: 'clipboard.appendImageUploadChunk',
+        params: {
+          uploadId: 'upload-1',
+          offset: CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
+          contentBase64: 'AAAA'
+        }
+      },
+      {
+        method: 'clipboard.commitImageUpload',
+        params: { uploadId: 'upload-1' }
+      }
+    ])
+  })
+
+  it('falls back to one-shot clipboard save for small payloads when the host lacks upload RPCs', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'clipboard.startImageUpload') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: false,
+              error: { code: 'method_not_found', message: 'Unknown method' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: '/tmp/orca-paste-image.png',
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    installClipboardImageBase64(Buffer.from('png-bytes').toString('base64'))
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.ui.saveClipboardImageAsTempFile({ connectionId: null })
+    ).resolves.toBe('/tmp/orca-paste-image.png')
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'clipboard.startImageUpload',
+        params: {
+          expectedBase64Length: Buffer.from('png-bytes').toString('base64').length,
+          connectionId: null
+        }
+      },
+      {
+        method: 'clipboard.saveImageAsTempFile',
+        params: {
+          contentBase64: Buffer.from('png-bytes').toString('base64'),
+          connectionId: null
+        }
+      }
+    ])
+  })
+
+  it('does not send large one-shot fallback frames when upload RPCs are missing', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: false,
+            error: { code: 'method_not_found', message: 'Unknown method' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS, installWebPreloadApi } =
+      await import('./web-preload-api')
+    installClipboardImageBase64('A'.repeat(CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS + 4))
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
+      'Unknown method'
+    )
+    expect(runtimeCalls).toHaveLength(1)
+    expect(runtimeCalls[0]?.method).toBe('clipboard.startImageUpload')
+  })
+
+  it('aborts best-effort when append fails', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'clipboard.startImageUpload') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { uploadId: 'upload-1' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'clipboard.appendImageUploadChunk') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: false,
+              error: { code: 'runtime_error', message: 'bad chunk' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { aborted: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    installClipboardImageBase64('AAAA')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow('bad chunk')
+    expect(runtimeCalls.map((call) => call.method)).toEqual([
+      'clipboard.startImageUpload',
+      'clipboard.appendImageUploadChunk',
+      'clipboard.abortImageUpload'
+    ])
+  })
+
+  it('aborts best-effort when commit fails', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'clipboard.startImageUpload') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { uploadId: 'upload-1' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'clipboard.commitImageUpload') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: false,
+              error: { code: 'runtime_error', message: 'save failed' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { aborted: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    installClipboardImageBase64('AAAA')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
+      'save failed'
+    )
+    expect(runtimeCalls.map((call) => call.method)).toEqual([
+      'clipboard.startImageUpload',
+      'clipboard.appendImageUploadChunk',
+      'clipboard.commitImageUpload',
+      'clipboard.abortImageUpload'
+    ])
+  })
+
+  it('rejects oversized converted clipboard images before starting an upload', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: null,
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    installClipboardImageBase64('A'.repeat(24 * 1024 * 1024 + 4))
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
+      'Clipboard image is too large'
+    )
+    expect(runtimeCalls).toEqual([])
   })
 
   it('migrates missing right sidebar visibility from the effective web legacy default', async () => {
@@ -454,6 +774,7 @@ describe('web GitHub preload API', () => {
         'requestPRReviewers',
         'resolveProjectRef',
         'resolveReviewThread',
+        'setPRAutoMerge',
         'setPRFileViewed',
         'starOrca',
         'updateIssue',
@@ -658,6 +979,12 @@ describe('web GitHub preload API', () => {
         args: { repoPath, prNumber: 7, method: 'squash' },
         expectedMethod: 'github.mergePR',
         expectedParams: withRepo({ repoPath, prNumber: 7, method: 'squash' })
+      },
+      {
+        key: 'setPRAutoMerge',
+        args: { repoPath, prNumber: 7, enabled: true },
+        expectedMethod: 'github.setPRAutoMerge',
+        expectedParams: withRepo({ repoPath, prNumber: 7, enabled: true })
       },
       {
         key: 'updatePRState',

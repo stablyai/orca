@@ -128,7 +128,15 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   >('loading')
 
   useEffect(() => {
-    window.api.updater.getVersion().then(setAppVersion)
+    let cancelled = false
+    void window.api.updater.getVersion().then((version) => {
+      if (!cancelled) {
+        setAppVersion(version)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -153,7 +161,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
       return
     }
     setStarState('starring')
-    const ok = await window.api.gh.starOrca()
+    const ok = await window.api.gh.starOrca('settings')
     if (!ok) {
       setStarState('error')
       return

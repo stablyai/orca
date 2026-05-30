@@ -50,9 +50,10 @@ export default function TabBarCreateEntry({
       setPending(false)
       setError(null)
       setSelectedIndex(0)
-      return
+      return undefined
     }
-    requestAnimationFrame(() => inputRef.current?.focus())
+    const focusFrame = requestAnimationFrame(() => inputRef.current?.focus())
+    return () => cancelAnimationFrame(focusFrame)
   }, [menuOpen])
 
   const options = useMemo(() => getTabEntryOptions(query, fileList), [fileList, query])

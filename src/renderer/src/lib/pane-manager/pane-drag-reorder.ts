@@ -22,6 +22,7 @@ export type DragReorderCallbacks = {
   applyPaneOpacity: () => void
   applyDividerStyles: () => void
   refitPanesUnder: (el: HTMLElement) => void
+  requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
   onLayoutChanged?: () => void
   onDragActiveChange?: (active: boolean) => void
 }

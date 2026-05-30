@@ -882,6 +882,8 @@ const XTERM_HTML = `<!DOCTYPE html>
   var longPressOrigin = null; // {x,y, identifier}
   var edgeScrollTimer = null;
   var edgeScrollDir = 0;
+  var edgeScrollClientX = 0;
+  var edgeScrollClientY = 0;
 
   // Eviction watchdog: linesEverWritten counts onLineFeed since last init.
   // Once buffer is full, every onLineFeed evicts the top row in xterm and
@@ -1074,11 +1076,15 @@ const XTERM_HTML = `<!DOCTYPE html>
     if (!cell) return '';
     var eventCode = lines < 0 ? 64 : 65;
     if (sgrMousePixelsMode) {
+      if (!isSafeSgrMouseCoordinate(cell.x) || !isSafeSgrMouseCoordinate(cell.y)) return '';
       return ESC + '[<' + eventCode + ';' + cell.x + ';' + cell.y + 'M';
     }
     if (sgrMouseMode) {
       // Why: xterm increments zero-based mouse cells before encoding reports.
-      return ESC + '[<' + eventCode + ';' + (cell.col + 1) + ';' + (cell.row + 1) + 'M';
+      var sgrCol = cell.col + 1;
+      var sgrRow = cell.row + 1;
+      if (!isSafeSgrMouseCoordinate(sgrCol) || !isSafeSgrMouseCoordinate(sgrRow)) return '';
+      return ESC + '[<' + eventCode + ';' + sgrCol + ';' + sgrRow + 'M';
     }
     // Why: xterm increments zero-based mouse cells before encoding reports.
     var button = eventCode + 32;
@@ -1088,6 +1094,47 @@ const XTERM_HTML = `<!DOCTYPE html>
     // the mobile JSON/RPC string path. Fall back to keys for wide terminals.
     if (button > 126 || col > 126 || row > 126) return '';
     return ESC + '[M' + String.fromCharCode(button) + String.fromCharCode(col) + String.fromCharCode(row);
+  }
+
+  function isSafeSgrMouseCoordinate(value) {
+    return Number.isInteger(value) && value >= 0 && value <= 9999;
+  }
+
+  function buildMouseClickInput(clientX, clientY) {
+    var mouseTrackingMode = getMouseTrackingMode();
+    if (!isClickMouseTrackingMode(mouseTrackingMode)) return '';
+    var cell = viewportToMouseReportCell(clientX, clientY);
+    if (!cell) return '';
+    if (sgrMousePixelsMode) {
+      // Why: xterm 1016 keeps SGR syntax but reports raw zero-based pixel positions.
+      var pixelX = cell.x;
+      var pixelY = cell.y;
+      if (!isSafeSgrMouseCoordinate(pixelX) || !isSafeSgrMouseCoordinate(pixelY)) return '';
+      var pixelPress = ESC + '[<0;' + pixelX + ';' + pixelY + 'M';
+      if (mouseTrackingMode === 'x10') return pixelPress;
+      return pixelPress + ESC + '[<0;' + pixelX + ';' + pixelY + 'm';
+    }
+    if (sgrMouseMode) {
+      // Why: xterm increments zero-based mouse cells before encoding reports.
+      var sgrCol = cell.col + 1;
+      var sgrRow = cell.row + 1;
+      if (!isSafeSgrMouseCoordinate(sgrCol) || !isSafeSgrMouseCoordinate(sgrRow)) return '';
+      var sgrPress = ESC + '[<0;' + sgrCol + ';' + sgrRow + 'M';
+      if (mouseTrackingMode === 'x10') return sgrPress;
+      return sgrPress + ESC + '[<0;' + sgrCol + ';' + sgrRow + 'm';
+    }
+    // Why: non-SGR click coordinates use printable ASCII bytes on the mobile
+    // bridge; unsafe wide-terminal cells must not turn into corrupted input.
+    var col = cell.col + 1 + 32;
+    var row = cell.row + 1 + 32;
+    if (col > 126 || row > 126) return '';
+    var press = ESC + '[M' + String.fromCharCode(32) + String.fromCharCode(col) + String.fromCharCode(row);
+    if (mouseTrackingMode === 'x10') return press;
+    return press + ESC + '[M' + String.fromCharCode(35) + String.fromCharCode(col) + String.fromCharCode(row);
+  }
+
+  function isClickMouseTrackingMode(mode) {
+    return mode !== 'none';
   }
 
   function isWheelMouseTrackingMode(mode) {
@@ -1370,10 +1417,30 @@ const XTERM_HTML = `<!DOCTYPE html>
     selMenu.style.left = clampedLeft + 'px';
   }
 
+  function syncSelectionHandleToViewportPoint(handle, clientX, clientY) {
+    var c = viewportToCell(clientX, clientY);
+    if (!c || !sel) return false;
+    if (handle === 'start') sel.anchor = c;
+    else sel.focus = c;
+    applyXtermSelection();
+    return true;
+  }
+
+  function syncEdgeScrollSelectionEndpoint() {
+    if (!sel || !sel.activeHandle) return false;
+    // Why: WebView may not emit new touchmove events while a handle is held
+    // at the edge; resample the stored finger point after each viewport scroll.
+    return syncSelectionHandleToViewportPoint(
+      sel.activeHandle,
+      edgeScrollClientX,
+      edgeScrollClientY
+    );
+  }
+
   function startEdgeScroll(dir) {
     if (edgeScrollDir === dir) return;
-    edgeScrollDir = dir;
     stopEdgeScroll();
+    edgeScrollDir = dir;
     edgeScrollTimer = setInterval(function() {
       if (!term || edgeScrollDir === 0) return;
       var beforeY = term.buffer.active.viewportY;
@@ -1384,6 +1451,7 @@ const XTERM_HTML = `<!DOCTYPE html>
         stopEdgeScroll();
         return;
       }
+      syncEdgeScrollSelectionEndpoint();
       repositionOverlay();
     }, EDGE_SCROLL_INTERVAL);
   }
@@ -1397,11 +1465,9 @@ const XTERM_HTML = `<!DOCTYPE html>
   }
 
   function handleDragMove(handle, clientX, clientY) {
-    var c = viewportToCell(clientX, clientY);
-    if (!c || !sel) return;
-    if (handle === 'start') sel.anchor = c;
-    else sel.focus = c;
-    applyXtermSelection();
+    edgeScrollClientX = clientX;
+    edgeScrollClientY = clientY;
+    if (!syncSelectionHandleToViewportPoint(handle, clientX, clientY)) return;
     repositionOverlay();
     if (clientY < EDGE_SCROLL_PX) startEdgeScroll(-1);
     else if (clientY > window.innerHeight - EDGE_SCROLL_PX) startEdgeScroll(1);
@@ -1540,7 +1606,12 @@ const XTERM_HTML = `<!DOCTYPE html>
     }
     if (dispatch.mode === 'surface') {
       if (e.touches.length === 0 && longPressOrigin && selMode !== 'select') {
-        notify({ type: 'terminal-tap' });
+        var clickInput = buildMouseClickInput(longPressOrigin.x, longPressOrigin.y);
+        if (clickInput) {
+          notify({ type: 'terminal-input', bytes: clickInput });
+        } else if (!isClickMouseTrackingMode(getMouseTrackingMode())) {
+          notify({ type: 'terminal-tap' });
+        }
       }
       clearLongPress();
       if (e.touches.length === 0) {

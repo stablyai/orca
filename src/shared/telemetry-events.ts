@@ -18,6 +18,7 @@ import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
 import { FEATURE_WALL_EXIT_ACTIONS, FEATURE_WALL_TOUR_DEPTH_STEPS } from './feature-wall-tour-depth'
 import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
+import { appStarSourceSchema } from './gh-star-source'
 import {
   NESTED_REPO_COUNT_BUCKETS,
   NESTED_REPO_IMPORT_ACTIONS,
@@ -49,6 +50,7 @@ import type {
 // should map to concrete values; see `tuiAgentToAgentKind`.
 export const AGENT_KIND_VALUES = [
   'claude-code',
+  'openclaude',
   'codex',
   'autohand',
   'opencode',
@@ -267,6 +269,13 @@ const repoAddedSchema = z
   .object({ method: repoMethodSchema, nth_repo_added: nthRepoAddedSchema })
   .strict()
 
+const appStarredOrcaSchema = z
+  .object({
+    source: appStarSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+
 const workspaceCreatedSchema = z
   .object({
     source: workspaceSourceSchema,
@@ -314,6 +323,27 @@ const settingsChangedSchema = z
 
 const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
+
+const orcaCliFeatureTipSourceSchema = z.enum(['app_open', 'manual'])
+const orcaCliFeatureTipShownSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const orcaCliFeatureTipSetupClickedSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const orcaCliFeatureTipSetupResultSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    result: z.enum(['installed', 'needs_attention', 'dev_preview', 'failed']),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
 
 const featureWallOpenedSchema = z
   .object({
@@ -1014,6 +1044,7 @@ const onboardingFeatureSetupTerminalInteractedSchema = z
 // which cannot be unmixed after the fact.
 export const eventSchemas = {
   app_opened: appOpenedSchema,
+  app_starred_orca: appStarredOrcaSchema,
 
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
@@ -1036,6 +1067,10 @@ export const eventSchemas = {
 
   telemetry_opted_in: telemetryOptedInSchema,
   telemetry_opted_out: telemetryOptedOutSchema,
+
+  orca_cli_feature_tip_shown: orcaCliFeatureTipShownSchema,
+  orca_cli_feature_tip_setup_clicked: orcaCliFeatureTipSetupClickedSchema,
+  orca_cli_feature_tip_setup_result: orcaCliFeatureTipSetupResultSchema,
 
   feature_wall_opened: featureWallOpenedSchema,
   feature_wall_closed: featureWallClosedSchema,
@@ -1107,6 +1142,7 @@ export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_
 // injection set against silent schema drift.
 type _CohortExtendedRoster =
   | 'app_opened'
+  | 'app_starred_orca'
   | 'repo_added'
   | 'add_repo_setup_step_action'
   | 'add_repo_existing_workspaces_detected'
@@ -1120,6 +1156,9 @@ type _CohortExtendedRoster =
   | 'agent_started'
   | 'agent_prompt_sent'
   | 'agent_error'
+  | 'orca_cli_feature_tip_shown'
+  | 'orca_cli_feature_tip_setup_clicked'
+  | 'orca_cli_feature_tip_setup_result'
 // Why: `z.object({}).strict()` infers a string index signature, which would
 // make every key appear present. Ignore index-signature-only keys here so
 // strict empty event payloads do not get pulled into keyed telemetry rosters.

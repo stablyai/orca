@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { Pin } from 'lucide-react'
+import { Pin, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -14,6 +14,11 @@ import WorktreeContextMenu from './WorktreeContextMenu'
 import { getWorkspaceKanbanDetailsHoverOpenState } from './workspace-kanban-details-hover'
 import { writeWorkspaceDragData } from './workspace-status'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
+import { runWorktreeDelete } from './delete-worktree-flow'
+import {
+  canShowWorkspaceDeleteQuickAction,
+  useWorkspaceDeleteModifierPressed
+} from './workspace-delete-quick-action'
 
 type WorkspaceKanbanCardProps = {
   worktree: Worktree
@@ -111,6 +116,7 @@ function WorkspaceKanbanCompactCard({
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const openModal = useAppStore((s) => s.openModal)
   const isDeleting = deleteState?.isDeleting ?? false
+  const deleteModifierPressed = useWorkspaceDeleteModifierPressed()
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [titleRenaming, setTitleRenaming] = useState(false)
   const contextMenuOpenRef = useRef(false)
@@ -216,6 +222,27 @@ function WorkspaceKanbanCompactCard({
     },
     [onContextMenuSelect, worktree]
   )
+  const showDeleteQuickAction = canShowWorkspaceDeleteQuickAction({
+    deleteModifierPressed,
+    isDeleting,
+    isMainWorktree: worktree.isMainWorktree
+  })
+  const stopQuickActionPropagation = useCallback(
+    (event: React.SyntheticEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+    },
+    []
+  )
+  const handleDeleteQuickAction = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (showDeleteQuickAction) {
+        runWorktreeDelete(worktree.id)
+      }
+    },
+    [showDeleteQuickAction, worktree.id]
+  )
 
   return (
     <WorktreeContextMenu
@@ -240,7 +267,7 @@ function WorkspaceKanbanCompactCard({
             onDoubleClick={handleDoubleClick}
             onKeyDown={handleKeyDown}
             className={cn(
-              'flex h-8 w-full min-w-0 cursor-pointer items-center rounded-md border px-2 text-left text-[12px] outline-none transition-colors',
+              'group relative flex h-8 w-full min-w-0 cursor-pointer items-center rounded-md border px-2 text-left text-[12px] outline-none transition-colors',
               isActive
                 ? 'border-sidebar-ring bg-sidebar-accent text-sidebar-accent-foreground'
                 : isSelected
@@ -249,6 +276,7 @@ function WorkspaceKanbanCompactCard({
               isActive && isSelected && 'ring-1 ring-sidebar-ring/35',
               'data-[workspace-board-card-area-selected=true]:border-sidebar-ring/50 data-[workspace-board-card-area-selected=true]:bg-sidebar-accent/75 data-[workspace-board-card-area-selected=true]:ring-1 data-[workspace-board-card-area-selected=true]:ring-sidebar-ring/30',
               !nativeDragEnabled && !isDeleting && '!cursor-grab',
+              showDeleteQuickAction && 'pr-7',
               titleRenaming && '!border-transparent !bg-transparent !ring-0 cursor-default',
               isDeleting && 'cursor-not-allowed opacity-50 grayscale'
             )}
@@ -288,6 +316,30 @@ function WorkspaceKanbanCompactCard({
                 </TooltipContent>
               </Tooltip>
             ) : null}
+            {showDeleteQuickAction && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    data-workspace-board-preserve-open=""
+                    onPointerDown={stopQuickActionPropagation}
+                    onKeyDown={stopQuickActionPropagation}
+                    onClick={handleDeleteQuickAction}
+                    className={cn(
+                      'absolute right-1 top-1 z-20 inline-flex size-5 items-center justify-center rounded border border-sidebar-border bg-sidebar/95 text-muted-foreground opacity-0 shadow-xs transition-colors transition-opacity',
+                      'group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
+                      'hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring'
+                    )}
+                    aria-label="Delete workspace"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  Delete workspace
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </HoverCardTrigger>
         <HoverCardContent

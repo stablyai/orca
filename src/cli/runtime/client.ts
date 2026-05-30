@@ -209,7 +209,7 @@ function resolveRemotePairing(
   if (!pairing) {
     throw new RuntimeClientError(
       'invalid_argument',
-      'Invalid remote pairing code. Expected an orca://pair#... URL or bare pairing payload.'
+      'Invalid remote pairing code. Expected an orca://pair?... URL or bare pairing payload.'
     )
   }
   return pairing

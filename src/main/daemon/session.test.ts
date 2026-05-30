@@ -20,6 +20,9 @@ function createMockSubprocess() {
     get pid() {
       return pid
     },
+    getForegroundProcess(): string | null {
+      return null
+    },
     write(data: string) {
       written.push(data)
     },

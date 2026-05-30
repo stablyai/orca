@@ -59,6 +59,7 @@ export type HookListenerState = {
   lastToolByPaneKey: Map<string, ToolSnapshot>
   lastStatusByPaneKey: Map<string, AgentHookEventPayload>
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
+  ampCompletedCacheKeys: Set<string>
 }
 
 export function createHookListenerState(): HookListenerState {
@@ -68,21 +69,44 @@ export function createHookListenerState(): HookListenerState {
     lastPromptByPaneKey: new Map(),
     lastToolByPaneKey: new Map(),
     lastStatusByPaneKey: new Map(),
-    antigravityCompletedTranscriptByPaneKey: new Map()
+    antigravityCompletedTranscriptByPaneKey: new Map(),
+    ampCompletedCacheKeys: new Set()
   }
 }
 
 export function clearPaneCacheState(state: HookListenerState, paneKey: string): void {
-  state.lastPromptByPaneKey.delete(paneKey)
-  state.lastToolByPaneKey.delete(paneKey)
-  state.lastStatusByPaneKey.delete(paneKey)
-  state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
+  deletePaneScopedCacheEntry(state.lastPromptByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.lastToolByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.lastStatusByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.antigravityCompletedTranscriptByPaneKey, paneKey)
+  deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
 }
 
 function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
   state.lastPromptByPaneKey.delete(paneKey)
   state.lastToolByPaneKey.delete(paneKey)
   state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
+  state.ampCompletedCacheKeys.delete(paneKey)
+}
+
+function deletePaneScopedCacheEntry(map: Map<string, unknown>, paneKey: string): void {
+  map.delete(paneKey)
+  const scopedPrefix = `${paneKey}\0`
+  for (const key of map.keys()) {
+    if (key.startsWith(scopedPrefix)) {
+      map.delete(key)
+    }
+  }
+}
+
+function deletePaneScopedSetEntry(set: Set<string>, paneKey: string): void {
+  set.delete(paneKey)
+  const scopedPrefix = `${paneKey}\0`
+  for (const key of set) {
+    if (key.startsWith(scopedPrefix)) {
+      set.delete(key)
+    }
+  }
 }
 
 export function clearAllListenerCaches(state: HookListenerState): void {
@@ -90,6 +114,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastToolByPaneKey.clear()
   state.lastStatusByPaneKey.clear()
   state.antigravityCompletedTranscriptByPaneKey.clear()
+  state.ampCompletedCacheKeys.clear()
   state.warnedVersions.clear()
   state.warnedEnvs.clear()
 }
@@ -567,6 +592,7 @@ function extractToolResponseText(toolResponse: unknown): string | undefined {
 
 const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
 const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
+const AMP_THREAD_ID_MAX_LENGTH = 256
 const GROK_SESSION_ID_MAX_LENGTH = 128
 const GROK_SESSION_CWD_MAX_LENGTH = 4096
 
@@ -1112,6 +1138,42 @@ function extractAntigravityToolFields(
     if (message) {
       return { lastAssistantMessage: message }
     }
+  }
+  return {}
+}
+
+function extractAmpToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (eventName === 'tool.call' || eventName === 'tool.result') {
+    const toolName =
+      readString(hookPayload, 'tool') ??
+      readString(hookPayload, 'toolName') ??
+      readString(hookPayload, 'name')
+    const toolInput =
+      deriveToolInputPreview(toolName, hookPayload.input) ??
+      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+      deriveToolInputPreview(toolName, hookPayload.arguments) ??
+      // Why: Amp plugin tools can have arbitrary names, so fall back to the
+      // obvious argument fields instead of rendering an empty tool preview.
+      deriveFallbackToolInputPreview(hookPayload.input) ??
+      deriveFallbackToolInputPreview(hookPayload.tool_input) ??
+      deriveFallbackToolInputPreview(hookPayload.arguments)
+    const update: ToolSnapshot = toolUpdate(
+      { toolName, toolInput },
+      { hasToolInputField: hasAnyOwnField(hookPayload, ['input', 'tool_input', 'arguments']) }
+    )
+    if (eventName === 'tool.result') {
+      const responseText =
+        readFirstString(hookPayload, ['error', 'output', 'result', 'message']) ??
+        extractToolResponseText(hookPayload.output) ??
+        extractToolResponseText(hookPayload.result)
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    return update
   }
   return {}
 }
@@ -1714,6 +1776,8 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'BeforeAgent'
     case 'antigravity':
       return eventName === 'PreInvocation'
+    case 'amp':
+      return eventName === 'agent.start'
     case 'opencode':
       return false
     case 'cursor':
@@ -1803,6 +1867,8 @@ function extractToolFields(
       return extractGeminiToolFields(eventName, hookPayload)
     case 'antigravity':
       return extractAntigravityToolFields(eventName, hookPayload)
+    case 'amp':
+      return extractAmpToolFields(eventName, hookPayload)
     case 'opencode':
       return extractOpenCodeToolFields(eventName, hookPayload)
     case 'cursor':
@@ -1843,7 +1909,7 @@ function normalizeClaudeEvent(
       ? 'working'
       : eventName === 'PermissionRequest'
         ? 'waiting'
-        : eventName === 'Stop'
+        : eventName === 'Stop' || eventName === 'StopFailure'
           ? 'done'
           : null
 
@@ -2001,6 +2067,122 @@ function normalizeAntigravityEvent(
     state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
   }
   return payload
+}
+
+function normalizeAmpEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const ampCacheKey = getAmpCacheKey(paneKey, hookPayload)
+  if (eventName === 'session.start') {
+    clearPaneTurnCacheState(state, ampCacheKey)
+    if (ampCacheKey !== paneKey) {
+      clearPaneTurnCacheState(state, paneKey)
+    }
+    return null
+  }
+
+  const stateName =
+    eventName === 'agent.start' || eventName === 'tool.call' || eventName === 'tool.result'
+      ? 'working'
+      : eventName === 'agent.end'
+        ? 'done'
+        : null
+
+  if (!stateName) {
+    return null
+  }
+  if (eventName === 'agent.start') {
+    state.ampCompletedCacheKeys.delete(ampCacheKey)
+  } else if (
+    (eventName === 'tool.call' || eventName === 'tool.result') &&
+    state.ampCompletedCacheKeys.has(ampCacheKey)
+  ) {
+    // Why: Amp status posts are fire-and-forget so tool requests cannot block
+    // the agent. Drop stale tool events that arrive after the thread ended.
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    ampCacheKey,
+    extractToolFields('amp', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('amp', eventName) }
+  )
+
+  const interrupted =
+    eventName === 'agent.end' && hookPayload.status === 'cancelled' ? true : undefined
+  const explicitPrompt = readFirstString(hookPayload, [
+    'prompt',
+    'user_prompt',
+    'userPrompt',
+    'initial_prompt',
+    'initialPrompt',
+    'user_message'
+  ])
+  const canUseMessageAsPrompt =
+    eventName === 'agent.start' ||
+    (eventName === 'agent.end' && !state.lastPromptByPaneKey.has(ampCacheKey))
+  const ampPromptText = explicitPrompt ?? (canUseMessageAsPrompt ? promptText : '')
+
+  const normalized = parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      // Why: Amp tool/result events may use `message` for tool output; only
+      // lifecycle events may treat it as the turn prompt.
+      prompt: resolvePrompt(state, ampCacheKey, ampPromptText, {
+        resetOnNewTurn: isNewTurnEvent('amp', eventName)
+      }),
+      agentType: 'amp',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage,
+      interrupted
+    })
+  )
+  if (normalized && eventName === 'agent.end') {
+    state.ampCompletedCacheKeys.add(ampCacheKey)
+  }
+  return normalized
+}
+
+function getAmpCacheKey(paneKey: string, hookPayload: Record<string, unknown>): string {
+  const threadId = readBoundedString(
+    hookPayload,
+    ['threadId', 'threadID', 'thread_id'],
+    AMP_THREAD_ID_MAX_LENGTH
+  )
+  // Why: Amp plugin processes can emit events for multiple threads in one
+  // pane. Cache by thread internally while keeping the visible paneKey stable.
+  return threadId ? `${paneKey}\0amp:${threadId}` : paneKey
+}
+
+function hasExplicitPromptForSource(
+  source: AgentHookSource,
+  eventName: unknown,
+  promptText: string,
+  hookPayload: Record<string, unknown>
+): boolean {
+  if (source !== 'amp') {
+    return promptText.length > 0
+  }
+  if (
+    readFirstString(hookPayload, [
+      'prompt',
+      'user_prompt',
+      'userPrompt',
+      'initial_prompt',
+      'initialPrompt',
+      'user_message'
+    ])
+  ) {
+    return true
+  }
+  // Why: Amp tool/result `message` is output text, not a user prompt.
+  return eventName === 'agent.start' && promptText.length > 0
 }
 
 function normalizeCodexEvent(
@@ -2573,6 +2755,9 @@ export function normalizeHookPayload(
       }
       payload = normalizeAntigravityEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'amp':
+      payload = normalizeAmpEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
     case 'opencode':
       if (extractedPrompt.source === 'role_user_text') {
         const messageId = readFirstString(hookPayloadRecord, [
@@ -2656,13 +2841,18 @@ export function normalizeHookPayload(
         tabId,
         worktreeId,
         connectionId: null,
-        hasExplicitPrompt: hasExplicitUserPrompt(
-          source,
-          eventName,
-          extractedPrompt,
-          resolvedPromptText,
-          hasTranscriptPromptEvidence
-        ),
+        hasExplicitPrompt:
+          source === 'amp'
+            ? hasExplicitPromptForSource(source, eventName, promptText, hookPayloadRecord)
+              ? true
+              : undefined
+            : hasExplicitUserPrompt(
+                source,
+                eventName,
+                extractedPrompt,
+                resolvedPromptText,
+                hasTranscriptPromptEvidence
+              ),
         promptInteractionKey,
         hookEventName: typeof eventName === 'string' ? eventName : undefined,
         toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
@@ -2680,6 +2870,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/codex': 'codex',
   '/hook/gemini': 'gemini',
   '/hook/antigravity': 'antigravity',
+  '/hook/amp': 'amp',
   '/hook/opencode': 'opencode',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
