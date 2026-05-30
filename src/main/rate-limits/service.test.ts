@@ -3,6 +3,7 @@ stale-data handling, account-switch generation, and OpenCode config-change
 semantics covered in service.ts, which already carries the same pragma.
 Keeping them in one file makes the ordering contract reviewable as a unit. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'events'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
@@ -78,6 +79,34 @@ function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<
   return service as unknown as { fetchAll: () => Promise<void> }
 }
 
+type RateLimitWindow = Parameters<RateLimitService['attach']>[0]
+
+class FakeRateLimitWindow extends EventEmitter {
+  webContents = {
+    send: vi.fn()
+  }
+
+  isDestroyed(): boolean {
+    return false
+  }
+
+  isVisible(): boolean {
+    return true
+  }
+
+  isMinimized(): boolean {
+    return false
+  }
+
+  isFocused(): boolean {
+    return true
+  }
+}
+
+function asRateLimitWindow(window: FakeRateLimitWindow): RateLimitWindow {
+  return window as unknown as RateLimitWindow
+}
+
 describe('RateLimitService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -109,6 +138,36 @@ describe('RateLimitService', () => {
 
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+  })
+
+  it('removes all window listeners when replacing the attached window', () => {
+    const service = new RateLimitService()
+    const firstWindow = new FakeRateLimitWindow()
+    const secondWindow = new FakeRateLimitWindow()
+
+    service.attach(asRateLimitWindow(firstWindow))
+    expect(firstWindow.listenerCount('focus')).toBe(1)
+    expect(firstWindow.listenerCount('show')).toBe(1)
+    expect(firstWindow.listenerCount('restore')).toBe(1)
+    expect(firstWindow.listenerCount('closed')).toBe(1)
+
+    service.attach(asRateLimitWindow(secondWindow))
+
+    expect(firstWindow.listenerCount('focus')).toBe(0)
+    expect(firstWindow.listenerCount('show')).toBe(0)
+    expect(firstWindow.listenerCount('restore')).toBe(0)
+    expect(firstWindow.listenerCount('closed')).toBe(0)
+    expect(secondWindow.listenerCount('focus')).toBe(1)
+    expect(secondWindow.listenerCount('show')).toBe(1)
+    expect(secondWindow.listenerCount('restore')).toBe(1)
+    expect(secondWindow.listenerCount('closed')).toBe(1)
+
+    service.stop()
+
+    expect(secondWindow.listenerCount('focus')).toBe(0)
+    expect(secondWindow.listenerCount('show')).toBe(0)
+    expect(secondWindow.listenerCount('restore')).toBe(0)
+    expect(secondWindow.listenerCount('closed')).toBe(0)
   })
 
   it('keeps recent stale data across repeated failures', async () => {
