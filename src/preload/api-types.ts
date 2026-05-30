@@ -1383,6 +1383,7 @@ export type PreloadApi = {
     codexStatus: () => Promise<AgentHookInstallStatus>
     geminiStatus: () => Promise<AgentHookInstallStatus>
     antigravityStatus: () => Promise<AgentHookInstallStatus>
+    ampStatus: () => Promise<AgentHookInstallStatus>
     cursorStatus: () => Promise<AgentHookInstallStatus>
     droidStatus: () => Promise<AgentHookInstallStatus>
     commandCodeStatus: () => Promise<AgentHookInstallStatus>

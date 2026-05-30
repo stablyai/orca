@@ -21,6 +21,35 @@ type ActiveGrabOp = {
 /** Hard timeout for an armed grab operation to prevent indefinite hangs. */
 const GRAB_OP_TIMEOUT_MS = 120_000
 
+function isGuestCancellationPayload(rawPayload: unknown): boolean {
+  if (!rawPayload || typeof rawPayload !== 'object') {
+    return false
+  }
+  const payload = rawPayload as Record<string, unknown>
+  if (payload.__orcaCancelled === true) {
+    return true
+  }
+  // Why: old guest/Electron paths can serialize cancellation as a plain error
+  // object, but valid grab payloads may also carry page-authored fields.
+  if (payload.message !== 'cancelled') {
+    return false
+  }
+  return !('page' in payload) && !('target' in payload) && !('payload' in payload)
+}
+
+function getGuestErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message
+  }
+  if (err && typeof err === 'object') {
+    const message = (err as Record<string, unknown>).message
+    if (typeof message === 'string') {
+      return message
+    }
+  }
+  return 'Selection failed'
+}
+
 export class BrowserGrabSessionController {
   private readonly activeGrabOps = new Map<string, ActiveGrabOp>()
 
@@ -105,6 +134,12 @@ export class BrowserGrabSessionController {
             settleOnce({ opId, kind: 'cancelled', reason: 'user' })
             return
           }
+          // Why: teardown cancellation is an expected user path. Classify it
+          // before payload validation so it cannot surface as an invalid grab.
+          if (isGuestCancellationPayload(rawPayload)) {
+            settleOnce({ opId, kind: 'cancelled', reason: 'user' })
+            return
+          }
           // Why: the guest wraps right-click results in { __orcaContextMenu, payload }
           // so the renderer can show the full action dropdown instead of auto-copying.
           const isContextMenu =
@@ -124,7 +159,7 @@ export class BrowserGrabSessionController {
             payload
           })
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Selection failed'
+          const message = getGuestErrorMessage(err)
           if (message.includes('cancelled')) {
             settleOnce({ opId, kind: 'cancelled', reason: 'user' })
           } else {
