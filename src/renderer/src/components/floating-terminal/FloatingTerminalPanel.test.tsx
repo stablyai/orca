@@ -471,6 +471,14 @@ function runEffects(): void {
   }
 }
 
+function attachRef(ref: unknown, value: unknown): void {
+  if (typeof ref === 'function') {
+    ref(value)
+    return
+  }
+  ;(ref as { current: unknown }).current = value
+}
+
 async function flushAsyncWork(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
@@ -583,7 +591,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
     const panel = findByProp(element, 'data-floating-terminal-panel')
     const panelElement = { focus: vi.fn() }
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
 
     runEffects()
 
@@ -702,7 +710,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     Object.setPrototypeOf(target, HTMLElement.prototype)
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', {
       activeElement,
       addEventListener: vi.fn(),
@@ -753,7 +761,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const target = { classList: { contains: vi.fn().mockReturnValue(true) }, closest: vi.fn() }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     Object.setPrototypeOf(target, HTMLElement.prototype)
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', {
       activeElement,
       addEventListener: vi.fn(),
@@ -796,7 +804,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const target = { classList: { contains: vi.fn().mockReturnValue(true) }, closest: vi.fn() }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     Object.setPrototypeOf(target, HTMLElement.prototype)
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', {
       activeElement,
       addEventListener: vi.fn(),
@@ -840,7 +848,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const titlebarTarget = { closest: vi.fn().mockReturnValue(null) }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', { activeElement })
 
     ;(titlebar.props.onPointerDown as (event: unknown) => void)({
@@ -865,7 +873,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const titlebarTarget = { closest: vi.fn().mockReturnValue(null) }
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
-    ;(panel.props.ref as { current: unknown }).current = panelElement
+    attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', { activeElement })
 
     ;(titlebar.props.onPointerDown as (event: unknown) => void)({

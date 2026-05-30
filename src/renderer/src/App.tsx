@@ -369,7 +369,15 @@ function App(): React.JSX.Element {
     floatingTerminalReturnFocusFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelFloatingTerminalReturnFocusFrame, [cancelFloatingTerminalReturnFocusFrame])
+  const setAppRootNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: return-focus frames are only valid while the App root is mounted.
+      if (!node) {
+        cancelFloatingTerminalReturnFocusFrame()
+      }
+    },
+    [cancelFloatingTerminalReturnFocusFrame]
+  )
 
   const rememberFloatingTerminalReturnFocus = useCallback((): void => {
     const active = document.activeElement
@@ -1562,6 +1570,7 @@ function App(): React.JSX.Element {
 
   return (
     <div
+      ref={setAppRootNode}
       className="flex flex-col h-screen w-screen overflow-hidden"
       style={
         {
