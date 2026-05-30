@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
@@ -51,6 +51,14 @@ export function RichMarkdownCodeBlock({
 
   const isMermaid = language === 'mermaid'
 
+  useEffect(() => {
+    if (!copied) {
+      return
+    }
+    const timeout = window.setTimeout(() => setCopied(false), 1500)
+    return () => window.clearTimeout(timeout)
+  }, [copied])
+
   const onChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       updateAttributes({ language: e.target.value })
@@ -66,7 +74,6 @@ export function RichMarkdownCodeBlock({
         .writeClipboardText(text)
         .then(() => {
           setCopied(true)
-          setTimeout(() => setCopied(false), 1500)
         })
         .catch(() => {
           // Silently swallow clipboard write failures (e.g. permission denied).
