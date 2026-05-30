@@ -293,6 +293,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'grok',
     expectedProcess: 'grok',
     promptInjectionMode: 'stdin-after-start'
+  },
+  adal: {
+    detectCmd: 'adal',
+    launchCmd: 'adal',
+    expectedProcess: 'adal',
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 

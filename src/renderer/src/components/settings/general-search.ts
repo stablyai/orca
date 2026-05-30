@@ -124,7 +124,8 @@ export const GENERAL_AGENT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'gemini',
       'aider',
       'copilot',
-      'grok'
+      'grok',
+      'adal'
     ]
   }
 ]

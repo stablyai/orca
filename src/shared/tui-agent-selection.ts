@@ -32,7 +32,8 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'qwen-code',
   'rovo',
   'hermes',
-  'openclaw'
+  'openclaw',
+  'adal'
 ] as const satisfies readonly TuiAgent[]
 
 export function pickTuiAgent(
