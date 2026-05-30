@@ -58,6 +58,9 @@ export function RemoteFileBrowser({
   const inputRef = useRef<HTMLInputElement>(null)
   const fileHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Why: paste resolution intentionally runs next tick; closing the picker
+  // before then should cancel stale preview work.
+  const pasteResolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Cache directory listings by absolute resolved path for the lifetime of
   // the picker so ordinary typing issues at most one remote call per newly
   // committed segment. targetId does not change within a picker instance.
@@ -82,9 +85,15 @@ export function RemoteFileBrowser({
     return () => {
       if (fileHintTimerRef.current) {
         clearTimeout(fileHintTimerRef.current)
+        fileHintTimerRef.current = null
       }
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
+      }
+      if (pasteResolveTimerRef.current) {
+        clearTimeout(pasteResolveTimerRef.current)
+        pasteResolveTimerRef.current = null
       }
     }
   }, [])
@@ -382,7 +391,11 @@ export function RemoteFileBrowser({
       // Paste resolves immediately; no debounce. React's onChange still fires
       // after the paste is applied to the input value, so we defer to the
       // next tick so `filter` reflects the pasted value.
-      setTimeout(() => {
+      if (pasteResolveTimerRef.current) {
+        clearTimeout(pasteResolveTimerRef.current)
+      }
+      pasteResolveTimerRef.current = setTimeout(() => {
+        pasteResolveTimerRef.current = null
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current)
           debounceTimerRef.current = null

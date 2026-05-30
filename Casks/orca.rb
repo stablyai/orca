@@ -22,7 +22,8 @@ cask "orca" do
   # becomes a no-op unless the user passes --greedy, and brew's version
   # metadata stays aligned with whatever the app has swapped itself to.
   auto_updates true
-  depends_on macos: ">= :big_sur"
+  conflicts_with cask: "orca@rc"
+  depends_on macos: :big_sur
 
   app "Orca.app"
 

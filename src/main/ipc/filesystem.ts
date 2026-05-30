@@ -64,7 +64,7 @@ import {
 } from '../text-generation/commit-message-text-generation'
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { getUpstreamStatus } from '../git/upstream'
-import { gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
+import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
@@ -1166,6 +1166,30 @@ export function registerFilesystemHandlers(
         await validateGitPushTarget(worktreePath, args.pushTarget)
       }
       await gitPull(worktreePath, args.pushTarget)
+    }
+  )
+
+  ipcMain.handle(
+    'git:fastForward',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        if (args.pushTarget) {
+          assertGitPushTargetShape(args.pushTarget)
+        }
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.fastForwardBranch(args.worktreePath, args.pushTarget)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      if (args.pushTarget) {
+        await validateGitPushTarget(worktreePath, args.pushTarget)
+      }
+      await gitFastForward(worktreePath, args.pushTarget)
     }
   )
 

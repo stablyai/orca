@@ -1178,6 +1178,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.pull', { worktree: worktree.id, pushTarget })
     },
+    fastForward: async ({ worktreePath, pushTarget }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.fastForward', { worktree: worktree.id, pushTarget })
+    },
     rebaseFromBase: async ({ worktreePath, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.rebaseFromBase', { worktree: worktree.id, baseRef })

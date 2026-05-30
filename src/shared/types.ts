@@ -469,6 +469,12 @@ export type TerminalTab = {
    *  PTY and tab icon stay stable even if the default shell setting changes
    *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
+  /** Why: the coding-harness agent Orca launched in this tab. Lets the tab bar
+   *  show the provider icon immediately, before the agent emits its first hook
+   *  event (a freshly-launched, idle agent reports no live status yet). Live
+   *  hook status overrides this once the agent does anything. Plain terminals
+   *  and manually-started agents omit it. */
+  launchAgent?: TuiAgent
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
    *  not by the user doing work. Without this flag the resulting

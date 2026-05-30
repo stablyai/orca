@@ -21,6 +21,7 @@ export type DropdownActionKind =
   | 'push_create_pr'
   | 'push'
   | 'pull'
+  | 'fast_forward'
   | 'sync'
   | 'rebase_base'
   | 'fetch'
@@ -45,6 +46,10 @@ function describePushCount(ahead: number): string {
 
 function describePullCount(behind: number): string {
   return `Pull ${behind} commit${behind === 1 ? '' : 's'}`
+}
+
+function describeFastForwardCount(behind: number): string {
+  return `Fast-forward ${behind} commit${behind === 1 ? '' : 's'}`
 }
 
 function describeSyncCounts(ahead: number, behind: number): string {
@@ -267,6 +272,33 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       globalBusy || upstreamLoading || !hasUpstream || behind === 0 || shouldForcePushWithLease
   }
 
+  const fastForwardItem: DropdownItem = {
+    kind: 'fast_forward',
+    label: formatCountLabel('Fast-forward', behind),
+    title: upstreamLoading
+      ? 'Checking branch status…'
+      : publishBlockedByPRLoading
+        ? 'Checking PR status…'
+        : publishBlockedByMergedPR
+          ? 'PR is already merged'
+          : !hasUpstream
+            ? 'Publish the branch first to fast-forward'
+            : shouldForcePushWithLease
+              ? 'Nothing new to fast-forward — remote only has older copies of local commits'
+              : behind === 0
+                ? 'Nothing to fast-forward'
+                : ahead > 0
+                  ? 'Local commits prevent a fast-forward pull'
+                  : describeFastForwardCount(behind),
+    disabled:
+      globalBusy ||
+      upstreamLoading ||
+      !hasUpstream ||
+      behind === 0 ||
+      ahead > 0 ||
+      shouldForcePushWithLease
+  }
+
   const syncItem: DropdownItem = {
     kind: 'sync',
     label: formatSyncLabel('Sync', ahead, behind),
@@ -415,6 +447,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     createPRItem,
     pushCreatePRItem,
     pullItem,
+    fastForwardItem,
     syncItem,
     rebaseItem,
     fetchItem,

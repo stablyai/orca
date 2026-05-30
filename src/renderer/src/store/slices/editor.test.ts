@@ -1332,6 +1332,7 @@ describe('createEditorSlice remote branch actions', () => {
   const gitUpstreamStatusMock = vi.fn()
   const gitPushMock = vi.fn()
   const gitPullMock = vi.fn()
+  const gitFastForwardMock = vi.fn()
   const gitRebaseFromBaseMock = vi.fn()
   const gitFetchMock = vi.fn()
 
@@ -1341,6 +1342,7 @@ describe('createEditorSlice remote branch actions', () => {
     gitUpstreamStatusMock.mockReset()
     gitPushMock.mockReset()
     gitPullMock.mockReset()
+    gitFastForwardMock.mockReset()
     gitRebaseFromBaseMock.mockReset()
     gitFetchMock.mockReset()
 
@@ -1361,6 +1363,7 @@ describe('createEditorSlice remote branch actions', () => {
         upstreamStatus: gitUpstreamStatusMock,
         push: gitPushMock,
         pull: gitPullMock,
+        fastForward: gitFastForwardMock,
         rebaseFromBase: gitRebaseFromBaseMock,
         fetch: gitFetchMock
       }
@@ -1466,6 +1469,97 @@ describe('createEditorSlice remote branch actions', () => {
       pushTarget
     })
     expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('runs fast-forward and refreshes upstream on success', async () => {
+    const store = createEditorStore()
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await store.getState().fastForwardBranch('wt-1', '/repo', undefined, pushTarget)
+
+    expect(gitFastForwardMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget
+    })
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('surfaces a fast-forward toast and clears the busy flag when fast-forward fails', async () => {
+    const store = createEditorStore()
+    gitFastForwardMock.mockRejectedValueOnce(new Error('Not possible to fast-forward, aborting.'))
+
+    await expect(store.getState().fastForwardBranch('wt-1', '/repo')).rejects.toThrow(
+      'Not possible to fast-forward'
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Fast-forward failed. Not possible to fast-forward, aborting.'
+    )
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('keeps fast-forward wording when normalized pull errors report local changes', async () => {
+    const store = createEditorStore()
+    gitFastForwardMock.mockRejectedValueOnce(
+      new Error(
+        'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
+      )
+    )
+
+    await expect(store.getState().fastForwardBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Fast-forward blocked — commit or stash your local changes first.'
+    )
+  })
+
+  it('keeps fast-forward wording when normalized pull errors report untracked files', async () => {
+    const store = createEditorStore()
+    gitFastForwardMock.mockRejectedValueOnce(
+      new Error('Pull would overwrite untracked files. Move, remove, or add them before pulling.')
+    )
+
+    await expect(store.getState().fastForwardBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Fast-forward blocked — move, remove, or add untracked files first.'
+    )
+  })
+
+  it('keeps rebase wording when normalized pull errors report local changes', async () => {
+    const store = createEditorStore()
+    gitRebaseFromBaseMock.mockRejectedValueOnce(
+      new Error(
+        'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
+      )
+    )
+
+    await expect(store.getState().rebaseFromBase('wt-1', '/repo', 'origin/main')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Rebase blocked — commit or stash your local changes first.'
+    )
+  })
+
+  it('keeps rebase wording when normalized pull errors report untracked files', async () => {
+    const store = createEditorStore()
+    gitRebaseFromBaseMock.mockRejectedValueOnce(
+      new Error('Pull would overwrite untracked files. Move, remove, or add them before pulling.')
+    )
+
+    await expect(store.getState().rebaseFromBase('wt-1', '/repo', 'origin/main')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Rebase blocked — move, remove, or add untracked files first.'
+    )
   })
 
   it('fetches the explicit push target and refreshes that target status', async () => {

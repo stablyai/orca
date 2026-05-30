@@ -1294,6 +1294,22 @@ describe('registerFilesystemHandlers', () => {
     expect(bulkDiscardChangesMock).not.toHaveBeenCalled()
   })
 
+  it('routes ssh git:fastForward through the SSH provider', async () => {
+    const sshFastForwardMock = vi.fn().mockResolvedValue(undefined)
+    const pushTarget = { remoteName: 'fork', branchName: 'feature/fix' }
+    getSshGitProviderMock.mockReturnValue({ fastForwardBranch: sshFastForwardMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:fastForward')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'conn-1',
+      pushTarget
+    })
+
+    expect(sshFastForwardMock).toHaveBeenCalledWith('/remote/repo', pushTarget)
+  })
+
   it('rejects git:commit with empty message and does not call commitChanges', async () => {
     registerFilesystemHandlers(store as never)
 

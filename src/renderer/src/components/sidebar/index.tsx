@@ -11,6 +11,7 @@ import WorktreeMetaDialog from './WorktreeMetaDialog'
 import NonGitFolderDialog from './NonGitFolderDialog'
 import RemoveFolderDialog from './RemoveFolderDialog'
 import AddRepoDialog from './AddRepoDialog'
+import AddProjectFromFolderDialog from './AddProjectFromFolderDialog'
 import ProjectAddedDialog from './ProjectAddedDialog'
 import WorktreeVisibilityDialog from './WorktreeVisibilityDialog'
 import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
@@ -98,6 +99,7 @@ function Sidebar({
       <NonGitFolderDialog />
       <RemoveFolderDialog />
       <AddRepoDialog />
+      <AddProjectFromFolderDialog />
       <ProjectAddedDialog />
       <WorktreeVisibilityDialog />
       <OrcaYamlTrustDialog />

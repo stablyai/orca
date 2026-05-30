@@ -156,7 +156,7 @@ function worktreeUsesWslPath(
   return worktree ? isWslUncPath(worktree.path) : false
 }
 
-function worktreeUsesRemoteConnection(
+export function worktreeUsesRemoteConnection(
   state: Pick<AppState, 'repos' | 'worktreesByRepo'>,
   worktreeId: string
 ): boolean {
@@ -287,6 +287,9 @@ export type TerminalSlice = {
        *  with an existing tab anywhere in the store (tabIds form the global
        *  paneKey namespace, so collisions are checked across all worktrees). */
       id?: string
+      /** Coding-harness agent being launched in this tab, recorded so the tab
+       *  bar can show the provider icon before the agent's first hook event. */
+      launchAgent?: TuiAgent
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
@@ -296,6 +299,7 @@ export type TerminalSlice = {
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
+  clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   /** Mark a tab as having unread activity (agent working→idle transition).
@@ -557,6 +561,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         sortOrder: existing.length,
         createdAt: Date.now(),
         ...(createdShellOverride !== undefined ? { shellOverride: createdShellOverride } : {}),
+        ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
         // Why: when Terminal.tsx's activation fallback auto-creates a tab for a
         // first-visit worktree, the resulting PTY spawn is caused by the user
         // clicking the worktree, not by work happening in it. Tagging the tab
@@ -1021,6 +1026,27 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
       return nextState
+    })
+  },
+
+  clearTabLaunchAgent: (tabId) => {
+    set((s) => {
+      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+      if (!ownerWorktreeId) {
+        return s
+      }
+      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
+      const tabIndex = tabs.findIndex((t) => t.id === tabId)
+      const currentTab = tabs[tabIndex]
+      if (!currentTab?.launchAgent) {
+        return s
+      }
+      const { launchAgent: _launchAgent, ...tabWithoutLaunchAgent } = currentTab
+      void _launchAgent
+      const nextTabs = [...tabs]
+      nextTabs[tabIndex] = tabWithoutLaunchAgent
+      scheduleRuntimeGraphSync()
+      return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
     })
   },
 
