@@ -11,7 +11,8 @@ import {
   createDivider,
   applyDividerStyles,
   applyPaneOpacity,
-  applyRootBackground
+  applyRootBackground,
+  disposeDividersIn
 } from './pane-divider'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
@@ -265,6 +266,7 @@ export class PaneManager {
       disposePane(pane, this.panes)
     }
     this.identities.clear()
+    disposeDividersIn(this.root)
     this.root.innerHTML = ''
     this.activePaneId = null
   }

@@ -6,7 +6,7 @@ import type {
   PaneStyleOptions,
   ScrollState
 } from './pane-manager-types'
-import { createDivider } from './pane-divider'
+import { createDivider, disposeDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
 import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
@@ -290,6 +290,7 @@ export function removeDividers(parent: HTMLElement): void {
       child instanceof HTMLElement && child.classList.contains('pane-divider')
   )
   for (const d of dividers) {
+    disposeDivider(d)
     d.remove()
   }
 }
