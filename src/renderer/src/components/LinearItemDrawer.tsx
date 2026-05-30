@@ -953,6 +953,14 @@ export function LinearIssueCommentFooter({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
@@ -972,6 +980,9 @@ export function LinearIssueCommentFooter({
     try {
       const result = await linearAddIssueComment(settings, issueId, trimmed, workspaceId)
       const typed = result as { ok: boolean; id?: string; error?: string }
+      if (!mountedRef.current) {
+        return
+      }
       if (typed.ok) {
         setBody('')
         onCommentAdded({
@@ -983,9 +994,13 @@ export function LinearIssueCommentFooter({
         toast.error(typed.error ?? 'Failed to add comment')
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }, [body, issueId, onCommentAdded, settings, workspaceId])
 

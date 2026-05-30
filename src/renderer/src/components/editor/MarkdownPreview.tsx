@@ -1713,6 +1713,14 @@ function MarkdownAnnotationComposer({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -1727,11 +1735,16 @@ function MarkdownAnnotationComposer({
     setSubmitting(true)
     try {
       const ok = await onSubmit(trimmed)
+      if (!mountedRef.current) {
+        return
+      }
       if (ok) {
         setBody('')
       }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
