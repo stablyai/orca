@@ -263,6 +263,11 @@ export function applyRootBackground(root: HTMLElement, styleOptions: PaneStyleOp
   if (styleOptions.splitBackground) {
     root.style.background = styleOptions.splitBackground
   }
+  if (styleOptions.paneBackground) {
+    root.style.setProperty('--orca-terminal-pane-background', styleOptions.paneBackground)
+  } else {
+    root.style.removeProperty('--orca-terminal-pane-background')
+  }
   if (styleOptions.paddingX !== undefined) {
     root.style.setProperty('--pane-padding-x', `${styleOptions.paddingX}px`)
   }

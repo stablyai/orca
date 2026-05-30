@@ -3,7 +3,6 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
-import { isGlassEffectActive } from '../../../../shared/glass-theme'
 import {
   getBuiltinTheme,
   resolvePaneStyleOptions,
@@ -190,6 +189,16 @@ export function composeActiveTerminalTheme(
   return theme
 }
 
+export function resolveEffectiveTerminalBackgroundOpacity(
+  settings: Pick<GlobalSettings, 'terminalBackgroundOpacity'> &
+    Partial<Pick<GlobalSettings, 'glassEffect'>>
+): number | undefined {
+  // Why: glass can tint the window chrome, but terminal theme colors must stay
+  // faithful by default. Only make the terminal itself translucent when the
+  // user explicitly opts into terminal background opacity.
+  return settings.terminalBackgroundOpacity
+}
+
 export function applyTerminalAppearance(
   manager: PaneManager,
   settings: GlobalSettings,
@@ -203,10 +212,7 @@ export function applyTerminalAppearance(
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
   const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  // Why: glass themes default to the sidebar's see-through level so there is
-  // no sharp seam where the sidebar meets the terminal. Explicit user opacity wins.
-  const effectiveOpacity =
-    settings.terminalBackgroundOpacity ?? (isGlassEffectActive(settings) ? 0.15 : undefined)
+  const effectiveOpacity = resolveEffectiveTerminalBackgroundOpacity(settings)
   const theme = composeActiveTerminalTheme(baseTheme, {
     ...settings,
     terminalBackgroundOpacity: effectiveOpacity

@@ -1,5 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createDividerFlexFrameScheduler } from './pane-divider'
+import { applyRootBackground, createDividerFlexFrameScheduler } from './pane-divider'
+
+type MockRoot = HTMLElement & {
+  style: CSSStyleDeclaration & {
+    background: string
+    setProperty: ReturnType<typeof vi.fn<(name: string, value: string) => void>>
+    removeProperty: ReturnType<typeof vi.fn<(name: string) => void>>
+  }
+}
+
+function makeRoot(): MockRoot {
+  const style = {
+    background: '',
+    setProperty: vi.fn<(name: string, value: string) => void>(),
+    removeProperty: vi.fn<(name: string) => void>()
+  }
+  return { style } as unknown as MockRoot
+}
 
 describe('createDividerFlexFrameScheduler', () => {
   it('coalesces repeated drag updates into one flex write per animation frame', () => {
@@ -39,5 +56,30 @@ describe('createDividerFlexFrameScheduler', () => {
     expect(cancelFrame).toHaveBeenCalledWith(7)
     expect(apply).toHaveBeenCalledTimes(1)
     expect(apply).toHaveBeenCalledWith(180, 220)
+  })
+})
+
+describe('applyRootBackground', () => {
+  it('exposes the pane background as a CSS variable for xterm gutter fill', () => {
+    const root = makeRoot()
+
+    applyRootBackground(root, {
+      splitBackground: '#111827',
+      paneBackground: '#111827'
+    })
+
+    expect(root.style.background).toBe('#111827')
+    expect(root.style.setProperty).toHaveBeenCalledWith(
+      '--orca-terminal-pane-background',
+      '#111827'
+    )
+  })
+
+  it('clears stale pane background variables when no pane background is present', () => {
+    const root = makeRoot()
+
+    applyRootBackground(root, {})
+
+    expect(root.style.removeProperty).toHaveBeenCalledWith('--orca-terminal-pane-background')
   })
 })

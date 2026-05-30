@@ -504,11 +504,11 @@
 }
 
 :root.glass-light .xterm-viewport {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--orca-terminal-pane-background, rgba(255, 255, 255, 0.15));
   scrollbar-color: rgba(120, 120, 120, 0.35) transparent;
 }
 :root.glass-dark .xterm-viewport {
-  background: rgba(15, 18, 32, 0.15);
+  background: var(--orca-terminal-pane-background, rgba(15, 18, 32, 0.15));
   scrollbar-color: rgba(180, 200, 240, 0.35) transparent;
 }
 
