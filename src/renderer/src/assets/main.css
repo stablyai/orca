@@ -1407,6 +1407,81 @@
   transform-origin: center;
 }
 
+/* CLI feature tip — terminal cursor inside the agent-control command. */
+@keyframes cli-tip-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  46%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-cli-tip-caret {
+  animation: cli-tip-caret 0.9s steps(1, end) infinite;
+}
+
+@keyframes cli-tip-command-line {
+  0% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-cli-tip-command-line {
+  animation: cli-tip-command-line 160ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-cli-tip-caret {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .animate-cli-tip-command-line {
+    animation: none;
+  }
+}
+
+.cli-tip-orchestration-frame .feature-wall-orch-stage {
+  --feature-wall-workspace-title-size: 11.5px;
+  --feature-wall-agent-message-size: 10.5px;
+  --feature-wall-agent-row-gap: 5px;
+  --feature-wall-agent-status-col: 10px;
+  --feature-wall-agent-icon-col: 12px;
+  --feature-wall-agent-status-box: 10px;
+  --feature-wall-agent-status-icon: 9px;
+  --feature-wall-agent-icon-box: 12px;
+  --feature-wall-child-indent: 22px;
+  align-content: start !important;
+  padding-top: 10px !important;
+  padding-left: 12px !important;
+  padding-right: 52px !important;
+}
+
+.cli-tip-orchestration-frame .feature-wall-agent-icon svg {
+  height: 11px;
+  width: 11px;
+}
+
+.cli-tip-orchestration-frame .feature-wall-agent-status [aria-label] {
+  height: 10px;
+  width: 10px;
+}
+
+.cli-tip-orchestration-frame .feature-wall-agent-status [aria-label] > span {
+  height: 6px;
+  width: 6px;
+  border-width: 1.5px;
+}
+
 /* ── Feature wall: agents-orchestration animations ───────────────── */
 
 /* Why: drives the supported-agents marquee on page 1 of the agents tile.
@@ -1509,7 +1584,7 @@
   offset-distance: 100%;
   transform: translate(-12px, -12px) scale(1);
   transition:
-    offset-distance 1500ms cubic-bezier(0.25, 0.6, 0.25, 1),
+    offset-distance 1600ms cubic-bezier(0.25, 0.6, 0.25, 1),
     transform 280ms ease,
     opacity 280ms ease;
 }
@@ -1537,37 +1612,6 @@
   animation: feature-wall-msg-pop 1100ms ease-out;
 }
 
-@keyframes feature-wall-orch-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.feature-wall-spawn-spinner {
-  width: 11px;
-  height: 11px;
-  border: 1.5px solid rgb(245 158 11);
-  border-top-color: transparent;
-  border-radius: 999px;
-  animation: feature-wall-orch-spin 800ms linear infinite;
-}
-
-/* "Creating workspaces…" placeholder shown before the child workspaces
-   reveal. Once the orchestrator finishes spawning, the wrapper collapses
-   and the real child cards take its place. */
-.feature-wall-creating-children {
-  overflow: hidden;
-  opacity: 1;
-  max-height: 60px;
-  transition:
-    opacity 220ms ease,
-    max-height 320ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-.feature-wall-creating-children[data-hidden='true'] {
-  opacity: 0;
-  max-height: 0;
-  pointer-events: none;
-}
-
 /* Children container fades in once the orchestrator finishes creating. */
 .feature-wall-children-wrapper {
   opacity: 0;
@@ -1579,6 +1623,20 @@
 .feature-wall-children-wrapper[data-visible='true'] {
   opacity: 1;
   transform: none;
+}
+
+@keyframes feature-wall-child-card-in {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.feature-wall-child-card-shell {
+  animation: feature-wall-child-card-in 260ms ease-out both;
 }
 
 /* Each child agent row stays collapsed until *its* dispatch bubble lands on

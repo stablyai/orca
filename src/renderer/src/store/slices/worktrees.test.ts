@@ -414,6 +414,55 @@ describe('fetchWorktrees', () => {
     expect(store.getState().sortEpoch).toBe(7)
   })
 
+  it('purges session-only tab keys after an authoritative refresh', async () => {
+    const store = createTestStore()
+    const deleted = makeWorktree({
+      id: 'repo1::/path/deleted',
+      repoId: 'repo1',
+      path: '/path/deleted'
+    })
+    const surviving = makeWorktree({
+      id: 'repo1::/path/surviving',
+      repoId: 'repo1',
+      path: '/path/surviving'
+    })
+
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(makeDetectedResult('repo1', [surviving]))
+    store.setState({
+      worktreesByRepo: { repo1: [] },
+      detectedWorktreesByRepo: {
+        repo1: makeDetectedResult('repo1', [], {
+          authoritative: false,
+          source: 'metadata-fallback'
+        })
+      },
+      tabsByWorktree: {
+        [deleted.id]: [{ id: 'tab-deleted', worktreeId: deleted.id }],
+        [surviving.id]: [{ id: 'tab-surviving', worktreeId: surviving.id }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-deleted': { root: null, activeLeafId: null, expandedLeafId: null },
+        'tab-surviving': { root: null, activeLeafId: null, expandedLeafId: null }
+      },
+      activeWorktreeId: deleted.id,
+      activeTabId: 'tab-deleted',
+      sortEpoch: 7
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([surviving])
+    expect(store.getState().tabsByWorktree).toEqual({
+      [surviving.id]: [{ id: 'tab-surviving', worktreeId: surviving.id }]
+    })
+    expect(store.getState().terminalLayoutsByTabId).toEqual({
+      'tab-surviving': { root: null, activeLeafId: null, expandedLeafId: null }
+    })
+    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(store.getState().activeTabId).toBeNull()
+    expect(store.getState().sortEpoch).toBe(8)
+  })
+
   it('does not purge remembered state from a non-authoritative partial refresh', async () => {
     const store = createTestStore()
     const missingFromFallback = makeWorktree({

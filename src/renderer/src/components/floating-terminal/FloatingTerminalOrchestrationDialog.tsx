@@ -61,10 +61,10 @@ export function FloatingTerminalOrchestrationDialog({
   const cliInstalled = isOrcaCliAvailableOnPath(cliStatus)
   const cliSupported = cliStatus?.supported ?? false
   const cliLabel = cliInstalled
-    ? 'orca is on PATH'
+    ? 'Orca CLI is on PATH'
     : cliLoading
       ? 'Checking CLI status...'
-      : (cliStatus?.detail ?? 'Register orca so agents can call Orca from a terminal.')
+      : (cliStatus?.detail ?? 'Register the Orca CLI so agents can call Orca from a terminal.')
 
   const handleInstallCli = async (): Promise<void> => {
     setCliBusy(true)
@@ -77,7 +77,7 @@ export function FloatingTerminalOrchestrationDialog({
         onSetupStateChange()
       }
       if (isOrcaCliAvailableOnPath(next)) {
-        toast.success('Registered `orca` in PATH.')
+        toast.success('Registered the Orca CLI in PATH.')
       }
     } finally {
       setCliBusy(false)

@@ -16,6 +16,7 @@ const execFileAsync = promisify(execFile)
 
 type PreflightRuntimeContext = {
   wslDistro?: string | null
+  wslDefault?: boolean
 }
 
 export type PreflightStatus = {
@@ -52,24 +53,32 @@ export function _resetPreflightCache(): void {
   cached = null
 }
 
+type WslPreflightTarget = {
+  distro?: string
+}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
 async function execCommandInWsl(
-  distro: string,
+  target: WslPreflightTarget,
   command: string
 ): Promise<{ stdout: string; stderr: string }> {
-  return execFileAsync('wsl.exe', ['-d', distro, '--', 'bash', '-lc', command], {
+  const distroArgs = target.distro ? ['-d', target.distro] : []
+  return execFileAsync('wsl.exe', [...distroArgs, '--', 'bash', '-lc', command], {
     encoding: 'utf-8',
     timeout: 5000
   }) as Promise<{ stdout: string; stderr: string }>
 }
 
-async function isCommandAvailable(command: string, wslDistro?: string): Promise<boolean> {
+async function isCommandAvailable(
+  command: string,
+  wslTarget?: WslPreflightTarget
+): Promise<boolean> {
   try {
-    await (wslDistro
-      ? execCommandInWsl(wslDistro, `${shellQuote(command)} --version`)
+    await (wslTarget
+      ? execCommandInWsl(wslTarget, `${shellQuote(command)} --version`)
       : execFileAsync(command, ['--version']))
     return true
   } catch {
@@ -80,11 +89,11 @@ async function isCommandAvailable(command: string, wslDistro?: string): Promise<
 // Why: `which`/`where` is faster than spawning the agent binary itself and avoids
 // triggering any agent-specific startup side-effects. This gives a reliable
 // PATH-based check without requiring `--version` support from each agent.
-async function isCommandOnPath(command: string, wslDistro?: string): Promise<boolean> {
+async function isCommandOnPath(command: string, wslTarget?: WslPreflightTarget): Promise<boolean> {
   const finder = process.platform === 'win32' ? 'where' : 'which'
   try {
-    const { stdout } = wslDistro
-      ? await execCommandInWsl(wslDistro, `command -v ${shellQuote(command)}`)
+    const { stdout } = wslTarget
+      ? await execCommandInWsl(wslTarget, `command -v ${shellQuote(command)}`)
       : await execFileAsync(finder, [command], { encoding: 'utf-8' })
     return stdout
       .split(/\r?\n/)
@@ -116,18 +125,26 @@ function getKnownAgentCommands(
   return [...BUILT_IN_AGENT_COMMANDS, ...customs]
 }
 
-function getPreflightWslDistro(context?: PreflightRuntimeContext): string | null {
+function getPreflightWslTarget(context?: PreflightRuntimeContext): WslPreflightTarget | null {
+  if (process.platform !== 'win32') {
+    return null
+  }
   const distro = context?.wslDistro?.trim()
-  return process.platform === 'win32' && distro ? distro : null
+  if (distro) {
+    return { distro }
+  }
+  return context?.wslDefault ? {} : null
 }
 
 async function detectCommandRuntime(
   command: string,
   context?: PreflightRuntimeContext
-): Promise<{ installed: boolean; wslDistro?: string }> {
-  const wslDistro = getPreflightWslDistro(context)
-  if (wslDistro && (await isCommandAvailable(command, wslDistro))) {
-    return { installed: true, wslDistro }
+): Promise<{ installed: boolean; wslTarget?: WslPreflightTarget }> {
+  const wslTarget = getPreflightWslTarget(context)
+  if (wslTarget) {
+    return (await isCommandAvailable(command, wslTarget))
+      ? { installed: true, wslTarget }
+      : { installed: false }
   }
   if (await isCommandAvailable(command)) {
     return { installed: true }
@@ -135,17 +152,33 @@ async function detectCommandRuntime(
   return { installed: false }
 }
 
+function resolveDetectInstalledAgentsArgs(
+  customAgentsOrContext?: readonly CustomTuiAgent[] | PreflightRuntimeContext,
+  context?: PreflightRuntimeContext
+): { customAgents: readonly CustomTuiAgent[]; context?: PreflightRuntimeContext } {
+  if (isCustomAgentList(customAgentsOrContext)) {
+    return { customAgents: customAgentsOrContext, context }
+  }
+  return { customAgents: [], context: customAgentsOrContext }
+}
+
+function isCustomAgentList(
+  value: readonly CustomTuiAgent[] | PreflightRuntimeContext | undefined
+): value is readonly CustomTuiAgent[] {
+  return Array.isArray(value)
+}
+
 export async function detectInstalledAgents(
-  customAgents: readonly CustomTuiAgent[],
+  customAgentsOrContext?: readonly CustomTuiAgent[] | PreflightRuntimeContext,
   context?: PreflightRuntimeContext
 ): Promise<string[]> {
-  const wslDistro = getPreflightWslDistro(context)
-  const knownCommands = getKnownAgentCommands(customAgents)
+  const resolved = resolveDetectInstalledAgentsArgs(customAgentsOrContext, context)
+  const wslTarget = getPreflightWslTarget(resolved.context)
+  const knownCommands = getKnownAgentCommands(resolved.customAgents)
   const checks = await Promise.all(
     knownCommands.map(async ({ id, cmd }) => ({
       id,
-      installed:
-        (wslDistro ? await isCommandOnPath(cmd, wslDistro) : false) || (await isCommandOnPath(cmd))
+      installed: await isCommandOnPath(cmd, wslTarget ?? undefined)
     }))
   )
   return checks.filter((c) => c.installed).map((c) => c.id)
@@ -204,10 +237,10 @@ export async function detectRemoteAgents(args: {
   return result.agents
 }
 
-async function isGhAuthenticated(wslDistro?: string): Promise<boolean> {
+async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
   try {
-    await (wslDistro
-      ? execCommandInWsl(wslDistro, `${shellQuote('gh')} auth status`)
+    await (wslTarget
+      ? execCommandInWsl(wslTarget, `${shellQuote('gh')} auth status`)
       : execFileAsync('gh', ['auth', 'status'], {
           encoding: 'utf-8'
         }))
@@ -227,10 +260,10 @@ async function isGhAuthenticated(wslDistro?: string): Promise<boolean> {
 
 // Why: parallel to isGhAuthenticated for the glab CLI. glab writes auth
 // status to stderr in some versions and stdout in others; check both.
-async function isGlabAuthenticated(wslDistro?: string): Promise<boolean> {
+async function isGlabAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
   try {
-    await (wslDistro
-      ? execCommandInWsl(wslDistro, `${shellQuote('glab')} auth status`)
+    await (wslTarget
+      ? execCommandInWsl(wslTarget, `${shellQuote('glab')} auth status`)
       : execFileAsync('glab', ['auth', 'status'], { encoding: 'utf-8' }))
     return true
   } catch (error) {
@@ -245,7 +278,7 @@ export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
 ): Promise<PreflightStatus> {
-  const cacheable = !getPreflightWslDistro(context)
+  const cacheable = !getPreflightWslTarget(context)
   if (cacheable && cached && !force) {
     return cached
   }
@@ -267,8 +300,8 @@ export async function runPreflightCheck(
   ])
 
   const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
-    ghProbe.installed ? isGhAuthenticated(ghProbe.wslDistro) : Promise.resolve(false),
-    glabProbe.installed ? isGlabAuthenticated(glabProbe.wslDistro) : Promise.resolve(false),
+    ghProbe.installed ? isGhAuthenticated(ghProbe.wslTarget) : Promise.resolve(false),
+    glabProbe.installed ? isGlabAuthenticated(glabProbe.wslTarget) : Promise.resolve(false),
     getBitbucketAuthStatus(),
     getAzureDevOpsAuthStatus(),
     getGiteaAuthStatus()

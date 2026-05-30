@@ -104,7 +104,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
       return
     }
     setState('starred') // optimistic
-    const ok = await window.api.gh.starOrca()
+    const ok = await window.api.gh.starOrca('landing')
     if (!ok) {
       setState('not-starred')
       return

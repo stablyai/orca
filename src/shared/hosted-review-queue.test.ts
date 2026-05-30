@@ -95,9 +95,30 @@ describe('reviewReadyToMerge', () => {
     expect(reviewReadyToMerge(baseSummary({ threadSummary: { unresolvedCount: 2 } }))).toBe(false)
     expect(reviewReadyToMerge(baseSummary({ threadSummary: undefined }))).toBe(false)
     expect(reviewReadyToMerge(baseSummary({ mergeable: 'UNKNOWN' }))).toBe(false)
+    expect(reviewReadyToMerge(baseSummary({ reviewDecision: 'review_required' }))).toBe(false)
+    expect(reviewReadyToMerge(baseSummary({ reviewDecision: 'changes_requested' }))).toBe(false)
+    expect(reviewReadyToMerge(baseSummary({ mergeStateStatus: 'BEHIND' }))).toBe(false)
+    expect(reviewReadyToMerge(baseSummary({ mergeStateStatus: 'BLOCKED' }))).toBe(false)
   })
 
   it('accepts neutral checks when all other gates pass', () => {
     expect(reviewReadyToMerge(baseSummary({ checksStatus: 'neutral' }))).toBe(true)
+  })
+
+  it('scopes GitHub merge-state blockers to GitHub summaries', () => {
+    expect(
+      reviewReadyToMerge(
+        baseSummary({
+          identity: {
+            provider: 'gitlab',
+            host: 'gitlab.com',
+            owner: 'acme',
+            repo: 'orca',
+            number: 42
+          },
+          mergeStateStatus: 'BLOCKED'
+        })
+      )
+    ).toBe(true)
   })
 })

@@ -1039,6 +1039,7 @@ describe('useIpcEvents updater integration', () => {
     }))
     vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
       createFloatingWorkspaceTerminalTab,
+      isEmptyFloatingWorkspacePanelVisible: () => false,
       isFloatingWorkspacePanelFocused: () => floatingPanelFocused
     }))
     vi.doMock('@/runtime/web-runtime-session', () => ({

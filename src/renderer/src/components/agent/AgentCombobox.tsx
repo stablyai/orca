@@ -142,6 +142,8 @@ export default function AgentCombobox({
   const [commandValue, setCommandValue] = useState('')
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const listId = useId()
+  const inputRef = React.useRef<HTMLInputElement | null>(null)
+  const focusFrameRef = React.useRef<number | null>(null)
 
   const selectedAgent = useMemo<AgentCatalogEntry | null>(
     () => (value ? (agents.find((agent) => agent.id === value) ?? null) : null),
@@ -156,15 +158,13 @@ export default function AgentCombobox({
     return 'blank terminal'.includes(q) || 'terminal'.startsWith(q)
   }, [query])
 
-  React.useEffect(() => {
-    if (!open) {
-      return
+  const focusSearchInput = useCallback(() => {
+    if (focusFrameRef.current !== null) {
+      cancelAnimationFrame(focusFrameRef.current)
     }
-    setCommandValue(value ?? BLANK_VALUE)
-    const frame = requestAnimationFrame(() => {
-      const searchInput = document.querySelector<HTMLInputElement>(
-        '[data-agent-combobox-root="true"] [data-slot="command-input"]'
-      )
+    focusFrameRef.current = requestAnimationFrame(() => {
+      focusFrameRef.current = null
+      const searchInput = inputRef.current
       if (!searchInput) {
         return
       }
@@ -175,15 +175,23 @@ export default function AgentCombobox({
       const end = searchInput.value.length
       searchInput.setSelectionRange(end, end)
     })
-    return () => cancelAnimationFrame(frame)
-  }, [open, value])
-
-  const handleOpenChange = useCallback((nextOpen: boolean) => {
-    setOpen(nextOpen)
-    if (!nextOpen) {
-      setQuery('')
-    }
   }, [])
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen)
+      if (nextOpen) {
+        setCommandValue(value ?? BLANK_VALUE)
+        return
+      }
+      if (focusFrameRef.current !== null) {
+        cancelAnimationFrame(focusFrameRef.current)
+        focusFrameRef.current = null
+      }
+      setQuery('')
+    },
+    [value]
+  )
 
   const handleSelect = useCallback(
     (nextValue: TuiAgentId | null) => {
@@ -219,6 +227,7 @@ export default function AgentCombobox({
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
+        setCommandValue(value ?? BLANK_VALUE)
         setOpen(true)
         return
       }
@@ -227,11 +236,12 @@ export default function AgentCombobox({
       }
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
+        setCommandValue(value ?? BLANK_VALUE)
         setQuery(event.key)
         setOpen(true)
       }
     },
-    [open, onTriggerEnter]
+    [open, onTriggerEnter, value]
   )
 
   return (
@@ -276,10 +286,18 @@ export default function AgentCombobox({
             !allowNarrowTrigger && 'min-w-[18rem]'
           )}
           data-agent-combobox-root="true"
-          onOpenAutoFocus={(event) => event.preventDefault()}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            focusSearchInput()
+          }}
         >
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
-            <CommandInput placeholder="Search agents..." value={query} onValueChange={setQuery} />
+            <CommandInput
+              ref={inputRef}
+              placeholder="Search agents..."
+              value={query}
+              onValueChange={setQuery}
+            />
             <CommandList id={listId}>
               <CommandEmpty>No agents match your search.</CommandEmpty>
               {blankMatchesQuery

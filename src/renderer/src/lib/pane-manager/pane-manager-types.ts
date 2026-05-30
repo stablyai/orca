@@ -1,4 +1,4 @@
-import type { IMarker, Terminal } from '@xterm/xterm'
+import type { IDisposable, IMarker, Terminal } from '@xterm/xterm'
 import type { ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
@@ -114,6 +114,9 @@ export type ManagedPaneInternal = {
   // Why: splitPane reparents DOM; its delayed restore owns scroll until the
   // browser settles, so intermediate fits must not compete with it.
   pendingSplitScrollState: ScrollState | null
+  // Stored so repeated split restores and disposePane() can remove the
+  // deferred alt-screen buffer listener instead of stacking callbacks.
+  pendingSplitScrollBufferDisposable?: IDisposable | null
   debugLabel: string | null
 } & ManagedPane
 

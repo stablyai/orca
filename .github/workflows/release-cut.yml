@@ -548,9 +548,11 @@ jobs:
       # Why: `pnpm build:release` verifies the Linux computer-use provider by
       # importing AT-SPI bindings, which are runtime package deps but are not
       # present on stock GitHub Ubuntu release runners.
+      # Why: `rpm` is needed by electron-builder's fpm backend to produce the
+      # .rpm artifact. Stock Ubuntu runners do not ship it.
       - name: Install Linux computer-use provider dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool
+        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool rpm
 
       - name: Verify macOS signing environment
         if: matrix.platform == 'mac'
