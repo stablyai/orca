@@ -18,11 +18,13 @@ type ThemeRoot = {
 
 type ThemeMediaMatcher = (query: string) => Pick<MediaQueryList, 'matches'>
 type ThemeAnimationFrame = (callback: FrameRequestCallback) => number
+type ThemeCancelAnimationFrame = (handle: number) => void
 
 type ApplyDocumentThemeOptions = {
   root?: ThemeRoot
   matchMedia?: ThemeMediaMatcher
   requestAnimationFrame?: ThemeAnimationFrame
+  cancelAnimationFrame?: ThemeCancelAnimationFrame
   disableTransitions?: boolean
   /**
    * Whether the host is macOS. Defaults to a userAgent sniff in the browser.
@@ -30,6 +32,15 @@ type ApplyDocumentThemeOptions = {
    * does not include "Mac" by default.
    */
   isDarwin?: boolean
+}
+
+let pendingTransitionDisableFrames: number[] = []
+
+function cancelPendingTransitionDisableFrames(cancelFrame: ThemeCancelAnimationFrame): void {
+  for (const frameId of pendingTransitionDisableFrames) {
+    cancelFrame(frameId)
+  }
+  pendingTransitionDisableFrames = []
 }
 
 function systemPrefersDark(
@@ -96,12 +107,22 @@ export function applyDocumentTheme(
   }
 
   const requestFrame = options.requestAnimationFrame ?? window.requestAnimationFrame.bind(window)
+  const cancelFrame = options.cancelAnimationFrame ?? window.cancelAnimationFrame.bind(window)
+  cancelPendingTransitionDisableFrames(cancelFrame)
 
   // Why: two frames lets the root theme class recalculate before restoring
   // normal hover/collapse transitions, preventing staggered color fades.
-  requestFrame(() => {
-    requestFrame(() => {
+  const firstFrame = requestFrame(() => {
+    pendingTransitionDisableFrames = pendingTransitionDisableFrames.filter(
+      (id) => id !== firstFrame
+    )
+    const secondFrame = requestFrame(() => {
+      pendingTransitionDisableFrames = pendingTransitionDisableFrames.filter(
+        (id) => id !== secondFrame
+      )
       root.classList.remove(THEME_TRANSITION_DISABLED_CLASS)
     })
+    pendingTransitionDisableFrames.push(secondFrame)
   })
+  pendingTransitionDisableFrames.push(firstFrame)
 }

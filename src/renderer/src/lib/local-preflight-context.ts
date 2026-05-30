@@ -1,9 +1,10 @@
 import type { AppState } from '@/store/types'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 
-export type LocalPreflightContext = { wslDistro?: string | null } | undefined
+export type LocalPreflightContext = { wslDistro?: string | null; wslDefault?: boolean } | undefined
 
 const wslPreflightContextsByDistro = new Map<string, NonNullable<LocalPreflightContext>>()
+const wslDefaultPreflightContext = Object.freeze({ wslDefault: true })
 
 export function getWslDistroFromPath(path?: string | null): string | null {
   return path ? (parseWslUncPath(path)?.distro ?? null) : null
@@ -23,6 +24,40 @@ function getWslPreflightContext(wslDistro: string): NonNullable<LocalPreflightCo
 }
 
 export function getLocalPreflightContext(state: AppState): LocalPreflightContext {
+  const wslDistro = getLocalPreflightWslDistro(state)
+  return wslDistro ? getWslPreflightContext(wslDistro) : undefined
+}
+
+export function getLocalAgentPreflightContext(state: AppState): LocalPreflightContext {
+  const explicitAgentRuntime = state.settings?.localAgentRuntime
+  if (explicitAgentRuntime === 'host') {
+    return undefined
+  }
+  if (explicitAgentRuntime === 'wsl') {
+    const explicitDistro =
+      state.settings?.localAgentWslDistro?.trim() ||
+      state.settings?.terminalWindowsWslDistro?.trim()
+    if (explicitDistro) {
+      return getWslPreflightContext(explicitDistro)
+    }
+    return wslDefaultPreflightContext
+  }
+
+  const wslDistro = getLocalPreflightWslDistro(state)
+  if (wslDistro) {
+    return getWslPreflightContext(wslDistro)
+  }
+  if (state.settings?.terminalWindowsShell === 'wsl.exe') {
+    const preferredDistro = state.settings.terminalWindowsWslDistro?.trim()
+    if (preferredDistro) {
+      return getWslPreflightContext(preferredDistro)
+    }
+    return wslDefaultPreflightContext
+  }
+  return undefined
+}
+
+function getLocalPreflightWslDistro(state: AppState): string | null {
   const activeWorktree = state.activeWorktreeId
     ? Object.values(state.worktreesByRepo ?? {})
         .flat()
@@ -30,10 +65,12 @@ export function getLocalPreflightContext(state: AppState): LocalPreflightContext
     : null
   const activePath =
     activeWorktree?.path ?? (state.repos ?? []).find((repo) => repo.id === state.activeRepoId)?.path
-  const wslDistro = getWslDistroFromPath(activePath)
-  return wslDistro ? getWslPreflightContext(wslDistro) : undefined
+  return getWslDistroFromPath(activePath)
 }
 
 export function localPreflightContextKey(context: LocalPreflightContext): string {
-  return context?.wslDistro ? `wsl:${context.wslDistro}` : 'host'
+  if (context?.wslDistro) {
+    return `wsl:${context.wslDistro}`
+  }
+  return context?.wslDefault ? 'wsl:default' : 'host'
 }

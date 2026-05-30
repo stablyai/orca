@@ -112,6 +112,7 @@ export function writeGithubOutputs({ published, skipped }, outputPath = process.
     `${[
       `published_count=${published.length}`,
       `skipped_count=${skipped.length}`,
+      `latest_published_tag=${published.at(-1) ?? ''}`,
       `published_tags=${published.join(',')}`,
       `skipped_tags=${skipped.map((item) => item.tag).join(',')}`
     ].join('\n')}\n`

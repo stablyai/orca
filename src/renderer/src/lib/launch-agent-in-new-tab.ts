@@ -93,7 +93,6 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
-
   // Why: argv/flag agents fold the prompt into the launch command and
   // auto-submit — keeping behavior consistent with the composer/tab-bar `+`
   // mental model, where the prompt is "the first turn the user sent".
@@ -176,7 +175,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // pty-transport → pty:spawn IPC → main, where main fires `agent_started`
   // only after the spawn succeeds. `request_kind: 'new'` because
   // quick-launch always opens a fresh session.
-  const tab = store.createTab(worktreeId, groupId)
+  //
+  // Why: stamp the launched agent on the tab so the tab bar shows the provider
+  // icon immediately, before the agent's first hook event arrives.
+  const tab = store.createTab(worktreeId, groupId, undefined, { launchAgent: agent })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
@@ -189,7 +191,6 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       request_kind: 'new'
     }
   })
-
   // Why: schedule the bracketed-paste-after-ready follow-up immediately after
   // the startup command is queued. Fire-and-forget so callers keep their
   // synchronous `{ tabId, startupPlan }` signature. The helper short-circuits

@@ -80,7 +80,10 @@ docs/**
 !docs/readme/**
 !docs/reference/
 !docs/reference/**
+# Keep generated React perf scan ledgers local; durable docs still use docs/reference.
+docs/reference/react-performance-audit.md
 !docs/STYLEGUIDE.md
+!docs/mobile-terminal-shortcut-bar.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

@@ -330,6 +330,16 @@ export default function WorkspaceKanbanDrawer({
   const handleWorktreeActivate = useCallback(() => {
     onOpenChange(false)
   }, [onOpenChange])
+  const handleSheetOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      // Why: Radix treats any outside pointer release as a dismiss request.
+      // The board has custom right-side/sidebar rules, so only those paths close it.
+      if (nextOpen) {
+        onOpenChange(true)
+      }
+    },
+    [onOpenChange]
+  )
 
   const handleRenameStatus = useCallback(
     (statusId: string, label: string) => {
@@ -464,7 +474,7 @@ export default function WorkspaceKanbanDrawer({
     : '0px'
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+    <Sheet open={open} onOpenChange={handleSheetOpenChange} modal={false}>
       <SheetContent
         side="left"
         showCloseButton={false}
@@ -486,6 +496,29 @@ export default function WorkspaceKanbanDrawer({
           // its tooltip without hover and makes the drawer feel noisy.
           event.preventDefault()
         }}
+        onPointerDownOutside={(event) => {
+          const originalEvent = event.detail.originalEvent
+          const target = originalEvent.target
+          if (preserveOpenForMenu) {
+            event.preventDefault()
+            return
+          }
+          if (isWorkspaceBoardKeepOpenTarget(target)) {
+            event.preventDefault()
+            return
+          }
+          const liveDrawerLeft =
+            boardRef.current
+              ?.closest<HTMLElement>('[data-slot="sheet-content"]')
+              ?.getBoundingClientRect().left ?? drawerLeft
+          const pointerX =
+            'clientX' in originalEvent && typeof originalEvent.clientX === 'number'
+              ? originalEvent.clientX
+              : null
+          if (pointerX !== null && pointerX < liveDrawerLeft) {
+            event.preventDefault()
+          }
+        }}
         onInteractOutside={(event) => {
           const originalEvent = event.detail.originalEvent
           const target = originalEvent.target
@@ -503,7 +536,11 @@ export default function WorkspaceKanbanDrawer({
             boardRef.current
               ?.closest<HTMLElement>('[data-slot="sheet-content"]')
               ?.getBoundingClientRect().left ?? drawerLeft
-          if (originalEvent instanceof PointerEvent && originalEvent.clientX < liveDrawerLeft) {
+          const pointerX =
+            'clientX' in originalEvent && typeof originalEvent.clientX === 'number'
+              ? originalEvent.clientX
+              : null
+          if (pointerX !== null && pointerX < liveDrawerLeft) {
             // Why: keep the workspace sidebar interactive while the companion board stays open.
             event.preventDefault()
           }

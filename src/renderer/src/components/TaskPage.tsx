@@ -133,6 +133,7 @@ import {
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
 import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-summary'
+import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import type {
   GitHubOwnerRepo,
   GitHubAssignableUser,
@@ -1165,75 +1166,6 @@ function sameOptionalGitHubOwnerRepo(
     : sameGitHubOwnerRepo(leftValue, rightValue)
 }
 
-function getMergeLabel(item: GitHubWorkItem): string {
-  if (item.state === 'merged') {
-    return 'Merged'
-  }
-  if (item.state === 'closed') {
-    return 'Closed'
-  }
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge'
-  }
-  if (item.mergeable === 'CONFLICTING') {
-    return 'Conflicts'
-  }
-  if (item.mergeStateStatus === 'BEHIND') {
-    return 'Behind'
-  }
-  if (item.mergeStateStatus === 'BLOCKED') {
-    return 'Blocked'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'Able to merge'
-  }
-  return 'Unknown'
-}
-
-function getMergeTone(item: GitHubWorkItem): string {
-  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'BLOCKED') {
-    return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
-  }
-  if (item.mergeStateStatus === 'BEHIND' || item.checksSummary?.state === 'pending') {
-    return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-  }
-  return 'border-border/60 bg-background/70 text-muted-foreground'
-}
-
-function getMergeTooltip(item: GitHubWorkItem): string {
-  if (item.state === 'merged') {
-    return 'This pull request is already merged'
-  }
-  if (item.state === 'closed') {
-    return 'This pull request is closed'
-  }
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge status is unavailable for this PR'
-  }
-  if (item.mergeable === 'CONFLICTING') {
-    return 'GitHub reports merge conflicts'
-  }
-  if (item.mergeStateStatus === 'BEHIND') {
-    return 'Update the branch before merging'
-  }
-  if (item.mergeStateStatus === 'BLOCKED') {
-    return 'GitHub reports this pull request is blocked'
-  }
-  if (item.checksSummary?.state === 'pending') {
-    return 'GitHub says this PR can merge, but checks are still running'
-  }
-  if (item.checksSummary?.state === 'success') {
-    return 'GitHub says this PR can merge and checks passed'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'GitHub says this PR can merge'
-  }
-  return 'GitHub has not reported a final merge status'
-}
-
 function mergeReviewerSuggestions(
   users: GitHubAssignableUser[],
   seedUsers: GitHubAssignableUser[]
@@ -1290,6 +1222,17 @@ function PRReviewCell({
   const [submitting, setSubmitting] = useState(false)
   const settings = useAppStore((s) => s.settings)
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
+  const reviewerInputFocusFrameRef = useRef<number | null>(null)
+
+  const cancelReviewerInputFocusFrame = useCallback((): void => {
+    if (reviewerInputFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(reviewerInputFocusFrameRef.current)
+    reviewerInputFocusFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelReviewerInputFocusFrame, [cancelReviewerInputFocusFrame])
 
   useEffect(() => {
     setLocalReviewRequests(item.reviewRequests ?? [])
@@ -1480,9 +1423,14 @@ function PRReviewCell({
   const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
     setOpen(nextOpen)
     if (nextOpen) {
-      requestAnimationFrame(() => reviewerInputRef.current?.focus())
+      cancelReviewerInputFocusFrame()
+      reviewerInputFocusFrameRef.current = requestAnimationFrame(() => {
+        reviewerInputFocusFrameRef.current = null
+        reviewerInputRef.current?.focus()
+      })
       return
     }
+    cancelReviewerInputFocusFrame()
     setReviewerInput('')
   }
 
@@ -1735,12 +1683,8 @@ function PRMergeCell({
   if (item.type !== 'pr') {
     return <span className="text-[11px] text-muted-foreground">Issue</span>
   }
-  const mergeDisabled =
-    !repo ||
-    merging ||
-    item.state === 'closed' ||
-    item.state === 'merged' ||
-    item.mergeable === 'CONFLICTING'
+  const mergePresentation = presentGitHubPRMergeState(item)
+  const mergeDisabled = !repo || merging || !mergePresentation.directMergeAvailable
 
   const handleMerge = async (method: 'merge' | 'squash' | 'rebase'): Promise<void> => {
     if (!repo || mergeDisabled) {
@@ -1762,7 +1706,8 @@ function PRMergeCell({
         repoPath: repo.path,
         repoId: repo.id,
         prNumber: item.number,
-        method
+        method,
+        prRepo: item.prRepo ?? null
       })
       if (result.ok) {
         toast.success('Pull request merged')
@@ -1772,6 +1717,33 @@ function PRMergeCell({
       }
     } catch {
       toast.error('Failed to merge pull request')
+    } finally {
+      setMerging(false)
+    }
+  }
+
+  const handleAutoMerge = async (): Promise<void> => {
+    if (!repo || !mergePresentation.autoMergeAction) {
+      return
+    }
+    const enabled = mergePresentation.autoMergeAction.kind === 'enable'
+    setMerging(true)
+    try {
+      const result = await window.api.gh.setPRAutoMerge({
+        repoPath: repo.path,
+        repoId: repo.id,
+        prNumber: item.number,
+        enabled,
+        prRepo: item.prRepo ?? null
+      })
+      if (result.ok) {
+        toast.success(enabled ? 'Auto-merge enabled' : 'Auto-merge disabled')
+        onRefresh()
+      } else {
+        toast.error(result.error)
+      }
+    } catch {
+      toast.error(enabled ? 'Failed to enable auto-merge' : 'Failed to disable auto-merge')
     } finally {
       setMerging(false)
     }
@@ -1787,7 +1759,7 @@ function PRMergeCell({
               onClick={(event) => event.stopPropagation()}
               className={cn(
                 'inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-110',
-                getMergeTone(item)
+                mergePresentation.tone
               )}
             >
               {merging ? (
@@ -1795,16 +1767,23 @@ function PRMergeCell({
               ) : (
                 <GitMerge className="size-3" />
               )}
-              <span className="truncate">{getMergeLabel(item)}</span>
+              <span className="truncate">{mergePresentation.label}</span>
               <ChevronDown className="size-2.5 opacity-60" />
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {getMergeTooltip(item)}
+          {mergePresentation.tooltip}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" onClick={(event) => event.stopPropagation()}>
+        {mergePresentation.autoMergeAction && (
+          <DropdownMenuItem disabled={!repo || merging} onSelect={() => void handleAutoMerge()}>
+            <GitMerge className="size-4" />
+            {mergePresentation.autoMergeAction.label}
+          </DropdownMenuItem>
+        )}
+        {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
         <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('squash')}>
           <GitMerge className="size-4" />
           Squash and merge

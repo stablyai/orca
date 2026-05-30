@@ -48,17 +48,30 @@ function createThemeRoot(): { classList: FakeClassList } {
 
 function createFrameQueue(): {
   requestAnimationFrame: (callback: FrameRequestCallback) => number
+  cancelAnimationFrame: (handle: number) => void
   flushNextFrame: () => void
+  pendingCount: () => number
 } {
-  const callbacks: FrameRequestCallback[] = []
+  let nextHandle = 1
+  const callbacks = new Map<number, FrameRequestCallback>()
   return {
     requestAnimationFrame: (callback) => {
-      callbacks.push(callback)
-      return callbacks.length
+      const handle = nextHandle++
+      callbacks.set(handle, callback)
+      return handle
+    },
+    cancelAnimationFrame: (handle) => {
+      callbacks.delete(handle)
     },
     flushNextFrame: () => {
-      callbacks.shift()?.(0)
-    }
+      const [handle, callback] = callbacks.entries().next().value ?? []
+      if (handle === undefined || !callback) {
+        return
+      }
+      callbacks.delete(handle)
+      callback(0)
+    },
+    pendingCount: () => callbacks.size
   }
 }
 
@@ -102,7 +115,8 @@ describe('document theme', () => {
 
     applyDocumentTheme('dark', false, {
       root,
-      requestAnimationFrame: frames.requestAnimationFrame
+      requestAnimationFrame: frames.requestAnimationFrame,
+      cancelAnimationFrame: frames.cancelAnimationFrame
     })
 
     expect(root.classList.contains(THEME_TRANSITION_DISABLED_CLASS)).toBe(true)
@@ -176,5 +190,32 @@ describe('document theme', () => {
     applyDocumentTheme('dark', false, { root, disableTransitions: false, isDarwin: true })
     expect(root.classList.contains('glass-dark')).toBe(false)
     expect(root.classList.contains('glass-light')).toBe(false)
+  })
+
+  it('cancels stale transition suppression frames on rapid theme changes', () => {
+    const root = createThemeRoot()
+    const frames = createFrameQueue()
+
+    applyDocumentTheme('dark', false, {
+      root,
+      requestAnimationFrame: frames.requestAnimationFrame,
+      cancelAnimationFrame: frames.cancelAnimationFrame
+    })
+    expect(frames.pendingCount()).toBe(1)
+
+    applyDocumentTheme('light', false, {
+      root,
+      requestAnimationFrame: frames.requestAnimationFrame,
+      cancelAnimationFrame: frames.cancelAnimationFrame
+    })
+    expect(frames.pendingCount()).toBe(1)
+
+    frames.flushNextFrame()
+    expect(root.classList.contains(THEME_TRANSITION_DISABLED_CLASS)).toBe(true)
+    expect(frames.pendingCount()).toBe(1)
+
+    frames.flushNextFrame()
+    expect(root.classList.contains(THEME_TRANSITION_DISABLED_CLASS)).toBe(false)
+    expect(frames.pendingCount()).toBe(0)
   })
 })

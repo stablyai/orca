@@ -331,6 +331,13 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.pull', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
   }
 
+  async fastForwardBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
+    await this.mux.request('git.fastForward', {
+      worktreePath,
+      ...(pushTarget ? { pushTarget } : {})
+    })
+  }
+
   async rebaseFromBase(worktreePath: string, baseRef: string): Promise<void> {
     await this.mux.request('git.rebaseFromBase', { worktreePath, baseRef })
   }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -86,12 +86,6 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     },
     [onMenuOpenChange]
   )
-
-  useEffect(() => {
-    return () => {
-      onMenuOpenChange?.(false)
-    }
-  }, [onMenuOpenChange])
 
   // Why: derive from current repos so stale ids (e.g. lingering after a repo
   // is removed) don't inflate counts or falsely signal an applied filter.

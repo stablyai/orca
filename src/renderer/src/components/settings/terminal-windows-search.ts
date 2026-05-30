@@ -38,6 +38,24 @@ export const TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY: SettingsSe
   }
 ]
 
+export const TERMINAL_WINDOWS_WSL_DISTRO_SEARCH_ENTRY: SettingsSearchEntry[] = [
+  {
+    title: 'WSL Distribution',
+    description: 'Choose which WSL distribution new WSL terminals and local agent scans use.',
+    keywords: [
+      'terminal',
+      'windows',
+      'wsl',
+      'linux',
+      'distribution',
+      'distro',
+      'ubuntu',
+      'debian',
+      'default'
+    ]
+  }
+]
+
 export const TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY: SettingsSearchEntry[] = [
   {
     title: 'Right-click to paste',
@@ -49,6 +67,7 @@ export const TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY: SettingsSearchEntry[] =
 
 export const TERMINAL_WINDOWS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY,
+  ...TERMINAL_WINDOWS_WSL_DISTRO_SEARCH_ENTRY,
   ...TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY,
   ...TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY
 ]

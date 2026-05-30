@@ -40,7 +40,7 @@ import {
 } from '../git/status'
 import { getHistory as getGitHistory } from '../git/history'
 import { getUpstreamStatus } from '../git/upstream'
-import { gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
+import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import {
   getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
@@ -300,6 +300,23 @@ export class RuntimeGitCommands {
       return { ok: true }
     }
     await gitPull(target.worktree.path, pushTarget)
+    return { ok: true }
+  }
+
+  async fastForwardRuntimeGit(
+    worktreeSelector: string,
+    pushTarget?: GitPushTarget
+  ): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      await provider.fastForwardBranch(target.worktree.path, pushTarget)
+      return { ok: true }
+    }
+    await gitFastForward(target.worktree.path, pushTarget)
     return { ok: true }
   }
 

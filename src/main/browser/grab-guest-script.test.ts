@@ -97,6 +97,7 @@ describe('buildGuestOverlayScript', () => {
   it('teardown script cancels pending awaitClick', () => {
     const script = buildGuestOverlayScript('teardown')
     expect(script).toContain('cancelAwait')
+    expect(buildGuestOverlayScript('awaitClick')).toContain('__orcaCancelled')
   })
 
   it('arm script uses full-viewport overlay as click catcher', () => {

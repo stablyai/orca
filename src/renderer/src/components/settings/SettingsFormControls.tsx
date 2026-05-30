@@ -124,6 +124,7 @@ type SettingsSegmentedControlProps<T extends string | number> = {
   options: readonly SegmentedOption<T>[]
   ariaLabel?: string
   size?: 'sm' | 'md'
+  equalWidth?: boolean
 }
 
 /** Canonical segmented control for theme/ligatures/cursor/shell/etc. */
@@ -132,13 +133,17 @@ export function SettingsSegmentedControl<T extends string | number>({
   onChange,
   options,
   ariaLabel,
-  size = 'md'
+  size = 'md',
+  equalWidth = false
 }: SettingsSegmentedControlProps<T>): React.JSX.Element {
   return (
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-flex items-center rounded-md border border-border bg-background/50 p-0.5"
+      className={cn(
+        'inline-flex items-center rounded-md border border-border bg-background/50 p-0.5',
+        equalWidth && 'w-full'
+      )}
     >
       {options.map((opt) => {
         const active = opt.value === value
@@ -156,8 +161,9 @@ export function SettingsSegmentedControl<T extends string | number>({
               }
             }}
             className={cn(
-              'rounded-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              'rounded-sm text-center outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
               size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm',
+              equalWidth && 'flex-1',
               active
                 ? 'bg-accent font-medium text-accent-foreground'
                 : opt.disabled

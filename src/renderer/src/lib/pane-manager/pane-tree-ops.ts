@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: split-tree DOM reparent, promote, and equalize rules need one consistent owner. */
 import type {
   DropZone,
   ManagedPane,
@@ -22,6 +23,8 @@ type TreeOpsCallbacks = {
   safeFit: (pane: ManagedPane) => void
   refitPanesUnder: (el: HTMLElement) => void
   onLayoutChanged?: () => void
+  isDestroyed?: () => boolean
+  requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
 }
 
 function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
@@ -216,7 +219,13 @@ export function insertPaneNextTo(
     split.appendChild(source.container)
   }
 
-  requestAnimationFrame(() => {
+  const requestReparentFrame =
+    callbacks.requestPaneReparentFrame ??
+    ((callback: FrameRequestCallback) => requestAnimationFrame(callback))
+  requestReparentFrame(() => {
+    if (callbacks.isDestroyed?.()) {
+      return
+    }
     if (sourceHadWebgl && source.gpuRenderingEnabled && !source.webglDisabledAfterContextLoss) {
       attachWebgl(source)
     }

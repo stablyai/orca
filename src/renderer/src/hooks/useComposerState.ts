@@ -478,6 +478,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [note])
   const composerRef = useRef<HTMLDivElement | null>(null)
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const promptCaretFrameRef = useRef<number | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
   // Why: the native-file-drop effect below subscribes once on mount and must
   // read the latest agentPrompt when computing the caret-scoped insertion.
@@ -504,6 +505,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   selectedRepoPathRef.current = selectedRepoPath
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+
+  const cancelPromptCaretFrame = useCallback((): void => {
+    if (promptCaretFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(promptCaretFrameRef.current)
+    promptCaretFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelPromptCaretFrame, [cancelPromptCaretFrame])
+
   const hookCheckRef = useRef<{
     key: string
     promise: Promise<HookCheckResult>
@@ -1227,50 +1239,58 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     })
   }, [])
 
-  const insertComposerFolderPaths = useCallback((folderPaths: string[]): void => {
-    if (folderPaths.length === 0) {
-      return
-    }
-    // Why: de-dup within a single drop — the OS occasionally delivers the
-    // same folder twice when a user drags from a selection that includes both
-    // the item and its parent, and we don't want to insert it multiple times.
-    const uniqueFolderPaths = Array.from(new Set(folderPaths))
-    // Why: wrap paths containing shell metacharacters in double quotes (and
-    // escape embedded quotes) so inserted folder refs stay a single token if
-    // pasted into a terminal. Simple paths stay unadorned to match OS drops.
-    const formatPath = (p: string): string => {
-      if (/[\s"'$`\\()[\]{}*?!;&|<>#~]/.test(p)) {
-        return `"${p.replace(/(["\\$`])/g, '\\$1')}"`
+  const insertComposerFolderPaths = useCallback(
+    (folderPaths: string[]): void => {
+      if (folderPaths.length === 0) {
+        return
       }
-      return p
-    }
-    const insertion = uniqueFolderPaths.map(formatPath).join(' ')
-    const textarea = promptTextareaRef.current
-    // Why: compute selection, insertion, and caret target OUTSIDE the
-    // setAgentPrompt updater so the updater stays pure. React Strict Mode
-    // double-invokes updaters in dev, and batching can delay execution.
-    const current = agentPromptRef.current
-    const selStart = textarea?.selectionStart ?? current.length
-    const selEnd = textarea?.selectionEnd ?? current.length
-    const before = current.slice(0, selStart)
-    const after = current.slice(selEnd)
-    // Why: pad with single spaces when the caret sits directly against other
-    // text so the folder path doesn't merge into an adjacent word.
-    const needsLeadingSpace = before.length > 0 && !/\s$/.test(before)
-    const needsTrailingSpace = after.length > 0 && !/^\s/.test(after)
-    const padded = `${needsLeadingSpace ? ' ' : ''}${insertion}${needsTrailingSpace ? ' ' : ''}`
-    const caret = before.length + padded.length
-    if (textarea) {
-      requestAnimationFrame(() => {
-        textarea.focus()
-        textarea.setSelectionRange(caret, caret)
-      })
-    }
-    // Why: pass a plain value (not an updater) since `before`/`after` were
-    // already resolved from `agentPromptRef.current`; this keeps the state
-    // write side-effect-free under Strict-Mode double-render.
-    setAgentPrompt(before + padded + after)
-  }, [])
+      // Why: de-dup within a single drop — the OS occasionally delivers the
+      // same folder twice when a user drags from a selection that includes both
+      // the item and its parent, and we don't want to insert it multiple times.
+      const uniqueFolderPaths = Array.from(new Set(folderPaths))
+      // Why: wrap paths containing shell metacharacters in double quotes (and
+      // escape embedded quotes) so inserted folder refs stay a single token if
+      // pasted into a terminal. Simple paths stay unadorned to match OS drops.
+      const formatPath = (p: string): string => {
+        if (/[\s"'$`\\()[\]{}*?!;&|<>#~]/.test(p)) {
+          return `"${p.replace(/(["\\$`])/g, '\\$1')}"`
+        }
+        return p
+      }
+      const insertion = uniqueFolderPaths.map(formatPath).join(' ')
+      const textarea = promptTextareaRef.current
+      // Why: compute selection, insertion, and caret target OUTSIDE the
+      // setAgentPrompt updater so the updater stays pure. React Strict Mode
+      // double-invokes updaters in dev, and batching can delay execution.
+      const current = agentPromptRef.current
+      const selStart = textarea?.selectionStart ?? current.length
+      const selEnd = textarea?.selectionEnd ?? current.length
+      const before = current.slice(0, selStart)
+      const after = current.slice(selEnd)
+      // Why: pad with single spaces when the caret sits directly against other
+      // text so the folder path doesn't merge into an adjacent word.
+      const needsLeadingSpace = before.length > 0 && !/\s$/.test(before)
+      const needsTrailingSpace = after.length > 0 && !/^\s/.test(after)
+      const padded = `${needsLeadingSpace ? ' ' : ''}${insertion}${needsTrailingSpace ? ' ' : ''}`
+      const caret = before.length + padded.length
+      if (textarea) {
+        cancelPromptCaretFrame()
+        promptCaretFrameRef.current = requestAnimationFrame(() => {
+          promptCaretFrameRef.current = null
+          if (promptTextareaRef.current !== textarea || !textarea.isConnected) {
+            return
+          }
+          textarea.focus()
+          textarea.setSelectionRange(caret, caret)
+        })
+      }
+      // Why: pass a plain value (not an updater) since `before`/`after` were
+      // already resolved from `agentPromptRef.current`; this keeps the state
+      // write side-effect-free under Strict-Mode double-render.
+      setAgentPrompt(before + padded + after)
+    },
+    [cancelPromptCaretFrame]
+  )
 
   const uploadComposerPaths = useCallback(
     async (

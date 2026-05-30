@@ -388,8 +388,7 @@ export function DiffSectionItem({
     const cleanupSaveShortcut = installEditorSaveShortcut(modified.getContainerDomNode(), () =>
       handleSectionSaveRef.current(index)
     )
-    modified.onDidDispose(() => cleanupSaveShortcut())
-    modified.onDidChangeModelContent(() => {
+    const modelContentSub = modified.onDidChangeModelContent(() => {
       const current = modified.getValue()
       setSections((prev) => {
         let changed = false
@@ -412,6 +411,12 @@ export function DiffSectionItem({
         })
         return changed ? next : prev
       })
+    })
+    modified.onDidDispose(() => {
+      // Why: editable diff sections own both the save shortcut and model-change
+      // subscription for this Monaco editor instance.
+      cleanupSaveShortcut()
+      modelContentSub.dispose()
     })
   }
 

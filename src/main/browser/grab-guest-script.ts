@@ -838,12 +838,14 @@ const AWAIT_CLICK_SCRIPT = `new Promise(function(resolve, reject) {
   grab.host.addEventListener('click', onClick, true);
   grab.host.addEventListener('contextmenu', onContext, true);
 
-  // Store cancel hook so teardown can reject the Promise
+  // Store cancel hook so teardown can settle the Promise
   grab.cancelAwait = function() {
     grab.host.removeEventListener('click', onClick, true);
     grab.host.removeEventListener('contextmenu', onContext, true);
     grab.cleanup();
-    reject(new Error('cancelled'));
+    // Why: teardown cancellation is a normal user flow; resolving a marker
+    // avoids a noisy guest-console Error while main still treats it as cancel.
+    resolve({ __orcaCancelled: true });
   };
 })`
 
