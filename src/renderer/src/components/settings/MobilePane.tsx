@@ -54,6 +54,7 @@ export function MobilePane(): React.JSX.Element {
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
+  const devicesRef = useRef<PairedDevice[]>([])
   const codeCopiedResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
   // Why: clipboard IPC can resolve after settings navigation; avoid starting
@@ -81,6 +82,7 @@ export function MobilePane(): React.JSX.Element {
     try {
       const result = await window.api.mobile.listDevices()
       if (mountedRef.current) {
+        devicesRef.current = result.devices
         setDevices(result.devices)
       }
     } catch {
@@ -129,9 +131,10 @@ export function MobilePane(): React.JSX.Element {
             setQrDataUrl(result.qrDataUrl)
             setPairingUrl(result.pairingUrl)
             setEndpoint(result.endpoint)
-            // Why: polling needs the device count from the moment this QR was minted,
-            // not a later count after `loadDevices` refreshes the paired-device list.
-            setDeviceCountAtQr(devices.length)
+            // Why: async QR generation may overlap a device-list refresh; use
+            // the latest committed list, then keep this baseline ahead of the
+            // post-QR refresh below.
+            setDeviceCountAtQr(devicesRef.current.length)
             clearCodeCopiedResetTimer()
             setCodeCopied(false)
             void loadDevices()
@@ -151,7 +154,7 @@ export function MobilePane(): React.JSX.Element {
         }
       }
     },
-    [clearCodeCopiedResetTimer, devices.length, loadDevices, mountedRef, selectedAddress]
+    [clearCodeCopiedResetTimer, loadDevices, mountedRef, selectedAddress]
   )
 
   useEffect(() => {
@@ -194,7 +197,11 @@ export function MobilePane(): React.JSX.Element {
     try {
       await window.api.mobile.revokeDevice({ deviceId })
       if (mountedRef.current) {
-        setDevices((prev) => prev.filter((d) => d.deviceId !== deviceId))
+        setDevices((prev) => {
+          const nextDevices = prev.filter((d) => d.deviceId !== deviceId)
+          devicesRef.current = nextDevices
+          return nextDevices
+        })
         toast.success('Device revoked')
       }
     } catch {
