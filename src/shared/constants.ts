@@ -233,6 +233,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     floatingTerminalTrustedCwds: [],
     floatingTerminalCwdMigratedToAppWorkspace: true,
     floatingTerminalTriggerLocation: 'floating-button',
+    massCodeTriggerLocation: 'floating-button',
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',
     combinedDiffFileTreeVisibleByDefault: false,
@@ -281,6 +282,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalTerminalAttention: false,
     experimentalCompactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
+    experimentalMassCode: false,
+    experimentalMassCodeVaultPath: null,
+    experimentalMassCodePreviewLines: 1,
     experimentalUnifiedNewTabLauncher: false,
     // Why: local desktop remains the default server until the user explicitly
     // selects a saved runtime environment.

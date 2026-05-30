@@ -9,7 +9,8 @@ import {
   ChevronRight,
   PanelsTopLeft,
   RefreshCw,
-  Server
+  Server,
+  ClipboardList
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -45,13 +46,16 @@ import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { TOGGLE_MASSCODE_PANEL_EVENT } from '@/lib/floating-masscode'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
+import { MassCodeIconContextMenu } from '@/components/floating-masscode/MassCodeIconContextMenu'
 import { summarizeCodexRestartStatus } from './codex-restart-status-summary'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
+  floatingMassCodeOpen: boolean
 }
 
 export type CodexStatusRuntimeTarget = {
@@ -1299,7 +1303,10 @@ function ProviderDetailsMenu({
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
-function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Element | null {
+function StatusBarInner({
+  floatingTerminalOpen,
+  floatingMassCodeOpen
+}: StatusBarProps): React.JSX.Element | null {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const rateLimits = useAppStore((s) => s.rateLimits)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
@@ -1310,6 +1317,11 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const floatingTerminalTriggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   )
+  const massCodeTriggerLocation = useAppStore(
+    (s) => s.settings?.massCodeTriggerLocation ?? 'floating-button'
+  )
+  const massCodeEnabled = useAppStore((s) => s.settings?.experimentalMassCode === true)
+  const massCodeVaultPath = useAppStore((s) => s.settings?.experimentalMassCodeVaultPath)
   // Why: usage bars exist to surface CLI rate limits — showing one for an
   // agent that isn't on the user's PATH is just noise (e.g. a fresh Ubuntu
   // install showing "Gemini Usage" with no Gemini CLI installed). We gate
@@ -1414,6 +1426,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
+  const showMassCodeToggle =
+    massCodeEnabled && !!massCodeVaultPath && massCodeTriggerLocation === 'status-bar'
   const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showResourceUsage
   const anyFetching =
     claude?.status === 'fetching' ||
@@ -1426,6 +1440,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const floatingTerminalActionLabel = floatingTerminalOpen
     ? 'Minimize Floating Workspace'
     : 'Show Floating Workspace'
+  const massCodeActionLabel = floatingMassCodeOpen ? 'Close snippets' : 'Show snippets'
 
   return (
     <div
@@ -1517,6 +1532,27 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               </TooltipContent>
             </Tooltip>
           </FloatingTerminalIconContextMenu>
+        )}
+        {showMassCodeToggle && (
+          <MassCodeIconContextMenu currentLocation="status-bar" className="relative">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border bg-secondary text-secondary-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+                  aria-label={massCodeActionLabel}
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent(TOGGLE_MASSCODE_PANEL_EVENT))
+                  }}
+                >
+                  <ClipboardList className="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}>
+                {massCodeActionLabel}
+              </TooltipContent>
+            </Tooltip>
+          </MassCodeIconContextMenu>
         )}
       </div>
 

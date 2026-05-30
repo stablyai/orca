@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 const { handlers, appExitMock, appQuitMock, appRelaunchMock } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
@@ -32,7 +35,7 @@ vi.mock('@electron-toolkit/utils', () => ({
   is: { dev: true }
 }))
 
-import { registerAppHandlers } from './app'
+import { registerAppHandlers, validateMassCodeVaultPath } from './app'
 
 describe('registerAppHandlers', () => {
   beforeEach(() => {
@@ -79,5 +82,57 @@ describe('registerAppHandlers', () => {
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appQuitMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('validateMassCodeVaultPath', () => {
+  it('authorizes only directories that look like massCode Markdown vaults', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-masscode-'))
+    try {
+      const vault = join(root, 'vault')
+      await mkdir(join(vault, 'code'), { recursive: true })
+
+      expect(validateMassCodeVaultPath(vault, root)).toEqual({
+        ok: true,
+        vaultPath: await realpath(vault)
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects files and folders without massCode type directories', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-masscode-'))
+    try {
+      const plainFolder = join(root, 'plain')
+      const filePath = join(root, 'not-a-vault')
+      await mkdir(plainFolder)
+      await writeFile(filePath, 'not a vault')
+
+      expect(validateMassCodeVaultPath(filePath, root)).toEqual({
+        ok: false,
+        error: 'The selected massCode vault is not a directory.'
+      })
+      expect(validateMassCodeVaultPath(plainFolder, root)).toEqual({
+        ok: false,
+        error: 'The selected folder does not look like a massCode Markdown vault.'
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects broad home-folder authorization even when it contains type-like folders', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-masscode-'))
+    try {
+      await mkdir(join(root, 'code'))
+
+      expect(validateMassCodeVaultPath(root, root)).toEqual({
+        ok: false,
+        error: 'Choose the massCode vault directory, not your home folder.'
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 })

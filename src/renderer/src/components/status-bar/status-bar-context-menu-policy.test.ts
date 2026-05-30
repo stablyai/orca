@@ -29,6 +29,12 @@ describe('shouldOpenStatusBarContextMenu', () => {
     )
   })
 
+  it('keeps the massCode context menu independent', () => {
+    expect(shouldOpenStatusBarContextMenu(targetMatching('[data-floating-masscode-toggle]'))).toBe(
+      false
+    )
+  })
+
   it('opens when the browser gives a non-element target', () => {
     expect(shouldOpenStatusBarContextMenu(null)).toBe(true)
   })

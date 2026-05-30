@@ -1,10 +1,17 @@
+/* eslint-disable max-lines -- Why: experimental settings stay in one pane so search filtering and hidden-section ordering remain local. */
+import { useEffect, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Label } from '../ui/label'
+import { Input } from '../ui/input'
+import { Button } from '../ui/button'
+import { FolderIcon, ShieldCheck } from 'lucide-react'
 import { useAppStore } from '../../store'
+import { toast } from 'sonner'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { EXPERIMENTAL_PANE_SEARCH_ENTRIES, EXPERIMENTAL_SEARCH_ENTRY } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
+import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
 
 export { EXPERIMENTAL_PANE_SEARCH_ENTRIES }
 
@@ -22,6 +29,14 @@ export function ExperimentalPane({
   hiddenExperimentalUnlocked = false
 }: ExperimentalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const [massCodeVaultPathInput, setMassCodeVaultPathInput] = useState(
+    settings.experimentalMassCodeVaultPath ?? ''
+  )
+
+  useEffect(() => {
+    setMassCodeVaultPathInput(settings.experimentalMassCodeVaultPath ?? '')
+  }, [settings.experimentalMassCodeVaultPath])
+
   const showPet = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_SEARCH_ENTRY.pet])
   const showAgentsView = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_SEARCH_ENTRY.activity])
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
@@ -33,12 +48,193 @@ export function ExperimentalPane({
   const showWorktreeSymlinks = matchesSettingsSearch(searchQuery, [
     EXPERIMENTAL_SEARCH_ENTRY.symlinks
   ])
+  const showMasscode = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_SEARCH_ENTRY.masscode])
   const showUnifiedNewTabLauncher = matchesSettingsSearch(searchQuery, [
     EXPERIMENTAL_SEARCH_ENTRY.unifiedNewTabLauncher
   ])
 
+  const authorizeMassCodePath = async (vaultPath: string): Promise<boolean> => {
+    const result = await window.api.app.authorizeMassCodeVault({ vaultPath })
+    if (!result.ok) {
+      toast.error(result.error)
+      return false
+    }
+    toast.success(`Authorized massCode vault: ${result.vaultPath}`)
+    updateSettings({
+      experimentalMassCodeVaultPath: result.vaultPath,
+      experimentalMassCode: true
+    })
+    return true
+  }
+
+  const toggleMassCode = async (enabled: boolean): Promise<void> => {
+    if (!enabled) {
+      updateSettings({ experimentalMassCode: false })
+      return
+    }
+
+    if (settings.experimentalMassCodeVaultPath) {
+      await authorizeMassCodePath(settings.experimentalMassCodeVaultPath)
+      return
+    }
+
+    const detected = await window.api.app.detectMassCodeVault()
+    if (detected.ok) {
+      toast.success(`Detected massCode vault: ${detected.vaultPath}`)
+      updateSettings({
+        experimentalMassCode: true,
+        experimentalMassCodeVaultPath: detected.vaultPath
+      })
+    } else {
+      toast.error(detected.error)
+      updateSettings({ experimentalMassCode: true })
+    }
+  }
+
+  const authorizeTypedMassCodeVault = async (): Promise<void> => {
+    await authorizeMassCodePath(massCodeVaultPathInput)
+  }
+
+  const pickMasscodeVault = async (): Promise<void> => {
+    const selectedPath = await window.api.repos.pickDirectory()
+    if (!selectedPath) {
+      return
+    }
+    await authorizeMassCodePath(selectedPath)
+  }
+
+  const updateMassCodePreviewLines = (value: string): void => {
+    const previewLines = Number(value)
+    if (previewLines === 0 || previewLines === 1 || previewLines === 2) {
+      updateSettings({ experimentalMassCodePreviewLines: previewLines })
+    }
+  }
+
+  const updateMassCodeTriggerLocation = (value: string): void => {
+    if (value === 'floating-button' || value === 'status-bar') {
+      updateSettings({ massCodeTriggerLocation: value })
+    }
+  }
+
+  const massCodePathControls = (
+    <div className="space-y-3 rounded-md border border-border p-3">
+      <div className="min-w-0 shrink space-y-1.5">
+        <Label>massCode Vault Path</Label>
+        <p className="text-xs text-muted-foreground">
+          The absolute path to your massCode Vault directory (v5+ Markdown format).
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Input
+          value={massCodeVaultPathInput}
+          placeholder="~/massCode"
+          onChange={(event) => setMassCodeVaultPathInput(event.target.value)}
+          className="h-8"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void authorizeTypedMassCodeVault()}
+          className="h-8 shrink-0 gap-1.5"
+        >
+          <ShieldCheck className="size-3.5" />
+          Authorize
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          onClick={() => void pickMasscodeVault()}
+          className="shrink-0"
+          aria-label="Choose massCode vault"
+        >
+          <FolderIcon className="size-3.5" />
+        </Button>
+      </div>
+      <div className="space-y-1.5 pt-1">
+        <Label>Snippet Preview Lines</Label>
+        <ToggleGroup
+          type="single"
+          value={String(settings.experimentalMassCodePreviewLines ?? 1)}
+          onValueChange={(value) => {
+            if (value) {
+              updateMassCodePreviewLines(value)
+            }
+          }}
+          className="justify-start"
+        >
+          <ToggleGroupItem value="0">None</ToggleGroupItem>
+          <ToggleGroupItem value="1">1 line</ToggleGroupItem>
+          <ToggleGroupItem value="2">2 lines</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+      <div className="space-y-2 pt-1">
+        <Label>Toggle Button Location</Label>
+        <ToggleGroup
+          type="single"
+          value={settings.massCodeTriggerLocation ?? 'floating-button'}
+          onValueChange={(value) => {
+            if (value) {
+              updateMassCodeTriggerLocation(value)
+            }
+          }}
+          className="justify-start"
+        >
+          <ToggleGroupItem value="floating-button">Floating Button</ToggleGroupItem>
+          <ToggleGroupItem value="status-bar">Status Bar</ToggleGroupItem>
+        </ToggleGroup>
+        <p className="text-xs text-muted-foreground">
+          Choose where the massCode toggle icon is displayed.
+        </p>
+      </div>
+      {!settings.experimentalMassCodeVaultPath ? (
+        <p className="text-xs text-muted-foreground">
+          The panel appears after a vault is authorized.
+        </p>
+      ) : null}
+    </div>
+  )
+
   return (
     <div className="space-y-4">
+      {showMasscode ? (
+        <SearchableSetting
+          title="massCode Integration"
+          description="Standalone snippet bridge for massCode (Markdown Vault)."
+          keywords={EXPERIMENTAL_SEARCH_ENTRY.masscode.keywords}
+          className="space-y-3 px-1 py-2"
+        >
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-1.5">
+                <Label>massCode Integration</Label>
+                <p className="text-xs text-muted-foreground">
+                  Standalone snippet bridge for massCode (Markdown Vault). When enabled, a floating
+                  massCode icon will appear in the bottom-right corner.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.experimentalMassCode}
+                onClick={() => void toggleMassCode(!settings.experimentalMassCode)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                  settings.experimentalMassCode ? 'bg-foreground' : 'bg-muted-foreground/30'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
+                    settings.experimentalMassCode ? 'translate-x-4' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {settings.experimentalMassCode ? massCodePathControls : null}
+          </div>
+        </SearchableSetting>
+      ) : null}
       {showPet ? (
         <SearchableSetting
           title="Pet"

@@ -1605,6 +1605,27 @@ export type SetupScriptLaunchMode = 'split-vertical' | 'split-horizontal' | 'new
 /** Direction used when the setup script launch mode is a split. */
 export type SetupSplitDirection = 'vertical' | 'horizontal'
 
+export type MassCodeSnippet = {
+  id: string
+  name: string
+  content: string
+  language: string
+  tags: string[]
+  folderId: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type MassCodeFolder = {
+  id: string
+  name: string
+  parentId: string | null
+}
+
+export type MassCodeVaultAuthorizationResult =
+  | { ok: true; vaultPath: string }
+  | { ok: false; error: string }
+
 export type TerminalColorOverrides = {
   foreground?: string
   background?: string
@@ -1838,6 +1859,9 @@ export type GlobalSettings = {
   /** Legacy pre-file-backed keyboard shortcut overrides. New writes go to
    *  ~/.orca/keybindings.json; main migrates this once when present. */
   keybindings?: KeybindingOverrides
+  /** Where the massCode toggle is shown. Defaults to the floating
+   *  button for discoverability. */
+  massCodeTriggerLocation?: MassCodeTriggerLocation
   diffDefaultView: 'inline' | 'side-by-side'
   combinedDiffFileTreeVisibleByDefault: boolean
   notifications: NotificationSettings
@@ -1978,6 +2002,13 @@ export type GlobalSettings = {
    *  configuration surface and edge cases (conflicts with existing paths,
    *  cleanup on worktree delete) are still being worked out. */
   experimentalWorktreeSymlinks: boolean
+  /** Experimental: whether the massCode integration is enabled. */
+  experimentalMassCode?: boolean
+  /** Experimental: path to the local massCode Vault directory. When set,
+   *  enables the floating massCode snippet integration. */
+  experimentalMassCodeVaultPath?: string | null
+  /** Number of preview lines to show in the massCode snippet list (0, 1, or 2). */
+  experimentalMassCodePreviewLines?: number
   /** Experimental: replaces the New Tab menu's static preview row with a
    *  command-style launcher for terminals, detected agents, URLs, and files. */
   experimentalUnifiedNewTabLauncher: boolean
@@ -2213,6 +2244,7 @@ export type StatusBarItem =
   | 'resource-usage'
   | 'ports'
 export type FloatingTerminalTriggerLocation = 'floating-button' | 'status-bar'
+export type MassCodeTriggerLocation = 'floating-button' | 'status-bar'
 
 export type TaskResumeState = {
   githubMode?: 'items' | 'project'

@@ -373,7 +373,14 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getFloatingTerminalCwd: () => Promise.resolve(''),
       getFloatingMarkdownDirectory: () => Promise.resolve(''),
       pickFloatingMarkdownDocument: () => Promise.resolve(null),
-      pickFloatingWorkspaceDirectory: () => Promise.resolve(null)
+      pickFloatingWorkspaceDirectory: () => Promise.resolve(null),
+      detectMassCodeVault: () =>
+        Promise.resolve({
+          ok: false,
+          error: 'massCode vaults are only available in desktop Orca.'
+        }),
+      authorizeMassCodeVault: () =>
+        Promise.resolve({ ok: false, error: 'massCode vaults are only available in desktop Orca.' })
     },
     e2e: {
       getConfig: () => createE2EConfig({})

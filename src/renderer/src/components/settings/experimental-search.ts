@@ -81,6 +81,11 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
+    title: 'massCode Integration',
+    description: 'Standalone snippet bridge for massCode (Markdown Vault).',
+    keywords: ['experimental', 'masscode', 'snippets', 'vault', 'markdown', 'integration']
+  },
+  {
     title: 'Smart New Tab menu',
     description:
       'Type in the New Tab menu to open a terminal, launch an agent, visit a URL, or open/create a file.',
@@ -119,5 +124,6 @@ export const EXPERIMENTAL_SEARCH_ENTRY = {
   terminalAttention: findEntry('Terminal attention'),
   compactWorktreeCards: findEntry('Compact worktree cards'),
   symlinks: findEntry('Symlinks on worktrees'),
+  masscode: findEntry('massCode Integration'),
   unifiedNewTabLauncher: findEntry('Smart New Tab menu')
 } as const

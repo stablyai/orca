@@ -1,12 +1,16 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
-import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/types'
+import type {
+  FloatingTerminalCwdRequest,
+  MarkdownDocument,
+  MassCodeVaultAuthorizationResult
+} from '../../shared/types'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailable } from '../pwsh'
@@ -21,6 +25,8 @@ import {
 import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
 
 const execFileAsync = promisify(execFile)
+const MASSCODE_CONFIG_MAX_BYTES = 256 * 1024
+const MASSCODE_TYPE_DIRECTORIES = ['code', 'notes', 'http', 'math', 'tools'] as const
 
 type RegisterAppHandlersOptions = {
   onBeforeRelaunch?: () => void
@@ -98,6 +104,119 @@ function resolveDevFeatureWallAssetDir(): string {
   // Why: E2E launches out/main/index.js, so app.getAppPath() can point at
   // out/main even though development resources still live at the repo root.
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
+}
+
+function expandHomeMassCodePath(input: string, home: string): string {
+  if (input === '~') {
+    return home
+  }
+  if (input.startsWith(`~${path.sep}`) || input.startsWith('~/')) {
+    return path.join(home, input.slice(2))
+  }
+  return input
+}
+
+export function validateMassCodeVaultPath(
+  vaultPath: string,
+  home: string
+): MassCodeVaultAuthorizationResult {
+  const trimmed = vaultPath.trim()
+  if (!trimmed || trimmed.includes('\0')) {
+    return { ok: false, error: 'Choose a valid massCode vault directory.' }
+  }
+
+  const expanded = expandHomeMassCodePath(trimmed, home)
+  const resolved = path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(home, expanded)
+  let realVaultPath: string
+  try {
+    realVaultPath = realpathSync(resolved)
+  } catch {
+    return { ok: false, error: 'The selected massCode vault does not exist.' }
+  }
+
+  try {
+    if (!statSync(realVaultPath).isDirectory()) {
+      return { ok: false, error: 'The selected massCode vault is not a directory.' }
+    }
+  } catch {
+    return { ok: false, error: 'The selected massCode vault could not be read.' }
+  }
+
+  if (path.parse(realVaultPath).root === realVaultPath) {
+    return { ok: false, error: 'Choose the massCode vault directory, not a filesystem root.' }
+  }
+  try {
+    if (realVaultPath === realpathSync(home)) {
+      return { ok: false, error: 'Choose the massCode vault directory, not your home folder.' }
+    }
+  } catch {}
+
+  const hasTypeDirectory = MASSCODE_TYPE_DIRECTORIES.some((directoryName) => {
+    const candidate = path.join(realVaultPath, directoryName)
+    try {
+      return statSync(candidate).isDirectory()
+    } catch {
+      return false
+    }
+  })
+  if (!hasTypeDirectory) {
+    return {
+      ok: false,
+      error: 'The selected folder does not look like a massCode Markdown vault.'
+    }
+  }
+
+  return { ok: true, vaultPath: realVaultPath }
+}
+
+function authorizeMassCodeVaultPath(vaultPath: string): MassCodeVaultAuthorizationResult {
+  const result = validateMassCodeVaultPath(vaultPath, app.getPath('home'))
+  if (result.ok) {
+    authorizeExternalPath(result.vaultPath)
+  }
+  return result
+}
+
+function readMassCodeConfigVaultPath(configPath: string): string | null {
+  try {
+    if (!existsSync(configPath) || statSync(configPath).size > MASSCODE_CONFIG_MAX_BYTES) {
+      return null
+    }
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
+      vault?: { path?: unknown }
+    }
+    return typeof config.vault?.path === 'string' ? config.vault.path : null
+  } catch {
+    return null
+  }
+}
+
+function detectMassCodeVaultPath(): MassCodeVaultAuthorizationResult {
+  const home = app.getPath('home')
+
+  const configLocations = [
+    path.join(app.getPath('appData'), 'massCode', 'config.json'),
+    path.join(home, 'Library', 'Application Support', 'massCode', 'config.json'),
+    path.join(home, '.config', 'massCode', 'config.json') // Linux
+  ]
+
+  for (const configPath of Array.from(new Set(configLocations))) {
+    const configuredVaultPath = readMassCodeConfigVaultPath(configPath)
+    if (configuredVaultPath) {
+      const result = authorizeMassCodeVaultPath(configuredVaultPath)
+      if (result.ok) {
+        return result
+      }
+    }
+  }
+
+  const defaultVault = path.join(home, 'massCode')
+  const defaultResult = authorizeMassCodeVaultPath(defaultVault)
+  if (defaultResult.ok) {
+    return defaultResult
+  }
+
+  return { ok: false, error: 'No massCode Markdown vault was detected.' }
 }
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
@@ -204,5 +323,10 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
 
   ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
     pickFloatingWorkspaceDirectory(event, store)
+  )
+
+  ipcMain.handle('app:detectMassCodeVault', () => detectMassCodeVaultPath())
+  ipcMain.handle('app:authorizeMassCodeVault', (_event, args?: { vaultPath?: unknown }) =>
+    authorizeMassCodeVaultPath(typeof args?.vaultPath === 'string' ? args.vaultPath : '')
   )
 }

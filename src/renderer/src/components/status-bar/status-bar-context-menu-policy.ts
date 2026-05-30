@@ -5,6 +5,7 @@ export const STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS = {
 } as const
 
 const FLOATING_TERMINAL_TOGGLE_SELECTOR = '[data-floating-terminal-toggle]'
+const FLOATING_MASSCODE_TOGGLE_SELECTOR = '[data-floating-masscode-toggle]'
 
 function hasClosest(target: EventTarget | null): target is EventTarget & {
   closest: (selector: string) => Element | null
@@ -21,6 +22,7 @@ export function shouldOpenStatusBarContextMenu(target: EventTarget | null): bool
   // nested status-bar surfaces opt out so their right-clicks stay local.
   return (
     target.closest(FLOATING_TERMINAL_TOGGLE_SELECTOR) === null &&
+    target.closest(FLOATING_MASSCODE_TOGGLE_SELECTOR) === null &&
     target.closest(STATUS_BAR_CONTEXT_MENU_EXEMPT_SELECTOR) === null
   )
 }

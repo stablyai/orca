@@ -55,6 +55,8 @@ import {
   FloatingTerminalPanel,
   FloatingTerminalToggleButton
 } from './components/floating-terminal/FloatingTerminalPanel'
+import { FloatingMassCodePanel } from './components/floating-masscode/FloatingMassCodePanel'
+import { FloatingMassCodeToggleButton } from './components/floating-masscode/FloatingMassCodeToggleButton'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
@@ -62,6 +64,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
+import { TOGGLE_MASSCODE_PANEL_EVENT } from '@/lib/floating-masscode'
 import { DictationController } from './components/dictation/DictationController'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
@@ -263,6 +266,7 @@ function App(): React.JSX.Element {
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
+  const [floatingMassCodeOpen, setFloatingMassCodeOpen] = useState(false)
 
   // Why: Zustand actions are referentially stable, but each individual
   // useAppStore(s => s.someAction) still registers a subscription that React
@@ -413,10 +417,19 @@ function App(): React.JSX.Element {
   }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
 
   useEffect(() => {
+    const toggleMassCode = (): void => {
+      setFloatingMassCodeOpen((open) => !open)
+    }
+    window.addEventListener(TOGGLE_MASSCODE_PANEL_EVENT, toggleMassCode)
+    return () => window.removeEventListener(TOGGLE_MASSCODE_PANEL_EVENT, toggleMassCode)
+  }, [])
+
+  useEffect(() => {
     if (!floatingTerminalEnabled) {
       setFloatingTerminalOpenWithFocus(false)
     }
   }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
+
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
@@ -431,6 +444,22 @@ function App(): React.JSX.Element {
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+
+  useEffect(() => {
+    if (!settings?.experimentalMassCode || !settings.experimentalMassCodeVaultPath) {
+      return
+    }
+    // Why: persisted massCode paths need a fresh trust grant after restart, but
+    // only the domain-specific validator may authorize them.
+    void window.api.app
+      .authorizeMassCodeVault({ vaultPath: settings.experimentalMassCodeVaultPath })
+      .then((result) => {
+        if (!result.ok) {
+          setFloatingMassCodeOpen(false)
+        }
+      })
+  }, [settings?.experimentalMassCode, settings?.experimentalMassCodeVaultPath])
+
   const primarySelectionMiddleClickPaste = resolvePrimarySelectionMiddleClickPaste(
     settings?.primarySelectionMiddleClickPaste
   )
@@ -1747,7 +1776,25 @@ function App(): React.JSX.Element {
               onOpenChange={setFloatingTerminalOpenWithFocus}
             />
           ) : null}
-          <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
+          {settings?.experimentalMassCode && settings?.experimentalMassCodeVaultPath ? (
+            <>
+              <FloatingMassCodePanel
+                open={floatingMassCodeOpen}
+                onOpenChange={setFloatingMassCodeOpen}
+              />
+              {(settings.massCodeTriggerLocation ?? 'floating-button') === 'floating-button' ||
+              !statusBarVisible ? (
+                <FloatingMassCodeToggleButton
+                  open={floatingMassCodeOpen}
+                  onToggle={() => setFloatingMassCodeOpen((open) => !open)}
+                />
+              ) : null}
+            </>
+          ) : null}
+          <StatusBar
+            floatingTerminalOpen={floatingTerminalOpen}
+            floatingMassCodeOpen={floatingMassCodeOpen}
+          />
           {/* Why: root overlays can render Radix <Tooltip>s; keep them inside
             the shared provider so lazy surfaces mount safely from any entry point. */}
           <Suspense fallback={null}>
