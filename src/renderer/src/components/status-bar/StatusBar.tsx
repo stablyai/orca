@@ -588,6 +588,7 @@ function ClaudeSwitcherMenu({
     activeAccountIdsByRuntime: { host: null, wsl: {} }
   })
   const [isSwitching, setIsSwitching] = useState(false)
+  const mountedRef = useRef(true)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
@@ -609,9 +610,18 @@ function ClaudeSwitcherMenu({
   })
   const accountState = getClaudeStatusAccountsFromSettings(settings) ?? accounts
 
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   const loadAccounts = useCallback(async () => {
     const next = await window.api.claudeAccounts.list()
-    setAccounts(next)
+    if (mountedRef.current) {
+      setAccounts(next)
+    }
   }, [])
 
   useEffect(() => {
@@ -648,13 +658,19 @@ function ClaudeSwitcherMenu({
         wslDistro: target.wslDistro
       })
       recordFeatureInteraction('claude-account-switching')
-      setAccounts(next)
+      if (mountedRef.current) {
+        setAccounts(next)
+      }
       await fetchSettings()
-      setAccountsExpanded(false)
+      if (mountedRef.current) {
+        setAccountsExpanded(false)
+      }
     } catch (error) {
       console.error('Failed to switch Claude account from status bar:', error)
     } finally {
-      setIsSwitching(false)
+      if (mountedRef.current) {
+        setIsSwitching(false)
+      }
     }
   }
 
@@ -1046,6 +1062,7 @@ function CodexSwitcherMenu({
   })
   const [isSwitching, setIsSwitching] = useState(false)
   const [reauthenticatingAccountId, setReauthenticatingAccountId] = useState<string | null>(null)
+  const mountedRef = useRef(true)
   const accountsExpandedRef = useRef(accountsExpanded)
   // Why: Radix item selection is separate from the nested button click, so
   // propagation stops alone do not prevent the row switch action.
@@ -1079,7 +1096,16 @@ function CodexSwitcherMenu({
 
   const loadAccounts = useCallback(async () => {
     const next = await window.api.codexAccounts.list()
-    setAccounts(next)
+    if (mountedRef.current) {
+      setAccounts(next)
+    }
+  }, [])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
   }, [])
 
   useEffect(() => {
@@ -1112,7 +1138,9 @@ function CodexSwitcherMenu({
         wslDistro: target.wslDistro
       })
       recordFeatureInteraction('codex-account-switching')
-      setAccounts(next)
+      if (mountedRef.current) {
+        setAccounts(next)
+      }
       await fetchSettings()
       const nextActiveAccountId = getCodexStatusActiveId(next, target)
       if (previousActiveAccountId !== nextActiveAccountId) {
@@ -1124,12 +1152,16 @@ function CodexSwitcherMenu({
         // for live Codex terminals. Keeping the switcher open and collapsing
         // back to the summary row lets the follow-up "restart open tabs"
         // prompt appear in the same flow instead of feeling detached.
-        setAccountsExpanded(false)
+        if (mountedRef.current) {
+          setAccountsExpanded(false)
+        }
       }
     } catch (error) {
       console.error('Failed to switch Codex account from status bar:', error)
     } finally {
-      setIsSwitching(false)
+      if (mountedRef.current) {
+        setIsSwitching(false)
+      }
     }
   }
 
@@ -1141,15 +1173,19 @@ function CodexSwitcherMenu({
     try {
       const next = await window.api.codexAccounts.reauthenticate({ accountId })
       recordFeatureInteraction('codex-account-switching')
-      setAccounts(next)
+      if (mountedRef.current) {
+        setAccounts(next)
+      }
       await fetchSettings()
-      if (accountsExpandedRef.current) {
+      if (mountedRef.current && accountsExpandedRef.current) {
         await fetchInactiveCodexAccountUsage()
       }
     } catch (error) {
       console.error('Failed to re-authenticate Codex account from status bar:', error)
     } finally {
-      setReauthenticatingAccountId(null)
+      if (mountedRef.current) {
+        setReauthenticatingAccountId(null)
+      }
     }
   }
 
@@ -1432,12 +1468,20 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
   const containerRef = useRef<HTMLDivElement>(null)
+  const mountedRef = useRef(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
   const [containerWidth, setContainerWidth] = useState(900)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -1482,7 +1526,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       // appears (and a removed CLI's bar hides) without restarting Orca.
       await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
     } finally {
-      setIsRefreshing(false)
+      if (mountedRef.current) {
+        setIsRefreshing(false)
+      }
     }
   }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
 
