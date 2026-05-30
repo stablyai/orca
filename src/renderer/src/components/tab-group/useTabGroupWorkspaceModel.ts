@@ -22,6 +22,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '../../runtime/web-runtime-session'
+import { getGroupKindForUuid } from '@/lib/layout-rules'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 
 export type GroupEditorItem = OpenFile & { tabId: string }
@@ -76,6 +77,7 @@ export function useTabGroupWorkspaceModel({
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (state) => state.openNewTerminalTabInActiveWorkspace
   )
+  const openFile = useAppStore((state) => state.openFile)
   const closeFile = useAppStore((state) => state.closeFile)
   const pinFile = useAppStore((state) => state.pinFile)
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
@@ -395,41 +397,80 @@ export function useTabGroupWorkspaceModel({
         return
       }
 
-      // Why: for terminals specifically, splitting a single-tab group should
-      // still produce a useful split — spawn a fresh terminal in the new pane
-      // and leave the existing one behind. Moving the only tab would collapse
-      // the split immediately (see the same-group guard in dropUnifiedTab),
-      // giving the user nothing; a new terminal preserves the old shortcut
-      // flow without duplicating a persistent tab like editors/browsers would.
-      if (sourceTab.contentType === 'terminal' && groupTabs.length <= 1) {
-        const newGroupId = createEmptySplitGroup(worktreeId, groupId, direction)
+      // Why: single-tab path bypasses dropUnifiedTab (which would no-op
+      // on split-onto-own-edge); resolver consults getGroupKindForUuid
+      // so direct stamps and YAML-name fallback agree on inheritance.
+      const storeState = useAppStore.getState()
+      const inheritedKind = getGroupKindForUuid({
+        worktreeId,
+        groupId,
+        groupsByWorktree: storeState.groupsByWorktree,
+        layoutConfigByWorktree: storeState.layoutConfigByWorktree,
+        layoutGroupIdByName: storeState.layoutGroupIdByName
+      })
+      const isSingleTab = groupTabs.length <= 1
+      if (isSingleTab) {
+        const newGroupId = createEmptySplitGroup(
+          worktreeId,
+          groupId,
+          direction,
+          inheritedKind ? { kind: inheritedKind } : undefined
+        )
         if (!newGroupId) {
           return
         }
-        const terminal = createTab(worktreeId, newGroupId)
-        setActiveTab(terminal.id)
-        setActiveTabType('terminal')
+        if (sourceTab.contentType === 'terminal') {
+          const terminal = createTab(worktreeId, newGroupId)
+          setActiveTab(terminal.id)
+          setActiveTabType('terminal')
+          return
+        }
+        if (sourceTab.contentType === 'browser') {
+          const sourceBrowser = worktreeState.browserTabs.find((t) => t.id === sourceTab.entityId)
+          createBrowserTab(worktreeId, sourceBrowser?.url ?? 'about:blank', {
+            title: sourceBrowser?.title ?? sourceBrowser?.url ?? 'New Browser Tab',
+            targetGroupId: newGroupId,
+            ...(sourceBrowser?.sessionProfileId
+              ? { sessionProfileId: sourceBrowser.sessionProfileId }
+              : {})
+          })
+          setActiveTabType('browser')
+          return
+        }
+        // Editor / diff / conflict-review: duplicate the same file
+        // into the new pane (matches "Split Editor" semantics in
+        // VSCode/Zed — same file, two view-ports).
+        const sourceFile = worktreeState.openFiles.find(
+          (f) => f.id === sourceTab.entityId && f.worktreeId === worktreeId
+        )
+        if (sourceFile) {
+          const { id: _id, isDirty: _isDirty, ...fileSeed } = sourceFile
+          openFile(fileSeed, { preview: false, targetGroupId: newGroupId })
+          setActiveTabType('editor')
+        }
         return
       }
 
-      // Why: split actions MOVE the source tab into the new pane rather than
-      // leaving a duplicate in the origin. Delegating to dropUnifiedTab reuses
-      // the same split+move path as drag-to-split so keyboard/menu splits and
-      // drag splits stay behaviorally identical, including collapsing the
-      // origin group if its last tab is the one we just moved.
+      // Why: multi-tab — MOVE source tab into the new pane (delegates to
+      // dropUnifiedTab so menu split and drag-split share one path).
+      // The new pane there also inherits target.groupId's kind via
+      // dropUnifiedTab's split branch.
       dropUnifiedTab(sourceTab.id, { groupId, splitDirection: direction })
     },
     [
       activeTab,
+      createBrowserTab,
       createEmptySplitGroup,
       createTab,
       dropUnifiedTab,
       focusGroup,
       groupId,
       groupTabs,
+      openFile,
       setActiveTab,
       setActiveTabType,
-      worktreeId
+      worktreeId,
+      worktreeState
     ]
   )
 

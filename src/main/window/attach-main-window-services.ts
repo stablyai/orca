@@ -279,6 +279,9 @@ function registerRuntimeWindowLifecycle(
         ...(startup ? { startup } : {})
       })
     },
+    layoutConfigForWorktree: (worktreeId, config) => {
+      send('ui:layoutConfig', { worktreeId, config })
+    },
     createTerminal: (worktreeId, opts) =>
       send('ui:createTerminal', { worktreeId, command: opts.command, title: opts.title }),
     revealTerminalSession: (worktreeId, opts) =>

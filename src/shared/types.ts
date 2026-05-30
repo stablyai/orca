@@ -21,6 +21,7 @@ import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
 } from './source-control-ai-types'
+import type { LayoutGroupKind } from './orca-yaml-layout'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -447,6 +448,10 @@ export type TabGroup = {
    *  sessions persisted before this field was added still hydrate cleanly —
    *  hydration seeds from activeTabId. */
   recentTabIds?: string[]
+  /** YAML group name (1:1 with orca.yaml). Drives post-restart binding rebuild. */
+  layoutGroupName?: string
+  /** Effective content-kind lock; survives splits where one YAML name fans out. */
+  kind?: LayoutGroupKind
 }
 
 // ─── Terminal Tab (legacy — used by persistence and TerminalContentSlice) ─

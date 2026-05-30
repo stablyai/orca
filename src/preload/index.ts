@@ -568,6 +568,11 @@ const api = {
 
     listAll: (): Promise<unknown[]> => ipcRenderer.invoke('worktrees:listAll'),
 
+    /** Pull side of the layout config push — null when no orca.yaml /
+     *  no layout block; raw layout block (renderer Zod-validates) on hit. */
+    getLayoutConfig: (args: { worktreeId: string }): Promise<unknown | null> =>
+      ipcRenderer.invoke('worktree:layoutConfig', args),
+
     create: (args: CreateWorktreeArgs): Promise<unknown> =>
       ipcRenderer.invoke('worktrees:create', args),
 
@@ -2432,11 +2437,18 @@ const api = {
         url: string
         worktreeId?: string
         sessionProfileId?: string
+        groupName?: string
       }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { requestId: string; url: string; worktreeId?: string; sessionProfileId?: string }
+        data: {
+          requestId: string
+          url: string
+          worktreeId?: string
+          sessionProfileId?: string
+          groupName?: string
+        }
       ) => callback(data)
       ipcRenderer.on('browser:requestTabCreate', listener)
       return () => ipcRenderer.removeListener('browser:requestTabCreate', listener)
@@ -2570,6 +2582,16 @@ const api = {
       ipcRenderer.on('ui:activateWorktree', listener)
       return () => ipcRenderer.removeListener('ui:activateWorktree', listener)
     },
+    onLayoutConfig: (
+      callback: (data: { worktreeId: string; config: unknown | null }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { worktreeId: string; config: unknown | null }
+      ) => callback(data)
+      ipcRenderer.on('ui:layoutConfig', listener)
+      return () => ipcRenderer.removeListener('ui:layoutConfig', listener)
+    },
     onCreateTerminal: (
       callback: (data: {
         requestId?: string
@@ -2611,6 +2633,7 @@ const api = {
         command?: string
         title?: string
         activate?: boolean
+        groupName?: string
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2623,6 +2646,7 @@ const api = {
           command?: string
           title?: string
           activate?: boolean
+          groupName?: string
         }
       ) => callback(data)
       ipcRenderer.on('terminal:requestTabCreate', listener)

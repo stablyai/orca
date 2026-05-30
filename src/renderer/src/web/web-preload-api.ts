@@ -941,6 +941,9 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
       ).worktrees,
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
+    // Why: web client doesn't have local FS access to read orca.yaml;
+    // main pushes the parsed config via `ui.onLayoutConfig` instead.
+    getLayoutConfig: async () => null,
     create: async (args) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult('worktree.create', {
@@ -1633,6 +1636,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     isMaximized: () => Promise.resolve(false),
     onOpenSettings: () => noopUnsubscribe,
+    onLayoutConfig: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,
     onToggleLeftSidebar: () => noopUnsubscribe,

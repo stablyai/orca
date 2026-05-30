@@ -211,7 +211,12 @@ vi.mock('../hooks', () => ({
     .mockImplementation((_repo: never, decision: string) => decision === 'run'),
   getEffectiveSetupRunPolicy: vi.fn().mockReturnValue('auto'),
   hasHooksFile: vi.fn().mockReturnValue(false),
-  parseOrcaYaml: vi.fn().mockReturnValue(null)
+  hasUnrecognizedOrcaYamlKeys: vi.fn().mockReturnValue(false),
+  loadLayoutConfig: vi.fn().mockReturnValue(null),
+  loadLayoutConfigFromReader: vi.fn().mockResolvedValue(null),
+  parseOrcaYaml: vi.fn().mockReturnValue(null),
+  readIssueCommand: vi.fn().mockReturnValue(null),
+  writeIssueCommand: vi.fn()
 }))
 
 vi.mock('../ipc/worktree-logic', async (importOriginal) => {

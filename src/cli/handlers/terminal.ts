@@ -133,6 +133,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     const useRendererBackedInteractiveTerminal =
       !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
+    const groupName = getOptionalStringFlag(flags, 'group')
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
       command,
@@ -141,7 +142,11 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       // path for browser-side features, but CLI creates must stay backgrounded
       // unless the caller explicitly asks for focus.
       focus,
-      ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
+      ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {}),
+      // Why: --group is opt-in. Spread conditionally so the RPC payload
+      // stays byte-identical to the pre-flag form when --group is absent —
+      // keeps existing automation contracts and test fixtures intact.
+      ...(groupName !== undefined ? { groupName } : {})
     })
     printResult(result, json, formatTerminalCreate)
   },

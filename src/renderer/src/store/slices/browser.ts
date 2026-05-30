@@ -36,6 +36,7 @@ import type {
   BrowserProfileListResult
 } from '../../../../shared/runtime-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { resolveTargetGroup } from '@/lib/layout-rules'
 
 type CreateBrowserTabOptions = {
   activate?: boolean
@@ -511,10 +512,24 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       (t) => t.contentType === 'browser' && t.entityId === workspaceId
     )
     if (!alreadyHasUnifiedTab) {
+      // Why: layout-rules — the resolver picks priority:
+      //   1. options.targetGroupId IFF group's declared `kind` accepts
+      //      browser tabs (or kind is unset/mixed)
+      //   2. group declared by rules['new-browser-tab']
+      //   3. undefined — createUnifiedTab falls back to active group
+      const resolvedTargetGroupId = resolveTargetGroup({
+        worktreeId,
+        contentKind: 'browser',
+        explicitGroupId: options?.targetGroupId ?? null,
+        activeGroupId: state.activeGroupIdByWorktree[worktreeId],
+        groupsByWorktree: state.groupsByWorktree,
+        layoutConfigByWorktree: state.layoutConfigByWorktree,
+        layoutGroupIdByName: state.layoutGroupIdByName
+      })
       state.createUnifiedTab(worktreeId, 'browser', {
         entityId: workspaceId,
         label: browserTab.title,
-        targetGroupId: options?.targetGroupId,
+        targetGroupId: resolvedTargetGroupId,
         activate: options?.activate ?? true
       })
     }

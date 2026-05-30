@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { Tab, TabGroup } from '../../../../shared/types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultUIState } from '../../../../shared/constants'
 
@@ -132,6 +132,7 @@ import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
+import { createLayoutRulesSlice } from './layout-rules'
 
 const WT = 'repo1::/tmp/feature'
 
@@ -164,7 +165,8 @@ function createTestStore() {
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
-    ...createWorkspaceCleanupSlice(...a)
+    ...createWorkspaceCleanupSlice(...a),
+    ...createLayoutRulesSlice(...a)
   }))
 }
 
@@ -868,6 +870,104 @@ describe('TabsSlice', () => {
       expect(
         state.groupsByWorktree[WT].find((group) => group.id === targetGroupId)?.tabOrder
       ).toEqual([tab.id])
+    })
+
+    it('createEmptySplitGroup stamps inherited kind on the new group', () => {
+      // Why: bootstrap a source group via createUnifiedTab so the test
+      // doesn't rely on an unrelated tab existing in the WT setup.
+      store.getState().createUnifiedTab(WT, 'browser', { id: 'browser-1', label: 'b1' })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      const newGroupId = store
+        .getState()
+        .createEmptySplitGroup(WT, sourceGroupId, 'right', { kind: 'browser' })
+      expect(newGroupId).toBeTruthy()
+      const newGroup = store.getState().groupsByWorktree[WT].find((g) => g.id === newGroupId)
+      expect(newGroup?.kind).toBe('browser')
+    })
+
+    it('drag-split sibling inherits target group kind so layout-rules survive splits', () => {
+      store.getState().createUnifiedTab(WT, 'browser', { id: 'browser-1', label: 'example.com' })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
+      expect(targetGroupId).toBeTruthy()
+      // Lock the target group to browser by config + binding.
+      store.getState().setLayoutConfigForWorktree(WT, {
+        groups: { browserArea: { position: 'right', kind: 'browser' } }
+      })
+      store.getState().recordLayoutGroupBinding(WT, 'browserArea', targetGroupId!)
+      const browserTab = store
+        .getState()
+        .unifiedTabsByWorktree[WT].find((t) => t.contentType === 'browser')!
+      store.getState().dropUnifiedTab(browserTab.id, {
+        groupId: targetGroupId!,
+        splitDirection: 'right'
+      })
+      // The new sibling group must carry the inherited kind: browser.
+      const newSibling = store
+        .getState()
+        .groupsByWorktree[WT].find((g) => g.id !== sourceGroupId && g.id !== targetGroupId)
+      expect(newSibling?.kind).toBe('browser')
+    })
+
+    it('createTab anchors a fresh fallback group into the existing layout tree', () => {
+      // Lock the only existing group to editor; then ask createTab to
+      // make a terminal. ensureGroup's allowsTerminal predicate must
+      // mint a fresh mixed-kind group, AND the layoutByWorktree split
+      // tree must gain a sibling leaf for it — otherwise the terminal
+      // would render nowhere.
+      // Bootstrap an editor group + populate the layout via the same
+      // path createUnifiedTab uses on first call.
+      store.getState().createUnifiedTab(WT, 'editor', { id: 'file-a.ts', label: 'file-a.ts' })
+      const editorGroupId = store.getState().groupsByWorktree[WT][0].id
+      store.getState().setLayoutConfigForWorktree(WT, {
+        groups: { editorPane: { position: 'left-top', kind: 'editor' } }
+      })
+      store.getState().recordLayoutGroupBinding(WT, 'editorPane', editorGroupId)
+
+      const groupsBefore = store.getState().groupsByWorktree[WT].length
+      const term = store.getState().createTab(WT)
+      const groupsAfter = store.getState().groupsByWorktree[WT].length
+      expect(groupsAfter).toBe(groupsBefore + 1)
+
+      const newGroup = store.getState().groupsByWorktree[WT].find((g) => g.id !== editorGroupId)!
+      // Walk the layout tree and assert the new group has a leaf.
+      const layout = store.getState().layoutByWorktree[WT]
+      const collectLeaves = (n: TabGroupLayoutNode | undefined): string[] => {
+        if (!n) {
+          return []
+        }
+        if (n.type === 'leaf') {
+          return [n.groupId]
+        }
+        return [...collectLeaves(n.first), ...collectLeaves(n.second)]
+      }
+      expect(collectLeaves(layout)).toContain(newGroup.id)
+      // And the terminal lives inside that new group, not the editor one.
+      const terminalUnified = store
+        .getState()
+        .unifiedTabsByWorktree[WT].find((t) => t.entityId === term.id)!
+      expect(terminalUnified.groupId).toBe(newGroup.id)
+    })
+
+    it('rejects a move into a kind-locked group whose kind does not match the tab', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
+      expect(targetGroupId).toBeTruthy()
+      // Lock the target to terminal-only and bind it to a name.
+      store.getState().setLayoutConfigForWorktree(WT, {
+        groups: { terminalArea: { position: 'right', kind: 'terminal' } }
+      })
+      store.getState().recordLayoutGroupBinding(WT, 'terminalArea', targetGroupId!)
+
+      store.getState().moveUnifiedTabToGroup(tab.id, targetGroupId!)
+
+      const state = store.getState()
+      const stillThere = state.unifiedTabsByWorktree[WT].find((item) => item.id === tab.id)
+      expect(stillThere?.groupId).toBe(sourceGroupId)
     })
 
     it('copies a unified tab into another group', () => {

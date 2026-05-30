@@ -6,7 +6,8 @@ import {
   shouldIgnoreNestedWorktreeContextMenuScope,
   shouldRemoveFolderProjectFromContextMenu,
   shouldSuppressContextMenuFollowUpClick,
-  shouldContinueDeleteSiblingPositionRestore
+  shouldContinueDeleteSiblingPositionRestore,
+  shouldShowResetLayoutAction
 } from './WorktreeContextMenu'
 
 describe('shouldUseNativeContextMenu', () => {
@@ -125,6 +126,19 @@ describe('hasSleepableWorkspaceActivity', () => {
     expect(hasSleepableWorkspaceActivity('wt-1', {}, {}, { 'wt-1': [{ id: 'browser-1' }] })).toBe(
       true
     )
+  })
+})
+
+describe('shouldShowResetLayoutAction', () => {
+  it('hides reset layout when no declarative layout config exists', () => {
+    expect(shouldShowResetLayoutAction(undefined)).toBe(false)
+    expect(shouldShowResetLayoutAction({})).toBe(false)
+    expect(shouldShowResetLayoutAction({ groups: {}, rules: {} })).toBe(false)
+  })
+
+  it('shows reset layout only for explicit layout groups or rules', () => {
+    expect(shouldShowResetLayoutAction({ groups: { terminal: { position: 'right' } } })).toBe(true)
+    expect(shouldShowResetLayoutAction({ rules: { 'new-terminal': 'terminal' } })).toBe(true)
   })
 })
 

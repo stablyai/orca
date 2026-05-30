@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: browser RPC schemas are centralized so handler registration stays focused on dispatch wiring. */
 // Why: the browser method surface area is large enough that keeping every
 // schema in the same file as its handler registration pushes the file past
 // the 300-line lint cap. Grouping all browser schemas here keeps each
@@ -118,7 +119,10 @@ export const TabCreate = z.object({
   url: OptionalString,
   worktree: OptionalString,
   profileId: OptionalString,
-  waitForRegistration: z.boolean().optional()
+  waitForRegistration: z.boolean().optional(),
+  // Why: declared group name; resolved against layoutGroupIdByName in
+  // the renderer at create time.
+  groupName: OptionalString
 })
 
 export const TabShow = z.object({

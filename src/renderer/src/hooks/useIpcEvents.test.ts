@@ -168,6 +168,8 @@ describe('useIpcEvents browser tab create routing', () => {
       clearTabPtyId: vi.fn(),
       settings: { terminalFontSize: 13 },
       activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-active' },
+      layoutConfigByWorktree: {},
+      layoutGroupIdByName: {},
       browserTabsByWorktree: {
         'wt-1': [{ id: 'workspace-active', activePageId: 'page-active', pageIds: ['page-active'] }]
       },
@@ -217,7 +219,8 @@ describe('useIpcEvents browser tab create routing', () => {
     vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
     vi.doMock('@/lib/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
-      ensureWorktreeHasInitialTerminal: vi.fn()
+      ensureWorktreeHasInitialTerminal: vi.fn(),
+      seedLayoutFromStore: vi.fn()
     }))
     vi.doMock('@/components/sidebar/visible-worktrees', () => ({ getVisibleWorktreeIds: () => [] }))
     vi.doMock('@/lib/editor-font-zoom', () => ({
@@ -255,6 +258,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onLayoutConfig: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
           replyTerminalCreate: () => {},
@@ -419,7 +423,8 @@ describe('useIpcEvents updater integration', () => {
     }))
     vi.doMock('@/lib/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
-      ensureWorktreeHasInitialTerminal: vi.fn()
+      ensureWorktreeHasInitialTerminal: vi.fn(),
+      seedLayoutFromStore: vi.fn()
     }))
     vi.doMock('@/components/sidebar/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
@@ -458,6 +463,7 @@ describe('useIpcEvents updater integration', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onLayoutConfig: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
           replyTerminalCreate: () => {},
@@ -654,7 +660,8 @@ describe('useIpcEvents updater integration', () => {
     }))
     vi.doMock('@/lib/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
-      ensureWorktreeHasInitialTerminal: vi.fn()
+      ensureWorktreeHasInitialTerminal: vi.fn(),
+      seedLayoutFromStore: vi.fn()
     }))
     vi.doMock('@/components/sidebar/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
@@ -693,6 +700,7 @@ describe('useIpcEvents updater integration', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onLayoutConfig: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
           replyTerminalCreate: () => {},
@@ -1020,7 +1028,8 @@ describe('useIpcEvents updater integration', () => {
     }))
     vi.doMock('@/lib/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
-      ensureWorktreeHasInitialTerminal: vi.fn()
+      ensureWorktreeHasInitialTerminal: vi.fn(),
+      seedLayoutFromStore: vi.fn()
     }))
     vi.doMock('@/components/sidebar/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
@@ -1074,6 +1083,7 @@ describe('useIpcEvents updater integration', () => {
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onActivateWorktree: () => () => {},
+          onLayoutConfig: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onCreateTerminal: (
             listener: (data: {
@@ -1551,7 +1561,8 @@ describe('useIpcEvents browser tab close routing', () => {
     }))
     vi.doMock('@/lib/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
-      ensureWorktreeHasInitialTerminal: vi.fn()
+      ensureWorktreeHasInitialTerminal: vi.fn(),
+      seedLayoutFromStore: vi.fn()
     }))
     vi.doMock('@/components/sidebar/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
@@ -1591,6 +1602,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onLayoutConfig: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
           replyTerminalCreate: () => {},
@@ -1763,7 +1775,8 @@ describe('useIpcEvents browser tab close routing', () => {
     }))
     vi.doMock('@/lib/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
-      ensureWorktreeHasInitialTerminal: vi.fn()
+      ensureWorktreeHasInitialTerminal: vi.fn(),
+      seedLayoutFromStore: vi.fn()
     }))
     vi.doMock('@/components/sidebar/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
@@ -1803,6 +1816,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onLayoutConfig: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
           replyTerminalCreate: () => {},
@@ -1970,7 +1984,8 @@ describe('useIpcEvents browser tab close routing', () => {
     }))
     vi.doMock('@/lib/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
-      ensureWorktreeHasInitialTerminal: vi.fn()
+      ensureWorktreeHasInitialTerminal: vi.fn(),
+      seedLayoutFromStore: vi.fn()
     }))
     vi.doMock('@/components/sidebar/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
@@ -2010,6 +2025,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onLayoutConfig: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
           replyTerminalCreate: () => {},
@@ -2244,6 +2260,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
             activateWorktreeListenerRef.current = listener
             return () => {}
           },
+          onLayoutConfig: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
           replyTerminalCreate: () => {},
@@ -2463,6 +2480,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onLayoutConfig: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
           replyTerminalCreate: () => {},

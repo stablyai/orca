@@ -1,5 +1,73 @@
-import type { Tab, TabContentType, TabGroup, WorkspaceSessionState } from '../../../../shared/types'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import type {
+  Tab,
+  TabContentType,
+  TabGroup,
+  TabGroupLayoutNode,
+  WorkspaceSessionState
+} from '../../../../shared/types'
+import { createBrowserUuid } from '../../lib/browser-uuid'
+
+function buildSplitNode(
+  existingGroupId: string,
+  newGroupId: string,
+  direction: 'horizontal' | 'vertical',
+  position: 'first' | 'second'
+): TabGroupLayoutNode {
+  const existingLeaf: TabGroupLayoutNode = { type: 'leaf', groupId: existingGroupId }
+  const newLeaf: TabGroupLayoutNode = { type: 'leaf', groupId: newGroupId }
+  return {
+    type: 'split',
+    direction,
+    first: position === 'first' ? newLeaf : existingLeaf,
+    second: position === 'second' ? newLeaf : existingLeaf,
+    ratio: 0.5
+  }
+}
+
+function replaceLeaf(
+  root: TabGroupLayoutNode,
+  targetGroupId: string,
+  replacement: TabGroupLayoutNode
+): TabGroupLayoutNode {
+  if (root.type === 'leaf') {
+    return root.groupId === targetGroupId ? replacement : root
+  }
+  return {
+    ...root,
+    first: replaceLeaf(root.first, targetGroupId, replacement),
+    second: replaceLeaf(root.second, targetGroupId, replacement)
+  }
+}
+
+function findFirstLeaf(root: TabGroupLayoutNode): string {
+  return root.type === 'leaf' ? root.groupId : findFirstLeaf(root.first)
+}
+
+// Why: anchor a freshly-minted ad-hoc group as a sibling so an
+// allowsGroup fallback group doesn't render off-tree.
+export function nextLayoutForCreatedGroup(
+  layoutByWorktree: Record<string, TabGroupLayoutNode>,
+  worktreeId: string,
+  groupId: string,
+  beforeGroupIds: Set<string>
+): Record<string, TabGroupLayoutNode> {
+  const currentLayout = layoutByWorktree[worktreeId]
+  if (!currentLayout) {
+    return {
+      ...layoutByWorktree,
+      [worktreeId]: { type: 'leaf', groupId }
+    }
+  }
+  if (beforeGroupIds.has(groupId)) {
+    return layoutByWorktree
+  }
+  const anchor = findFirstLeaf(currentLayout)
+  const replacement = buildSplitNode(anchor, groupId, 'horizontal', 'second')
+  return {
+    ...layoutByWorktree,
+    [worktreeId]: replaceLeaf(currentLayout, anchor, replacement)
+  }
+}
 
 export function findTabAndWorktree(
   tabsByWorktree: Record<string, Tab[]>,
@@ -58,15 +126,23 @@ export function ensureGroup(
   groupsByWorktree: Record<string, TabGroup[]>,
   activeGroupIdByWorktree: Record<string, string>,
   worktreeId: string,
-  preferredGroupId?: string
+  preferredGroupId?: string,
+  // Why: layout-rules — when caller passes a kind-allows predicate, both
+  // the preferred and the first-group fallback are gated through it so
+  // a kind-locked group never receives mismatched content via the
+  // fallback path. A new mixed-kind group is created when no existing
+  // group accepts the content.
+  allowsGroup?: (groupId: string) => boolean
 ): {
   group: TabGroup
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
 } {
-  const existing =
-    groupsByWorktree[worktreeId]?.find((group) => group.id === preferredGroupId) ??
-    groupsByWorktree[worktreeId]?.[0]
+  const candidates = groupsByWorktree[worktreeId] ?? []
+  const accepts = allowsGroup ?? (() => true)
+  const preferred = candidates.find((group) => group.id === preferredGroupId)
+  const fallback = candidates.find((group) => accepts(group.id))
+  const existing = preferred && accepts(preferred.id) ? preferred : fallback
   if (existing) {
     return { group: existing, groupsByWorktree, activeGroupIdByWorktree }
   }
@@ -74,7 +150,10 @@ export function ensureGroup(
   const group: TabGroup = { id: groupId, worktreeId, activeTabId: null, tabOrder: [] }
   return {
     group,
-    groupsByWorktree: { ...groupsByWorktree, [worktreeId]: [group] },
+    groupsByWorktree: {
+      ...groupsByWorktree,
+      [worktreeId]: [...candidates, group]
+    },
     activeGroupIdByWorktree: { ...activeGroupIdByWorktree, [worktreeId]: groupId }
   }
 }

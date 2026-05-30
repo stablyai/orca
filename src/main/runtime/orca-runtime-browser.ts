@@ -139,9 +139,15 @@ function clampOptionalNumber(
 
 export type RuntimeBrowserCommandHost = {
   getAgentBrowserBridge(): AgentBrowserBridge | null
-  resolveWorktreeSelector(selector: string): Promise<{ id: string }>
+  resolveWorktreeSelector(
+    selector: string
+  ): Promise<{ id: string; path: string; repoId: string }>
   getAuthoritativeWindow(): BrowserWindow
   getAvailableAuthoritativeWindow(): BrowserWindow | null
+  // Why: layout-rules — browser tab creation needs to push the layout
+  // config before requesting a renderer tab so a CLI `--group <name>`
+  // resolves against populated bindings even on a never-activated target.
+  pushLayoutConfigForWorktree?(worktreeId: string, worktreePath: string, repoId: string): Promise<void>
 }
 
 export class RuntimeBrowserCommands {
@@ -1259,21 +1265,30 @@ export class RuntimeBrowserCommands {
     worktree?: string
     profileId?: string
     waitForRegistration?: boolean
+    groupName?: string
   }): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+    const worktree = params.worktree
+      ? await this.host.resolveWorktreeSelector(params.worktree)
       : undefined
+    const worktreeId = worktree?.id
     if (!this.host.getAvailableAuthoritativeWindow()) {
       throw new BrowserError(
         'browser_error',
         'Browser tab creation requires a desktop renderer; headless orca serve does not support browser panes yet.'
       )
     }
+    // Why: layout-rules — push config BEFORE the renderer handler runs
+    // so seedLayoutFromStore + --group resolve see populated bindings
+    // even on a CLI target that has never been activated this session.
+    if (worktree && this.host.pushLayoutConfigForWorktree) {
+      await this.host.pushLayoutConfigForWorktree(worktree.id, worktree.path, worktree.repoId)
+    }
     const { browserPageId } = await this.createBrowserTabInRenderer(
       url,
       worktreeId,
-      params.profileId
+      params.profileId,
+      params.groupName
     )
 
     // Why: the renderer creates the Zustand tab immediately, but the webview must
@@ -1648,7 +1663,8 @@ export class RuntimeBrowserCommands {
   private async createBrowserTabInRenderer(
     url: string,
     worktreeId?: string,
-    profileId?: string
+    profileId?: string,
+    groupName?: string
   ): Promise<{ browserPageId: string }> {
     const win = this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
@@ -1683,7 +1699,12 @@ export class RuntimeBrowserCommands {
         requestId,
         url,
         worktreeId,
-        sessionProfileId: profileId
+        sessionProfileId: profileId,
+        // Why: layout-rules — let the renderer resolve the declared
+        // group name to a UUID at create time. Renderer's
+        // `layoutGroupIdByName[worktreeId][groupName]` knows the
+        // mapping (populated by `applyLayoutSeed` during first-mount).
+        ...(groupName !== undefined ? { groupName } : {})
       })
     })
 

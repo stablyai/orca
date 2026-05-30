@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: hook parsing, shell selection, and execution-path regressions are tightly coupled, so these cases stay in one file to preserve the behavior matrix across platforms. */
 import type { Repo } from '../shared/types'
 
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseOrcaYaml } from './hooks'
 
 // Mock fs and path used by loadHooks
@@ -11,7 +11,8 @@ vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
   rmSync: vi.fn(),
-  chmodSync: vi.fn()
+  chmodSync: vi.fn(),
+  statSync: vi.fn()
 }))
 
 const { execMock, execFileMock } = vi.hoisted(() => ({
@@ -26,6 +27,10 @@ vi.mock('child_process', () => ({
   // runner.ts imports spawn from child_process transitively.
   spawn: vi.fn()
 }))
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 describe('parseOrcaYaml', () => {
   it('parses YAML with setup script only', () => {
@@ -197,6 +202,59 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
 
     const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
     expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(false)
+  })
+})
+
+describe('loadLayoutConfig', () => {
+  it('loads only the layout block from a local orca.yaml', async () => {
+    const fs = await import('fs')
+    vi.mocked(fs.existsSync).mockImplementation((path) => path === '/test/repo/orca.yaml')
+    vi.mocked(fs.statSync).mockReturnValue({ size: 96 } as never)
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      'scripts:\n  setup: pnpm install\nlayout:\n  groups:\n    editor:\n      position: center\n'
+    )
+
+    const { loadLayoutConfig } = await import('./hooks')
+    expect(loadLayoutConfig('/test/repo')).toEqual({
+      groups: {
+        editor: { position: 'center' }
+      }
+    })
+  })
+
+  it('returns an invalid-yaml sentinel instead of throwing on malformed yaml', async () => {
+    const fs = await import('fs')
+    vi.mocked(fs.existsSync).mockImplementation((path) => path === '/test/repo/orca.yaml')
+    vi.mocked(fs.statSync).mockReturnValue({ size: 32 } as never)
+    vi.mocked(fs.readFileSync).mockReturnValue('layout: [unterminated\n')
+
+    const { loadLayoutConfig } = await import('./hooks')
+    const { isInvalidYamlSentinel } = await import('../shared/orca-yaml-layout')
+    expect(isInvalidYamlSentinel(loadLayoutConfig('/test/repo'))).toBe(true)
+  })
+
+  it('skips oversized local orca.yaml before parsing', async () => {
+    const fs = await import('fs')
+    vi.mocked(fs.existsSync).mockImplementation((path) => path === '/test/repo/orca.yaml')
+    vi.mocked(fs.statSync).mockReturnValue({ size: 256 * 1024 + 1 } as never)
+
+    const { loadLayoutConfig } = await import('./hooks')
+    expect(loadLayoutConfig('/test/repo')).toBeNull()
+    expect(vi.mocked(fs.readFileSync)).not.toHaveBeenCalled()
+  })
+
+  it('uses POSIX paths when reading layout config through the SSH relay', async () => {
+    const readFile = vi.fn().mockResolvedValue({
+      content: 'layout:\n  groups:\n    terminal:\n      position: left-bottom\n'
+    })
+
+    const { loadLayoutConfigFromReader } = await import('./hooks')
+    await expect(loadLayoutConfigFromReader({ readFile }, '/home/user/project')).resolves.toEqual({
+      groups: {
+        terminal: { position: 'left-bottom' }
+      }
+    })
+    expect(readFile).toHaveBeenCalledWith('/home/user/project/orca.yaml')
   })
 })
 

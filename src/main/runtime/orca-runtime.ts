@@ -327,6 +327,8 @@ import {
   hasUnrecognizedOrcaYamlKeys,
   hasHooksFile,
   loadHooks,
+  loadLayoutConfig,
+  loadLayoutConfigFromReader,
   parseOrcaYaml,
   readIssueCommand,
   runHook,
@@ -655,6 +657,7 @@ type RuntimeNotifier = {
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
+  layoutConfigForWorktree?(worktreeId: string, config: unknown | null): void
   activateWorktree(
     repoId: string,
     worktreeId: string,
@@ -7049,10 +7052,38 @@ export class OrcaRuntimeService {
       throw new Error('repo_not_found')
     }
 
+    // Why: push layout config FIRST so the renderer's first-mount seed
+    // sees the declared groups before any initial entities are created.
+    await this.pushLayoutConfig(worktree.id, worktree.path, repo.connectionId)
     // Why: inactive worktree terminal panes are renderer-owned and may not have
     // live PTYs until the desktop activates the worktree and mounts them.
     this.notifier?.activateWorktree(repo.id, worktree.id)
     return { repoId: repo.id, worktreeId: worktree.id, activated: true }
+  }
+
+  // Why: route to local FS or SSH provider depending on the repo so
+  // orca.yaml `layout` is honored on both.
+  private async pushLayoutConfig(
+    worktreeId: string,
+    worktreePath: string,
+    connectionId: string | null | undefined
+  ): Promise<void> {
+    if (connectionId) {
+      const provider = getSshFilesystemProvider(connectionId)
+      if (!provider) {
+        // Why: SSH session may not be ready yet. Skipping keeps the renderer
+        // from treating transient unavailability as a config removal.
+        console.warn(
+          `[layout-rules] SSH filesystem provider for ${connectionId} not ready; skipping layout push for ${worktreeId}.`
+        )
+        return
+      }
+      const config = await loadLayoutConfigFromReader(provider, worktreePath)
+      this.notifier?.layoutConfigForWorktree?.(worktreeId, config)
+      return
+    }
+    const config = loadLayoutConfig(worktreePath)
+    this.notifier?.layoutConfigForWorktree?.(worktreeId, config)
   }
 
   private async buildStartupForDraft(
@@ -7855,6 +7886,9 @@ export class OrcaRuntimeService {
     invalidateAuthorizedRootsCache()
 
     this.notifier?.worktreesChanged(repo.id)
+    // Why: push layout config before any startup/setup terminal spawn or
+    // renderer activation so the first-mount seed sees the declared groups.
+    await this.pushLayoutConfig(worktree.id, worktree.path, repo?.connectionId)
     const shouldActivate = args.activate === true || args.runHooks === true
     let didSpawnStartup = false
     let didSpawnSetup = false
@@ -9182,6 +9216,7 @@ export class OrcaRuntimeService {
       activate?: boolean
       tabId?: string
       leafId?: string
+      groupName?: string
     } = {}
   ): Promise<RuntimeTerminalCreate> {
     // Why: pre-diff createTerminal fell back to the renderer's active worktree
@@ -9190,13 +9225,20 @@ export class OrcaRuntimeService {
     // the renderer IPC path to preserve that behavior.
     const rendererWindow =
       opts.rendererBacked === true ? this.getAvailableAuthoritativeWindow() : null
+    // Why: a named layout group can only be resolved by the renderer store.
+    // Keep newer background spawning unless routing is required to honor UI state.
+    const requiresRendererRouting =
+      opts.focus === true || opts.groupName !== undefined || opts.rendererBacked === true
     const shouldCreateInBackground =
       worktreeSelector !== undefined &&
-      ((opts.focus !== true && opts.rendererBacked !== true) ||
+      ((!requiresRendererRouting && opts.rendererBacked !== true) ||
         // Why: `orca serve` exposes the local runtime without a renderer
         // window. Renderer-backed Codex terminals are preferred for the app,
         // but headless CLI users still need a usable terminal handle.
-        (opts.rendererBacked === true && rendererWindow === null))
+        (opts.rendererBacked === true &&
+          rendererWindow === null &&
+          opts.groupName === undefined &&
+          opts.focus !== true))
 
     if (shouldCreateInBackground) {
       if (!this.ptyController?.spawn) {
@@ -9271,9 +9313,18 @@ export class OrcaRuntimeService {
     const win = rendererWindow ?? this.getAuthoritativeWindow()
     // Why: mirrors browserTabCreate — when no worktree is specified, pass
     // undefined so the renderer uses its current active worktree.
-    const worktreeId = worktreeSelector
-      ? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    const worktree = worktreeSelector
+      ? await this.resolveWorktreeSelector(worktreeSelector)
       : undefined
+    const worktreeId = worktree?.id
+    // Why: layout-rules — push the config BEFORE requesting a tab so the
+    // renderer's `seedLayoutFromStore` sees it on a never-activated CLI
+    // target. Without this, `--group <name>` returns "Unknown layout
+    // group" because layoutGroupIdByName is empty.
+    if (worktree) {
+      const terminalRepo = this.store?.getRepo(worktree.repoId)
+      await this.pushLayoutConfig(worktree.id, worktree.path, terminalRepo?.connectionId)
+    }
     const requestId = randomUUID()
 
     // Why: terminal creation is a renderer-side Zustand store operation (like
@@ -9306,7 +9357,10 @@ export class OrcaRuntimeService {
         worktreeId,
         command: opts.command,
         title: opts.title,
-        activate: opts.focus === true || opts.activate === true
+        activate: opts.focus === true || opts.activate === true,
+        // Why: layout-rules — declared group name resolved by the renderer
+        // against the layout-bindings map populated during first-mount seed.
+        ...(opts.groupName !== undefined ? { groupName: opts.groupName } : {})
       })
     })
 
@@ -12009,7 +12063,21 @@ export class OrcaRuntimeService {
     getAgentBrowserBridge: () => this.agentBrowserBridge,
     resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
-    getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow()
+    getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow(),
+    // Why: layout-rules — browser tab create needs to push layout config
+    // before the renderer handler runs so `--group` resolves correctly
+    // against the bindings map seeded at first mount.
+    pushLayoutConfigForWorktree: async (worktreeId, worktreePath, repoId) => {
+      // Why: if the repo isn't in the store (transient hydration race or
+      // post-delete), skip rather than fall through to the local-FS branch
+      // — pushLayoutConfig would otherwise read a non-existent local path
+      // for an SSH worktree and push null, wiping persisted layout bindings.
+      const repo = this.store?.getRepo(repoId)
+      if (!repo) {
+        return
+      }
+      await this.pushLayoutConfig(worktreeId, worktreePath, repo.connectionId)
+    }
   })
 
   browserSnapshot: RuntimeBrowserCommands['browserSnapshot'] =

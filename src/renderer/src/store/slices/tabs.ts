@@ -19,6 +19,7 @@ import {
   findGroupForTab,
   findTabAndWorktree,
   findTabByEntityInGroup,
+  nextLayoutForCreatedGroup,
   patchTab,
   pickNextActiveTab,
   pushRecentTabId,
@@ -29,6 +30,8 @@ import { buildHydratedTabState } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { getGroupKindForUuid } from '@/lib/layout-rules'
+import { groupAllowsContentKind, type LayoutGroupKind } from '../../../../shared/orca-yaml-layout'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -86,7 +89,8 @@ export type TabsSlice = {
   createEmptySplitGroup: (
     worktreeId: string,
     sourceGroupId: string,
-    direction: TabSplitDirection
+    direction: TabSplitDirection,
+    options?: { kind?: LayoutGroupKind }
   ) => string | null
   moveUnifiedTabToGroup: (
     tabId: string,
@@ -410,11 +414,24 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     const id = init?.id ?? createBrowserUuid()
     let created!: Tab
     set((state) => {
+      const allowsGroup = (groupId: string): boolean =>
+        groupAllowsContentKind(
+          getGroupKindForUuid({
+            worktreeId,
+            groupId,
+            groupsByWorktree: state.groupsByWorktree,
+            layoutConfigByWorktree: state.layoutConfigByWorktree,
+            layoutGroupIdByName: state.layoutGroupIdByName
+          }),
+          contentType
+        )
+      const beforeGroupIds = new Set((state.groupsByWorktree[worktreeId] ?? []).map((g) => g.id))
       const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
         state.groupsByWorktree,
         state.activeGroupIdByWorktree,
         worktreeId,
-        init?.targetGroupId ?? state.activeGroupIdByWorktree[worktreeId]
+        init?.targetGroupId ?? state.activeGroupIdByWorktree[worktreeId],
+        allowsGroup
       )
       const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
 
@@ -470,10 +487,15 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           })
         },
         activeGroupIdByWorktree,
-        layoutByWorktree: {
-          ...state.layoutByWorktree,
-          [worktreeId]: state.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
-        }
+        // Why: anchor a fresh ad-hoc group (when ensureGroup's
+        // allowsGroup fallback created one) into the existing split
+        // tree. Shared with createTab via tab-group-state.
+        layoutByWorktree: nextLayoutForCreatedGroup(
+          state.layoutByWorktree,
+          worktreeId,
+          group.id,
+          beforeGroupIds
+        )
       }
     })
     if (init?.recordInteraction !== false) {
@@ -976,13 +998,18 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     return true
   },
 
-  createEmptySplitGroup: (worktreeId, sourceGroupId, direction) => {
+  createEmptySplitGroup: (worktreeId, sourceGroupId, direction, options) => {
     const newGroupId = createBrowserUuid()
     const newGroup: TabGroup = {
       id: newGroupId,
       worktreeId,
       activeTabId: null,
-      tabOrder: []
+      tabOrder: [],
+      // Why: split-derived groups inherit kind from source so a split
+      // off a kind-locked pane stays locked (browser pane → browser
+      // pane, not unkinded escape hatch). layoutGroupName is NOT
+      // propagated — one YAML name can't map to multiple UUIDs.
+      ...(options?.kind ? { kind: options.kind } : {})
     }
     set((state) => {
       const existing = state.groupsByWorktree[worktreeId] ?? []
@@ -1017,6 +1044,20 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       }
       const { tab, worktreeId } = foundTab
       if (tab.groupId === targetGroupId) {
+        return {}
+      }
+      // Why: layout-rules — kind-locked groups reject mismatched content
+      // on drag-and-drop too, not only at create time. Without this the
+      // "+" menu would hide options that the user could still smuggle in
+      // by dragging an existing tab.
+      const targetKind = getGroupKindForUuid({
+        worktreeId,
+        groupId: targetGroupId,
+        groupsByWorktree: state.groupsByWorktree,
+        layoutConfigByWorktree: state.layoutConfigByWorktree,
+        layoutGroupIdByName: state.layoutGroupIdByName
+      })
+      if (!groupAllowsContentKind(targetKind, tab.contentType)) {
         return {}
       }
       const sourceGroup = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
@@ -1120,6 +1161,21 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         // and group IDs. Treat that as a no-op instead of faking a split.
         return {}
       }
+      // Why: kind-lock — both move-into and split-out-of must respect
+      // the source/target group's effective kind. The split case
+      // inherits target.groupId's kind on the new sibling (we only
+      // need to validate the content fits that kind here; the actual
+      // kind stamp on the new group happens in the split branch below).
+      const targetKind = getGroupKindForUuid({
+        worktreeId,
+        groupId: target.groupId,
+        groupsByWorktree: state.groupsByWorktree,
+        layoutConfigByWorktree: state.layoutConfigByWorktree,
+        layoutGroupIdByName: state.layoutGroupIdByName
+      })
+      if (!groupAllowsContentKind(targetKind, tab.contentType)) {
+        return {}
+      }
 
       moved = true
 
@@ -1134,7 +1190,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           id: newGroupId,
           worktreeId,
           activeTabId: null, // Placeholder; properly set in the nextGroups.map() below
-          tabOrder: []
+          tabOrder: [],
+          // Why: split sibling inherits effective kind so layout-rules
+          // contract survives splits (terminal pane → terminal pane).
+          ...(targetKind ? { kind: targetKind } : {})
         }
         const currentLayout =
           nextLayoutByWorktree[worktreeId] ?? ({ type: 'leaf', groupId: target.groupId } as const)
@@ -1545,5 +1604,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     )
     validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
     set(buildHydratedTabState(session, validWorktreeIds))
+    // Why: rebuild layoutGroupIdByName from persisted layoutGroupName
+    // stamps so post-restart --group lookups resolve.
+    const after = get()
+    for (const [worktreeId, groups] of Object.entries(after.groupsByWorktree)) {
+      after.rebuildLayoutBindingsFromGroups(worktreeId, groups)
+    }
   }
 })

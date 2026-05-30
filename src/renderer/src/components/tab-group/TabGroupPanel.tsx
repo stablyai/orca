@@ -20,6 +20,7 @@ import {
   type TabDropZone
 } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
+import { getGroupKindForUuid } from '@/lib/layout-rules'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
@@ -51,6 +52,26 @@ export default function TabGroupPanel({
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
 
+  // Why: layout-rules — read this group's effective `kind` so TabBar's
+  // "+" menu hides options that would land in a kind-locked group.
+  // groupsByWorktree must be passed too: split-derived siblings carry
+  // kind on the TabGroup directly (no layoutGroupName), so without
+  // groupsByWorktree the resolver only sees the YAML-name fallback and
+  // returns undefined for inherited kind.
+  const groupsByWorktree = useAppStore((state) => state.groupsByWorktree)
+  const layoutConfigByWorktree = useAppStore((state) => state.layoutConfigByWorktree)
+  const layoutGroupIdByName = useAppStore((state) => state.layoutGroupIdByName)
+  const groupKind = useMemo(
+    () =>
+      getGroupKindForUuid({
+        worktreeId,
+        groupId,
+        groupsByWorktree,
+        layoutConfigByWorktree,
+        layoutGroupIdByName
+      }),
+    [worktreeId, groupId, groupsByWorktree, layoutConfigByWorktree, layoutGroupIdByName]
+  )
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
   const { setNodeRef: setBodyDropRef } = useDroppable({
@@ -115,6 +136,7 @@ export default function TabGroupPanel({
       onNewBrowserTab={commands.newBrowserTab}
       onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
+      groupKind={groupKind}
       onSetCustomTitle={commands.setTabCustomTitle}
       onSetTabColor={commands.setTabColor}
       onTogglePaneExpand={commands.toggleTerminalPaneExpand}

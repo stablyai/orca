@@ -34,6 +34,8 @@ import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview
 import { toast } from 'sonner'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { branchName } from '@/lib/git-utils'
+import { LayoutConfigSchema, isInvalidYamlSentinel } from '../../../../shared/orca-yaml-layout'
+import { tryReseedAfterLateConfigArrival } from '@/lib/layout-rules'
 import { basename } from '@/lib/path'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
@@ -679,6 +681,29 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     groupsByWorktree: omitByWorktree(s.groupsByWorktree),
     layoutByWorktree: omitByWorktree(s.layoutByWorktree),
     activeGroupIdByWorktree: omitByWorktree(s.activeGroupIdByWorktree),
+    // Why: removed worktrees must not leave stale layout bindings or retry locks.
+    layoutConfigByWorktree: omitByWorktree(s.layoutConfigByWorktree),
+    layoutGroupIdByName: omitByWorktree(s.layoutGroupIdByName),
+    layoutConfigPrefetchedIds: (() => {
+      let changed = false
+      const next = new Set(s.layoutConfigPrefetchedIds)
+      for (const id of worktreeIdSet) {
+        if (next.delete(id)) {
+          changed = true
+        }
+      }
+      return changed ? next : s.layoutConfigPrefetchedIds
+    })(),
+    layoutConfigInvalidIds: (() => {
+      let changed = false
+      const next = new Set(s.layoutConfigInvalidIds)
+      for (const id of worktreeIdSet) {
+        if (next.delete(id)) {
+          changed = true
+        }
+      }
+      return changed ? next : s.layoutConfigInvalidIds
+    })(),
     // Git status caches
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
     gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
@@ -715,6 +740,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   everActivatedWorktreeIds: new Set<string>(),
   lastVisitedAtByWorktreeId: {},
   hasHydratedWorktreePurge: false,
+  layoutConfigPrefetchedIds: new Set<string>(),
+  layoutConfigInvalidIds: new Set<string>(),
 
   fetchDetectedWorktrees: async (repoId) => {
     try {
@@ -736,6 +763,24 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const settings = get().settings
       const detected = await listDetectedWorktreesForRepo(settings, repoId)
       const worktrees = toVisibleWorktrees(detected)
+      // Why: renderer IPC resolves desktop worktrees only; remote runtimes push
+      // layout config during activation instead of reading local paths here.
+      const shouldPrefetchLayoutConfigs = getActiveRuntimeTarget(settings).kind === 'local'
+
+      // Why: prefetch BEFORE the equality short-circuit so hydrated
+      // session restores still fetch orca.yaml on first boot.
+      const prefetched = get().layoutConfigPrefetchedIds
+      const newlySeen = shouldPrefetchLayoutConfigs
+        ? worktrees.filter((wt) => !prefetched.has(wt.id))
+        : []
+      if (newlySeen.length > 0) {
+        const next = new Set(prefetched)
+        for (const wt of newlySeen) {
+          next.add(wt.id)
+        }
+        set({ layoutConfigPrefetchedIds: next })
+      }
+
       const current = get().worktreesByRepo[repoId]
       if (areWorktreesEqual(current, worktrees)) {
         set((s) => {
@@ -752,6 +797,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           }
         })
         await refreshRemoteWorktreeLineageBestEffort(settings, set)
+        prefetchLayoutConfigsForNewWorktrees()
         return
       }
 
@@ -786,6 +832,116 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
       await refreshRemoteWorktreeLineageBestEffort(settings, set)
+      prefetchLayoutConfigsForNewWorktrees()
+
+      function prefetchLayoutConfigsForNewWorktrees(): void {
+        if (newlySeen.length === 0) {
+          return
+        }
+        // Why: release lock so the next worktrees:changed retries after
+        // a transient failure (IPC error, malformed YAML, SSH not ready).
+        const dropPrefetchLock = (id: string): void => {
+          const live = get().layoutConfigPrefetchedIds
+          if (!live.has(id)) {
+            return
+          }
+          const next = new Set(live)
+          next.delete(id)
+          set({ layoutConfigPrefetchedIds: next })
+        }
+        const markInvalid = (id: string): void => {
+          const live = get().layoutConfigInvalidIds
+          if (live.has(id)) {
+            return
+          }
+          set({ layoutConfigInvalidIds: new Set([...live, id]) })
+        }
+        const clearInvalid = (id: string): void => {
+          const live = get().layoutConfigInvalidIds
+          if (!live.has(id)) {
+            return
+          }
+          const next = new Set(live)
+          next.delete(id)
+          set({ layoutConfigInvalidIds: next })
+        }
+
+        for (const wt of newlySeen) {
+          void window.api.worktrees
+            .getLayoutConfig({ worktreeId: wt.id })
+            .then((rawConfig) => {
+              if (!rawConfig) {
+                get().setLayoutConfigForWorktree(wt.id, null)
+                // Why: legitimate "no orca.yaml" — not an invalid state.
+                clearInvalid(wt.id)
+                // Why: SSH null can mean "provider not ready"; release
+                // lock so a reconnect re-fetches.
+                const repo = get().repos.find((r) => r.id === wt.repoId)
+                if (repo?.connectionId) {
+                  dropPrefetchLock(wt.id)
+                }
+                return
+              }
+              // Why: main wraps unparseable YAML in a sentinel so we can
+              // distinguish "no orca.yaml" from "yaml broke".
+              if (isInvalidYamlSentinel(rawConfig)) {
+                toast.error('orca.yaml could not be parsed', {
+                  description: rawConfig.message
+                })
+                get().setLayoutConfigForWorktree(wt.id, null)
+                // Why: mark for Reset Layout visibility; release lock so a fix retries.
+                markInvalid(wt.id)
+                dropPrefetchLock(wt.id)
+                return
+              }
+              const parsed = LayoutConfigSchema.safeParse(rawConfig)
+              if (!parsed.success) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  '[layout-rules] Renderer rejected layout config (prefetch) for worktree',
+                  wt.id,
+                  parsed.error.issues
+                )
+                const firstIssue = parsed.error.issues[0]
+                const detail = firstIssue
+                  ? `${firstIssue.path.join('.') || 'layout'}: ${firstIssue.message}`
+                  : 'see DevTools console for full Zod error'
+                toast.error('orca.yaml layout rejected', { description: detail })
+                get().setLayoutConfigForWorktree(wt.id, null)
+                markInvalid(wt.id)
+                dropPrefetchLock(wt.id)
+                return
+              }
+              get().setLayoutConfigForWorktree(wt.id, parsed.data)
+              // Why: clean parse — clear any prior invalid flag.
+              clearInvalid(wt.id)
+              const s = get()
+              tryReseedAfterLateConfigArrival(wt.id, parsed.data, {
+                getGroupsForWorktree: (id) => get().groupsByWorktree[id] ?? [],
+                getTabsForWorktree: (id) => get().tabsByWorktree[id] ?? [],
+                ensureWorktreeRootGroup: s.ensureWorktreeRootGroup,
+                createEmptySplitGroup: s.createEmptySplitGroup,
+                focusGroup: s.focusGroup,
+                recordLayoutGroupBinding: s.recordLayoutGroupBinding,
+                closeTab: s.closeTab,
+                closeEmptyGroup: s.closeEmptyGroup,
+                recreateInitialTerminal: (id) => {
+                  // Why: closeTab during teardown may have null'd
+                  // activeWorktreeId; restore before recreating.
+                  const live = get()
+                  if (live.activeWorktreeId !== id) {
+                    live.setActiveWorktree(id)
+                  }
+                  get().createTab(id, undefined, undefined, { pendingActivationSpawn: true })
+                }
+              })
+            })
+            .catch(() => {
+              // Why: release lock so the next worktrees:changed retries.
+              dropPrefetchLock(wt.id)
+            })
+        }
+      }
     } catch (err) {
       console.error(`Failed to fetch worktrees for repo ${repoId}:`, err)
     }
@@ -1234,6 +1390,18 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextLayoutByWorktree[worktreeId]
         const nextActiveGroupIdByWorktree = { ...s.activeGroupIdByWorktree }
         delete nextActiveGroupIdByWorktree[worktreeId]
+        // Why: clear symmetrically with groups so a same-path re-create
+        // doesn't inherit stale config/bindings; release prefetch lock too.
+        const nextLayoutConfigByWorktree = { ...s.layoutConfigByWorktree }
+        delete nextLayoutConfigByWorktree[worktreeId]
+        const nextLayoutGroupIdByName = { ...s.layoutGroupIdByName }
+        delete nextLayoutGroupIdByName[worktreeId]
+        const nextLayoutConfigPrefetchedIds = s.layoutConfigPrefetchedIds.has(worktreeId)
+          ? new Set([...s.layoutConfigPrefetchedIds].filter((id) => id !== worktreeId))
+          : s.layoutConfigPrefetchedIds
+        const nextLayoutConfigInvalidIds = s.layoutConfigInvalidIds.has(worktreeId)
+          ? new Set([...s.layoutConfigInvalidIds].filter((id) => id !== worktreeId))
+          : s.layoutConfigInvalidIds
         // Why: git status / compare caches are keyed by worktree and stop being
         // refreshed once the worktree is deleted. Remove them here so deleted
         // worktrees cannot retain stale conflict badges, branch diffs, or compare
@@ -1330,6 +1498,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           groupsByWorktree: nextGroupsByWorktree,
           layoutByWorktree: nextLayoutByWorktree,
           activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+          layoutConfigByWorktree: nextLayoutConfigByWorktree,
+          layoutGroupIdByName: nextLayoutGroupIdByName,
+          layoutConfigPrefetchedIds: nextLayoutConfigPrefetchedIds,
+          layoutConfigInvalidIds: nextLayoutConfigInvalidIds,
           editorDrafts: nextEditorDrafts,
           markdownViewMode: nextMarkdownViewMode,
           editorViewMode: nextEditorViewMode,

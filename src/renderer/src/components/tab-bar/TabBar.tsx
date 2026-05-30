@@ -70,6 +70,9 @@ type TabBarProps = {
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
   onOpenFileTab?: () => void
+  /** Kind-lock — `mixed` / undefined shows all "+" entries; explicit
+   *  kinds hide the menu items that don't match. */
+  groupKind?: 'editor' | 'terminal' | 'browser' | 'mixed'
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
@@ -136,6 +139,7 @@ function TabBarInner({
   showAgentLaunchItems = true,
   onNewFileTab,
   onOpenFileTab,
+  groupKind,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePaneExpand,
@@ -227,6 +231,10 @@ function TabBarInner({
   const shouldShowWindowsShellMenu = isWindows || runtimeHostPlatform === 'win32'
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(shouldShowWindowsShellMenu)
   const resolvedGroupId = groupId ?? worktreeId
+  const acceptsTerminal = !groupKind || groupKind === 'mixed' || groupKind === 'terminal'
+  const acceptsBrowser = !groupKind || groupKind === 'mixed' || groupKind === 'browser'
+  const acceptsEditor = !groupKind || groupKind === 'mixed' || groupKind === 'editor'
+  const acceptsAllEntryKinds = acceptsTerminal && acceptsBrowser && acceptsEditor
 
   const statusByRelativePath = useMemo(() => buildStatusMap(gitStatusEntries), [gitStatusEntries])
 
@@ -626,7 +634,7 @@ function TabBarInner({
             runPendingNewTabMenuFocusAfterClose()
           }}
         >
-          {!terminalOnly && onOpenEntry && unifiedNewTabLauncherEnabled ? (
+          {!terminalOnly && acceptsAllEntryKinds && onOpenEntry && unifiedNewTabLauncherEnabled ? (
             <>
               <TabBarCreateEntry
                 worktreeId={worktreeId}
@@ -644,7 +652,13 @@ function TabBarInner({
               <DropdownMenuSeparator />
             </>
           ) : null}
-          {shouldShowWindowsShellMenu && onNewTerminalWithShell ? (
+          {/* Why: layout-rules — render terminal-create options ONLY when
+           *  group accepts terminals (or has no kind lock). Apply same
+           *  gate to both Windows shell-list path and the unix simple
+           *  "New Terminal" item so a browser-locked group hides every
+           *  terminal entry.
+           */}
+          {acceptsTerminal && shouldShowWindowsShellMenu && onNewTerminalWithShell ? (
             // Why: previously the Windows path nested shell choices under a
             // Radix submenu. In practice the submenu frequently failed to open
             // on hover/click, and even when it worked the two-step expansion
@@ -704,7 +718,7 @@ function TabBarInner({
                 )
               })
             })()
-          ) : (
+          ) : acceptsTerminal ? (
             <DropdownMenuItem
               onSelect={() => {
                 queueNewActiveTerminalFocusAfterNewTabMenuClose()
@@ -716,8 +730,8 @@ function TabBarInner({
               New Terminal
               <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
             </DropdownMenuItem>
-          )}
-          {!terminalOnly && (
+          ) : null}
+          {!terminalOnly && acceptsBrowser && (
             <DropdownMenuItem
               onSelect={onNewBrowserTab}
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -727,7 +741,7 @@ function TabBarInner({
               <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
             </DropdownMenuItem>
           )}
-          {!terminalOnly && onNewFileTab && (
+          {!terminalOnly && onNewFileTab && acceptsEditor && (
             <DropdownMenuItem
               onSelect={onNewFileTab}
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -737,7 +751,7 @@ function TabBarInner({
               <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
             </DropdownMenuItem>
           )}
-          {!terminalOnly && onOpenFileTab && (
+          {!terminalOnly && onOpenFileTab && acceptsEditor && (
             <DropdownMenuItem
               onSelect={onOpenFileTab}
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -746,7 +760,10 @@ function TabBarInner({
               Open Markdown...
             </DropdownMenuItem>
           )}
-          {showAgentLaunchItems ? (
+          {/* Why: agents launch into a terminal, so hide them in groups
+           *  whose layout kind rejects terminal content.
+           */}
+          {showAgentLaunchItems && acceptsTerminal ? (
             <>
               <DropdownMenuSeparator />
               <QuickLaunchAgentMenuItems
