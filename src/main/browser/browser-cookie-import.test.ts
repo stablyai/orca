@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: cookie import tests share import-time Electron mocks plus
+   browser-specific cookie fixtures; splitting would duplicate brittle setup. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { sessionFromPartitionMock, dialogShowOpenDialogMock } = vi.hoisted(() => ({
@@ -14,12 +16,76 @@ vi.mock('electron', () => ({
 import {
   buildChromiumCookieInsertParams,
   importCookiesFromFile,
+  importCookiesFromBrowser,
   detectInstalledBrowsers,
-  type ChromiumCookieColumnInfo
+  type ChromiumCookieColumnInfo,
+  type DetectedBrowser
 } from './browser-cookie-import'
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+
+const LARGE_SAFARI_COOKIE_COUNT = 150_000
+
+function buildSafariBinaryCookies(cookieCount: number): Buffer {
+  const cookies: Buffer[] = []
+  const offsets: number[] = []
+  let pageSize = 8 + cookieCount * 4
+
+  for (let index = 0; index < cookieCount; index += 1) {
+    offsets.push(pageSize)
+    const cookie = buildExpiredSafariCookie(index)
+    cookies.push(cookie)
+    pageSize += cookie.length
+  }
+
+  const page = Buffer.alloc(pageSize)
+  page.writeUInt32BE(0x00000100, 0)
+  page.writeUInt32LE(cookieCount, 4)
+  for (let index = 0; index < offsets.length; index += 1) {
+    page.writeUInt32LE(offsets[index], 8 + index * 4)
+  }
+
+  let cookieOffset = 8 + cookieCount * 4
+  for (const cookie of cookies) {
+    cookie.copy(page, cookieOffset)
+    cookieOffset += cookie.length
+  }
+
+  const file = Buffer.alloc(12 + page.length)
+  file.write('cook', 0, 'utf8')
+  file.writeUInt32BE(1, 4)
+  file.writeUInt32BE(page.length, 8)
+  page.copy(file, 12)
+  return file
+}
+
+function buildExpiredSafariCookie(index: number): Buffer {
+  const domain = `.expired-${index}.example.com`
+  const name = `sid-${index}`
+  const path = '/'
+  const value = 'expired'
+  const strings = [domain, name, path, value]
+  const headerSize = 48
+  let cursor = headerSize
+  const offsets = strings.map((text) => {
+    const offset = cursor
+    cursor += Buffer.byteLength(text) + 1
+    return offset
+  })
+
+  const cookie = Buffer.alloc(cursor)
+  cookie.writeUInt32LE(cookie.length, 0)
+  cookie.writeUInt32LE(offsets[0], 16)
+  cookie.writeUInt32LE(offsets[1], 20)
+  cookie.writeUInt32LE(offsets[2], 24)
+  cookie.writeUInt32LE(offsets[3], 28)
+  cookie.writeDoubleLE(1, 40)
+  for (let index = 0; index < strings.length; index += 1) {
+    cookie.write(strings[index], offsets[index], 'utf8')
+  }
+  return cookie
+}
 
 describe('importCookiesFromFile', () => {
   let tmpDir: string
@@ -211,6 +277,41 @@ describe('importCookiesFromFile', () => {
     }
     expect(result.summary.importedCookies).toBe(1)
     expect(result.summary.skippedCookies).toBe(1)
+  })
+})
+
+describe('importCookiesFromBrowser Safari', () => {
+  let tmpDir: string
+  let cookiesSetMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'orca-safari-cookie-test-'))
+    cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    sessionFromPartitionMock.mockReset()
+    sessionFromPartitionMock.mockReturnValue({
+      cookies: { set: cookiesSetMock }
+    })
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('reports expired cookies from large Safari binary cookie pages', async () => {
+    const cookiesPath = join(tmpDir, 'Cookies.binarycookies')
+    writeFileSync(cookiesPath, buildSafariBinaryCookies(LARGE_SAFARI_COOKIE_COUNT))
+    const browser: DetectedBrowser = {
+      family: 'safari',
+      label: 'Safari',
+      cookiesPath,
+      profiles: [],
+      selectedProfile: 'Default'
+    }
+
+    const result = await importCookiesFromBrowser(browser, 'persist:test')
+
+    expect(result).toEqual({ ok: false, reason: 'All Safari cookies are expired.' })
+    expect(cookiesSetMock).not.toHaveBeenCalled()
   })
 })
 
