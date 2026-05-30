@@ -267,12 +267,13 @@ describe('fetchWorktrees', () => {
     } as Partial<AppState>)
 
     const unsubscribe = store.subscribe(subscriber)
-    await store.getState().fetchWorktrees('repo1')
+    const result = await store.getState().fetchWorktrees('repo1')
     unsubscribe()
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
     expect(store.getState().sortEpoch).toBe(7)
     expect(subscriber).not.toHaveBeenCalled()
+    expect(result).toBe(true)
   })
 
   it('updates the repo entry and bumps sortEpoch when git reports a branch change', async () => {
@@ -338,10 +339,59 @@ describe('fetchWorktrees', () => {
     )
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
 
-    await store.getState().fetchWorktrees('repo1')
+    const result = await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
     expect(store.getState().sortEpoch).toBe(7)
+    expect(result).toBe(false)
+  })
+
+  it('reports unchanged non-authoritative refreshes as not fully refreshed', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult('repo1', [existing], {
+        authoritative: false,
+        source: 'metadata-fallback'
+      })
+    )
+    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
+
+    const result = await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
+    expect(store.getState().sortEpoch).toBe(7)
+    expect(result).toBe(false)
+  })
+
+  it('does not publish non-authoritative rows when an authoritative refresh is required', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/existing',
+      repoId: 'repo1',
+      path: '/path/existing'
+    })
+    const fallback = makeWorktree({
+      id: 'repo1::/path/fallback',
+      repoId: 'repo1',
+      path: '/path/fallback'
+    })
+
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult('repo1', [fallback], {
+        authoritative: false,
+        source: 'metadata-fallback'
+      })
+    )
+    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
+
+    const result = await store.getState().fetchWorktrees('repo1', { requireAuthoritative: true })
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
+    expect(store.getState().detectedWorktreesByRepo.repo1).toBeUndefined()
+    expect(store.getState().sortEpoch).toBe(7)
+    expect(result).toBe(false)
   })
 
   it('purges remembered right sidebar tabs for worktrees removed by a committed refresh', async () => {
@@ -445,7 +495,7 @@ describe('fetchWorktrees', () => {
       }
     } as unknown as Partial<AppState>)
 
-    await store.getState().fetchWorktrees('repo1')
+    const result = await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().rightSidebarTabByWorktree).toEqual({
       [missingFromFallback.id]: 'search',
@@ -456,6 +506,7 @@ describe('fetchWorktrees', () => {
     ])
     expect(store.getState().worktreesByRepo.repo1).toEqual([fallback])
     expect(store.getState().sortEpoch).toBe(8)
+    expect(result).toBe(false)
   })
 
   it('does not purge remembered right sidebar tabs on a transient empty refresh', async () => {
@@ -474,11 +525,12 @@ describe('fetchWorktrees', () => {
       rightSidebarTabByWorktree: { [existing.id]: 'search' }
     } as Partial<AppState>)
 
-    await store.getState().fetchWorktrees('repo1')
+    const result = await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [existing.id]: 'search' })
     expect(store.getState().sortEpoch).toBe(7)
+    expect(result).toBe(false)
   })
 
   it('accepts an empty refresh when the repo had no cached worktrees', async () => {

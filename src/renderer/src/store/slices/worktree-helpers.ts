@@ -68,7 +68,7 @@ export type WorktreeSlice = {
    */
   hasHydratedWorktreePurge: boolean
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
-  fetchWorktrees: (repoId: string) => Promise<void>
+  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<boolean>
   fetchAllWorktrees: () => Promise<void>
   fetchWorktreeLineage: () => Promise<void>
   updateWorktreeLineage: (

@@ -22,7 +22,7 @@ type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup'
 type RepoKind = 'git' | 'folder'
 
 export function useCreateRepo(
-  fetchWorktrees: (repoId: string) => Promise<void>,
+  fetchWorktrees: (repoId: string) => Promise<unknown>,
   setStep: (step: DialogStep) => void,
   setAddedRepo: (repo: Repo | null) => void,
   closeModal: () => void,

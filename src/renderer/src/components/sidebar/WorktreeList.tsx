@@ -157,6 +157,13 @@ import {
 } from '../../../../shared/worktree-ownership'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
+import ImportedWorktreesVisibilityCard from './ImportedWorktreesVisibilityCard'
+import {
+  keepImportedWorktreesHiddenCard,
+  showImportedWorktreesCard,
+  type ImportedWorktreeCardActionState
+} from './imported-worktrees-card-actions'
+import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-candidates'
 
 type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
@@ -328,6 +335,9 @@ type VirtualizedWorktreeViewportProps = {
   handleCreateForRepo: (projectId: string) => void
   handleOpenRepoSettings: (projectId: string, sectionId?: string) => void
   handleOpenWorktreeVisibility: (projectId: string) => void
+  handleShowImportedWorktrees: (projectId: string) => void
+  handleKeepImportedWorktreesHidden: (projectId: string) => void
+  importedWorktreeCardActionState: ReadonlyMap<string, ImportedWorktreeCardActionState>
   handleRemoveProject: (repo: Repo) => void
   handleCreateGroupFromRepo: (repo: Repo) => void
   handleMoveProjectToGroup: (repo: Repo, groupId: string) => void
@@ -479,7 +489,7 @@ function isWorktreeItemRow(row: Row): row is WorktreeItemRow {
   return row.type === 'item'
 }
 
-function renderRowContainsWorktree(row: RenderRow, worktreeId: string | null): boolean {
+export function renderRowContainsWorktree(row: RenderRow, worktreeId: string | null): boolean {
   if (worktreeId === null) {
     return false
   }
@@ -524,17 +534,20 @@ function buildRenderableRows(rows: Row[]): RenderRow[] {
   return renderRows
 }
 
-function getRenderRowKey(row: RenderRow): string {
+export function getRenderRowKey(row: RenderRow): string {
   if (row.type === 'header') {
     return `hdr:${row.key}`
   }
   if (row.type === 'lineage-group') {
     return `lineage-group:${row.key}`
   }
+  if (row.type === 'imported-worktrees-card') {
+    return `imported:${row.key}`
+  }
   return `wt:${row.worktree.id}`
 }
 
-function getWorktreeDragGroups(rows: Row[]): WorktreeDragGroup[] {
+export function getWorktreeDragGroups(rows: Row[]): WorktreeDragGroup[] {
   const groups: WorktreeDragGroup[] = []
   let current: { key: string; ids: string[] } | null = null
 
@@ -542,6 +555,9 @@ function getWorktreeDragGroups(rows: Row[]): WorktreeDragGroup[] {
     if (row.type === 'header') {
       current = { key: row.key, ids: [] }
       groups.push({ key: current.key, worktreeIds: current.ids })
+      continue
+    }
+    if (row.type === 'imported-worktrees-card') {
       continue
     }
     if (!current) {
@@ -552,6 +568,13 @@ function getWorktreeDragGroups(rows: Row[]): WorktreeDragGroup[] {
   }
 
   return groups.filter((group) => group.worktreeIds.length > 0)
+}
+
+export function canKeepImportedWorktreesHidden(
+  row: Extract<Row, { type: 'imported-worktrees-card' }>,
+  actionState: ImportedWorktreeCardActionState | undefined
+): boolean {
+  return row.placement === 'repo-group' && actionState?.forceVisible !== true
 }
 
 function getWorktreeDragIndexes(groups: readonly WorktreeDragGroup[]): {
@@ -589,6 +612,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   handleCreateForRepo,
   handleOpenRepoSettings,
   handleOpenWorktreeVisibility,
+  handleShowImportedWorktrees,
+  handleKeepImportedWorktreesHidden,
+  importedWorktreeCardActionState,
   handleRemoveProject,
   handleCreateGroupFromRepo,
   handleMoveProjectToGroup,
@@ -2836,6 +2862,37 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               )
             }
 
+            if (row.type === 'imported-worktrees-card') {
+              const actionState = importedWorktreeCardActionState.get(row.repo.id)
+              return (
+                <div
+                  key={vItem.key}
+                  role="presentation"
+                  data-worktree-virtual-row
+                  data-worktree-virtual-row-key={String(vItem.key)}
+                  data-worktree-virtual-row-start={vItem.start}
+                  data-index={vItem.index}
+                  ref={measureVirtualRowElement}
+                  className="absolute left-0 right-0 top-0"
+                  style={{ transform: getVirtualRowTransform(vItem.start) }}
+                >
+                  <ImportedWorktreesVisibilityCard
+                    repoDisplayName={row.repo.displayName}
+                    hiddenWorktrees={row.hiddenWorktrees}
+                    placement={row.placement}
+                    pending={actionState?.pending ?? false}
+                    error={actionState?.error ?? null}
+                    onShow={() => handleShowImportedWorktrees(row.repo.id)}
+                    onKeepHidden={
+                      canKeepImportedWorktreesHidden(row, actionState)
+                        ? () => handleKeepImportedWorktreesHidden(row.repo.id)
+                        : undefined
+                    }
+                  />
+                </div>
+              )
+            }
+
             const itemWorkspaceStatus =
               groupBy === 'workspace-status'
                 ? getWorkspaceStatus(row.worktree, workspaceStatuses)
@@ -2904,6 +2961,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const worktreeMap = useWorktreeMap()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const groupBy = useAppStore((s) => s.groupBy)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
@@ -2917,6 +2975,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
+  const updateRepo = useAppStore((s) => s.updateRepo)
+  const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
@@ -3222,6 +3282,22 @@ const WorktreeList = React.memo(function WorktreeList({
     repos.forEach((r, i) => map.set(r.id, i))
     return map
   }, [repos])
+  const [importedWorktreeCardActionState, setImportedWorktreeCardActionState] = useState<
+    Map<string, ImportedWorktreeCardActionState>
+  >(new Map())
+  const importedWorktreesByRepo = useMemo(() => {
+    const forceVisibleRepoIds = new Set(
+      [...importedWorktreeCardActionState.entries()]
+        .filter(([, state]) => state.forceVisible)
+        .map(([repoId]) => repoId)
+    )
+    return buildImportedWorktreesCardCandidates({
+      repos,
+      detectedWorktreesByRepo,
+      filterRepoIds,
+      forceVisibleRepoIds
+    })
+  }, [detectedWorktreesByRepo, filterRepoIds, importedWorktreeCardActionState, repos])
   const placeholderRepoIds = useMemo(() => {
     if (groupBy !== 'repo' || projectGroups.length === 0) {
       return new Set<string>()
@@ -3255,7 +3331,8 @@ const WorktreeList = React.memo(function WorktreeList({
         true,
         settings,
         projectGroups,
-        placeholderRepoIds
+        placeholderRepoIds,
+        importedWorktreesByRepo
       ),
     [
       groupBy,
@@ -3270,7 +3347,8 @@ const WorktreeList = React.memo(function WorktreeList({
       worktreeMap,
       settings,
       projectGroups,
-      placeholderRepoIds
+      placeholderRepoIds,
+      importedWorktreesByRepo
     ]
   )
   // Why: header/mode changes can shift entire groups, so remount the
@@ -3413,6 +3491,45 @@ const WorktreeList = React.memo(function WorktreeList({
       openModal('worktree-visibility', { repoId: projectId })
     },
     [openModal]
+  )
+
+  const setImportedWorktreeCardState = useCallback(
+    (projectId: string, state: ImportedWorktreeCardActionState | null) => {
+      setImportedWorktreeCardActionState((previous) => {
+        const next = new Map(previous)
+        if (state) {
+          next.set(projectId, state)
+        } else {
+          next.delete(projectId)
+        }
+        return next
+      })
+    },
+    []
+  )
+
+  const handleShowImportedWorktrees = useCallback(
+    async (projectId: string) => {
+      await showImportedWorktreesCard({
+        projectId,
+        forceVisible: importedWorktreeCardActionState.get(projectId)?.forceVisible === true,
+        updateRepo,
+        fetchWorktrees,
+        setCardState: setImportedWorktreeCardState
+      })
+    },
+    [fetchWorktrees, importedWorktreeCardActionState, setImportedWorktreeCardState, updateRepo]
+  )
+
+  const handleKeepImportedWorktreesHidden = useCallback(
+    async (projectId: string) => {
+      await keepImportedWorktreesHiddenCard({
+        projectId,
+        updateRepo,
+        setCardState: setImportedWorktreeCardState
+      })
+    },
+    [setImportedWorktreeCardState, updateRepo]
   )
 
   const handleRemoveProject = useCallback(
@@ -3632,7 +3749,11 @@ const WorktreeList = React.memo(function WorktreeList({
     }
   }, [handleRevealCurrentWorkspaceRequest])
 
-  const filtersHideAllRows = hasFilters && worktrees.length === 0 && placeholderRepoIds.size === 0
+  const filtersHideAllRows =
+    hasFilters &&
+    worktrees.length === 0 &&
+    placeholderRepoIds.size === 0 &&
+    importedWorktreesByRepo.size === 0
   // Why: Project Group headers can render before workspace rows load, but when
   // active filters hide everything the Clear Filters empty state must win.
   if (rows.length === 0 || filtersHideAllRows) {
@@ -3705,6 +3826,9 @@ const WorktreeList = React.memo(function WorktreeList({
         handleCreateForRepo={handleCreateForRepo}
         handleOpenRepoSettings={handleOpenRepoSettings}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
+        handleShowImportedWorktrees={handleShowImportedWorktrees}
+        handleKeepImportedWorktreesHidden={handleKeepImportedWorktreesHidden}
+        importedWorktreeCardActionState={importedWorktreeCardActionState}
         handleRemoveProject={handleRemoveProject}
         handleCreateGroupFromRepo={handleCreateGroupFromRepo}
         handleMoveProjectToGroup={handleMoveProjectToGroup}
