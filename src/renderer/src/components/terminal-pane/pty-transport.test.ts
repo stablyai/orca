@@ -124,6 +124,113 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
+  it('limits deferred PTY side-effect work per timer tick', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange })
+      const callbacks = { onData: vi.fn() }
+
+      for (let i = 0; i < 200; i++) {
+        processor.processData(`\x1b]0;title-${i}\x07`, callbacks)
+      }
+
+      expect(onTitleChange).not.toHaveBeenCalled()
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(onTitleChange.mock.calls.length).toBeGreaterThan(0)
+      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
+
+      await vi.runAllTimersAsync()
+      expect(onTitleChange).toHaveBeenCalledTimes(200)
+      expect(onTitleChange).toHaveBeenLastCalledWith('title-199', 'title-199')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('limits coalesced OSC titles in one PTY chunk per timer tick', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange })
+      const callbacks = { onData: vi.fn() }
+      const titles = Array.from({ length: 200 }, (_, i) => `\x1b]0;chunk-title-${i}\x07`).join('')
+
+      processor.processData(titles, callbacks)
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(onTitleChange.mock.calls.length).toBeGreaterThan(0)
+      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
+
+      await vi.runAllTimersAsync()
+      expect(onTitleChange).toHaveBeenCalledTimes(200)
+      expect(onTitleChange).toHaveBeenLastCalledWith('chunk-title-199', 'chunk-title-199')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('flushes all remaining PTY side effects after a partial bounded drain', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange })
+      const callbacks = { onData: vi.fn() }
+
+      for (let i = 0; i < 200; i++) {
+        processor.processData(`\x1b]0;flush-title-${i}\x07`, callbacks)
+      }
+
+      await vi.runOnlyPendingTimersAsync()
+      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
+
+      processor.flushPendingSideEffects()
+
+      expect(onTitleChange).toHaveBeenCalledTimes(200)
+      expect(onTitleChange).toHaveBeenLastCalledWith('flush-title-199', 'flush-title-199')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still runs stale-title detection when an OSC status chunk has no title', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onAgentStatus = vi.fn()
+      const onAgentBecameIdle = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange,
+        onAgentStatus,
+        onAgentBecameIdle
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;. Claude working\x07', callbacks)
+      processor.processData(
+        '\x1b]9999;{"state":"working","prompt":"ship it","agentType":"codex"}\x07plain output\r\n',
+        callbacks
+      )
+
+      await vi.runOnlyPendingTimersAsync()
+      expect(onAgentStatus).toHaveBeenCalledWith({
+        state: 'working',
+        prompt: 'ship it',
+        agentType: 'codex'
+      })
+
+      vi.advanceTimersByTime(3_000)
+      expect(onAgentBecameIdle).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uses acknowledged writes only for local IPC PTYs', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const localTransport = createIpcPtyTransport({})
@@ -240,6 +347,90 @@ describe('createIpcPtyTransport', () => {
     onData?.({ id: 'pty-1', data: '' })
     await flushPtySideEffects()
     expect(onBell).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds the eager buffer to its cap and keeps the most recent output', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const cap = 512 * 1024
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+
+    // 8 x 100 KB = 800 KB of distinct chunks, exceeding the 512 KB cap; the
+    // earliest chunks must be dropped while the prompt-bearing tail is kept.
+    for (let i = 0; i < 8; i += 1) {
+      onData?.({ id: 'pty-restored', data: String.fromCharCode(65 + i).repeat(100 * 1024) })
+    }
+    onData?.({ id: 'pty-restored', data: 'PROMPT$' })
+
+    const flushed = handle.flush()
+    expect(flushed.length).toBeLessThanOrEqual(cap)
+    expect(flushed.endsWith('PROMPT$')).toBe(true)
+    expect(flushed).not.toContain('A') // oldest chunk trimmed
+  })
+
+  it('caps a single oversized eager chunk to its most-recent tail', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const cap = 512 * 1024
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+
+    // One chunk larger than the cap must not be stored whole.
+    onData?.({ id: 'pty-restored', data: `${'x'.repeat(cap)}TAIL$` })
+
+    const flushed = handle.flush()
+    expect(flushed.length).toBeLessThanOrEqual(cap)
+    expect(flushed.endsWith('TAIL$')).toBe(true)
+  })
+
+  it('enforces the eager buffer cap in UTF-8 bytes for multi-byte output', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const cap = 512 * 1024
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+
+    onData?.({ id: 'pty-restored', data: `${'界'.repeat(cap)}PROMPT$` })
+
+    const flushed = handle.flush()
+    expect(new TextEncoder().encode(flushed).byteLength).toBeLessThanOrEqual(cap)
+    expect(flushed.endsWith('PROMPT$')).toBe(true)
+  })
+
+  it('preserves a BOM when it starts the retained oversized eager-buffer tail', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const cap = 512 * 1024
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+
+    onData?.({ id: 'pty-restored', data: `${'x'.repeat(16)}\uFEFF${'y'.repeat(cap - 3)}` })
+
+    const flushed = handle.flush()
+    expect(new TextEncoder().encode(flushed).byteLength).toBe(cap)
+    expect(flushed.startsWith('\uFEFF')).toBe(true)
+  })
+
+  it('does not use Array.shift while trimming many eager chunks', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+    const originalShift = Array.prototype.shift
+
+    try {
+      // Why: this hot path used to call Array.shift() once per trim, which
+      // reindexed the live buffer and made many small chunks quadratic.
+      Object.defineProperty(Array.prototype, 'shift', {
+        configurable: true,
+        writable: true,
+        value() {
+          throw new Error('Array.shift should not be used by the eager buffer')
+        }
+      })
+      for (let i = 0; i < 2048; i += 1) {
+        onData?.({ id: 'pty-restored', data: 'x'.repeat(1024) })
+      }
+    } finally {
+      Object.defineProperty(Array.prototype, 'shift', {
+        configurable: true,
+        writable: true,
+        value: originalShift
+      })
+    }
+
+    expect(handle.flush().length).toBeLessThanOrEqual(512 * 1024)
   })
 
   it('routes eager-buffered bytes through onReplayData so the renderer can engage the replay guard', async () => {

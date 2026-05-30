@@ -9,9 +9,11 @@ import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
-  handleOscLink
+  installFilePathLinkClickFallback
 } from './terminal-link-handlers'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
+import { handleOscLink } from './terminal-osc-link-routing'
+import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import type {
   GlobalSettings,
   SetupSplitDirection,
@@ -122,8 +124,10 @@ type UseTerminalPaneLifecycleDeps = {
   updateTabPtyId: (tabId: string, ptyId: string) => void
   markWorktreeUnread: (worktreeId: string) => void
   markTerminalTabUnread: (tabId: string) => void
+  markTerminalPaneUnread: (paneKey: string) => void
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
+  clearTerminalPaneUnread: (paneKey: string) => void
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
     terminalTitle?: string
@@ -176,6 +180,20 @@ type SplitStartupPayload = { command: string; env?: Record<string, string> }
 
 type SplitWithStartupDeps = {
   startup?: SplitStartupPayload | null
+}
+
+function resolveTerminalHomePathFromEnv(env: Record<string, string> | undefined): string | null {
+  const home = env?.HOME?.trim()
+  if (home) {
+    return home
+  }
+  const userProfile = env?.USERPROFILE?.trim()
+  if (userProfile) {
+    return userProfile
+  }
+  const homeDrive = env?.HOMEDRIVE?.trim()
+  const homePath = env?.HOMEPATH?.trim()
+  return homeDrive && homePath ? `${homeDrive}${homePath}` : null
 }
 
 /** Scopes `deps.startup` to a single call of `splitPane()`, clearing it in `finally` so later splits do not replay the payload. */
@@ -253,8 +271,10 @@ export function useTerminalPaneLifecycle({
   updateTabPtyId,
   markWorktreeUnread,
   markTerminalTabUnread,
+  markTerminalPaneUnread,
   clearWorktreeUnread,
   clearTerminalTabUnread,
+  clearTerminalPaneUnread,
   dispatchNotification,
   setCacheTimerStartedAt,
   syncPanePtyLayoutBinding,
@@ -271,6 +291,8 @@ export function useTerminalPaneLifecycle({
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
+  const fileLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
+  const httpLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
   // Why: read settingsRef at fire time so toggling "copy on select" takes
   // effect without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -338,6 +360,8 @@ export function useTerminalPaneLifecycle({
     const paneTransports = paneTransportsRef.current
     const panePtyBindings = panePtyBindingsRef.current
     const linkDisposables = linkProviderDisposablesRef.current
+    const fileLinkClickFallbackDisposables = fileLinkClickFallbackDisposablesRef.current
+    const httpLinkClickFallbackDisposables = httpLinkClickFallbackDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
     const selectionCaptureTimers = selectionCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
@@ -349,11 +373,16 @@ export function useTerminalPaneLifecycle({
       cwd ??
       ''
     const startupCwd = cwd ?? worktreePath
+    const terminalHomePath = resolveTerminalHomePathFromEnv(startup?.env)
+    // Why: existence probes can cross SSH/runtime boundaries. This cache is
+    // lifecycle-scoped, so external mutations and the initial 'active' runtime
+    // fallback can temporarily leave stale entries.
     const pathExistsCache = new Map<string, boolean>()
     const linkDeps: LinkHandlerDeps = {
       worktreeId,
       worktreePath,
       startupCwd,
+      terminalHomePath,
       managerRef,
       linkProviderDisposablesRef,
       pathExistsCache,
@@ -419,8 +448,10 @@ export function useTerminalPaneLifecycle({
       updateTabPtyId,
       markWorktreeUnread,
       markTerminalTabUnread,
+      markTerminalPaneUnread,
       clearWorktreeUnread,
       clearTerminalTabUnread,
+      clearTerminalPaneUnread,
       dispatchNotification,
       setCacheTimerStartedAt,
       syncPanePtyLayoutBinding,
@@ -534,6 +565,17 @@ export function useTerminalPaneLifecycle({
           createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, fileOpenLinkHint)
         )
         linkProviderDisposablesRef.current.set(pane.id, linkProviderDisposable)
+        const fileLinkClickFallbackDisposable = installFilePathLinkClickFallback(
+          pane.id,
+          pane.terminal,
+          linkDeps
+        )
+        fileLinkClickFallbackDisposablesRef.current.set(pane.id, fileLinkClickFallbackDisposable)
+        const httpLinkClickFallbackDisposable = installHttpLinkClickFallback(
+          pane.terminal,
+          linkDeps
+        )
+        httpLinkClickFallbackDisposables.set(pane.id, httpLinkClickFallbackDisposable)
         // Why: skip empty selections so clicking to deselect doesn't clobber
         // whatever the user last copied elsewhere.
         const selectionDisposable = pane.terminal.onSelectionChange(() => {
@@ -660,6 +702,17 @@ export function useTerminalPaneLifecycle({
           linkProviderDisposable.dispose()
           linkProviderDisposablesRef.current.delete(paneId)
         }
+        const fileLinkClickFallbackDisposable =
+          fileLinkClickFallbackDisposablesRef.current.get(paneId)
+        if (fileLinkClickFallbackDisposable) {
+          fileLinkClickFallbackDisposable.dispose()
+          fileLinkClickFallbackDisposablesRef.current.delete(paneId)
+        }
+        const httpLinkClickFallbackDisposable = httpLinkClickFallbackDisposables.get(paneId)
+        if (httpLinkClickFallbackDisposable) {
+          httpLinkClickFallbackDisposable.dispose()
+          httpLinkClickFallbackDisposables.delete(paneId)
+        }
         const selectionDisposable = selectionDisposablesRef.current.get(paneId)
         if (selectionDisposable) {
           selectionDisposable.dispose()
@@ -703,6 +756,18 @@ export function useTerminalPaneLifecycle({
           panePtyBinding.dispose()
           panePtyBindings.delete(paneId)
         }
+        // Why: closing a pane is user-initiated teardown of this row — drop
+        // (not remove) so any retained `done` snapshot for this pane is also
+        // cleared and a same-frame live→gone transition cannot re-snapshot
+        // it via the retention sync. This is pane-keyed state, so it must
+        // clear even if the PTY transport was already removed.
+        const leafId = closedPane?.leafId
+        if (leafId) {
+          const paneKey = makePaneKey(tabId, leafId)
+          useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
+          clearTerminalPaneUnread(paneKey)
+          useAppStore.getState().dropAgentStatus(paneKey)
+        }
         if (transport) {
           const ptyId = suppressIntentionalPaneCloseExit(
             transport,
@@ -714,16 +779,6 @@ export function useTerminalPaneLifecycle({
             // so the last-surviving pane is not mistaken for an exited tab.
             syncPanePtyLayoutBinding(paneId, null)
             clearTabPtyId(tabId, ptyId)
-          }
-          // Why: closing a pane is user-initiated teardown of this row — drop
-          // (not remove) so any retained `done` snapshot for this pane is also
-          // cleared and a same-frame live→gone transition cannot re-snapshot
-          // it via the retention sync.
-          const leafId = closedPane?.leafId
-          if (leafId) {
-            const paneKey = makePaneKey(tabId, leafId)
-            useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
-            useAppStore.getState().dropAgentStatus(paneKey)
           }
           transport.destroy?.()
           paneTransportsRef.current.delete(paneId)
@@ -1066,6 +1121,14 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       linkDisposables.clear()
+      for (const disposable of fileLinkClickFallbackDisposables.values()) {
+        disposable.dispose()
+      }
+      fileLinkClickFallbackDisposables.clear()
+      for (const disposable of httpLinkClickFallbackDisposables.values()) {
+        disposable.dispose()
+      }
+      httpLinkClickFallbackDisposables.clear()
       for (const disposable of selectionDisposables.values()) {
         disposable.dispose()
       }

@@ -110,6 +110,20 @@ export class SshRelaySession {
     ) => void
   ) {}
 
+  refreshEnvironment(
+    getMainWindow: () => BrowserWindow | null,
+    store: Store,
+    portForwardManager: SshPortForwardManager,
+    runtime?: OrcaRuntimeService,
+    onDetectedPortsChanged?: (targetId: string, ports: DetectedPort[], platform: string) => void
+  ): void {
+    this.getMainWindow = getMainWindow
+    this.store = store
+    this.portForwardManager = portForwardManager
+    this.runtime = runtime
+    this.onDetectedPortsChanged = onDetectedPortsChanged
+  }
+
   setOnRelayLost(cb: (targetId: string) => void): void {
     this._onRelayLost = cb
   }
@@ -628,6 +642,11 @@ export class SshRelaySession {
         env?: unknown
         version?: unknown
         hasExplicitPrompt?: unknown
+        promptInteractionKey?: unknown
+        hookEventName?: unknown
+        toolUseId?: unknown
+        toolAgentId?: unknown
+        toolAgentType?: unknown
         isReplay?: unknown
         payload?: unknown
       }
@@ -647,6 +666,16 @@ export class SshRelaySession {
           env: typeof envelope.env === 'string' ? envelope.env : undefined,
           version: typeof envelope.version === 'string' ? envelope.version : undefined,
           hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
+          promptInteractionKey:
+            typeof envelope.promptInteractionKey === 'string'
+              ? envelope.promptInteractionKey
+              : undefined,
+          hookEventName:
+            typeof envelope.hookEventName === 'string' ? envelope.hookEventName : undefined,
+          toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
+          toolAgentId: typeof envelope.toolAgentId === 'string' ? envelope.toolAgentId : undefined,
+          toolAgentType:
+            typeof envelope.toolAgentType === 'string' ? envelope.toolAgentType : undefined,
           isReplay: envelope.isReplay === true ? true : undefined,
           payload: envelope.payload
         },
@@ -783,10 +812,9 @@ export class SshRelaySession {
   }
 
   private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
-    const getWin = this.getMainWindow
     ptyProvider.onData((payload) => {
       const seq = this.runtime?.onPtyData(payload.id, payload.data, Date.now())
-      const win = getWin()
+      const win = this.getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('pty:data', {
           ...payload,
@@ -795,7 +823,7 @@ export class SshRelaySession {
       }
     })
     ptyProvider.onReplay((payload) => {
-      const win = getWin()
+      const win = this.getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('pty:replay', payload)
       }
@@ -806,7 +834,7 @@ export class SshRelaySession {
       deletePtyOwnership(payload.id)
       this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
       this.runtime?.onPtyExit(payload.id, payload.code)
-      const win = getWin()
+      const win = this.getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('pty:exit', payload)
       }

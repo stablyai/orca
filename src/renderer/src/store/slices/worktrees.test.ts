@@ -7,14 +7,22 @@ import { create } from 'zustand'
 import type { AppState } from '../types'
 import type {
   DetectedWorktreeListResult,
+  LocalBaseRefRefreshResult,
   Worktree,
   WorktreeLineage
 } from '../../../../shared/types'
+import { toast } from 'sonner'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+
+vi.mock('sonner', () => ({
+  toast: {
+    warning: vi.fn()
+  }
+}))
 
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
@@ -404,6 +412,55 @@ describe('fetchWorktrees', () => {
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [visible.id]: 'checks' })
     expect(store.getState().tabsByWorktree[hidden.id]).toBeUndefined()
     expect(store.getState().sortEpoch).toBe(7)
+  })
+
+  it('purges session-only tab keys after an authoritative refresh', async () => {
+    const store = createTestStore()
+    const deleted = makeWorktree({
+      id: 'repo1::/path/deleted',
+      repoId: 'repo1',
+      path: '/path/deleted'
+    })
+    const surviving = makeWorktree({
+      id: 'repo1::/path/surviving',
+      repoId: 'repo1',
+      path: '/path/surviving'
+    })
+
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(makeDetectedResult('repo1', [surviving]))
+    store.setState({
+      worktreesByRepo: { repo1: [] },
+      detectedWorktreesByRepo: {
+        repo1: makeDetectedResult('repo1', [], {
+          authoritative: false,
+          source: 'metadata-fallback'
+        })
+      },
+      tabsByWorktree: {
+        [deleted.id]: [{ id: 'tab-deleted', worktreeId: deleted.id }],
+        [surviving.id]: [{ id: 'tab-surviving', worktreeId: surviving.id }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-deleted': { root: null, activeLeafId: null, expandedLeafId: null },
+        'tab-surviving': { root: null, activeLeafId: null, expandedLeafId: null }
+      },
+      activeWorktreeId: deleted.id,
+      activeTabId: 'tab-deleted',
+      sortEpoch: 7
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([surviving])
+    expect(store.getState().tabsByWorktree).toEqual({
+      [surviving.id]: [{ id: 'tab-surviving', worktreeId: surviving.id }]
+    })
+    expect(store.getState().terminalLayoutsByTabId).toEqual({
+      'tab-surviving': { root: null, activeLeafId: null, expandedLeafId: null }
+    })
+    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(store.getState().activeTabId).toBeNull()
+    expect(store.getState().sortEpoch).toBe(8)
   })
 
   it('does not purge remembered state from a non-authoritative partial refresh', async () => {
@@ -902,6 +959,44 @@ describe('updateWorktreeGitIdentity', () => {
     expect(mockApi.worktrees.list).not.toHaveBeenCalled()
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
+
+  it('follows the new branch in the title when displayName was auto-derived from the branch', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature',
+      displayName: 'feature'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      branch: 'refs/heads/main'
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0].displayName).toBe('main')
+  })
+
+  it('preserves a custom title when displayName differs from the branch', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature',
+      displayName: 'My Cool Work'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      branch: 'refs/heads/main'
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0].displayName).toBe('My Cool Work')
+  })
 })
 
 describe('createWorktree base status merge', () => {
@@ -961,6 +1056,70 @@ describe('createWorktree base status merge', () => {
       linkedLinearIssue: 'ENG-123',
       workspaceStatus: 'in-review'
     })
+  })
+
+  it.each([
+    {
+      status: 'skipped_dirty_worktree',
+      expectedReason: 'uncommitted changes'
+    },
+    {
+      status: 'skipped_not_fast_forward',
+      expectedReason: 'cannot be fast-forwarded cleanly'
+    },
+    {
+      status: 'skipped_error',
+      expectedReason: 'Git returned an error'
+    }
+  ] satisfies {
+    status: LocalBaseRefRefreshResult['status']
+    expectedReason: string
+  }[])('warns when local base ref refresh returns $status', async ({ status, expectedReason }) => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefRefresh: {
+        status,
+        baseRef: 'origin/main',
+        localBranch: 'main',
+        ownerWorktreePath: '/repo'
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(toast.warning).toHaveBeenCalledWith('Local main was not refreshed', {
+      description: expect.stringContaining(expectedReason)
+    })
+    const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.description
+    expect(description).not.toContain('AI tools')
+    expect(description).not.toContain('git diff')
+  })
+
+  it('does not warn when the local base ref refresh succeeds', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefRefresh: {
+        status: 'updated',
+        baseRef: 'origin/main',
+        localBranch: 'main'
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(toast.warning).not.toHaveBeenCalled()
   })
 
   it('stamps manualOrder on create while Manual sort is active', async () => {
@@ -1231,6 +1390,35 @@ describe('removeWorktree state cleanup', () => {
     await store.getState().removeWorktree('repo1::/path/wt1')
 
     expect(store.getState().editorViewMode).toEqual({ 'file-2': 'changes' })
+  })
+
+  it('records the sidebar scroll anchor in the same tick it removes the worktree', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    store.setState({ worktreesByRepo: { repo1: [wt] } } as Partial<AppState>)
+
+    const sidebar = new EventTarget()
+    let worktreePresentWhenRecorded: boolean | null = null
+    sidebar.addEventListener('orca-record-virtualized-scroll-anchor', () => {
+      worktreePresentWhenRecorded =
+        store.getState().worktreesByRepo.repo1?.some((w) => w.id === wt.id) ?? false
+    })
+    const globalWithDocument = globalThis as { document?: unknown }
+    const originalDocument = globalWithDocument.document
+    globalWithDocument.document = {
+      querySelector: (selector: string) => (selector === '[data-worktree-sidebar]' ? sidebar : null)
+    }
+
+    try {
+      await store.getState().removeWorktree(wt.id)
+    } finally {
+      globalWithDocument.document = originalDocument
+    }
+
+    // The anchor must be captured while the row still exists so the post-delete
+    // restore pins the pre-removal position instead of the already-shifted list.
+    expect(worktreePresentWhenRecorded).toBe(true)
+    expect(store.getState().worktreesByRepo.repo1).toEqual([])
   })
 
   it('cleans up expandedDirs for the removed worktree', async () => {

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handlers, appExitMock, appRelaunchMock } = vi.hoisted(() => ({
+const { handlers, appExitMock, appQuitMock, appRelaunchMock } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
+  appQuitMock: vi.fn(),
   appRelaunchMock: vi.fn()
 }))
 
@@ -11,6 +12,7 @@ vi.mock('electron', () => ({
     exit: appExitMock,
     getAppPath: vi.fn(() => '/test/app'),
     isPackaged: false,
+    quit: appQuitMock,
     relaunch: appRelaunchMock
   },
   BrowserWindow: {
@@ -37,6 +39,7 @@ describe('registerAppHandlers', () => {
     vi.useFakeTimers()
     handlers.clear()
     appExitMock.mockReset()
+    appQuitMock.mockReset()
     appRelaunchMock.mockReset()
   })
 
@@ -58,5 +61,23 @@ describe('registerAppHandlers', () => {
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
+  it('marks restart as expected shutdown before quitting through the normal pipeline', () => {
+    const onBeforeRelaunch = vi.fn()
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+
+    handlers.get('app:restart')?.(null)
+
+    expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
+    expect(appRelaunchMock).not.toHaveBeenCalled()
+    expect(appQuitMock).not.toHaveBeenCalled()
+    expect(appExitMock).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(150)
+
+    expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(appQuitMock).toHaveBeenCalledTimes(1)
+    expect(appExitMock).not.toHaveBeenCalled()
   })
 })

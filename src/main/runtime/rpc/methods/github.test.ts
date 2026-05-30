@@ -47,10 +47,15 @@ describe('github RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('github.listWorkItems', { repo: 'repo-1', limit: 10, query: 'is:pr' })
+      makeRequest('github.listWorkItems', {
+        repo: 'repo-1',
+        limit: 10,
+        query: 'is:pr',
+        noCache: true
+      })
     )
 
-    expect(runtime.listRepoWorkItems).toHaveBeenCalledWith('repo-1', 10, 'is:pr', undefined)
+    expect(runtime.listRepoWorkItems).toHaveBeenCalledWith('repo-1', 10, 'is:pr', undefined, true)
     expect(response).toMatchObject({ ok: true, result: { items: [] } })
   })
 
@@ -360,6 +365,29 @@ describe('github RPC methods', () => {
     )
 
     expect(runtime.mergeRepoPR).toHaveBeenCalledWith('repo-1', 7, 'squash', {
+      owner: 'acme',
+      repo: 'widgets'
+    })
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
+  it('sets PR auto-merge on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      setRepoPRAutoMerge: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.setPRAutoMerge', {
+        repo: 'repo-1',
+        prNumber: 7,
+        enabled: true,
+        prRepo: { owner: 'acme', repo: 'widgets' }
+      })
+    )
+
+    expect(runtime.setRepoPRAutoMerge).toHaveBeenCalledWith('repo-1', 7, true, {
       owner: 'acme',
       repo: 'widgets'
     })

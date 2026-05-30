@@ -52,6 +52,15 @@ export type StreamMetadata = {
   empty?: boolean
 }
 
+type StreamChunkReader = {
+  read(
+    buffer: Buffer,
+    offset: number,
+    length: number,
+    position: number
+  ): Promise<{ bytesRead: number }>
+}
+
 export async function readRelayFileStreamMetadata(
   filePath: string,
   dispatcher: RelayDispatcher,
@@ -142,11 +151,11 @@ async function pumpChunks(
           break
         }
         const want = Math.min(STREAM_CHUNK_SIZE, totalSize - offset)
-        const { bytesRead } = await entry.handle.read(buffer, 0, want, offset)
-        if (bytesRead === 0) {
+        const bytesRead = await readFullStreamChunk(entry.handle, buffer, want, offset)
+        if (bytesRead !== want) {
           endReason = 'error'
           errorCode = 'ESTREAMTRUNCATED'
-          errorMessage = `File truncated mid-stream: expected ${totalSize}, got ${offset}`
+          errorMessage = `File truncated mid-stream: expected ${totalSize}, got ${offset + bytesRead}`
           break
         }
         if (context.isStale()) {
@@ -200,6 +209,30 @@ async function pumpChunks(
   } finally {
     await registry.release(streamId)
   }
+}
+
+// Why: fs.read() may return fewer bytes than requested before EOF. Fill each
+// protocol chunk so strict clients reject corruption, not valid short reads.
+async function readFullStreamChunk(
+  handle: StreamChunkReader,
+  buffer: Buffer,
+  length: number,
+  offset: number
+): Promise<number> {
+  let totalRead = 0
+  while (totalRead < length) {
+    const { bytesRead } = await handle.read(
+      buffer,
+      totalRead,
+      length - totalRead,
+      offset + totalRead
+    )
+    if (bytesRead === 0) {
+      break
+    }
+    totalRead += bytesRead
+  }
+  return totalRead
 }
 
 export function isTooManyStreamsError(err: unknown): err is TooManyStreamsError {

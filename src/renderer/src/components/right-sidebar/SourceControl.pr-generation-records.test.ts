@@ -18,6 +18,13 @@ const seed = {
   draft: false
 }
 
+const fieldRevisions = {
+  base: 0,
+  title: 0,
+  body: 0,
+  draft: 0
+}
+
 function runningRecord(overrides: Partial<PullRequestGenerationRecord> = {}) {
   return {
     context: {
@@ -29,6 +36,7 @@ function runningRecord(overrides: Partial<PullRequestGenerationRecord> = {}) {
       branch: 'feature-a'
     },
     seed,
+    seedFieldRevisions: fieldRevisions,
     status: 'running' as const,
     result: null,
     error: null,
@@ -59,28 +67,25 @@ describe('SourceControl pull request generation records', () => {
     )
   })
 
-  it('applies generated PR fields only to the original running request with unchanged seed', () => {
+  it('applies generated PR fields only to the original running request', () => {
     expect(
       shouldApplyPullRequestGenerationResult({
         record: runningRecord(),
-        requestId: 3,
-        currentFields: seed
+        requestId: 3
       })
     ).toBe(true)
 
     expect(
       shouldApplyPullRequestGenerationResult({
         record: runningRecord(),
-        requestId: 4,
-        currentFields: seed
+        requestId: 4
       })
     ).toBe(false)
 
     expect(
       shouldApplyPullRequestGenerationResult({
-        record: runningRecord(),
-        requestId: 3,
-        currentFields: { ...seed, base: 'release' }
+        record: runningRecord({ status: 'succeeded' }),
+        requestId: 3
       })
     ).toBe(false)
   })
@@ -89,7 +94,7 @@ describe('SourceControl pull request generation records', () => {
     expect(arePullRequestGenerationFieldsEqual(seed, { ...seed, draft: true })).toBe(false)
   })
 
-  it('rehydrates a completed result only when the seed still matches', () => {
+  it('rehydrates a completed result until it is marked hydrated', () => {
     const record = runningRecord({
       status: 'succeeded',
       result: { ...seed, title: 'Generated title' }
@@ -97,22 +102,13 @@ describe('SourceControl pull request generation records', () => {
 
     expect(
       shouldHydratePullRequestGenerationResult({
-        record,
-        currentFields: seed
+        record
       })
     ).toBe(true)
 
     expect(
       shouldHydratePullRequestGenerationResult({
-        record,
-        currentFields: { ...seed, body: 'Edited body' }
-      })
-    ).toBe(false)
-
-    expect(
-      shouldHydratePullRequestGenerationResult({
-        record: { ...record, hydrated: true },
-        currentFields: seed
+        record: { ...record, hydrated: true }
       })
     ).toBe(false)
   })
@@ -127,7 +123,8 @@ describe('SourceControl pull request generation records', () => {
         repoId: 'repo-1',
         branch: 'feature-a'
       },
-      seed
+      seed,
+      fieldRevisions
     )
     const records: Record<string, PullRequestGenerationRecord> = {
       'wt-a': worktreeA
@@ -147,7 +144,6 @@ describe('SourceControl pull request generation records', () => {
     const completedA = resolvePullRequestGenerationSuccess({
       record: records['wt-a'],
       requestId: 1,
-      currentFields: seed,
       result: generated
     })
 
@@ -158,8 +154,7 @@ describe('SourceControl pull request generation records', () => {
     })
     expect(
       shouldHydratePullRequestGenerationResult({
-        record: completedA,
-        currentFields: seed
+        record: completedA
       })
     ).toBe(true)
   })

@@ -90,10 +90,16 @@ export function CodexUsagePane(): React.JSX.Element {
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const setCodexUsageScope = useAppStore((state) => state.setCodexUsageScope)
   const setCodexUsageRange = useAppStore((state) => state.setCodexUsageRange)
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useEffect(() => {
     void fetchCodexUsage()
   }, [fetchCodexUsage])
+
+  const handleSetEnabled = (enabled: boolean): void => {
+    recordFeatureInteraction('usage-tracking')
+    void setCodexUsageEnabled(enabled)
+  }
 
   if (!scanState?.enabled) {
     return (
@@ -110,7 +116,7 @@ export function CodexUsagePane(): React.JSX.Element {
             role="switch"
             aria-checked={false}
             aria-label="Enable Codex usage analytics"
-            onClick={() => void setCodexUsageEnabled(true)}
+            onClick={() => handleSetEnabled(true)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-muted-foreground/30 transition-colors"
           >
             <span className="pointer-events-none block size-3.5 translate-x-0.5 rounded-full bg-background shadow-sm transition-transform" />
@@ -210,7 +216,7 @@ export function CodexUsagePane(): React.JSX.Element {
             role="switch"
             aria-checked={true}
             aria-label="Enable Codex usage analytics"
-            onClick={() => void setCodexUsageEnabled(false)}
+            onClick={() => handleSetEnabled(false)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-foreground transition-colors"
           >
             <span className="pointer-events-none block size-3.5 translate-x-4 rounded-full bg-background shadow-sm transition-transform" />

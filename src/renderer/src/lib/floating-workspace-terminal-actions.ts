@@ -8,12 +8,18 @@ import {
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
 import type { AppState } from '@/store/types'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import {
   activateWebRuntimeSessionTab,
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
+import { keybindingMatchesAction, type KeybindingOverrides } from '../../../shared/keybindings'
+export {
+  isFloatingWorkspacePanelShortcut,
+  isFloatingWorkspacePanelShortcutTarget
+} from './floating-workspace-shortcut-policy'
 
 type FloatingWorkspaceTerminalStore = Pick<
   AppState,
@@ -35,13 +41,23 @@ type FloatingWorkspaceTabSwitchStore = Pick<
   | 'unifiedTabsByWorktree'
 >
 
-type FloatingWorkspaceShortcutEvent = Pick<
-  KeyboardEvent,
-  'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey' | 'target'
->
-
 const FLOATING_WORKSPACE_PANEL_SELECTOR = '[data-floating-terminal-panel]'
-const FLOATING_WORKSPACE_SHORTCUT_SURFACE_SELECTOR = '[data-floating-terminal-shortcut-surface]'
+const EMPTY_FLOATING_WORKSPACE_PANEL_SELECTOR =
+  '[data-floating-terminal-panel][aria-hidden="false"] [data-floating-terminal-empty-state]'
+
+type EmptyFloatingWorkspaceCloseShortcutEvent = Pick<
+  KeyboardEvent,
+  | 'altKey'
+  | 'code'
+  | 'ctrlKey'
+  | 'key'
+  | 'metaKey'
+  | 'preventDefault'
+  | 'repeat'
+  | 'shiftKey'
+  | 'stopImmediatePropagation'
+  | 'stopPropagation'
+>
 
 function getActiveFloatingWorkspaceGroup(store: FloatingWorkspaceTabSwitchStore): TabGroup | null {
   const groups = store.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
@@ -170,14 +186,16 @@ function getNextFloatingWorkspaceTerminalTab(
   ]
 }
 
-function defaultIsMacPlatform(): boolean {
-  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-}
-
 export function isFloatingWorkspacePanelVisible(
   doc: Pick<Document, 'querySelector'> = document
 ): boolean {
   return Boolean(doc.querySelector('[data-floating-terminal-panel][aria-hidden="false"]'))
+}
+
+export function isEmptyFloatingWorkspacePanelVisible(
+  doc: Pick<Document, 'querySelector'> | null = typeof document === 'undefined' ? null : document
+): boolean {
+  return Boolean(doc?.querySelector(EMPTY_FLOATING_WORKSPACE_PANEL_SELECTOR))
 }
 
 export function isFloatingWorkspacePanelFocused(
@@ -194,57 +212,40 @@ export function isFloatingWorkspaceTerminalInputTarget(target: EventTarget | nul
   if (target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) === null) {
     return false
   }
-  return target.classList.contains('xterm-helper-textarea') || target.closest('.xterm') !== null
-}
-
-export function isFloatingWorkspacePanelShortcutTarget(
-  target: EventTarget | null,
-  panelRoot: HTMLElement | null = null
-): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
   return (
-    target === panelRoot ||
-    target.getAttribute('data-floating-terminal-panel') !== null ||
-    target.closest(FLOATING_WORKSPACE_SHORTCUT_SURFACE_SELECTOR) !== null
+    target.classList?.contains('xterm-helper-textarea') === true ||
+    target.closest('.xterm') !== null
   )
-}
-
-export function isFloatingWorkspacePanelShortcut(
-  event: FloatingWorkspaceShortcutEvent,
-  isMacPlatform = defaultIsMacPlatform(),
-  panelRoot: HTMLElement | null = null
-): boolean {
-  const mod = isMacPlatform ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-  if (!mod || event.altKey) {
-    return false
-  }
-
-  const key = event.key.toLowerCase()
-  const claimedChord = event.shiftKey
-    ? key === 'b' || key === 'm' || key === 'o'
-    : key === 't' || key === 'w'
-  return claimedChord && isFloatingWorkspacePanelShortcutTarget(event.target, panelRoot)
 }
 
 export function shouldMinimizeFloatingWorkspacePanelOnCloseShortcut({
-  activeView,
-  activeWorktreeId,
   floatingTerminalOpen,
-  floatingUnifiedTabCount
+  floatingVisibleTabCount
 }: {
-  activeView: string
-  activeWorktreeId: string | null
   floatingTerminalOpen: boolean
-  floatingUnifiedTabCount: number
+  floatingVisibleTabCount: number
 }): boolean {
-  return (
-    floatingTerminalOpen &&
-    floatingUnifiedTabCount === 0 &&
-    activeView === 'terminal' &&
-    activeWorktreeId === null
-  )
+  return floatingTerminalOpen && floatingVisibleTabCount === 0
+}
+
+export function handleEmptyFloatingWorkspacePanelCloseShortcut(
+  event: EmptyFloatingWorkspaceCloseShortcutEvent,
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides
+): boolean {
+  if (
+    event.repeat ||
+    !isEmptyFloatingWorkspacePanelVisible() ||
+    !keybindingMatchesAction('tab.close', event, platform, keybindings, { context: 'app' })
+  ) {
+    return false
+  }
+
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
+  return true
 }
 
 export function switchFloatingWorkspaceTab(

@@ -164,7 +164,7 @@ function safeScrollCall(fn: () => void): boolean {
   }
 }
 
-function releaseScrollStateMarker(state: ScrollState): void {
+export function releaseScrollStateMarker(state: ScrollState): void {
   state.firstVisibleLineMarker?.dispose()
   state.firstVisibleLineMarker = undefined
 }

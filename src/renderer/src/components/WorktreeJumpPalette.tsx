@@ -191,6 +191,7 @@ function findBrowserSelection(
 function getSettingsTargetFromSectionId(sectionId: string): {
   pane: SettingsNavTarget
   repoId: string | null
+  sectionId?: string
 } {
   if (sectionId.startsWith('repo-')) {
     return { pane: 'repo', repoId: sectionId.slice('repo-'.length) }
@@ -255,7 +256,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const activeGroupSnapshotRef = useRef<CmdJActiveGroupSnapshot | null>(null)
   const wasVisibleRef = useRef(false)
   const skipRestoreFocusRef = useRef(false)
-  const prevQueryRef = useRef('')
   const listRef = useRef<HTMLDivElement>(null)
   const createLookupGuard = useMemo(() => createWorktreePaletteRequestGuard(), [])
   const preserveCreateLookupOnCloseRef = useRef(false)
@@ -688,9 +688,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           ? 'address-bar'
           : 'webview'
       skipRestoreFocusRef.current = false
-      prevQueryRef.current = ''
       setQuery('')
       setSelectedItemId('')
+      listRef.current?.scrollTo(0, 0)
     }
 
     if (!visible && wasVisibleRef.current) {
@@ -714,29 +714,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     visible
   ])
 
-  useEffect(() => {
-    if (!visible) {
-      return
-    }
-    const queryChanged = deferredQuery !== prevQueryRef.current
-    prevQueryRef.current = deferredQuery
+  const commandSelectedItemId = getNextWorktreePaletteSelection({
+    currentSelectedItemId: selectedItemId,
+    queryChanged: false,
+    selectableItemIds: selectionItemIds,
+    showCreateAction
+  })
 
-    const nextSelectedItemId = getNextWorktreePaletteSelection({
-      currentSelectedItemId: selectedItemId,
-      queryChanged,
-      selectableItemIds: selectionItemIds,
-      showCreateAction
-    })
-    if (queryChanged) {
-      setSelectedItemId(nextSelectedItemId)
-      listRef.current?.scrollTo(0, 0)
-      return
-    }
-
-    if (nextSelectedItemId !== selectedItemId) {
-      setSelectedItemId(nextSelectedItemId)
-    }
-  }, [deferredQuery, selectedItemId, showCreateAction, visible, selectionItemIds])
+  const handleQueryChange = useCallback((nextQuery: string) => {
+    setQuery(nextQuery)
+    setSelectedItemId('')
+    listRef.current?.scrollTo(0, 0)
+  }, [])
 
   const focusFallbackSurface = useCallback(() => {
     requestAnimationFrame(() => {
@@ -843,6 +832,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const handleSelectSettings = useCallback(
     (result: CmdJSettingsResult) => {
       const target = getSettingsTargetFromSectionId(result.sectionId)
+      if (result.targetSectionId) {
+        target.sectionId = result.targetSectionId
+      }
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
@@ -1089,7 +1081,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       contentClassName="top-[13%] w-[736px] max-w-[94vw] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
       commandProps={{
         loop: true,
-        value: selectedItemId,
+        value: commandSelectedItemId,
         onValueChange: setSelectedItemId,
         className: 'bg-transparent'
       }}
@@ -1097,7 +1089,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       <CommandInput
         placeholder="Search workspaces, settings, tabs, and actions..."
         value={query}
-        onValueChange={setQuery}
+        onValueChange={handleQueryChange}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
         className="h-12 text-[14px] placeholder:text-muted-foreground/75"

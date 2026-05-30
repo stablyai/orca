@@ -1,5 +1,4 @@
 /* eslint-disable max-lines -- Why: computer CLI coverage shares one mocked runtime setup across command contracts. */
-import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -71,7 +70,7 @@ describe('orca computer CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
     expect(callMock).toHaveBeenNthCalledWith(2, 'computer.listApps', {
-      worktree: `path:${path.resolve('/tmp/repo')}`
+      worktree: 'id:repo::/tmp/repo'
     })
   })
 
@@ -142,7 +141,7 @@ describe('orca computer CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'computer.getAppState', {
       app: 'Finder',
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       noScreenshot: true,
       restoreWindow: true
     })
@@ -176,7 +175,7 @@ describe('orca computer CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'computer.listWindows', {
       app: 'Finder',
-      worktree: `path:${path.resolve('/tmp/repo')}`
+      worktree: 'id:repo::/tmp/repo'
     })
     const output = vi.mocked(console.log).mock.calls[0][0]
     expect(output).toContain('[0] id:42 "Recents"')
@@ -241,7 +240,7 @@ describe('orca computer CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'computer.drag', {
       app: 'Finder',
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       fromElementIndex: undefined,
       toElementIndex: undefined,
       fromX: 1,

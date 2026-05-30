@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shouldCancelVirtualizedScrollOffsetRestore } from './useVirtualizedScrollAnchor'
+import { shouldCancelVirtualizedScrollOffsetRestore } from './virtualizedScrollOffsetRestore'
 
 describe('shouldCancelVirtualizedScrollOffsetRestore', () => {
   it('keeps a pending restore when direct user scroll input is not tracked', () => {

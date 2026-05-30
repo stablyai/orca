@@ -163,4 +163,33 @@ describe('remapOpenEditorTabsForPathChange', () => {
       markdownPreviewSourceFileId: floatingNewSourceId
     })
   })
+
+  it('clears the untitled marker when remapping a renamed new markdown file', () => {
+    const state = useAppStore.getState()
+    const oldPath = '/repo/untitled.md'
+    const newPath = '/repo/renamed.md'
+
+    state.openFile({
+      filePath: oldPath,
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+
+    remapOpenEditorTabsForPathChange({
+      fromPath: oldPath,
+      toPath: newPath,
+      worktreePath: '/repo',
+      worktreeId: 'wt-1'
+    })
+
+    expect(useAppStore.getState().openFiles).toHaveLength(1)
+    expect(useAppStore.getState().openFiles[0]).toMatchObject({
+      filePath: newPath,
+      relativePath: 'renamed.md'
+    })
+    expect(useAppStore.getState().openFiles[0].isUntitled).toBeUndefined()
+  })
 })

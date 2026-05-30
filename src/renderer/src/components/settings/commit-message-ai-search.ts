@@ -2,8 +2,9 @@ import type { SettingsSearchEntry } from './settings-search'
 
 export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'Enable AI commit messages',
-    description: 'Adds a Generate button to the Source Control panel.',
+    title: 'Enable Source Control AI',
+    description:
+      'Adds AI generation to Source Control commit, pull request, and branch-name flows.',
     keywords: [
       'ai',
       'commit',
@@ -18,12 +19,12 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Agent',
-    description: 'Which agent to invoke when generating a commit message.',
-    keywords: ['agent', 'claude', 'codex']
+    description: 'Which agent to invoke for Source Control text generation.',
+    keywords: ['agent', 'claude', 'codex', 'source control']
   },
   {
-    title: 'Model',
-    description: 'Which model the selected agent uses to generate the message.',
+    title: 'Default model',
+    description: 'Which model Source Control AI uses unless an operation override exists.',
     keywords: ['model', 'haiku', 'sonnet', 'opus', 'gpt']
   },
   {
@@ -32,10 +33,30 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['thinking', 'effort', 'reasoning']
   },
   {
-    title: 'Custom prompt',
+    title: 'Advanced model overrides',
     description:
-      'Optional instructions appended to the base prompt (e.g. Conventional Commits style).',
-    keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
+      'Optional per-operation model choices for commit messages, PR details, and branch names.',
+    keywords: ['model', 'override', 'commit', 'pull request', 'pr', 'branch', 'thinking']
+  },
+  {
+    title: 'Commit message instructions',
+    description: 'Optional instructions appended only to commit-message prompts.',
+    keywords: ['prompt', 'instructions', 'conventional commits', 'gitmoji', 'style']
+  },
+  {
+    title: 'Pull request instructions',
+    description: 'Optional instructions appended only to pull-request detail prompts.',
+    keywords: ['prompt', 'instructions', 'pull request', 'pr', 'description', 'template']
+  },
+  {
+    title: 'Branch name instructions',
+    description: 'Optional instructions appended only to auto branch-name prompts.',
+    keywords: ['prompt', 'instructions', 'branch', 'branch name', 'rename', 'slug']
+  },
+  {
+    title: 'PR creation defaults',
+    description: 'Defaults used when the Create PR composer opens.',
+    keywords: ['pull request', 'pr', 'draft', 'template', 'generate', 'open']
   },
   {
     title: 'Custom command',

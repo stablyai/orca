@@ -49,8 +49,17 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'command',
       'override',
       'install',
-      'detected'
+      'detected',
+      'enable',
+      'disable',
+      'hide',
+      'show'
     ]
+  },
+  {
+    title: 'Agent Location',
+    description: 'Choose whether installed agents are detected on this device or in WSL.',
+    keywords: ['agent', 'location', 'windows', 'wsl', 'linux', 'detect', 'installed', 'path']
   },
   {
     title: AGENT_STATUS_HOOKS_TITLE,

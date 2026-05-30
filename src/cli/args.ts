@@ -29,7 +29,17 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue
     }
 
-    const flag = token.slice(2)
+    const assignment = token.slice(2)
+    // Why: `--flag=value` is the only unambiguous way to pass a value that
+    // itself starts with `--` (e.g. `--text=--help`); the space-separated form
+    // treats a `--`-leading next token as a new flag, so it can't express one.
+    const equalsIndex = assignment.indexOf('=')
+    if (equalsIndex !== -1) {
+      flags.set(assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      continue
+    }
+
+    const flag = assignment
     const hasNext = i + 1 < argv.length
     const next = argv[i + 1]
     if (!hasNext || next.startsWith('--')) {

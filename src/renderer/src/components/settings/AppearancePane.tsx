@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: AppearancePane keeps theme, typography, zoom, and status-bar
+   visibility settings together so the searchable settings rows share one filtered surface. */
 import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Separator } from '../ui/separator'
@@ -66,6 +68,7 @@ export function AppearancePane({
   const zoomOutKeyCombos = useShortcutKeyCombos('zoom.out')
   const statusBarItems = useAppStore((state) => state.statusBarItems)
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(STATUS_BAR_TOGGLES)
 
   const visibleSections = [
@@ -214,7 +217,23 @@ export function AppearancePane({
                   label={toggle.title}
                   description={toggle.toggleDescription}
                   checked={enabled}
-                  onChange={() => toggleStatusBarItem(toggle.id)}
+                  onChange={() => {
+                    if (toggle.id === 'resource-usage') {
+                      recordFeatureInteraction('resource-manager')
+                    } else if (toggle.id === 'ports') {
+                      recordFeatureInteraction('ports')
+                    } else if (toggle.id === 'ssh') {
+                      recordFeatureInteraction('ssh')
+                    } else if (
+                      toggle.id === 'claude' ||
+                      toggle.id === 'codex' ||
+                      toggle.id === 'gemini' ||
+                      toggle.id === 'opencode-go'
+                    ) {
+                      recordFeatureInteraction('usage-tracking')
+                    }
+                    toggleStatusBarItem(toggle.id)
+                  }}
                   ariaLabel={toggle.title}
                 />
               </SearchableSetting>

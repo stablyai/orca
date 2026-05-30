@@ -94,6 +94,14 @@ describe('CdpWsProxy', () => {
     expect(proxy.getPort()).toBeGreaterThan(0)
   })
 
+  it('does not retain an extra startup server error listener after binding', () => {
+    const server = (
+      proxy as unknown as { httpServer: { listenerCount: (event: string) => number } }
+    ).httpServer
+
+    expect(server.listenerCount('error')).toBeLessThanOrEqual(1)
+  })
+
   it('attaches debugger on start', () => {
     expect(mock.webContents.debugger.attach).toHaveBeenCalledWith('1.3')
   })

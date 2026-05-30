@@ -80,6 +80,27 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.agentType).toBe('claude')
   })
 
+  it('normalizes Gemini BeforeTool to working with tool fields', () => {
+    const event = normalizeHookPayload(
+      state,
+      'gemini',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'BeforeTool',
+          tool_name: 'read_file',
+          args: { file_path: 'src/index.ts' }
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload.state).toBe('working')
+    expect(event?.payload.agentType).toBe('gemini')
+    expect(event?.payload.toolName).toBe('read_file')
+    expect(event?.payload.toolInput).toBe('src/index.ts')
+  })
+
   it('normalizes OMP Pi-compatible hooks with OMP attribution', () => {
     const event = normalizeHookPayload(
       state,
@@ -175,6 +196,52 @@ describe('shared agent-hook-listener', () => {
         toolName: 'shell_command',
         toolInput: 'pwd'
       })
+      expect(tool?.hasExplicitPrompt).toBe(true)
+      expect(tool?.promptInteractionKey).toMatch(/^command-code-transcript-[a-f0-9]{12}-/)
+
+      const directPrompt = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            prompt: 'Direct command prompt'
+          }
+        },
+        'production'
+      )
+      expect(directPrompt?.hasExplicitPrompt).toBe(true)
+
+      const directPromptWithTranscript = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            prompt: 'Run pwd and report it',
+            transcript_path: transcriptPath
+          }
+        },
+        'production'
+      )
+      expect(directPromptWithTranscript?.hasExplicitPrompt).toBe(true)
+      expect(directPromptWithTranscript?.promptInteractionKey).toBe(tool?.promptInteractionKey)
+
+      const statusMessage = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            message: 'Preparing tool call'
+          }
+        },
+        'production'
+      )
+      expect(statusMessage?.hasExplicitPrompt).toBe(false)
 
       const done = normalizeHookPayload(
         state,
@@ -198,6 +265,25 @@ describe('shared agent-hook-listener', () => {
         agentType: 'command-code',
         lastAssistantMessage: 'The output is /tmp/project.'
       })
+      expect(done?.promptInteractionKey).toBe(tool?.promptInteractionKey)
+
+      const cachedOnly = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'Stop'
+          }
+        },
+        'production'
+      )
+      expect(cachedOnly?.payload.prompt).toBe('Run pwd and report it')
+      expect(cachedOnly?.hasExplicitPrompt).toBe(false)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -302,6 +388,29 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('normalizes Antigravity events even when the hook body is empty', () => {
+    const started = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        hook_event_name: 'PreInvocation',
+        payload: {}
+      },
+      'production'
+    )
+
+    // Why: Antigravity can invoke managed hooks without stdin. The wrapper
+    // posts `{}` in that case, and the event name is still enough to keep the
+    // visible status alive.
+    expect(started?.payload).toMatchObject({
+      state: 'working',
+      prompt: '',
+      agentType: 'antigravity'
+    })
+  })
+
   it('reads Antigravity user requests from the transcript', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-prompt-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
@@ -332,6 +441,7 @@ describe('shared agent-hook-listener', () => {
         prompt: 'Fix the failing test',
         agentType: 'antigravity'
       })
+      expect(started?.hasExplicitPrompt).toBe(true)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -507,7 +617,7 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('normalizes Antigravity Stop to done even when fullyIdle is false', () => {
+  it('keeps Antigravity Stop working while fullyIdle is false', () => {
     const event = normalizeHookPayload(
       state,
       'antigravity',
@@ -520,8 +630,44 @@ describe('shared agent-hook-listener', () => {
     )
 
     expect(event?.payload).toMatchObject({
-      state: 'done',
+      state: 'working',
       agentType: 'antigravity'
+    })
+  })
+
+  it('keeps Antigravity tool hooks active after a non-idle Stop for the same transcript', () => {
+    const transcriptPath = '/tmp/antigravity-non-idle-transcript.jsonl'
+    const stop = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'Stop',
+        payload: { transcriptPath, fullyIdle: false }
+      },
+      'production'
+    )
+    expect(stop?.payload.state).toBe('working')
+
+    const nextTool = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'PostToolUse',
+        payload: {
+          transcriptPath,
+          toolCall: { name: 'run_command', args: { CommandLine: 'pwd' } }
+        }
+      },
+      'production'
+    )
+
+    expect(nextTool?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'antigravity',
+      toolName: 'run_command',
+      toolInput: 'pwd'
     })
   })
 
@@ -570,6 +716,12 @@ describe('shared agent-hook-listener', () => {
           transcriptPath: '/tmp/antigravity-transcript.jsonl',
           last_assistant_message: 'done'
         }
+      })
+    ).toBe(false)
+    expect(
+      hasPendingAgentResultText('antigravity', {
+        hook_event_name: 'Stop',
+        payload: { fullyIdle: false, transcriptPath: '/tmp/antigravity-transcript.jsonl' }
       })
     ).toBe(false)
   })

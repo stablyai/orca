@@ -205,6 +205,36 @@ export type PendingEditorReveal = {
   matchLength: number
 }
 
+const pendingEditorLineRevealFrameIds = new Set<number>()
+
+function cancelPendingEditorLineRevealFrames(): void {
+  if (typeof cancelAnimationFrame === 'function') {
+    for (const frameId of pendingEditorLineRevealFrameIds) {
+      cancelAnimationFrame(frameId)
+    }
+  }
+  pendingEditorLineRevealFrameIds.clear()
+}
+
+function trackEditorLineRevealFrameId(frameId: number): void {
+  pendingEditorLineRevealFrameIds.add(frameId)
+}
+
+function requestTrackedEditorLineRevealFrame(callback: FrameRequestCallback): void {
+  let completed = false
+  let frameId: number | undefined
+  frameId = requestAnimationFrame((timestamp) => {
+    completed = true
+    if (frameId !== undefined) {
+      pendingEditorLineRevealFrameIds.delete(frameId)
+    }
+    callback(timestamp)
+  })
+  if (!completed) {
+    trackEditorLineRevealFrameId(frameId)
+  }
+}
+
 function scheduleEditorLineReveal(
   get: () => AppState,
   filePath: string,
@@ -214,9 +244,10 @@ function scheduleEditorLineReveal(
 ): void {
   // Why: openFile can replace a preview and remount Monaco asynchronously; the
   // reveal must land after that remount or the old editor can clear it.
+  cancelPendingEditorLineRevealFrames()
   get().setPendingEditorReveal(null)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  requestTrackedEditorLineRevealFrame(() => {
+    requestTrackedEditorLineRevealFrame(() => {
       get().setPendingEditorReveal({
         filePath,
         fileId,
@@ -3458,7 +3489,9 @@ function areGitStatusEntriesEqual(prev: GitStatusEntry[], next: GitStatusEntry[]
         entry.oldPath === next[index].oldPath &&
         entry.conflictKind === next[index].conflictKind &&
         entry.conflictStatus === next[index].conflictStatus &&
-        entry.conflictStatusSource === next[index].conflictStatusSource
+        entry.conflictStatusSource === next[index].conflictStatusSource &&
+        entry.added === next[index].added &&
+        entry.removed === next[index].removed
     )
   )
 }

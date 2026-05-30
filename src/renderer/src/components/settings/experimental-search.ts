@@ -32,6 +32,38 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
+    title: 'Terminal attention',
+    description: 'Persistent pane highlight for terminal bell and agent-completion events.',
+    keywords: [
+      'experimental',
+      'terminal',
+      'attention',
+      'highlight',
+      'pane',
+      'bell',
+      'notification',
+      'agent',
+      'completion',
+      'unread'
+    ]
+  },
+  {
+    title: 'Compact worktree cards',
+    description: 'Hide redundant second lines in the worktree sidebar.',
+    keywords: [
+      'experimental',
+      'worktree',
+      'worktrees',
+      'workspace',
+      'workspaces',
+      'compact',
+      'sidebar',
+      'cards',
+      'branch',
+      'metadata'
+    ]
+  },
+  {
     title: 'Symlinks on worktrees',
     description:
       'Automatically symlink configured files or folders into newly created worktrees so shared state (envs, caches, installs) stays connected.',
@@ -46,6 +78,26 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'shared',
       'env',
       'node_modules'
+    ]
+  },
+  {
+    title: 'Smart New Tab menu',
+    description:
+      'Type in the New Tab menu to open a terminal, launch an agent, visit a URL, or open/create a file.',
+    keywords: [
+      'experimental',
+      'smart',
+      'new tab',
+      'new tab menu',
+      'launcher',
+      'unified',
+      'plus',
+      'terminal',
+      'agents',
+      'claude',
+      'codex',
+      'url',
+      'file'
     ]
   }
 ]
@@ -64,5 +116,8 @@ function findEntry(title: string): SettingsSearchEntry {
 export const EXPERIMENTAL_SEARCH_ENTRY = {
   pet: findEntry('Pet'),
   activity: findEntry('Agents View'),
-  symlinks: findEntry('Symlinks on worktrees')
+  terminalAttention: findEntry('Terminal attention'),
+  compactWorktreeCards: findEntry('Compact worktree cards'),
+  symlinks: findEntry('Symlinks on worktrees'),
+  unifiedNewTabLauncher: findEntry('Smart New Tab menu')
 } as const

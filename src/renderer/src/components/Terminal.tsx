@@ -3,6 +3,7 @@
 import React, { useEffect, useCallback, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
+import { useShallow } from 'zustand/react/shallow'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
@@ -30,12 +31,13 @@ import {
   type EditorRequestFileCloseDetail,
   requestEditorSaveQuiesce
 } from './editor/editor-autosave'
-import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
+import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { TabGroupLayoutNode } from '../../../shared/types'
 import BrowserPane from './browser-pane/BrowserPane'
 import { destroyPersistentWebview } from './browser-pane/webview-registry'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
+import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
   collectBrowserWebviewIds,
@@ -73,6 +75,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import {
   createFloatingWorkspaceTerminalTab,
+  handleEmptyFloatingWorkspacePanelCloseShortcut,
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
@@ -83,6 +86,7 @@ import {
 } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -736,6 +740,10 @@ function Terminal(): React.JSX.Element | null {
     openNewBrowserTabInActiveWorkspace
   ])
 
+  const handleOpenEntry = useCallback(async (args: TabCreateEntryArgs) => {
+    await openTabBarEntry(args)
+  }, [])
+
   const handleDuplicateBrowserTab = useCallback(
     (browserTabId: string) => {
       if (!activeWorktreeId) {
@@ -1138,7 +1146,7 @@ function Terminal(): React.JSX.Element | null {
       }
 
       // Cmd/Ctrl+Shift+T — reopen closed browser tab when browser is active,
-      // otherwise reopen the most recently closed editor tab (VS Code–style).
+      // otherwise reopen the most recently closed editor tab.
       if (!e.repeat && matchShortcut('tab.reopenClosed')) {
         e.preventDefault()
         notifyTerminalCapture('tab.reopenClosed')
@@ -1190,6 +1198,10 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
+      if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
+        return
+      }
+
       // Cmd/Ctrl+W - close active editor tab, browser tab, or terminal pane.
       // Terminal pane/tab close is handled by the pane-level keyboard handler
       // in keyboard-handlers.ts so it can close individual split panes and
@@ -1230,7 +1242,7 @@ function Terminal(): React.JSX.Element | null {
       // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs (scoped to the
       // active tab type). Cmd/Ctrl+Alt+] and Cmd/Ctrl+Alt+[ cycles across
       // every tab type as an escape hatch from the type-scoped default, and
-      // mirrors Safari/Chrome's tab-switch chord on macOS.
+      // matches the platform tab-switch chord on macOS.
       // Why: use e.code instead of e.key because on macOS, Shift+[ reports '{'
       // as the key value (the shifted character), not '['. Option+[ also
       // composes to dead-key / punctuation on many layouts, so matching on
@@ -1328,10 +1340,9 @@ function Terminal(): React.JSX.Element | null {
   // Warn on window close if there are unsaved editor files
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent): void => {
-      // Why: updater restarts intentionally close the app even if a hidden
-      // editor tab still reports dirty. Let ShipIt replace the bundle instead
-      // of vetoing quitAndInstall and leaving the old version running.
-      if (isUpdaterQuitAndInstallInProgress()) {
+      // Why: update/manual restarts pre-save dirty tabs and then intentionally
+      // close the app. Do not let stale dirty flags veto the relaunch path.
+      if (isIntentionalAppRestartInProgress()) {
         return
       }
       const dirtyFiles = useAppStore.getState().openFiles.filter((f) => f.isDirty)
@@ -1348,7 +1359,7 @@ function Terminal(): React.JSX.Element | null {
   // close here. Explicit destructive terminal actions keep their own confirms.
   useEffect(() => {
     return window.api.ui.onWindowCloseRequested(({ isQuitting }) => {
-      if (isUpdaterQuitAndInstallInProgress()) {
+      if (isIntentionalAppRestartInProgress()) {
         window.api.ui.confirmWindowClose()
         return
       }
@@ -1447,7 +1458,7 @@ function Terminal(): React.JSX.Element | null {
       <EditorAutosaveController />
 
       {/* Why: once split groups are enabled, each group owns its own tab strip
-          inline like VS Code. The old titlebar portal stays only as a fallback
+          inline. The old titlebar portal stays only as a fallback
           before the root-group layout has been established. */}
       {activeWorktreeId &&
         !effectiveActiveLayout &&
@@ -1464,6 +1475,7 @@ function Terminal(): React.JSX.Element | null {
             onNewTerminalTab={() => handleNewTab()}
             onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
+            onOpenEntry={handleOpenEntry}
             onNewFileTab={handleNewFile}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}
@@ -1788,15 +1800,28 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   shouldMeasureHiddenWorktree: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
 }): React.JSX.Element {
+  const browserPageIds = useAppStore(
+    useShallow((state) =>
+      (state.browserTabsByWorktree[worktreeId] ?? []).flatMap((tab) =>
+        tab.pageIds && tab.pageIds.length > 0 ? tab.pageIds : [tab.activePageId ?? tab.id]
+      )
+    )
+  )
+  const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
+  const shouldKeepPaintable = shouldMeasureHiddenWorktree || hasAutomationVisibleBrowser
+
   return (
     <div
       className={
         isVisible
           ? 'absolute inset-0 flex'
-          : shouldMeasureHiddenWorktree
+          : shouldKeepPaintable
             ? 'absolute inset-0 flex opacity-0 pointer-events-none'
             : 'absolute inset-0 hidden'
       }
+      // Why: automation-visible panes must stay paintable for webviews, but
+      // invisible controls cannot remain reachable by Tab or assistive tech.
+      inert={!isVisible}
       aria-hidden={!isVisible}
     >
       <CodexRestartChip worktreeId={worktreeId} />

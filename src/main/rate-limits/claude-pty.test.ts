@@ -52,24 +52,24 @@ describe('fetchViaPty', () => {
   it('disposes node-pty listeners before killing the hidden PTY on timeout', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
+    const killMock = vi.fn()
 
     spawnMock.mockReturnValue({
       onData: vi.fn(() => onDataDisposable),
       onExit: vi.fn(() => onExitDisposable),
       write: vi.fn(),
-      kill: vi.fn()
+      kill: killMock
     })
 
     const resultPromise = fetchViaPty()
     await vi.advanceTimersByTimeAsync(25_000)
     await resultPromise
 
-    const term = spawnMock.mock.results[0]?.value as { kill: ReturnType<typeof vi.fn> }
     expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      term.kill.mock.invocationCallOrder[0]
+      killMock.mock.invocationCallOrder[0]
     )
     expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      term.kill.mock.invocationCallOrder[0]
+      killMock.mock.invocationCallOrder[0]
     )
   })
 

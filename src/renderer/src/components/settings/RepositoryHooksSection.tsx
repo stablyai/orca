@@ -26,6 +26,7 @@ type RepositoryHooksSectionProps = {
   hooksInspectionReady: boolean
   mayNeedUpdate: boolean
   copiedTemplate: boolean
+  forceVisible?: boolean
   onCopyTemplate: () => void
   onUpdateHookSettings: (settings: RepoHookSettings) => void
 }
@@ -553,6 +554,7 @@ export function RepositoryHooksSection({
   hooksInspectionReady,
   mayNeedUpdate,
   copiedTemplate,
+  forceVisible = false,
   onCopyTemplate,
   onUpdateHookSettings
 }: RepositoryHooksSectionProps): React.JSX.Element {
@@ -791,6 +793,7 @@ export function RepositoryHooksSection({
       <SearchableSetting
         title="Setup Script"
         description="Local and shared scripts that run after a new worktree is created."
+        forceVisible={forceVisible}
         keywords={[
           'setup',
           'script',
@@ -817,6 +820,7 @@ export function RepositoryHooksSection({
       <SearchableSetting
         title="When to Run Setup"
         description="Choose the default behavior when a setup script is available."
+        forceVisible={forceVisible}
         keywords={['setup run policy', 'ask', 'run by default', 'skip by default']}
       >
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
@@ -837,6 +841,7 @@ export function RepositoryHooksSection({
       <SearchableSetting
         title="Archive Script"
         description="Local and shared scripts that run before a worktree is archived."
+        forceVisible={forceVisible}
         keywords={[
           'archive',
           'script',
@@ -871,6 +876,7 @@ export function RepositoryHooksSection({
       <SearchableSetting
         title="Custom GitHub Issue Command"
         description="Optional per-user override for the linked-issue command."
+        forceVisible={forceVisible}
         keywords={['github issue command', 'issue command', 'workflow', 'agent', 'github']}
       >
         <div className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
@@ -906,6 +912,7 @@ export function RepositoryHooksSection({
       <SearchableSetting
         title="Advanced"
         description="Command source and orca.yaml details."
+        forceVisible={forceVisible}
         keywords={[
           'advanced',
           'command source',

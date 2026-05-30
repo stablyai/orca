@@ -2,6 +2,7 @@
 global setup across namespaces so browser API installation stays realistic. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreloadApi } from '../../../preload/api-types'
+import type { FeatureInteractionState } from '../../../shared/feature-interactions'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
 class MemoryStorage implements Storage {
@@ -177,6 +178,79 @@ describe('web UI preload API', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it('saves browser clipboard images through the paired host runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: 'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png',
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    vi.stubGlobal(
+      'FileReader',
+      class {
+        result: string | ArrayBuffer | null = null
+        error: DOMException | null = null
+        onload: (() => void) | null = null
+        onerror: (() => void) | null = null
+
+        readAsDataURL(blob: Blob): void {
+          void blob
+            .arrayBuffer()
+            .then((buffer) => {
+              this.result = `data:${blob.type};base64,${Buffer.from(buffer).toString('base64')}`
+              this.onload?.()
+            })
+            .catch((error: DOMException) => {
+              this.error = error
+              this.onerror?.()
+            })
+        }
+      }
+    )
+
+    const globals = installBrowserGlobals('Linux')
+    vi.stubGlobal('navigator', {
+      userAgent: 'Linux',
+      hardwareConcurrency: 8,
+      clipboard: {
+        readText: vi.fn().mockResolvedValue(''),
+        read: vi.fn().mockResolvedValue([
+          {
+            types: ['image/png'],
+            getType: vi.fn().mockResolvedValue(new Blob(['png-bytes'], { type: 'image/png' }))
+          }
+        ])
+      }
+    })
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.ui.saveClipboardImageAsTempFile({ connectionId: null })
+    ).resolves.toBe('C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png')
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'clipboard.saveImageAsTempFile',
+        params: {
+          contentBase64: Buffer.from('png-bytes').toString('base64'),
+          connectionId: null
+        }
+      }
+    ])
   })
 
   it('migrates missing right sidebar visibility from the effective web legacy default', async () => {
@@ -194,6 +268,125 @@ describe('web UI preload API', () => {
     const ui = await api.ui.get()
 
     expect(ui.rightSidebarOpen).toBe(true)
+  })
+
+  it('keeps newer feature interaction counts when runtime responses resolve out of order', async () => {
+    const pending: ((response: RuntimeRpcResponse<unknown>) => void)[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return new Promise((resolve) => {
+            pending.push((response) =>
+              resolve({
+                ...response,
+                id: method,
+                _meta: { runtimeId: 'runtime-1' }
+              })
+            )
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const first = globals.window.api.ui.recordFeatureInteraction('tasks')
+    const second = globals.window.api.ui.recordFeatureInteraction('tasks')
+
+    pending[1]({
+      id: 'second',
+      ok: true,
+      result: {
+        ui: {
+          featureInteractions: {
+            tasks: { firstInteractedAt: 100, interactionCount: 2 }
+          }
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await second
+    pending[0]({
+      id: 'first',
+      ok: true,
+      result: {
+        ui: {
+          featureInteractions: {
+            tasks: { firstInteractedAt: 100, interactionCount: 1 }
+          }
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await first
+
+    const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
+      featureInteractions?: FeatureInteractionState
+    }
+    expect(stored.featureInteractions?.tasks).toEqual({
+      firstInteractedAt: 100,
+      interactionCount: 2
+    })
+  })
+
+  it('keeps newer local feature interactions when ui.get returns stale host state', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {
+              ui: {
+                featureInteractions: {
+                  tasks: { firstInteractedAt: 100, interactionCount: 1 },
+                  ports: { firstInteractedAt: 300, interactionCount: 1 }
+                }
+              }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({
+        featureInteractions: {
+          tasks: { firstInteractedAt: 50, interactionCount: 3 }
+        }
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const ui = await globals.window.api.ui.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
+      featureInteractions?: FeatureInteractionState
+    }
+
+    expect(ui.featureInteractions?.tasks).toEqual({
+      firstInteractedAt: 50,
+      interactionCount: 3
+    })
+    expect(stored.featureInteractions?.tasks).toEqual({
+      firstInteractedAt: 50,
+      interactionCount: 3
+    })
+    expect(stored.featureInteractions?.ports).toEqual({
+      firstInteractedAt: 300,
+      interactionCount: 1
+    })
   })
 })
 
@@ -333,6 +526,7 @@ describe('web GitHub preload API', () => {
         'requestPRReviewers',
         'resolveProjectRef',
         'resolveReviewThread',
+        'setPRAutoMerge',
         'setPRFileViewed',
         'starOrca',
         'updateIssue',
@@ -474,9 +668,15 @@ describe('web GitHub preload API', () => {
       },
       {
         key: 'listWorkItems',
-        args: { repoPath, limit: 20, query: 'is:pr', before: 'cursor' },
+        args: { repoPath, limit: 20, query: 'is:pr', before: 'cursor', noCache: true },
         expectedMethod: 'github.listWorkItems',
-        expectedParams: withRepo({ repoPath, limit: 20, query: 'is:pr', before: 'cursor' })
+        expectedParams: withRepo({
+          repoPath,
+          limit: 20,
+          query: 'is:pr',
+          before: 'cursor',
+          noCache: true
+        })
       },
       {
         key: 'prChecks',
@@ -531,6 +731,12 @@ describe('web GitHub preload API', () => {
         args: { repoPath, prNumber: 7, method: 'squash' },
         expectedMethod: 'github.mergePR',
         expectedParams: withRepo({ repoPath, prNumber: 7, method: 'squash' })
+      },
+      {
+        key: 'setPRAutoMerge',
+        args: { repoPath, prNumber: 7, enabled: true },
+        expectedMethod: 'github.setPRAutoMerge',
+        expectedParams: withRepo({ repoPath, prNumber: 7, enabled: true })
       },
       {
         key: 'updatePRState',
