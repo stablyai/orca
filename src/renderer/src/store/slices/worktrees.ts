@@ -241,12 +241,30 @@ function toVisibleWorktrees(result: DetectedWorktreeListResult): Worktree[] {
   return result.worktrees.filter((worktree) => worktree.visible).map(toVisibleWorktree)
 }
 
+function getHydratedSessionWorktreeIdsForRepo(state: AppState, repoId: string): string[] {
+  return Object.keys(state.tabsByWorktree).filter((id) => getRepoIdFromWorktreeId(id) === repoId)
+}
+
 function getKnownWorktreeIdsForPurge(state: AppState, repoId: string): string[] {
   const detected = state.detectedWorktreesByRepo[repoId]
+  const knownIds = new Set<string>()
   if (detected?.authoritative === true) {
-    return detected.worktrees.map((worktree) => worktree.id)
+    for (const worktree of detected.worktrees) {
+      knownIds.add(worktree.id)
+    }
+  } else {
+    for (const worktree of state.worktreesByRepo[repoId] ?? []) {
+      knownIds.add(worktree.id)
+    }
   }
-  return (state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id)
+  if (!state.hasHydratedWorktreePurge) {
+    // Why (#1158): hydration can preserve tab keys before worktree metadata exists;
+    // the first authoritative scan still needs to reap deleted session-only keys.
+    for (const id of getHydratedSessionWorktreeIdsForRepo(state, repoId)) {
+      knownIds.add(id)
+    }
+  }
+  return [...knownIds]
 }
 
 function getRemovedWorktreeIdsAfterAuthoritativeScan(
@@ -788,81 +806,81 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           set({ layoutConfigInvalidIds: next })
         }
 
-      for (const wt of newlySeen) {
-        void window.api.worktrees
-          .getLayoutConfig({ worktreeId: wt.id })
-          .then((rawConfig) => {
-            if (!rawConfig) {
-              get().setLayoutConfigForWorktree(wt.id, null)
-              // Why: legitimate "no orca.yaml" — not an invalid state.
-              clearInvalid(wt.id)
-              // Why: SSH null can mean "provider not ready"; release
-              // lock so a reconnect re-fetches.
-              const repo = get().repos.find((r) => r.id === wt.repoId)
-              if (repo?.connectionId) {
-                dropPrefetchLock(wt.id)
-              }
-              return
-            }
-            // Why: main wraps unparseable YAML in a sentinel so we can
-            // distinguish "no orca.yaml" from "yaml broke".
-            if (isInvalidYamlSentinel(rawConfig)) {
-              toast.error('orca.yaml could not be parsed', {
-                description: rawConfig.message
-              })
-              get().setLayoutConfigForWorktree(wt.id, null)
-              // Why: mark for Reset Layout visibility; release lock so a fix retries.
-              markInvalid(wt.id)
-              dropPrefetchLock(wt.id)
-              return
-            }
-            const parsed = LayoutConfigSchema.safeParse(rawConfig)
-            if (!parsed.success) {
-              // eslint-disable-next-line no-console
-              console.warn(
-                '[layout-rules] Renderer rejected layout config (prefetch) for worktree',
-                wt.id,
-                parsed.error.issues
-              )
-              const firstIssue = parsed.error.issues[0]
-              const detail = firstIssue
-                ? `${firstIssue.path.join('.') || 'layout'}: ${firstIssue.message}`
-                : 'see DevTools console for full Zod error'
-              toast.error('orca.yaml layout rejected', { description: detail })
-              get().setLayoutConfigForWorktree(wt.id, null)
-              markInvalid(wt.id)
-              dropPrefetchLock(wt.id)
-              return
-            }
-            get().setLayoutConfigForWorktree(wt.id, parsed.data)
-            // Why: clean parse — clear any prior invalid flag.
-            clearInvalid(wt.id)
-            const s = get()
-            tryReseedAfterLateConfigArrival(wt.id, parsed.data, {
-              getGroupsForWorktree: (id) => get().groupsByWorktree[id] ?? [],
-              getTabsForWorktree: (id) => get().tabsByWorktree[id] ?? [],
-              ensureWorktreeRootGroup: s.ensureWorktreeRootGroup,
-              createEmptySplitGroup: s.createEmptySplitGroup,
-              focusGroup: s.focusGroup,
-              recordLayoutGroupBinding: s.recordLayoutGroupBinding,
-              closeTab: s.closeTab,
-              closeEmptyGroup: s.closeEmptyGroup,
-              recreateInitialTerminal: (id) => {
-                // Why: closeTab during teardown may have null'd
-                // activeWorktreeId; restore before recreating.
-                const live = get()
-                if (live.activeWorktreeId !== id) {
-                  live.setActiveWorktree(id)
+        for (const wt of newlySeen) {
+          void window.api.worktrees
+            .getLayoutConfig({ worktreeId: wt.id })
+            .then((rawConfig) => {
+              if (!rawConfig) {
+                get().setLayoutConfigForWorktree(wt.id, null)
+                // Why: legitimate "no orca.yaml" — not an invalid state.
+                clearInvalid(wt.id)
+                // Why: SSH null can mean "provider not ready"; release
+                // lock so a reconnect re-fetches.
+                const repo = get().repos.find((r) => r.id === wt.repoId)
+                if (repo?.connectionId) {
+                  dropPrefetchLock(wt.id)
                 }
-                get().createTab(id, undefined, undefined, { pendingActivationSpawn: true })
+                return
               }
+              // Why: main wraps unparseable YAML in a sentinel so we can
+              // distinguish "no orca.yaml" from "yaml broke".
+              if (isInvalidYamlSentinel(rawConfig)) {
+                toast.error('orca.yaml could not be parsed', {
+                  description: rawConfig.message
+                })
+                get().setLayoutConfigForWorktree(wt.id, null)
+                // Why: mark for Reset Layout visibility; release lock so a fix retries.
+                markInvalid(wt.id)
+                dropPrefetchLock(wt.id)
+                return
+              }
+              const parsed = LayoutConfigSchema.safeParse(rawConfig)
+              if (!parsed.success) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  '[layout-rules] Renderer rejected layout config (prefetch) for worktree',
+                  wt.id,
+                  parsed.error.issues
+                )
+                const firstIssue = parsed.error.issues[0]
+                const detail = firstIssue
+                  ? `${firstIssue.path.join('.') || 'layout'}: ${firstIssue.message}`
+                  : 'see DevTools console for full Zod error'
+                toast.error('orca.yaml layout rejected', { description: detail })
+                get().setLayoutConfigForWorktree(wt.id, null)
+                markInvalid(wt.id)
+                dropPrefetchLock(wt.id)
+                return
+              }
+              get().setLayoutConfigForWorktree(wt.id, parsed.data)
+              // Why: clean parse — clear any prior invalid flag.
+              clearInvalid(wt.id)
+              const s = get()
+              tryReseedAfterLateConfigArrival(wt.id, parsed.data, {
+                getGroupsForWorktree: (id) => get().groupsByWorktree[id] ?? [],
+                getTabsForWorktree: (id) => get().tabsByWorktree[id] ?? [],
+                ensureWorktreeRootGroup: s.ensureWorktreeRootGroup,
+                createEmptySplitGroup: s.createEmptySplitGroup,
+                focusGroup: s.focusGroup,
+                recordLayoutGroupBinding: s.recordLayoutGroupBinding,
+                closeTab: s.closeTab,
+                closeEmptyGroup: s.closeEmptyGroup,
+                recreateInitialTerminal: (id) => {
+                  // Why: closeTab during teardown may have null'd
+                  // activeWorktreeId; restore before recreating.
+                  const live = get()
+                  if (live.activeWorktreeId !== id) {
+                    live.setActiveWorktree(id)
+                  }
+                  get().createTab(id, undefined, undefined, { pendingActivationSpawn: true })
+                }
+              })
             })
-          })
-          .catch(() => {
-            // Why: release lock so the next worktrees:changed retries.
-            dropPrefetchLock(wt.id)
-          })
-      }
+            .catch(() => {
+              // Why: release lock so the next worktrees:changed retries.
+              dropPrefetchLock(wt.id)
+            })
+        }
       }
     } catch (err) {
       console.error(`Failed to fetch worktrees for repo ${repoId}:`, err)

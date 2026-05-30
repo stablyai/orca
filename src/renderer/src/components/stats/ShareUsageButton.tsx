@@ -20,6 +20,14 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
   const cardRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const [capturing, setCapturing] = useState(false)
+  const copiedResetTimerRef = useRef<number | null>(null)
+
+  const clearCopiedResetTimer = useCallback((): void => {
+    if (copiedResetTimerRef.current !== null) {
+      window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = null
+    }
+  }, [])
 
   const captureToClipboard = useCallback(async () => {
     if (!cardRef.current || capturing) {
@@ -41,10 +49,14 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
   const handleCopy = useCallback(async () => {
     const ok = await captureToClipboard()
     if (ok) {
+      clearCopiedResetTimer()
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      copiedResetTimerRef.current = window.setTimeout(() => {
+        copiedResetTimerRef.current = null
+        setCopied(false)
+      }, 2000)
     }
-  }, [captureToClipboard])
+  }, [captureToClipboard, clearCopiedResetTimer])
 
   const handleShareToX = useCallback(async () => {
     const { provider, summary, range } = props

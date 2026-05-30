@@ -66,7 +66,7 @@ export function StarNagCard(): React.JSX.Element | null {
     }
     setBusy(true)
     setError(false)
-    const ok = await window.api.gh.starOrca()
+    const ok = await window.api.gh.starOrca('star_nag')
     setBusy(false)
     if (!ok) {
       setError(true)

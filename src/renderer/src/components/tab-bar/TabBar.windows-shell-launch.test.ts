@@ -234,7 +234,10 @@ describe('TabBar PowerShell launch wiring', () => {
   it('passes pwsh.exe when the PowerShell menu item uses the PowerShell 7+ implementation', async () => {
     vi.stubGlobal('window', {
       api: {
-        wsl: { isAvailable: vi.fn().mockResolvedValue(false) },
+        wsl: {
+          isAvailable: vi.fn().mockResolvedValue(false),
+          listDistros: vi.fn().mockResolvedValue([])
+        },
         pwsh: { isAvailable: vi.fn().mockResolvedValue(true) }
       }
     })
@@ -281,7 +284,10 @@ describe('TabBar PowerShell launch wiring', () => {
   it('shows the WSL terminal row when shared Windows capabilities report WSL', async () => {
     vi.stubGlobal('window', {
       api: {
-        wsl: { isAvailable: vi.fn().mockResolvedValue(true) },
+        wsl: {
+          isAvailable: vi.fn().mockResolvedValue(true),
+          listDistros: vi.fn().mockResolvedValue(['Ubuntu'])
+        },
         pwsh: { isAvailable: vi.fn().mockResolvedValue(false) }
       }
     })

@@ -134,6 +134,7 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
       groupKind={groupKind}
       onSetCustomTitle={commands.setTabCustomTitle}

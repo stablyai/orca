@@ -223,6 +223,10 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   }
 ]
 
+export function getAgentLabel(agent: TuiAgent): string {
+  return AGENT_CATALOG.find((entry) => entry.id === agent)?.label ?? agent
+}
+
 function PiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   // SVG sourced from pi.dev/favicon.svg — the π shape rendered in currentColor.
   // Why: className="text-current" opts out of shadcn's Select rule that forces

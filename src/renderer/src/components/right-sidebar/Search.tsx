@@ -106,9 +106,13 @@ export default function Search(): React.JSX.Element {
     })
   }, [cancelSeededInputSelectionFrame])
 
-  // Focus input on mount
-  useEffect(() => {
-    inputRef.current?.focus()
+  const setSearchInputRef = useCallback((el: HTMLInputElement | null): void => {
+    inputRef.current = el
+    // Why: focusing belongs to the input mount; the object ref still backs
+    // seeded-search selection and result keyboard handlers.
+    if (el) {
+      el.focus()
+    }
   }, [])
 
   // Cleanup debounce timer on unmount
@@ -324,7 +328,7 @@ export default function Search(): React.JSX.Element {
   return (
     <div className="flex flex-col h-full">
       <SearchHeader
-        inputRef={inputRef}
+        inputRef={setSearchInputRef}
         includeInputRef={includeInputRef}
         excludeInputRef={excludeInputRef}
         query={fileSearchQuery}

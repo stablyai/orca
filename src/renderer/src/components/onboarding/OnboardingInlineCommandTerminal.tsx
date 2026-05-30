@@ -17,6 +17,7 @@ type OnboardingInlineCommandTerminalProps = {
   ariaLabel: string
   terminalHeightPx?: number
   terminalTopMarginPx?: number
+  descriptionPaddingClassName?: string
   autoScrollIntoView?: boolean
   worktreeId?: string
   onOpened?: () => void
@@ -30,6 +31,7 @@ export function OnboardingInlineCommandTerminal({
   ariaLabel,
   terminalHeightPx = 280,
   terminalTopMarginPx = 20,
+  descriptionPaddingClassName = 'px-4 py-3',
   autoScrollIntoView = true,
   worktreeId = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
   onOpened,
@@ -225,7 +227,7 @@ export function OnboardingInlineCommandTerminal({
         className="min-h-0 overflow-hidden rounded-xl border border-border bg-card"
       >
         {description ? (
-          <div className="border-b border-border px-4 py-3">
+          <div className={`border-b border-border ${descriptionPaddingClassName}`}>
             <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
           </div>
         ) : null}

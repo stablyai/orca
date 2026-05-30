@@ -53,6 +53,14 @@ export function MobilePane(): React.JSX.Element {
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
 
+  useEffect(() => {
+    if (!codeCopied) {
+      return
+    }
+    const timeout = window.setTimeout(() => setCodeCopied(false), 2000)
+    return () => window.clearTimeout(timeout)
+  }, [codeCopied])
+
   const loadDevices = useCallback(async () => {
     try {
       const result = await window.api.mobile.listDevices()
@@ -141,7 +149,6 @@ export function MobilePane(): React.JSX.Element {
       // IPC clipboard which the rest of the app uses everywhere.
       await window.api.ui.writeClipboardText(pairingUrl)
       setCodeCopied(true)
-      setTimeout(() => setCodeCopied(false), 2000)
     } catch {
       toast.error('Failed to copy pairing code')
     }

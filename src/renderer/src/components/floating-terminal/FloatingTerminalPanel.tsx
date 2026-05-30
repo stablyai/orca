@@ -1307,6 +1307,7 @@ function FloatingTerminalEmptyState({
   return (
     <div
       className="absolute inset-0 flex items-center justify-center"
+      data-floating-terminal-empty-state
       data-floating-terminal-shortcut-surface
       onPointerDown={onFocusPanel}
     >

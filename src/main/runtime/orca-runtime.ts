@@ -170,6 +170,7 @@ import {
   updatePRTitle,
   updatePRDetails,
   mergePR,
+  setPRAutoMerge,
   updatePRState,
   requestPRReviewers,
   removePRReviewers,
@@ -306,6 +307,7 @@ import {
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
+  isForEachRefExcludeUnsupportedError,
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
@@ -553,6 +555,31 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   // serving a stale `lastAgentStatus` after the agent process exits and the
   // shell takes over the title — the bug behind issue #1437.
   lastOscTitle: string | null
+}
+
+function isCursorAgentOrchestrationTarget(
+  leaf: RuntimeLeafRecord,
+  tabTitle: string | null | undefined
+): boolean {
+  return [leaf.lastOscTitle, leaf.paneTitle, tabTitle].some(isCursorAgentTitle)
+}
+
+function isCursorAgentTitle(title: string | null | undefined): boolean {
+  if (typeof title !== 'string') {
+    return false
+  }
+  const trimmed = title.trim()
+  const lower = trimmed.toLowerCase()
+  if (
+    lower === 'cursor agent' ||
+    lower === 'cursor ready' ||
+    lower === 'cursor - action required'
+  ) {
+    return true
+  }
+  // Why: display labels can mention Cursor in another agent's task text. Only
+  // treat the controlled synthetic Cursor spinner title as Cursor identity.
+  return /^[\u2800-\u28ff] Cursor Agent$/u.test(trimmed)
 }
 
 type RuntimePtyWorktreeRecord = {
@@ -5799,14 +5826,21 @@ export class OrcaRuntimeService {
       return []
     }
     const normalizedQuery = normalizeRefSearchQuery(query)
-    if (!normalizedQuery) {
-      return []
-    }
     try {
-      const [result, remotesResult] = await Promise.all([
-        provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path),
-        provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      ])
+      const remotesPromise = provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
+      let result: { stdout: string }
+      try {
+        result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery, limit), repo.path)
+      } catch (err) {
+        if (!isForEachRefExcludeUnsupportedError(err)) {
+          throw err
+        }
+        result = await provider.exec(
+          buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
+          repo.path
+        )
+      }
+      const remotesResult = await remotesPromise
       const remotes = remotesResult.stdout
         .split('\n')
         .map((line) => line.trim())
@@ -6417,6 +6451,16 @@ export class OrcaRuntimeService {
   ): Promise<Awaited<ReturnType<typeof mergePR>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     return mergePR(repo.path, prNumber, method, repo.connectionId ?? null, prRepo ?? null)
+  }
+
+  async setRepoPRAutoMerge(
+    repoSelector: string,
+    prNumber: number,
+    enabled: boolean,
+    prRepo?: GitHubOwnerRepo | null
+  ): Promise<Awaited<ReturnType<typeof setPRAutoMerge>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return setPRAutoMerge(repo.path, prNumber, enabled, repo.connectionId ?? null, prRepo ?? null)
   }
 
   async updateRepoPRState(
@@ -11740,6 +11784,15 @@ export class OrcaRuntimeService {
     const payload = formatMessagesForInjection(unread)
     const wrote = this.ptyController?.write(leaf.ptyId, payload) ?? false
     if (!wrote) {
+      return
+    }
+
+    const tabTitle = this.tabs.get(leaf.tabId)?.title
+    if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
+      // Why: Cursor Agent treats injected PTY text as editable prompt input.
+      // Push-on-idle may surface the message, but submitting it must stay
+      // under user control.
+      this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
       return
     }
 

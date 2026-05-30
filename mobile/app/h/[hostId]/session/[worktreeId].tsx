@@ -18,13 +18,14 @@ import {
   type TextStyle
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   AlertTriangle,
   ArrowUp,
   ChevronLeft,
   ChevronRight,
+  ChevronsRight,
   Eraser,
   Folder,
   File,
@@ -59,7 +60,11 @@ import {
   type TerminalModes,
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
-import { TERMINAL_ACCESSORY_KEYS } from '../../../../src/terminal/terminal-accessory-keys'
+import {
+  getDefaultTerminalAccessoryBuiltInIds,
+  getVisibleTerminalAccessoryKeys,
+  loadTerminalAccessoryLayout
+} from '../../../../src/terminal/terminal-accessory-layout'
 import {
   getTerminalLiveSpecialKeyBytes,
   isTerminalLiveInputWithinByteLimit
@@ -724,8 +729,15 @@ export default function SessionScreen() {
   const [leaveDrafts, setLeaveDrafts] = useState<DirtyMarkdownDraft[] | null>(null)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
+  const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
+    getDefaultTerminalAccessoryBuiltInIds
+  )
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
   const [deleteKeyTarget, setDeleteKeyTarget] = useState<CustomKey | null>(null)
+  const visibleBuiltInAccessoryKeys = useMemo(
+    () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
+    [visibleBuiltInIds]
+  )
   // Why: in Expo SDK 55 edge-to-edge mode the OS does NOT resize the window when
   // the IME opens — the keyboard draws on top of the app. We track the keyboard
   // height ourselves and translate the input/accessory area above the IME without
@@ -1716,6 +1728,34 @@ export default function SessionScreen() {
     void loadCustomKeys().then(setCustomKeys)
   }, [])
 
+  useFocusEffect(
+    useCallback(() => {
+      let stale = false
+      void loadTerminalAccessoryLayout().then((layout) => {
+        if (!stale) setVisibleBuiltInIds(layout.visibleBuiltInIds)
+      })
+      return () => {
+        stale = true
+      }
+    }, [])
+  )
+
+  useEffect(() => {
+    let mounted = true
+    const refresh = () => {
+      void loadTerminalAccessoryLayout().then((layout) => {
+        if (mounted) setVisibleBuiltInIds(layout.visibleBuiltInIds)
+      })
+    }
+    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+      if (s === 'active') refresh()
+    })
+    return () => {
+      mounted = false
+      sub.remove()
+    }
+  }, [])
+
   // Why: re-measure when non-keyboard layout-affecting state changes
   // (e.g. tab strip toggling visibility when the terminal count crosses
   // 0↔1 — without this, a freshly-created 2nd tab subscribes with a
@@ -1814,6 +1854,11 @@ export default function SessionScreen() {
     },
     [customKeys]
   )
+
+  const handleManageShortcuts = useCallback(() => {
+    setShowCustomKeyModal(false)
+    router.push('/terminal-settings')
+  }, [router])
 
   useEffect(() => {
     clearTerminalCache()
@@ -3279,15 +3324,16 @@ export default function SessionScreen() {
                       : 'Switch to live terminal input'
                   }
                 >
-                  <Text
-                    style={[
-                      styles.accessoryKeyText,
-                      liveInputEnabled && styles.accessoryKeyTextActive,
-                      !canSend && styles.accessoryKeyTextDisabled
-                    ]}
-                  >
-                    Live
-                  </Text>
+                  <ChevronsRight
+                    size={14}
+                    color={
+                      liveInputEnabled
+                        ? colors.bgBase
+                        : canSend
+                          ? colors.textSecondary
+                          : colors.textMuted
+                    }
+                  />
                 </Pressable>
                 {canPaste && (
                   <Pressable
@@ -3307,9 +3353,9 @@ export default function SessionScreen() {
                     </Text>
                   </Pressable>
                 )}
-                {TERMINAL_ACCESSORY_KEYS.map((key) => (
+                {visibleBuiltInAccessoryKeys.map((key) => (
                   <Pressable
-                    key={key.label}
+                    key={key.id}
                     style={({ pressed }) => [
                       styles.accessoryKey,
                       pressed && styles.accessoryKeyPressed,
@@ -3383,12 +3429,9 @@ export default function SessionScreen() {
                 onPress={focusLiveInput}
                 accessibilityLabel="Focus live terminal input"
               >
-                <View style={styles.liveInputBadge}>
-                  <KeyboardIcon size={13} color={colors.textPrimary} strokeWidth={2.2} />
-                  <Text style={styles.liveInputBadgeText}>Live</Text>
-                </View>
+                <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
                 <Text style={styles.liveInputHint} numberOfLines={1}>
-                  Keyboard input goes to terminal
+                  Keyboard input directly goes to terminal
                 </Text>
                 <TextInput
                   ref={liveInputRef}
@@ -3775,6 +3818,7 @@ export default function SessionScreen() {
         visible={showCustomKeyModal}
         onClose={() => setShowCustomKeyModal(false)}
         onKeysChanged={setCustomKeys}
+        onManageShortcuts={handleManageShortcuts}
       />
       <ActionSheetModal
         visible={deleteKeyTarget != null}
@@ -4194,7 +4238,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle
   },
   accessoryKeyActive: {
-    backgroundColor: colors.accentBlue
+    backgroundColor: colors.textPrimary
   },
   customAccessoryKey: {
     borderWidth: 1,
@@ -4209,7 +4253,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.monoFamily
   },
   accessoryKeyTextActive: {
-    color: colors.textPrimary,
+    color: colors.bgBase,
     fontWeight: '700'
   },
   accessoryKeyTextDisabled: {
@@ -4218,6 +4262,7 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 46,
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.md,
     borderTopWidth: 1,
@@ -4226,11 +4271,12 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
+    height: 34,
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: 0,
     fontSize: 14,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
@@ -4238,21 +4284,7 @@ const styles = StyleSheet.create({
   liveInputBar: {
     gap: spacing.sm
   },
-  liveInputBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.accentBlue,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.button
-  },
-  liveInputBadgeText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: typography.monoFamily
-  },
+
   liveInputHint: {
     flex: 1,
     color: colors.textSecondary,

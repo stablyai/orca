@@ -210,7 +210,9 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     const pluginPath = join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js')
     expect(existsSync(pluginPath)).toBe(true)
     // Sanity-check the file has plugin source, not a stray write.
-    expect(readFileSync(pluginPath, 'utf8')).toContain('OrcaOpenCodeStatusPlugin')
+    const pluginSource = readFileSync(pluginPath, 'utf8')
+    expect(pluginSource).toContain('OrcaOpenCodeStatusPlugin')
+    expect(pluginSource).toContain('messageID: part.messageID')
   })
 
   it('clearPty removes the same directory buildPtyEnv created', () => {
