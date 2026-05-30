@@ -8,6 +8,7 @@ import {
 } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
+import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import type { PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
@@ -1013,9 +1014,8 @@ export function connectPanePty(
   // Why: remote repos route PTY spawn through the SSH provider. Resolve the
   // repo's connectionId from the store so the transport passes it to pty:spawn.
   const state = useAppStore.getState()
-  const allWorktrees = Object.values(state.worktreesByRepo ?? {}).flat()
-  const worktree = allWorktrees.find((w) => w.id === deps.worktreeId)
-  const repo = worktree ? state.repos?.find((r) => r.id === worktree.repoId) : null
+  const worktree = getWorktreeMapFromState(state).get(deps.worktreeId)
+  const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
   const connectionId = repo?.connectionId ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
