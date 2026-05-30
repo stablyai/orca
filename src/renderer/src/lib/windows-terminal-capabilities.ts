@@ -96,12 +96,20 @@ export function useWindowsTerminalCapabilities(
       return
     }
 
+    let cancelled = false
     const cached = getCachedWindowsTerminalCapabilities()
     setCapabilities(cachedCapabilities ? cached : { ...cached, isLoading: true })
     subscribers.add(setCapabilities)
-    void loadWindowsTerminalCapabilities({ force: forceRefreshOnMount }).then(setCapabilities)
+    void loadWindowsTerminalCapabilities({ force: forceRefreshOnMount }).then(
+      (nextCapabilities) => {
+        if (!cancelled) {
+          setCapabilities(nextCapabilities)
+        }
+      }
+    )
 
     return () => {
+      cancelled = true
       subscribers.delete(setCapabilities)
     }
   }, [enabled, forceRefreshOnMount])

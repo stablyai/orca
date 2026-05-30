@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
@@ -32,13 +32,29 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const shortcutLabel = useShortcutLabel('voice.dictation')
   const [catalog, setCatalog] = useState<SpeechModelManifest[]>([])
   const [permissionPending, setPermissionPending] = useState(false)
+  const mountedRef = useRef(true)
 
   useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
     refreshModelStates()
-    window.api.speech
+    void window.api.speech
       .getCatalog()
-      .then(setCatalog)
+      .then((nextCatalog) => {
+        if (!cancelled) {
+          setCatalog(nextCatalog)
+        }
+      })
       .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [refreshModelStates])
 
   useEffect(() => {
@@ -84,7 +100,9 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     } catch {
       toast.error('Could not request microphone permission. Voice dictation was not enabled.')
     } finally {
-      setPermissionPending(false)
+      if (mountedRef.current) {
+        setPermissionPending(false)
+      }
     }
   }
 
