@@ -91,7 +91,7 @@ export function createPaneDOM(
   const dragHandle = document.createElement('div')
   dragHandle.className = 'pane-drag-handle'
   container.appendChild(dragHandle)
-  attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
+  const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 
   const webLinksAddon = new WebLinksAddon(
     options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
@@ -146,6 +146,7 @@ export function createPaneDOM(
     ligaturesAddon: null,
     panePointerDownHandler,
     paneMouseEnterHandler,
+    paneDragCleanup,
     compositionHandler: null,
     pendingSplitScrollState: null,
     pendingSplitScrollRafIds: [],
@@ -324,6 +325,8 @@ export function disposePane(
     pane.container.removeEventListener('mouseenter', pane.paneMouseEnterHandler)
     pane.paneMouseEnterHandler = null
   }
+  pane.paneDragCleanup?.()
+  pane.paneDragCleanup = null
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null

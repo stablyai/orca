@@ -116,6 +116,7 @@ export type ManagedPaneInternal = {
   // Stored so disposePane() can remove pane-local DOM listeners explicitly.
   panePointerDownHandler?: ((event: PointerEvent) => void) | null
   paneMouseEnterHandler?: ((event: MouseEvent) => void) | null
+  paneDragCleanup?: (() => void) | null
   // Stored so disposePane() can remove it and avoid a memory leak.
   compositionHandler: (() => void) | null
   // Why: splitPane reparents DOM; its delayed restore owns scroll until the

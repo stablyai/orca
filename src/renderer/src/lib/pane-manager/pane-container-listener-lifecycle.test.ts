@@ -52,4 +52,16 @@ describe('disposePane container listener cleanup', () => {
     expect(pane.paneMouseEnterHandler).toBeNull()
     expect(panes.has(pane.id)).toBe(false)
   })
+
+  it('runs pane drag cleanup', () => {
+    const pane = makePane()
+    const paneDragCleanup = vi.fn()
+    pane.paneDragCleanup = paneDragCleanup
+    const panes = new Map([[pane.id, pane]])
+
+    disposePane(pane, panes)
+
+    expect(paneDragCleanup).toHaveBeenCalledTimes(1)
+    expect(pane.paneDragCleanup).toBeNull()
+  })
 })
