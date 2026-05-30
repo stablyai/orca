@@ -16,6 +16,8 @@ import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButto
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { cn } from '@/lib/utils'
 
+const ENABLED_SEND_TOOLTIP = 'Send notes to an agent'
+
 export type NotesSendMenuScope<TNote> = {
   id: string
   label: string
@@ -147,10 +149,8 @@ export function NotesSendMenu<TNote>({
                 triggerClassName
               )}
               disabled={!hasDeliverableNotes}
-              title={hasDeliverableNotes ? 'Send notes to a new agent' : disabledTooltip}
-              aria-label={
-                triggerLabel ? `Send ${triggerLabel} to a new agent` : 'Send notes to a new agent'
-              }
+              title={hasDeliverableNotes ? ENABLED_SEND_TOOLTIP : disabledTooltip}
+              aria-label={triggerLabel ? `Send ${triggerLabel} to an agent` : ENABLED_SEND_TOOLTIP}
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
@@ -172,7 +172,7 @@ export function NotesSendMenu<TNote>({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {hasDeliverableNotes ? 'Send notes to a new agent' : disabledTooltip}
+          {hasDeliverableNotes ? ENABLED_SEND_TOOLTIP : disabledTooltip}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent

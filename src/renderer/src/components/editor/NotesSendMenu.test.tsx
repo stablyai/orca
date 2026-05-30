@@ -264,6 +264,7 @@ describe('NotesSendMenu', () => {
   it('opens and closes target mode with the default scope', () => {
     const onDelivered = vi.fn()
     const tree = renderMenu({ onDelivered })
+    expect(findByType(tree, 'button').props.title).toBe('Send notes to an agent')
     const dropdown = findByType(tree, 'DropdownMenu')
 
     ;(dropdown.props.onOpenChange as (open: boolean) => void)(true)
