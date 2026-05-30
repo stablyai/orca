@@ -44,6 +44,7 @@ import {
   type AgentStatusState,
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
+import type { ClaudeWorkflowFileSelectors } from '../../shared/claude-workflow-detail'
 import {
   isAgentInterruptInputIntent,
   type AgentInterruptInferenceRequest
@@ -144,6 +145,21 @@ function equivalentInterruptAgentType(
   return normalizedActual === normalizedBaseline
 }
 
+function sanitizeClaudeWorkflowSelectors(value: unknown): ClaudeWorkflowFileSelectors | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined
+  }
+  const record = value as Record<string, unknown>
+  const selectors: ClaudeWorkflowFileSelectors = {}
+  for (const key of ['transcriptPath', 'scriptPath', 'cwd', 'sessionId'] as const) {
+    const candidate = record[key]
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      selectors[key] = candidate.trim()
+    }
+  }
+  return Object.keys(selectors).length > 0 ? selectors : undefined
+}
+
 // Why: paneKey is `${tabId}:${leafUuid}` — validate the durable leaf suffix
 // at write/hydrate time so legacy numeric rows fail closed.
 export function isValidPaneKey(value: unknown): value is string {
@@ -216,6 +232,7 @@ function sanitizeHydratedEntry(
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
+    claudeWorkflow: sanitizeClaudeWorkflowSelectors(record.claudeWorkflow),
     payload,
     receivedAt,
     stateStartedAt
@@ -230,6 +247,7 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     connectionId: entry.connectionId,
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
+    claudeWorkflow: entry.claudeWorkflow,
     ...entry.payload
   }
 }
@@ -866,6 +884,7 @@ export class AgentHookServer {
       toolAgentId?: string
       toolAgentType?: string
       isReplay?: boolean
+      claudeWorkflow?: unknown
       payload: unknown
     },
     connectionId: string
@@ -969,6 +988,7 @@ export class AgentHookServer {
       toolAgentId,
       toolAgentType,
       isReplay: envelope.isReplay === true ? true : undefined,
+      claudeWorkflow: sanitizeClaudeWorkflowSelectors(envelope.claudeWorkflow),
       payload: normalizedPayload
     }
     this.applyNormalizedStatus(event)

@@ -31,6 +31,7 @@ import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 import { parsePaneKey } from './stable-pane-id'
+import type { ClaudeWorkflowFileSelectors } from './claude-workflow-detail'
 
 /** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
@@ -179,6 +180,7 @@ export type AgentHookEventPayload = {
   toolAgentType?: string
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
+  claudeWorkflow?: ClaudeWorkflowFileSelectors
   payload: ParsedAgentStatusPayload
 }
 
@@ -548,6 +550,38 @@ function readFirstString(
     }
   }
   return undefined
+}
+
+function extractClaudeWorkflowSelectors(
+  source: AgentHookSource,
+  record: Record<string, unknown>
+): ClaudeWorkflowFileSelectors | undefined {
+  if (source !== 'claude') {
+    return undefined
+  }
+  const selectors: ClaudeWorkflowFileSelectors = {}
+  const transcriptPath = readFirstString(record, ['transcript_path', 'transcriptPath'])
+  const scriptPath = readFirstString(record, [
+    'script_path',
+    'scriptPath',
+    'generated_script_path',
+    'generatedScriptPath'
+  ])
+  const cwd = readFirstString(record, ['cwd', 'workspaceRoot', 'workspace_root'])
+  const sessionId = readFirstString(record, ['session_id', 'sessionId'])
+  if (transcriptPath) {
+    selectors.transcriptPath = transcriptPath
+  }
+  if (scriptPath) {
+    selectors.scriptPath = scriptPath
+  }
+  if (cwd) {
+    selectors.cwd = cwd
+  }
+  if (sessionId) {
+    selectors.sessionId = sessionId
+  }
+  return Object.keys(selectors).length > 0 ? selectors : undefined
 }
 
 function parseJsonObjectString(value: unknown): Record<string, unknown> | undefined {
@@ -2858,6 +2892,7 @@ export function normalizeHookPayload(
         toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
         toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
+        claudeWorkflow: extractClaudeWorkflowSelectors(source, hookPayloadRecord),
         payload
       }
     : null

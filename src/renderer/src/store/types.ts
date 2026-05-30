@@ -21,6 +21,7 @@ import type { BrowserSlice } from './slices/browser'
 import type { RateLimitSlice } from './slices/rate-limits'
 import type { SshSlice } from './slices/ssh'
 import type { AgentStatusSlice } from './slices/agent-status'
+import type { ClaudeWorkflowDetailSlice } from './slices/claude-workflow-detail'
 import type { DiffCommentsSlice } from './slices/diffComments'
 import type { DetectedAgentsSlice } from './slices/detected-agents'
 import type { WorktreeNavHistorySlice } from './slices/worktree-nav-history'
@@ -50,6 +51,7 @@ export type AppState = RepoSlice &
   RateLimitSlice &
   SshSlice &
   AgentStatusSlice &
+  ClaudeWorkflowDetailSlice &
   DiffCommentsSlice &
   DetectedAgentsSlice &
   WorktreeNavHistorySlice &

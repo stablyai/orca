@@ -520,6 +520,17 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
       drop: () => {}
     },
+    claudeWorkflows: {
+      getDetail: ({ target }) =>
+        Promise.resolve({
+          target,
+          summaryOnly: true,
+          source: 'remote-unsupported',
+          warnings: ['Claude workflow details are unavailable in the paired web client.'],
+          timeline: [],
+          agents: []
+        })
+    },
     mobile: {
       listNetworkInterfaces: () => Promise.resolve({ interfaces: [] }),
       getPairingQR: () => Promise.resolve({ available: false }),

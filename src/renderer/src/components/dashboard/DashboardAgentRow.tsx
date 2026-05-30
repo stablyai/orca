@@ -1,11 +1,16 @@
+/* eslint-disable max-lines -- Why: this dense row owns the inline agent
+   hierarchy, attention, nested actions, and expand/collapse layout together;
+   splitting the new detail action out would separate it from the propagation
+   safeguards it must share with the existing nested buttons. */
 import React, { useState, useCallback } from 'react'
-import { X, Wrench, ChevronDown } from 'lucide-react'
+import { X, Wrench, ChevronDown, PanelRightOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Button } from '@/components/ui/button'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
@@ -121,6 +126,7 @@ type Props = {
   reserveDisclosureGutter?: boolean
   // Why: chevron indentation replaces fixed-offset lineage connector art.
   hideLineageConnectors?: boolean
+  onOpenDetails?: (agent: DashboardAgentRowData) => void
 }
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
@@ -137,7 +143,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   childAgentsExpanded = false,
   onToggleChildAgents,
   reserveDisclosureGutter = false,
-  hideLineageConnectors = false
+  hideLineageConnectors = false,
+  onOpenDetails
 }: Props) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -162,6 +169,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     e.stopPropagation()
     setExpanded((prev) => !prev)
   }, [])
+  const handleOpenDetails = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault()
+      e.stopPropagation()
+      onOpenDetails?.(agent)
+    },
+    [agent, onOpenDetails]
+  )
   const stopMouseDown = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
   }, [])
@@ -370,6 +385,27 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             place. State belongs in the leading gutter; repeating it here as
             text makes interrupted rows look like the old badge treatment. */}
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {onOpenDetails ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleOpenDetails}
+                  onMouseDown={stopMouseDown}
+                  onKeyDown={stopKeyDown}
+                  aria-label="Open Claude workflow details"
+                  className="opacity-0 transition-opacity duration-150 group-hover/agent-row:opacity-100 focus-visible:opacity-100"
+                >
+                  <PanelRightOpen className="size-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                Details
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           {/* Why: timestamp and dismiss-X share a single slot so passive
               rows show "time ago" and hovered rows swap in the X — no
               reserved-space gap, no competing columns. Grid stacks both

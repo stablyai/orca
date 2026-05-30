@@ -65,6 +65,7 @@ import {
 import { DictationController } from './components/dictation/DictationController'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
+import ClaudeWorkflowDetailPanel from './components/claude-workflow/ClaudeWorkflowDetailPanel'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
@@ -1811,6 +1812,7 @@ function App(): React.JSX.Element {
           ) : null}
           <DictationController />
           <RecentTabSwitcher />
+          <ClaudeWorkflowDetailPanel />
         </ConfirmationDialogProvider>
       </TooltipProvider>
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />

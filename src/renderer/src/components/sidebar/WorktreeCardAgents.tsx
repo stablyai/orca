@@ -10,6 +10,8 @@ import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/da
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { dismissStaleAgentRowByKey } from '../terminal-pane/stale-agent-row'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
+import { getConnectionId } from '@/lib/connection-context'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
 
 type Props = {
   worktreeId: string
@@ -119,6 +121,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
+  const openClaudeWorkflowDetail = useAppStore((s) => s.openClaudeWorkflowDetail)
 
   // Why: subscribe to the ack map reference (Object.is equality) and derive
   // per-agent unvisited flags locally. Keeps the inline list's bold/mute
@@ -182,6 +185,33 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       }
     },
     [worktreeId]
+  )
+
+  const handleOpenClaudeDetails = useCallback(
+    (agent: DashboardAgentRowData) => {
+      const connectionId = getConnectionId(worktreeId)
+      const parsedWorktree = splitWorktreeIdForFilesystem(worktreeId)
+      if (connectionId === undefined || !parsedWorktree) {
+        return
+      }
+      openClaudeWorkflowDetail({
+        paneKey: agent.paneKey,
+        worktreeId,
+        connectionId,
+        worktreePath: parsedWorktree.worktreePath,
+        state: agent.state,
+        prompt: agent.entry.prompt,
+        updatedAt: agent.entry.updatedAt,
+        stateStartedAt: agent.entry.stateStartedAt,
+        stateHistory: agent.entry.stateHistory,
+        agentType: agent.agentType,
+        terminalTitle: agent.entry.terminalTitle,
+        orchestration: agent.entry.orchestration,
+        selectors: agent.entry.claudeWorkflow,
+        tabTitle: agent.tab.title
+      })
+    },
+    [openClaudeWorkflowDetail, worktreeId]
   )
 
   // Why: own one 30s tick per non-empty inline list. Cards with zero agents
@@ -273,6 +303,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           // are pinned to a fixed left offset that doesn't match the
           // chevron-shifted column and read as floating fragments.
           hideLineageConnectors
+          onOpenDetails={agent.agentType === 'claude' ? handleOpenClaudeDetails : undefined}
         />
         {hasChildAgents && expanded
           ? childAgents.map((childAgent) =>

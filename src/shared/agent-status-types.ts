@@ -1,3 +1,5 @@
+import type { ClaudeWorkflowFileSelectors } from './claude-workflow-detail'
+
 // ─── Explicit agent status (reported via native agent hooks → IPC) ──────────
 // These types define the normalized status that Orca receives from Claude,
 // Codex, and other explicit integrations. Agent state normally comes from
@@ -103,6 +105,9 @@ export type AgentStatusEntry = {
    *  Why: parent/child agent hierarchy is pane-level state, not worktree
    *  lineage; workers often run in the same worktree as their coordinator. */
   orchestration?: AgentStatusOrchestrationContext
+  /** Lightweight file selectors for lazy Claude workflow inspection. Payload
+   *  bodies are intentionally read through the detail IPC only. */
+  claudeWorkflow?: ClaudeWorkflowFileSelectors
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -130,6 +135,7 @@ export type AgentStatusPayload = {
   toolInput?: string
   lastAssistantMessage?: string
   interrupted?: boolean
+  claudeWorkflow?: ClaudeWorkflowFileSelectors
 }
 
 /**
@@ -161,6 +167,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext
+  claudeWorkflow?: ClaudeWorkflowFileSelectors
 }
 
 /** Maximum character length for the prompt field. Truncated on parse. */
@@ -259,6 +266,31 @@ function normalizeOptionalField(value: unknown, maxLength: number): string | und
   return normalized.length > 0 ? normalized : undefined
 }
 
+function normalizeClaudeWorkflowSelectors(value: unknown): ClaudeWorkflowFileSelectors | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined
+  }
+  const record = value as Record<string, unknown>
+  const selectors: ClaudeWorkflowFileSelectors = {}
+  const transcriptPath = normalizeOptionalField(record.transcriptPath, 4096)
+  const scriptPath = normalizeOptionalField(record.scriptPath, 4096)
+  const cwd = normalizeOptionalField(record.cwd, 4096)
+  const sessionId = normalizeOptionalField(record.sessionId, 512)
+  if (transcriptPath) {
+    selectors.transcriptPath = transcriptPath
+  }
+  if (scriptPath) {
+    selectors.scriptPath = scriptPath
+  }
+  if (cwd) {
+    selectors.cwd = cwd
+  }
+  if (sessionId) {
+    selectors.sessionId = sessionId
+  }
+  return Object.keys(selectors).length > 0 ? selectors : undefined
+}
+
 function normalizeOptionalMultilineField(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') {
     return undefined
@@ -306,7 +338,8 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     ),
     // Why: only meaningful on `done`. Coerce to undefined on other states so
     // the field doesn't leak stale truth through state transitions.
-    interrupted: obj.interrupted === true && state === 'done' ? true : undefined
+    interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
+    claudeWorkflow: normalizeClaudeWorkflowSelectors(obj.claudeWorkflow)
   }
 }
 

@@ -283,6 +283,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // worker completes and the active dispatch closes. Preserve the last
           // known parent-child link so done/retained rows stay grouped.
           orchestration: payload.orchestration ?? existing?.orchestration,
+          claudeWorkflow: payload.claudeWorkflow ?? existing?.claudeWorkflow,
           // Why: interrupted lives on `done` only. parseAgentStatusPayload
           // already clamps it to `undefined` for non-done states, so writing
           // the field through directly preserves truth for done and resets

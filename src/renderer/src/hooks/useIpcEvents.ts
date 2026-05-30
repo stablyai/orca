@@ -2062,7 +2062,8 @@ export function useIpcEvents(): void {
         toolName: data.toolName,
         toolInput: data.toolInput,
         lastAssistantMessage: data.lastAssistantMessage,
-        interrupted: data.interrupted
+        interrupted: data.interrupted,
+        claudeWorkflow: data.claudeWorkflow
       })
       if (!payload) {
         return 'dropped'

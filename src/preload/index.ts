@@ -109,6 +109,10 @@ import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
+import type {
+  ClaudeWorkflowDetail,
+  ClaudeWorkflowDetailRequest
+} from '../shared/claude-workflow-detail'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type {
   SpeechErrorEvent,
@@ -3333,6 +3337,11 @@ const api = {
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)
     }
+  },
+
+  claudeWorkflows: {
+    getDetail: (request: ClaudeWorkflowDetailRequest): Promise<ClaudeWorkflowDetail> =>
+      ipcRenderer.invoke('claudeWorkflows:getDetail', request)
   },
 
   speech: {

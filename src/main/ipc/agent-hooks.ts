@@ -1,11 +1,14 @@
 import { ipcMain } from 'electron'
+import type { Store } from '../persistence'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../../shared/agent-status-types'
+import type { ClaudeWorkflowDetailRequest } from '../../shared/claude-workflow-detail'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
+import { getClaudeWorkflowDetail } from '../claude-workflow-detail-reader'
 import { ampHookService } from '../amp/hook-service'
 import {
   clearMigrationUnsupportedPtysForPaneKey,
@@ -27,7 +30,7 @@ import { openClaudeHookService } from '../openclaude/hook-service'
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
 // renderer-triggered remove would be silently reverted on the next launch
 // and mislead the user.
-export function registerAgentHookHandlers(): void {
+export function registerAgentHookHandlers(store?: Store): void {
   // Why: matches the defensive pattern in src/main/ipc/pty.ts so re-registration
   // never throws "Attempted to register a second handler..." if this function is
   // ever invoked more than once (e.g. the macOS app re-activation path that
@@ -49,6 +52,7 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
+  ipcMain.removeHandler('claudeWorkflows:getDetail')
   // Why: agentStatus:drop is sent fire-and-forget from the renderer via
   // ipcRenderer.send(); we listen with ipcMain.on (not handle) so we don't
   // round-trip a response. Removing first keeps re-registration safe even
@@ -84,6 +88,15 @@ export function registerAgentHookHandlers(): void {
     'agentStatus:getMigrationUnsupportedSnapshot',
     (): MigrationUnsupportedPtyEntry[] => getMigrationUnsupportedPtySnapshot()
   )
+  ipcMain.handle('claudeWorkflows:getDetail', async (_event, request: unknown) => {
+    if (!store) {
+      throw new Error('Claude workflow detail store is unavailable.')
+    }
+    if (typeof request !== 'object' || request === null) {
+      throw new Error('Invalid Claude workflow detail request.')
+    }
+    return getClaudeWorkflowDetail(store, (request as ClaudeWorkflowDetailRequest).target)
+  })
 
   // Why: errors from getStatus() (fs permission denied, homedir resolution
   // failure, etc.) must be reported inline via state:'error' so the sidebar can
