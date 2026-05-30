@@ -507,26 +507,16 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
 // renderer (agent-ready-wait, new-workspace). A bare shell is the only process
 // type that garbles injected preambles, so this is the negative signal for
 // "is an agent running".
-const SHELL_NAMES = new Set([
-  '',
-  'bash',
-  'zsh',
-  'sh',
-  'fish',
-  'cmd',
-  'cmd.exe',
-  'powershell',
-  'powershell.exe',
-  'pwsh',
-  'pwsh.exe',
-  'nu'
-])
+const SHELL_NAMES = new Set(
+  '|bash|zsh|sh|fish|cmd|cmd.exe|powershell|powershell.exe|pwsh|pwsh.exe|nu'.split('|')
+)
 
 export function isShellProcess(processName: string): boolean {
   const normalized = processName
     .trim()
     .replace(/^["']|["']$/g, '')
     .toLowerCase()
-  const basename = normalized.split(/[\\/]/).pop() ?? normalized
-  return SHELL_NAMES.has(normalized) || SHELL_NAMES.has(basename)
+  return (
+    SHELL_NAMES.has(normalized) || SHELL_NAMES.has(normalized.split(/[\\/]/).pop() ?? normalized)
+  )
 }

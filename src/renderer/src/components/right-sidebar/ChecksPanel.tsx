@@ -168,7 +168,14 @@ export default function ChecksPanel(): React.JSX.Element {
     }
   }, [])
 
-  useEffect(() => clearTitleInputFocusTimer, [clearTitleInputFocusTimer])
+  const setChecksPanelContentRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node === null) {
+        clearTitleInputFocusTimer()
+      }
+    },
+    [clearTitleInputFocusTimer]
+  )
 
   // Why: the sidebar no longer uses key={activeWorktreeId} to force a full
   // remount on worktree switch (that caused an IPC storm on Windows). Reset
@@ -1585,7 +1592,7 @@ export default function ChecksPanel(): React.JSX.Element {
   }
 
   return (
-    <div className="flex-1 overflow-auto scrollbar-sleek">
+    <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {/* PR Header */}
       <div className="px-3 py-3 border-b border-border space-y-2.5">
         {/* PR number + state badge + refresh + open link */}
