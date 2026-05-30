@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import { Check, Copy, Share2 } from 'lucide-react'
 import { Button } from '../ui/button'
@@ -29,7 +29,14 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
     }
   }, [])
 
-  useEffect(() => clearCopiedResetTimer, [clearCopiedResetTimer])
+  const setShareButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (node === null) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
 
   const captureToClipboard = useCallback(async () => {
     if (!cardRef.current || capturing) {
@@ -108,7 +115,12 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
         <Tooltip>
           <TooltipTrigger asChild>
             <DialogTrigger asChild>
-              <Button variant="ghost" size="icon-xs" aria-label="Share usage">
+              <Button
+                ref={setShareButtonRef}
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Share usage"
+              >
                 <Share2 className="size-3.5" />
               </Button>
             </DialogTrigger>
