@@ -459,6 +459,7 @@ export default function MarkdownPreview({
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const [reviewPanelOpen, setReviewPanelOpen] = useState(false)
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
+  const reviewNotesCopiedResetTimerRef = useRef<number | null>(null)
   const [activeReviewCommentId, setActiveReviewCommentId] = useState<string | null>(null)
   const markdownReviewNotes = useMemo(
     () => sortMarkdownReviewNotes(markdownComments as MarkdownReviewNote[]),
@@ -579,6 +580,13 @@ export default function MarkdownPreview({
     setIsSearchOpen(false)
     setQuery('')
     setActiveMatchIndex(-1)
+  }, [])
+
+  const clearReviewNotesCopiedResetTimer = useCallback((): void => {
+    if (reviewNotesCopiedResetTimerRef.current !== null) {
+      window.clearTimeout(reviewNotesCopiedResetTimerRef.current)
+      reviewNotesCopiedResetTimerRef.current = null
+    }
   }, [])
 
   const scrollToAnchor = useCallback((rawAnchor: string): boolean => {
@@ -716,19 +724,16 @@ export default function MarkdownPreview({
     }
     try {
       await window.api.ui.writeClipboardText(markdownReviewPrompt)
+      clearReviewNotesCopiedResetTimer()
       setReviewNotesCopied(true)
+      reviewNotesCopiedResetTimerRef.current = window.setTimeout(() => {
+        reviewNotesCopiedResetTimerRef.current = null
+        setReviewNotesCopied(false)
+      }, 1600)
     } catch {
       // Best-effort clipboard action; failures usually mean the window is not focused.
     }
-  }, [markdownReviewNotes.length, markdownReviewPrompt])
-
-  useEffect(() => {
-    if (!reviewNotesCopied) {
-      return
-    }
-    const timeout = window.setTimeout(() => setReviewNotesCopied(false), 1600)
-    return () => window.clearTimeout(timeout)
-  }, [reviewNotesCopied])
+  }, [clearReviewNotesCopiedResetTimer, markdownReviewNotes.length, markdownReviewPrompt])
 
   const scrollToReviewNote = useCallback((comment: DiffComment): void => {
     setActiveReviewCommentId(comment.id)
