@@ -15,6 +15,7 @@ type TerminalFileOpenDeps = {
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId?: string | null
+  openWithSystemDefault?: boolean
 }
 
 export function isHtmlFilePath(filePath: string): boolean {
@@ -89,17 +90,17 @@ export function openDetectedFilePath(
   column: number | null,
   deps: TerminalFileOpenDeps
 ): void {
-  const { runtimeEnvironmentId, worktreeId, worktreePath } = deps
+  const { openWithSystemDefault = false, runtimeEnvironmentId, worktreeId, worktreePath } = deps
   const requestId = ++latestOpenDetectedFilePathRequestId
   cancelPendingEditorRevealFrames()
 
   void (async () => {
     let statResult
     const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
-    const opensWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, filePath)
+    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, filePath)
     try {
       // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
-      if (opensWithSystemDefault) {
+      if (canOpenWithSystemDefault) {
         await window.api.fs.authorizeExternalPath({ targetPath: filePath })
       }
       statResult = await statRuntimePath(fileContext, filePath)
@@ -111,9 +112,9 @@ export function openDetectedFilePath(
       return
     }
 
-    if (opensWithSystemDefault) {
-      // Why: local terminal file links should honor the user's OS file
-      // associations without adding editor-specific settings in Orca.
+    if (openWithSystemDefault && canOpenWithSystemDefault) {
+      // Why: Shift+Cmd/Ctrl mirrors URL links by escaping Orca and honoring the
+      // user's OS file associations without adding editor-specific settings.
       const openedWithSystemDefault = await window.api.shell.openFilePath(filePath)
       if (openedWithSystemDefault || statResult.isDirectory) {
         return
@@ -121,11 +122,14 @@ export function openDetectedFilePath(
     }
 
     if (statResult.isDirectory) {
+      if (canOpenWithSystemDefault) {
+        await window.api.shell.openFilePath(filePath)
+      }
       return
     }
 
-    // Why: if the OS default opener fails for a local HTML file, Orca's browser
-    // fallback still renders the page instead of dumping HTML source in Monaco.
+    // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,
+    // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
     if (
       isHtmlFilePath(filePath) &&
       shouldOpenTerminalFileWithSystemDefault(fileContext, filePath)

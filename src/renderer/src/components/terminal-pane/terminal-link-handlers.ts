@@ -77,21 +77,20 @@ function isMacPlatform(): boolean {
 
 export function getTerminalFileOpenHint(): string {
   return isMacPlatform()
-    ? '⌘+click to open with default app'
-    : 'Ctrl+click to open with default app'
+    ? '⌘+click to open or ⇧⌘+click for default app'
+    : 'Ctrl+click to open or Shift+Ctrl+click for default app'
 }
 
 export function getTerminalOrcaFileOpenHint(): string {
   return isMacPlatform() ? '⌘+click to open in Orca' : 'Ctrl+click to open in Orca'
 }
 
-// Why: local .html/.htm links now use the OS default browser through the same
-// native path as other local files; naming that in the hover hint mirrors the
-// existing URL-link tooltip.
+// Why: local .html/.htm links keep the ordinary Orca browser route, with the
+// same Shift+modifier escape hatch to the system default browser as URL links.
 export function getTerminalHtmlFileOpenHint(): string {
   return isMacPlatform()
-    ? '⌘+click to open in default browser'
-    : 'Ctrl+click to open in default browser'
+    ? '⌘+click to open or ⇧⌘+click for default browser'
+    : 'Ctrl+click to open or Shift+Ctrl+click for default browser'
 }
 
 export function getTerminalUrlOpenHint(): string {
@@ -180,18 +179,18 @@ export function createFilePathLinkProvider(
                     openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
                       worktreeId,
                       worktreePath,
-                      runtimeEnvironmentId
+                      runtimeEnvironmentId,
+                      openWithSystemDefault: Boolean(event.shiftKey)
                     })
                   },
                   hover: () => {
-                    // Why: local HTML opens through the OS default handler, while
-                    // remote file links stay inside Orca because they may not exist
-                    // on the user's local filesystem.
-                    const opensWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
+                    // Why: only local paths can offer the Shift+modifier system
+                    // default escape hatch; remote paths may not exist locally.
+                    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
                       fileContext,
                       resolved.absolutePath
                     )
-                    const hint = opensWithSystemDefault
+                    const hint = canOpenWithSystemDefault
                       ? isHtmlFilePath(resolved.absolutePath)
                         ? getTerminalHtmlFileOpenHint()
                         : openLinkHint
@@ -290,7 +289,8 @@ export function installFilePathLinkClickFallback(
         worktreeId: deps.worktreeId,
         worktreePath: deps.worktreePath,
         runtimeEnvironmentId,
-        pathExistsCache: deps.pathExistsCache
+        pathExistsCache: deps.pathExistsCache,
+        openWithSystemDefault: Boolean(event.shiftKey)
       }
     )
     if (opened) {

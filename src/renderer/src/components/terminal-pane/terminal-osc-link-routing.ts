@@ -40,7 +40,10 @@ export function handleOscLink(
       deps.terminalHomePath
     )
     if (resolved) {
-      openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, deps)
+      openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
+        ...deps,
+        openWithSystemDefault: Boolean(event?.shiftKey)
+      })
     }
     return
   }
@@ -67,6 +70,9 @@ export function handleOscLink(
     if (!resolved) {
       return
     }
-    openDetectedFilePath(resolved.filePath, resolved.line, resolved.column, deps)
+    openDetectedFilePath(resolved.filePath, resolved.line, resolved.column, {
+      ...deps,
+      openWithSystemDefault: Boolean(event?.shiftKey)
+    })
   }
 }
