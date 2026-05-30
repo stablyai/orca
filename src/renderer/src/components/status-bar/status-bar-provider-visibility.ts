@@ -1,5 +1,14 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
+function hasUsageData(provider: ProviderRateLimits): boolean {
+  return Boolean(
+    provider.session ||
+    provider.weekly ||
+    provider.monthly ||
+    (provider.buckets && provider.buckets.length > 0)
+  )
+}
+
 // Why: a provider that returns `unavailable` is explicitly not configured
 // (Gemini OAuth off, OpenCode Go cookie unset, Claude on API-key billing). Its
 // fetch object is non-null, so a bare `!== null` check still renders a "--"
@@ -9,5 +18,11 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 export function isProviderConfigured(
   provider: ProviderRateLimits | null
 ): provider is ProviderRateLimits {
-  return provider !== null && provider.status !== 'unavailable'
+  if (provider === null || provider.status === 'unavailable') {
+    return false
+  }
+  if (provider.status === 'fetching' && !hasUsageData(provider)) {
+    return false
+  }
+  return true
 }

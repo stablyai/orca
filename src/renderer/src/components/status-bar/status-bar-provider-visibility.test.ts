@@ -5,14 +5,18 @@ import type {
 } from '../../../../shared/rate-limit-types'
 import { isProviderConfigured } from './status-bar-provider-visibility'
 
-function provider(status: ProviderRateLimitStatus): ProviderRateLimits {
+function provider(
+  status: ProviderRateLimitStatus,
+  overrides: Partial<ProviderRateLimits> = {}
+): ProviderRateLimits {
   return {
     provider: 'gemini',
     session: null,
     weekly: null,
     updatedAt: 0,
     error: null,
-    status
+    status,
+    ...overrides
   }
 }
 
@@ -28,10 +32,27 @@ describe('isProviderConfigured', () => {
     expect(isProviderConfigured(provider('unavailable'))).toBe(false)
   })
 
+  it('hides a first-load fetching provider until it has proven usage data', () => {
+    // The initial fetch marks every provider as `fetching`; without prior data
+    // that state is not proof the user configured Gemini or OpenCode Go.
+    expect(isProviderConfigured(provider('fetching'))).toBe(false)
+  })
+
   it('shows configured providers, including ones failing transiently', () => {
     expect(isProviderConfigured(provider('ok'))).toBe(true)
     expect(isProviderConfigured(provider('error'))).toBe(true)
-    expect(isProviderConfigured(provider('fetching'))).toBe(true)
+    expect(
+      isProviderConfigured(
+        provider('fetching', {
+          session: {
+            usedPercent: 25,
+            windowMinutes: 300,
+            resetsAt: null,
+            resetDescription: null
+          }
+        })
+      )
+    ).toBe(true)
     expect(isProviderConfigured(provider('idle'))).toBe(true)
   })
 })
