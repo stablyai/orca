@@ -112,6 +112,10 @@ describe('commandExecFileAsync Windows command shims', () => {
         expect.objectContaining({ stdio: 'ignore', windowsHide: true })
       )
       expect(command.kill).not.toHaveBeenCalled()
+      expect(command.stdout.listenerCount('data')).toBe(0)
+      expect(command.stderr.listenerCount('data')).toBe(0)
+      expect(command.listenerCount('error')).toBe(0)
+      expect(command.listenerCount('close')).toBe(0)
     })
   })
 
@@ -137,6 +141,30 @@ describe('commandExecFileAsync Windows command shims', () => {
         expect.objectContaining({ stdio: 'ignore', windowsHide: true })
       )
       expect(command.kill).not.toHaveBeenCalled()
+      expect(command.stdout.listenerCount('data')).toBe(0)
+      expect(command.stderr.listenerCount('data')).toBe(0)
+      expect(command.listenerCount('error')).toBe(0)
+      expect(command.listenerCount('close')).toBe(0)
+    })
+  })
+
+  it('removes listeners after successful Windows .cmd shim executions', async () => {
+    await withPlatform('win32', async () => {
+      const command = createMockChildProcess(1234)
+      spawnMock.mockReturnValue(command)
+
+      const promise = commandExecFileAsync('C:\\tools\\pnpm.cmd', ['--version'], {
+        cwd: 'C:\\repo'
+      })
+      command.stdout.emit('data', Buffer.from('9.1.0\n'))
+      command.stderr.emit('data', Buffer.from('notice\n'))
+      command.emit('close', 0)
+
+      await expect(promise).resolves.toEqual({ stdout: '9.1.0\n', stderr: 'notice\n' })
+      expect(command.stdout.listenerCount('data')).toBe(0)
+      expect(command.stderr.listenerCount('data')).toBe(0)
+      expect(command.listenerCount('error')).toBe(0)
+      expect(command.listenerCount('close')).toBe(0)
     })
   })
 })

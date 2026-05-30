@@ -6,6 +6,7 @@ const {
   askForMediaAccessMock,
   getMediaAccessStatusMock,
   isTrustedAccessibilityClientMock,
+  execFileMock,
   createSocketMock,
   socketMock,
   socketState
@@ -27,6 +28,7 @@ const {
     askForMediaAccessMock: vi.fn(),
     getMediaAccessStatusMock: vi.fn(),
     isTrustedAccessibilityClientMock: vi.fn(),
+    execFileMock: vi.fn(),
     createSocketMock: vi.fn(() => socketMock),
     socketMock,
     socketState
@@ -53,6 +55,10 @@ vi.mock('node:dgram', () => ({
   }
 }))
 
+vi.mock('node:child_process', () => ({
+  execFile: execFileMock
+}))
+
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
 
 describe('registerDeveloperPermissionHandlers', () => {
@@ -66,6 +72,15 @@ describe('registerDeveloperPermissionHandlers', () => {
     askForMediaAccessMock.mockReset()
     getMediaAccessStatusMock.mockReset()
     isTrustedAccessibilityClientMock.mockReset()
+    execFileMock.mockReset()
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      const callback = args.at(-1)
+      if (typeof callback === 'function') {
+        const execCallback = callback as () => void
+        execCallback()
+      }
+      return { kill: vi.fn() }
+    })
     createSocketMock.mockClear()
     socketState.sendCallback = null
     socketMock.on.mockClear()
@@ -121,5 +136,28 @@ describe('registerDeveloperPermissionHandlers', () => {
     expect(vi.getTimerCount()).toBe(0)
     expect(socketMock.removeListener).toHaveBeenCalledWith('error', expect.any(Function))
     expect(socketMock.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('settles the automation prompt when osascript hangs', async () => {
+    const killMock = vi.fn()
+    execFileMock.mockImplementation(() => ({ kill: killMock }))
+    registerDeveloperPermissionHandlers()
+
+    const result = getRequestHandler()({}, { id: 'automation' })
+    let settled = false
+    void result.finally(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(3_000)
+    await Promise.resolve()
+
+    expect(settled).toBe(true)
+    await expect(result).resolves.toEqual({
+      id: 'automation',
+      status: 'unknown',
+      openedSystemSettings: false
+    })
+    expect(killMock).toHaveBeenCalled()
   })
 })

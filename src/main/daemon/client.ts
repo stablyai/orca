@@ -214,6 +214,29 @@ export class DaemonClient {
       }
 
       let buffer = ''
+      let settled = false
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const cleanup = (): void => {
+        if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
+        socket.removeListener('data', onData)
+        socket.removeListener('error', onError)
+        socket.removeListener('close', onClose)
+      }
+      const finish = (error?: Error): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve()
+      }
       const onData = (chunk: Buffer): void => {
         buffer += chunk.toString()
         const newlineIdx = buffer.indexOf('\n')
@@ -221,23 +244,33 @@ export class DaemonClient {
           return
         }
 
-        socket.removeListener('data', onData)
         const line = buffer.slice(0, newlineIdx)
         try {
           const response = JSON.parse(line) as HelloResponse
           if (response.ok) {
-            resolve()
+            finish()
           } else {
-            reject(
+            finish(
               new DaemonProtocolError(addNodePtyRecoveryHint(response.error ?? 'Hello rejected'))
             )
           }
         } catch {
-          reject(new DaemonProtocolError('Invalid hello response'))
+          finish(new DaemonProtocolError('Invalid hello response'))
         }
       }
+      const onError = (error: Error): void => finish(error)
+      const onClose = (): void =>
+        finish(new DaemonProtocolError('Connection closed before hello response'))
 
+      timer = setTimeout(() => {
+        // Why: a stale daemon can accept the socket but never answer hello;
+        // without a handshake timeout, startup waits forever on ensureConnected().
+        finish(new DaemonProtocolError('Hello response timed out'))
+        socket.destroy()
+      }, CONNECT_TIMEOUT_MS)
       socket.on('data', onData)
+      socket.on('error', onError)
+      socket.on('close', onClose)
       socket.write(encodeNdjson(hello))
     })
   }

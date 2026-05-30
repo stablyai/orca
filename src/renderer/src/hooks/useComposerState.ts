@@ -212,6 +212,7 @@ export type UseComposerStateResult = {
   /** Ref the consumer should attach to the composer wrapper so the global
    *  Enter-to-submit handler can scope its behavior to the visible composer. */
   composerRef: React.RefObject<HTMLDivElement | null>
+  onComposerNodeChange: (node: HTMLDivElement | null) => void
   promptTextareaRef: React.RefObject<HTMLTextAreaElement | null>
   nameInputRef: React.RefObject<HTMLInputElement | null>
   submit: () => Promise<void>
@@ -514,7 +515,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     promptCaretFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelPromptCaretFrame, [cancelPromptCaretFrame])
+  const handleComposerNodeChange = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued caret restoration targets composer descendants and
+      // must be canceled as soon as the composer root leaves the DOM.
+      if (!node) {
+        cancelPromptCaretFrame()
+      }
+    },
+    [cancelPromptCaretFrame]
+  )
 
   const hookCheckRef = useRef<{
     key: string
@@ -2329,6 +2339,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   return {
     cardProps,
     composerRef,
+    onComposerNodeChange: handleComposerNodeChange,
     promptTextareaRef,
     nameInputRef,
     submit,

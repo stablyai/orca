@@ -194,11 +194,10 @@ export default function SmartWorkspaceNameField({
   const [linearLoading, setLinearLoading] = useState(false)
   const [commandValue, setCommandValue] = useState('')
   const localInputRef = useRef<HTMLInputElement | null>(null)
-  const selectedSourceRef = useRef<HTMLDivElement | null>(null)
+  const focusedSelectedSourceKeyRef = useRef<string | null>(null)
   const tabsListRef = useRef<HTMLDivElement | null>(null)
   const repoSlugCacheRef = useRef<Map<string, RepoSlug | null>>(new Map())
   const handledCrossRepoUrlRef = useRef<string | null>(null)
-  const selectedSourceFocusFrameRef = useRef<number | null>(null)
   const localInputFocusFrameRef = useRef<number | null>(null)
   const [crossRepoPrompt, setCrossRepoPrompt] = useState<{
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
@@ -240,14 +239,28 @@ export default function SmartWorkspaceNameField({
     },
     [inputRef]
   )
-
-  const cancelSelectedSourceFocusFrame = useCallback((): void => {
-    if (selectedSourceFocusFrameRef.current === null) {
-      return
-    }
-    cancelAnimationFrame(selectedSourceFocusFrameRef.current)
-    selectedSourceFocusFrameRef.current = null
-  }, [])
+  const selectedSourceFocusKey = selectedSource
+    ? `${selectedSource.kind}:${selectedSource.label}:${selectedSource.url ?? ''}`
+    : null
+  const setSelectedSourceNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) {
+        focusedSelectedSourceKeyRef.current = null
+        return
+      }
+      if (
+        !selectedSourceFocusKey ||
+        focusedSelectedSourceKeyRef.current === selectedSourceFocusKey
+      ) {
+        return
+      }
+      focusedSelectedSourceKeyRef.current = selectedSourceFocusKey
+      // Why: after Enter accepts a source row, the input unmounts. Move focus
+      // to the pill immediately so the next Enter advances to Agent.
+      node.focus({ preventScroll: true })
+    },
+    [selectedSourceFocusKey]
+  )
 
   const cancelLocalInputFocusFrame = useCallback((): void => {
     if (localInputFocusFrameRef.current === null) {
@@ -257,13 +270,7 @@ export default function SmartWorkspaceNameField({
     localInputFocusFrameRef.current = null
   }, [])
 
-  useEffect(
-    () => () => {
-      cancelSelectedSourceFocusFrame()
-      cancelLocalInputFocusFrame()
-    },
-    [cancelLocalInputFocusFrame, cancelSelectedSourceFocusFrame]
-  )
+  useEffect(() => cancelLocalInputFocusFrame, [cancelLocalInputFocusFrame])
 
   useEffect(() => {
     if (disabled || textOnly) {
@@ -328,20 +335,6 @@ export default function SmartWorkspaceNameField({
     const timer = window.setTimeout(() => setDebouncedQuery(value), SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [value])
-
-  useEffect(() => {
-    if (selectedSource) {
-      setOpen(false)
-      // Why: after Enter accepts a PR/issue row, the input unmounts. Keep the
-      // keyboard flow on the source field so the next Enter advances to Agent.
-      cancelSelectedSourceFocusFrame()
-      selectedSourceFocusFrameRef.current = requestAnimationFrame(() => {
-        selectedSourceFocusFrameRef.current = null
-        selectedSourceRef.current?.focus({ preventScroll: true })
-      })
-    }
-    return cancelSelectedSourceFocusFrame
-  }, [cancelSelectedSourceFocusFrame, selectedSource])
 
   const normalizedGhQuery = useMemo(
     () => normalizeGitHubLinkQuery(debouncedQuery),
@@ -916,7 +909,7 @@ export default function SmartWorkspaceNameField({
         onValueChange={(next) => {
           const nextMode = next as SmartNameMode
           setMode(nextMode)
-          setOpen(!disabled && nextMode !== 'text')
+          setOpen(!disabled && nextMode !== 'text' && selectedSource === null)
           cancelLocalInputFocusFrame()
           localInputFocusFrameRef.current = requestAnimationFrame(() => {
             localInputFocusFrameRef.current = null
@@ -966,8 +959,8 @@ export default function SmartWorkspaceNameField({
       </Tabs>
 
       <Popover
-        open={!disabled && open && mode !== 'text'}
-        onOpenChange={(next) => setOpen(disabled ? false : next)}
+        open={!disabled && open && mode !== 'text' && selectedSource === null}
+        onOpenChange={(next) => setOpen(disabled || selectedSource ? false : next)}
       >
         <Command
           value={commandValue}
@@ -983,7 +976,7 @@ export default function SmartWorkspaceNameField({
                 // min-content (long PR title) propagates up and pushes the
                 // dialog wider than its max-w.
                 <div
-                  ref={selectedSourceRef}
+                  ref={setSelectedSourceNode}
                   tabIndex={0}
                   onKeyDown={(event) => {
                     if (

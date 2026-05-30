@@ -739,6 +739,10 @@ const api = {
       ipcRenderer.send('pty:ackColdRestore', { id })
     },
 
+    pauseOutput: (id: string, paused: boolean): void => {
+      ipcRenderer.send('pty:pauseOutput', { id, paused })
+    },
+
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
 

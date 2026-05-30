@@ -8,9 +8,6 @@ export const NATIVE_FILE_DROP_TARGET = {
   projectSidebar: 'project-sidebar'
 } as const
 
-export type NativeFileDropTarget =
-  (typeof NATIVE_FILE_DROP_TARGET)[keyof typeof NATIVE_FILE_DROP_TARGET]
-
 export type NativeDropResolution =
   | { target: typeof NATIVE_FILE_DROP_TARGET.editor }
   | { target: typeof NATIVE_FILE_DROP_TARGET.terminal; tabId?: string }
@@ -36,7 +33,7 @@ export type NativeFileDropPathEntry = {
   terminalTabId?: string
 }
 
-export function getDataTransferTypes(
+function getDataTransferTypes(
   types: Iterable<string> | ArrayLike<string> | null | undefined
 ): string[] {
   return types ? Array.from(types) : []

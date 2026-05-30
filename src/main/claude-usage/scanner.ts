@@ -665,14 +665,6 @@ export async function scanClaudeUsageFiles(
   }
 }
 
-export function getClaudeProjectsDirectory(): string {
-  return CLAUDE_PROJECTS_DIR
-}
-
-export function getClaudeTranscriptsDirectory(): string {
-  return CLAUDE_TRANSCRIPTS_DIR
-}
-
 export function createWorktreeRefs(
   repos: Repo[],
   worktreesByRepo: Map<string, { path: string; worktreeId: string; displayName: string }[]>

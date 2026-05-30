@@ -236,16 +236,6 @@ function Terminal(): React.JSX.Element | null {
     closeDialogDebounceTimersRef.current.add(timer)
   }, [])
 
-  useEffect(() => {
-    const timers = closeDialogDebounceTimersRef.current
-    return () => {
-      for (const timer of timers) {
-        window.clearTimeout(timer)
-      }
-      timers.clear()
-    }
-  }, [])
-
   // Window close confirmation dialog — shown for local terminals with running
   // child processes. SSH terminals detach/persist through the relay lifecycle.
   const [windowCloseDialogOpen, setWindowCloseDialogOpen] = useState(false)
@@ -569,6 +559,7 @@ function Terminal(): React.JSX.Element | null {
   const [, setBackgroundMountRevision] = useState(0)
   useEffect(() => {
     const timers = measurableBackgroundWorktreeTimersRef.current
+    const closeDialogDebounceTimers = closeDialogDebounceTimersRef.current
     const onBackgroundMountTerminalWorktree = (event: Event): void => {
       const customEvent = event as CustomEvent<BackgroundMountTerminalWorktreeDetail>
       const worktreeId = customEvent.detail?.worktreeId
@@ -607,6 +598,12 @@ function Terminal(): React.JSX.Element | null {
         window.clearTimeout(timer)
       }
       timers.clear()
+      // Why: close-dialog debounce timers are Terminal-owned and only need
+      // unmount cleanup; keep them with the existing Terminal lifetime cleanup.
+      for (const timer of closeDialogDebounceTimers) {
+        window.clearTimeout(timer)
+      }
+      closeDialogDebounceTimers.clear()
     }
   }, [])
   // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting

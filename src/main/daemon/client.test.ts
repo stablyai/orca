@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: daemon connection, RPC, event, and disconnect behavior share one socket test harness. */
+import { EventEmitter } from 'events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type Server, type Socket } from 'net'
 import { tmpdir } from 'os'
@@ -36,6 +38,7 @@ describe('DaemonClient', () => {
   })
 
   afterEach(async () => {
+    vi.useRealTimers()
     client?.disconnect()
     await new Promise<void>((resolve) => {
       if (server?.listening) {
@@ -48,12 +51,21 @@ describe('DaemonClient', () => {
   })
 
   function startMockDaemon(opts?: {
+    closeOnConnect?: boolean
+    closeOnHello?: boolean
     onControlMessage?: (msg: unknown) => string | null
+    onHello?: (msg: HelloMessage) => void
     onStreamHello?: (msg: HelloMessage) => void
     rejectVersion?: boolean
+    suppressHelloResponse?: boolean
   }): Promise<void> {
     return new Promise((resolve) => {
       server = createServer((socket) => {
+        if (opts?.closeOnConnect) {
+          socket.destroy()
+          return
+        }
+
         let buffer = ''
         socket.on('data', (chunk) => {
           buffer += chunk.toString()
@@ -69,6 +81,14 @@ describe('DaemonClient', () => {
 
             if (msg.type === 'hello') {
               const hello = msg as HelloMessage
+              opts?.onHello?.(hello)
+              if (opts?.closeOnHello) {
+                socket.destroy()
+                return
+              }
+              if (opts?.suppressHelloResponse) {
+                return
+              }
               if (opts?.rejectVersion) {
                 socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Version mismatch' }))
                 return
@@ -126,6 +146,77 @@ describe('DaemonClient', () => {
 
     it('rejects on version mismatch', async () => {
       await startMockDaemon({ rejectVersion: true })
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await expect(client.ensureConnected()).rejects.toThrow()
+    })
+
+    it('times out when the daemon never answers hello', async () => {
+      let resolveHello: () => void = () => {}
+      const helloReceived = new Promise<void>((resolve) => {
+        resolveHello = resolve
+      })
+      await startMockDaemon({
+        suppressHelloResponse: true,
+        onHello: resolveHello
+      })
+
+      vi.useFakeTimers()
+      try {
+        client = new DaemonClient({ socketPath, tokenPath })
+        const outcomePromise = client
+          .ensureConnected()
+          .then(() => 'connected')
+          .catch((error: Error) => error.message)
+
+        await helloReceived
+        await vi.advanceTimersByTimeAsync(5000)
+        const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+        expect(outcome).toBe('Hello response timed out')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('removes hello startup listeners after timeout', async () => {
+      vi.useFakeTimers()
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      const write = vi.fn(() => true)
+      const destroy = vi.fn()
+      const socket = new EventEmitter() as Socket
+      socket.write = write as unknown as Socket['write']
+      socket.destroy = destroy as unknown as Socket['destroy']
+      const sendHello = (
+        client as unknown as {
+          sendHello(socket: Socket, token: string, role: 'control' | 'stream'): Promise<void>
+        }
+      ).sendHello.bind(client)
+
+      const promise = sendHello(socket, 'test-token-123', 'control')
+      const rejection = expect(promise).rejects.toThrow('Hello response timed out')
+      await vi.advanceTimersByTimeAsync(5000)
+
+      await rejection
+      expect(write).toHaveBeenCalledOnce()
+      expect(destroy).toHaveBeenCalledOnce()
+      expect(socket.listenerCount('data')).toBe(0)
+      expect(socket.listenerCount('error')).toBe(0)
+      expect(socket.listenerCount('close')).toBe(0)
+    })
+
+    it('rejects when the daemon closes before hello completes', async () => {
+      await startMockDaemon({ closeOnHello: true })
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await expect(client.ensureConnected()).rejects.toThrow(
+        'Connection closed before hello response'
+      )
+    })
+
+    it('rejects when the daemon closes immediately after connect', async () => {
+      await startMockDaemon({ closeOnConnect: true })
 
       client = new DaemonClient({ socketPath, tokenPath })
       await expect(client.ensureConnected()).rejects.toThrow()

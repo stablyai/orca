@@ -79,4 +79,28 @@ describe('computer sidecar client', () => {
 
     await expect(secondCall).resolves.toEqual({ supports: { screenshots: true } })
   })
+
+  it('starts a replacement sidecar after the active child errors', async () => {
+    const firstCall = callComputerSidecarCapabilities()
+    const firstRejection = expect(firstCall).rejects.toThrow('active sidecar failed')
+    const firstChild = children[0]!
+
+    firstChild.emit('error', new Error('active sidecar failed'))
+    await firstRejection
+    expect(firstChild.killed).toBe(true)
+
+    const secondCall = callComputerSidecarCapabilities()
+    void secondCall.catch(() => undefined)
+    expect(children).toHaveLength(2)
+    const secondChild = children[1]!
+    const secondRequest = secondChild.sent[0]!
+
+    secondChild.emit('message', {
+      id: secondRequest.id,
+      ok: true,
+      result: { supports: { screenshots: true } }
+    })
+
+    await expect(secondCall).resolves.toEqual({ supports: { screenshots: true } })
+  })
 })

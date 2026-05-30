@@ -144,8 +144,6 @@ export function useDiffCommentDecorator({
     scrollToZoneFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelScrollToZoneFrame, [cancelScrollToZoneFrame])
-
   const commentableLineSet = useMemo(
     () => (commentableLineNumbers ? new Set(commentableLineNumbers) : null),
     [commentableLineNumbers]

@@ -266,6 +266,14 @@ export class MacOSNativeProviderClient {
     if (this.socket !== socket) {
       return
     }
+    // Why: an active transport error makes the helper socket unreliable; the
+    // next request must reconnect instead of reusing a broken socket.
+    this.socket = null
+    this.socketBuffer = ''
+    if (!socket.destroyed) {
+      socket.destroy()
+    }
+    this.cleanupSocketDirectory()
     this.rejectPending(new RuntimeClientError('accessibility_error', error.message))
   }
   private cleanupSocketDirectory(): void {

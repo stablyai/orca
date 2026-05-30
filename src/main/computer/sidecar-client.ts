@@ -222,6 +222,10 @@ class ComputerSidecarProcess {
     if (this.child !== child) {
       return
     }
+    // Why: an active process error makes the IPC sidecar unreliable; restart
+    // on the next call instead of reusing a broken helper.
+    this.child = null
+    child.kill('SIGTERM')
     const wrapped = new RuntimeClientError('accessibility_error', error.message)
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer)

@@ -244,6 +244,49 @@ function createDefaultCollapsedSections(): Set<string> {
   return new Set(DEFAULT_COLLAPSED_SECTIONS)
 }
 
+function useCopyFeedbackState<T>(resetValue: T): [T, (value: T) => void] {
+  const [value, setValue] = useState(resetValue)
+  const resetTimerRef = useRef<number | null>(null)
+  const mountedRef = useRef(true)
+
+  const clearResetTimer = useCallback(() => {
+    if (resetTimerRef.current !== null) {
+      window.clearTimeout(resetTimerRef.current)
+      resetTimerRef.current = null
+    }
+  }, [])
+
+  // Why: copy feedback timers are event-owned, but still need unmount cleanup
+  // so delayed clipboard/timer work cannot update a destroyed component.
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      clearResetTimer()
+    }
+  }, [clearResetTimer])
+
+  const showFeedback = useCallback(
+    (nextValue: T) => {
+      if (!mountedRef.current) {
+        return
+      }
+      clearResetTimer()
+      setValue(nextValue)
+      resetTimerRef.current = window.setTimeout(() => {
+        if (!mountedRef.current) {
+          return
+        }
+        setValue(resetValue)
+        resetTimerRef.current = null
+      }, 1500)
+    },
+    [clearResetTimer, resetValue]
+  )
+
+  return [value, showFeedback]
+}
+
 function cancelSourceControlEditorRevealFrames(frameIds: React.MutableRefObject<number[]>): void {
   for (const frameId of frameIds.current) {
     cancelAnimationFrame(frameId)
@@ -1058,16 +1101,12 @@ function SourceControlInner(): React.JSX.Element {
     [diffCommentsForActive]
   )
   const [diffCommentsExpanded, setDiffCommentsExpanded] = useState(false)
-  const [diffCommentsCopied, setDiffCommentsCopied] = useState(false)
+  const [diffCommentsCopied, showDiffCommentsCopied] = useCopyFeedbackState(false)
   const [pendingDiffCommentsClear, setPendingDiffCommentsClear] =
     useState<PendingDiffCommentsClear | null>(null)
   const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
-  // Why: clipboard IPC can resolve after Source Control unmounts; skip copied
-  // feedback instead of starting a reset timer on a stale panel.
-  const diffCommentsCopyMountedRef = useRef(false)
   const setSourceControlRootRef = useCallback((node: HTMLDivElement | null) => {
     sourceControlRef.current = node
-    diffCommentsCopyMountedRef.current = node !== null
   }, [])
 
   useEffect(() => {
@@ -1080,25 +1119,12 @@ function SourceControlInner(): React.JSX.Element {
     }
     try {
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
-      if (!diffCommentsCopyMountedRef.current) {
-        return
-      }
-      setDiffCommentsCopied(true)
+      showDiffCommentsCopied(true)
     } catch {
       // Why: swallow — clipboard write can fail when the window isn't focused.
       // No dedicated error surface is warranted for a best-effort copy action.
     }
-  }, [diffCommentsForActive, diffCommentsPrompt])
-
-  // Why: auto-dismiss the "copied" indicator so the button returns to its
-  // default icon after a brief confirmation window.
-  useEffect(() => {
-    if (!diffCommentsCopied) {
-      return
-    }
-    const handle = window.setTimeout(() => setDiffCommentsCopied(false), 1500)
-    return () => window.clearTimeout(handle)
-  }, [diffCommentsCopied])
+  }, [diffCommentsForActive, diffCommentsPrompt, showDiffCommentsCopied])
 
   const pendingDiffCommentsClearCount = useMemo(() => {
     if (!pendingDiffCommentsClear || pendingDiffCommentsClear.worktreeId !== activeWorktreeId) {
@@ -6032,36 +6058,16 @@ function DiffCommentsInlineList({
     return Array.from(map.entries())
   }, [comments])
 
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  // Why: clipboard IPC can resolve after the inline notes list unmounts; skip
-  // copied feedback instead of starting a reset timer on a stale list.
-  const copiedIdMountedRef = useRef(false)
-  const setInlineDiffCommentsListRef = useCallback((node: HTMLDivElement | null) => {
-    copiedIdMountedRef.current = node !== null
-  }, [])
-
-  // Why: auto-dismiss the per-row "copied" indicator so the button returns to
-  // its default icon after a brief confirmation window. Matches the top-level
-  // Copy button's behavior.
-  useEffect(() => {
-    if (!copiedId) {
-      return
-    }
-    const handle = window.setTimeout(() => setCopiedId(null), 1500)
-    return () => window.clearTimeout(handle)
-  }, [copiedId])
+  const [copiedId, showCopiedId] = useCopyFeedbackState<string | null>(null)
 
   const handleCopyOne = useCallback(async (c: DiffComment): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(formatDiffComment(c))
-      if (!copiedIdMountedRef.current) {
-        return
-      }
-      setCopiedId(c.id)
+      showCopiedId(c.id)
     } catch {
       // Why: swallow — clipboard write can fail when the window isn't focused.
     }
-  }, [])
+  }, [showCopiedId])
 
   if (comments.length === 0) {
     return (
@@ -6072,7 +6078,7 @@ function DiffCommentsInlineList({
   }
 
   return (
-    <div ref={setInlineDiffCommentsListRef} className="bg-muted/20">
+    <div className="bg-muted/20">
       {groups.map(([filePath, list]) => (
         <div key={filePath} className="px-3 py-1.5">
           <div className="group/file flex items-center gap-1">

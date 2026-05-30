@@ -4,6 +4,7 @@ import type { RightSidebarTab } from '@/store/slices/editor'
 import type { CheckStatus } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from './right-sidebar-titlebar-drag-regions'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,7 +52,10 @@ export function TopActivityOverflowMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="relative flex h-[36px] w-8 shrink-0 items-center justify-center text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className={cn(
+            'relative flex h-[36px] w-8 shrink-0 items-center justify-center text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
+          )}
           aria-label="More sidebar tabs"
         >
           <MoreHorizontal size={16} />
@@ -109,7 +113,8 @@ export function ActivityBarButton({
         <button
           type="button"
           className={cn(
-            'relative flex shrink-0 items-center justify-center transition-colors right-sidebar-header-no-drag',
+            'relative flex shrink-0 items-center justify-center transition-colors',
+            RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
             isTop ? 'h-[36px] w-9' : 'w-10 h-10',
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}

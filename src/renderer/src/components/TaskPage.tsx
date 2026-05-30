@@ -1232,7 +1232,16 @@ function PRReviewCell({
     reviewerInputFocusFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelReviewerInputFocusFrame, [cancelReviewerInputFocusFrame])
+  const setReviewerInputNode = useCallback(
+    (node: HTMLInputElement | null): void => {
+      // Why: the queued picker focus is only valid while this input is mounted.
+      if (!node) {
+        cancelReviewerInputFocusFrame()
+      }
+      reviewerInputRef.current = node
+    },
+    [cancelReviewerInputFocusFrame]
+  )
 
   useEffect(() => {
     setLocalReviewRequests(item.reviewRequests ?? [])
@@ -1509,7 +1518,7 @@ function PRReviewCell({
         </div>
         <div className="border-b border-border/70 p-3">
           <Input
-            ref={reviewerInputRef}
+            ref={setReviewerInputNode}
             value={reviewerInput}
             onChange={(event) => setReviewerInput(event.target.value)}
             placeholder="Type or choose a user"

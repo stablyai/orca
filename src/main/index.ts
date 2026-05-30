@@ -82,7 +82,8 @@ import {
   getPtyIdForPaneKey,
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
-  registerHeadlessPtyRuntime
+  registerHeadlessPtyRuntime,
+  isRendererPtyOutputPaused
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
@@ -868,6 +869,9 @@ registerPaneKeyTeardownListener((paneKey) => {
 
 function sendSyntheticTitle(ptyId: string, data: string, options: { force?: boolean } = {}): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
+    return
+  }
+  if (options.force !== true && isRendererPtyOutputPaused(ptyId)) {
     return
   }
   // Why: repeated working-spinner frames are decorative and can arrive every

@@ -1494,6 +1494,18 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     setWorktreeDragState(WORKTREE_ROW_DRAG_INITIAL_STATE)
   }, [cancelWorktreeNativeAutoscroll, cleanupWorktreePointerDrag])
 
+  const setScrollRootRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node === null && scrollRef.current !== null) {
+        // Why: sidebar drag previews and autoscroll frames are tied to the
+        // scroll root surface; clear them before that DOM owner disappears.
+        clearWorktreeDrag()
+      }
+      scrollRef.current = node
+    },
+    [clearWorktreeDrag]
+  )
+
   const flushWorktreePointerDrag = useCallback(() => {
     const drag = worktreePointerDragRef.current
     if (!drag) {
@@ -2260,8 +2272,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [clearWorktreeDrag])
 
-  useEffect(() => () => clearWorktreeDrag(), [clearWorktreeDrag])
-
   useWorkspaceStatusDocumentDrop(
     scrollRef,
     onMoveWorktreeToStatus,
@@ -2277,7 +2287,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   return (
     <div data-worktree-sidebar-container className="relative min-h-0 flex-1">
       <div
-        ref={scrollRef}
+        ref={setScrollRootRef}
         data-worktree-sidebar
         tabIndex={0}
         role="listbox"

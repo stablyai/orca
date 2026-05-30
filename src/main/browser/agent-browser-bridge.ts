@@ -54,6 +54,7 @@ import type {
 const EXEC_TIMEOUT_MS = 90_000
 const CONSECUTIVE_TIMEOUT_LIMIT = 3
 const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
+const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
 
 type SessionState = {
   proxy: CdpWsProxy
@@ -1917,11 +1918,7 @@ export class AgentBrowserBridge {
       // across Orca restarts. A stale session ignores --cdp (already initialized) and
       // connects to the dead port. Must await close so the daemon forgets the session
       // before we pass --cdp with the new port.
-      await new Promise<void>((resolve) => {
-        execFile(this.agentBrowserBin, ['--session', sessionName, 'close'], { timeout: 3000 }, () =>
-          resolve()
-        )
-      })
+      await this.closeStaleAgentBrowserSession(sessionName)
 
       const proxy = new CdpWsProxy(wc)
       const cdpEndpoint = await proxy.start()
@@ -2095,6 +2092,40 @@ export class AgentBrowserBridge {
 
   private createPageUnavailableError(sessionName: string): BrowserError {
     return new BrowserError('browser_tab_not_found', pageUnavailableMessageForSession(sessionName))
+  }
+
+  private closeStaleAgentBrowserSession(sessionName: string): Promise<void> {
+    return new Promise((resolve) => {
+      let child: ReturnType<typeof execFile> | null = null
+      let settled = false
+
+      const finish = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timeout)
+        resolve()
+      }
+
+      // Why: this is best-effort daemon cleanup before creating a fresh session;
+      // a wedged close command must not block the real browser action.
+      const timeout = setTimeout(() => {
+        child?.kill()
+        finish()
+      }, STALE_SESSION_CLOSE_TIMEOUT_MS)
+
+      try {
+        child = execFile(
+          this.agentBrowserBin,
+          ['--session', sessionName, 'close'],
+          { timeout: STALE_SESSION_CLOSE_TIMEOUT_MS },
+          finish
+        )
+      } catch {
+        finish()
+      }
+    })
   }
 
   private createCommandError(

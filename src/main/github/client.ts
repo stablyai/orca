@@ -36,6 +36,7 @@ import { tmpdir } from 'os'
 import { getPRConflictSummary } from './conflict-summary'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
+import { splitRemoteBranchName } from '../../shared/git-effective-upstream'
 import {
   execFileAsync,
   ghExecFileAsync,
@@ -55,6 +56,7 @@ import {
   getRemoteUrlForRepo,
   type OwnerRepo
 } from './gh-utils'
+import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -1891,6 +1893,98 @@ async function getFallbackPRListForBranch(
   return list[0] ?? null
 }
 
+type TrackedUpstreamBranch = {
+  remoteName: string
+  branchName: string
+}
+
+function parseTrackedUpstreamBranch(
+  upstreamRef: string,
+  branchName: string
+): TrackedUpstreamBranch | null {
+  const parsed = splitRemoteBranchName(upstreamRef.trim())
+  if (!parsed || parsed.branchName === branchName) {
+    return null
+  }
+  return parsed
+}
+
+async function getTrackedUpstreamBranch(
+  repoPath: string,
+  branchName: string,
+  connectionId?: string | null
+): Promise<TrackedUpstreamBranch | null> {
+  const args = ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branchName}@{upstream}`]
+  try {
+    const provider = connectionId ? getSshGitProvider(connectionId) : null
+    const result = provider
+      ? await provider.exec(args, repoPath)
+      : await gitExecFileAsync(args, { cwd: repoPath })
+    return parseTrackedUpstreamBranch(result.stdout, branchName)
+  } catch {
+    return null
+  }
+}
+
+async function lookupPRByBranchName(args: {
+  candidates: OwnerRepo[]
+  headRepo: OwnerRepo | null
+  branchName: string
+  ghOptions: GhExecOptions
+}): Promise<{ data: PullRequestLookupData | null; dataRepo: OwnerRepo | null }> {
+  if (args.candidates.length > 0) {
+    for (const candidate of args.candidates) {
+      try {
+        const branchData = args.headRepo
+          ? await getRestPRForBranch(
+              candidate,
+              args.headRepo.owner,
+              args.branchName,
+              args.ghOptions
+            )
+          : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
+        // Why: REST/list branch lookup identifies the PR cheaply; exact
+        // `gh pr view` carries review, merge queue, and auto-merge state.
+        const data = await hydrateBranchLookupWithExactPR(candidate, branchData, args.ghOptions)
+        if (data) {
+          return { data, dataRepo: candidate }
+        }
+      } catch (err) {
+        if (args.headRepo) {
+          throw err
+        }
+        const branchData = await getRestPRForBranch(
+          candidate,
+          candidate.owner,
+          args.branchName,
+          args.ghOptions
+        )
+        const data = await hydrateBranchLookupWithExactPR(candidate, branchData, args.ghOptions)
+        if (data) {
+          return { data, dataRepo: candidate }
+        }
+      }
+    }
+    return { data: null, dataRepo: null }
+  }
+
+  try {
+    const { stdout } = await ghExecFileAsync(
+      ['pr', 'view', args.branchName, '--json', PR_LOOKUP_JSON_FIELDS],
+      args.ghOptions
+    )
+    return {
+      data: normalizePullRequestLookupData(JSON.parse(stdout) as PullRequestLookupData),
+      dataRepo: null
+    }
+  } catch (err) {
+    if (isNoPullRequestError(err)) {
+      return { data: null, dataRepo: null }
+    }
+    throw err
+  }
+}
+
 async function getRestPRByNumber(
   ownerRepo: OwnerRepo,
   number: number,
@@ -2051,6 +2145,7 @@ export async function getPRForBranchOutcome(
     const { candidates, headRepo } = await resolvePRRepositoryCandidates(repoPath, connectionId)
     let data: PullRequestLookupData | null = null
     let dataRepo: OwnerRepo | null = null
+    let dataHeadRepo: OwnerRepo | null = headRepo
 
     if (typeof linkedPRNumber === 'number') {
       const exactLookup = await lookupPRByNumber({
@@ -2063,49 +2158,32 @@ export async function getPRForBranchOutcome(
     } else if (branchName) {
       // During a rebase the worktree is in detached HEAD and branch is empty.
       // An empty --head filter causes gh to return an arbitrary PR.
-      if (candidates.length > 0) {
-        for (const candidate of candidates) {
-          try {
-            const branchData = headRepo
-              ? await getRestPRForBranch(candidate, headRepo.owner, branchName, ghOptions)
-              : await getFallbackPRListForBranch(candidate, branchName, ghOptions)
-            // Why: REST/list branch lookup identifies the PR cheaply; exact
-            // `gh pr view` carries review, merge queue, and auto-merge state.
-            data = await hydrateBranchLookupWithExactPR(candidate, branchData, ghOptions)
-            if (data) {
-              dataRepo = candidate
-              break
-            }
-          } catch (err) {
-            if (headRepo) {
-              throw err
-            } else {
-              const branchData = await getRestPRForBranch(
-                candidate,
-                candidate.owner,
-                branchName,
-                ghOptions
-              )
-              data = await hydrateBranchLookupWithExactPR(candidate, branchData, ghOptions)
-              if (data) {
-                dataRepo = candidate
-                break
-              }
-            }
-          }
-        }
-      } else {
-        try {
-          const { stdout } = await ghExecFileAsync(
-            ['pr', 'view', branchName, '--json', PR_LOOKUP_JSON_FIELDS],
+      const branchLookup = await lookupPRByBranchName({
+        candidates,
+        headRepo,
+        branchName,
+        ghOptions
+      })
+      data = branchLookup.data
+      dataRepo = branchLookup.dataRepo
+      if (!data) {
+        // Why: worktrees can have a short local branch tracking a differently
+        // named remote PR head; after the local miss, try that configured head.
+        const upstreamBranch = await getTrackedUpstreamBranch(repoPath, branchName, connectionId)
+        if (upstreamBranch) {
+          const upstreamHeadRepo =
+            (await getOwnerRepoForRemote(repoPath, upstreamBranch.remoteName, connectionId)) ??
+            headRepo
+          const upstreamLookup = await lookupPRByBranchName({
+            candidates,
+            headRepo: upstreamHeadRepo,
+            branchName: upstreamBranch.branchName,
             ghOptions
-          )
-          data = normalizePullRequestLookupData(JSON.parse(stdout))
-        } catch (err) {
-          if (isNoPullRequestError(err)) {
-            data = null
-          } else {
-            throw err
+          })
+          data = upstreamLookup.data
+          dataRepo = upstreamLookup.dataRepo
+          if (data) {
+            dataHeadRepo = upstreamHeadRepo
           }
         }
       }
@@ -2151,7 +2229,7 @@ export async function getPRForBranchOutcome(
         ...(data.mergeStateStatus !== undefined ? { mergeStateStatus: data.mergeStateStatus } : {}),
         headSha: data.headRefOid,
         prRepo: dataRepo ?? undefined,
-        headRepo: headRepo ?? undefined,
+        headRepo: dataHeadRepo ?? undefined,
         conflictSummary
       }
     }

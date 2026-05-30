@@ -292,6 +292,48 @@ describe('preflight', () => {
     )
   })
 
+  it('times out hung WSL preflight probes', async () => {
+    vi.useFakeTimers()
+    try {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: 'win32'
+      })
+      execFileAsyncMock.mockImplementation((command, args) => {
+        if (command === 'git') {
+          return Promise.resolve({ stdout: 'git version 2.0.0\n' })
+        }
+        if (command === 'gh' || command === 'glab') {
+          return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
+        }
+        if (command === 'wsl.exe' && Array.isArray(args) && args.at(-1) === "'gh' --version") {
+          return new Promise(() => {})
+        }
+        if (command === 'wsl.exe' && Array.isArray(args) && args.at(-1) === "'glab' --version") {
+          return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
+        }
+        throw new Error(`unexpected command ${String(command)}`)
+      })
+
+      const statusPromise = runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      let settled = false
+      void statusPromise.finally(() => {
+        settled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(5000)
+      await Promise.resolve()
+
+      expect(settled).toBe(true)
+      await expect(statusPromise).resolves.toMatchObject({
+        gh: { installed: false },
+        glab: { installed: false }
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('re-runs the probe when forced so updated gh auth state is visible without relaunch', async () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })

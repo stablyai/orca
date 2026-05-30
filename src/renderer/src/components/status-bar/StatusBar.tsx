@@ -44,6 +44,7 @@ import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
 import { PortsStatusSegment } from './PortsStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
+import { isProviderConfigured } from './status-bar-provider-visibility'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
@@ -1211,8 +1212,12 @@ function CodexSwitcherMenu({
     }
   }, [])
 
-  useEffect(() => {
-    if (accountsExpanded) {
+  const handleAccountsExpandedToggle = useCallback((): void => {
+    const nextExpanded = !accountsExpanded
+    setAccountsExpanded(nextExpanded)
+    if (nextExpanded) {
+      // Why: inactive-account usage is needed only for the explicit switcher
+      // expansion, so fetch it on that event instead of one render later.
       void fetchInactiveCodexAccountUsage()
     }
   }, [accountsExpanded, fetchInactiveCodexAccountUsage])
@@ -1257,7 +1262,7 @@ function CodexSwitcherMenu({
       <DropdownMenuItem
         onSelect={(event) => {
           event.preventDefault()
-          setAccountsExpanded((prev) => !prev)
+          handleAccountsExpandedToggle()
         }}
       >
         <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5 text-[12px]">
@@ -1538,31 +1543,27 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
   const { claude, codex, gemini, opencodeGo } = rateLimits
 
-  // Why: hiding `unavailable` providers makes the status bar appear to lose a
-  // provider at random after refreshes or wake/resume. Keeping the slot visible
-  // preserves layout stability and makes it obvious that the provider is still
-  // configured but currently unavailable. Detection-gating (see
-  // status-bar-agent-gating) hides the per-CLI bars when the agent isn't
-  // installed on PATH — this is what stops a fresh install from showing
-  // "Gemini Usage" when Gemini isn't installed.
+  // Why: a provider only earns a bar once it's configured (isProviderConfigured
+  // drops the `unavailable` state — Gemini OAuth off, OpenCode Go cookie unset,
+  // Claude on API-key billing). A configured provider that fails transiently
+  // (`error`) keeps its slot so the bar doesn't flap on refresh hiccups.
+  // Detection-gating (see status-bar-agent-gating) additionally hides per-CLI
+  // bars when the agent isn't installed on PATH.
   const showClaude =
-    !!claude &&
+    isProviderConfigured(claude) &&
     statusBarItems.includes('claude') &&
     isStatusBarItemAvailable('claude', detectedAgentIds)
   const showCodex =
-    !!codex &&
+    isProviderConfigured(codex) &&
     statusBarItems.includes('codex') &&
     isStatusBarItemAvailable('codex', detectedAgentIds)
-  // Why: hide only when the state hasn't loaded yet (null), not when unavailable.
-  // Gemini shows if credentials exist; OpenCode Go shows always so users can see
-  // the provider and know to configure the cookie in Settings.
   const showGemini =
-    gemini !== null &&
+    isProviderConfigured(gemini) &&
     statusBarItems.includes('gemini') &&
     isStatusBarItemAvailable('gemini', detectedAgentIds)
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
-  const showOpencodeGo = opencodeGo !== null && statusBarItems.includes('opencode-go')
+  const showOpencodeGo = isProviderConfigured(opencodeGo) && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')

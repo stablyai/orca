@@ -261,15 +261,41 @@ const SSH_G_TIMEOUT_MS = 5000
 // resolution without reimplementing OpenSSH's complex matching logic.
 export function resolveWithSshG(host: string): Promise<SshResolvedConfig | null> {
   return new Promise((resolve) => {
-    // Why: '--' prevents a host label starting with '-' from being interpreted
-    // as an SSH flag (classic argument injection vector).
-    execFile('ssh', ['-G', '--', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
-      if (err) {
-        resolve(null)
+    let settled = false
+    let child: ReturnType<typeof execFile> | undefined
+    const timer = setTimeout(() => {
+      if (settled) {
         return
       }
-      resolve(parseSshGOutput(stdout))
-    })
+      settled = true
+      child?.kill()
+      resolve(null)
+    }, SSH_G_TIMEOUT_MS)
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      callback()
+    }
+
+    // Why: '--' prevents a host label starting with '-' from being interpreted
+    // as an SSH flag (classic argument injection vector).
+    // Why: execFile's timeout only signals ssh; a stuck callback must still
+    // release SSH import/connection resolution with the existing null fallback.
+    try {
+      child = execFile('ssh', ['-G', '--', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
+        if (err) {
+          settle(() => resolve(null))
+          return
+        }
+        settle(() => resolve(parseSshGOutput(stdout)))
+      })
+    } catch {
+      settle(() => resolve(null))
+    }
   })
 }
 

@@ -19,6 +19,7 @@ import type {
 } from '../../shared/computer-use-permissions-types'
 
 const DEFAULT_COMPUTER_USE_BUNDLE_ID = 'com.stablyai.orca.computer-use'
+const PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS = 5_000
 
 export function openComputerUsePermissions(
   permissionId?: ComputerUsePermissionId
@@ -242,11 +243,16 @@ function launchPermissionStatusHelper(helperAppPath: string, statusPath: string)
       stderr += chunk
     }
     let settled = false
+    let launchTimeout: ReturnType<typeof setTimeout> | null = null
     const removeListeners = (): void => {
       launch.stdout?.off('data', onStdoutData)
       launch.stderr?.off('data', onStderrData)
       launch.off('error', onError)
       launch.off('close', onClose)
+      if (launchTimeout) {
+        clearTimeout(launchTimeout)
+        launchTimeout = null
+      }
     }
     const settleResolve = (): void => {
       if (settled) {
@@ -281,6 +287,18 @@ function launchPermissionStatusHelper(helperAppPath: string, statusPath: string)
       settleReject(
         new RuntimeClientError('accessibility_error', `Could not check permissions: ${detail}`)
       )
+    }
+    const onTimeout = (): void => {
+      launch.kill()
+      settleReject(
+        new RuntimeClientError('accessibility_error', 'Timed out launching permission helper')
+      )
+    }
+    // Why: the status-file polling timeout only starts after `open` exits; if
+    // `open` wedges first, permission checks would otherwise stay pending.
+    launchTimeout = setTimeout(onTimeout, PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS)
+    if (typeof launchTimeout.unref === 'function') {
+      launchTimeout.unref()
     }
     launch.stdout?.on('data', onStdoutData)
     launch.stderr?.on('data', onStderrData)

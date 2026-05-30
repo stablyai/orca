@@ -188,6 +188,17 @@ export function MobileBrowserPane({
     }
   }, [])
 
+  const setRootViewRef = useCallback(
+    (node: View | null) => {
+      // Why: long-press right-click timers belong to this responder surface;
+      // clearing from ref cleanup preserves the same unmount boundary.
+      if (node === null) {
+        clearLongPressTimer()
+      }
+    },
+    [clearLongPressTimer]
+  )
+
   const resetBrowserZoomState = useCallback(() => {
     clearLongPressTimer()
     pinchRef.current = null
@@ -694,8 +705,6 @@ export function MobileBrowserPane({
     [client, flushPendingWheelCommand, pageParams]
   )
 
-  useEffect(() => () => clearLongPressTimer(), [clearLongPressTimer])
-
   const mapTouchPoint = useCallback((locationX: number, locationY: number): BrowserPoint | null => {
     return mapScreenToBrowserPoint(
       locationX,
@@ -1017,7 +1026,7 @@ export function MobileBrowserPane({
   )
 
   return (
-    <View style={styles.root}>
+    <View ref={setRootViewRef} style={styles.root}>
       <View style={styles.toolbar}>
         <ToolbarIconButton
           disabled={controlsDisabled || !tab.canGoBack}

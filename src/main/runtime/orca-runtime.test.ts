@@ -5962,6 +5962,30 @@ describe('OrcaRuntimeService', () => {
     expect(elapsed).toBeLessThan(500)
   })
 
+  it('rejects leaf PTY waits when the request signal aborts', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const controller = new AbortController()
+
+      const waitPromise = runtime
+        .waitForLeafPtyId('missing-handle', 60_000, controller.signal)
+        .then(() => 'resolved')
+        .catch((error: Error) => error.message)
+
+      controller.abort()
+      const outcomePromise = Promise.race([
+        waitPromise,
+        new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0))
+      ])
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(await outcomePromise).toBe('request_aborted')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('fails terminal waits closed when the handle goes stale during reload', async () => {
     const runtime = new OrcaRuntimeService(store)
 

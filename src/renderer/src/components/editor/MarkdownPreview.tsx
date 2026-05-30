@@ -201,6 +201,14 @@ function cancelMarkdownPreviewEditorRevealFrames(frameIds: MutableRefObject<numb
   frameIds.current = []
 }
 
+function clearMarkdownPreviewTimeout(timeoutRef: MutableRefObject<number | null>): void {
+  if (timeoutRef.current === null) {
+    return
+  }
+  window.clearTimeout(timeoutRef.current)
+  timeoutRef.current = null
+}
+
 function requestMarkdownPreviewEditorRevealFrame(
   frameIds: MutableRefObject<number[]>,
   callback: FrameRequestCallback
@@ -555,7 +563,13 @@ export default function MarkdownPreview({
   )
 
   useEffect(() => {
-    return () => cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
+    return () => {
+      // Why: review-note reveal/copy timers are event-owned, but the final
+      // cancellation belongs to the preview surface unmount.
+      cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
+      clearMarkdownPreviewTimeout(attentionReviewCommentTimeoutRef)
+      clearMarkdownPreviewTimeout(reviewNotesCopiedResetTimerRef)
+    }
   }, [])
 
   // Why: each split pane needs its own markdown preview viewport even when the
@@ -825,14 +839,6 @@ export default function MarkdownPreview({
       // Best-effort clipboard action; failures usually mean the window is not focused.
     }
   }, [clearReviewNotesCopiedResetTimer, markdownReviewNotes.length, markdownReviewPrompt])
-
-  useEffect(() => {
-    return () => {
-      if (attentionReviewCommentTimeoutRef.current !== null) {
-        window.clearTimeout(attentionReviewCommentTimeoutRef.current)
-      }
-    }
-  }, [])
 
   const pulseRenderedMarkdownReviewNote = useCallback((commentId: string): void => {
     if (attentionReviewCommentTimeoutRef.current !== null) {

@@ -13,6 +13,7 @@ const DEFAULT_MAC_COMMAND_PATH = '/usr/local/bin/orca'
 const LINUX_COMMAND_NAME = 'orca-ide'
 const LEGACY_LINUX_COMMAND_NAME = 'orca'
 const DEV_LAUNCHER_DIR = ['cli', 'bin']
+const WINDOWS_PATH_COMMAND_TIMEOUT_MS = 5_000
 
 type CliInstallerOptions = {
   platform?: NodeJS.Platform
@@ -639,7 +640,7 @@ function isAbsoluteForPlatform(platform: NodeJS.Platform, value: string): boolea
 }
 
 async function readWindowsUserPath(): Promise<string | null> {
-  const { stdout } = await execFileAsync('powershell', [
+  const stdout = await runWindowsPathCommand([
     '-NoProfile',
     '-Command',
     "[Environment]::GetEnvironmentVariable('Path','User')"
@@ -648,7 +649,7 @@ async function readWindowsUserPath(): Promise<string | null> {
 }
 
 async function writeWindowsUserPath(value: string): Promise<void> {
-  await execFileAsync('powershell', [
+  await runWindowsPathCommand([
     '-NoProfile',
     '-Command',
     // Why: PATH registration must stay user-scoped on Windows so the Orca
@@ -656,6 +657,48 @@ async function writeWindowsUserPath(value: string): Promise<void> {
     // elevation or mutating machine-wide environment state.
     `[Environment]::SetEnvironmentVariable('Path', ${quotePowerShell(value)}, 'User')`
   ])
+}
+
+function runWindowsPathCommand(args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let child: ReturnType<typeof execFile> | null = null
+    let settled = false
+
+    const finish = (error: Error | null, stdout = ''): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(stdout)
+    }
+
+    // Why: Windows PATH reads/writes back CLI Settings; wedged PowerShell must
+    // not keep command registration status or install/remove pending forever.
+    const timeout = setTimeout(() => {
+      child?.kill()
+      finish(
+        new Error(`Windows PATH command timed out after ${WINDOWS_PATH_COMMAND_TIMEOUT_MS}ms.`)
+      )
+    }, WINDOWS_PATH_COMMAND_TIMEOUT_MS)
+
+    try {
+      child = execFile(
+        'powershell',
+        args,
+        { encoding: 'utf8', timeout: WINDOWS_PATH_COMMAND_TIMEOUT_MS },
+        (error, stdout) => {
+          finish(error ?? null, stdout)
+        }
+      )
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error(String(error)))
+    }
+  })
 }
 
 function quotePowerShell(value: string): string {

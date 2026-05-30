@@ -737,6 +737,29 @@ export default function RichMarkdownEditor({
     return registerPendingEditorFlush(fileId, flushPendingSerialization)
   }, [fileId, flushPendingSerialization])
 
+  const clearAttentionTimers = useCallback(() => {
+    if (attentionReviewCommentTimeoutRef.current !== null) {
+      window.clearTimeout(attentionReviewCommentTimeoutRef.current)
+      attentionReviewCommentTimeoutRef.current = null
+    }
+    if (sourceAttentionTimeoutRef.current !== null) {
+      window.clearTimeout(sourceAttentionTimeoutRef.current)
+      sourceAttentionTimeoutRef.current = null
+    }
+  }, [])
+
+  const setRootElement = useCallback(
+    (node: HTMLDivElement | null) => {
+      // Why: review-note pulses are tied to this editor root; ref cleanup
+      // keeps the existing unmount boundary without a passive Effect.
+      if (node === null) {
+        clearAttentionTimers()
+      }
+      rootRef.current = node
+    },
+    [clearAttentionTimers]
+  )
+
   const syncAnnotationTarget = useCallback((nextEditor: Editor): void => {
     if (annotationTargetFrameRef.current !== null) {
       window.cancelAnimationFrame(annotationTargetFrameRef.current)
@@ -762,17 +785,6 @@ export default function RichMarkdownEditor({
       }
       setAnnotationTarget(target)
     })
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      if (attentionReviewCommentTimeoutRef.current !== null) {
-        window.clearTimeout(attentionReviewCommentTimeoutRef.current)
-      }
-      if (sourceAttentionTimeoutRef.current !== null) {
-        window.clearTimeout(sourceAttentionTimeoutRef.current)
-      }
-    }
   }, [])
 
   const pulseRichMarkdownReviewNote = useCallback((commentId: string): void => {
@@ -1689,7 +1701,7 @@ export default function RichMarkdownEditor({
   return (
     <div className="rich-markdown-editor-layout">
       <div
-        ref={rootRef}
+        ref={setRootElement}
         className={`rich-markdown-editor-shell ${
           reviewRailExpanded ? 'has-rich-markdown-review-notes' : ''
         }`.trim()}

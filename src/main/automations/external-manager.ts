@@ -5,7 +5,6 @@ import { existsSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
-import { promisify } from 'util'
 import type {
   ExternalAutomationAction,
   ExternalAutomationActionInput,
@@ -25,13 +24,13 @@ import {
   readHermesCronOutputRunsPage
 } from './hermes-cron-output'
 
-const execFileAsync = promisify(execFile)
 const HERMES_HOME = process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
 const HERMES_CRON_DIR = join(HERMES_HOME, 'cron')
 const HERMES_JOBS_FILE = join(HERMES_CRON_DIR, 'jobs.json')
 const OPENCLAW_JOBS_FILE = join(homedir(), '.openclaw', 'cron', 'jobs.json')
 const EXTERNAL_JOB_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/
 const LOCAL_COMMAND_LOOKUP_TIMEOUT_MS = 5_000
+const LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS = 30_000
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -76,6 +75,50 @@ function runLocalCommandLookup(command: string, args: string[]): Promise<void> {
       child = execFile(command, args, { encoding: 'utf-8' }, (error) => {
         finish(error ?? null)
       })
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error(String(error)))
+    }
+  })
+}
+
+function runLocalAutomationCommand(command: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let child: ReturnType<typeof execFile> | null = null
+    let settled = false
+
+    const finish = (error: Error | null): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve()
+    }
+
+    // Why: local automation mutations back UI actions; a wedged CLI must not
+    // keep create/edit/run/delete pending after Node signals a timeout.
+    const timeout = setTimeout(() => {
+      child?.kill()
+      finish(
+        new Error(
+          `Local automation command timed out after ${LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS}ms.`
+        )
+      )
+    }, LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS)
+
+    try {
+      child = execFile(
+        command,
+        args,
+        { encoding: 'utf-8', timeout: LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS },
+        (error) => {
+          finish(error ?? null)
+        }
+      )
     } catch (error) {
       finish(error instanceof Error ? error : new Error(String(error)))
     }
@@ -436,7 +479,7 @@ export async function createExternalAutomation(
 ): Promise<void> {
   const normalized = normalizeHermesCronMutationInput(input)
   if (input.target.type === 'local') {
-    await execFileAsync('hermes', hermesCronCreateArgs(normalized), { encoding: 'utf-8' })
+    await runLocalAutomationCommand('hermes', hermesCronCreateArgs(normalized))
     clearHermesCronOutputRunCountCache()
     return
   }
@@ -458,9 +501,7 @@ export async function updateExternalAutomation(
   }
   const normalized = normalizeHermesCronMutationInput(input)
   if (input.target.type === 'local') {
-    await execFileAsync('hermes', hermesCronEditArgs(input.jobId, normalized), {
-      encoding: 'utf-8'
-    })
+    await runLocalAutomationCommand('hermes', hermesCronEditArgs(input.jobId, normalized))
     clearHermesCronOutputRunCountCache(input.jobId)
     return
   }
@@ -486,7 +527,7 @@ export async function runExternalAutomationAction(
       ? hermesCommandForAction(input.action)
       : openClawCommandForAction(input.action)
   if (input.target.type === 'local') {
-    await execFileAsync(input.provider, ['cron', command, input.jobId], { encoding: 'utf-8' })
+    await runLocalAutomationCommand(input.provider, ['cron', command, input.jobId])
     if (input.provider === 'hermes') {
       clearHermesCronOutputRunCountCache(input.jobId)
     }

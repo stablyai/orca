@@ -296,15 +296,23 @@ async function spawnCommandCapture(
       killSpawnedCommandTree(child)
       finish(createAbortError())
     }
+    const cleanupListeners = (): void => {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      options.signal?.removeEventListener('abort', onAbort)
+      child.stdout?.off('data', onStdoutData)
+      child.stderr?.off('data', onStderrData)
+      child.off('error', onError)
+      child.off('close', onClose)
+    }
     const finish = (error: Error | null): void => {
       if (settled) {
         return
       }
       settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-      options.signal?.removeEventListener('abort', onAbort)
+      cleanupListeners()
       if (error) {
         reject(Object.assign(error, { stdout, stderr }))
         return
@@ -318,7 +326,7 @@ async function spawnCommandCapture(
         }, options.timeout)
       : null
     options.signal?.addEventListener('abort', onAbort, { once: true })
-    child.stdout?.on('data', (chunk: Buffer) => {
+    function onStdoutData(chunk: Buffer): void {
       stdoutBytes += chunk.byteLength
       if (options.maxBuffer && stdoutBytes > options.maxBuffer) {
         killSpawnedCommandTree(child)
@@ -326,8 +334,8 @@ async function spawnCommandCapture(
         return
       }
       stdout += chunk.toString(options.encoding ?? 'utf-8')
-    })
-    child.stderr?.on('data', (chunk: Buffer) => {
+    }
+    function onStderrData(chunk: Buffer): void {
       stderrBytes += chunk.byteLength
       if (options.maxBuffer && stderrBytes > options.maxBuffer) {
         killSpawnedCommandTree(child)
@@ -335,15 +343,21 @@ async function spawnCommandCapture(
         return
       }
       stderr += chunk.toString(options.encoding ?? 'utf-8')
-    })
-    child.on('error', finish)
-    child.on('close', (code) => {
+    }
+    function onError(error: Error): void {
+      finish(error)
+    }
+    function onClose(code: number | null): void {
       if (code === 0) {
         finish(null)
         return
       }
       finish(new Error(`${command} exited with ${code}.`))
-    })
+    }
+    child.stdout?.on('data', onStdoutData)
+    child.stderr?.on('data', onStderrData)
+    child.on('error', onError)
+    child.on('close', onClose)
   })
 }
 

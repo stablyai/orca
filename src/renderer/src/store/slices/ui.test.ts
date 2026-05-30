@@ -10,6 +10,7 @@ import type {
 } from '../../../../shared/types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
+import { createSettingsSearchState } from './settings-search-state'
 import type { AppState } from '../types'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
 
@@ -28,6 +29,7 @@ function createUIStore(): StoreApi<AppState> {
     worktreesByRepo: {},
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
+    ...createSettingsSearchState(args[0]),
     ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
   })) as unknown as StoreApi<AppState>
@@ -679,6 +681,17 @@ describe('createUISlice settings navigation', () => {
     store.getState().closeSettingsPage()
 
     expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('clears transient settings search when opening settings', () => {
+    const store = createUIStore()
+
+    store.setState({ settingsSearchInputQuery: 'terminal', settingsSearchQuery: 'terminal' })
+    store.getState().openSettingsPage()
+
+    expect(store.getState().activeView).toBe('settings')
+    expect(store.getState().settingsSearchInputQuery).toBe('')
+    expect(store.getState().settingsSearchQuery).toBe('')
   })
 })
 

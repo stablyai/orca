@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { SshDestructiveActionDialog } from './SshDestructiveActionDialog'
-import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
+import {
+  isSshTargetConnecting,
+  shouldClearPendingSshReset,
+  type SshTargetBusyAction
+} from './ssh-target-action-state'
 
 type PendingTargetAction = { id: string; label: string }
 
@@ -102,12 +106,17 @@ export function SshTargetDestructiveActions({
     pendingReset !== null && isSshTargetConnecting(pendingResetStatus)
   const pendingTerminateIsBusy =
     pendingTerminate !== null && targetActionsInFlight.get(pendingTerminate.id) === 'terminate'
-
-  useEffect(() => {
-    if (pendingResetBlockedByConnection && !pendingResetIsBusy) {
-      setPendingReset(null)
-    }
-  }, [pendingResetBlockedByConnection, pendingResetIsBusy])
+  const shouldClearReset = shouldClearPendingSshReset({
+    pendingTargetId: pendingReset?.id ?? null,
+    pendingResetIsBusy,
+    connectionStatus: pendingResetStatus
+  })
+  if (shouldClearReset) {
+    // Why: a reconnecting target cannot safely reset its relay; clear the
+    // pending dialog before it paints stale destructive UI.
+    setPendingReset(null)
+  }
+  const dialogPendingReset = shouldClearReset ? null : pendingReset
 
   const confirmResetRelay = async (): Promise<void> => {
     if (!pendingReset) {
@@ -169,10 +178,10 @@ export function SshTargetDestructiveActions({
       />
 
       <SshDestructiveActionDialog
-        open={!!pendingReset && (!pendingResetBlockedByConnection || pendingResetIsBusy)}
+        open={!!dialogPendingReset && (!pendingResetBlockedByConnection || pendingResetIsBusy)}
         title="Reset Remote Relay?"
         description="This force-stops the remote relay for this SSH target. Active remote terminals and port forwards for this target will end."
-        targetLabel={pendingReset?.label}
+        targetLabel={dialogPendingReset?.label}
         actionLabel="Reset Relay"
         busyLabel="Resetting"
         isBusy={pendingResetIsBusy}

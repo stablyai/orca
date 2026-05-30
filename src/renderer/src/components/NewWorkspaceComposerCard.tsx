@@ -41,6 +41,7 @@ type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 type NewWorkspaceComposerCardProps = {
   containerClassName?: string
   composerRef?: React.RefObject<HTMLDivElement | null>
+  onComposerNodeChange?: (node: HTMLDivElement | null) => void
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   onQuickAgentChange: (agent: TuiAgent | null) => void
@@ -205,6 +206,7 @@ function useComposerFileDragOver(): {
 export default function NewWorkspaceComposerCard({
   containerClassName,
   composerRef,
+  onComposerNodeChange,
   nameInputRef,
   quickAgent,
   onQuickAgentChange,
@@ -281,7 +283,19 @@ export default function NewWorkspaceComposerCard({
     nameInputFocusFrameRef.current = null
   }, [])
 
-  React.useEffect(() => cancelNameInputFocusFrame, [cancelNameInputFocusFrame])
+  const setComposerNode = React.useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued repo-picker focus is only valid while this composer exists.
+      if (!node) {
+        cancelNameInputFocusFrame()
+      }
+      if (composerRef) {
+        composerRef.current = node
+      }
+      onComposerNodeChange?.(node)
+    },
+    [cancelNameInputFocusFrame, composerRef, onComposerNodeChange]
+  )
 
   const focusNameInput = React.useCallback(() => {
     // Why: after the repo picker commits a choice, moving focus to the name
@@ -313,7 +327,7 @@ export default function NewWorkspaceComposerCard({
 
   return (
     <div
-      ref={composerRef}
+      ref={setComposerNode}
       // Why: preload classifies native OS file drops by the nearest
       // `data-native-file-drop-target` marker in the composedPath. Tagging
       // the composer root makes drops anywhere on the card route to the

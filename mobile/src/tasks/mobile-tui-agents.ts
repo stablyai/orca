@@ -7,6 +7,7 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
   'openclaude',
   'codex',
+  'openclaude',
   'grok',
   'copilot',
   'opencode',
@@ -135,7 +136,7 @@ export function isMobileTuiAgent(value: unknown): value is TuiAgent {
   return MOBILE_TUI_AGENT_AUTO_PICK_ORDER.includes(value as TuiAgent)
 }
 
-export function normalizeDisabledMobileTuiAgents(value: unknown): TuiAgent[] {
+function normalizeDisabledMobileTuiAgents(value: unknown): TuiAgent[] {
   if (!Array.isArray(value)) {
     return []
   }
