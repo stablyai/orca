@@ -2257,7 +2257,7 @@ export class OrcaRuntimeService {
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.recentPtyOutputById.set(
       ptyId,
-      `${this.recentPtyOutputById.get(ptyId) ?? ''}${data}`.slice(-RECENT_PTY_OUTPUT_LIMIT)
+      appendRecentPtyOutput(this.recentPtyOutputById.get(ptyId), data)
     )
     // Agent detection runs on raw data before leaf processing, since the
     // tail buffer logic normalizes away the OSC sequences we need.
@@ -12663,6 +12663,13 @@ function withTimeoutResult<T>(
       clearTimeout(timeout)
     }
   })
+}
+
+export function appendRecentPtyOutput(previous: string | undefined, data: string): string {
+  if (data.length >= RECENT_PTY_OUTPUT_LIMIT) {
+    return data.slice(-RECENT_PTY_OUTPUT_LIMIT)
+  }
+  return `${previous ?? ''}${data}`.slice(-RECENT_PTY_OUTPUT_LIMIT)
 }
 
 export function buildPreview(lines: string[], partialLine: string): string {

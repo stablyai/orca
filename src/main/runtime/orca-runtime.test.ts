@@ -26,7 +26,12 @@ import {
 import { getBranchConflictKind, getDefaultBaseRef } from '../git/repo'
 import type { OrchestrationDb } from './orchestration/db'
 import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
-import { appendNormalizedToTailBuffer, buildPreview, OrcaRuntimeService } from './orca-runtime'
+import {
+  appendNormalizedToTailBuffer,
+  appendRecentPtyOutput,
+  buildPreview,
+  OrcaRuntimeService
+} from './orca-runtime'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
@@ -3962,6 +3967,16 @@ describe('OrcaRuntimeService', () => {
       ['line-4990', 'line-4992', 'line-4994', 'line-4996', 'line-4998', 'partial-tail'].join('\n')
     )
     expect(mapCallCount).toBe(0)
+  })
+
+  it('keeps recent PTY replay output capped without needing previous data for large chunks', () => {
+    const previous = 'old-output'.repeat(1000)
+    const data = 'new-output'.repeat(1000)
+    const expected = `${previous}${data}`.slice(-4096)
+
+    expect(appendRecentPtyOutput(previous, 'tail')).toBe(`${previous}tail`.slice(-4096))
+    expect(appendRecentPtyOutput(previous, data)).toBe(expected)
+    expect(appendRecentPtyOutput(undefined, data)).toBe(data.slice(-4096))
   })
 
   it('bounds retained partial terminal output before preview reads', async () => {
