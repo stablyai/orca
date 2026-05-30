@@ -112,6 +112,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   // Why: local folder picking/scanning can outlive the dialog; resetState
   // invalidates stale continuations before they can repopulate closed UI.
   const localAddGenRef = useRef(0)
+  // Why: server path adds share the same dialog but run against a runtime
+  // server; resetState cancels their stale scan/add/fetch continuations.
+  const serverAddGenRef = useRef(0)
   // Why: a dropped path is modal data, so ordinary state updates must not
   // re-run the import while the Add Project dialog advances through steps.
   const droppedLocalPathHandledRef = useRef<string | null>(null)
@@ -244,6 +247,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const resetState = useCallback(() => {
     cloneGenRef.current++
     localAddGenRef.current++
+    serverAddGenRef.current++
     // Why: kill the git clone process if one is running, so backing out
     // or closing the dialog doesn't leave a clone running on disk.
     void window.api.repos.cloneAbort()
@@ -492,11 +496,15 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       if (!path) {
         return
       }
+      const gen = ++serverAddGenRef.current
       setIsAddingServerPath(true)
       try {
         if (kind === 'git') {
           const attemptId = createNestedRepoTelemetryAttemptId()
           const scan = await scanNestedRepos(path)
+          if (gen !== serverAddGenRef.current) {
+            return
+          }
           track(
             'add_repo_nested_scan_result',
             buildNestedRepoScanTelemetry({
@@ -518,10 +526,16 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           }
         }
         const repo = await addRepoPath(path, kind)
+        if (gen !== serverAddGenRef.current) {
+          return
+        }
         if (repo && isGitRepoKind(repo)) {
           setAddedRepo(repo)
           setExistingWorkspaceSource('runtime_server_path')
           await fetchWorktrees(repo.id)
+          if (gen !== serverAddGenRef.current) {
+            return
+          }
           setStep('setup')
         } else if (repo) {
           // Why: folder repos skip the Git worktree setup step; their synthetic
@@ -529,7 +543,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           closeModal()
         }
       } finally {
-        setIsAddingServerPath(false)
+        if (gen === serverAddGenRef.current) {
+          setIsAddingServerPath(false)
+        }
       }
     },
     [addRepoPath, closeModal, fetchWorktrees, getNestedRepoRuntimeKind, scanNestedRepos, serverPath]
