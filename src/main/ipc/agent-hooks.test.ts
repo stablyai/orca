@@ -46,6 +46,9 @@ vi.mock('../agent-hooks/server', async () => {
 vi.mock('../claude/hook-service', () => ({
   claudeHookService: { getStatus: vi.fn(() => ({ agent: 'claude', state: 'absent' })) }
 }))
+vi.mock('../openclaude/hook-service', () => ({
+  openClaudeHookService: { getStatus: vi.fn(() => ({ agent: 'openclaude', state: 'absent' })) }
+}))
 vi.mock('../codex/hook-service', () => ({
   codexHookService: { getStatus: vi.fn(() => ({ agent: 'codex', state: 'absent' })) }
 }))
@@ -54,6 +57,9 @@ vi.mock('../gemini/hook-service', () => ({
 }))
 vi.mock('../antigravity/hook-service', () => ({
   antigravityHookService: { getStatus: vi.fn(() => ({ agent: 'antigravity', state: 'absent' })) }
+}))
+vi.mock('../amp/hook-service', () => ({
+  ampHookService: { getStatus: vi.fn(() => ({ agent: 'amp', state: 'absent' })) }
 }))
 vi.mock('../cursor/hook-service', () => ({
   cursorHookService: { getStatus: vi.fn(() => ({ agent: 'cursor', state: 'absent' })) }
@@ -118,6 +124,28 @@ describe('agentHooks:antigravityStatus IPC', () => {
     const handler = handleHandlers.get('agentHooks:antigravityStatus')
     expect(handler).toBeDefined()
     expect(handler!({})).toEqual({ agent: 'antigravity', state: 'absent' })
+  })
+})
+
+describe('agentHooks:ampStatus IPC', () => {
+  it('returns Amp hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:ampStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'amp', state: 'absent' })
+  })
+})
+
+describe('agentHooks:openClaudeStatus IPC', () => {
+  it('returns OpenClaude hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:openClaudeStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'openclaude', state: 'absent' })
   })
 })
 

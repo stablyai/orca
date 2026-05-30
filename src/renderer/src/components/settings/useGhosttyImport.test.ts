@@ -31,6 +31,10 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   return {
     ...actual,
+    useEffect: (effect: () => void | (() => void)) => {
+      void effect()
+    },
+    useRef: (initial: unknown) => ({ current: initial }),
     useState: (initial: unknown) => {
       const i = mockStateIndex++
       if (mockStateValues[i] === undefined) {

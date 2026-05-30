@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
@@ -10,6 +10,29 @@ import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/da
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { dismissStaleAgentRowByKey } from '../terminal-pane/stale-agent-row'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
+import {
+  CompactAgentExpansion,
+  CompactAgentRow,
+  CompactAgentSummaryButton
+} from './worktree-card-compact-agents'
+import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
+import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
+
+export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
+  'orca-suppress-worktree-list-scroll-adjustment'
+
+const dispatchSuppressScrollAdjustment = () => {
+  window.dispatchEvent(new CustomEvent(SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT))
+}
+
+function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
+  const sidebarElement = agentListRoot?.closest('[data-worktree-sidebar]')
+  const worktreeOptionElement = agentListRoot?.closest('[role="option"]')
+  if (!(sidebarElement instanceof HTMLElement) || !worktreeOptionElement) {
+    return
+  }
+  revealElementInScrollContainer(sidebarElement, worktreeOptionElement, 'auto')
+}
 
 type Props = {
   worktreeId: string
@@ -116,9 +139,12 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   agents,
   className
 }: BodyProps) {
+  const agentActivityDisplayMode =
+    useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
+  const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
 
   // Why: subscribe to the ack map reference (Object.is equality) and derive
   // per-agent unvisited flags locally. Keeps the inline list's bold/mute
@@ -188,15 +214,26 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   // never mount this component (see WorktreeCardAgents), so idle worktrees
   // don't pay any timer cost.
   const now = useNow(30_000)
-  const hasLineage = agents.some((agent) => agent.lineage && agent.lineage.depth > 0)
   const { rootAgents, childrenByParentPaneKey } = useMemo(
     () => buildAgentLineageModel(agents),
     [agents]
   )
+  const hasLineage = childrenByParentPaneKey.size > 0
   const [expandedLineageParents, setExpandedLineageParents] = useState<ReadonlySet<string>>(
     () => new Set()
   )
+  const [compactRootListExpanded, setCompactRootListExpanded] = useState(false)
+
+  useLayoutEffect(() => {
+    if (compactRootListExpanded && agentActivityDisplayMode === 'compact') {
+      dispatchSuppressScrollAdjustment()
+      // Why: keep any needed reveal scroll in the expansion commit; a delayed
+      // store reveal paints the tall card once, then scrolls it on the next turn.
+      revealCompactAgentCard(compactAgentListRootRef.current)
+    }
+  }, [agentActivityDisplayMode, compactRootListExpanded])
   const toggleLineageParent = useCallback((paneKey: string) => {
+    dispatchSuppressScrollAdjustment()
     setExpandedLineageParents((current) => {
       const next = new Set(current)
       if (next.has(paneKey)) {
@@ -283,6 +320,88 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     )
   }
 
+  const renderCompactAgentBranch = (
+    agent: DashboardAgentRowData,
+    ancestorPaneKeys: ReadonlySet<string> = new Set()
+  ): React.ReactNode => {
+    if (ancestorPaneKeys.has(agent.paneKey)) {
+      return null
+    }
+    const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
+    const hasChildAgents = childAgents.length > 0
+    const expanded = expandedLineageParents.has(agent.paneKey)
+    const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
+    descendantAncestorPaneKeys.add(agent.paneKey)
+    return (
+      <React.Fragment key={agent.paneKey}>
+        <CompactAgentRow
+          agent={agent}
+          now={now}
+          onActivate={handleActivateAgentTab}
+          childAgentCount={hasChildAgents ? childAgents.length : undefined}
+          childAgentsExpanded={expanded}
+          onToggleChildAgents={
+            hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
+          }
+          reserveDisclosureGutter={anyRootHasChildren && !hasChildAgents}
+          isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+        />
+        {hasChildAgents ? (
+          <CompactAgentExpansion expanded={expanded}>
+            {childAgents.map((childAgent) =>
+              renderCompactAgentBranch(childAgent, descendantAncestorPaneKeys)
+            )}
+          </CompactAgentExpansion>
+        ) : null}
+      </React.Fragment>
+    )
+  }
+
+  if (agentActivityDisplayMode === 'compact') {
+    const shouldUseSummaryRow = agents.length > 1
+    const summaryAgents = hasLineage ? rootAgents : agents
+    const subjectLabel = hasLineage
+      ? `${rootAgents.length} ${rootAgents.length === 1 ? 'parent' : 'parents'}`
+      : `${agents.length} agents`
+
+    return (
+      <div
+        ref={compactAgentListRootRef}
+        className={cn('flex flex-col mt-1 mb-1 gap-0.5', className)}
+        onClick={stopBubble}
+        onDoubleClick={stopBubble}
+        onMouseDown={stopBubble}
+        onPointerDown={stopBubble}
+        role={hasLineage ? 'tree' : 'group'}
+        aria-label="Agents"
+      >
+        {shouldUseSummaryRow && (
+          <CompactAgentSummaryButton
+            agents={summaryAgents}
+            subjectLabel={subjectLabel}
+            expanded={compactRootListExpanded}
+            onToggle={() => {
+              dispatchSuppressScrollAdjustment()
+              setCompactRootListExpanded((expanded) => !expanded)
+            }}
+          />
+        )}
+        {!shouldUseSummaryRow ? (
+          <CompactAgentRow
+            agent={agents[0]}
+            now={now}
+            onActivate={handleActivateAgentTab}
+            isFocusedPane={agents[0].paneKey === focusedAgentPaneKey}
+          />
+        ) : shouldUseSummaryRow ? (
+          <CompactAgentExpansion expanded={compactRootListExpanded}>
+            {rootAgents.map((rootAgent) => renderCompactAgentBranch(rootAgent))}
+          </CompactAgentExpansion>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     // Why: swallow bubbling so clicks on the gutter around the agent rows
     // don't reach WorktreeCard's activate / edit-meta handlers.
@@ -290,6 +409,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       className={cn('flex flex-col mt-1 mb-1', className)}
       onClick={stopBubble}
       onDoubleClick={stopBubble}
+      onMouseDown={stopBubble}
+      onPointerDown={stopBubble}
       role={hasLineage ? 'tree' : 'group'}
       aria-label="Agents"
     >

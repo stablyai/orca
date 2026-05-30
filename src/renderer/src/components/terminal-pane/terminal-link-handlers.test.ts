@@ -116,6 +116,9 @@ beforeEach(() => {
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
     return setTimeout(() => callback(0), 0) as unknown as number
   })
+  vi.stubGlobal('cancelAnimationFrame', (handle: number): void => {
+    clearTimeout(handle)
+  })
 })
 
 afterEach(() => {
@@ -275,6 +278,24 @@ describe('handleOscLink', () => {
     })
   })
 
+  it('cancels a pending Monaco reveal frame when another file open starts', async () => {
+    setPlatform('Macintosh')
+    const cancelAnimationFrame = vi.fn()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 42)
+    )
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
+
+    openDetectedFilePath('/tmp/src/main.ts', 42, null, deps)
+    await flushAsyncWork()
+
+    openDetectedFilePath('/tmp/src/other.ts', null, null, deps)
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42)
+    expect(setPendingEditorRevealMock).toHaveBeenCalledWith(null)
+  })
+
   it('advertises the browser-open behavior in the html hover hint', () => {
     setPlatform('Macintosh')
     expect(getTerminalHtmlFileOpenHint()).toBe('⌘+click to open in browser')
@@ -302,6 +323,44 @@ describe('handleOscLink', () => {
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' })
     )
+  })
+
+  it('opens Windows UNC file URL links from Windows worktrees', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'file://server/share/repo/test.txt',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        worktreePath: '\\\\server\\share\\repo'
+      }
+    )
+    await flushAsyncWork()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: '//server/share/repo/test.txt'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '//server/share/repo/test.txt' })
+    )
+  })
+
+  it('rejects hosted file URL links when the active worktree is not Windows-local', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'file://server/share/repo/test.txt',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        worktreePath: '/home/user/repo'
+      }
+    )
+    await flushAsyncWork()
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
   })
 
   it('preserves #L line anchors from file URL links', async () => {

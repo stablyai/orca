@@ -40,6 +40,12 @@ describe('screen submit shortcut', () => {
     expect(isScreenSubmitShortcut({ key: 'Escape', ctrlKey: true })).toBe(false)
   })
 
+  it('ignores Windows Ctrl+Alt+Enter chords', () => {
+    setUserAgent('Windows NT')
+
+    expect(isScreenSubmitShortcut({ key: 'Enter', ctrlKey: true, altKey: true })).toBe(false)
+  })
+
   it('ignores composing Enter events', () => {
     setUserAgent('Linux')
 

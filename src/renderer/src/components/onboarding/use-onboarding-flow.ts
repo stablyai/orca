@@ -45,6 +45,7 @@ import {
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -153,29 +154,28 @@ export function useOnboardingFlow(
   const tourOutcomeTrackerRef = useRef(createOnboardingTourOutcomeTracker())
 
   // Why: settings load async; the lazy useState initializers above run before
-  // settings hydrates. Re-sync once when settings transitions to non-null,
-  // unless the user has already interacted with that field.
+  // settings hydrates. Re-sync once before commit so children never paint the
+  // fallback defaults, unless the user already interacted with that field.
   const themeInteractedRef = useRef(false)
   const agentInteractedRef = useRef(false)
-  const settingsHydratedRef = useRef(false)
-  useEffect(() => {
-    if (!settings || settingsHydratedRef.current) {
-      return
+  const [settingsHydrated, setSettingsHydrated] = useState(settings != null)
+  const settingsHydration = resolveOnboardingSettingsHydration({
+    settings,
+    settingsHydrated,
+    themeInteracted: themeInteractedRef.current,
+    agentInteracted: agentInteractedRef.current,
+    currentTheme: theme,
+    currentAgent: selectedAgent
+  })
+  if (settingsHydration) {
+    setSettingsHydrated(settingsHydration.settingsHydrated)
+    if (settingsHydration.theme !== undefined) {
+      setTheme(settingsHydration.theme)
     }
-    settingsHydratedRef.current = true
-    if (!themeInteractedRef.current) {
-      setTheme(settings.theme)
+    if (settingsHydration.selectedAgent !== undefined) {
+      setSelectedAgent(settingsHydration.selectedAgent)
     }
-    if (!agentInteractedRef.current) {
-      const fromSettings =
-        settings.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
-          ? settings.defaultTuiAgent
-          : null
-      if (fromSettings !== null) {
-        setSelectedAgent(fromSettings)
-      }
-    }
-  }, [settings])
+  }
 
   // Why: track user interaction so async settings hydration above doesn't
   // overwrite a value the user explicitly chose.

@@ -109,9 +109,9 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
     // A generous timeout: a passing fix rejects on close well before this; the
     // pre-fix behavior would hang the full duration and trip vitest's own limit.
     const start = Date.now()
-    await expect(
-      sendRequest(metadata, 'status.get', undefined, 60000)
-    ).rejects.toMatchObject({ code: 'runtime_unavailable' })
+    await expect(sendRequest(metadata, 'status.get', undefined, 60000)).rejects.toMatchObject({
+      code: 'runtime_unavailable'
+    })
     expect(Date.now() - start).toBeLessThan(5000)
   })
 })

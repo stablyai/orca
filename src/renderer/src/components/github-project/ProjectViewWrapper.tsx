@@ -31,6 +31,7 @@ import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { cn } from '@/lib/utils'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { projectViewCacheKey } from '@/store/slices/github'
 import type {
   GetProjectViewTableResult,
@@ -75,6 +76,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const addRepoFromStore = useAppStore((s) => s.addRepo)
   const repos = useAppStore((s) => s.repos)
   const { lookupSlug, ready: slugIndexReady } = useRepoSlugIndex()
+  const mountedRef = useMountedRef()
 
   const activeProject = settings?.githubProjects?.activeProject ?? null
   const lastViewByProject = useMemo(
@@ -126,18 +128,21 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           },
           { force }
         )
+        if (!mountedRef.current || fetchRunIdRef.current !== runId) {
+          return
+        }
         if (!res.ok) {
           setError({ error: res.error, totalCount: res.totalCount })
         }
       } finally {
         // Why: a manual refresh can overlap with a tab/search fetch; an older
         // request finishing first must not clear the newer refresh indicator.
-        if (fetchRunIdRef.current === runId) {
+        if (mountedRef.current && fetchRunIdRef.current === runId) {
           setLoading(false)
         }
       }
     },
-    [fetchProjectViewTable]
+    [fetchProjectViewTable, mountedRef]
   )
 
   const handleSelect = useCallback(

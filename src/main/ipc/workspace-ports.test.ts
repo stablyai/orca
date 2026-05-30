@@ -258,6 +258,26 @@ describe('registerWorkspacePortHandlers', () => {
       port: 3002
     })
   })
+
+  it('unsubscribes the previous advertised URL listener when handlers are registered again', () => {
+    const store = makeStore()
+    const firstUnsubscribe = vi.fn()
+    const secondUnsubscribe = vi.fn()
+    const onDidChange = vi
+      .fn()
+      .mockReturnValueOnce(firstUnsubscribe)
+      .mockReturnValueOnce(secondUnsubscribe)
+
+    registerWorkspacePortHandlers(store as never, {
+      advertisedUrlEvents: { onDidChange }
+    })
+    registerWorkspacePortHandlers(store as never, {
+      advertisedUrlEvents: { onDidChange }
+    })
+
+    expect(firstUnsubscribe).toHaveBeenCalledTimes(1)
+    expect(secondUnsubscribe).not.toHaveBeenCalled()
+  })
 })
 
 function workspacePort({ pid, port }: { pid: number; port: number }): WorkspacePort {

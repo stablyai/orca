@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -31,9 +31,22 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
   const closeModal = useAppStore((s) => s.closeModal)
   const markOrcaHookScriptConfirmed = useAppStore((s) => s.markOrcaHookScriptConfirmed)
   const markOrcaHookRepoAlwaysTrusted = useAppStore((s) => s.markOrcaHookRepoAlwaysTrusted)
-  const [alwaysTrust, setAlwaysTrust] = useState(false)
 
   const isOpen = activeModal === 'confirm-orca-yaml-hooks'
+  const [alwaysTrustState, setAlwaysTrustState] = useState(() => ({
+    isOpen,
+    value: false
+  }))
+
+  // Why: never show a stale "always trust" choice on a new hook prompt.
+  // Resetting during render avoids one paint with the old decision checked.
+  if (alwaysTrustState.isOpen !== isOpen) {
+    setAlwaysTrustState({ isOpen, value: false })
+  }
+  const alwaysTrust = alwaysTrustState.isOpen === isOpen ? alwaysTrustState.value : false
+  const setAlwaysTrust = (value: boolean): void => {
+    setAlwaysTrustState({ isOpen, value })
+  }
 
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
   const repoName = typeof modalData.repoName === 'string' ? modalData.repoName : 'this repository'
@@ -50,12 +63,6 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
     typeof modalData.onResolve === 'function'
       ? (modalData.onResolve as (decision: 'run' | 'skip') => void)
       : null
-
-  useEffect(() => {
-    if (isOpen) {
-      setAlwaysTrust(false)
-    }
-  }, [isOpen])
 
   const resolveAndClose = useCallback(
     (decision: 'run' | 'skip') => {

@@ -18,13 +18,15 @@ import {
   type TextStyle
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   AlertTriangle,
   ArrowUp,
+  Bot,
   ChevronLeft,
   ChevronRight,
+  ChevronsRight,
   Eraser,
   Folder,
   File,
@@ -59,7 +61,11 @@ import {
   type TerminalModes,
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
-import { TERMINAL_ACCESSORY_KEYS } from '../../../../src/terminal/terminal-accessory-keys'
+import {
+  getDefaultTerminalAccessoryBuiltInIds,
+  getVisibleTerminalAccessoryKeys,
+  loadTerminalAccessoryLayout
+} from '../../../../src/terminal/terminal-accessory-layout'
 import {
   getTerminalLiveSpecialKeyBytes,
   isTerminalLiveInputWithinByteLimit
@@ -98,6 +104,11 @@ import {
   terminalRecordsEqual,
   type TerminalRecord
 } from '../../../../src/session/mobile-terminal-records'
+import {
+  buildMobileNewTabAgentOptions,
+  type MobileNewTabAgentOption,
+  type MobileNewTabAgentSettings
+} from '../../../../src/session/mobile-new-tab-agent-options'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
 
 type Terminal = TerminalRecord
@@ -294,6 +305,20 @@ type TerminalCreateResult = {
   tab: Extract<MobileSessionTab, { type: 'terminal' }>
 }
 
+type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
+
+type RuntimeRepoSummary = {
+  id: string
+  connectionId?: string | null
+}
+
+function getRepoIdFromMobileWorktreeId(id: string): string {
+  // Why: mobile cannot import desktop shared modules in its standalone tsc run,
+  // but the runtime worktree id wire format is still `${repoId}::${path}`.
+  const separatorIdx = id.indexOf('::')
+  return separatorIdx === -1 ? id : id.slice(0, separatorIdx)
+}
+
 type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
 
 const STATUS_LABELS: Record<ConnectionState, string> = {
@@ -325,6 +350,10 @@ type TerminalGestureInputQueue = {
 
 function isWheelMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | undefined): boolean {
   return mode === 'vt200' || mode === 'drag' || mode === 'any'
+}
+
+function isGestureMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | undefined): boolean {
+  return mode === 'x10' || isWheelMouseTrackingMode(mode)
 }
 
 function TerminalPaneView({
@@ -703,6 +732,9 @@ export default function SessionScreen() {
   const [createError, setCreateError] = useState('')
   const [createWarning, setCreateWarning] = useState(initialCreateWarning)
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
+  const [createTabAgentLoadState, setCreateTabAgentLoadState] =
+    useState<MobileNewTabAgentLoadState>('idle')
+  const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
   const [markdownActionTarget, setMarkdownActionTarget] = useState<Extract<
@@ -724,8 +756,15 @@ export default function SessionScreen() {
   const [leaveDrafts, setLeaveDrafts] = useState<DirtyMarkdownDraft[] | null>(null)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
+  const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
+    getDefaultTerminalAccessoryBuiltInIds
+  )
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
   const [deleteKeyTarget, setDeleteKeyTarget] = useState<CustomKey | null>(null)
+  const visibleBuiltInAccessoryKeys = useMemo(
+    () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
+    [visibleBuiltInIds]
+  )
   // Why: in Expo SDK 55 edge-to-edge mode the OS does NOT resize the window when
   // the IME opens — the keyboard draws on top of the app. We track the keyboard
   // height ourselves and translate the input/accessory area above the IME without
@@ -1716,6 +1755,34 @@ export default function SessionScreen() {
     void loadCustomKeys().then(setCustomKeys)
   }, [])
 
+  useFocusEffect(
+    useCallback(() => {
+      let stale = false
+      void loadTerminalAccessoryLayout().then((layout) => {
+        if (!stale) setVisibleBuiltInIds(layout.visibleBuiltInIds)
+      })
+      return () => {
+        stale = true
+      }
+    }, [])
+  )
+
+  useEffect(() => {
+    let mounted = true
+    const refresh = () => {
+      void loadTerminalAccessoryLayout().then((layout) => {
+        if (mounted) setVisibleBuiltInIds(layout.visibleBuiltInIds)
+      })
+    }
+    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+      if (s === 'active') refresh()
+    })
+    return () => {
+      mounted = false
+      sub.remove()
+    }
+  }, [])
+
   // Why: re-measure when non-keyboard layout-affecting state changes
   // (e.g. tab strip toggling visibility when the terminal count crosses
   // 0↔1 — without this, a freshly-created 2nd tab subscribes with a
@@ -1814,6 +1881,11 @@ export default function SessionScreen() {
     },
     [customKeys]
   )
+
+  const handleManageShortcuts = useCallback(() => {
+    setShowCustomKeyModal(false)
+    router.push('/terminal-settings')
+  }, [router])
 
   useEffect(() => {
     clearTerminalCache()
@@ -2401,9 +2473,9 @@ export default function SessionScreen() {
       if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal')
         return
       const modes = ptyModesRef.current.get(handle)
-      // Why: WebView messages can become PTY input here. Only TUI scroll paths
-      // generate gesture input, and the bridge is rate-limited for SSH safety.
-      if (!modes?.altScreen && !isWheelMouseTrackingMode(modes?.mouseTrackingMode)) return
+      // Why: WebView gesture bytes can become PTY input here, so mouse-aware
+      // reports stay behind validation and SSH-safe rate limiting.
+      if (!modes?.altScreen && !isGestureMouseTrackingMode(modes?.mouseTrackingMode)) return
       const sequenceCount = countTerminalGestureInputSequences(bytes)
       if (sequenceCount == null) return
       if (!allowTerminalGestureInput(handle, sequenceCount)) return
@@ -2610,7 +2682,74 @@ export default function SessionScreen() {
     }
   }, [selectModeActive])
 
-  async function handleCreateTerminal() {
+  useEffect(() => {
+    if (!showCreateTabDrawer) {
+      setCreateTabAgentLoadState('idle')
+      setCreateTabAgentOptions([])
+      return
+    }
+    if (!client || connState !== 'connected') {
+      setCreateTabAgentLoadState('idle')
+      setCreateTabAgentOptions([])
+      return
+    }
+
+    let stale = false
+    setCreateTabAgentLoadState('loading')
+    setCreateTabAgentOptions([])
+
+    void (async () => {
+      const [settingsResponse, repoResponse] = await Promise.all([
+        client.sendRequest('settings.get'),
+        client.sendRequest('repo.list')
+      ])
+      if (!settingsResponse.ok) {
+        throw new Error(settingsResponse.error.message)
+      }
+      const settings = (
+        (settingsResponse as RpcSuccess).result as {
+          settings?: MobileNewTabAgentSettings
+        }
+      ).settings
+      if (!repoResponse.ok) {
+        throw new Error(repoResponse.error.message)
+      }
+      const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
+      if (!repoId) {
+        throw new Error('worktree_repo_missing')
+      }
+      const repos =
+        ((repoResponse as RpcSuccess).result as { repos?: RuntimeRepoSummary[] }).repos ?? []
+      const repo = repos.find((candidate) => candidate.id === repoId)
+      if (!repo) {
+        throw new Error('worktree_repo_not_found')
+      }
+      const connectionId = repo.connectionId?.trim() || null
+      const detectedResponse = connectionId
+        ? await client.sendRequest('preflight.detectRemoteAgents', { connectionId })
+        : await client.sendRequest('preflight.detectAgents')
+      if (!detectedResponse.ok) {
+        throw new Error(detectedResponse.error.message)
+      }
+      if (stale) {
+        return
+      }
+      const detectedAgentIds = (detectedResponse as RpcSuccess).result as unknown[]
+      setCreateTabAgentOptions(buildMobileNewTabAgentOptions(settings, detectedAgentIds))
+      setCreateTabAgentLoadState('loaded')
+    })().catch(() => {
+      if (!stale) {
+        setCreateTabAgentOptions([])
+        setCreateTabAgentLoadState('error')
+      }
+    })
+
+    return () => {
+      stale = true
+    }
+  }, [client, connState, showCreateTabDrawer, worktreeId])
+
+  async function handleCreateTerminal(agent?: MobileNewTabAgentOption['agent']) {
     if (!client || creating) return
 
     setCreating(true)
@@ -2619,7 +2758,8 @@ export default function SessionScreen() {
     try {
       const response = await client.sendRequest('session.tabs.createTerminal', {
         worktree: `id:${worktreeId}`,
-        afterTabId: activeSessionTabId ?? undefined
+        afterTabId: activeSessionTabId ?? undefined,
+        ...(agent ? { agent } : {})
       })
       if (response.ok) {
         const result = (response as RpcSuccess).result as TerminalCreateResult
@@ -2951,6 +3091,47 @@ export default function SessionScreen() {
     opacity: toastOpacityRef.current,
     transform: [{ translateY: -keyboardLift }]
   }
+  const createTabAgentActions =
+    createTabAgentLoadState === 'loading'
+      ? [
+          {
+            label: 'Detecting Agents',
+            icon: Bot,
+            disabled: true,
+            loading: true,
+            onPress: () => {}
+          }
+        ]
+      : createTabAgentOptions.length > 0
+        ? createTabAgentOptions.map((option) => ({
+            label: option.label,
+            hint: 'Agent preset',
+            icon: Bot,
+            onPress: () => {
+              setShowCreateTabDrawer(false)
+              void handleCreateTerminal(option.agent)
+            }
+          }))
+        : createTabAgentLoadState === 'loaded'
+          ? [
+              {
+                label: 'No Enabled Agents',
+                icon: Bot,
+                disabled: true,
+                onPress: () => {}
+              }
+            ]
+          : createTabAgentLoadState === 'error'
+            ? [
+                {
+                  label: 'Agent Presets Unavailable',
+                  hint: 'Check the host connection',
+                  icon: Bot,
+                  disabled: true,
+                  onPress: () => {}
+                }
+              ]
+            : []
 
   return (
     <View style={styles.container}>
@@ -3279,15 +3460,16 @@ export default function SessionScreen() {
                       : 'Switch to live terminal input'
                   }
                 >
-                  <Text
-                    style={[
-                      styles.accessoryKeyText,
-                      liveInputEnabled && styles.accessoryKeyTextActive,
-                      !canSend && styles.accessoryKeyTextDisabled
-                    ]}
-                  >
-                    Live
-                  </Text>
+                  <ChevronsRight
+                    size={14}
+                    color={
+                      liveInputEnabled
+                        ? colors.bgBase
+                        : canSend
+                          ? colors.textSecondary
+                          : colors.textMuted
+                    }
+                  />
                 </Pressable>
                 {canPaste && (
                   <Pressable
@@ -3307,9 +3489,9 @@ export default function SessionScreen() {
                     </Text>
                   </Pressable>
                 )}
-                {TERMINAL_ACCESSORY_KEYS.map((key) => (
+                {visibleBuiltInAccessoryKeys.map((key) => (
                   <Pressable
-                    key={key.label}
+                    key={key.id}
                     style={({ pressed }) => [
                       styles.accessoryKey,
                       pressed && styles.accessoryKeyPressed,
@@ -3383,12 +3565,9 @@ export default function SessionScreen() {
                 onPress={focusLiveInput}
                 accessibilityLabel="Focus live terminal input"
               >
-                <View style={styles.liveInputBadge}>
-                  <KeyboardIcon size={13} color={colors.textPrimary} strokeWidth={2.2} />
-                  <Text style={styles.liveInputBadgeText}>Live</Text>
-                </View>
+                <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
                 <Text style={styles.liveInputHint} numberOfLines={1}>
-                  Keyboard input goes to terminal
+                  Keyboard input directly goes to terminal
                 </Text>
                 <TextInput
                   ref={liveInputRef}
@@ -3512,7 +3691,8 @@ export default function SessionScreen() {
               setShowCreateTabDrawer(false)
               void handleCreateMarkdownNote()
             }
-          }
+          },
+          ...createTabAgentActions
         ]}
         onClose={() => setShowCreateTabDrawer(false)}
       />
@@ -3775,6 +3955,7 @@ export default function SessionScreen() {
         visible={showCustomKeyModal}
         onClose={() => setShowCustomKeyModal(false)}
         onKeysChanged={setCustomKeys}
+        onManageShortcuts={handleManageShortcuts}
       />
       <ActionSheetModal
         visible={deleteKeyTarget != null}
@@ -4194,7 +4375,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle
   },
   accessoryKeyActive: {
-    backgroundColor: colors.accentBlue
+    backgroundColor: colors.textPrimary
   },
   customAccessoryKey: {
     borderWidth: 1,
@@ -4209,7 +4390,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.monoFamily
   },
   accessoryKeyTextActive: {
-    color: colors.textPrimary,
+    color: colors.bgBase,
     fontWeight: '700'
   },
   accessoryKeyTextDisabled: {
@@ -4218,6 +4399,7 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 46,
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.md,
     borderTopWidth: 1,
@@ -4226,11 +4408,12 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
+    height: 34,
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: 0,
     fontSize: 14,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
@@ -4238,21 +4421,7 @@ const styles = StyleSheet.create({
   liveInputBar: {
     gap: spacing.sm
   },
-  liveInputBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.accentBlue,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.button
-  },
-  liveInputBadgeText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: typography.monoFamily
-  },
+
   liveInputHint: {
     flex: 1,
     color: colors.textSecondary,

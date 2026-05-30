@@ -103,6 +103,25 @@ describe('resolveGroupAddress', () => {
       expect(result).toEqual(['term_b'])
     })
 
+    it('matches @openclaude by terminal title', () => {
+      const terminals = [
+        makeSummary('term_a', { title: 'OpenClaude' }),
+        makeSummary('term_b', { title: 'OpenClaude running' }),
+        makeSummary('term_c', { title: 'Claude Code' })
+      ]
+      const result = resolveGroupAddress('@openclaude', 'term_a', terminals, noStatus)
+      expect(result).toEqual(['term_b'])
+    })
+
+    it('does not match OpenClaude titles through @claude', () => {
+      const terminals = [
+        makeSummary('term_a', { title: 'Claude Code' }),
+        makeSummary('term_b', { title: 'OpenClaude running' })
+      ]
+      const result = resolveGroupAddress('@claude', 'term_a', terminals, noStatus)
+      expect(result).toEqual([])
+    })
+
     it('matches @codex by terminal title', () => {
       const terminals = [
         makeSummary('term_a', { title: 'Codex CLI' }),

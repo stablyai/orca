@@ -10,7 +10,10 @@ import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-instal
 
 const execFileAsync = promisify(execFile)
 const DEFAULT_MAC_COMMAND_PATH = '/usr/local/bin/orca'
+const LINUX_COMMAND_NAME = 'orca-ide'
+const LEGACY_LINUX_COMMAND_NAME = 'orca'
 const DEV_LAUNCHER_DIR = ['cli', 'bin']
+const WINDOWS_PATH_COMMAND_TIMEOUT_MS = 5_000
 
 type CliInstallerOptions = {
   platform?: NodeJS.Platform
@@ -48,6 +51,11 @@ export class CliInstaller {
   private readonly userPathReader: () => Promise<string | null>
   private readonly userPathWriter: (value: string) => Promise<void>
 
+  // Why: Linux uses `orca-ide` to avoid shadowing GNOME Orca's /usr/bin/orca.
+  private get commandName(): string {
+    return this.platform === 'linux' ? LINUX_COMMAND_NAME : 'orca'
+  }
+
   constructor(options: CliInstallerOptions = {}) {
     this.platform = options.platform ?? process.platform
     this.isPackaged = options.isPackaged ?? app.isPackaged
@@ -73,7 +81,7 @@ export class CliInstaller {
     if (!spec) {
       return {
         platform: this.platform,
-        commandName: 'orca',
+        commandName: this.commandName,
         commandPath: null,
         pathDirectory: null,
         pathConfigured: false,
@@ -91,7 +99,7 @@ export class CliInstaller {
     if (!launcherPath) {
       return {
         platform: this.platform,
-        commandName: 'orca',
+        commandName: this.commandName,
         commandPath: spec.commandPath,
         pathDirectory: dirname(spec.commandPath),
         pathConfigured: false,
@@ -130,6 +138,7 @@ export class CliInstaller {
     // eslint-disable-next-line unicorn/prefer-ternary -- Why: the install path performs async side effects and is easier to audit as an explicit branch than as an awaited ternary.
     if (status.installMethod === 'symlink') {
       await this.installSymlink(status)
+      await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
     } else {
       await this.installWindowsWrapper(status.commandPath, status.launcherPath)
     }
@@ -150,6 +159,7 @@ export class CliInstaller {
       return status
     }
     if (status.state === 'not_installed') {
+      await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
       if (this.platform === 'win32') {
         await this.removeWindowsPathEntry(dirname(status.commandPath))
         return this.getStatus()
@@ -165,6 +175,7 @@ export class CliInstaller {
 
     if (status.installMethod === 'symlink') {
       await this.removeSymlink(status.commandPath)
+      await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
     } else {
       await unlink(status.commandPath)
       await this.removeWindowsPathEntry(dirname(status.commandPath))
@@ -209,7 +220,10 @@ export class CliInstaller {
       // Why: Linux does not have a single privileged global shell-command flow
       // equivalent to macOS's /usr/local/bin integration. ~/.local/bin is the
       // least surprising user-scoped location that many distros already expose.
-      return join(this.homePath, '.local', 'bin', 'orca')
+      // Why `orca-ide`: GNOME Orca (the screen reader) ships /usr/bin/orca on
+      // most Linux distros. Using `orca-ide` avoids shadowing that system
+      // command, matching the executableName already used for the Electron binary.
+      return join(this.homePath, '.local', 'bin', LINUX_COMMAND_NAME)
     }
 
     if (this.platform === 'win32') {
@@ -272,6 +286,36 @@ export class CliInstaller {
       await this.privilegedRunner(
         `if [ -L ${quoteShell(commandPath)} ]; then rm ${quoteShell(commandPath)}; fi`
       )
+    }
+  }
+
+  private async removeLegacyLinuxCommandIfManaged(launcherPath: string | null): Promise<void> {
+    if (this.platform !== 'linux' || this.commandPathOverride || !launcherPath) {
+      return
+    }
+
+    const legacyCommandPath = join(this.homePath, '.local', 'bin', LEGACY_LINUX_COMMAND_NAME)
+    try {
+      const stats = await lstat(legacyCommandPath)
+      if (!stats.isSymbolicLink()) {
+        return
+      }
+
+      const currentTarget = await readlink(legacyCommandPath)
+      const resolvedCurrentTarget = resolve(dirname(legacyCommandPath), currentTarget)
+      const legacyLauncherPath = resolve(dirname(launcherPath), LEGACY_LINUX_COMMAND_NAME)
+      if (resolvedCurrentTarget !== legacyLauncherPath) {
+        return
+      }
+
+      // Why: after the Linux command rename, the old Orca-owned `orca` symlink
+      // would keep shadowing GNOME Orca even though the new command is installed.
+      await unlink(legacyCommandPath)
+    } catch (error) {
+      if (isMissingError(error)) {
+        return
+      }
+      throw error
     }
   }
 
@@ -387,7 +431,7 @@ export class CliInstaller {
   }): CliInstallStatus {
     return {
       platform: this.platform,
-      commandName: 'orca',
+      commandName: this.commandName,
       commandPath: args.commandPath,
       pathDirectory: dirname(args.commandPath),
       pathConfigured: false,
@@ -480,7 +524,7 @@ async function ensureDevLauncher(args: {
   const launcherPath = join(
     args.userDataPath,
     ...DEV_LAUNCHER_DIR,
-    args.platform === 'win32' ? 'orca.cmd' : 'orca'
+    args.platform === 'win32' ? 'orca.cmd' : args.platform === 'linux' ? LINUX_COMMAND_NAME : 'orca'
   )
   await mkdir(dirname(launcherPath), { recursive: true })
 
@@ -596,7 +640,7 @@ function isAbsoluteForPlatform(platform: NodeJS.Platform, value: string): boolea
 }
 
 async function readWindowsUserPath(): Promise<string | null> {
-  const { stdout } = await execFileAsync('powershell', [
+  const stdout = await runWindowsPathCommand([
     '-NoProfile',
     '-Command',
     "[Environment]::GetEnvironmentVariable('Path','User')"
@@ -605,7 +649,7 @@ async function readWindowsUserPath(): Promise<string | null> {
 }
 
 async function writeWindowsUserPath(value: string): Promise<void> {
-  await execFileAsync('powershell', [
+  await runWindowsPathCommand([
     '-NoProfile',
     '-Command',
     // Why: PATH registration must stay user-scoped on Windows so the Orca
@@ -613,6 +657,48 @@ async function writeWindowsUserPath(value: string): Promise<void> {
     // elevation or mutating machine-wide environment state.
     `[Environment]::SetEnvironmentVariable('Path', ${quotePowerShell(value)}, 'User')`
   ])
+}
+
+function runWindowsPathCommand(args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let child: ReturnType<typeof execFile> | null = null
+    let settled = false
+
+    const finish = (error: Error | null, stdout = ''): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(stdout)
+    }
+
+    // Why: Windows PATH reads/writes back CLI Settings; wedged PowerShell must
+    // not keep command registration status or install/remove pending forever.
+    const timeout = setTimeout(() => {
+      child?.kill()
+      finish(
+        new Error(`Windows PATH command timed out after ${WINDOWS_PATH_COMMAND_TIMEOUT_MS}ms.`)
+      )
+    }, WINDOWS_PATH_COMMAND_TIMEOUT_MS)
+
+    try {
+      child = execFile(
+        'powershell',
+        args,
+        { encoding: 'utf8', timeout: WINDOWS_PATH_COMMAND_TIMEOUT_MS },
+        (error, stdout) => {
+          finish(error ?? null, stdout)
+        }
+      )
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error(String(error)))
+    }
+  })
 }
 
 function quotePowerShell(value: string): string {
@@ -623,8 +709,11 @@ export function getBundledLauncherPath(
   platform: NodeJS.Platform,
   resourcesPath: string
 ): string | null {
-  if (platform === 'darwin' || platform === 'linux') {
+  if (platform === 'darwin') {
     return join(resourcesPath, 'bin', 'orca')
+  }
+  if (platform === 'linux') {
+    return join(resourcesPath, 'bin', LINUX_COMMAND_NAME)
   }
   if (platform === 'win32') {
     return join(resourcesPath, 'bin', 'orca.cmd')

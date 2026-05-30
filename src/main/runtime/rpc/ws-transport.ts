@@ -251,7 +251,9 @@ export class WebSocketTransport implements RpcTransport {
 
     if (wss) {
       for (const client of wss.clients) {
-        client.close(1001, 'Server shutting down')
+        // Why: stop() is a teardown path. A half-open mobile socket may never
+        // answer a graceful close frame, which keeps httpServer.close pending.
+        client.terminate()
       }
       wss.close()
     }

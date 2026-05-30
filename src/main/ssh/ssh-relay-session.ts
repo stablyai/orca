@@ -36,6 +36,7 @@ import {
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
+  isRendererPtyOutputPaused,
   setPtyOwnership
 } from '../ipc/pty'
 import {
@@ -642,6 +643,11 @@ export class SshRelaySession {
         env?: unknown
         version?: unknown
         hasExplicitPrompt?: unknown
+        promptInteractionKey?: unknown
+        hookEventName?: unknown
+        toolUseId?: unknown
+        toolAgentId?: unknown
+        toolAgentType?: unknown
         isReplay?: unknown
         payload?: unknown
       }
@@ -661,6 +667,16 @@ export class SshRelaySession {
           env: typeof envelope.env === 'string' ? envelope.env : undefined,
           version: typeof envelope.version === 'string' ? envelope.version : undefined,
           hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
+          promptInteractionKey:
+            typeof envelope.promptInteractionKey === 'string'
+              ? envelope.promptInteractionKey
+              : undefined,
+          hookEventName:
+            typeof envelope.hookEventName === 'string' ? envelope.hookEventName : undefined,
+          toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
+          toolAgentId: typeof envelope.toolAgentId === 'string' ? envelope.toolAgentId : undefined,
+          toolAgentType:
+            typeof envelope.toolAgentType === 'string' ? envelope.toolAgentType : undefined,
           isReplay: envelope.isReplay === true ? true : undefined,
           payload: envelope.payload
         },
@@ -800,7 +816,7 @@ export class SshRelaySession {
     ptyProvider.onData((payload) => {
       const seq = this.runtime?.onPtyData(payload.id, payload.data, Date.now())
       const win = this.getMainWindow()
-      if (win && !win.isDestroyed()) {
+      if (win && !win.isDestroyed() && !isRendererPtyOutputPaused(payload.id)) {
         win.webContents.send('pty:data', {
           ...payload,
           ...(typeof seq === 'number' ? { seq, rawLength: payload.data.length } : {})

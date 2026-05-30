@@ -1,14 +1,40 @@
 /* eslint-disable max-lines -- Why: desktop provider contract coverage shares one mocked bridge harness. */
 import { execFile } from 'child_process'
-import { readFileSync } from 'fs'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DesktopScriptProviderClient } from './desktop-script-provider-client'
+
+const { operationFiles, mkdtempMock, rmMock, writeFileMock } = vi.hoisted(() => {
+  const files = new Map<string, string>()
+  return {
+    operationFiles: files,
+    mkdtempMock: vi.fn(async (prefix: string) => `${prefix}${files.size}`),
+    rmMock: vi.fn(async () => undefined),
+    writeFileMock: vi.fn(async (filePath: string, data: string | Buffer) => {
+      files.set(filePath, Buffer.isBuffer(data) ? data.toString('utf8') : data)
+    })
+  }
+})
 
 vi.mock('child_process', () => ({
   execFile: vi.fn()
 }))
 
+vi.mock('fs/promises', () => ({
+  mkdtemp: mkdtempMock,
+  rm: rmMock,
+  writeFile: writeFileMock
+}))
+
 describe('DesktopScriptProviderClient', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.mocked(execFile).mockReset()
+    operationFiles.clear()
+    mkdtempMock.mockClear()
+    rmMock.mockClear()
+    writeFileMock.mockClear()
+  })
+
   it('normalizes list-apps responses', async () => {
     mockBridgeResponse({
       ok: true,
@@ -291,6 +317,27 @@ describe('DesktopScriptProviderClient', () => {
     })
   })
 
+  it('rejects when the desktop provider subprocess ignores the exec timeout', async () => {
+    vi.useFakeTimers()
+    const kill = vi.fn()
+    vi.mocked(execFile).mockImplementationOnce(() => ({ kill }) as never)
+
+    const client = new DesktopScriptProviderClient('linux', '/tmp/runtime.py')
+    const promise = client.listApps()
+    let settled = false
+    void promise.catch(() => {
+      settled = true
+    })
+
+    await vi.waitFor(() => expect(execFile).toHaveBeenCalled(), { timeout: 1_000 })
+    await vi.advanceTimersByTimeAsync(30_001)
+    await vi.runOnlyPendingTimersAsync()
+
+    expect(settled).toBe(true)
+    expect(kill).toHaveBeenCalled()
+    await expect(promise).rejects.toMatchObject({ code: 'action_timeout' })
+  })
+
   it('maps action-specific bridge errors to actionable codes', async () => {
     mockBridgeResponse({ ok: false, error: 'element value is not settable' })
     mockBridgeResponse({ ok: false, error: 'Raise is not a valid secondary action' })
@@ -375,7 +422,11 @@ function mockBridgeResponse(
   vi.mocked(execFile).mockImplementationOnce((_command, _args, _options, callback) => {
     const operationPath = _args?.at(-1)
     if (inspectOperation && typeof operationPath === 'string') {
-      inspectOperation(JSON.parse(readFileSync(operationPath, 'utf8')) as Record<string, unknown>)
+      const operation = operationFiles.get(operationPath)
+      if (!operation) {
+        throw new Error(`Missing mocked operation file: ${operationPath}`)
+      }
+      inspectOperation(JSON.parse(operation) as Record<string, unknown>)
     }
     const done = callback as (error: Error | null, stdout: string, stderr: string) => void
     done(null, JSON.stringify(response), '')

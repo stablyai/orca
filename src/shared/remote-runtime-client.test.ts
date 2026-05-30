@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { WebSocketServer, type WebSocket } from 'ws'
+import WebSocketClient, { WebSocketServer, type WebSocket } from 'ws'
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
 import {
   decrypt,
@@ -74,6 +74,25 @@ describe('sendRemoteRuntimeRequest', () => {
       ok: true,
       result: { satisfied: true }
     })
+  })
+
+  it('detaches one-shot socket listeners after a successful response', async () => {
+    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+    try {
+      const server = await createOneShotServer()
+
+      await sendRemoteRuntimeRequest<{ satisfied: boolean }>(
+        server.pairing,
+        'terminal.wait',
+        { terminal: 't1', for: 'tui-idle', timeoutMs: 550 },
+        300
+      )
+
+      const removedEvents = offSpy.mock.calls.map(([event]) => event)
+      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
+    } finally {
+      offSpy.mockRestore()
+    }
   })
 })
 

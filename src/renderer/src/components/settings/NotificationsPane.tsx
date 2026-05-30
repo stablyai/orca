@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: notification settings keeps delivery toggles, system test feedback, and sound selection on one settings merge path. */
-import { type ReactNode, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
@@ -16,6 +16,7 @@ import {
 } from '../ui/select'
 import { BellRing, Bot, FileAudio, Siren, Upload, Volume2 } from 'lucide-react'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 export { NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './notifications-search'
 
@@ -165,7 +166,7 @@ export function NotificationsPane({
 }: NotificationsPaneProps): React.JSX.Element {
   const notificationSettings = settings.notifications
   const notificationSettingsRef = useRef(notificationSettings)
-  notificationSettingsRef.current = notificationSettings
+  const mountedRef = useMountedRef()
   const [isPickingSound, setIsPickingSound] = useState(false)
 
   const updateNotificationSettings = async (
@@ -182,6 +183,10 @@ export function NotificationsPane({
       }
     })
   }
+
+  useEffect(() => {
+    notificationSettingsRef.current = notificationSettings
+  }, [notificationSettings])
 
   // Why: keep dragging local and persist only on Radix's commit event. That
   // avoids IPC on every tick without a debounce timer that can race settings updates.
@@ -240,7 +245,9 @@ export function NotificationsPane({
         await previewSound('custom')
       }
     } finally {
-      setIsPickingSound(false)
+      if (mountedRef.current) {
+        setIsPickingSound(false)
+      }
     }
   }
 

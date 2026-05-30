@@ -1,9 +1,12 @@
+/* eslint-disable max-lines -- Why: the mobile page keeps pairing, device
+   revoke, QR, and stage transitions together so the flow remains auditable. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import QRCodeBrowser from 'qrcode/lib/browser'
 import { toast } from 'sonner'
 import { Eye, EyeOff, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { PhoneCarousel } from './PhoneCarousel'
 import {
@@ -65,6 +68,7 @@ export default function MobilePage(): React.JSX.Element {
   const [revokingDeviceIds, setRevokingDeviceIds] = useState<string[]>([])
   const [deviceCountAtPairStart, setDeviceCountAtPairStart] = useState<number | null>(null)
   const hasGeneratedRef = useRef(false)
+  const mountedRef = useMountedRef()
   // Tracks the previous stage so we can set the paired-view baseline exactly
   // once on entry into 'paired', avoiding a polling-stop race when devices
   // change while already in paired view.
@@ -76,7 +80,9 @@ export default function MobilePage(): React.JSX.Element {
   const loadDevices = useCallback(async (): Promise<PairedDevice[]> => {
     try {
       const result = await window.api.mobile.listDevices()
-      setDevices(result.devices)
+      if (mountedRef.current) {
+        setDevices(result.devices)
+      }
       return result.devices
     } catch (err) {
       // Log so a transient IPC failure (which routes the user to 'intro') is
@@ -84,7 +90,7 @@ export default function MobilePage(): React.JSX.Element {
       console.error('mobile.listDevices failed', err)
       return []
     }
-  }, [])
+  }, [mountedRef])
 
   // Why: pick the initial stage based on whether any devices are already
   // paired so returning users don't see the marketing intro every time.
@@ -120,17 +126,23 @@ export default function MobilePage(): React.JSX.Element {
       try {
         await window.api.mobile.revokeDevice({ deviceId })
         const remaining = await loadDevices()
-        toast.success('Device revoked')
-        if (remaining.length === 0) {
+        if (mountedRef.current) {
+          toast.success('Device revoked')
+        }
+        if (remaining.length === 0 && mountedRef.current) {
           setStage('intro')
         }
       } catch {
-        toast.error('Failed to revoke device')
+        if (mountedRef.current) {
+          toast.error('Failed to revoke device')
+        }
       } finally {
-        setRevokingDeviceIds((prev) => prev.filter((id) => id !== deviceId))
+        if (mountedRef.current) {
+          setRevokingDeviceIds((prev) => prev.filter((id) => id !== deviceId))
+        }
       }
     },
-    [loadDevices]
+    [loadDevices, mountedRef]
   )
 
   // Why: render install QRs lazily — only after the user enters the flow,
@@ -162,7 +174,9 @@ export default function MobilePage(): React.JSX.Element {
 
   const generatePairing = useCallback(
     async (rotate: boolean, addressOverride?: string) => {
-      setPairLoading(true)
+      if (mountedRef.current) {
+        setPairLoading(true)
+      }
       try {
         const address = addressOverride ?? selectedAddress
         const result = await window.api.mobile.getPairingQR({
@@ -170,40 +184,56 @@ export default function MobilePage(): React.JSX.Element {
           ...(rotate ? { rotate: true } : {})
         })
         if (result.available) {
-          setPairQrDataUrl(result.qrDataUrl)
-          setPairingUrl(result.pairingUrl)
+          if (mountedRef.current) {
+            setPairQrDataUrl(result.qrDataUrl)
+            setPairingUrl(result.pairingUrl)
+          }
           hasGeneratedRef.current = true
         } else {
-          toast.error('WebSocket transport is not running')
+          if (mountedRef.current) {
+            toast.error('WebSocket transport is not running')
+          }
         }
       } catch {
-        toast.error('Failed to generate pairing code')
+        if (mountedRef.current) {
+          toast.error('Failed to generate pairing code')
+        }
       } finally {
-        setPairLoading(false)
+        if (mountedRef.current) {
+          setPairLoading(false)
+        }
       }
     },
-    [selectedAddress]
+    [mountedRef, selectedAddress]
   )
 
   const loadNetworkInterfaces = useCallback(async () => {
-    setRefreshingNetworkInterfaces(true)
+    if (mountedRef.current) {
+      setRefreshingNetworkInterfaces(true)
+    }
     try {
       const result = await window.api.mobile.listNetworkInterfaces()
-      setNetworkInterfaces(result.interfaces)
+      if (mountedRef.current) {
+        setNetworkInterfaces(result.interfaces)
+      }
       // Resolve the new address before committing it so we can detect a real
       // change and remint the QR — otherwise the QR keeps encoding the stale
       // endpoint after a network refresh swaps the active interface.
       const newAddress = selectRefreshedNetworkAddress(selectedAddress, result.interfaces)
-      setSelectedAddress(newAddress)
-      if (newAddress !== selectedAddress && hasGeneratedRef.current) {
+      if (mountedRef.current) {
+        setSelectedAddress(newAddress)
+      }
+      if (newAddress !== selectedAddress && hasGeneratedRef.current && mountedRef.current) {
         void generatePairing(true, newAddress)
       }
     } catch {
       // Network list is non-critical; the QR will still mint with default routing.
     } finally {
-      setRefreshingNetworkInterfaces(false)
+      if (mountedRef.current) {
+        setRefreshingNetworkInterfaces(false)
+      }
     }
-  }, [selectedAddress, generatePairing])
+  }, [selectedAddress, generatePairing, mountedRef])
 
   useEffect(() => {
     if (stage !== 'flow') {
@@ -227,12 +257,16 @@ export default function MobilePage(): React.JSX.Element {
     }
     try {
       await window.api.ui.writeClipboardText(pairingUrl)
-      toast.success('Pairing code copied')
+      if (mountedRef.current) {
+        toast.success('Pairing code copied')
+      }
     } catch (err) {
       console.error('writeClipboardText failed', err)
-      toast.error('Failed to copy pairing code')
+      if (mountedRef.current) {
+        toast.error('Failed to copy pairing code')
+      }
     }
-  }, [pairingUrl])
+  }, [mountedRef, pairingUrl])
 
   // Why: when Step 2 first becomes visible, mint a pairing offer so the
   // user sees a real QR immediately. Subsequent visits keep the existing
@@ -329,10 +363,14 @@ export default function MobilePage(): React.JSX.Element {
   const copyInstallUrl = async (): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(PLATFORM_COPY[platform].url)
-      toast.success('Install link copied')
+      if (mountedRef.current) {
+        toast.success('Install link copied')
+      }
     } catch (err) {
       console.error('writeClipboardText failed', err)
-      toast.error('Failed to copy link')
+      if (mountedRef.current) {
+        toast.error('Failed to copy link')
+      }
     }
   }
 

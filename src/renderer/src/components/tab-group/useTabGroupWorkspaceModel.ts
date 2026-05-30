@@ -22,6 +22,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '../../runtime/web-runtime-session'
+import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
@@ -121,6 +122,11 @@ export function useTabGroupWorkspaceModel({
             createdAt: item.createdAt,
             generation: terminalTab?.generation,
             shellOverride: terminalTab?.shellOverride,
+            // Why: carry the launched agent through the rebuilt tab so the tab
+            // bar can show the provider icon before the agent's first hook —
+            // this object is reconstructed from the unified-tab model, so any
+            // store-only field (like launchAgent) is dropped unless copied here.
+            launchAgent: terminalTab?.launchAgent,
             pendingActivationSpawn: terminalTab?.pendingActivationSpawn
           }
         }),
@@ -532,6 +538,9 @@ export function useTabGroupWorkspaceModel({
       createSplitGroup,
       newBrowserTab: () => {
         void openNewBrowserTabInActiveWorkspace(groupId)
+      },
+      openEntry: async (args: TabCreateEntryArgs) => {
+        await openTabBarEntry(args)
       },
       duplicateBrowserTab: (browserTabId: string) => {
         void (async () => {

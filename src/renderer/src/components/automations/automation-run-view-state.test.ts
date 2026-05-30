@@ -72,7 +72,7 @@ describe('automation run view state', () => {
     })
   })
 
-  it('falls back to opening the workspace when terminal history is gone', () => {
+  it('falls back to resuming the workspace when terminal history is gone', () => {
     expect(
       getAutomationRunViewState({
         run: makeRun(),
@@ -81,8 +81,8 @@ describe('automation run view state', () => {
       })
     ).toMatchObject({
       availability: 'workspace',
-      actionLabel: 'Open workspace',
-      statusLabel: 'Opened workspace; original terminal is closed.',
+      actionLabel: 'Resume workspace',
+      statusLabel: 'Workspace is available; original terminal is closed.',
       canOpen: true
     })
   })

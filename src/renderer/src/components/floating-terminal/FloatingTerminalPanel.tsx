@@ -2,7 +2,16 @@
  * resizing, orchestration setup, and mixed terminal/browser/editor tab
  * handling in one surface so the floating worktree does not drift from the
  * main tab model while still keeping the DOM-mounted panes local. */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import BrowserPane from '@/components/browser-pane/BrowserPane'
@@ -11,6 +20,7 @@ import TabBar from '@/components/tab-bar/TabBar'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { Button } from '@/components/ui/button'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useShortcutKeys } from '@/hooks/useShortcutLabel'
 import {
   Dialog,
@@ -72,7 +82,12 @@ import {
   clampFloatingTerminalBounds,
   getDefaultFloatingTerminalBounds,
   getMaximizedFloatingTerminalBounds,
-  type FloatingTerminalPanelBounds
+  persistFloatingTerminalPanelBounds,
+  readPersistedFloatingTerminalPanelBounds,
+  resolveFloatingTerminalPanelBounds,
+  shouldReconcileFloatingTerminalPanelBounds,
+  type FloatingTerminalPanelBounds,
+  type FloatingTerminalPanelBoundsSource
 } from './floating-terminal-panel-bounds'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 const EMPTY_BROWSER_TABS: BrowserTabState[] = []
@@ -91,8 +106,39 @@ const FLOATING_TERMINAL_NO_DRAG_SELECTOR =
   'button,input,textarea,select,[role="menuitem"],[data-testid="sortable-tab"],[data-floating-terminal-no-drag]'
 const FLOATING_TERMINAL_SHORTCUT_SURFACE_SELECTOR = '[data-floating-terminal-shortcut-surface]'
 
+type FloatingTerminalPanelBoundsState = {
+  bounds: FloatingTerminalPanelBounds
+  source: FloatingTerminalPanelBoundsSource
+}
+
 function isFloatingTerminalDragTarget(target: EventTarget): boolean {
   return !(target instanceof HTMLElement && target.closest(FLOATING_TERMINAL_NO_DRAG_SELECTOR))
+}
+
+function readInitialPanelBounds(): FloatingTerminalPanelBoundsState {
+  const persistedBounds = readPersistedFloatingTerminalPanelBounds()
+  return persistedBounds
+    ? {
+        bounds: persistedBounds,
+        source: 'user'
+      }
+    : {
+        bounds: getDefaultFloatingTerminalBounds(),
+        source: 'default'
+      }
+}
+
+function areFloatingTerminalPanelBoundsEqual(
+  left: FloatingTerminalPanelBounds | null,
+  right: FloatingTerminalPanelBounds
+): boolean {
+  return (
+    left !== null &&
+    left.left === right.left &&
+    left.top === right.top &&
+    left.width === right.width &&
+    left.height === right.height
+  )
 }
 
 export function FloatingTerminalPanel({
@@ -128,23 +174,36 @@ export function FloatingTerminalPanel({
 
   const [cwd, setCwd] = useState<string | null>(null)
   const [markdownCwd, setMarkdownCwd] = useState<string | null>(null)
-  const [bounds, setBounds] = useState(() => getDefaultFloatingTerminalBounds())
+  const initialBoundsStateRef = useRef<FloatingTerminalPanelBoundsState | null>(null)
+  if (initialBoundsStateRef.current === null) {
+    initialBoundsStateRef.current = readInitialPanelBounds()
+  }
+  const boundsSourceRef = useRef<FloatingTerminalPanelBoundsSource>(
+    initialBoundsStateRef.current.source
+  )
+  const [bounds, setBounds] = useState(initialBoundsStateRef.current.bounds)
   const [maximized, setMaximized] = useState(false)
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
     () => !hasOrchestrationSetupMarker() && !isOrchestrationSetupDismissed()
   )
-  const restoreBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
-  const normalizedInitialBoundsRef = useRef(false)
+  const restoreBoundsRef = useRef<FloatingTerminalPanelBoundsState | null>(null)
+  const stagedBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
+  const lastPersistedBoundsRef = useRef<FloatingTerminalPanelBounds | null>(
+    initialBoundsStateRef.current.source === 'user' ? initialBoundsStateRef.current.bounds : null
+  )
   const pendingEditorCloseQueueRef = useRef<string[]>([])
   const saveDialogFileIdRef = useRef<string | null>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const shortcutFocusFrameRef = useRef<number | null>(null)
+  const shortcutFocusTimeoutRef = useRef<number | null>(null)
+  const mountedRef = useMountedRef()
   const dragRef = useRef<{
     pointerId: number
     startX: number
     startY: number
-    left: number
-    top: number
+    bounds: FloatingTerminalPanelBounds
+    moved: boolean
   } | null>(null)
 
   const tabs = tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TERMINAL_TABS
@@ -342,27 +401,90 @@ export function FloatingTerminalPanel({
     handleSaveDialogCancel()
   }, [handleSaveDialogCancel])
 
-  useEffect(() => {
-    if (!open || normalizedInitialBoundsRef.current || typeof window === 'undefined') {
+  const persistUserBounds = useCallback((nextBounds: FloatingTerminalPanelBounds): void => {
+    if (areFloatingTerminalPanelBoundsEqual(lastPersistedBoundsRef.current, nextBounds)) {
       return
     }
-    normalizedInitialBoundsRef.current = true
-    const rightGap = window.innerWidth - bounds.left - bounds.width
-    if (rightGap > 160) {
-      setBounds(getDefaultFloatingTerminalBounds())
+    lastPersistedBoundsRef.current = nextBounds
+    persistFloatingTerminalPanelBounds(nextBounds)
+  }, [])
+
+  const previewUserBounds = useCallback((nextBounds: FloatingTerminalPanelBounds): void => {
+    const clampedBounds = clampFloatingTerminalBounds(nextBounds)
+    stagedBoundsRef.current = clampedBounds
+    setBounds(clampedBounds)
+  }, [])
+
+  const commitUserBounds = useCallback(
+    (nextBounds: FloatingTerminalPanelBounds | null = stagedBoundsRef.current): void => {
+      if (!nextBounds) {
+        return
+      }
+      const clampedBounds = clampFloatingTerminalBounds(nextBounds)
+      stagedBoundsRef.current = null
+      boundsSourceRef.current = 'user'
+      setBounds(clampedBounds)
+      persistUserBounds(clampedBounds)
+    },
+    [persistUserBounds]
+  )
+
+  const reconcileBounds = useCallback((): void => {
+    if (maximized) {
+      setBounds(getMaximizedFloatingTerminalBounds())
+      return
     }
-  }, [bounds.left, bounds.width, open])
+    setBounds((currentBounds) => {
+      const source = boundsSourceRef.current
+      if (!shouldReconcileFloatingTerminalPanelBounds(source)) {
+        return currentBounds
+      }
+      const nextBounds = resolveFloatingTerminalPanelBounds(currentBounds, source)
+      if (source === 'user') {
+        persistUserBounds(nextBounds)
+      }
+      return nextBounds
+    })
+  }, [maximized, persistUserBounds])
+
+  useLayoutEffect(() => {
+    // Why: Electron can mount before final renderer dimensions are known; default
+    // bounds should re-anchor before paint while saved user bounds wait for a usable viewport.
+    reconcileBounds()
+  }, [reconcileBounds])
 
   useEffect(() => {
+    const handleResize = (): void => reconcileBounds()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [reconcileBounds])
+
+  useEffect(() => {
+    let cancelled = false
     void window.api.app
       .getFloatingTerminalCwd({
         path: floatingTerminalCwd
       })
-      .then(setCwd)
+      .then((nextCwd) => {
+        if (!cancelled) {
+          setCwd(nextCwd)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
   }, [floatingTerminalCwd])
 
   useEffect(() => {
-    void window.api.app.getFloatingMarkdownDirectory().then(setMarkdownCwd)
+    let cancelled = false
+    void window.api.app.getFloatingMarkdownDirectory().then((nextMarkdownCwd) => {
+      if (!cancelled) {
+        setMarkdownCwd(nextMarkdownCwd)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -392,11 +514,15 @@ export function FloatingTerminalPanel({
     }
     try {
       const status = await window.api.cli.getInstallStatus()
-      setShowOrchestrationSetup(!isOrcaCliAvailableOnPath(status))
+      if (mountedRef.current) {
+        setShowOrchestrationSetup(!isOrcaCliAvailableOnPath(status))
+      }
     } catch {
-      setShowOrchestrationSetup(true)
+      if (mountedRef.current) {
+        setShowOrchestrationSetup(true)
+      }
     }
-  }, [])
+  }, [mountedRef])
 
   useEffect(() => {
     if (open) {
@@ -690,17 +816,45 @@ export function FloatingTerminalPanel({
     panelRef.current?.focus({ preventScroll: true })
   }, [])
 
+  const cancelShortcutFocusFrame = useCallback((): void => {
+    if (shortcutFocusFrameRef.current !== null) {
+      cancelAnimationFrame(shortcutFocusFrameRef.current)
+      shortcutFocusFrameRef.current = null
+    }
+    if (shortcutFocusTimeoutRef.current !== null) {
+      window.clearTimeout(shortcutFocusTimeoutRef.current)
+      shortcutFocusTimeoutRef.current = null
+    }
+  }, [])
+
+  const setPanelNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the deferred shortcut focus targets this panel and must stop
+      // when the panel root leaves the DOM.
+      if (!node) {
+        cancelShortcutFocusFrame()
+      }
+      panelRef.current = node
+    },
+    [cancelShortcutFocusFrame]
+  )
+
   const focusPanelForShortcutsAfterClose = useCallback(() => {
     if (typeof window === 'undefined') {
       return
     }
-    const focusPanel = (): void => focusPanelForShortcuts(false)
+    cancelShortcutFocusFrame()
+    const focusPanel = (): void => {
+      shortcutFocusFrameRef.current = null
+      shortcutFocusTimeoutRef.current = null
+      focusPanelForShortcuts(false)
+    }
     if (typeof window.requestAnimationFrame === 'function') {
-      window.requestAnimationFrame(focusPanel)
+      shortcutFocusFrameRef.current = window.requestAnimationFrame(focusPanel)
       return
     }
-    globalThis.setTimeout(focusPanel, 0)
-  }, [focusPanelForShortcuts])
+    shortcutFocusTimeoutRef.current = window.setTimeout(focusPanel, 0)
+  }, [cancelShortcutFocusFrame, focusPanelForShortcuts])
 
   const setFloatingTerminalInputFocused = useCallback((target: EventTarget | null): void => {
     window.api.ui.setFloatingTerminalInputFocused(isFloatingWorkspaceTerminalInputTarget(target))
@@ -953,17 +1107,33 @@ export function FloatingTerminalPanel({
   }, [open])
 
   const toggleMaximized = useCallback(() => {
-    setMaximized((current) => {
-      if (current) {
-        setBounds(restoreBoundsRef.current ?? getDefaultFloatingTerminalBounds())
-        restoreBoundsRef.current = null
-        return false
+    if (maximized) {
+      const restoredState = restoreBoundsRef.current ?? {
+        bounds: getDefaultFloatingTerminalBounds(),
+        source: 'default' as const
       }
-      restoreBoundsRef.current = bounds
-      setBounds(getMaximizedFloatingTerminalBounds())
-      return true
-    })
-  }, [bounds])
+      restoreBoundsRef.current = null
+      boundsSourceRef.current = restoredState.source
+      const restoredBounds = shouldReconcileFloatingTerminalPanelBounds(restoredState.source)
+        ? resolveFloatingTerminalPanelBounds(restoredState.bounds, restoredState.source)
+        : restoredState.bounds
+      if (restoredState.source === 'user') {
+        commitUserBounds(restoredBounds)
+      } else {
+        stagedBoundsRef.current = null
+        setBounds(restoredBounds)
+      }
+      setMaximized(false)
+      return
+    }
+    restoreBoundsRef.current = {
+      bounds,
+      source: boundsSourceRef.current
+    }
+    stagedBoundsRef.current = null
+    setBounds(getMaximizedFloatingTerminalBounds())
+    setMaximized(true)
+  }, [bounds, commitUserBounds, maximized])
 
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (maximized) {
@@ -983,8 +1153,8 @@ export function FloatingTerminalPanel({
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      left: bounds.left,
-      top: bounds.top
+      bounds,
+      moved: false
     }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -994,19 +1164,28 @@ export function FloatingTerminalPanel({
     if (!drag || drag.pointerId !== event.pointerId) {
       return
     }
-    setBounds((prev) =>
-      clampFloatingTerminalBounds({
-        ...prev,
-        left: drag.left + event.clientX - drag.startX,
-        top: drag.top + event.clientY - drag.startY
-      })
-    )
+    const dx = event.clientX - drag.startX
+    const dy = event.clientY - drag.startY
+    if (dx === 0 && dy === 0) {
+      return
+    }
+    drag.moved = true
+    previewUserBounds({
+      ...drag.bounds,
+      left: drag.bounds.left + dx,
+      top: drag.bounds.top + dy
+    })
   }
 
   const handleDragEnd = (event: React.PointerEvent<HTMLDivElement>): void => {
-    if (dragRef.current?.pointerId === event.pointerId) {
-      dragRef.current = null
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return
     }
+    if (drag.moved) {
+      commitUserBounds()
+    }
+    dragRef.current = null
   }
 
   const handleTitlebarDoubleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
@@ -1025,7 +1204,7 @@ export function FloatingTerminalPanel({
 
   return (
     <div
-      ref={panelRef}
+      ref={setPanelNode}
       data-floating-terminal-panel
       aria-hidden={!open}
       tabIndex={-1}
@@ -1041,10 +1220,13 @@ export function FloatingTerminalPanel({
         if (maximized) {
           return
         }
+        if (!stagedBoundsRef.current && boundsSourceRef.current !== 'user') {
+          return
+        }
         const rect = event.currentTarget.getBoundingClientRect()
-        setBounds((prev) =>
-          clampFloatingTerminalBounds({ ...prev, width: rect.width, height: rect.height })
-        )
+        const measuredBaseBounds =
+          stagedBoundsRef.current ?? lastPersistedBoundsRef.current ?? bounds
+        commitUserBounds({ ...measuredBaseBounds, width: rect.width, height: rect.height })
       }}
       onFocusCapture={(event) => setFloatingTerminalInputFocused(event.target)}
       onBlurCapture={(event) => setFloatingTerminalInputFocused(event.relatedTarget)}
@@ -1228,7 +1410,13 @@ export function FloatingTerminalPanel({
           </div>
         </div>
       ) : null}
-      {!maximized && <FloatingTerminalResizeHandles bounds={bounds} setBounds={setBounds} />}
+      {!maximized && (
+        <FloatingTerminalResizeHandles
+          bounds={bounds}
+          onPreviewBounds={previewUserBounds}
+          onCommitBounds={commitUserBounds}
+        />
+      )}
       <FloatingTerminalOrchestrationDialog
         open={orchestrationDialogOpen}
         activeTabId={activeTerminalId}
@@ -1307,6 +1495,7 @@ function FloatingTerminalEmptyState({
   return (
     <div
       className="absolute inset-0 flex items-center justify-center"
+      data-floating-terminal-empty-state
       data-floating-terminal-shortcut-surface
       onPointerDown={onFocusPanel}
     >

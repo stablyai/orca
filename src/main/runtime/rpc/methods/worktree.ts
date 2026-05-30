@@ -66,6 +66,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedGitLabIssue: params.linkedGitLabIssue,
         comment: params.comment,
         displayName: params.displayName,
+        telemetrySource: params.telemetrySource,
         workspaceStatus: params.workspaceStatus,
         manualOrder: params.manualOrder,
         sparseCheckout: params.sparseCheckout,
@@ -74,7 +75,12 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         activate: params.activate === true,
         setupDecision: params.setupDecision,
         createdWithAgent: params.createdWithAgent,
-        startup: params.startupCommand ? { command: params.startupCommand } : undefined,
+        startup: params.startupCommand
+          ? {
+              command: params.startupCommand,
+              ...(params.startupEnv ? { env: params.startupEnv } : {})
+            }
+          : undefined,
         startupDraft: params.startupDraft,
         lineage: {
           parentWorktree: params.parentWorktree,

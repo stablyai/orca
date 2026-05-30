@@ -49,11 +49,11 @@ export function buildKnownOrcaWorkspaceLayouts(
   const layouts: OrcaWorkspaceLayout[] = []
   if (!repo?.connectionId && settings.workspaceDir) {
     layouts.push({ path: settings.workspaceDir, nestWorkspaces: settings.nestWorkspaces })
-    layouts.push(...(settings.workspaceDirHistory ?? []))
+    appendWorkspaceLayouts(layouts, settings.workspaceDirHistory ?? [])
   }
 
   const wslLayouts = repo ? buildWslWorkspaceLayouts(repo.path, settings) : []
-  layouts.push(...wslLayouts)
+  appendWorkspaceLayouts(layouts, wslLayouts)
 
   const seen = new Set<string>()
   return layouts.filter((layout) => {
@@ -64,6 +64,17 @@ export function buildKnownOrcaWorkspaceLayouts(
     seen.add(key)
     return Boolean(layout.path)
   })
+}
+
+function appendWorkspaceLayouts(
+  target: OrcaWorkspaceLayout[],
+  source: readonly OrcaWorkspaceLayout[]
+): void {
+  // Why: workspace history is persisted user data and can grow large enough
+  // for `push(...source)` to exceed the JavaScript call argument limit.
+  for (const layout of source) {
+    target.push(layout)
+  }
 }
 
 function buildWslWorkspaceLayouts(

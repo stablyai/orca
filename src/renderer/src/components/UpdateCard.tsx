@@ -94,6 +94,8 @@ export function UpdateCard() {
   const reassuranceSeen = useAppStore((s) => s.updateReassuranceSeen)
   const markReassuranceSeen = useAppStore((s) => s.markUpdateReassuranceSeen)
   const hasStartedDownload = useRef(false)
+  const dismissAnimationTimerRef = useRef<number | null>(null)
+  const collapseAnimationTimerRef = useRef<number | null>(null)
   const [mediaFailed, setMediaFailed] = useState(false)
   const [mediaLoaded, setMediaLoaded] = useState(false)
   const [installError, setInstallError] = useState<string | null>(null)
@@ -202,6 +204,17 @@ export function UpdateCard() {
     const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (dismissAnimationTimerRef.current !== null) {
+        window.clearTimeout(dismissAnimationTimerRef.current)
+      }
+      if (collapseAnimationTimerRef.current !== null) {
+        window.clearTimeout(collapseAnimationTimerRef.current)
+      }
+    }
   }, [])
 
   // ── Visibility gates ──────────────────────────────────────────────
@@ -358,7 +371,13 @@ export function UpdateCard() {
       return
     }
     setExiting(true)
-    setTimeout(handleClose, 150)
+    if (dismissAnimationTimerRef.current !== null) {
+      window.clearTimeout(dismissAnimationTimerRef.current)
+    }
+    dismissAnimationTimerRef.current = window.setTimeout(() => {
+      dismissAnimationTimerRef.current = null
+      handleClose()
+    }, 150)
   }
 
   // Why: long-running phases (downloading, downloaded, error) minimize to the
@@ -370,7 +389,11 @@ export function UpdateCard() {
       return
     }
     setExiting(true)
-    setTimeout(() => {
+    if (collapseAnimationTimerRef.current !== null) {
+      window.clearTimeout(collapseAnimationTimerRef.current)
+    }
+    collapseAnimationTimerRef.current = window.setTimeout(() => {
+      collapseAnimationTimerRef.current = null
       setCollapsed(true)
       setExiting(false)
     }, 150)

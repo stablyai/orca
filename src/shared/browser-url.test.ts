@@ -42,6 +42,12 @@ describe('browser-url helpers', () => {
     expect(normalizeBrowserNavigationUrl('C:\\Users\\me\\Downloads\\Example.ipynb')).toBe(
       'file:///C:/Users/me/Downloads/Example.ipynb'
     )
+    expect(normalizeBrowserNavigationUrl('\\\\server\\share\\Example.ipynb')).toBe(
+      'file://server/share/Example.ipynb'
+    )
+    expect(
+      normalizeBrowserNavigationUrl('\\\\wsl.localhost\\Ubuntu\\home\\me\\Example.ipynb')
+    ).toBe('file://wsl.localhost/Ubuntu/home/me/Example.ipynb')
   })
 
   // Why: in-app preview is fine (sandboxed webview), but handing file:// to
@@ -49,6 +55,7 @@ describe('browser-url helpers', () => {
   // arbitrary paths. External-open paths must still refuse file://.
   it('rejects file:// for external opens even though it is allowed in-app', () => {
     expect(normalizeExternalBrowserUrl('file:///etc/passwd')).toBeNull()
+    expect(normalizeExternalBrowserUrl('\\\\server\\share\\Example.ipynb')).toBeNull()
   })
 
   it('returns null for non-URL input without search engine opt-in', () => {

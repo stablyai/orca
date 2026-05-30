@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: the platform-specific scan paths share parsing,
 attribution, and normalization rules that must stay in lockstep. */
 import { execFile } from 'child_process'
-import { promisify } from 'util'
 import { readFile, readdir, readlink } from 'fs/promises'
 import path from 'path'
 import type {
@@ -11,8 +10,6 @@ import type {
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
-
-const execFileAsync = promisify(execFile)
 
 const COMMAND_TIMEOUT_MS = 4_000
 const MAX_PORTS = 200
@@ -340,12 +337,50 @@ async function loadWindowsProcessMetadata(
 }
 
 async function runCommand(command: string, args: string[]): Promise<{ stdout: string }> {
-  const { stdout } = await execFileAsync(command, args, {
-    timeout: COMMAND_TIMEOUT_MS,
-    maxBuffer: 2 * 1024 * 1024,
-    windowsHide: true
+  return await new Promise((resolve, reject) => {
+    let settled = false
+    let child: ReturnType<typeof execFile> | undefined
+    const timer = setTimeout(() => {
+      if (settled) {
+        return
+      }
+      settled = true
+      child?.kill()
+      reject(new Error(`${command} timed out after ${COMMAND_TIMEOUT_MS}ms`))
+    }, COMMAND_TIMEOUT_MS)
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      callback()
+    }
+
+    // Why: Node's execFile timeout only signals the child; if the callback
+    // never arrives, the workspace port scan would otherwise hang forever.
+    try {
+      child = execFile(
+        command,
+        args,
+        {
+          timeout: COMMAND_TIMEOUT_MS,
+          maxBuffer: 2 * 1024 * 1024,
+          windowsHide: true
+        },
+        (error, stdout) => {
+          if (error) {
+            settle(() => reject(error))
+            return
+          }
+          settle(() => resolve({ stdout: String(stdout) }))
+        }
+      )
+    } catch (error) {
+      settle(() => reject(error))
+    }
   })
-  return { stdout: String(stdout) }
 }
 
 async function readTextIfAvailable(filePath: string): Promise<string | undefined> {

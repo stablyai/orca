@@ -1,8 +1,12 @@
-import { useEffect, useId, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { DriverState } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldFocusMobileDriverAction } from './mobile-driver-overlay-focus'
+import {
+  createMobileDriverOverlayCollapseState,
+  getMobileDriverOverlayCollapseState
+} from './mobile-driver-overlay-collapse'
 
 type Props = {
   driver: DriverState
@@ -25,24 +29,22 @@ export function MobileDriverOverlay({
   const isHeldAtPhoneFit = !isMobileDriving && hasFitOverride
   const driverClientId = driver.kind === 'mobile' ? driver.clientId : null
 
-  const [collapsed, setCollapsed] = useState(false)
-  const [actionPending, setActionPending] = useState(false)
-  const mountedRef = useRef(true)
-
-  useEffect(
-    () => () => {
-      mountedRef.current = false
-    },
-    []
+  const [collapseState, setCollapseState] = useState(() =>
+    createMobileDriverOverlayCollapseState(driverClientId)
   )
+  const [actionPending, setActionPending] = useState(false)
+  const mountedRef = useRef(false)
 
-  // Re-expand on driver flip so a new mobile actor is loud, not silent.
-  useEffect(() => {
-    if (!isMobileDriving) {
-      return
-    }
-    setCollapsed(false)
-  }, [isMobileDriving, driverClientId])
+  const setOverlayRootRef = useCallback((node: HTMLDivElement | null): void => {
+    mountedRef.current = node !== null
+  }, [])
+
+  const currentCollapseState = getMobileDriverOverlayCollapseState(collapseState, driverClientId)
+  // Why: a new mobile actor must be loud even if the prior driver was collapsed.
+  if (currentCollapseState !== collapseState) {
+    setCollapseState(currentCollapseState)
+  }
+  const collapsed = currentCollapseState.collapsed
 
   if (!isMobileDriving && !isHeldAtPhoneFit) {
     return null
@@ -72,6 +74,7 @@ export function MobileDriverOverlay({
         actionPending={actionPending}
         onAction={handleAction}
         tone="held"
+        rootRef={setOverlayRootRef}
         rootClassName={rootClassName}
       />
     )
@@ -82,7 +85,8 @@ export function MobileDriverOverlay({
       <LockChip
         actionPending={actionPending}
         onAction={handleAction}
-        onExpand={() => setCollapsed(false)}
+        onExpand={() => setCollapseState(createMobileDriverOverlayCollapseState(driverClientId))}
+        rootRef={setOverlayRootRef}
         rootClassName={rootClassName}
       />
     )
@@ -96,8 +100,9 @@ export function MobileDriverOverlay({
       actionLabel="Take back"
       actionPending={actionPending}
       onAction={handleAction}
-      onCollapse={() => setCollapsed(true)}
+      onCollapse={() => setCollapseState({ driverClientId, collapsed: true })}
       tone="driving"
+      rootRef={setOverlayRootRef}
       rootClassName={rootClassName}
     />
   )
@@ -112,6 +117,7 @@ type LoudOverlayProps = {
   onAction: () => void | Promise<void>
   onCollapse?: () => void
   tone: 'driving' | 'held'
+  rootRef?: (node: HTMLDivElement | null) => void
   rootClassName?: string
 }
 
@@ -124,12 +130,20 @@ function LoudOverlay({
   onAction,
   onCollapse,
   tone,
+  rootRef: outerRootRef,
   rootClassName
 }: LoudOverlayProps): ReactElement {
   const titleId = useId()
   const bodyId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
   const actionRef = useRef<HTMLButtonElement>(null)
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      rootRef.current = node
+      outerRootRef?.(node)
+    },
+    [outerRootRef]
+  )
   // Why: focus the recovery action on mount only when the user isn't already
   // typing into another input (composer, command palette, settings field).
   // Unconditional autoFocus yanks focus on every overlay mount, so a phone
@@ -145,7 +159,7 @@ function LoudOverlay({
   // lock UI must not add a pane-wide scrim or blur over the live stream.
   return (
     <div
-      ref={rootRef}
+      ref={setRootRef}
       role="dialog"
       aria-live="assertive"
       aria-labelledby={titleId}
@@ -198,12 +212,20 @@ type ChipProps = {
   actionPending: boolean
   onAction: () => void | Promise<void>
   onExpand: () => void
+  rootRef?: (node: HTMLDivElement | null) => void
   rootClassName?: string
 }
 
-function LockChip({ actionPending, onAction, onExpand, rootClassName }: ChipProps): ReactElement {
+function LockChip({
+  actionPending,
+  onAction,
+  onExpand,
+  rootRef,
+  rootClassName
+}: ChipProps): ReactElement {
   return (
     <div
+      ref={rootRef}
       className={cn(
         'absolute right-2 top-2 z-50 flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-1 text-xs font-medium text-card-foreground shadow-xs',
         rootClassName

@@ -124,6 +124,31 @@ function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boo
   return false
 }
 
+function isAgentCompletionState(state: ParsedAgentStatusPayload['state']): boolean {
+  return state === 'done' || state === 'waiting' || state === 'blocked'
+}
+
+function getTabIdFromPaneKey(paneKey: string): string | null {
+  const separator = paneKey.indexOf(':')
+  if (separator <= 0 || separator !== paneKey.lastIndexOf(':')) {
+    return null
+  }
+  return paneKey.slice(0, separator)
+}
+
+function findAgentPaneWorktreeId(state: AppState, paneKey: string): string | null {
+  const tabId = getTabIdFromPaneKey(paneKey)
+  if (!tabId) {
+    return null
+  }
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    if (tabs.some((tab) => tab.id === tabId)) {
+      return worktreeId
+    }
+  }
+  return null
+}
+
 function pruneMigrationUnsupportedEntries(
   entries: Record<string, MigrationUnsupportedPtyEntry>,
   predicate: (entry: MigrationUnsupportedPtyEntry) => boolean
@@ -173,6 +198,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
     setAgentStatus: (paneKey, payload, terminalTitle, timing) => {
       const updatedAt = timing?.updatedAt ?? Date.now()
+      let completionRefreshWorktreeId: string | null = null
       set((s) => {
         const existing = s.agentStatusByPaneKey[paneKey]
         // Why: snapshots and live pushes share receivedAt from the same main-side
@@ -263,6 +289,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // it when a new turn starts (working → Stop reprices it).
           interrupted: payload.interrupted
         }
+        if (
+          isAgentCompletionState(entry.state) &&
+          existing !== undefined &&
+          !isAgentCompletionState(existing.state)
+        ) {
+          completionRefreshWorktreeId = findAgentPaneWorktreeId(s, paneKey)
+        }
         // Why: broad freshness-aware subscribers only need a global tick when
         // an entry appears, changes state, crosses stale->fresh, or receives
         // a same-state `done` update that may carry the final assistant
@@ -329,6 +362,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       // Why: schedule after set completes so the timer reads the updated map.
       // queueMicrotask avoids re-entry into the zustand store during set.
       queueMicrotask(() => freshness.schedule())
+      if (completionRefreshWorktreeId) {
+        const worktreeId = completionRefreshWorktreeId
+        // Why: agents can create a PR via `gh pr create`, bypassing Orca's
+        // create-PR flow and leaving a fresh "no PR" cache entry in place.
+        queueMicrotask(() => get().refreshGitHubForWorktreeIfStale(worktreeId))
+      }
     },
 
     setMigrationUnsupportedPty: (entry) => {

@@ -4,6 +4,7 @@ import {
   deriveMarkdownPreviewSourceRoot,
   findMarkdownPreviewOpenedEditFileId,
   findMarkdownPreviewSourceOpenFile,
+  getMarkdownPreviewAnchorScrollTop,
   resolveMarkdownPreviewSourceWorktree
 } from './MarkdownPreview'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -133,5 +134,17 @@ describe('MarkdownPreview source link routing', () => {
         }
       )
     ).toBe(activeRuntimeEdit.id)
+  })
+
+  it('computes anchor scroll from viewport position instead of offset parent', () => {
+    const container = {
+      scrollTop: 125,
+      getBoundingClientRect: () => ({ top: 50 }) as DOMRect
+    }
+    const target = {
+      getBoundingClientRect: () => ({ top: 430 }) as DOMRect
+    }
+
+    expect(getMarkdownPreviewAnchorScrollTop(container, target)).toBe(493)
   })
 })

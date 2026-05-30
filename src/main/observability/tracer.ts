@@ -114,12 +114,6 @@ export function setActiveSink(sink: TracerSink | null): void {
   activeSink = sink
 }
 
-/** Read the currently-active sink. Used by the bundle path to flush before
- *  collecting traces, and by tests for assertion. */
-export function getActiveSink(): TracerSink | null {
-  return activeSink
-}
-
 /** Get the current parent context, or `undefined` if we are at the top of
  *  the trace tree. Renderer-IPC entry points capture this, embed it in
  *  span-event attributes (so cross-process spans can be visually linked

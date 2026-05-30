@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { fetchMock, handlers } = vi.hoisted(() => ({
   fetchMock: vi.fn(),
@@ -29,9 +29,14 @@ function postedBody(): Record<string, unknown> {
 
 describe('submitFeedback', () => {
   beforeEach(() => {
+    vi.useRealTimers()
     handlers.clear()
     fetchMock.mockReset()
     fetchMock.mockResolvedValue(okResponse())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('strips GitHub identity and anonymous contact fields when submitted anonymously', async () => {
@@ -92,6 +97,29 @@ describe('submitFeedback', () => {
       githubLogin: 'trusted-user',
       githubEmail: null
     })
+  })
+
+  it('falls back when the primary feedback request stalls', async () => {
+    vi.useFakeTimers()
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('api.onorca.dev')) {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('request aborted')))
+        })
+      }
+      return Promise.resolve(okResponse())
+    })
+
+    const result = submitFeedback({
+      feedback: 'stalled primary',
+      submitAnonymously: false,
+      githubLogin: 'trusted-user',
+      githubEmail: 'trusted@example.com'
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    await expect(Promise.race([result, Promise.resolve('pending')])).resolves.toEqual({ ok: true })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('forces renderer IPC submissions onto the feedback lane', async () => {

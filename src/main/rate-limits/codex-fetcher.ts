@@ -7,13 +7,17 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
 import { cleanupHiddenRateLimitPty } from './hidden-pty-cleanup'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { extractCodexAuthError, isCodexAuthError } from '../../shared/codex-auth-errors'
 
 const RPC_TIMEOUT_MS = 10_000
+const WSL_RPC_TIMEOUT_MS = 25_000
 const PTY_TIMEOUT_MS = 15_000
 const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
 
 export type FetchCodexRateLimitsOptions = {
   codexHomePath?: string | null
+  allowPtyFallback?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -41,6 +45,37 @@ type RpcRateLimitsResult = {
 // The actual response shape is `{ rateLimits: { primary, secondary, ... } }`.
 type RpcRateLimitsResponse = {
   rateLimits?: RpcRateLimitsResult
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+function buildWslCodexCommand(
+  codexHomePath: string,
+  args: string[]
+): {
+  command: string
+  args: string[]
+} | null {
+  const wslInfo = parseWslUncPath(codexHomePath)
+  if (process.platform !== 'win32' || !wslInfo) {
+    return null
+  }
+  const script = [
+    `export CODEX_HOME=${shellQuote(wslInfo.linuxPath)}`,
+    `exec codex ${args.map(shellQuote).join(' ')}`
+  ].join('; ')
+  return {
+    command: 'wsl.exe',
+    args: ['-d', wslInfo.distro, '--', 'bash', '-lc', script]
+  }
+}
+
+function cloneProcessEnvWithoutCodexHome(): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  delete env.CODEX_HOME
+  return env
 }
 
 function buildRpcMessage(id: number, method: string, params?: unknown): string {
@@ -95,18 +130,21 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let resolved = false
     let rpcId = 0
 
-    const codexCommand = resolveCodexCommand()
+    const codexArgs = ['-s', 'read-only', '-a', 'untrusted', 'app-server']
+    const wslCodex = options?.codexHomePath
+      ? buildWslCodexCommand(options.codexHomePath, codexArgs)
+      : null
+    // Why: cold WSL process startup plus Codex app-server initialization can
+    // exceed the host RPC budget, causing a false "unavailable" on app launch.
+    const rpcTimeoutMs = wslCodex ? WSL_RPC_TIMEOUT_MS : RPC_TIMEOUT_MS
+    const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
     // Why: on Windows, resolveCodexCommand() may return a .cmd/.bat file.
     // spawn() cannot execute batch scripts directly without shell:true, but
     // shell:true with an args array triggers DEP0190 (args are concatenated,
     // not escaped). Fix: detect batch scripts and route through cmd.exe /c.
-    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, [
-      '-s',
-      'read-only',
-      '-a',
-      'untrusted',
-      'app-server'
-    ])
+    const { spawnCmd, spawnArgs } = wslCodex
+      ? { spawnCmd: wslCodex.command, spawnArgs: wslCodex.args }
+      : getSpawnArgsForWindows(codexCommand, codexArgs)
     const child = spawn(spawnCmd, spawnArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
       // Why: the selected Codex rate-limit account must only affect this fetch
@@ -117,25 +155,49 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       // poll on Windows.
       windowsHide: true,
       env: {
-        ...process.env,
-        ...(options?.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {})
+        ...(wslCodex ? cloneProcessEnvWithoutCodexHome() : process.env),
+        ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
       }
     })
 
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true
+    let timeout: ReturnType<typeof setTimeout> | null = null
+
+    function cleanupListeners(): void {
+      if (timeout) {
+        clearTimeout(timeout)
+        timeout = null
+      }
+      child.stdout.off('data', onStdoutData)
+      child.stderr.off('data', onStderrData)
+      child.off('error', onError)
+      child.off('close', onClose)
+    }
+
+    function settle(result: ProviderRateLimits, options?: { kill?: boolean }): void {
+      if (resolved) {
+        return
+      }
+      resolved = true
+      cleanupListeners()
+      if (options?.kill) {
         child.kill()
-        resolve({
+      }
+      resolve(result)
+    }
+
+    timeout = setTimeout(() => {
+      settle(
+        {
           provider: 'codex',
           session: null,
           weekly: null,
           updatedAt: Date.now(),
           error: 'RPC timeout',
           status: 'error'
-        })
-      }
-    }, RPC_TIMEOUT_MS)
+        },
+        { kill: true }
+      )
+    }, rpcTimeoutMs)
 
     function sendRpc(method: string, params?: unknown): number {
       const id = ++rpcId
@@ -158,7 +220,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params: {} })}\n`)
     }
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    function onStdoutData(chunk: Buffer): void {
       buffer += chunk.toString()
 
       // JSON-RPC messages are newline-delimited
@@ -190,19 +252,19 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
             if (resolved) {
               return
             }
-            resolved = true
-            clearTimeout(timeout)
-            child.kill()
 
             if (msg.error) {
-              resolve({
-                provider: 'codex',
-                session: null,
-                weekly: null,
-                updatedAt: Date.now(),
-                error: withMacTailscaleDnsHint(msg.error.message, stderr),
-                status: 'error'
-              })
+              settle(
+                {
+                  provider: 'codex',
+                  session: null,
+                  weekly: null,
+                  updatedAt: Date.now(),
+                  error: withMacTailscaleDnsHint(msg.error.message, stderr),
+                  status: 'error'
+                },
+                { kill: true }
+              )
               return
             }
 
@@ -211,64 +273,64 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
             const session = mapRpcWindow(result?.primary, 300)
             const weekly = mapRpcWindow(result?.secondary, 10080)
 
-            resolve({
-              provider: 'codex',
-              session,
-              weekly,
-              updatedAt: Date.now(),
-              error: null,
-              status: 'ok'
-            })
+            settle(
+              {
+                provider: 'codex',
+                session,
+                weekly,
+                updatedAt: Date.now(),
+                error: null,
+                status: 'ok'
+              },
+              { kill: true }
+            )
           }
         } catch {
           // Non-JSON line from the RPC server — ignore
         }
       }
-    })
+    }
 
-    child.stderr.on('data', (chunk: Buffer) => {
+    function onStderrData(chunk: Buffer): void {
       stderr += chunk.toString()
       // Why: this background poll only needs recent failure context for hints.
       if (stderr.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
         stderr = stderr.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
       }
-    })
+    }
 
-    child.on('error', (err) => {
-      if (!resolved) {
-        resolved = true
-        clearTimeout(timeout)
-        const isEnoent = (err as NodeJS.ErrnoException).code === 'ENOENT'
-        const isBareCommand = codexCommand === 'codex'
-        resolve({
-          provider: 'codex',
-          session: null,
-          weekly: null,
-          updatedAt: Date.now(),
-          error: isEnoent
-            ? isBareCommand
-              ? 'Codex CLI not found'
-              : 'Codex CLI found but could not run — Node.js may not be in your PATH'
-            : withMacTailscaleDnsHint(err.message, stderr),
-          status: isEnoent && isBareCommand ? 'unavailable' : 'error'
-        })
-      }
-    })
+    function onError(err: Error): void {
+      const isEnoent = (err as NodeJS.ErrnoException).code === 'ENOENT'
+      const isBareCommand = codexCommand === 'codex'
+      settle({
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: isEnoent
+          ? isBareCommand
+            ? 'Codex CLI not found'
+            : 'Codex CLI found but could not run — Node.js may not be in your PATH'
+          : withMacTailscaleDnsHint(err.message, stderr),
+        status: isEnoent && isBareCommand ? 'unavailable' : 'error'
+      })
+    }
 
-    child.on('close', () => {
-      if (!resolved) {
-        resolved = true
-        clearTimeout(timeout)
-        resolve({
-          provider: 'codex',
-          session: null,
-          weekly: null,
-          updatedAt: Date.now(),
-          error: withMacTailscaleDnsHint('RPC process exited unexpectedly', stderr),
-          status: 'error'
-        })
-      }
-    })
+    function onClose(): void {
+      settle({
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: withMacTailscaleDnsHint('RPC process exited unexpectedly', stderr),
+        status: 'error'
+      })
+    }
+
+    child.stdout.on('data', onStdoutData)
+    child.stderr.on('data', onStderrData)
+    child.on('error', onError)
+    child.on('close', onClose)
   })
 }
 
@@ -318,7 +380,8 @@ function parsePtyStatus(output: string): {
 
 async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<ProviderRateLimits> {
   const pty = await import('node-pty')
-  const codexCommand = resolveCodexCommand()
+  const wslCodex = options?.codexHomePath ? buildWslCodexCommand(options.codexHomePath, []) : null
+  const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
 
   // Why: node-pty cannot spawn .cmd/.bat batch scripts directly on Windows —
   // those need cmd.exe as an interpreter. resolveCodexCommand() may also fall
@@ -328,8 +391,8 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
   // even for bare 'codex' (not just .cmd/.bat) to let PATHEXT resolution
   // succeed under a minimal Electron PATH. /d matches the rest of the codebase.
   const isWin32 = process.platform === 'win32'
-  const spawnFile = isWin32 ? getCmdExePath() : codexCommand
-  const spawnArgs = isWin32 ? ['/d', '/c', codexCommand] : []
+  const spawnFile = wslCodex ? wslCodex.command : isWin32 ? getCmdExePath() : codexCommand
+  const spawnArgs = wslCodex ? wslCodex.args : isWin32 ? ['/d', '/c', codexCommand] : []
 
   return new Promise<ProviderRateLimits>((resolve) => {
     let output = ''
@@ -341,9 +404,9 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       cols: 120,
       rows: 40,
       env: {
-        ...process.env,
+        ...(wslCodex ? cloneProcessEnvWithoutCodexHome() : process.env),
         TERM: 'xterm-256color',
-        ...(options?.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {})
+        ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
       }
     })
     const termDisposables: { dispose: () => void }[] = []
@@ -357,7 +420,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: withMacTailscaleDnsHint('PTY timeout', output),
+          error: extractCodexAuthError(output) ?? withMacTailscaleDnsHint('PTY timeout', output),
           status: 'error'
         })
       }
@@ -426,7 +489,8 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           error:
             session || weekly
               ? null
-              : withMacTailscaleDnsHint('CLI exited before status was available', clean),
+              : (extractCodexAuthError(clean) ??
+                withMacTailscaleDnsHint('CLI exited before status was available', clean)),
           status: session || weekly ? 'ok' : 'error'
         })
       }
@@ -450,9 +514,25 @@ export async function fetchCodexRateLimits(
     if (rpcResult.status === 'ok' || rpcResult.status === 'unavailable') {
       return rpcResult
     }
+    if (isCodexAuthError(rpcResult.error)) {
+      return rpcResult
+    }
+    if (options?.allowPtyFallback === false) {
+      return rpcResult
+    }
     // Why: app-server can fail independently of the interactive CLI. Keep the
     // status-bar useful by trying the older /status PTY reader on RPC errors.
   } catch {
+    if (options?.allowPtyFallback === false) {
+      return {
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: 'RPC failed',
+        status: 'error'
+      }
+    }
     // RPC failed — fall through to PTY
   }
 

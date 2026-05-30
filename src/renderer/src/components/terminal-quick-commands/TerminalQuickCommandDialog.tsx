@@ -1,29 +1,23 @@
-import { useMemo, useRef, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { useRef, useState } from 'react'
 import type {
   Repo,
   TerminalQuickCommand,
   TerminalQuickCommandScope
 } from '../../../../shared/types'
-import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { Button } from '@/components/ui/button'
 import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList
-} from '@/components/ui/command'
+  getTerminalQuickCommandAction,
+  getTerminalQuickCommandScope,
+  isTerminalAgentQuickCommand,
+  supportsTerminalAgentQuickCommand
+} from '../../../../shared/terminal-quick-commands'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -32,21 +26,20 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { useAppStore } from '@/store'
+import type { TuiAgent } from '../../../../shared/types'
+import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
+import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
+import { TerminalQuickCommandDialogFooter } from './TerminalQuickCommandDialogFooter'
+import { TerminalQuickCommandLabelField } from './TerminalQuickCommandLabelField'
+import { TerminalQuickCommandScopeField } from './TerminalQuickCommandScopeField'
 import {
-  buildTerminalAgentQuickCommandPreset,
-  type TerminalAgentQuickCommandPreset
-} from './terminal-agent-quick-command-presets'
+  createTerminalQuickCommandDialogDraftMemory,
+  switchTerminalQuickCommandDialogAction
+} from './terminal-quick-command-dialog-draft'
 
 type TerminalQuickCommandDialogMode = 'add' | 'edit'
-
-const EMPTY_AGENT_CMD_OVERRIDES = {}
 
 type TerminalQuickCommandDialogProps = {
   open: boolean
@@ -69,23 +62,6 @@ export function createTerminalQuickCommandDraft(
   }
 }
 
-function getRepoLabel(repo: Pick<Repo, 'displayName' | 'path'>): string {
-  return repo.displayName || repo.path
-}
-
-function filterAgentPresets(
-  presets: TerminalAgentQuickCommandPreset[],
-  rawQuery: string
-): TerminalAgentQuickCommandPreset[] {
-  const query = rawQuery.trim().toLowerCase()
-  if (!query) {
-    return presets
-  }
-  return presets.filter((preset) => {
-    return preset.label.toLowerCase().includes(query) || preset.agent.toLowerCase().includes(query)
-  })
-}
-
 export function TerminalQuickCommandDialog({
   open,
   mode,
@@ -94,14 +70,13 @@ export function TerminalQuickCommandDialog({
   onOpenChange,
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
+  const fallbackAgent: TuiAgent =
+    AGENT_CATALOG.find((entry) => supportsTerminalAgentQuickCommand(entry.id))?.id ?? 'claude'
   const [draft, setDraft] = useState<TerminalQuickCommand>(command)
-  const [agentPresetOpen, setAgentPresetOpen] = useState(false)
-  const [agentPresetQuery, setAgentPresetQuery] = useState('')
   const wasOpenRef = useRef(open)
   const syncedCommandRef = useRef(command)
-  const agentCmdOverrides = useAppStore(
-    (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
-  )
+  const draftMemoryRef = useRef(createTerminalQuickCommandDialogDraftMemory(command, fallbackAgent))
+  const selectedAction = getTerminalQuickCommandAction(draft)
   const selectedScope = getTerminalQuickCommandScope(draft)
   // Why: repo-scoped commands can outlive the current repo list; only an
   // explicit selection should replace the saved repo id.
@@ -119,62 +94,75 @@ export function TerminalQuickCommandDialog({
     syncedCommandRef.current = command
     // Why: opening or retargeting the dialog should render the new command
     // draft immediately instead of repairing it in a follow-up Effect.
+    draftMemoryRef.current = createTerminalQuickCommandDialogDraftMemory(command, fallbackAgent)
     setDraft({ ...command })
-    if (agentPresetOpen) {
-      setAgentPresetOpen(false)
-    }
-    if (agentPresetQuery) {
-      setAgentPresetQuery('')
-    }
   }
 
-  const agentPresets = useMemo(() => {
-    return AGENT_CATALOG.map((entry, index) => {
-      const preset = buildTerminalAgentQuickCommandPreset({
-        agent: entry.id,
-        label: entry.label,
-        cmdOverrides: agentCmdOverrides,
-        platform: CLIENT_PLATFORM
-      })
-      return preset ? { preset, index } : null
+  const selectedAgent =
+    isTerminalAgentQuickCommand(draft) && supportsTerminalAgentQuickCommand(draft.agent)
+      ? draft.agent
+      : fallbackAgent
+
+  const setAction = (action: 'terminal-command' | 'agent-prompt'): void => {
+    setDraft((current) => {
+      const next = switchTerminalQuickCommandDialogAction(current, action, draftMemoryRef.current)
+      draftMemoryRef.current = next.memory
+      return next.draft
     })
-      .filter((item): item is { preset: TerminalAgentQuickCommandPreset; index: number } =>
-        Boolean(item)
-      )
-      .sort((a, b) => a.index - b.index)
-      .map((item) => item.preset)
-  }, [agentCmdOverrides])
+  }
 
-  const visibleAgentPresets = useMemo(
-    () => filterAgentPresets(agentPresets, agentPresetQuery),
-    [agentPresetQuery, agentPresets]
-  )
-
-  const selectAgentPreset = (preset: TerminalAgentQuickCommandPreset): void => {
-    setDraft((current) => ({
-      ...current,
-      command: preset.command
-    }))
-    setAgentPresetOpen(false)
-    setAgentPresetQuery('')
+  const toggleAppendEnter = (): void => {
+    setDraft((current) =>
+      isTerminalAgentQuickCommand(current)
+        ? current
+        : (() => {
+            const appendEnter = !current.appendEnter
+            draftMemoryRef.current = {
+              ...draftMemoryRef.current,
+              terminalAppendEnter: appendEnter
+            }
+            return { ...current, appendEnter }
+          })()
+    )
   }
 
   const saveDraft = (): void => {
-    const next = {
-      ...draft,
-      label: draft.label.trim(),
-      command: draft.command.trimEnd(),
-      scope: selectedScope
-    }
-    if (!next.label || !next.command) {
+    const next: TerminalQuickCommand = isTerminalAgentQuickCommand(draft)
+      ? {
+          id: draft.id,
+          label: draft.label.trim(),
+          action: 'agent-prompt',
+          agent: draft.agent,
+          prompt: draft.prompt.trimEnd(),
+          scope: selectedScope
+        }
+      : {
+          id: draft.id,
+          label: draft.label.trim(),
+          action: 'terminal-command',
+          command: draft.command.trimEnd(),
+          appendEnter: draft.appendEnter,
+          scope: selectedScope
+        }
+    if (
+      !next.label ||
+      (isTerminalAgentQuickCommand(next)
+        ? !next.prompt.trim() || !supportsTerminalAgentQuickCommand(next.agent)
+        : !next.command.trim())
+    ) {
       return
     }
     onSave(next)
     onOpenChange(false)
   }
 
-  const canSave = draft.label.trim().length > 0 && draft.command.trimEnd().length > 0
-  const submitShortcutLabel = isMacUserAgent() ? '⌘↵' : 'Ctrl+Enter'
+  const canSave =
+    draft.label.trim().length > 0 &&
+    (isTerminalAgentQuickCommand(draft)
+      ? draft.prompt.trimEnd().length > 0 && supportsTerminalAgentQuickCommand(draft.agent)
+      : draft.command.trimEnd().length > 0)
+  const isMac = isMacUserAgent()
+  const submitShortcutLabel = isMac ? '⌘↵' : 'Ctrl+Enter'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -184,7 +172,7 @@ export function TerminalQuickCommandDialog({
             {mode === 'edit' ? 'Edit Quick Command' : 'Add Quick Command'}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Save terminal input text for the context menu.
+            Save terminal commands or agent prompts for quick access.
           </DialogDescription>
         </DialogHeader>
 
@@ -193,196 +181,139 @@ export function TerminalQuickCommandDialog({
           onKeyDown={(event) => {
             // Why: cross-platform submit shortcut — Cmd+Enter on Mac, Ctrl+Enter
             // elsewhere. Falls through to native textarea/Input newline insertion
-            // when the modifier isn't held.
-            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && canSave) {
+            // when the platform modifier isn't held.
+            const platformSubmit = isMac ? event.metaKey : event.ctrlKey
+            if (event.key === 'Enter' && platformSubmit && canSave) {
               event.preventDefault()
               saveDraft()
             }
           }}
         >
+          <TerminalQuickCommandLabelField label={draft.label} setDraft={setDraft} />
+
           <div className="space-y-2">
-            <Label>Label</Label>
-            <Input
-              value={draft.label}
-              onChange={(event) =>
-                setDraft((current) => ({ ...current, label: event.target.value }))
-              }
-              placeholder="Start dev server"
+            <Label>Action</Label>
+            <TerminalQuickCommandActionToggle
+              selectedAction={selectedAction}
+              onActionChange={setAction}
             />
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label>Command Text</Label>
-              <Popover open={agentPresetOpen} onOpenChange={setAgentPresetOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    className="h-7 shrink-0 gap-1 px-2 text-xs font-normal"
-                    aria-label="Insert an agent command"
-                  >
-                    Insert agent command
-                    <ChevronDown className="size-3" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-[min(17rem,calc(100vw-2rem))] p-0">
-                  <Command shouldFilter={false}>
-                    <CommandInput
-                      autoFocus
-                      placeholder="Search agents"
-                      value={agentPresetQuery}
-                      onValueChange={setAgentPresetQuery}
-                      className="h-9 text-xs"
-                      wrapperClassName="px-3"
-                    />
-                    <CommandList className="max-h-64">
-                      <CommandEmpty>No agents match your search.</CommandEmpty>
-                      {visibleAgentPresets.map((preset) => (
-                        <CommandItem
-                          key={preset.agent}
-                          value={`${preset.agent} ${preset.label}`}
-                          disabled={!preset.startsWithPrompt}
-                          onSelect={() => {
-                            if (preset.startsWithPrompt) {
-                              selectAgentPreset(preset)
-                            }
-                          }}
-                          className="min-h-11 items-start gap-2 px-3 py-2"
-                        >
-                          <span className="mt-0.5">
-                            <AgentIcon agent={preset.agent} size={16} />
-                          </span>
-                          <span className="flex min-w-0 flex-1 flex-col">
-                            <span className="truncate text-sm font-medium">{preset.label}</span>
-                            {!preset.startsWithPrompt ? (
-                              <span className="truncate text-xs text-muted-foreground">
-                                Does not support prompt commands
-                              </span>
-                            ) : null}
-                          </span>
-                        </CommandItem>
-                      ))}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <textarea
-              value={draft.command}
-              onChange={(event) =>
-                setDraft((current) => ({ ...current, command: event.target.value }))
-              }
-              placeholder="npm run dev"
-              rows={4}
-              className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Scope</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              <ToggleGroup
-                type="single"
-                value={selectedScope.type}
-                onValueChange={(value) => {
-                  if (value === 'global') {
-                    setDraft((current) => ({ ...current, scope: { type: 'global' } }))
-                  }
-                  if (value === 'repo' && repos[0]) {
-                    if (selectedScope.type !== 'repo') {
-                      setDraft((current) => ({
-                        ...current,
-                        scope: { type: 'repo', repoId: repos[0].id }
-                      }))
+          {isTerminalAgentQuickCommand(draft) ? (
+            <>
+              <div className="space-y-2">
+                <Label>Agent</Label>
+                <Select
+                  value={selectedAgent}
+                  onValueChange={(agent) => {
+                    const nextAgent = agent as TuiAgent
+                    draftMemoryRef.current = {
+                      ...draftMemoryRef.current,
+                      agent: nextAgent
                     }
-                  }
-                }}
-                className="justify-start"
-              >
-                <ToggleGroupItem value="global">Global</ToggleGroupItem>
-                <ToggleGroupItem value="repo" disabled={repos.length === 0}>
-                  Project
-                </ToggleGroupItem>
-              </ToggleGroup>
-              {selectedScope.type === 'repo' && repos.length > 0 ? (
-                <div className="space-y-1">
-                  <Select
-                    value={selectedRepoId}
-                    onValueChange={(repoId) =>
-                      setDraft((current) => ({ ...current, scope: { type: 'repo', repoId } }))
-                    }
+                    setDraft((current) =>
+                      isTerminalAgentQuickCommand(current)
+                        ? { ...current, agent: nextAgent }
+                        : current
+                    )
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose agent" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    side="bottom"
+                    align="start"
+                    sideOffset={4}
+                    className="max-h-[min(20rem,var(--radix-select-content-available-height))] w-[--radix-select-trigger-width]"
                   >
-                    <SelectTrigger size="sm" className="min-w-48">
-                      <SelectValue
-                        placeholder={selectedRepoMissing ? 'Project not in list' : 'Choose project'}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {repos.map((repo) => (
-                        <SelectItem key={repo.id} value={repo.id}>
-                          <RepoBadgeLabel
-                            name={getRepoLabel(repo)}
-                            color={repo.badgeColor}
-                            className="max-w-full"
-                          />
+                    {AGENT_CATALOG.map((entry) => {
+                      const supported = supportsTerminalAgentQuickCommand(entry.id)
+                      return (
+                        <SelectItem key={entry.id} value={entry.id} disabled={!supported}>
+                          <span className="flex min-w-0 items-center gap-2">
+                            <AgentIcon agent={entry.id} size={16} />
+                            <span className="flex min-w-0 flex-col">
+                              <span className="truncate">{entry.label}</span>
+                              {!supported ? (
+                                <span className="truncate text-xs text-muted-foreground">
+                                  Does not support prompt commands
+                                </span>
+                              ) : null}
+                            </span>
+                          </span>
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedRepoMissing ? (
-                    <p className="max-w-48 text-xs text-muted-foreground">
-                      Saving keeps the existing project scope unless you choose another.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-4 rounded-md border border-border/50 px-3 py-2">
-            <div className="space-y-0.5">
-              <div className="text-sm font-medium">Append Enter</div>
-              <div className="text-xs text-muted-foreground">
-                Submit immediately instead of only inserting text.
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={draft.appendEnter}
-              aria-label="Toggle append Enter"
-              onClick={() =>
-                setDraft((current) => ({ ...current, appendEnter: !current.appendEnter }))
-              }
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                draft.appendEnter ? 'bg-foreground' : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span
-                className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                  draft.appendEnter ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
+
+              <div className="space-y-2">
+                <Label>Prompt</Label>
+                <textarea
+                  value={draft.prompt}
+                  onChange={(event) => {
+                    const prompt = event.target.value
+                    draftMemoryRef.current = {
+                      ...draftMemoryRef.current,
+                      agentPrompt: prompt
+                    }
+                    setDraft((current) =>
+                      isTerminalAgentQuickCommand(current) ? { ...current, prompt } : current
+                    )
+                  }}
+                  placeholder="Ask the agent to investigate this workspace"
+                  rows={4}
+                  className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <Label>Command Text</Label>
+              <textarea
+                value={draft.command}
+                onChange={(event) => {
+                  const command = event.target.value
+                  draftMemoryRef.current = {
+                    ...draftMemoryRef.current,
+                    terminalCommand: command
+                  }
+                  setDraft((current) =>
+                    isTerminalAgentQuickCommand(current) ? current : { ...current, command }
+                  )
+                }}
+                placeholder="npm run dev"
+                rows={4}
+                className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               />
-            </button>
-          </div>
+            </div>
+          )}
+
+          <TerminalQuickCommandScopeField
+            repos={repos}
+            selectedScope={selectedScope}
+            selectedRepoId={selectedRepoId}
+            selectedRepoMissing={selectedRepoMissing}
+            setDraft={setDraft}
+          />
+
+          {!isTerminalAgentQuickCommand(draft) ? (
+            <TerminalQuickCommandAppendEnterSwitch
+              appendEnter={draft.appendEnter}
+              onToggle={toggleAppendEnter}
+            />
+          ) : null}
         </div>
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={saveDraft}
-            disabled={!canSave}
-            title={`Save (${submitShortcutLabel})`}
-          >
-            Save
-            <span className="ml-1 text-[10px] opacity-60">{submitShortcutLabel}</span>
-          </Button>
-        </DialogFooter>
+        <TerminalQuickCommandDialogFooter
+          canSave={canSave}
+          submitShortcutLabel={submitShortcutLabel}
+          onCancel={() => onOpenChange(false)}
+          onSave={saveDraft}
+        />
       </DialogContent>
     </Dialog>
   )

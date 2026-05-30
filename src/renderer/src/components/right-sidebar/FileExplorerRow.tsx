@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- File Explorer rows own dense context-menu and drag/drop interactions. */
+/* eslint-disable max-lines -- Why: the row owns dense file-tree rendering plus its context menu, drag target, and inline-input sibling contract. */
 import React, { useCallback, useEffect, useRef } from 'react'
 import { basename } from '@/lib/path'
 import {
@@ -97,10 +97,27 @@ export function InlineInputRow({
   // of auto-submitting, which would dismiss the empty input.
   const focusSettled = useRef(false)
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const refocusFrame = useRef<number | null>(null)
+
+  const cancelRefocusFrame = useCallback((): void => {
+    if (refocusFrame.current !== null) {
+      cancelAnimationFrame(refocusFrame.current)
+      refocusFrame.current = null
+    }
+  }, [])
+
+  const scheduleInputRefocus = useCallback((): void => {
+    cancelRefocusFrame()
+    refocusFrame.current = requestAnimationFrame(() => {
+      refocusFrame.current = null
+      inputRef.current?.focus()
+    })
+  }, [cancelRefocusFrame])
 
   useEffect(() => {
     submitted.current = false
     focusSettled.current = false
+    cancelRefocusFrame()
 
     // Schedule focus after any pending focus-restore from menu close
     const raf = requestAnimationFrame(() => {
@@ -126,6 +143,7 @@ export function InlineInputRow({
     })
     return () => {
       cancelAnimationFrame(raf)
+      cancelRefocusFrame()
       if (blurTimeout.current) {
         clearTimeout(blurTimeout.current)
       }
@@ -133,7 +151,7 @@ export function InlineInputRow({
         clearTimeout(settleTimer.current)
       }
     }
-  }, [inlineInput])
+  }, [cancelRefocusFrame, inlineInput])
 
   const clearBlurTimeout = useCallback(() => {
     if (blurTimeout.current) {
@@ -190,14 +208,14 @@ export function InlineInputRow({
             (e.relatedTarget.closest('[data-slot="context-menu-trigger"]') ||
               e.relatedTarget.closest('[data-slot="dropdown-menu-trigger"]'))
           ) {
-            requestAnimationFrame(() => inputRef.current?.focus())
+            scheduleInputRefocus()
             return
           }
           // During the grace period after mount, menu close focus management
           // may shift focus away (often relatedTarget is null). Re-focus
           // instead of dismissing the still-empty input.
           if (!focusSettled.current) {
-            requestAnimationFrame(() => inputRef.current?.focus())
+            scheduleInputRefocus()
             return
           }
           const value = e.currentTarget.value
@@ -234,6 +252,8 @@ type FileExplorerRowProps = {
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
+  onAddFolderAsProject: () => void
+  canAddAsProject: boolean
   onRequestDelete: () => void
   onCollapseFolderSubtree: () => void
   onFindInFolder: () => void
@@ -274,6 +294,8 @@ export function FileExplorerRow({
   onStartNew,
   onStartRename,
   onDuplicate,
+  onAddFolderAsProject,
+  canAddAsProject,
   onRequestDelete,
   onCollapseFolderSubtree,
   onFindInFolder,
@@ -291,17 +313,18 @@ export function FileExplorerRow({
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
-  const { handleDragOver, handleDragEnter, handleDragLeave, handleDrop } = useFileExplorerRowDrag({
-    rowDropDir,
-    isDirectory: node.isDirectory,
-    nodePath: node.path,
-    isExpanded,
-    onDragTargetChange,
-    onDragExpandDir,
-    onNativeDragTargetChange,
-    onNativeDragExpandDir,
-    onMoveDrop
-  })
+  const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
+    useFileExplorerRowDrag({
+      rowDropDir,
+      isDirectory: node.isDirectory,
+      nodePath: node.path,
+      isExpanded,
+      onDragTargetChange,
+      onDragExpandDir,
+      onNativeDragTargetChange,
+      onNativeDragExpandDir,
+      onMoveDrop
+    })
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return
@@ -322,6 +345,7 @@ export function FileExplorerRow({
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
           style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+          ref={setRowDragNode}
           data-native-file-drop-dir={rowDropDir}
           draggable
           onDragStart={(event) => {
@@ -487,6 +511,12 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />
             Duplicate
+          </ContextMenuItem>
+        )}
+        {canAddAsProject && (
+          <ContextMenuItem onSelect={onAddFolderAsProject}>
+            <FolderPlus />
+            Add as Project...
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && (

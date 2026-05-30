@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: shell IPC path validation, OS opener fallbacks, and launcher lifecycle tests share one mocked Electron/child_process boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalize, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -58,6 +59,7 @@ import { EXTERNAL_EDITOR_CLI_COMMAND, registerShellHandlers } from './shell'
 
 function createSpawnedProcess(result: 'spawn' | 'error' = 'spawn'): {
   once: ReturnType<typeof vi.fn>
+  off: ReturnType<typeof vi.fn>
   unref: ReturnType<typeof vi.fn>
 } {
   const child = {
@@ -69,6 +71,7 @@ function createSpawnedProcess(result: 'spawn' | 'error' = 'spawn'): {
       }
       return child
     }),
+    off: vi.fn(() => child),
     unref: vi.fn()
   }
   return child
@@ -203,7 +206,8 @@ describe('registerShellHandlers', () => {
     })
 
     it('maps launcher failures to launch-failed', async () => {
-      spawnMock.mockReturnValueOnce(createSpawnedProcess('error'))
+      const child = createSpawnedProcess('error')
+      spawnMock.mockReturnValueOnce(child)
       const workspacePath = resolve('workspace')
       const handler = getHandler('shell:openInExternalEditor')
 
@@ -220,10 +224,14 @@ describe('registerShellHandlers', () => {
         stdio: 'ignore',
         windowsHide: true
       })
+      expect(child.off).toHaveBeenCalledWith('error', expect.any(Function))
+      expect(child.off).toHaveBeenCalledWith('spawn', expect.any(Function))
       expect(openPathMock).not.toHaveBeenCalled()
     })
 
     it('opens existing absolute paths with the editor launcher', async () => {
+      const child = createSpawnedProcess()
+      spawnMock.mockReturnValueOnce(child)
       const workspacePath = resolve('workspace')
       const handler = getHandler('shell:openInExternalEditor')
 
@@ -237,6 +245,8 @@ describe('registerShellHandlers', () => {
         stdio: 'ignore',
         windowsHide: true
       })
+      expect(child.off).toHaveBeenCalledWith('error', expect.any(Function))
+      expect(child.off).toHaveBeenCalledWith('spawn', expect.any(Function))
       expect(openPathMock).not.toHaveBeenCalled()
     })
 
