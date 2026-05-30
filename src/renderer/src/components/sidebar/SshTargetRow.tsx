@@ -4,7 +4,7 @@
  * Why extracted: keeps AddRepoSteps.tsx under the 400-line oxlint limit
  * while isolating the inline-connect interaction logic.
  */
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 
@@ -22,6 +22,7 @@ export function SshTargetRow({
   onConnect
 }: Props): React.JSX.Element {
   const [connecting, setConnecting] = useState(false)
+  const mountedRef = useRef(true)
   const status = target.state?.status ?? 'disconnected'
   const isConnected = status === 'connected'
   const isBusy =
@@ -49,8 +50,19 @@ export function SshTargetRow({
       return
     }
     setConnecting(true)
-    void onConnect(target.id).finally(() => setConnecting(false))
+    void onConnect(target.id).finally(() => {
+      if (mountedRef.current) {
+        setConnecting(false)
+      }
+    })
   }
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   return (
     <div
