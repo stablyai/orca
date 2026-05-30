@@ -55,17 +55,8 @@ import type {
   RuntimeMobileMarkdownResponse
 } from '../shared/mobile-markdown-document'
 import type { RateLimitRuntimeTarget, RateLimitState } from '../shared/rate-limit-types'
-import type {
-  WorkspaceSpaceAnalyzeResult,
-  WorkspaceSpaceScanProgress
-} from '../shared/workspace-space-types'
-import type {
-  WorkspacePortAdvertisedUrlChangedEvent,
-  WorkspacePortKillRequest,
-  WorkspacePortKillResult,
-  WorkspacePortScanRequest,
-  WorkspacePortScanResult
-} from '../shared/workspace-ports'
+import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
+import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   AddIssueCommentBySlugArgs,
@@ -575,23 +566,17 @@ const api = {
   } satisfies PreloadApi['worktrees'],
 
   workspaceCleanup: {
-    scan: (args?: { worktreeId?: string; skipGitWorktreeIds?: string[] }): Promise<unknown> =>
-      ipcRenderer.invoke('workspaceCleanup:scan', args),
-    dismiss: (args: { dismissals: unknown[] }): Promise<void> =>
-      ipcRenderer.invoke('workspaceCleanup:dismiss', args),
-    clearDismissals: (): Promise<void> => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
-    hasKillableLocalProcesses: (args: {
-      worktreeId: string
-      connectionId?: string | null
-      worktreePath?: string
-    }): Promise<unknown> => ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args)
-  },
+    scan: (args) => ipcRenderer.invoke('workspaceCleanup:scan', args),
+    dismiss: (args) => ipcRenderer.invoke('workspaceCleanup:dismiss', args),
+    clearDismissals: () => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
+    hasKillableLocalProcesses: (args) =>
+      ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args)
+  } satisfies PreloadApi['workspaceCleanup'],
 
   workspaceSpace: {
-    analyze: (): Promise<WorkspaceSpaceAnalyzeResult> =>
-      ipcRenderer.invoke('workspaceSpace:analyze'),
-    cancel: (): Promise<boolean> => ipcRenderer.invoke('workspaceSpace:cancel'),
-    onProgress: (callback: (progress: WorkspaceSpaceScanProgress) => void): (() => void) => {
+    analyze: () => ipcRenderer.invoke('workspaceSpace:analyze'),
+    cancel: () => ipcRenderer.invoke('workspaceSpace:cancel'),
+    onProgress: (callback) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
         progress: WorkspaceSpaceScanProgress
@@ -599,16 +584,12 @@ const api = {
       ipcRenderer.on('workspaceSpace:progress', listener)
       return () => ipcRenderer.removeListener('workspaceSpace:progress', listener)
     }
-  },
+  } satisfies PreloadApi['workspaceSpace'],
 
   workspacePorts: {
-    scan: (args: WorkspacePortScanRequest): Promise<WorkspacePortScanResult> =>
-      ipcRenderer.invoke('workspacePorts:scan', args),
-    kill: (args: WorkspacePortKillRequest): Promise<WorkspacePortKillResult> =>
-      ipcRenderer.invoke('workspacePorts:kill', args),
-    onAdvertisedUrlChanged: (
-      callback: (event: WorkspacePortAdvertisedUrlChangedEvent) => void
-    ): (() => void) => {
+    scan: (args) => ipcRenderer.invoke('workspacePorts:scan', args),
+    kill: (args) => ipcRenderer.invoke('workspacePorts:kill', args),
+    onAdvertisedUrlChanged: (callback) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
         event: WorkspacePortAdvertisedUrlChangedEvent
@@ -616,7 +597,7 @@ const api = {
       ipcRenderer.on('workspacePorts:advertised-url-changed', listener)
       return () => ipcRenderer.removeListener('workspacePorts:advertised-url-changed', listener)
     }
-  },
+  } satisfies PreloadApi['workspacePorts'],
 
   pty: {
     spawn: (opts: {
