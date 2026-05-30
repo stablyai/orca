@@ -527,6 +527,9 @@ export default function MarkdownPreview({
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
   const reviewNotesCopiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after the preview unmounts; skip copied
+  // feedback instead of starting a reset timer on a stale preview.
+  const reviewNotesCopyMountedRef = useRef(false)
   const [activeReviewCommentId, setActiveReviewCommentId] = useState<string | null>(null)
   const [attentionReviewCommentId, setAttentionReviewCommentId] = useState<string | null>(null)
   const attentionReviewCommentTimeoutRef = useRef<number | null>(null)
@@ -661,6 +664,14 @@ export default function MarkdownPreview({
       reviewNotesCopiedResetTimerRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    reviewNotesCopyMountedRef.current = true
+    return () => {
+      reviewNotesCopyMountedRef.current = false
+      clearReviewNotesCopiedResetTimer()
+    }
+  }, [clearReviewNotesCopiedResetTimer])
 
   const scrollToAnchor = useCallback((rawAnchor: string): boolean => {
     const container = rootRef.current
@@ -797,6 +808,9 @@ export default function MarkdownPreview({
     }
     try {
       await window.api.ui.writeClipboardText(markdownReviewPrompt)
+      if (!reviewNotesCopyMountedRef.current) {
+        return
+      }
       clearReviewNotesCopiedResetTimer()
       setReviewNotesCopied(true)
       reviewNotesCopiedResetTimerRef.current = window.setTimeout(() => {
