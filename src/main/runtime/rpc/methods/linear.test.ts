@@ -152,6 +152,96 @@ describe('linear RPC methods', () => {
     expect(runtime.linearIssueComments).toHaveBeenCalledWith('issue-3', 'workspace-1')
   })
 
+  it('routes Linear label catalog requests to the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      linearListIssueLabels: vi.fn().mockResolvedValue([{ id: 'label-1' }]),
+      linearCreateIssueLabel: vi.fn().mockResolvedValue({ ok: true, label: { id: 'label-2' } }),
+      linearUpdateIssueLabel: vi.fn().mockResolvedValue({ ok: true, label: { id: 'label-2' } }),
+      linearRetireIssueLabel: vi.fn().mockResolvedValue({ ok: true, label: { id: 'label-2' } }),
+      linearRestoreIssueLabel: vi.fn().mockResolvedValue({ ok: true, label: { id: 'label-2' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('linear.listIssueLabels', {
+        workspaceId: 'workspace-1',
+        teamId: 'team-1',
+        includeArchived: true
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.createIssueLabel', {
+        workspaceId: 'workspace-1',
+        input: { name: 'Bug', color: '#eb5757', description: null, teamId: 'team-1' }
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.updateIssueLabel', {
+        id: 'label-2',
+        workspaceId: 'workspace-1',
+        input: { name: 'Defect', parentId: null }
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.retireIssueLabel', { id: 'label-2', workspaceId: 'workspace-1' })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.restoreIssueLabel', { id: 'label-2', workspaceId: 'workspace-1' })
+    )
+
+    expect(runtime.linearListIssueLabels).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      teamId: 'team-1',
+      includeArchived: true
+    })
+    expect(runtime.linearCreateIssueLabel).toHaveBeenCalledWith(
+      { name: 'Bug', color: '#eb5757', description: null, teamId: 'team-1' },
+      'workspace-1'
+    )
+    expect(runtime.linearUpdateIssueLabel).toHaveBeenCalledWith(
+      'label-2',
+      { name: 'Defect', parentId: null },
+      'workspace-1'
+    )
+    expect(runtime.linearRetireIssueLabel).toHaveBeenCalledWith('label-2', 'workspace-1')
+    expect(runtime.linearRestoreIssueLabel).toHaveBeenCalledWith('label-2', 'workspace-1')
+  })
+
+  it('rejects invalid Linear label catalog RPC payloads before runtime calls', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      linearCreateIssueLabel: vi.fn(),
+      linearListIssueLabels: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
+
+    const invalidName = await dispatcher.dispatch(
+      makeRequest('linear.createIssueLabel', { workspaceId: 'workspace-1', input: { name: ' ' } })
+    )
+    const invalidColor = await dispatcher.dispatch(
+      makeRequest('linear.createIssueLabel', {
+        workspaceId: 'workspace-1',
+        input: { name: 'Bug', color: 123 }
+      })
+    )
+    const invalidWorkspace = await dispatcher.dispatch(
+      makeRequest('linear.listIssueLabels', { workspaceId: 123 })
+    )
+    const invalidRetireId = await dispatcher.dispatch(
+      makeRequest('linear.retireIssueLabel', { id: ' ', workspaceId: 'workspace-1' })
+    )
+
+    for (const result of [invalidName, invalidColor, invalidWorkspace, invalidRetireId]) {
+      if (result.ok) {
+        throw new Error('Expected invalid label payload to fail validation')
+      }
+      expect(result.error.code).toBe('invalid_argument')
+    }
+    expect(runtime.linearCreateIssueLabel).not.toHaveBeenCalled()
+    expect(runtime.linearListIssueLabels).not.toHaveBeenCalled()
+  })
+
   it('routes Linear metadata requests to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

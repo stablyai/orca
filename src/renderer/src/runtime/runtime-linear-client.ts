@@ -9,6 +9,10 @@ import type {
   LinearCustomViewModel,
   LinearCustomViewSummary,
   LinearIssue,
+  LinearIssueLabel,
+  LinearIssueLabelCreateInput,
+  LinearIssueLabelMutationResult,
+  LinearIssueLabelUpdateInput,
   LinearIssueUpdate,
   LinearLabel,
   LinearMember,
@@ -33,6 +37,12 @@ export type LinearCreateIssueResult =
   | { ok: false; error: string }
 export type LinearMutationResult = { ok: true } | { ok: false; error: string }
 export type LinearCommentResult = { ok: true; id: string } | { ok: false; error: string }
+
+export type LinearIssueLabelListOptions = {
+  workspaceId?: LinearWorkspaceSelection | null
+  teamId?: string | null
+  includeArchived?: boolean
+}
 
 export async function linearStatus(
   settings: RuntimeLinearSettings
@@ -385,6 +395,80 @@ export async function linearListCustomViewProjects(
         { timeoutMs: 30_000 }
       )
     : window.api.linear.listCustomViewProjects({ viewId, limit, workspaceId })
+}
+
+export async function linearListIssueLabels(
+  settings: RuntimeLinearSettings,
+  options: LinearIssueLabelListOptions = {}
+): Promise<LinearIssueLabel[]> {
+  const target = getActiveRuntimeTarget(settings)
+  const params = {
+    workspaceId: options.workspaceId ?? undefined,
+    teamId: options.teamId ?? undefined,
+    includeArchived: options.includeArchived
+  }
+  return target.kind === 'environment'
+    ? callRuntimeRpc<LinearIssueLabel[]>(target, 'linear.listIssueLabels', params, {
+        timeoutMs: 30_000
+      })
+    : window.api.linear.listIssueLabels(params)
+}
+
+export async function linearCreateIssueLabel(
+  settings: RuntimeLinearSettings,
+  input: LinearIssueLabelCreateInput,
+  workspaceId?: string | null
+): Promise<LinearIssueLabelMutationResult> {
+  const target = getActiveRuntimeTarget(settings)
+  const params = { input, workspaceId: workspaceId ?? undefined }
+  return target.kind === 'environment'
+    ? callRuntimeRpc<LinearIssueLabelMutationResult>(target, 'linear.createIssueLabel', params, {
+        timeoutMs: 30_000
+      })
+    : window.api.linear.createIssueLabel(params)
+}
+
+export async function linearUpdateIssueLabel(
+  settings: RuntimeLinearSettings,
+  id: string,
+  input: LinearIssueLabelUpdateInput,
+  workspaceId?: string | null
+): Promise<LinearIssueLabelMutationResult> {
+  const target = getActiveRuntimeTarget(settings)
+  const params = { id, input, workspaceId: workspaceId ?? undefined }
+  return target.kind === 'environment'
+    ? callRuntimeRpc<LinearIssueLabelMutationResult>(target, 'linear.updateIssueLabel', params, {
+        timeoutMs: 30_000
+      })
+    : window.api.linear.updateIssueLabel(params)
+}
+
+export async function linearRetireIssueLabel(
+  settings: RuntimeLinearSettings,
+  id: string,
+  workspaceId?: string | null
+): Promise<LinearIssueLabelMutationResult> {
+  const target = getActiveRuntimeTarget(settings)
+  const params = { id, workspaceId: workspaceId ?? undefined }
+  return target.kind === 'environment'
+    ? callRuntimeRpc<LinearIssueLabelMutationResult>(target, 'linear.retireIssueLabel', params, {
+        timeoutMs: 30_000
+      })
+    : window.api.linear.retireIssueLabel(params)
+}
+
+export async function linearRestoreIssueLabel(
+  settings: RuntimeLinearSettings,
+  id: string,
+  workspaceId?: string | null
+): Promise<LinearIssueLabelMutationResult> {
+  const target = getActiveRuntimeTarget(settings)
+  const params = { id, workspaceId: workspaceId ?? undefined }
+  return target.kind === 'environment'
+    ? callRuntimeRpc<LinearIssueLabelMutationResult>(target, 'linear.restoreIssueLabel', params, {
+        timeoutMs: 30_000
+      })
+    : window.api.linear.restoreIssueLabel(params)
 }
 
 export async function linearTeamStates(

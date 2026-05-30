@@ -1271,6 +1271,37 @@ const api = {
       workspaceId: string
     }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViewProjects', args),
 
+    listIssueLabels: (args?: {
+      workspaceId?: string
+      teamId?: string
+      includeArchived?: boolean
+    }): Promise<unknown[]> => ipcRenderer.invoke('linear:listIssueLabels', args),
+
+    createIssueLabel: (args: {
+      input: unknown
+      workspaceId?: string
+    }): Promise<{ ok: true; label: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:createIssueLabel', args),
+
+    updateIssueLabel: (args: {
+      id: string
+      input: unknown
+      workspaceId?: string
+    }): Promise<{ ok: true; label: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:updateIssueLabel', args),
+
+    retireIssueLabel: (args: {
+      id: string
+      workspaceId?: string
+    }): Promise<{ ok: true; label: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:retireIssueLabel', args),
+
+    restoreIssueLabel: (args: {
+      id: string
+      workspaceId?: string
+    }): Promise<{ ok: true; label: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:restoreIssueLabel', args),
+
     teamStates: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:teamStates', args),
 

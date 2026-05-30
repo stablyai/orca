@@ -76,6 +76,10 @@ import type {
   LinearCustomViewSummary,
   LinearWorkspaceSelection,
   LinearIssue,
+  LinearIssueLabel,
+  LinearIssueLabelCreateInput,
+  LinearIssueLabelMutationResult,
+  LinearIssueLabelUpdateInput,
   LinearIssueUpdate,
   LinearComment,
   LinearWorkflowState,
@@ -1379,6 +1383,28 @@ export type PreloadApi = {
       limit?: number
       workspaceId: string
     }) => Promise<LinearCollectionResult<LinearProjectSummary>>
+    listIssueLabels: (args?: {
+      workspaceId?: LinearWorkspaceSelection
+      teamId?: string
+      includeArchived?: boolean
+    }) => Promise<LinearIssueLabel[]>
+    createIssueLabel: (args: {
+      input: LinearIssueLabelCreateInput
+      workspaceId?: string
+    }) => Promise<LinearIssueLabelMutationResult>
+    updateIssueLabel: (args: {
+      id: string
+      input: LinearIssueLabelUpdateInput
+      workspaceId?: string
+    }) => Promise<LinearIssueLabelMutationResult>
+    retireIssueLabel: (args: {
+      id: string
+      workspaceId?: string
+    }) => Promise<LinearIssueLabelMutationResult>
+    restoreIssueLabel: (args: {
+      id: string
+      workspaceId?: string
+    }) => Promise<LinearIssueLabelMutationResult>
     teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
     teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
     teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>

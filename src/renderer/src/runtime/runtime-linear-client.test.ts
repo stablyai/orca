@@ -3,19 +3,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   linearCreateIssue,
+  linearCreateIssueLabel,
   linearCreateSubIssue,
   linearGetCustomView,
   linearGetProject,
   linearListCustomViewIssues,
   linearListCustomViewProjects,
   linearListCustomViews,
+  linearListIssueLabels,
   linearListProjectIssues,
+  linearRestoreIssueLabel,
   linearListProjects,
   linearListTeams,
+  linearRetireIssueLabel,
   linearSearchIssues,
   linearSelectWorkspace,
   linearStatus,
-  linearUpdateIssue
+  linearUpdateIssue,
+  linearUpdateIssueLabel
 } from './runtime-linear-client'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -38,6 +43,11 @@ const linearListCustomViewsLocal = vi.fn()
 const linearListCustomViewIssuesLocal = vi.fn()
 const linearListCustomViewProjectsLocal = vi.fn()
 const linearSelectWorkspaceLocal = vi.fn()
+const linearListIssueLabelsLocal = vi.fn()
+const linearCreateIssueLabelLocal = vi.fn()
+const linearUpdateIssueLabelLocal = vi.fn()
+const linearRetireIssueLabelLocal = vi.fn()
+const linearRestoreIssueLabelLocal = vi.fn()
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
@@ -56,6 +66,11 @@ beforeEach(() => {
   linearListCustomViewIssuesLocal.mockReset()
   linearListCustomViewProjectsLocal.mockReset()
   linearSelectWorkspaceLocal.mockReset()
+  linearListIssueLabelsLocal.mockReset()
+  linearCreateIssueLabelLocal.mockReset()
+  linearUpdateIssueLabelLocal.mockReset()
+  linearRetireIssueLabelLocal.mockReset()
+  linearRestoreIssueLabelLocal.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
   })
@@ -75,7 +90,12 @@ beforeEach(() => {
         listCustomViews: linearListCustomViewsLocal,
         listCustomViewIssues: linearListCustomViewIssuesLocal,
         listCustomViewProjects: linearListCustomViewProjectsLocal,
-        selectWorkspace: linearSelectWorkspaceLocal
+        selectWorkspace: linearSelectWorkspaceLocal,
+        listIssueLabels: linearListIssueLabelsLocal,
+        createIssueLabel: linearCreateIssueLabelLocal,
+        updateIssueLabel: linearUpdateIssueLabelLocal,
+        retireIssueLabel: linearRetireIssueLabelLocal,
+        restoreIssueLabel: linearRestoreIssueLabelLocal
       }
     }
   })
@@ -159,6 +179,105 @@ describe('runtime linear client', () => {
     })
     expect(linearStatusLocal).not.toHaveBeenCalled()
     expect(linearSearchIssuesLocal).not.toHaveBeenCalled()
+  })
+
+  it('routes Linear label catalog calls locally and through runtime environments', async () => {
+    linearListIssueLabelsLocal.mockResolvedValue([{ id: 'label-1' }])
+    linearCreateIssueLabelLocal.mockResolvedValue({ ok: true, label: { id: 'label-2' } })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'rpc-labels',
+        ok: true,
+        result: [{ id: 'label-1' }],
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-create-label',
+        ok: true,
+        result: { ok: true, label: { id: 'label-2' } },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-update-label',
+        ok: true,
+        result: { ok: true, label: { id: 'label-2' } },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-retire-label',
+        ok: true,
+        result: { ok: true, label: { id: 'label-2' } },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-restore-label',
+        ok: true,
+        result: { ok: true, label: { id: 'label-2' } },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+
+    await linearListIssueLabels(
+      { activeRuntimeEnvironmentId: null },
+      { workspaceId: 'workspace-1' }
+    )
+    await linearCreateIssueLabel(
+      { activeRuntimeEnvironmentId: null },
+      { name: 'Bug' },
+      'workspace-1'
+    )
+    await linearListIssueLabels(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      { workspaceId: 'workspace-1', teamId: 'team-1', includeArchived: true }
+    )
+    await linearCreateIssueLabel(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      { name: 'Bug', teamId: 'team-1' },
+      'workspace-1'
+    )
+    await linearUpdateIssueLabel(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      'label-2',
+      { name: 'Defect' },
+      'workspace-1'
+    )
+    await linearRetireIssueLabel({ activeRuntimeEnvironmentId: 'env-1' }, 'label-2', 'workspace-1')
+    await linearRestoreIssueLabel({ activeRuntimeEnvironmentId: 'env-1' }, 'label-2', 'workspace-1')
+
+    expect(linearListIssueLabelsLocal).toHaveBeenCalledWith({ workspaceId: 'workspace-1' })
+    expect(linearCreateIssueLabelLocal).toHaveBeenCalledWith({
+      input: { name: 'Bug' },
+      workspaceId: 'workspace-1'
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
+      selector: 'env-1',
+      method: 'linear.listIssueLabels',
+      params: { workspaceId: 'workspace-1', teamId: 'team-1', includeArchived: true },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-1',
+      method: 'linear.createIssueLabel',
+      params: { input: { name: 'Bug', teamId: 'team-1' }, workspaceId: 'workspace-1' },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
+      selector: 'env-1',
+      method: 'linear.updateIssueLabel',
+      params: { id: 'label-2', input: { name: 'Defect' }, workspaceId: 'workspace-1' },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
+      selector: 'env-1',
+      method: 'linear.retireIssueLabel',
+      params: { id: 'label-2', workspaceId: 'workspace-1' },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(5, {
+      selector: 'env-1',
+      method: 'linear.restoreIssueLabel',
+      params: { id: 'label-2', workspaceId: 'workspace-1' },
+      timeoutMs: 30_000
+    })
   })
 
   it('routes Linear mutations and metadata through the selected runtime environment', async () => {

@@ -51,6 +51,8 @@ import type {
   WorktreeRemoteBranchConflictEvent,
   WorktreeStartupLaunch,
   LinearCustomViewModel,
+  LinearIssueLabelCreateInput,
+  LinearIssueLabelUpdateInput,
   LinearIssueUpdate,
   LinearWorkspaceSelection,
   NestedRepoScanResult,
@@ -273,6 +275,13 @@ import {
   listProjectIssues as listLinearProjectIssues,
   listProjects as listLinearProjects
 } from '../linear/projects'
+import {
+  createIssueLabel as createLinearIssueLabel,
+  listIssueLabels as listLinearIssueLabels,
+  restoreIssueLabel as restoreLinearIssueLabel,
+  retireIssueLabel as retireLinearIssueLabel,
+  updateIssueLabel as updateLinearIssueLabel
+} from '../linear/labels'
 import {
   getTeamLabels as getLinearTeamLabels,
   getTeamMembers as getLinearTeamMembers,
@@ -12388,6 +12397,41 @@ export class OrcaRuntimeService {
     workspaceId: string
   ): ReturnType<typeof listLinearCustomViewProjects> {
     return listLinearCustomViewProjects(viewId, Math.min(Math.max(1, limit), 50), workspaceId)
+  }
+
+  linearListIssueLabels(
+    args: Parameters<typeof listLinearIssueLabels>[0]
+  ): ReturnType<typeof listLinearIssueLabels> {
+    return listLinearIssueLabels(args)
+  }
+
+  linearCreateIssueLabel(
+    input: LinearIssueLabelCreateInput,
+    workspaceId?: string
+  ): ReturnType<typeof createLinearIssueLabel> {
+    return createLinearIssueLabel(input, workspaceId)
+  }
+
+  linearUpdateIssueLabel(
+    id: string,
+    input: LinearIssueLabelUpdateInput,
+    workspaceId?: string
+  ): ReturnType<typeof updateLinearIssueLabel> {
+    return updateLinearIssueLabel(id, input, workspaceId)
+  }
+
+  linearRetireIssueLabel(
+    id: string,
+    workspaceId?: string
+  ): ReturnType<typeof retireLinearIssueLabel> {
+    return retireLinearIssueLabel(id, workspaceId)
+  }
+
+  linearRestoreIssueLabel(
+    id: string,
+    workspaceId?: string
+  ): ReturnType<typeof restoreLinearIssueLabel> {
+    return restoreLinearIssueLabel(id, workspaceId)
   }
 
   linearTeamStates(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamStates> {
