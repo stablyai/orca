@@ -75,12 +75,14 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
 
 export { GENERAL_PANE_SEARCH_ENTRIES }
 
-type AutoSaveDelayDraftState = {
+export type AutoSaveDelayDraftState = {
   sourceDelayMs: number
   draft: string
 }
 
-function createAutoSaveDelayDraftState(editorAutoSaveDelayMs: number): AutoSaveDelayDraftState {
+export function createAutoSaveDelayDraftState(
+  editorAutoSaveDelayMs: number
+): AutoSaveDelayDraftState {
   return {
     sourceDelayMs: editorAutoSaveDelayMs,
     draft: String(editorAutoSaveDelayMs)
@@ -94,6 +96,19 @@ function resolveAutoSaveDelayDraftState(
   return state.sourceDelayMs === editorAutoSaveDelayMs
     ? state
     : createAutoSaveDelayDraftState(editorAutoSaveDelayMs)
+}
+
+export function updateAutoSaveDelayDraftState(
+  state: AutoSaveDelayDraftState,
+  editorAutoSaveDelayMs: number,
+  draft: string
+): AutoSaveDelayDraftState {
+  return {
+    // Why: settings persistence is async, so a committed draft must stay tied
+    // to the current source until the persisted value reloads.
+    ...resolveAutoSaveDelayDraftState(state, editorAutoSaveDelayMs),
+    draft
+  }
 }
 
 type OpenInApplicationsDraftState = {
@@ -219,10 +234,9 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   }
   const autoSaveDelayDraft = resolvedAutoSaveDelayDraftState.draft
   const updateAutoSaveDelayDraft = (draft: string): void => {
-    setAutoSaveDelayDraftState((current) => ({
-      ...resolveAutoSaveDelayDraftState(current, settings.editorAutoSaveDelayMs),
-      draft
-    }))
+    setAutoSaveDelayDraftState((current) =>
+      updateAutoSaveDelayDraftState(current, settings.editorAutoSaveDelayMs, draft)
+    )
   }
 
   const resolvedOpenInApplicationsDraftState = resolveOpenInApplicationsDraftState(
@@ -280,7 +294,9 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
       MAX_EDITOR_AUTO_SAVE_DELAY_MS
     )
     updateSettings({ editorAutoSaveDelayMs: next })
-    setAutoSaveDelayDraftState(createAutoSaveDelayDraftState(next))
+    setAutoSaveDelayDraftState((current) =>
+      updateAutoSaveDelayDraftState(current, settings.editorAutoSaveDelayMs, String(next))
+    )
   }
 
   const handleRestartToUpdate = (): void => {
