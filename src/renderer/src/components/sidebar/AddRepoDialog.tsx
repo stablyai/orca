@@ -542,8 +542,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       toast.error('Enter a server path for the clone destination.')
       return
     }
+    const gen = cloneGenRef.current
     const dir = await window.api.repos.pickDirectory()
-    if (dir) {
+    if (dir && gen === cloneGenRef.current) {
       setCloneDestination(dir)
       setCloneError(null)
     }
@@ -596,6 +597,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       setAddedRepo(repo)
       setExistingWorkspaceSource('clone_url')
       await fetchWorktrees(repo.id)
+      if (gen !== cloneGenRef.current) {
+        return
+      }
       setStep('setup')
     } catch (err) {
       if (gen !== cloneGenRef.current) {
