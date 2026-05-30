@@ -100,7 +100,7 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
 
 export function detectLanguage(filePath: string): string {
   // Check exact filename first
-  const parts = filePath.split('/')
+  const parts = filePath.split(/[\\/]/)
   const filename = parts.at(-1)!
   if (FILENAME_TO_LANGUAGE[filename]) {
     return FILENAME_TO_LANGUAGE[filename]

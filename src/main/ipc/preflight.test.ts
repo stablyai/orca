@@ -145,10 +145,12 @@ describe('preflight', () => {
       gitea: defaultGiteaStatus
     })
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(4, 'gh', ['auth', 'status'], {
-      encoding: 'utf-8'
+      encoding: 'utf-8',
+      timeout: 5000
     })
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(5, 'glab', ['auth', 'status'], {
-      encoding: 'utf-8'
+      encoding: 'utf-8',
+      timeout: 5000
     })
   })
 
@@ -204,6 +206,47 @@ describe('preflight', () => {
     const status = await runPreflightCheck()
 
     expect(status.glab).toEqual({ installed: true, authenticated: false })
+  })
+
+  it('times out hung local preflight probes', async () => {
+    vi.useFakeTimers()
+    try {
+      execFileAsyncMock.mockImplementation((command, args) => {
+        if (command === 'git') {
+          return Promise.resolve({ stdout: 'git version 2.0.0\n' })
+        }
+        if (command === 'gh' && Array.isArray(args) && args[0] === '--version') {
+          return new Promise(() => {})
+        }
+        if (command === 'glab') {
+          return Promise.reject(new Error('command not found: glab'))
+        }
+        throw new Error(`unexpected command ${String(command)}`)
+      })
+
+      const statusPromise = runPreflightCheck()
+      let settled = false
+      void statusPromise.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+
+      await vi.advanceTimersByTimeAsync(5000)
+      await Promise.resolve()
+
+      expect(settled).toBe(true)
+      await expect(statusPromise).resolves.toMatchObject({
+        git: { installed: true },
+        gh: { installed: false },
+        glab: { installed: false }
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('prefers the selected WSL distro when checking gh for a WSL workspace', async () => {

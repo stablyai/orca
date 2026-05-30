@@ -829,6 +829,39 @@
   background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
+/* Why: the virtualized card row is height-measured; animating height would
+   make TanStack reposition sibling cards on every frame. */
+.compact-agent-expansion-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+}
+
+.compact-agent-expansion-grid-expanded {
+  grid-template-rows: 1fr;
+}
+
+/* Why: keyframes run when the content mounts already in its final state. */
+@keyframes compact-agent-expansion-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.compact-agent-expansion-grid-expanded .compact-agent-expansion-content {
+  animation: compact-agent-expansion-reveal 150ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compact-agent-expansion-grid-expanded .compact-agent-expansion-content {
+    animation-duration: 0ms;
+  }
+}
+
 .scroll-to-current-workspace-reveal-highlight {
   position: relative;
   isolation: isolate;

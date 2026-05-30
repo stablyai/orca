@@ -2211,6 +2211,8 @@ export type WorktreeCardProperty =
   // view options.
   | 'inline-agents'
 
+export type AgentActivityDisplayMode = 'compact' | 'full'
+
 export type StatusBarItem =
   | 'claude'
   | 'codex'
@@ -2259,6 +2261,7 @@ export type PersistedUIState = {
   uiZoomLevel: number
   editorFontZoomLevel: number
   worktreeCardProperties: WorktreeCardProperty[]
+  agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardCompact?: boolean

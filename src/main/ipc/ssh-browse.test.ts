@@ -108,4 +108,41 @@ describe('registerSshBrowseHandler', () => {
     expect(channel.stderr.listenerCount('data')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
   })
+
+  it('times out browse channels that never close', async () => {
+    vi.useFakeTimers()
+    try {
+      const channel = createMockChannel()
+      const exec = vi.fn().mockResolvedValue(channel)
+      const getConnectionManager = () => ({
+        getConnection: () => ({ exec })
+      })
+      registerSshBrowseHandler(getConnectionManager as never)
+
+      const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/mnt/stalled' })
+      let settled = false
+      void resultPromise.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      expect(settled).toBe(true)
+      await expect(resultPromise).rejects.toThrow('Remote directory listing timed out')
+      expect(channel.listenerCount('data')).toBe(0)
+      expect(channel.listenerCount('exit')).toBe(0)
+      expect(channel.listenerCount('close')).toBe(0)
+      expect(channel.listenerCount('error')).toBe(0)
+      expect(channel.stderr.listenerCount('data')).toBe(0)
+      expect(channel.stderr.listenerCount('error')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

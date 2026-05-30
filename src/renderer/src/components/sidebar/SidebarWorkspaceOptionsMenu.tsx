@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { WorktreeCardProperty } from '../../../../shared/types'
+import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
@@ -46,6 +46,11 @@ const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
   { id: 'inline-agents', label: 'Agent activity' }
 ]
 
+const AGENT_ACTIVITY_DISPLAY_OPTIONS: { id: AgentActivityDisplayMode; label: string }[] = [
+  { id: 'compact', label: 'Compact' },
+  { id: 'full', label: 'Full list' }
+]
+
 const SORT_OPTIONS = [
   { id: 'name', label: 'Name', description: null },
   {
@@ -72,6 +77,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const repos = useAppStore((s) => s.repos)
   const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
   const toggleWorktreeCardProperty = useAppStore((s) => s.toggleWorktreeCardProperty)
+  const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
+  const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
@@ -250,6 +257,26 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
                 {opt.label}
               </DropdownMenuCheckboxItem>
             ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+              Agent activity layout
+            </DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={agentActivityDisplayMode}
+              onValueChange={(value) =>
+                setAgentActivityDisplayMode(value as AgentActivityDisplayMode)
+              }
+            >
+              {AGENT_ACTIVITY_DISPLAY_OPTIONS.map((opt) => (
+                <DropdownMenuRadioItem
+                  key={opt.id}
+                  value={opt.id}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  {opt.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 

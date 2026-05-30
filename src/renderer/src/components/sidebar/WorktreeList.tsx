@@ -27,7 +27,9 @@ import {
   useWorktreeMap
 } from '@/store/selectors'
 import WorktreeCard from './WorktreeCard'
-import WorktreeCardAgents from './WorktreeCardAgents'
+import WorktreeCardAgents, {
+  SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT
+} from './WorktreeCardAgents'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { WorktreeActivityStatusIndicator } from './WorktreeActivityStatusIndicator'
 import { Button } from '@/components/ui/button'
@@ -77,12 +79,15 @@ import {
   getActiveStickyHeaderIndex,
   getActiveStickyHeaderIndexForScroll,
   getPreviousStickyHeaderIndex,
-  GROUP_HEADER_ROW_HEIGHT,
   getStickyHeaderIndexes,
   getVirtualRowTransform,
   shouldUseHeaderTopSpacing,
   type RenderRow
 } from './worktree-list-virtual-rows'
+import {
+  revealElementInScrollContainer,
+  WORKTREE_SIDEBAR_REVEAL_TOP_INSET
+} from './worktree-sidebar-reveal'
 import {
   getWorkspaceStatus,
   getWorkspaceStatusFromGroupKey,
@@ -180,6 +185,11 @@ import {
   type WorktreeSectionActivitySummary
 } from './worktree-section-activity'
 
+export {
+  getScrollTopToRevealBounds,
+  WORKTREE_SIDEBAR_REVEAL_TOP_INSET
+} from './worktree-sidebar-reveal'
+
 type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
   | { type: 'rename'; groupId: string; currentName: string }
@@ -194,10 +204,8 @@ type ProjectGroupDeleteDialogState = {
 // terminal title changes) trigger score recalculations.
 const SORT_SETTLE_MS = 3_000
 const USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 500
-const WORKTREE_REVEAL_TOP_CLEARANCE = 6
 const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
-export const WORKTREE_SIDEBAR_REVEAL_TOP_INSET =
-  GROUP_HEADER_ROW_HEIGHT + WORKTREE_REVEAL_TOP_CLEARANCE
+const EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 300
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // Why: TanStack Virtual owns scroll correction. Native browser anchoring can
   // fight virtual row measurement/remounts and produce visible jumps.
@@ -269,59 +277,16 @@ function getWorktreeOptionId(worktreeId: string): string {
   return `worktree-list-option-${encodeURIComponent(worktreeId)}`
 }
 
-function getMountedWorktreeBounds(
-  container: HTMLElement,
-  worktreeId: string
-): VirtualItemBounds | null {
-  const element = document.getElementById(getWorktreeOptionId(worktreeId))
-  if (!element || !container.contains(element)) {
-    return null
-  }
-
-  const containerRect = container.getBoundingClientRect()
-  const elementRect = element.getBoundingClientRect()
-  return {
-    index: -1,
-    start: elementRect.top - containerRect.top + container.scrollTop,
-    end: elementRect.bottom - containerRect.top + container.scrollTop
-  }
-}
-
-export function getScrollTopToRevealBounds(
-  container: HTMLElement,
-  bounds: Pick<VirtualItemBounds, 'start' | 'end'>,
-  topInset = 0
-): number | null {
-  const viewportTopInset = Math.max(0, Math.min(container.clientHeight, topInset))
-  const viewportTop = container.scrollTop + viewportTopInset
-  const viewportBottom = container.scrollTop + container.clientHeight
-  if (bounds.start < viewportTop) {
-    return bounds.start - viewportTopInset
-  }
-  if (bounds.end > viewportBottom) {
-    return bounds.end - container.clientHeight
-  }
-  return null
-}
-
 function revealMountedWorktreeElement(
   container: HTMLElement,
   worktreeId: string,
   behavior: ScrollBehavior
 ): boolean {
-  const bounds = getMountedWorktreeBounds(container, worktreeId)
-  if (!bounds) {
+  const element = document.getElementById(getWorktreeOptionId(worktreeId))
+  if (!element || !container.contains(element)) {
     return false
   }
-  const nextScrollTop = getScrollTopToRevealBounds(
-    container,
-    bounds,
-    WORKTREE_SIDEBAR_REVEAL_TOP_INSET
-  )
-  if (nextScrollTop !== null) {
-    container.scrollTo({ top: Math.max(0, nextScrollTop), behavior })
-  }
-  return true
+  return revealElementInScrollContainer(container, element, behavior)
 }
 
 function getWorktreeVisibilityMenuLabel(repo: Repo): string {
@@ -490,12 +455,6 @@ const WORKTREE_ROW_DRAG_INITIAL_STATE: WorktreeRowDragState = {
   dropIndicatorY: null,
   previewOffsetsByWorktreeId: EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS,
   pointerY: null
-}
-
-type VirtualItemBounds = {
-  index: number
-  start: number
-  end: number
 }
 
 type WorktreePointerDrag = {
@@ -1103,6 +1062,19 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       now: window.performance.now(),
       suppressUntil: suppressMeasurementAdjustmentUntilRef.current
     })
+
+  useEffect(() => {
+    const handleSuppress = () => {
+      // Why: compact agent expansion changes measured row height; let the row
+      // grow in place instead of letting TanStack compensate scrollTop.
+      suppressMeasurementAdjustmentUntilRef.current =
+        window.performance.now() + EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
+    }
+    window.addEventListener(SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT, handleSuppress)
+    return () => {
+      window.removeEventListener(SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT, handleSuppress)
+    }
+  }, [])
 
   React.useEffect(() => {
     if (!pendingRevealWorktree) {
@@ -2788,7 +2760,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   data-worktree-drag-group-key={worktreeDragGroupKey}
                   data-worktree-drag-group-index={worktreeDragGroupIndex}
                   className={cn(
-                    'relative transition-[opacity,transform,filter] duration-150 ease-out',
+                    // Why: avoid transitioning 'transform' to prevent browser-side lag and flashing
+                    // when TanStack Virtual programmatically repositions adjacent rows.
+                    'relative transition-[opacity,filter] duration-150 ease-out',
                     highlightedRevealWorktreeId === itemRow.worktree.id &&
                       'scroll-to-current-workspace-reveal-highlight',
                     worktreeDragState.draggingWorktreeId === itemRow.worktree.id &&

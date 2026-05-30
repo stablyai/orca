@@ -12,6 +12,7 @@ import {
   Sparkle,
   Sparkles,
   Square,
+  PencilLine,
   Undo2,
   Check,
   Copy,
@@ -101,6 +102,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
@@ -192,6 +194,8 @@ type SourceControlAiInstructionGuidance = {
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 const COMMIT_FAILURE_PROMPT_OUTPUT_LIMIT = 12_000
+const COMMIT_FAILURE_REPLY_INSTRUCTION =
+  'Reply with the root cause, files changed, validation run, final git status, and anything left for the user.'
 
 // Why: directional signifiers ahead of each primary action label. Commit
 // (✓) is affirmative; Push (↑) points in the direction data flows; Sync
@@ -679,17 +683,19 @@ export function buildFixCommitFailurePrompt({
   error,
   entries,
   worktreePath,
-  commitMessage
+  commitMessage,
+  customInstruction
 }: {
   summary: string
   error: string
   entries: Pick<GitStatusEntry, 'path' | 'status' | 'area'>[]
   worktreePath: string | null
   commitMessage: string
+  customInstruction?: string
 }): string {
   const failureOutput = truncatePromptText(error, COMMIT_FAILURE_PROMPT_OUTPUT_LIMIT)
 
-  return [
+  const prompt = [
     'Fix the failed git commit in this worktree and leave the user ready to retry the commit.',
     '',
     `- Worktree: ${JSON.stringify(worktreePath ?? 'current terminal working directory')}`,
@@ -710,8 +716,34 @@ export function buildFixCommitFailurePrompt({
     '',
     `Failure output JSON string: ${JSON.stringify(failureOutput)}`,
     '',
-    'Reply with the root cause, files changed, validation run, final git status, and anything left for the user.'
+    COMMIT_FAILURE_REPLY_INSTRUCTION
   ].join('\n')
+
+  return appendCommitFailureCustomInstruction(prompt, customInstruction ?? '')
+}
+
+export function appendCommitFailureCustomInstruction(
+  prompt: string,
+  customInstruction: string
+): string {
+  const trimmedInstruction = customInstruction.trim()
+  if (!trimmedInstruction) {
+    return prompt
+  }
+
+  const customInstructionBlock = [
+    '',
+    'Additional user instruction for this fix:',
+    trimmedInstruction,
+    ''
+  ].join('\n')
+  if (!prompt.endsWith(COMMIT_FAILURE_REPLY_INSTRUCTION)) {
+    return `${prompt}${customInstructionBlock}`
+  }
+
+  // Why: keep ad hoc user guidance before the required response format so the
+  // final line remains the agent's reporting contract.
+  return `${prompt.slice(0, -COMMIT_FAILURE_REPLY_INSTRUCTION.length)}${customInstructionBlock}${COMMIT_FAILURE_REPLY_INSTRUCTION}`
 }
 
 export function buildResolveConflictsPrompt({
@@ -1727,64 +1759,67 @@ function SourceControlInner(): React.JSX.Element {
         : null,
     [commitError, commitMessage, grouped.staged, worktreePath]
   )
-  const handleFixCommitFailureWithAI = useCallback(async (): Promise<boolean> => {
-    if (isLaunchingCommitFailureAgent || !activeWorktreeId || !commitError) {
-      return false
-    }
-
-    setIsLaunchingCommitFailureAgent(true)
-    try {
-      const connectionId = getConnectionId(activeWorktreeId)
-      if (connectionId === undefined) {
-        toast.error('Unable to resolve the workspace connection.')
+  const handleFixCommitFailureWithAI = useCallback(
+    async (promptOverride?: string): Promise<boolean> => {
+      if (isLaunchingCommitFailureAgent || !activeWorktreeId || !commitError) {
         return false
       }
 
-      const store = useAppStore.getState()
-      const detectedAgents =
-        typeof connectionId === 'string'
-          ? await store.ensureRemoteDetectedAgents(connectionId)
-          : await store.ensureDetectedAgents()
-      const agent = pickDefaultSourceControlAgent(
-        store.settings?.defaultTuiAgent,
-        detectedAgents,
-        store.settings?.disabledTuiAgents
-      )
-      if (!agent) {
-        toast.error('No enabled AI agents. Configure agents in Settings.')
-        return false
-      }
+      setIsLaunchingCommitFailureAgent(true)
+      try {
+        const connectionId = getConnectionId(activeWorktreeId)
+        if (connectionId === undefined) {
+          toast.error('Unable to resolve the workspace connection.')
+          return false
+        }
 
-      if (!commitFailureRecoveryPrompt) {
-        toast.error('Could not build the agent prompt.')
-        return false
-      }
-      const result = launchAgentInNewTab({
-        agent,
-        worktreeId: activeWorktreeId,
-        groupId: activeGroupId ?? activeWorktreeId,
-        prompt: commitFailureRecoveryPrompt,
-        promptDelivery: 'submit-after-ready',
-        launchSource: 'source_control_recovery'
-      })
-      if (!result) {
-        toast.error('Could not build the agent launch command.')
-        return false
-      }
+        const store = useAppStore.getState()
+        const detectedAgents =
+          typeof connectionId === 'string'
+            ? await store.ensureRemoteDetectedAgents(connectionId)
+            : await store.ensureDetectedAgents()
+        const agent = pickDefaultSourceControlAgent(
+          store.settings?.defaultTuiAgent,
+          detectedAgents,
+          store.settings?.disabledTuiAgents
+        )
+        if (!agent) {
+          toast.error('No enabled AI agents. Configure agents in Settings.')
+          return false
+        }
 
-      focusTerminalTabSurface(result.tabId)
-      toast.success('Started an AI agent for the commit failure.')
-      return true
-    } finally {
-      setIsLaunchingCommitFailureAgent(false)
-    }
-  }, [
-    activeGroupId,
-    activeWorktreeId,
-    commitError,
-    commitFailureRecoveryPrompt,
-    isLaunchingCommitFailureAgent
-  ])
+        if (!commitFailureRecoveryPrompt) {
+          toast.error('Could not build the agent prompt.')
+          return false
+        }
+        const result = launchAgentInNewTab({
+          agent,
+          worktreeId: activeWorktreeId,
+          groupId: activeGroupId ?? activeWorktreeId,
+          prompt: promptOverride ?? commitFailureRecoveryPrompt,
+          promptDelivery: 'submit-after-ready',
+          launchSource: 'source_control_recovery'
+        })
+        if (!result) {
+          toast.error('Could not build the agent launch command.')
+          return false
+        }
+
+        focusTerminalTabSurface(result.tabId)
+        toast.success('Started an AI agent for the commit failure.')
+        return true
+      } finally {
+        setIsLaunchingCommitFailureAgent(false)
+      }
+    },
+    [
+      activeGroupId,
+      activeWorktreeId,
+      commitError,
+      commitFailureRecoveryPrompt,
+      isLaunchingCommitFailureAgent
+    ]
+  )
 
   // Why: orphaned draft/error/in-flight entries accumulate when worktrees are
   // removed from the store (long sessions with many create/destroy cycles).
@@ -5101,7 +5136,7 @@ type CommitFailureFixSplitButtonProps = {
   iconClassName: string
   primaryClassName?: string
   chevronClassName?: string
-  onFixWithDefaultAgent: () => Promise<boolean> | boolean
+  onFixWithDefaultAgent: (promptOverride?: string) => Promise<boolean> | boolean
   onPromptDelivered: () => void
 }
 
@@ -5119,61 +5154,180 @@ function CommitFailureFixSplitButton({
   onFixWithDefaultAgent,
   onPromptDelivered
 }: CommitFailureFixSplitButtonProps): React.JSX.Element {
+  const [customizePromptOpen, setCustomizePromptOpen] = useState(false)
+  const [customInstruction, setCustomInstruction] = useState('')
+  const customInstructionId = React.useId()
   const canLaunch = Boolean(worktreeId && groupId && prompt)
-  const dividerClass =
-    variant === 'default' ? 'border-primary-foreground/20' : 'border-destructive/20'
+  const hasCustomInstruction = customInstruction.trim().length > 0
+  const customizedPrompt = useMemo(
+    () => (prompt ? appendCommitFailureCustomInstruction(prompt, customInstruction) : null),
+    [customInstruction, prompt]
+  )
+  const dividerClass = variant === 'default' ? 'border-primary-foreground/20' : 'border-border'
+  const handleCustomizePromptOpenChange = useCallback((open: boolean) => {
+    setCustomizePromptOpen(open)
+    if (!open) {
+      setCustomInstruction('')
+    }
+  }, [])
+  const handleStartDefaultWithCustomPrompt = useCallback(async () => {
+    if (!customizedPrompt || !hasCustomInstruction) {
+      return
+    }
+    const launched = await onFixWithDefaultAgent(customizedPrompt)
+    if (launched) {
+      setCustomizePromptOpen(false)
+      setCustomInstruction('')
+    }
+  }, [customizedPrompt, hasCustomInstruction, onFixWithDefaultAgent])
+  const handleCustomPromptDelivered = useCallback(() => {
+    setCustomizePromptOpen(false)
+    setCustomInstruction('')
+    onPromptDelivered()
+  }, [onPromptDelivered])
 
   return (
-    <DropdownMenu>
-      <div className="flex shrink-0 items-stretch">
-        <Button
-          type="button"
-          variant={variant}
-          size={size}
-          className={cn('rounded-r-none', primaryClassName)}
-          disabled={isLaunching || !canLaunch}
-          onClick={() => void onFixWithDefaultAgent()}
-          title="Start the default AI agent to fix this commit failure"
-          aria-label="Fix commit failure with AI"
-        >
-          {isLaunching ? (
-            <RefreshCw className={cn(iconClassName, 'animate-spin')} />
-          ) : (
-            <Sparkle className={iconClassName} />
-          )}
-          {label}
-        </Button>
-        <DropdownMenuTrigger asChild>
+    <>
+      <DropdownMenu>
+        <div className="flex shrink-0 items-stretch">
           <Button
             type="button"
             variant={variant}
             size={size}
-            className={cn('rounded-l-none border-l', dividerClass, chevronClassName)}
+            className={cn('rounded-r-none', primaryClassName)}
             disabled={isLaunching || !canLaunch}
-            title="Choose an agent for this commit failure"
-            aria-label="Choose agent to fix commit failure"
+            onClick={() => void onFixWithDefaultAgent()}
+            title="Start the default AI agent to fix this commit failure"
+            aria-label="Fix commit failure with AI"
           >
-            <ChevronDown className={iconClassName} />
+            {isLaunching ? (
+              <RefreshCw className={cn(iconClassName, 'animate-spin')} />
+            ) : (
+              <Sparkle className={iconClassName} />
+            )}
+            {label}
           </Button>
-        </DropdownMenuTrigger>
-      </div>
-      <DropdownMenuContent align="end" className="min-w-[180px]">
-        {worktreeId && groupId && prompt ? (
-          <QuickLaunchAgentMenuItems
-            worktreeId={worktreeId}
-            groupId={groupId}
-            onFocusTerminal={focusTerminalTabSurface}
-            prompt={prompt}
-            promptDelivery="submit-after-ready"
-            launchSource="source_control_recovery"
-            onPromptDelivered={onPromptDelivered}
-          />
-        ) : (
-          <DropdownMenuItem disabled>Commit failure context unavailable</DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant={variant}
+              size={size}
+              className={cn('rounded-l-none border-l', dividerClass, chevronClassName)}
+              disabled={isLaunching || !canLaunch}
+              title="Choose an agent for this commit failure"
+              aria-label="Choose agent to fix commit failure"
+            >
+              <ChevronDown className={iconClassName} />
+            </Button>
+          </DropdownMenuTrigger>
+        </div>
+        <DropdownMenuContent align="end" className="min-w-[210px] p-1">
+          {worktreeId && groupId && prompt ? (
+            <>
+              <DropdownMenuItem
+                onSelect={() => setCustomizePromptOpen(true)}
+                className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+              >
+                <PencilLine className="size-4 text-muted-foreground" />
+                Customize prompt...
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <QuickLaunchAgentMenuItems
+                worktreeId={worktreeId}
+                groupId={groupId}
+                onFocusTerminal={focusTerminalTabSurface}
+                prompt={prompt}
+                promptDelivery="submit-after-ready"
+                launchSource="source_control_recovery"
+                onPromptDelivered={onPromptDelivered}
+              />
+            </>
+          ) : (
+            <DropdownMenuItem disabled>Commit failure context unavailable</DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Dialog open={customizePromptOpen} onOpenChange={handleCustomizePromptOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Customize Prompt</DialogTitle>
+            <DialogDescription>Add one-time guidance for this failed commit.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor={customInstructionId} className="text-xs">
+              Custom instruction
+            </Label>
+            <textarea
+              id={customInstructionId}
+              value={customInstruction}
+              onChange={(event) => setCustomInstruction(event.target.value)}
+              placeholder="Focus on the staged files only, and prefer the smallest lint-safe change."
+              rows={5}
+              className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <DialogClose asChild>
+              <Button type="button" variant="outline" size="sm">
+                Cancel
+              </Button>
+            </DialogClose>
+            {worktreeId && groupId && customizedPrompt ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isLaunching || !hasCustomInstruction}
+                  >
+                    Choose agent
+                    <ChevronDown className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[180px] p-1">
+                  <QuickLaunchAgentMenuItems
+                    worktreeId={worktreeId}
+                    groupId={groupId}
+                    onFocusTerminal={focusTerminalTabSurface}
+                    prompt={customizedPrompt}
+                    promptDelivery="submit-after-ready"
+                    launchSource="source_control_recovery"
+                    onPromptDelivered={handleCustomPromptDelivered}
+                  />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              disabled={isLaunching || !canLaunch || !hasCustomInstruction}
+              onClick={() => void handleStartDefaultWithCustomPrompt()}
+            >
+              {isLaunching ? (
+                <RefreshCw className="size-4 animate-spin" />
+              ) : (
+                <Sparkle className="size-4" />
+              )}
+              Start default agent
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
+}
+
+function getCommitFailureKindLabel(summary: string): string | null {
+  if (/\blint\b/i.test(summary)) {
+    return 'Lint'
+  }
+
+  if (/\bhook\b|\bpre-commit\b/i.test(summary)) {
+    return 'Hook'
+  }
+
+  return null
 }
 
 type CommitAreaProps = {
@@ -5201,7 +5355,7 @@ type CommitAreaProps = {
   onCommitMessageChange: (message: string) => void
   onGenerate: () => void
   onCancelGenerate: () => void
-  onFixCommitFailureWithAI: () => Promise<boolean> | boolean
+  onFixCommitFailureWithAI: (promptOverride?: string) => Promise<boolean> | boolean
   onPrimaryAction: () => void
   onDropdownAction: (kind: DropdownActionKind) => void
 }
@@ -5267,6 +5421,10 @@ export function CommitArea({
     () => (commitError ? summarizeCommitFailure(commitError) : null),
     [commitError]
   )
+  const commitFailureKindLabel = useMemo(
+    () => (commitFailureSummary ? getCommitFailureKindLabel(commitFailureSummary) : null),
+    [commitFailureSummary]
+  )
   const hasCommitFailureDetails = useMemo(
     () =>
       commitError && commitFailureSummary
@@ -5287,13 +5445,16 @@ export function CommitArea({
     },
     [commitFailureIdentity]
   )
-  const handleFixCommitFailureWithAI = useCallback(async (): Promise<boolean> => {
-    const launched = await onFixCommitFailureWithAI()
-    if (launched) {
-      setCommitFailureDialogOpen(false)
-    }
-    return launched
-  }, [onFixCommitFailureWithAI, setCommitFailureDialogOpen])
+  const handleFixCommitFailureWithAI = useCallback(
+    async (promptOverride?: string): Promise<boolean> => {
+      const launched = await onFixCommitFailureWithAI(promptOverride)
+      if (launched) {
+        setCommitFailureDialogOpen(false)
+      }
+      return launched
+    },
+    [onFixCommitFailureWithAI, setCommitFailureDialogOpen]
+  )
   const handleCommitFailureAgentPromptDelivered = useCallback(() => {
     setCommitFailureDialogOpen(false)
   }, [setCommitFailureDialogOpen])
@@ -5525,35 +5686,54 @@ export function CommitArea({
           id="commit-area-error"
           role="alert"
           aria-live="polite"
-          className="mt-1 flex min-w-0 items-center gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-[11px] text-destructive"
+          className="mt-2 min-w-0 overflow-hidden rounded-lg border border-destructive/20 bg-card text-card-foreground shadow-xs"
         >
-          <TriangleAlert className="size-3 shrink-0" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate">{commitFailureSummary}</span>
-          <CommitFailureFixSplitButton
-            label="Fix"
-            worktreeId={worktreeId}
-            groupId={groupId}
-            prompt={commitFailureRecoveryPrompt}
-            isLaunching={isFixingCommitFailureWithAI}
-            variant="ghost"
-            size="xs"
-            iconClassName="size-3"
-            primaryClassName="h-5 px-1.5 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
-            chevronClassName="h-5 px-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onFixWithDefaultAgent={handleFixCommitFailureWithAI}
-            onPromptDelivered={handleCommitFailureAgentPromptDelivered}
-          />
-          {hasCommitFailureDetails && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="h-5 shrink-0 px-1.5 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => setCommitFailureDialogOpen(true)}
-            >
-              Details
-            </Button>
-          )}
+          <div className="h-0.5 bg-destructive/70" aria-hidden="true" />
+          <div className="grid min-w-0 gap-2 px-2.5 py-2.5">
+            <div className="grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] gap-1.5">
+              <span className="mt-px inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                <TriangleAlert className="size-3" aria-hidden="true" />
+              </span>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span className="text-xs font-semibold text-foreground">Commit blocked</span>
+                {commitFailureKindLabel ? (
+                  <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-px text-[10px] leading-4 font-semibold text-destructive">
+                    {commitFailureKindLabel}
+                  </span>
+                ) : null}
+              </div>
+              <p className="col-start-2 mt-0.5 line-clamp-3 min-w-0 font-mono text-[11px] leading-4 break-words text-muted-foreground [overflow-wrap:anywhere]">
+                {commitFailureSummary}
+              </p>
+            </div>
+            <div className="ml-[1.375rem] flex min-w-0 items-center gap-1.5">
+              <CommitFailureFixSplitButton
+                label="AI Fix"
+                worktreeId={worktreeId}
+                groupId={groupId}
+                prompt={commitFailureRecoveryPrompt}
+                isLaunching={isFixingCommitFailureWithAI}
+                variant="secondary"
+                size="xs"
+                iconClassName="size-3"
+                primaryClassName="h-6 px-2 text-[11px]"
+                chevronClassName="h-6 px-1.5"
+                onFixWithDefaultAgent={handleFixCommitFailureWithAI}
+                onPromptDelivered={handleCommitFailureAgentPromptDelivered}
+              />
+              {hasCommitFailureDetails && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="h-6 shrink-0 border-foreground/25 px-2 text-[11px] font-semibold"
+                  onClick={() => setCommitFailureDialogOpen(true)}
+                >
+                  Details
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       )}
       {commitError && commitFailureSummary && (

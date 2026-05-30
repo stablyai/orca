@@ -5321,29 +5321,34 @@ export default function TaskPage(): React.JSX.Element {
                                 <ButtonGroup>
                                   <Button
                                     type="button"
-                                    variant="outline"
+                                    variant={attachedWorkspace ? 'default' : 'outline'}
                                     size="xs"
                                     onClick={(event) => {
                                       event.stopPropagation()
                                       handleOpenOrUseGitHubPR(item)
                                     }}
-                                    className="bg-background/80"
+                                    className={cn(
+                                      'min-w-[72px] gap-1 font-semibold',
+                                      attachedWorkspace ? 'shadow-xs' : 'bg-background/80'
+                                    )}
                                     aria-label={
                                       attachedWorkspace
-                                        ? 'Open workspace attached to PR'
+                                        ? 'Resume workspace attached to PR'
                                         : 'Start workspace from PR'
                                     }
                                   >
-                                    {attachedWorkspace ? 'Open' : 'Start'}
+                                    {attachedWorkspace ? 'Resume' : 'Start'}
                                     <ArrowRight className="size-3" />
                                   </Button>
                                   <DropdownMenuTrigger asChild>
                                     <Button
                                       type="button"
-                                      variant="outline"
+                                      variant={attachedWorkspace ? 'default' : 'outline'}
                                       size="icon-xs"
                                       onClick={(event) => event.stopPropagation()}
-                                      className="bg-background/80"
+                                      className={cn(
+                                        attachedWorkspace ? 'shadow-xs' : 'bg-background/80'
+                                      )}
                                       aria-label="More PR actions"
                                     >
                                       <ChevronDown className="size-3" />
