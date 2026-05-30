@@ -35,6 +35,7 @@ import type {
   FloatingTerminalCwdRequest,
   MarkdownDocument,
   SearchResult,
+  UpdateStatus,
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
@@ -50,6 +51,7 @@ import type {
 } from '../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
+import type { RemoteWorkspaceChangedEvent } from '../shared/remote-workspace-types'
 import type {
   RuntimeMobileMarkdownRequest,
   RuntimeMobileMarkdownResponse
@@ -1924,40 +1926,37 @@ const api = {
   },
 
   session: {
-    get: (): Promise<unknown> => ipcRenderer.invoke('session:get'),
-    set: (args: unknown): Promise<void> => ipcRenderer.invoke('session:set', args),
+    get: () => ipcRenderer.invoke('session:get'),
+    set: (args) => ipcRenderer.invoke('session:set', args),
     /** Synchronous session save for beforeunload — blocks until flushed to disk. */
-    setSync: (args: unknown): void => {
+    setSync: (args) => {
       ipcRenderer.sendSync('session:set-sync', args)
     }
-  },
+  } satisfies PreloadApi['session'],
 
   remoteWorkspace: {
-    get: (args: { targetId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('remoteWorkspace:get', args),
-    setForConnectedTargets: (args: {
-      session: unknown
-      hydratedTargetIds?: string[]
-    }): Promise<unknown> => ipcRenderer.invoke('remoteWorkspace:setForConnectedTargets', args),
-    listEnabledConnectedTargets: (): Promise<string[]> =>
+    get: (args) => ipcRenderer.invoke('remoteWorkspace:get', args),
+    setForConnectedTargets: (args) =>
+      ipcRenderer.invoke('remoteWorkspace:setForConnectedTargets', args),
+    listEnabledConnectedTargets: () =>
       ipcRenderer.invoke('remoteWorkspace:listEnabledConnectedTargets'),
-    listConnectedClients: (args?: { targetIds?: string[] }): Promise<unknown> =>
+    listConnectedClients: (args) =>
       ipcRenderer.invoke('remoteWorkspace:listConnectedClients', args),
-    clientId: (): Promise<string> => ipcRenderer.invoke('remoteWorkspace:clientId'),
-    onChanged: (callback: (event: unknown) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: unknown) => callback(data)
+    clientId: () => ipcRenderer.invoke('remoteWorkspace:clientId'),
+    onChanged: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: RemoteWorkspaceChangedEvent) =>
+        callback(data)
       ipcRenderer.on('remoteWorkspace:changed', listener)
       return () => ipcRenderer.removeListener('remoteWorkspace:changed', listener)
     }
-  },
+  } satisfies PreloadApi['remoteWorkspace'],
 
   updater: {
-    getStatus: (): Promise<unknown> => ipcRenderer.invoke('updater:getStatus'),
-    getVersion: (): Promise<string> => ipcRenderer.invoke('updater:getVersion'),
-    check: (options?: { includePrerelease?: boolean }): Promise<void> =>
-      ipcRenderer.invoke('updater:check', options),
-    download: (): Promise<void> => ipcRenderer.invoke('updater:download'),
-    dismissNudge: (): Promise<void> => ipcRenderer.invoke('updater:dismissNudge'),
+    getStatus: () => ipcRenderer.invoke('updater:getStatus'),
+    getVersion: () => ipcRenderer.invoke('updater:getVersion'),
+    check: (options) => ipcRenderer.invoke('updater:check', options),
+    download: () => ipcRenderer.invoke('updater:download'),
+    dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
     quitAndInstall: async (): Promise<void> => {
       // Why: update installs must proceed even when a dirty-file auto-save
       // fails; otherwise a downloaded update can get stuck behind hidden editor
@@ -1976,17 +1975,17 @@ const api = {
         throw error
       }
     },
-    onStatus: (callback: (status: unknown) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status)
+    onStatus: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => callback(status)
       ipcRenderer.on('updater:status', listener)
       return () => ipcRenderer.removeListener('updater:status', listener)
     },
-    onClearDismissal: (callback: () => void): (() => void) => {
+    onClearDismissal: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('updater:clearDismissal', listener)
       return () => ipcRenderer.removeListener('updater:clearDismissal', listener)
     }
-  },
+  } satisfies PreloadApi['updater'],
 
   notebook: {
     runPythonCell: (args: {
