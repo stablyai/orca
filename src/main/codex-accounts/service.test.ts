@@ -95,6 +95,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
+    quickCreateWorkspaceWithDefaultAgent: false,
     disabledTuiAgents: [],
     skipDeleteWorktreeConfirm: false,
     skipDeleteAutomationConfirm: false,
