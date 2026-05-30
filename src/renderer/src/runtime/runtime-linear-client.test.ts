@@ -1,7 +1,15 @@
+/* eslint-disable max-lines -- Why: runtime Linear routing cases stay together
+   so local preload fallback and SSH runtime transport parity are reviewed as one boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   linearCreateIssue,
   linearCreateSubIssue,
+  linearGetCustomView,
+  linearGetProject,
+  linearListCustomViewIssues,
+  linearListCustomViewProjects,
+  linearListCustomViews,
+  linearListProjectIssues,
   linearListProjects,
   linearListTeams,
   linearSearchIssues,
@@ -23,6 +31,12 @@ const linearCreateIssueLocal = vi.fn()
 const linearUpdateIssueLocal = vi.fn()
 const linearListTeamsLocal = vi.fn()
 const linearListProjectsLocal = vi.fn()
+const linearGetCustomViewLocal = vi.fn()
+const linearGetProjectLocal = vi.fn()
+const linearListProjectIssuesLocal = vi.fn()
+const linearListCustomViewsLocal = vi.fn()
+const linearListCustomViewIssuesLocal = vi.fn()
+const linearListCustomViewProjectsLocal = vi.fn()
 const linearSelectWorkspaceLocal = vi.fn()
 
 beforeEach(() => {
@@ -35,6 +49,12 @@ beforeEach(() => {
   linearUpdateIssueLocal.mockReset()
   linearListTeamsLocal.mockReset()
   linearListProjectsLocal.mockReset()
+  linearGetCustomViewLocal.mockReset()
+  linearGetProjectLocal.mockReset()
+  linearListProjectIssuesLocal.mockReset()
+  linearListCustomViewsLocal.mockReset()
+  linearListCustomViewIssuesLocal.mockReset()
+  linearListCustomViewProjectsLocal.mockReset()
   linearSelectWorkspaceLocal.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
@@ -49,6 +69,12 @@ beforeEach(() => {
         updateIssue: linearUpdateIssueLocal,
         listTeams: linearListTeamsLocal,
         listProjects: linearListProjectsLocal,
+        getCustomView: linearGetCustomViewLocal,
+        getProject: linearGetProjectLocal,
+        listProjectIssues: linearListProjectIssuesLocal,
+        listCustomViews: linearListCustomViewsLocal,
+        listCustomViewIssues: linearListCustomViewIssuesLocal,
+        listCustomViewProjects: linearListCustomViewProjectsLocal,
         selectWorkspace: linearSelectWorkspaceLocal
       }
     }
@@ -98,7 +124,7 @@ describe('runtime linear client', () => {
 
     await expect(
       linearListProjects({ activeRuntimeEnvironmentId: null }, 'roadmap', 10, 'workspace-1')
-    ).resolves.toEqual([])
+    ).resolves.toEqual({ items: [] })
   })
 
   it('routes Linear reads through the selected runtime environment', async () => {
@@ -176,7 +202,7 @@ describe('runtime linear client', () => {
       .mockResolvedValueOnce({
         id: 'rpc-projects',
         ok: true,
-        result: [{ id: 'project-1' }],
+        result: { items: [{ id: 'project-1' }] },
         _meta: { runtimeId: 'runtime-1' }
       })
       .mockResolvedValueOnce({
@@ -256,5 +282,120 @@ describe('runtime linear client', () => {
       params: { workspaceId: 'workspace-1' },
       timeoutMs: 15_000
     })
+  })
+
+  it('routes Linear project and custom-view reads through the selected runtime environment', async () => {
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'rpc-project',
+        ok: true,
+        result: { id: 'project-1' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-project-issues',
+        ok: true,
+        result: { items: [{ id: 'issue-1' }] },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-views',
+        ok: true,
+        result: { items: [{ id: 'view-1' }] },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-view',
+        ok: true,
+        result: { id: 'view-1' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-view-issues',
+        ok: true,
+        result: { items: [{ id: 'issue-2' }] },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-view-projects',
+        ok: true,
+        result: { items: [{ id: 'project-2' }] },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+
+    await linearGetProject({ activeRuntimeEnvironmentId: 'env-1' }, 'project-1', 'workspace-1')
+    await linearListProjectIssues(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      'project-1',
+      10,
+      'workspace-1'
+    )
+    await linearListCustomViews(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      'project',
+      10,
+      'workspace-1'
+    )
+    await linearGetCustomView(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      'view-1',
+      'project',
+      'workspace-1'
+    )
+    await linearListCustomViewIssues(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      'view-1',
+      10,
+      'workspace-1'
+    )
+    await linearListCustomViewProjects(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      'view-2',
+      10,
+      'workspace-1'
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
+      selector: 'env-1',
+      method: 'linear.getProject',
+      params: { id: 'project-1', workspaceId: 'workspace-1' },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-1',
+      method: 'linear.listProjectIssues',
+      params: { projectId: 'project-1', limit: 10, workspaceId: 'workspace-1' },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
+      selector: 'env-1',
+      method: 'linear.listCustomViews',
+      params: { model: 'project', limit: 10, workspaceId: 'workspace-1' },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
+      selector: 'env-1',
+      method: 'linear.getCustomView',
+      params: { viewId: 'view-1', model: 'project', workspaceId: 'workspace-1' },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(5, {
+      selector: 'env-1',
+      method: 'linear.listCustomViewIssues',
+      params: { viewId: 'view-1', limit: 10, workspaceId: 'workspace-1' },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(6, {
+      selector: 'env-1',
+      method: 'linear.listCustomViewProjects',
+      params: { viewId: 'view-2', limit: 10, workspaceId: 'workspace-1' },
+      timeoutMs: 30_000
+    })
+    expect(linearGetProjectLocal).not.toHaveBeenCalled()
+    expect(linearGetCustomViewLocal).not.toHaveBeenCalled()
+    expect(linearListProjectIssuesLocal).not.toHaveBeenCalled()
+    expect(linearListCustomViewsLocal).not.toHaveBeenCalled()
+    expect(linearListCustomViewIssuesLocal).not.toHaveBeenCalled()
+    expect(linearListCustomViewProjectsLocal).not.toHaveBeenCalled()
   })
 })

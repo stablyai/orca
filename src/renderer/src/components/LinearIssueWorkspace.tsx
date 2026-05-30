@@ -272,7 +272,7 @@ function LinearIssueSidebarProjectCard({
       void linearListProjects(settings, query, 20, issue.workspaceId)
         .then((result) => {
           if (!cancelled) {
-            setProjects(result)
+            setProjects(result.items)
           }
         })
         .catch((error) => {

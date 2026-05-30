@@ -3,6 +3,7 @@ import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 
 const VALID_FILTERS = ['assigned', 'created', 'all', 'completed'] as const
+const VALID_CUSTOM_VIEW_MODELS = ['issue', 'project'] as const
 const LinearPriority = z.number().int().min(0).max(4).optional()
 const LinearLabelIds = z.array(requiredString('Invalid label ID')).optional()
 
@@ -15,6 +16,11 @@ const WorkspaceSelection = z
     workspaceId: OptionalString
   })
   .optional()
+
+const ConcreteWorkspaceId = requiredString('Concrete Linear workspace ID is required').refine(
+  (value) => value !== 'all',
+  'Concrete Linear workspace ID is required'
+)
 
 const SelectWorkspace = z.object({
   workspaceId: requiredString('Workspace ID is required')
@@ -65,6 +71,35 @@ const ListProjects = z
     workspaceId: OptionalString
   })
   .optional()
+
+const ProjectId = z.object({
+  id: requiredString('Project ID is required'),
+  workspaceId: ConcreteWorkspaceId
+})
+
+const ProjectIssues = z.object({
+  projectId: requiredString('Project ID is required'),
+  limit: OptionalFiniteNumber,
+  workspaceId: ConcreteWorkspaceId
+})
+
+const ListCustomViews = z.object({
+  model: z.enum(VALID_CUSTOM_VIEW_MODELS),
+  limit: OptionalFiniteNumber,
+  workspaceId: OptionalString
+})
+
+const CustomViewId = z.object({
+  viewId: requiredString('Custom view ID is required'),
+  model: z.enum(VALID_CUSTOM_VIEW_MODELS),
+  workspaceId: ConcreteWorkspaceId
+})
+
+const CustomViewContents = z.object({
+  viewId: requiredString('Custom view ID is required'),
+  limit: OptionalFiniteNumber,
+  workspaceId: ConcreteWorkspaceId
+})
 
 const TeamId = z.object({
   teamId: requiredString('Team ID is required'),
@@ -180,6 +215,54 @@ export const LINEAR_METHODS: RpcMethod[] = [
     params: ListProjects,
     handler: async (params, { runtime }) =>
       runtime.linearListProjects(params?.query, params?.limit, params?.workspaceId)
+  }),
+  defineMethod({
+    name: 'linear.getProject',
+    params: ProjectId,
+    handler: async (params, { runtime }) =>
+      runtime.linearGetProject(params.id.trim(), params.workspaceId.trim())
+  }),
+  defineMethod({
+    name: 'linear.listProjectIssues',
+    params: ProjectIssues,
+    handler: async (params, { runtime }) =>
+      runtime.linearListProjectIssues(
+        params.projectId.trim(),
+        params.limit,
+        params.workspaceId.trim()
+      )
+  }),
+  defineMethod({
+    name: 'linear.listCustomViews',
+    params: ListCustomViews,
+    handler: async (params, { runtime }) =>
+      runtime.linearListCustomViews(params.model, params.limit, params.workspaceId)
+  }),
+  defineMethod({
+    name: 'linear.getCustomView',
+    params: CustomViewId,
+    handler: async (params, { runtime }) =>
+      runtime.linearGetCustomView(params.viewId.trim(), params.model, params.workspaceId.trim())
+  }),
+  defineMethod({
+    name: 'linear.listCustomViewIssues',
+    params: CustomViewContents,
+    handler: async (params, { runtime }) =>
+      runtime.linearListCustomViewIssues(
+        params.viewId.trim(),
+        params.limit,
+        params.workspaceId.trim()
+      )
+  }),
+  defineMethod({
+    name: 'linear.listCustomViewProjects',
+    params: CustomViewContents,
+    handler: async (params, { runtime }) =>
+      runtime.linearListCustomViewProjects(
+        params.viewId.trim(),
+        params.limit,
+        params.workspaceId.trim()
+      )
   }),
   defineMethod({
     name: 'linear.teamStates',

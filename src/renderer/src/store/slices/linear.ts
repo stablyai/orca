@@ -6,9 +6,15 @@ import type { AppState } from '../types'
 import type {
   LinearViewer,
   LinearConnectionStatus,
+  LinearCollectionResult,
+  LinearCustomViewModel,
+  LinearCustomViewSummary,
   LinearIssue,
+  LinearProjectDetail,
+  LinearProjectSummary,
   LinearTeam,
   LinearWorkspace,
+  LinearWorkspaceError,
   LinearWorkspaceSelection
 } from '../../../../shared/types'
 import type { CacheEntry } from './github'
@@ -17,8 +23,15 @@ import {
   linearConnect,
   linearDisconnect,
   linearDisconnectWorkspace,
+  linearGetCustomView,
+  linearGetProject,
   linearGetIssue,
+  linearListCustomViewIssues,
+  linearListCustomViewProjects,
+  linearListCustomViews,
   linearListIssues,
+  linearListProjectIssues,
+  linearListProjects,
   linearListTeams,
   linearSearchIssues,
   linearSelectWorkspace,
@@ -60,11 +73,44 @@ type InflightLinearIssueRequest = {
   generation: number
 }
 
+function workspaceErrorType(error: unknown): LinearWorkspaceError['type'] {
+  const record = error as { name?: string; message?: string; status?: number; response?: unknown }
+  const message = record.message ?? String(error)
+  const status =
+    typeof record.status === 'number'
+      ? record.status
+      : typeof (record.response as { status?: unknown } | undefined)?.status === 'number'
+        ? ((record.response as { status: number }).status as number)
+        : undefined
+  if (looksLikeAuthError(error)) {
+    return 'auth'
+  }
+  if (status === 429 || /rate/i.test(record.name ?? '')) {
+    return 'rate_limited'
+  }
+  if ((typeof status === 'number' && status >= 500) || /network/i.test(record.name ?? message)) {
+    return 'network'
+  }
+  return 'unknown'
+}
+
+function workspaceErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 const inflightIssueRequests = new Map<string, InflightLinearIssueRequest>()
 type InflightLinearListRequest = {
   promise: Promise<LinearIssue[]>
   force: boolean
   generation: number
+}
+type InflightLinearCollectionRequest<T> = {
+  promise: Promise<LinearCollectionResult<T>>
+  force: boolean
+}
+type InflightLinearDetailRequest<T> = {
+  promise: Promise<T>
+  force: boolean
 }
 
 const inflightSearchRequests = new Map<string, InflightLinearListRequest>()
@@ -76,6 +122,31 @@ type InflightLinearTeamRequest = {
 }
 
 const inflightTeamRequests = new Map<string, InflightLinearTeamRequest>()
+const inflightProjectRequests = new Map<
+  string,
+  InflightLinearCollectionRequest<LinearProjectSummary>
+>()
+const inflightProjectDetailRequests = new Map<
+  string,
+  InflightLinearDetailRequest<LinearProjectDetail | null>
+>()
+const inflightProjectIssueRequests = new Map<string, InflightLinearCollectionRequest<LinearIssue>>()
+const inflightCustomViewRequests = new Map<
+  string,
+  InflightLinearCollectionRequest<LinearCustomViewSummary>
+>()
+const inflightCustomViewDetailRequests = new Map<
+  string,
+  InflightLinearDetailRequest<LinearCustomViewSummary | null>
+>()
+const inflightCustomViewIssueRequests = new Map<
+  string,
+  InflightLinearCollectionRequest<LinearIssue>
+>()
+const inflightCustomViewProjectRequests = new Map<
+  string,
+  InflightLinearCollectionRequest<LinearProjectSummary>
+>()
 let inflightStatusRequest: Promise<void> | null = null
 let linearStatusReadGeneration = 0
 let linearMutationGeneration = 0
@@ -140,6 +211,13 @@ function clearLinearRequestMaps(): void {
   inflightSearchRequests.clear()
   inflightListRequests.clear()
   inflightTeamRequests.clear()
+  inflightProjectRequests.clear()
+  inflightProjectDetailRequests.clear()
+  inflightProjectIssueRequests.clear()
+  inflightCustomViewRequests.clear()
+  inflightCustomViewDetailRequests.clear()
+  inflightCustomViewIssueRequests.clear()
+  inflightCustomViewProjectRequests.clear()
 }
 
 function invalidateLinearCaches(): void {
@@ -152,6 +230,66 @@ function shouldRefreshStatusAfterRead(
   workspaceId: LinearWorkspaceSelection | null | undefined
 ): boolean {
   return workspaceId === 'all'
+}
+
+function linearCollectionCacheKey(
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  mode: string,
+  ...parts: (string | number | null | undefined)[]
+): string {
+  return [workspaceId ?? 'default', mode, ...parts.map((part) => part ?? '')].join('::')
+}
+
+function emptyLinearCollection<T>(): LinearCollectionResult<T> {
+  return { items: [] }
+}
+
+function collectionWithWorkspaceError<T>(
+  fallback: LinearCollectionResult<T>,
+  workspaceId: string,
+  error: unknown
+): LinearCollectionResult<T> {
+  const existingErrors = (fallback.errors ?? []).filter((item) => item.workspaceId !== workspaceId)
+  return {
+    ...fallback,
+    errors: [
+      ...existingErrors,
+      {
+        workspaceId,
+        type: workspaceErrorType(error),
+        message: workspaceErrorMessage(error) || 'Linear request failed.'
+      }
+    ]
+  }
+}
+
+function patchLinearIssueCollectionCache(
+  cache: Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>,
+  issueId: string,
+  patch: Partial<LinearIssue>
+): {
+  cache: Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>
+  changed: boolean
+} {
+  let changed = false
+  const nextCache = { ...cache }
+  for (const [key, entry] of Object.entries(nextCache)) {
+    if (!entry?.data) {
+      continue
+    }
+    const idx = entry.data.items.findIndex((item) => item.id === issueId)
+    if (idx === -1) {
+      continue
+    }
+    const updatedItems = [...entry.data.items]
+    updatedItems[idx] = { ...updatedItems[idx], ...patch }
+    nextCache[key] = {
+      ...entry,
+      data: { ...entry.data, items: updatedItems }
+    }
+    changed = true
+  }
+  return { cache: nextCache, changed }
 }
 
 type LinearIssueReadArgs =
@@ -176,6 +314,16 @@ export type LinearSlice = {
   linearIssueCache: Record<string, CacheEntry<LinearIssue>>
   linearSearchCache: Record<string, CacheEntry<LinearIssue[]>>
   linearTeamCache: Record<string, CacheEntry<LinearTeam[]>>
+  linearProjectCache: Record<string, CacheEntry<LinearCollectionResult<LinearProjectSummary>>>
+  linearProjectDetailCache: Record<string, CacheEntry<LinearProjectDetail | null>>
+  linearProjectIssueCache: Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>
+  linearCustomViewCache: Record<string, CacheEntry<LinearCollectionResult<LinearCustomViewSummary>>>
+  linearCustomViewDetailCache: Record<string, CacheEntry<LinearCustomViewSummary | null>>
+  linearCustomViewIssueCache: Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>
+  linearCustomViewProjectCache: Record<
+    string,
+    CacheEntry<LinearCollectionResult<LinearProjectSummary>>
+  >
 
   checkLinearConnection: (force?: boolean) => Promise<void>
   connectLinear: (
@@ -205,6 +353,57 @@ export type LinearSlice = {
     workspaceId?: LinearWorkspaceSelection | null,
     options?: LinearFetchOptions
   ) => Promise<LinearTeam[]>
+  getCachedLinearProjects: (
+    query?: string,
+    limit?: number,
+    workspaceId?: LinearWorkspaceSelection | null
+  ) => LinearCollectionResult<LinearProjectSummary> | null
+  listLinearProjects: (
+    query?: string,
+    limit?: number,
+    workspaceId?: LinearWorkspaceSelection | null,
+    options?: LinearFetchOptions
+  ) => Promise<LinearCollectionResult<LinearProjectSummary>>
+  fetchLinearProject: (
+    id: string,
+    workspaceId: string,
+    options?: LinearFetchOptions
+  ) => Promise<LinearProjectDetail | null>
+  listLinearProjectIssues: (
+    projectId: string,
+    workspaceId: string,
+    limit?: number,
+    options?: LinearFetchOptions
+  ) => Promise<LinearCollectionResult<LinearIssue>>
+  getCachedLinearCustomViews: (
+    model: LinearCustomViewModel,
+    limit?: number,
+    workspaceId?: LinearWorkspaceSelection | null
+  ) => LinearCollectionResult<LinearCustomViewSummary> | null
+  listLinearCustomViews: (
+    model: LinearCustomViewModel,
+    limit?: number,
+    workspaceId?: LinearWorkspaceSelection | null,
+    options?: LinearFetchOptions
+  ) => Promise<LinearCollectionResult<LinearCustomViewSummary>>
+  fetchLinearCustomView: (
+    viewId: string,
+    workspaceId: string,
+    model: LinearCustomViewModel,
+    options?: LinearFetchOptions
+  ) => Promise<LinearCustomViewSummary | null>
+  listLinearCustomViewIssues: (
+    viewId: string,
+    workspaceId: string,
+    limit?: number,
+    options?: LinearFetchOptions
+  ) => Promise<LinearCollectionResult<LinearIssue>>
+  listLinearCustomViewProjects: (
+    viewId: string,
+    workspaceId: string,
+    limit?: number,
+    options?: LinearFetchOptions
+  ) => Promise<LinearCollectionResult<LinearProjectSummary>>
   patchLinearIssue: (issueId: string, patch: Partial<LinearIssue>) => void
 }
 
@@ -214,6 +413,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   linearIssueCache: {},
   linearSearchCache: {},
   linearTeamCache: {},
+  linearProjectCache: {},
+  linearProjectDetailCache: {},
+  linearProjectIssueCache: {},
+  linearCustomViewCache: {},
+  linearCustomViewDetailCache: {},
+  linearCustomViewIssueCache: {},
+  linearCustomViewProjectCache: {},
 
   checkLinearConnection: async (force = false) => {
     if (inflightStatusRequest && !force) {
@@ -241,6 +447,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearIssueCache: {},
             linearSearchCache: {},
             linearTeamCache: {},
+            linearProjectCache: {},
+            linearProjectDetailCache: {},
+            linearProjectIssueCache: {},
+            linearCustomViewCache: {},
+            linearCustomViewDetailCache: {},
+            linearCustomViewIssueCache: {},
+            linearCustomViewProjectCache: {},
             linearStatusChecked: true
           })
         } else if (!get().linearStatusChecked) {
@@ -255,7 +468,21 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           return
         }
         if (get().linearStatus.connected) {
-          set({ linearStatus: { connected: false, viewer: null }, linearStatusChecked: true })
+          invalidateLinearCaches()
+          set({
+            linearStatus: { connected: false, viewer: null },
+            linearIssueCache: {},
+            linearSearchCache: {},
+            linearTeamCache: {},
+            linearProjectCache: {},
+            linearProjectDetailCache: {},
+            linearProjectIssueCache: {},
+            linearCustomViewCache: {},
+            linearCustomViewDetailCache: {},
+            linearCustomViewIssueCache: {},
+            linearCustomViewProjectCache: {},
+            linearStatusChecked: true
+          })
         } else if (!get().linearStatusChecked) {
           set({ linearStatusChecked: true })
         }
@@ -285,6 +512,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearIssueCache: {},
             linearSearchCache: {},
             linearTeamCache: {},
+            linearProjectCache: {},
+            linearProjectDetailCache: {},
+            linearProjectIssueCache: {},
+            linearCustomViewCache: {},
+            linearCustomViewDetailCache: {},
+            linearCustomViewIssueCache: {},
+            linearCustomViewProjectCache: {},
             linearStatusChecked: true
           })
         } else {
@@ -307,7 +541,14 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         set({
           linearIssueCache: {},
           linearSearchCache: {},
-          linearTeamCache: {}
+          linearTeamCache: {},
+          linearProjectCache: {},
+          linearProjectDetailCache: {},
+          linearProjectIssueCache: {},
+          linearCustomViewCache: {},
+          linearCustomViewDetailCache: {},
+          linearCustomViewIssueCache: {},
+          linearCustomViewProjectCache: {}
         })
         const status = await linearStatus(get().settings)
         if (!isCurrentLinearMutation(requestGeneration)) {
@@ -337,6 +578,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearIssueCache: {},
       linearSearchCache: {},
       linearTeamCache: {},
+      linearProjectCache: {},
+      linearProjectDetailCache: {},
+      linearProjectIssueCache: {},
+      linearCustomViewCache: {},
+      linearCustomViewDetailCache: {},
+      linearCustomViewIssueCache: {},
+      linearCustomViewProjectCache: {},
       linearStatusChecked: true
     })
   },
@@ -353,6 +601,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearIssueCache: {},
       linearSearchCache: {},
       linearTeamCache: {},
+      linearProjectCache: {},
+      linearProjectDetailCache: {},
+      linearProjectIssueCache: {},
+      linearCustomViewCache: {},
+      linearCustomViewDetailCache: {},
+      linearCustomViewIssueCache: {},
+      linearCustomViewProjectCache: {},
       linearStatusChecked: true
     })
   },
@@ -370,6 +625,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearIssueCache: {},
       linearSearchCache: {},
       linearTeamCache: {},
+      linearProjectCache: {},
+      linearProjectDetailCache: {},
+      linearProjectIssueCache: {},
+      linearCustomViewCache: {},
+      linearCustomViewDetailCache: {},
+      linearCustomViewIssueCache: {},
+      linearCustomViewProjectCache: {},
       linearStatusChecked: true
     })
   },
@@ -632,6 +894,348 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     return promise
   },
 
+  getCachedLinearProjects: (query, limit = 20, workspaceId) => {
+    const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
+    const cacheKey = linearCollectionCacheKey(resolvedWorkspaceId, 'projects', query?.trim(), limit)
+    return get().linearProjectCache[cacheKey]?.data ?? null
+  },
+
+  listLinearProjects: async (query, limit = 20, workspaceId, options) => {
+    const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
+    const trimmed = query?.trim() || undefined
+    const cacheKey = linearCollectionCacheKey(resolvedWorkspaceId, 'projects', trimmed, limit)
+    const cached = get().linearProjectCache[cacheKey]
+    if (!options?.force && isFresh(cached)) {
+      return cached.data ?? emptyLinearCollection<LinearProjectSummary>()
+    }
+
+    const inflight = inflightProjectRequests.get(cacheKey)
+    if (inflight && (!options?.force || inflight.force)) {
+      return inflight.promise
+    }
+
+    let entry: InflightLinearCollectionRequest<LinearProjectSummary>
+    const promise = linearListProjects(get().settings, trimmed, limit, resolvedWorkspaceId)
+      .then((result) => {
+        if (inflightProjectRequests.get(cacheKey) === entry) {
+          set((s) => ({
+            linearProjectCache: evictStaleEntries({
+              ...s.linearProjectCache,
+              [cacheKey]: { data: result, fetchedAt: Date.now() }
+            })
+          }))
+        }
+        return result
+      })
+      .catch((error) => {
+        console.warn('[linear] listLinearProjects failed:', error)
+        if (looksLikeAuthError(error)) {
+          set({ linearStatus: { connected: false, viewer: null } })
+        }
+        const fallback =
+          get().linearProjectCache[cacheKey]?.data ?? emptyLinearCollection<LinearProjectSummary>()
+        return collectionWithWorkspaceError(fallback, resolvedWorkspaceId ?? 'default', error)
+      })
+      .finally(() => {
+        if (inflightProjectRequests.get(cacheKey) === entry) {
+          inflightProjectRequests.delete(cacheKey)
+        }
+      })
+
+    entry = { promise, force: Boolean(options?.force) }
+    inflightProjectRequests.set(cacheKey, entry)
+    return promise
+  },
+
+  fetchLinearProject: async (id, workspaceId, options) => {
+    const cacheKey = linearCollectionCacheKey(workspaceId, 'project-detail', id)
+    const cached = get().linearProjectDetailCache[cacheKey]
+    if (!options?.force && isFresh(cached)) {
+      return cached.data
+    }
+
+    const inflight = inflightProjectDetailRequests.get(cacheKey)
+    if (inflight && (!options?.force || inflight.force)) {
+      return inflight.promise
+    }
+
+    let entry: InflightLinearDetailRequest<LinearProjectDetail | null>
+    const promise = linearGetProject(get().settings, id, workspaceId)
+      .then((project) => {
+        if (inflightProjectDetailRequests.get(cacheKey) === entry) {
+          set((s) => ({
+            linearProjectDetailCache: evictStaleEntries({
+              ...s.linearProjectDetailCache,
+              [cacheKey]: { data: project, fetchedAt: Date.now() }
+            })
+          }))
+        }
+        return project
+      })
+      .catch((error) => {
+        console.warn('[linear] fetchLinearProject failed:', error)
+        if (looksLikeAuthError(error)) {
+          set({ linearStatus: { connected: false, viewer: null } })
+        }
+        if (options?.force) {
+          throw error
+        }
+        const cachedResult = get().linearProjectDetailCache[cacheKey]
+        if (cachedResult) {
+          return cachedResult.data
+        }
+        throw error
+      })
+      .finally(() => {
+        if (inflightProjectDetailRequests.get(cacheKey) === entry) {
+          inflightProjectDetailRequests.delete(cacheKey)
+        }
+      })
+
+    entry = { promise, force: Boolean(options?.force) }
+    inflightProjectDetailRequests.set(cacheKey, entry)
+    return promise
+  },
+
+  listLinearProjectIssues: async (projectId, workspaceId, limit = 20, options) => {
+    const cacheKey = linearCollectionCacheKey(workspaceId, 'project-issues', projectId, limit)
+    const cached = get().linearProjectIssueCache[cacheKey]
+    if (!options?.force && isFresh(cached)) {
+      return cached.data ?? emptyLinearCollection<LinearIssue>()
+    }
+
+    const inflight = inflightProjectIssueRequests.get(cacheKey)
+    if (inflight && (!options?.force || inflight.force)) {
+      return inflight.promise
+    }
+
+    let entry: InflightLinearCollectionRequest<LinearIssue>
+    const promise = linearListProjectIssues(get().settings, projectId, limit, workspaceId)
+      .then((result) => {
+        if (inflightProjectIssueRequests.get(cacheKey) === entry) {
+          set((s) => ({
+            linearProjectIssueCache: evictStaleEntries({
+              ...s.linearProjectIssueCache,
+              [cacheKey]: { data: result, fetchedAt: Date.now() }
+            })
+          }))
+        }
+        return result
+      })
+      .catch((error) => {
+        console.warn('[linear] listLinearProjectIssues failed:', error)
+        if (looksLikeAuthError(error)) {
+          set({ linearStatus: { connected: false, viewer: null } })
+        }
+        const fallback =
+          get().linearProjectIssueCache[cacheKey]?.data ?? emptyLinearCollection<LinearIssue>()
+        return collectionWithWorkspaceError(fallback, workspaceId, error)
+      })
+      .finally(() => {
+        if (inflightProjectIssueRequests.get(cacheKey) === entry) {
+          inflightProjectIssueRequests.delete(cacheKey)
+        }
+      })
+
+    entry = { promise, force: Boolean(options?.force) }
+    inflightProjectIssueRequests.set(cacheKey, entry)
+    return promise
+  },
+
+  getCachedLinearCustomViews: (model, limit = 20, workspaceId) => {
+    const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
+    const cacheKey = linearCollectionCacheKey(resolvedWorkspaceId, 'custom-views', model, limit)
+    return get().linearCustomViewCache[cacheKey]?.data ?? null
+  },
+
+  listLinearCustomViews: async (model, limit = 20, workspaceId, options) => {
+    const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
+    const cacheKey = linearCollectionCacheKey(resolvedWorkspaceId, 'custom-views', model, limit)
+    const cached = get().linearCustomViewCache[cacheKey]
+    if (!options?.force && isFresh(cached)) {
+      return cached.data ?? emptyLinearCollection<LinearCustomViewSummary>()
+    }
+
+    const inflight = inflightCustomViewRequests.get(cacheKey)
+    if (inflight && (!options?.force || inflight.force)) {
+      return inflight.promise
+    }
+
+    let entry: InflightLinearCollectionRequest<LinearCustomViewSummary>
+    const promise = linearListCustomViews(get().settings, model, limit, resolvedWorkspaceId)
+      .then((result) => {
+        if (inflightCustomViewRequests.get(cacheKey) === entry) {
+          set((s) => ({
+            linearCustomViewCache: evictStaleEntries({
+              ...s.linearCustomViewCache,
+              [cacheKey]: { data: result, fetchedAt: Date.now() }
+            })
+          }))
+        }
+        return result
+      })
+      .catch((error) => {
+        console.warn('[linear] listLinearCustomViews failed:', error)
+        if (looksLikeAuthError(error)) {
+          set({ linearStatus: { connected: false, viewer: null } })
+        }
+        const fallback =
+          get().linearCustomViewCache[cacheKey]?.data ??
+          emptyLinearCollection<LinearCustomViewSummary>()
+        return collectionWithWorkspaceError(fallback, resolvedWorkspaceId ?? 'default', error)
+      })
+      .finally(() => {
+        if (inflightCustomViewRequests.get(cacheKey) === entry) {
+          inflightCustomViewRequests.delete(cacheKey)
+        }
+      })
+
+    entry = { promise, force: Boolean(options?.force) }
+    inflightCustomViewRequests.set(cacheKey, entry)
+    return promise
+  },
+
+  fetchLinearCustomView: async (viewId, workspaceId, model, options) => {
+    const cacheKey = linearCollectionCacheKey(workspaceId, 'custom-view-detail', model, viewId)
+    const cached = get().linearCustomViewDetailCache[cacheKey]
+    if (!options?.force && isFresh(cached)) {
+      return cached.data
+    }
+
+    const inflight = inflightCustomViewDetailRequests.get(cacheKey)
+    if (inflight && (!options?.force || inflight.force)) {
+      return inflight.promise
+    }
+
+    let entry: InflightLinearDetailRequest<LinearCustomViewSummary | null>
+    const promise = linearGetCustomView(get().settings, viewId, model, workspaceId)
+      .then((view) => {
+        if (inflightCustomViewDetailRequests.get(cacheKey) === entry) {
+          set((s) => ({
+            linearCustomViewDetailCache: evictStaleEntries({
+              ...s.linearCustomViewDetailCache,
+              [cacheKey]: { data: view, fetchedAt: Date.now() }
+            })
+          }))
+        }
+        return view
+      })
+      .catch((error) => {
+        console.warn('[linear] fetchLinearCustomView failed:', error)
+        if (looksLikeAuthError(error)) {
+          set({ linearStatus: { connected: false, viewer: null } })
+        }
+        if (options?.force) {
+          throw error
+        }
+        const cachedResult = get().linearCustomViewDetailCache[cacheKey]
+        if (cachedResult) {
+          return cachedResult.data
+        }
+        throw error
+      })
+      .finally(() => {
+        if (inflightCustomViewDetailRequests.get(cacheKey) === entry) {
+          inflightCustomViewDetailRequests.delete(cacheKey)
+        }
+      })
+
+    entry = { promise, force: Boolean(options?.force) }
+    inflightCustomViewDetailRequests.set(cacheKey, entry)
+    return promise
+  },
+
+  listLinearCustomViewIssues: async (viewId, workspaceId, limit = 20, options) => {
+    const cacheKey = linearCollectionCacheKey(workspaceId, 'custom-view-issues', viewId, limit)
+    const cached = get().linearCustomViewIssueCache[cacheKey]
+    if (!options?.force && isFresh(cached)) {
+      return cached.data ?? emptyLinearCollection<LinearIssue>()
+    }
+
+    const inflight = inflightCustomViewIssueRequests.get(cacheKey)
+    if (inflight && (!options?.force || inflight.force)) {
+      return inflight.promise
+    }
+
+    let entry: InflightLinearCollectionRequest<LinearIssue>
+    const promise = linearListCustomViewIssues(get().settings, viewId, limit, workspaceId)
+      .then((result) => {
+        if (inflightCustomViewIssueRequests.get(cacheKey) === entry) {
+          set((s) => ({
+            linearCustomViewIssueCache: evictStaleEntries({
+              ...s.linearCustomViewIssueCache,
+              [cacheKey]: { data: result, fetchedAt: Date.now() }
+            })
+          }))
+        }
+        return result
+      })
+      .catch((error) => {
+        console.warn('[linear] listLinearCustomViewIssues failed:', error)
+        if (looksLikeAuthError(error)) {
+          set({ linearStatus: { connected: false, viewer: null } })
+        }
+        const fallback =
+          get().linearCustomViewIssueCache[cacheKey]?.data ?? emptyLinearCollection<LinearIssue>()
+        return collectionWithWorkspaceError(fallback, workspaceId, error)
+      })
+      .finally(() => {
+        if (inflightCustomViewIssueRequests.get(cacheKey) === entry) {
+          inflightCustomViewIssueRequests.delete(cacheKey)
+        }
+      })
+
+    entry = { promise, force: Boolean(options?.force) }
+    inflightCustomViewIssueRequests.set(cacheKey, entry)
+    return promise
+  },
+
+  listLinearCustomViewProjects: async (viewId, workspaceId, limit = 20, options) => {
+    const cacheKey = linearCollectionCacheKey(workspaceId, 'custom-view-projects', viewId, limit)
+    const cached = get().linearCustomViewProjectCache[cacheKey]
+    if (!options?.force && isFresh(cached)) {
+      return cached.data ?? emptyLinearCollection<LinearProjectSummary>()
+    }
+
+    const inflight = inflightCustomViewProjectRequests.get(cacheKey)
+    if (inflight && (!options?.force || inflight.force)) {
+      return inflight.promise
+    }
+
+    let entry: InflightLinearCollectionRequest<LinearProjectSummary>
+    const promise = linearListCustomViewProjects(get().settings, viewId, limit, workspaceId)
+      .then((result) => {
+        if (inflightCustomViewProjectRequests.get(cacheKey) === entry) {
+          set((s) => ({
+            linearCustomViewProjectCache: evictStaleEntries({
+              ...s.linearCustomViewProjectCache,
+              [cacheKey]: { data: result, fetchedAt: Date.now() }
+            })
+          }))
+        }
+        return result
+      })
+      .catch((error) => {
+        console.warn('[linear] listLinearCustomViewProjects failed:', error)
+        if (looksLikeAuthError(error)) {
+          set({ linearStatus: { connected: false, viewer: null } })
+        }
+        const fallback =
+          get().linearCustomViewProjectCache[cacheKey]?.data ??
+          emptyLinearCollection<LinearProjectSummary>()
+        return collectionWithWorkspaceError(fallback, workspaceId, error)
+      })
+      .finally(() => {
+        if (inflightCustomViewProjectRequests.get(cacheKey) === entry) {
+          inflightCustomViewProjectRequests.delete(cacheKey)
+        }
+      })
+
+    entry = { promise, force: Boolean(options?.force) }
+    inflightCustomViewProjectRequests.set(cacheKey, entry)
+    return promise
+  },
+
   patchLinearIssue: (issueId, patch) => {
     set((s) => {
       let changed = false
@@ -667,7 +1271,36 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         changed = true
       }
 
-      return changed ? { linearIssueCache: nextIssueCache, linearSearchCache: nextSearchCache } : {}
+      const nextProjectIssueCache = patchLinearIssueCollectionCache(
+        s.linearProjectIssueCache,
+        issueId,
+        patch
+      )
+      if (nextProjectIssueCache.changed) {
+        changed = true
+      }
+
+      const nextCustomViewIssueCache = patchLinearIssueCollectionCache(
+        s.linearCustomViewIssueCache,
+        issueId,
+        patch
+      )
+      if (nextCustomViewIssueCache.changed) {
+        changed = true
+      }
+
+      return changed
+        ? {
+            linearIssueCache: nextIssueCache,
+            linearSearchCache: nextSearchCache,
+            linearProjectIssueCache: nextProjectIssueCache.changed
+              ? nextProjectIssueCache.cache
+              : s.linearProjectIssueCache,
+            linearCustomViewIssueCache: nextCustomViewIssueCache.changed
+              ? nextCustomViewIssueCache.cache
+              : s.linearCustomViewIssueCache
+          }
+        : {}
     })
   }
 })

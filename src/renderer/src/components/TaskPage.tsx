@@ -110,6 +110,12 @@ import PullRequestPage from '@/components/PullRequestPage'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
+import {
+  LinearCollectionNotice,
+  LinearCustomViewTable,
+  LinearProjectOverview,
+  LinearProjectTable
+} from '@/components/linear-project-view-surfaces'
 import { cn } from '@/lib/utils'
 import {
   getLinkedWorkItemSuggestedName,
@@ -141,7 +147,11 @@ import type {
   GitHubWorkItem,
   GitLabTodo,
   GitLabWorkItem,
+  LinearCollectionResult,
+  LinearCustomViewModel,
+  LinearCustomViewSummary,
   LinearIssue,
+  LinearProjectDetail,
   LinearProjectSummary,
   LinearTeam,
   LinearWorkspaceSelection,
@@ -390,6 +400,8 @@ const LINEAR_PRIORITY_LABELS: Record<number, string> = {
 }
 
 type LinearViewMode = 'list' | 'board'
+type LinearMode = 'issues' | 'projects' | 'views'
+type LinearProjectTab = 'overview' | 'issues'
 type LinearGroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'team'
 type LinearOrderBy = 'priority' | 'updated' | 'identifier'
 type LinearDisplayProperty = 'state' | 'priority' | 'assignee' | 'team' | 'labels' | 'updated'
@@ -405,6 +417,17 @@ type LinearIssueListRow =
   | { type: 'issue'; issue: LinearIssue }
 
 const LINEAR_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-linear-issue-id'
+
+const LINEAR_MODE_OPTIONS: { id: LinearMode; label: string }[] = [
+  { id: 'issues', label: 'Issues' },
+  { id: 'projects', label: 'Projects' },
+  { id: 'views', label: 'Views' }
+]
+
+const LINEAR_CUSTOM_VIEW_MODEL_OPTIONS: { id: LinearCustomViewModel; label: string }[] = [
+  { id: 'issue', label: 'Issues' },
+  { id: 'project', label: 'Projects' }
+]
 
 const LINEAR_VIEW_OPTIONS: {
   id: LinearViewMode
@@ -1976,6 +1999,15 @@ export default function TaskPage(): React.JSX.Element {
   const getCachedLinearIssues = useAppStore((s) => s.getCachedLinearIssues)
   const getCachedLinearTeams = useAppStore((s) => s.getCachedLinearTeams)
   const listLinearTeams = useAppStore((s) => s.listLinearTeams)
+  const getCachedLinearProjects = useAppStore((s) => s.getCachedLinearProjects)
+  const listLinearProjectsFromStore = useAppStore((s) => s.listLinearProjects)
+  const fetchLinearProject = useAppStore((s) => s.fetchLinearProject)
+  const listLinearProjectIssues = useAppStore((s) => s.listLinearProjectIssues)
+  const getCachedLinearCustomViews = useAppStore((s) => s.getCachedLinearCustomViews)
+  const listLinearCustomViews = useAppStore((s) => s.listLinearCustomViews)
+  const fetchLinearCustomView = useAppStore((s) => s.fetchLinearCustomView)
+  const listLinearCustomViewIssues = useAppStore((s) => s.listLinearCustomViewIssues)
+  const listLinearCustomViewProjects = useAppStore((s) => s.listLinearCustomViewProjects)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
@@ -2537,6 +2569,7 @@ export default function TaskPage(): React.JSX.Element {
   }, [clearSelectedLinearIssue, setDialogWorkItem])
 
   // Linear tab state
+  const [linearMode, setLinearMode] = useState<LinearMode>('issues')
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
   const [linearLoading, setLinearLoading] = useState(false)
   const [linearError, setLinearError] = useState<string | null>(null)
@@ -2551,6 +2584,46 @@ export default function TaskPage(): React.JSX.Element {
   >(() => new Set(DEFAULT_LINEAR_DISPLAY_PROPERTIES))
   const [linearTeamPropertyTouched, setLinearTeamPropertyTouched] = useState(false)
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
+  const [linearProjectSearchInput, setLinearProjectSearchInput] = useState('')
+  const [appliedLinearProjectSearch, setAppliedLinearProjectSearch] = useState('')
+  const [linearProjectsResult, setLinearProjectsResult] = useState<
+    LinearCollectionResult<LinearProjectSummary>
+  >({ items: [] })
+  const [linearProjectsLoading, setLinearProjectsLoading] = useState(false)
+  const [linearProjectsError, setLinearProjectsError] = useState<string | null>(null)
+  const [selectedLinearProject, setSelectedLinearProject] = useState<LinearProjectSummary | null>(
+    null
+  )
+  const [selectedLinearProjectDetail, setSelectedLinearProjectDetail] =
+    useState<LinearProjectDetail | null>(null)
+  const [linearProjectDetailLoading, setLinearProjectDetailLoading] = useState(false)
+  const [linearProjectDetailError, setLinearProjectDetailError] = useState<string | null>(null)
+  const [linearProjectTab, setLinearProjectTab] = useState<LinearProjectTab>('overview')
+  const [linearProjectIssuesResult, setLinearProjectIssuesResult] = useState<
+    LinearCollectionResult<LinearIssue>
+  >({ items: [] })
+  const [linearProjectIssuesLoading, setLinearProjectIssuesLoading] = useState(false)
+  const [linearProjectIssuesError, setLinearProjectIssuesError] = useState<string | null>(null)
+  const [linearCustomViewModel, setLinearCustomViewModel] = useState<LinearCustomViewModel>('issue')
+  const [linearCustomViewsResult, setLinearCustomViewsResult] = useState<
+    LinearCollectionResult<LinearCustomViewSummary>
+  >({ items: [] })
+  const [linearCustomViewsLoading, setLinearCustomViewsLoading] = useState(false)
+  const [linearCustomViewsError, setLinearCustomViewsError] = useState<string | null>(null)
+  const [selectedLinearCustomView, setSelectedLinearCustomView] =
+    useState<LinearCustomViewSummary | null>(null)
+  const [linearProjectParentView, setLinearProjectParentView] =
+    useState<LinearCustomViewSummary | null>(null)
+  const [linearCustomViewIssuesResult, setLinearCustomViewIssuesResult] = useState<
+    LinearCollectionResult<LinearIssue>
+  >({ items: [] })
+  const [linearCustomViewProjectsResult, setLinearCustomViewProjectsResult] = useState<
+    LinearCollectionResult<LinearProjectSummary>
+  >({ items: [] })
+  const [linearCustomViewContentsLoading, setLinearCustomViewContentsLoading] = useState(false)
+  const [linearCustomViewContentsError, setLinearCustomViewContentsError] = useState<string | null>(
+    null
+  )
   const [linearBoardDraggingIssueId, setLinearBoardDraggingIssueId] = useState<string | null>(null)
   const [linearBoardDragOverKey, setLinearBoardDragOverKey] = useState<string | null>(null)
   const [linearBoardUpdatingIssueIds, setLinearBoardUpdatingIssueIds] = useState<
@@ -2558,6 +2631,88 @@ export default function TaskPage(): React.JSX.Element {
   >(() => new Set())
   const lastLinearRequestRef = useRef<{ nonce: number; signature: string } | null>(null)
   const landingLinearRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
+  const linearContextResumeAttemptedRef = useRef(false)
+
+  const patchScopedLinearIssue = useCallback((issueId: string, patch: Partial<LinearIssue>) => {
+    const patchResult = (result: LinearCollectionResult<LinearIssue>) => ({
+      ...result,
+      items: result.items.map((item) => (item.id === issueId ? { ...item, ...patch } : item))
+    })
+    setLinearProjectIssuesResult(patchResult)
+    setLinearCustomViewIssuesResult(patchResult)
+  }, [])
+
+  const selectLinearMode = useCallback(
+    (mode: LinearMode) => {
+      clearSelectedLinearIssue()
+      setSelectedLinearProject(null)
+      setSelectedLinearProjectDetail(null)
+      setSelectedLinearCustomView(null)
+      setLinearProjectParentView(null)
+      setLinearProjectIssuesResult({ items: [] })
+      setLinearCustomViewIssuesResult({ items: [] })
+      setLinearCustomViewProjectsResult({ items: [] })
+      setLinearMode(mode)
+      setTaskResumeState({ linearMode: mode, linearContext: undefined })
+    },
+    [clearSelectedLinearIssue, setTaskResumeState]
+  )
+
+  const openLinearProjectContext = useCallback(
+    (project: LinearProjectSummary, options?: { parentView?: LinearCustomViewSummary | null }) => {
+      if (!project.workspaceId) {
+        toast.error('Linear project is missing workspace context.')
+        return
+      }
+      const parentView = options?.parentView ?? null
+      clearSelectedLinearIssue()
+      setLinearProjectParentView(parentView)
+      if (parentView) {
+        setSelectedLinearCustomView(parentView)
+      } else {
+        setSelectedLinearCustomView(null)
+        setLinearCustomViewProjectsResult({ items: [] })
+      }
+      setLinearProjectIssuesResult({ items: [] })
+      setLinearCustomViewIssuesResult({ items: [] })
+      setSelectedLinearProject(project)
+      setLinearProjectTab('overview')
+      setLinearMode('projects')
+      setTaskResumeState({
+        linearMode: 'projects',
+        linearContext: { kind: 'project', id: project.id, workspaceId: project.workspaceId }
+      })
+    },
+    [clearSelectedLinearIssue, setTaskResumeState]
+  )
+
+  const openLinearCustomViewContext = useCallback(
+    (view: LinearCustomViewSummary) => {
+      if (!view.workspaceId) {
+        toast.error('Linear view is missing workspace context.')
+        return
+      }
+      clearSelectedLinearIssue()
+      setSelectedLinearProject(null)
+      setSelectedLinearProjectDetail(null)
+      setLinearProjectParentView(null)
+      setLinearProjectIssuesResult({ items: [] })
+      setLinearCustomViewIssuesResult({ items: [] })
+      setLinearCustomViewProjectsResult({ items: [] })
+      setSelectedLinearCustomView(view)
+      setLinearMode('views')
+      setTaskResumeState({
+        linearMode: 'views',
+        linearContext: {
+          kind: 'view',
+          id: view.id,
+          workspaceId: view.workspaceId,
+          model: view.model
+        }
+      })
+    },
+    [clearSelectedLinearIssue, setTaskResumeState]
+  )
 
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
@@ -2591,6 +2746,7 @@ export default function TaskPage(): React.JSX.Element {
 
     const linearPreset = taskResumeState?.linearPreset ?? 'all'
     const linearQuery = taskResumeState?.linearQuery ?? ''
+    setLinearMode(taskResumeState?.linearMode ?? 'issues')
     setActiveLinearPreset(linearPreset)
     setLinearSearchInput(linearQuery)
     setAppliedLinearSearch(linearQuery)
@@ -2606,6 +2762,97 @@ export default function TaskPage(): React.JSX.Element {
     resolvedInitialSelection,
     taskResumeState,
     visibleTaskProviders
+  ])
+
+  useEffect(() => {
+    const context = taskResumeState?.linearContext
+    if (
+      linearContextResumeAttemptedRef.current ||
+      !taskResumeApplied ||
+      taskSource !== 'linear' ||
+      !linearStatus.connected ||
+      !context
+    ) {
+      return
+    }
+    linearContextResumeAttemptedRef.current = true
+    let cancelled = false
+
+    if (context.kind === 'project') {
+      void fetchLinearProject(context.id, context.workspaceId, { force: true })
+        .then((project) => {
+          if (cancelled) {
+            return
+          }
+          if (!project) {
+            setSelectedLinearProject(null)
+            setSelectedLinearProjectDetail(null)
+            setLinearProjectParentView(null)
+            setLinearProjectsError('Saved Linear project was not found.')
+            setTaskResumeState({ linearContext: undefined })
+            return
+          }
+          setSelectedLinearProject(project)
+          setSelectedLinearProjectDetail(project)
+          setLinearMode('projects')
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setSelectedLinearProject(null)
+            setSelectedLinearProjectDetail(null)
+            setLinearProjectParentView(null)
+            setLinearProjectsError('Failed to restore saved Linear project.')
+            setTaskResumeState({ linearContext: undefined })
+          }
+        })
+      return () => {
+        cancelled = true
+      }
+    }
+
+    if (context.kind === 'view' && context.model) {
+      setLinearCustomViewModel(context.model)
+      setLinearMode('views')
+      setLinearCustomViewsLoading(true)
+      setLinearCustomViewsError(null)
+      void fetchLinearCustomView(context.id, context.workspaceId, context.model, {
+        force: true
+      })
+        .then((restoredView) => {
+          if (cancelled) {
+            return
+          }
+          setLinearCustomViewsLoading(false)
+          if (!restoredView) {
+            setSelectedLinearCustomView(null)
+            setLinearCustomViewsError('Saved Linear view was not found.')
+            setTaskResumeState({ linearContext: undefined })
+            return
+          }
+          setSelectedLinearCustomView(restoredView)
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setSelectedLinearCustomView(null)
+            setLinearCustomViewsLoading(false)
+            setLinearCustomViewsError('Failed to restore saved Linear view.')
+            setTaskResumeState({ linearContext: undefined })
+          }
+        })
+      return () => {
+        cancelled = true
+      }
+    }
+    return undefined
+  }, [
+    fetchLinearCustomView,
+    fetchLinearProject,
+    listLinearCustomViews,
+    linearStatus.connected,
+    setTaskResumeState,
+    taskResumeApplied,
+    taskResumeState?.linearContext,
+    taskSource
   ])
 
   // Why: fetch the full team list from the Linear API so the selector shows
@@ -2819,9 +3066,40 @@ export default function TaskPage(): React.JSX.Element {
     return new Set(defaultLinearTeamSelection)
   })
 
+  const activeLinearIssues =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? linearProjectIssuesResult.items
+      : selectedLinearCustomView?.model === 'issue'
+        ? linearCustomViewIssuesResult.items
+        : linearIssues
+  const activeLinearIssueLoading =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? linearProjectIssuesLoading
+      : selectedLinearCustomView?.model === 'issue'
+        ? linearCustomViewContentsLoading
+        : linearLoading
+  const activeLinearIssueError =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? linearProjectIssuesError
+      : selectedLinearCustomView?.model === 'issue'
+        ? linearCustomViewContentsError
+        : linearError
+  const activeLinearIssueCollectionErrors =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? linearProjectIssuesResult.errors
+      : selectedLinearCustomView?.model === 'issue'
+        ? linearCustomViewIssuesResult.errors
+        : undefined
+  const activeLinearIssueHasCollectionError = (activeLinearIssueCollectionErrors?.length ?? 0) > 0
+  const activeLinearIssueContextLabel = selectedLinearProject
+    ? `Project: ${selectedLinearProject.name}`
+    : selectedLinearCustomView?.model === 'issue'
+      ? `View: ${selectedLinearCustomView.name}`
+      : null
+
   const displayedLinearIssues = useMemo(
     () =>
-      linearIssues.map(
+      activeLinearIssues.map(
         (issue) =>
           findTaskPageLinearIssue(
             linearCacheSnapshot.issueCache,
@@ -2829,7 +3107,7 @@ export default function TaskPage(): React.JSX.Element {
             issue.id
           ) ?? issue
       ),
-    [linearIssues, linearCacheSnapshot.issueCache, linearCacheSnapshot.searchCache]
+    [activeLinearIssues, linearCacheSnapshot.issueCache, linearCacheSnapshot.searchCache]
   )
 
   const linearIssueTeams = useMemo(() => {
@@ -2886,13 +3164,16 @@ export default function TaskPage(): React.JSX.Element {
   }, [linearTeamOptions, defaultLinearTeamSelection])
 
   const filteredLinearIssues = useMemo(() => {
+    if (activeLinearIssueContextLabel) {
+      return displayedLinearIssues
+    }
     // Why: team options can be derived after issue rows render. Treat an
     // empty selection as "all" until reconciliation has a concrete team set.
     if (displayedLinearIssues.length > 0 && linearTeamSelection.size === 0) {
       return displayedLinearIssues
     }
     return displayedLinearIssues.filter((issue) => linearTeamSelection.has(issue.team.id))
-  }, [displayedLinearIssues, linearTeamSelection])
+  }, [activeLinearIssueContextLabel, displayedLinearIssues, linearTeamSelection])
 
   const selectedLinearTeamForExternalLink = useMemo(() => {
     if (linearTeamSelection.size !== 1) {
@@ -3044,6 +3325,7 @@ export default function TaskPage(): React.JSX.Element {
         }
 
         patchLinearIssue(issue.id, { state: nextState })
+        patchScopedLinearIssue(issue.id, { state: nextState })
         applyFallbackState(nextState)
 
         const result = await linearUpdateIssue(
@@ -3054,11 +3336,13 @@ export default function TaskPage(): React.JSX.Element {
         )
         if (result.ok === false) {
           patchLinearIssue(issue.id, { state: previousState })
+          patchScopedLinearIssue(issue.id, { state: previousState })
           applyFallbackState(previousState)
           toast.error(result.error ?? 'Failed to update Linear state')
         }
       } catch {
         patchLinearIssue(issue.id, { state: previousState })
+        patchScopedLinearIssue(issue.id, { state: previousState })
         applyFallbackState(previousState)
         toast.error('Failed to update Linear state')
       } finally {
@@ -3074,6 +3358,7 @@ export default function TaskPage(): React.JSX.Element {
       linearBoardDraggingIssueId,
       linearBoardUpdatingIssueIds,
       linearStatusBoardEnabled,
+      patchScopedLinearIssue,
       patchLinearIssue,
       settings
     ]
@@ -3128,7 +3413,7 @@ export default function TaskPage(): React.JSX.Element {
     linearListProjects(settings, undefined, 100, targetWorkspaceId)
       .then((p) => {
         if (!cancelled) {
-          setNewLinearIssueProjects(p)
+          setNewLinearIssueProjects(p.items)
         }
       })
       .catch(() => {})
@@ -3150,9 +3435,16 @@ export default function TaskPage(): React.JSX.Element {
     setNewLinearIssueStateId(null)
     setNewLinearIssueAssigneeId(null)
     setNewLinearIssuePriority(0)
-    setNewLinearIssueProjectId(null)
+    if (
+      selectedLinearProject &&
+      selectedLinearProject.workspaceId === newLinearIssueTargetTeam?.workspaceId
+    ) {
+      setNewLinearIssueProjectId(selectedLinearProject.id)
+    } else {
+      setNewLinearIssueProjectId(null)
+    }
     setNewLinearIssueLabelIds([])
-  }, [newLinearIssueTargetTeam?.id, newLinearIssueTargetTeam?.workspaceId])
+  }, [newLinearIssueTargetTeam?.id, newLinearIssueTargetTeam?.workspaceId, selectedLinearProject])
 
   const newLinearStates = useTeamStates(
     newLinearIssueTargetTeam?.id || null,
@@ -3949,6 +4241,14 @@ export default function TaskPage(): React.JSX.Element {
     if (!title || newLinearIssueSubmitting) {
       return
     }
+    if (
+      selectedLinearProject &&
+      newLinearIssueProjectId === selectedLinearProject.id &&
+      newLinearIssueTargetTeam.workspaceId !== selectedLinearProject.workspaceId
+    ) {
+      toast.error('Select a team from the project workspace before filing this issue.')
+      return
+    }
     setNewLinearIssueSubmitting(true)
     try {
       const result = await linearCreateIssue(settings, {
@@ -4007,6 +4307,7 @@ export default function TaskPage(): React.JSX.Element {
     newLinearIssueProjectId,
     newLinearIssueLabelIds,
     openLinearDetailPage,
+    selectedLinearProject,
     settings
   ])
 
@@ -4105,6 +4406,9 @@ export default function TaskPage(): React.JSX.Element {
     if (taskSource !== 'linear') {
       return
     }
+    if (linearMode !== 'issues') {
+      return
+    }
     if (!linearStatus.connected) {
       return
     }
@@ -4186,6 +4490,7 @@ export default function TaskPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskSource,
+    linearMode,
     linearStatus.connected,
     selectedLinearWorkspaceId,
     appliedLinearSearch,
@@ -4193,6 +4498,233 @@ export default function TaskPage(): React.JSX.Element {
     linearRefreshNonce,
     taskResumeApplied,
     getCachedLinearIssues
+  ])
+
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    const timeout = window.setTimeout(() => {
+      setAppliedLinearProjectSearch(linearProjectSearchInput)
+    }, TASK_SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timeout)
+  }, [linearProjectSearchInput, taskResumeApplied])
+
+  useEffect(() => {
+    if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'projects') {
+      return
+    }
+    if (!linearStatus.connected || selectedLinearProject) {
+      return
+    }
+    let cancelled = false
+    const query = appliedLinearProjectSearch.trim()
+    const cached = getCachedLinearProjects(query || undefined, LINEAR_ITEM_LIMIT)
+    if (cached) {
+      setLinearProjectsResult(cached)
+    }
+    const force = linearRefreshNonce > 0
+    setLinearProjectsLoading(force || cached === null)
+    setLinearProjectsError(null)
+    void listLinearProjectsFromStore(query || undefined, LINEAR_ITEM_LIMIT, undefined, {
+      force
+    })
+      .then((result) => {
+        if (!cancelled) {
+          setLinearProjectsResult(result)
+          setLinearProjectsLoading(false)
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLinearProjectsError(
+            error instanceof Error ? error.message : 'Failed to load projects.'
+          )
+          setLinearProjectsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    taskResumeApplied,
+    taskSource,
+    linearMode,
+    linearStatus.connected,
+    selectedLinearWorkspaceId,
+    selectedLinearProject,
+    appliedLinearProjectSearch,
+    linearRefreshNonce,
+    getCachedLinearProjects
+  ])
+
+  useEffect(() => {
+    if (!selectedLinearProject?.workspaceId) {
+      setSelectedLinearProjectDetail(null)
+      return
+    }
+    let cancelled = false
+    setLinearProjectDetailLoading(true)
+    setLinearProjectDetailError(null)
+    void fetchLinearProject(selectedLinearProject.id, selectedLinearProject.workspaceId, {
+      force: linearRefreshNonce > 0
+    })
+      .then((project) => {
+        if (!cancelled) {
+          setSelectedLinearProjectDetail(project)
+          setLinearProjectDetailLoading(false)
+          if (!project) {
+            setSelectedLinearProject(null)
+            setLinearProjectParentView(null)
+            setLinearProjectDetailError(null)
+            setLinearProjectsError('Project was not found.')
+            setTaskResumeState({ linearContext: undefined })
+          }
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLinearProjectDetailError(
+            error instanceof Error ? error.message : 'Failed to load project.'
+          )
+          setLinearProjectDetailLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [fetchLinearProject, linearRefreshNonce, selectedLinearProject, setTaskResumeState])
+
+  useEffect(() => {
+    if (!selectedLinearProject?.workspaceId || linearProjectTab !== 'issues') {
+      return
+    }
+    let cancelled = false
+    setLinearProjectIssuesLoading(true)
+    setLinearProjectIssuesError(null)
+    void listLinearProjectIssues(
+      selectedLinearProject.id,
+      selectedLinearProject.workspaceId,
+      LINEAR_ITEM_LIMIT,
+      { force: linearRefreshNonce > 0 }
+    )
+      .then((result) => {
+        if (!cancelled) {
+          setLinearProjectIssuesResult(result)
+          setLinearProjectIssuesLoading(false)
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLinearProjectIssuesError(
+            error instanceof Error ? error.message : 'Failed to load project issues.'
+          )
+          setLinearProjectIssuesLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [linearProjectTab, linearRefreshNonce, listLinearProjectIssues, selectedLinearProject])
+
+  useEffect(() => {
+    if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'views') {
+      return
+    }
+    if (!linearStatus.connected || selectedLinearCustomView) {
+      return
+    }
+    let cancelled = false
+    const cached = getCachedLinearCustomViews(linearCustomViewModel, LINEAR_ITEM_LIMIT)
+    if (cached) {
+      setLinearCustomViewsResult(cached)
+    }
+    const force = linearRefreshNonce > 0
+    setLinearCustomViewsLoading(force || cached === null)
+    setLinearCustomViewsError(null)
+    void listLinearCustomViews(linearCustomViewModel, LINEAR_ITEM_LIMIT, undefined, { force })
+      .then((result) => {
+        if (!cancelled) {
+          setLinearCustomViewsResult(result)
+          setLinearCustomViewsLoading(false)
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLinearCustomViewsError(
+            error instanceof Error ? error.message : 'Failed to load views.'
+          )
+          setLinearCustomViewsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    taskResumeApplied,
+    taskSource,
+    linearMode,
+    linearStatus.connected,
+    selectedLinearWorkspaceId,
+    selectedLinearCustomView,
+    linearCustomViewModel,
+    linearRefreshNonce,
+    getCachedLinearCustomViews
+  ])
+
+  useEffect(() => {
+    if (!selectedLinearCustomView?.workspaceId) {
+      setLinearCustomViewIssuesResult({ items: [] })
+      setLinearCustomViewProjectsResult({ items: [] })
+      return
+    }
+    let cancelled = false
+    setLinearCustomViewContentsLoading(true)
+    setLinearCustomViewContentsError(null)
+    const request =
+      selectedLinearCustomView.model === 'issue'
+        ? listLinearCustomViewIssues(
+            selectedLinearCustomView.id,
+            selectedLinearCustomView.workspaceId,
+            LINEAR_ITEM_LIMIT,
+            { force: linearRefreshNonce > 0 }
+          )
+        : listLinearCustomViewProjects(
+            selectedLinearCustomView.id,
+            selectedLinearCustomView.workspaceId,
+            LINEAR_ITEM_LIMIT,
+            { force: linearRefreshNonce > 0 }
+          )
+    void request
+      .then((result) => {
+        if (cancelled) {
+          return
+        }
+        if (selectedLinearCustomView.model === 'issue') {
+          setLinearCustomViewIssuesResult(result as LinearCollectionResult<LinearIssue>)
+        } else {
+          setLinearCustomViewProjectsResult(result as LinearCollectionResult<LinearProjectSummary>)
+        }
+        setLinearCustomViewContentsLoading(false)
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLinearCustomViewContentsError(
+            error instanceof Error ? error.message : 'Failed to load view contents.'
+          )
+          setLinearCustomViewContentsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    linearRefreshNonce,
+    listLinearCustomViewIssues,
+    listLinearCustomViewProjects,
+    selectedLinearCustomView
   ])
 
   useEffect(() => {
@@ -4263,6 +4795,25 @@ export default function TaskPage(): React.JSX.Element {
   const handleLinearWorkspaceChange = useCallback(
     (workspaceId: LinearWorkspaceSelection): void => {
       clearSelectedLinearIssue()
+      setSelectedLinearProject(null)
+      setSelectedLinearProjectDetail(null)
+      setSelectedLinearCustomView(null)
+      setLinearProjectParentView(null)
+      setLinearProjectTab('overview')
+      setLinearProjectsResult({ items: [] })
+      setLinearCustomViewsResult({ items: [] })
+      setLinearProjectIssuesResult({ items: [] })
+      setLinearCustomViewIssuesResult({ items: [] })
+      setLinearCustomViewProjectsResult({ items: [] })
+      setLinearProjectDetailError(null)
+      setLinearProjectsError(null)
+      setLinearCustomViewsError(null)
+      setLinearCustomViewContentsError(null)
+      setTaskResumeState({
+        linearMode,
+        linearContext: undefined
+      })
+      linearContextResumeAttemptedRef.current = false
       setLinearIssues([])
       setLinearError(null)
       setLinearLoading(true)
@@ -4275,7 +4826,7 @@ export default function TaskPage(): React.JSX.Element {
           toast.error('Failed to switch Linear workspace.')
         })
     },
-    [clearSelectedLinearIssue, selectLinearWorkspace]
+    [clearSelectedLinearIssue, linearMode, selectLinearWorkspace, setTaskResumeState]
   )
 
   const handleLinearTeamSelectionChange = useCallback(
@@ -4719,29 +5270,28 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : taskSource === 'linear' && linearStatus.connected ? (
                   <div className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap gap-2">
-                        {LINEAR_PRESETS.map((preset) => {
-                          const active = !linearSearchInput && activeLinearPreset === preset.id
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                      <div
+                        className="flex items-center gap-1 text-xs"
+                        role="group"
+                        aria-label="Linear task mode"
+                      >
+                        {LINEAR_MODE_OPTIONS.map((mode) => {
+                          const active = linearMode === mode.id
                           return (
                             <button
-                              key={preset.id}
+                              key={mode.id}
                               type="button"
-                              onClick={() => {
-                                setLinearSearchInput('')
-                                setAppliedLinearSearch('')
-                                setActiveLinearPreset(preset.id)
-                                setTaskResumeState({ linearPreset: preset.id, linearQuery: '' })
-                                setLinearRefreshNonce((n) => n + 1)
-                              }}
+                              aria-pressed={active}
+                              onClick={() => selectLinearMode(mode.id)}
                               className={cn(
                                 'rounded-md border px-2 py-1 text-xs transition',
                                 active
-                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                  ? 'border-border/50 bg-foreground/90 text-background'
                                   : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
                               )}
                             >
-                              {preset.label}
+                              {mode.label}
                             </button>
                           )
                         })}
@@ -4755,12 +5305,21 @@ export default function TaskPage(): React.JSX.Element {
                               onClick={() => {
                                 setNewLinearIssueTitle('')
                                 setNewLinearIssueBody('')
-                                setNewLinearIssueTeamId(availableTeams[0]?.id ?? null)
+                                const projectTeamId =
+                                  selectedLinearProject?.teams?.[0]?.id ??
+                                  availableTeams.find(
+                                    (team) =>
+                                      team.workspaceId === selectedLinearProject?.workspaceId
+                                  )?.id
+                                setNewLinearIssueTeamId(
+                                  projectTeamId ?? availableTeams[0]?.id ?? null
+                                )
+                                setNewLinearIssueProjectId(selectedLinearProject?.id ?? null)
                                 setNewLinearIssueOpen(true)
                               }}
                               disabled={availableTeams.length === 0}
                               aria-label="New Linear issue"
-                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                              className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
                               <Plus className="size-4" />
                             </Button>
@@ -4775,11 +5334,23 @@ export default function TaskPage(): React.JSX.Element {
                               variant="outline"
                               size="icon"
                               onClick={() => setLinearRefreshNonce((n) => n + 1)}
-                              disabled={linearLoading}
-                              aria-label="Refresh Linear issues"
-                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                              disabled={
+                                linearMode === 'issues'
+                                  ? linearLoading
+                                  : linearMode === 'projects'
+                                    ? linearProjectsLoading || linearProjectDetailLoading
+                                    : linearCustomViewsLoading || linearCustomViewContentsLoading
+                              }
+                              aria-label="Refresh Linear"
+                              className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
-                              {linearLoading ? (
+                              {linearMode === 'issues' && linearLoading ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                              ) : linearMode === 'projects' &&
+                                (linearProjectsLoading || linearProjectDetailLoading) ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                              ) : linearMode === 'views' &&
+                                (linearCustomViewsLoading || linearCustomViewContentsLoading) ? (
                                 <LoaderCircle className="size-4 animate-spin" />
                               ) : (
                                 <RefreshCw className="size-4" />
@@ -4787,55 +5358,151 @@ export default function TaskPage(): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            Refresh Linear issues
+                            Refresh Linear
                           </TooltipContent>
                         </Tooltip>
                       </div>
                     </div>
-                    <div className="mt-3 flex min-w-0 items-center gap-3">
-                      <div className="relative min-w-0 flex-1 basis-64">
-                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          value={linearSearchInput}
-                          onChange={(e) => setLinearSearchInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              if (
-                                shouldSuppressEnterSubmit(
-                                  { isComposing: e.nativeEvent.isComposing, shiftKey: e.shiftKey },
-                                  false
-                                )
-                              ) {
-                                return
-                              }
-                              e.preventDefault()
-                              const trimmed = linearSearchInput.trim()
-                              setLinearSearchInput(trimmed)
-                              setAppliedLinearSearch(trimmed)
-                              setTaskResumeState({ linearQuery: trimmed })
-                              setLinearRefreshNonce((n) => n + 1)
-                            }
-                          }}
-                          placeholder="Search Linear issues..."
-                          className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
-                        />
-                        {linearSearchInput ? (
-                          <button
-                            type="button"
-                            aria-label="Clear search"
-                            onClick={() => {
-                              setLinearSearchInput('')
-                              setAppliedLinearSearch('')
-                              setTaskResumeState({ linearQuery: '' })
-                              setLinearRefreshNonce((n) => n + 1)
-                            }}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
-                          >
-                            <X className="size-4" />
-                          </button>
-                        ) : null}
+
+                    {linearMode === 'issues' ? (
+                      <>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {LINEAR_PRESETS.map((preset) => {
+                            const active = !linearSearchInput && activeLinearPreset === preset.id
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => {
+                                  setLinearSearchInput('')
+                                  setAppliedLinearSearch('')
+                                  setActiveLinearPreset(preset.id)
+                                  setTaskResumeState({
+                                    linearPreset: preset.id,
+                                    linearQuery: '',
+                                    linearMode: 'issues'
+                                  })
+                                  setLinearRefreshNonce((n) => n + 1)
+                                }}
+                                className={cn(
+                                  'rounded-md border px-2 py-1 text-xs transition',
+                                  active
+                                    ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                    : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                                )}
+                              >
+                                {preset.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <div className="mt-3 flex min-w-0 items-center gap-3">
+                          <div className="relative min-w-0 flex-1 basis-64">
+                            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              value={linearSearchInput}
+                              onChange={(e) => setLinearSearchInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  if (
+                                    shouldSuppressEnterSubmit(
+                                      {
+                                        isComposing: e.nativeEvent.isComposing,
+                                        shiftKey: e.shiftKey
+                                      },
+                                      false
+                                    )
+                                  ) {
+                                    return
+                                  }
+                                  e.preventDefault()
+                                  const trimmed = linearSearchInput.trim()
+                                  setLinearSearchInput(trimmed)
+                                  setAppliedLinearSearch(trimmed)
+                                  setTaskResumeState({ linearQuery: trimmed, linearMode: 'issues' })
+                                  setLinearRefreshNonce((n) => n + 1)
+                                }
+                              }}
+                              placeholder="Search Linear issues..."
+                              className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
+                            />
+                            {linearSearchInput ? (
+                              <button
+                                type="button"
+                                aria-label="Clear search"
+                                onClick={() => {
+                                  setLinearSearchInput('')
+                                  setAppliedLinearSearch('')
+                                  setTaskResumeState({ linearQuery: '', linearMode: 'issues' })
+                                  setLinearRefreshNonce((n) => n + 1)
+                                }}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                              >
+                                <X className="size-4" />
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </>
+                    ) : linearMode === 'projects' && !selectedLinearProject ? (
+                      <div className="mt-3 flex min-w-0 items-center gap-3">
+                        <div className="relative min-w-0 flex-1 basis-64">
+                          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            value={linearProjectSearchInput}
+                            onChange={(e) => setLinearProjectSearchInput(e.target.value)}
+                            placeholder="Search Linear projects..."
+                            className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
+                          />
+                          {linearProjectSearchInput ? (
+                            <button
+                              type="button"
+                              aria-label="Clear search"
+                              onClick={() => {
+                                setLinearProjectSearchInput('')
+                                setAppliedLinearProjectSearch('')
+                                setLinearRefreshNonce((n) => n + 1)
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                            >
+                              <X className="size-4" />
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
+                    ) : linearMode === 'views' && !selectedLinearCustomView ? (
+                      <div
+                        className="mt-3 flex min-w-0 flex-wrap items-center gap-2"
+                        role="group"
+                        aria-label="Linear view type"
+                      >
+                        {LINEAR_CUSTOM_VIEW_MODEL_OPTIONS.map((option) => {
+                          const active = option.id === linearCustomViewModel
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => {
+                                setSelectedLinearCustomView(null)
+                                setLinearCustomViewModel(option.id)
+                                setLinearCustomViewsResult({ items: [] })
+                                setLinearCustomViewsError(null)
+                                setLinearRefreshNonce((n) => n + 1)
+                              }}
+                              className={cn(
+                                'rounded-md border px-2 py-1 text-xs transition',
+                                active
+                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                              )}
+                            >
+                              {option.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : null}
                   </div>
                 ) : taskSource === 'gitlab' ? (
                   <>
@@ -5640,7 +6307,7 @@ export default function TaskPage(): React.JSX.Element {
             <LinearIssueWorkspace
               issue={selectedLinearIssue}
               variant="page"
-              backLabel="Linear list"
+              backLabel={activeLinearIssueContextLabel ?? 'Linear list'}
               onUse={handleUseLinearItem}
               onOpenIssue={openRelatedLinearIssue}
               onClose={closeTaskDetailPage}
@@ -5665,11 +6332,224 @@ export default function TaskPage(): React.JSX.Element {
                 Add Linear access
               </Button>
             </div>
+          ) : selectedLinearProject && linearProjectTab === 'overview' ? (
+            <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+              <LinearProjectOverview
+                project={selectedLinearProjectDetail ?? selectedLinearProject}
+                loading={linearProjectDetailLoading}
+                error={linearProjectDetailError}
+                onBack={() => {
+                  if (linearProjectParentView) {
+                    setSelectedLinearProject(null)
+                    setSelectedLinearProjectDetail(null)
+                    setLinearProjectTab('overview')
+                    setLinearMode('views')
+                    setSelectedLinearCustomView(linearProjectParentView)
+                    setTaskResumeState(
+                      linearProjectParentView.workspaceId
+                        ? {
+                            linearMode: 'views',
+                            linearContext: {
+                              kind: 'view',
+                              id: linearProjectParentView.id,
+                              workspaceId: linearProjectParentView.workspaceId,
+                              model: linearProjectParentView.model
+                            }
+                          }
+                        : {
+                            linearMode: 'views',
+                            linearContext: undefined
+                          }
+                    )
+                    setLinearProjectParentView(null)
+                    return
+                  }
+                  setSelectedLinearProject(null)
+                  setSelectedLinearProjectDetail(null)
+                  setLinearProjectParentView(null)
+                  setLinearProjectTab('overview')
+                  setTaskResumeState({ linearContext: undefined })
+                }}
+                onOpenProject={(project) => {
+                  if (project.url) {
+                    void window.api.shell.openUrl(project.url)
+                  }
+                }}
+                onRefresh={() => setLinearRefreshNonce((n) => n + 1)}
+                onOpenIssues={() => setLinearProjectTab('issues')}
+              />
+            </div>
+          ) : linearMode === 'projects' && !selectedLinearProject ? (
+            <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+              <div className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground grid-cols-[minmax(180px,1.5fr)_110px_100px_90px_120px_110px_80px_70px]">
+                <span>Project</span>
+                <span>Status</span>
+                <span>Health</span>
+                <span>Priority</span>
+                <span>Lead</span>
+                <span>Target</span>
+                <span>Issues</span>
+                <span />
+              </div>
+              <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-sleek">
+                {linearProjectsError ? (
+                  <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+                    {linearProjectsError}
+                  </div>
+                ) : null}
+                <LinearProjectTable
+                  projects={linearProjectsResult.items}
+                  loading={linearProjectsLoading}
+                  hasError={!!linearProjectsResult.errors?.length}
+                  workspaceSelection={selectedLinearWorkspaceId}
+                  onSelectProject={openLinearProjectContext}
+                  onOpenProject={(project) => {
+                    if (project.url) {
+                      void window.api.shell.openUrl(project.url)
+                    }
+                  }}
+                  onUseProjectIssues={(project) => {
+                    openLinearProjectContext(project)
+                    setLinearProjectTab('issues')
+                  }}
+                />
+              </div>
+              <LinearCollectionNotice
+                errors={linearProjectsResult.errors}
+                hasMore={linearProjectsResult.hasMore}
+                count={linearProjectsResult.items.length}
+                label="projects"
+              />
+            </div>
+          ) : linearMode === 'views' && !selectedLinearCustomView ? (
+            <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+              <div className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground grid-cols-[minmax(220px,1.5fr)_120px_120px_120px_130px_60px]">
+                <span>View</span>
+                <span>Model</span>
+                <span>Visibility</span>
+                <span>Owner</span>
+                <span>Updated</span>
+                <span />
+              </div>
+              <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-sleek">
+                {linearCustomViewsError ? (
+                  <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+                    {linearCustomViewsError}
+                  </div>
+                ) : null}
+                <LinearCustomViewTable
+                  views={linearCustomViewsResult.items}
+                  model={linearCustomViewModel}
+                  loading={linearCustomViewsLoading}
+                  hasError={!!linearCustomViewsResult.errors?.length}
+                  workspaceSelection={selectedLinearWorkspaceId}
+                  onSelectView={openLinearCustomViewContext}
+                  onOpenView={(view) => {
+                    if (view.url) {
+                      void window.api.shell.openUrl(view.url)
+                    }
+                  }}
+                />
+              </div>
+              <LinearCollectionNotice
+                errors={linearCustomViewsResult.errors}
+                hasMore={linearCustomViewsResult.hasMore}
+                count={linearCustomViewsResult.items.length}
+                label={`${linearCustomViewModel} views`}
+              />
+            </div>
+          ) : selectedLinearCustomView?.model === 'project' ? (
+            <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+              <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => {
+                      setSelectedLinearCustomView(null)
+                      setLinearProjectParentView(null)
+                      setTaskResumeState({ linearContext: undefined })
+                    }}
+                    aria-label="Back to views"
+                  >
+                    <ChevronLeft className="size-3.5" />
+                  </Button>
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-medium text-foreground">
+                      {selectedLinearCustomView.name}
+                    </div>
+                    <div className="truncate text-[11px] text-muted-foreground">Linear / Views</div>
+                  </div>
+                </div>
+                {selectedLinearCustomView.url ? (
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => void window.api.shell.openUrl(selectedLinearCustomView.url!)}
+                    className="gap-1 border-border/50 bg-background/70"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Linear
+                  </Button>
+                ) : null}
+              </div>
+              <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-sleek">
+                {linearCustomViewContentsError ? (
+                  <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+                    {linearCustomViewContentsError}
+                  </div>
+                ) : null}
+                <LinearProjectTable
+                  projects={linearCustomViewProjectsResult.items}
+                  loading={linearCustomViewContentsLoading}
+                  hasError={!!linearCustomViewProjectsResult.errors?.length}
+                  workspaceSelection={selectedLinearWorkspaceId}
+                  onSelectProject={(project) =>
+                    openLinearProjectContext(project, { parentView: selectedLinearCustomView })
+                  }
+                  onOpenProject={(project) => {
+                    if (project.url) {
+                      void window.api.shell.openUrl(project.url)
+                    }
+                  }}
+                  onUseProjectIssues={(project) => {
+                    openLinearProjectContext(project, { parentView: selectedLinearCustomView })
+                    setLinearProjectTab('issues')
+                  }}
+                />
+              </div>
+              <LinearCollectionNotice
+                errors={linearCustomViewProjectsResult.errors}
+                hasMore={linearCustomViewProjectsResult.hasMore}
+                count={linearCustomViewProjectsResult.items.length}
+                label="projects"
+              />
+            </div>
           ) : (
             <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
               <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
-                <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  Linear issues
+                <div className="flex min-w-0 items-center gap-2">
+                  {activeLinearIssueContextLabel ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => {
+                        if (selectedLinearProject) {
+                          setLinearProjectTab('overview')
+                          return
+                        }
+                        setSelectedLinearCustomView(null)
+                        setLinearProjectParentView(null)
+                        setTaskResumeState({ linearContext: undefined })
+                      }}
+                      aria-label="Back"
+                    >
+                      <ChevronLeft className="size-3.5" />
+                    </Button>
+                  ) : null}
+                  <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {activeLinearIssueContextLabel ?? 'Linear issues'}
+                  </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <div
@@ -5801,13 +6681,13 @@ export default function TaskPage(): React.JSX.Element {
                 className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
                 style={{ scrollbarGutter: 'stable' }}
               >
-                {linearError ? (
+                {activeLinearIssueError ? (
                   <div className="border-b border-border px-4 py-4 text-sm text-destructive">
-                    {linearError}
+                    {activeLinearIssueError}
                   </div>
                 ) : null}
 
-                {linearLoading && linearIssues.length === 0 ? (
+                {activeLinearIssueLoading && activeLinearIssues.length === 0 ? (
                   <div className="divide-y divide-border/50">
                     {Array.from({ length: 12 }).map((_, i) => (
                       <div key={i} className="px-3 py-3">
@@ -5818,18 +6698,39 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
 
-                {!linearLoading && linearIssues.length === 0 && !linearError ? (
+                {!activeLinearIssueLoading &&
+                activeLinearIssues.length === 0 &&
+                !activeLinearIssueError &&
+                activeLinearIssueHasCollectionError ? (
                   <div className="px-4 py-10 text-center">
-                    <p className="text-sm font-medium text-foreground">No Linear issues fetched</p>
+                    <p className="text-sm font-medium text-foreground">
+                      Unable to load Linear issues
+                    </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      {linearSearchInput
-                        ? 'No fetched Linear issues match this search query.'
-                        : 'No current Linear issues were fetched for this view.'}
+                      Review the workspace error below, then refresh.
                     </p>
                   </div>
                 ) : null}
 
-                {!linearLoading && linearIssues.length > 0 && filteredLinearIssues.length === 0 ? (
+                {!activeLinearIssueLoading &&
+                activeLinearIssues.length === 0 &&
+                !activeLinearIssueError &&
+                !activeLinearIssueHasCollectionError ? (
+                  <div className="px-4 py-10 text-center">
+                    <p className="text-sm font-medium text-foreground">No Linear issues found</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {activeLinearIssueContextLabel
+                        ? 'No issues match this Linear context.'
+                        : linearSearchInput
+                          ? 'Try a different search query.'
+                          : 'No assigned issues. Try searching for something.'}
+                    </p>
+                  </div>
+                ) : null}
+
+                {!activeLinearIssueLoading &&
+                activeLinearIssues.length > 0 &&
+                filteredLinearIssues.length === 0 ? (
                   <div className="px-4 py-10 text-center">
                     <p className="text-sm font-medium text-foreground">
                       No fetched issues match the selected teams
@@ -6182,6 +7083,21 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 )}
               </div>
+              {selectedLinearProject && linearProjectTab === 'issues' ? (
+                <LinearCollectionNotice
+                  errors={linearProjectIssuesResult.errors}
+                  hasMore={linearProjectIssuesResult.hasMore}
+                  count={linearProjectIssuesResult.items.length}
+                  label="project issues"
+                />
+              ) : selectedLinearCustomView?.model === 'issue' ? (
+                <LinearCollectionNotice
+                  errors={linearCustomViewIssuesResult.errors}
+                  hasMore={linearCustomViewIssuesResult.hasMore}
+                  count={linearCustomViewIssuesResult.items.length}
+                  label="view issues"
+                />
+              ) : null}
             </div>
           )}
         </div>
