@@ -105,6 +105,8 @@ export type ManagedPaneInternal = {
   // value means "currently disabled".
   ligaturesAddon: LigaturesAddon | null
   fitResizeObserver: ResizeObserver | null
+  // Stored so disposePane() can cancel the first post-open fit if a pane closes before paint.
+  pendingInitialFitRafId?: number | null
   pendingObservedFitRafId: number | null
   serializeAddon: SerializeAddon
   unicode11Addon: Unicode11Addon

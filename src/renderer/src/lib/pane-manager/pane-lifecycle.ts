@@ -119,6 +119,7 @@ export function createPaneDOM(
     hasComplexScriptOutput: false,
     fitAddon,
     fitResizeObserver: null,
+    pendingInitialFitRafId: null,
     pendingObservedFitRafId: null,
     searchAddon,
     serializeAddon,
@@ -230,7 +231,11 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   attachPaneFitResizeObserver(pane)
 
   // Initial fit (deferred to ensure layout has settled)
-  requestAnimationFrame(() => {
+  if (pane.pendingInitialFitRafId != null) {
+    cancelAnimationFrame(pane.pendingInitialFitRafId)
+  }
+  pane.pendingInitialFitRafId = requestAnimationFrame(() => {
+    pane.pendingInitialFitRafId = null
     safeFit(pane)
   })
 }
@@ -290,6 +295,10 @@ export function disposePane(
   pane: ManagedPaneInternal,
   panes: Map<number, ManagedPaneInternal>
 ): void {
+  if (pane.pendingInitialFitRafId != null) {
+    cancelAnimationFrame(pane.pendingInitialFitRafId)
+    pane.pendingInitialFitRafId = null
+  }
   detachPaneFitResizeObserver(pane)
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
