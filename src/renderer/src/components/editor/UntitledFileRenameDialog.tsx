@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,8 +47,6 @@ export function UntitledFileRenameDialog({
       focusFrameRef.current = null
     }
   }, [])
-
-  useEffect(() => cancelFocusFrame, [cancelFocusFrame])
 
   const setNameInputNode = useCallback(
     (node: HTMLInputElement | null): void => {
