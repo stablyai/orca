@@ -251,10 +251,10 @@ describe('estimateRenderRowSize', () => {
     expect(activeSize).toBe(36)
   })
 
-  it('estimates imported worktree card rows with a stable larger height', () => {
+  it('estimates imported worktree line rows with a stable compact height', () => {
     const rows = [makeHeaderRow('repo:repo-1'), makeImportedCardRow()]
 
-    expect(estimateRenderRowSize(rows, 1, 0, null)).toBe(224)
+    expect(estimateRenderRowSize(rows, 1, 0, null)).toBe(36)
   })
 
   it('keeps the previous header active until the secondary header row reaches the top', () => {
