@@ -31,6 +31,7 @@ const HERMES_CRON_DIR = join(HERMES_HOME, 'cron')
 const HERMES_JOBS_FILE = join(HERMES_CRON_DIR, 'jobs.json')
 const OPENCLAW_JOBS_FILE = join(homedir(), '.openclaw', 'cron', 'jobs.json')
 const EXTERNAL_JOB_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/
+const LOCAL_COMMAND_LOOKUP_TIMEOUT_MS = 5_000
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -39,11 +40,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 async function isCommandOnPath(command: string): Promise<boolean> {
   const finder = process.platform === 'win32' ? 'where' : 'which'
   try {
-    await execFileAsync(finder, [command], { encoding: 'utf-8' })
+    await runLocalCommandLookup(finder, [command])
     return true
   } catch {
     return false
   }
+}
+
+function runLocalCommandLookup(command: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let child: ReturnType<typeof execFile> | null = null
+    let settled = false
+
+    const finish = (error: Error | null): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve()
+    }
+
+    // Why: these probes run while loading Automations; a wedged PATH shim must
+    // not keep the list IPC pending forever.
+    const timeout = setTimeout(() => {
+      child?.kill()
+      finish(new Error(`Command lookup timed out after ${LOCAL_COMMAND_LOOKUP_TIMEOUT_MS}ms.`))
+    }, LOCAL_COMMAND_LOOKUP_TIMEOUT_MS)
+
+    try {
+      child = execFile(command, args, { encoding: 'utf-8' }, (error) => {
+        finish(error ?? null)
+      })
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error(String(error)))
+    }
+  })
 }
 
 async function readLocalHermesJobs(): Promise<unknown[]> {

@@ -270,6 +270,7 @@ describe('TerminalPane PowerShell version setting', () => {
       setScrollbackMode: () => {},
       ghostty: ghosttyMock,
       wslAvailable: true,
+      wslDistros: ['Ubuntu'],
       pwshAvailable: false,
       gitBashPath: null
     })
@@ -297,6 +298,34 @@ describe('TerminalPane PowerShell version setting', () => {
     })
 
     expect(collectText(element)).not.toContain('WSL')
+  })
+
+  it('shows WSL distro choices when WSL is the selected Windows shell', () => {
+    const element = TerminalPane({
+      settings: {
+        terminalScrollbackBytes: 10_000_000,
+        terminalWindowsShell: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian',
+        terminalWindowsPowerShellImplementation: 'auto',
+        terminalWordSeparator: ''
+      } as never,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      scrollbackMode: 'preset',
+      setScrollbackMode: () => {},
+      ghostty: ghosttyMock,
+      wslAvailable: true,
+      wslDistros: ['Ubuntu', 'Debian'],
+      pwshAvailable: false,
+      gitBashPath: null
+    })
+
+    const text = collectText(element)
+    expect(text).toContain('Choose which WSL distribution')
+    expect(text).toContain('Windows default')
+    expect(text).toContain('Ubuntu')
+    expect(text).toContain('Debian')
   })
 
   it('shows Git Bash as a Windows default shell option when bash.exe is detected', () => {

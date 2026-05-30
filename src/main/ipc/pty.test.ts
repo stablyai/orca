@@ -2402,7 +2402,7 @@ describe('registerPtyHandlers', () => {
       expect(env.PYTHONUTF8).toBe('0')
     })
 
-    it('passes no encoding args for unrecognized shells', () => {
+    it('launches Git Bash from COMSPEC as an interactive login shell', () => {
       process.env.COMSPEC = 'C:\\Program Files\\Git\\bin\\bash.exe'
 
       registerPtyHandlers(mainWindow as never)
@@ -2410,8 +2410,10 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\Git\\bin\\bash.exe',
-        [],
-        expect.any(Object)
+        ['--login', '-i'],
+        expect.objectContaining({
+          env: expect.objectContaining({ CHERE_INVOKING: '1' })
+        })
       )
     })
 
@@ -2889,6 +2891,158 @@ describe('registerPtyHandlers', () => {
       })
       vi.advanceTimersByTime(8)
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('holds background PTY output briefly after foreground input', async () => {
+    vi.useFakeTimers()
+    const activeProc = createMockProc()
+    const backgroundProc = createMockProc()
+    spawnMock.mockReturnValueOnce(activeProc.proc).mockReturnValueOnce(backgroundProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const activeSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const backgroundSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+      mainWindow.webContents.send.mockClear()
+
+      backgroundProc.emitData('background output')
+      writeListener(null, {
+        id: activeSpawn.id,
+        data: 'a'
+      })
+
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+
+      activeProc.emitData('\x1b[20;2Hredraw')
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: activeSpawn.id,
+        data: '\x1b[20;2Hredraw'
+      })
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+
+      vi.advanceTimersByTime(41)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+
+      vi.advanceTimersByTime(1)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not hold foreground PTY batch output behind background output', async () => {
+    vi.useFakeTimers()
+    const activeProc = createMockProc()
+    const backgroundProc = createMockProc()
+    spawnMock.mockReturnValueOnce(activeProc.proc).mockReturnValueOnce(backgroundProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const activeSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const backgroundSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+      mainWindow.webContents.send.mockClear()
+
+      backgroundProc.emitData('background output')
+      writeListener(null, {
+        id: activeSpawn.id,
+        data: 'a'
+      })
+      const foregroundOutput = 'x'.repeat(1025)
+      activeProc.emitData(foregroundOutput)
+
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: activeSpawn.id,
+        data: foregroundOutput
+      })
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not starve background PTY output during continuous input', async () => {
+    vi.useFakeTimers()
+    const activeProc = createMockProc()
+    const backgroundProc = createMockProc()
+    spawnMock.mockReturnValueOnce(activeProc.proc).mockReturnValueOnce(backgroundProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const activeSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const backgroundSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+      mainWindow.webContents.send.mockClear()
+
+      backgroundProc.emitData('background output')
+      for (let index = 0; index < 7; index++) {
+        writeListener(null, {
+          id: activeSpawn.id,
+          data: 'a'
+        })
+        vi.advanceTimersByTime(40)
+      }
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+
+      writeListener(null, {
+        id: activeSpawn.id,
+        data: 'a'
+      })
+      vi.advanceTimersByTime(10)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
     } finally {
       vi.useRealTimers()
     }

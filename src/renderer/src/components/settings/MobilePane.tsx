@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy, Maximize2, Smartphone, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useAppStore } from '../../store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useMobilePairingDevicePolling } from './mobile-pairing-device-polling'
 import {
   selectRefreshedNetworkAddress,
@@ -52,32 +53,63 @@ export function MobilePane(): React.JSX.Element {
   const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
+  const codeCopiedResetTimerRef = useRef<number | null>(null)
+  const mountedRef = useMountedRef()
+  // Why: clipboard IPC can resolve after settings navigation; avoid starting
+  // a reset timer that will outlive this pane.
+  const pairingCodeButtonMountedRef = useRef(false)
+
+  const clearCodeCopiedResetTimer = useCallback((): void => {
+    if (codeCopiedResetTimerRef.current !== null) {
+      window.clearTimeout(codeCopiedResetTimerRef.current)
+      codeCopiedResetTimerRef.current = null
+    }
+  }, [])
+
+  const setPairingCodeButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      pairingCodeButtonMountedRef.current = node !== null
+      if (node === null) {
+        clearCodeCopiedResetTimer()
+      }
+    },
+    [clearCodeCopiedResetTimer]
+  )
 
   const loadDevices = useCallback(async () => {
     try {
       const result = await window.api.mobile.listDevices()
-      setDevices(result.devices)
+      if (mountedRef.current) {
+        setDevices(result.devices)
+      }
     } catch {
       // Silently fail — device list is non-critical
     }
-  }, [])
+  }, [mountedRef])
 
-  const loadNetworkInterfaces = useCallback(async (opts: { notifyOnError?: boolean } = {}) => {
-    setRefreshingNetworkInterfaces(true)
-    try {
-      const result = await window.api.mobile.listNetworkInterfaces()
-      setNetworkInterfaces(result.interfaces)
-      setSelectedAddress((currentAddress) =>
-        selectRefreshedNetworkAddress(currentAddress, result.interfaces)
-      )
-    } catch {
-      if (opts.notifyOnError) {
-        toast.error('Failed to refresh network interfaces')
+  const loadNetworkInterfaces = useCallback(
+    async (opts: { notifyOnError?: boolean } = {}) => {
+      setRefreshingNetworkInterfaces(true)
+      try {
+        const result = await window.api.mobile.listNetworkInterfaces()
+        if (mountedRef.current) {
+          setNetworkInterfaces(result.interfaces)
+          setSelectedAddress((currentAddress) =>
+            selectRefreshedNetworkAddress(currentAddress, result.interfaces)
+          )
+        }
+      } catch {
+        if (opts.notifyOnError && mountedRef.current) {
+          toast.error('Failed to refresh network interfaces')
+        }
+      } finally {
+        if (mountedRef.current) {
+          setRefreshingNetworkInterfaces(false)
+        }
       }
-    } finally {
-      setRefreshingNetworkInterfaces(false)
-    }
-  }, [])
+    },
+    [mountedRef]
+  )
 
   const generateQR = useCallback(
     async (opts: { rotate?: boolean } = {}) => {
@@ -92,21 +124,30 @@ export function MobilePane(): React.JSX.Element {
         })
         if (result.available) {
           useAppStore.getState().recordFeatureInteraction('mobile-pairing')
-          setQrDataUrl(result.qrDataUrl)
-          setPairingUrl(result.pairingUrl)
-          setEndpoint(result.endpoint)
-          setCodeCopied(false)
-          void loadDevices()
+          if (mountedRef.current) {
+            setQrDataUrl(result.qrDataUrl)
+            setPairingUrl(result.pairingUrl)
+            setEndpoint(result.endpoint)
+            clearCodeCopiedResetTimer()
+            setCodeCopied(false)
+            void loadDevices()
+          }
         } else {
-          toast.error('WebSocket transport is not running')
+          if (mountedRef.current) {
+            toast.error('WebSocket transport is not running')
+          }
         }
       } catch {
-        toast.error('Failed to generate QR code')
+        if (mountedRef.current) {
+          toast.error('Failed to generate QR code')
+        }
       } finally {
-        setLoading(false)
+        if (mountedRef.current) {
+          setLoading(false)
+        }
       }
     },
-    [loadDevices, selectedAddress]
+    [clearCodeCopiedResetTimer, loadDevices, mountedRef, selectedAddress]
   )
 
   useEffect(() => {
@@ -140,20 +181,33 @@ export function MobilePane(): React.JSX.Element {
       // (no transient activation, non-secure context). Use the main-process
       // IPC clipboard which the rest of the app uses everywhere.
       await window.api.ui.writeClipboardText(pairingUrl)
+      if (!pairingCodeButtonMountedRef.current) {
+        return
+      }
+      clearCodeCopiedResetTimer()
       setCodeCopied(true)
-      setTimeout(() => setCodeCopied(false), 2000)
+      codeCopiedResetTimerRef.current = window.setTimeout(() => {
+        codeCopiedResetTimerRef.current = null
+        setCodeCopied(false)
+      }, 2000)
     } catch {
-      toast.error('Failed to copy pairing code')
+      if (mountedRef.current) {
+        toast.error('Failed to copy pairing code')
+      }
     }
   }
 
   async function revokeDevice(deviceId: string) {
     try {
       await window.api.mobile.revokeDevice({ deviceId })
-      setDevices((prev) => prev.filter((d) => d.deviceId !== deviceId))
-      toast.success('Device revoked')
+      if (mountedRef.current) {
+        setDevices((prev) => prev.filter((d) => d.deviceId !== deviceId))
+        toast.success('Device revoked')
+      }
     } catch {
-      toast.error('Failed to revoke device')
+      if (mountedRef.current) {
+        toast.error('Failed to revoke device')
+      }
     }
   }
 
@@ -191,6 +245,7 @@ export function MobilePane(): React.JSX.Element {
                 Or paste this code in the mobile app:
               </div>
               <Button
+                ref={setPairingCodeButtonRef}
                 variant="outline"
                 size="sm"
                 onClick={() => void copyPairingCode()}

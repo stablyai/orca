@@ -45,6 +45,8 @@ function cacheBlobUrl(key: string, url: string): void {
 }
 const cacheListeners = new Set<() => void>()
 let cacheGeneration = 0
+const pendingBlobUrlRevocations = new Set<string>()
+let pendingBlobUrlRevocationTimer: ReturnType<typeof setTimeout> | null = null
 
 function base64ToBlobUrl(base64: string, mimeType: string): string {
   const binary = atob(base64.replace(/\s/g, ''))
@@ -55,12 +57,30 @@ function base64ToBlobUrl(base64: string, mimeType: string): string {
   return URL.createObjectURL(new Blob([bytes], { type: mimeType }))
 }
 
+function revokePendingBlobUrls(): void {
+  pendingBlobUrlRevocationTimer = null
+  for (const url of pendingBlobUrlRevocations) {
+    URL.revokeObjectURL(url)
+  }
+  pendingBlobUrlRevocations.clear()
+}
+
+function scheduleBlobUrlRevocation(urls: string[]): void {
+  for (const url of urls) {
+    pendingBlobUrlRevocations.add(url)
+  }
+  if (pendingBlobUrlRevocationTimer !== null || pendingBlobUrlRevocations.size === 0) {
+    return
+  }
+  pendingBlobUrlRevocationTimer = setTimeout(revokePendingBlobUrls, 30_000)
+}
+
 // Why: when the user switches back to the app after deleting or replacing
 // image files externally, clearing the cache forces the preview to pick up
 // the current filesystem state instead of showing stale in-memory blob URLs.
 // Old blob URLs are revoked after a short delay so that <img> elements still
 // display the old data while the fresh IPC load completes, avoiding a visible
-// flash. The 5-second window is generous enough for even slow IPC reads.
+// flash. The 30-second window is generous enough for even slow IPC reads.
 function invalidateImageCache(): void {
   const staleUrls = Array.from(blobUrlCache.values())
   blobUrlCache.clear()
@@ -73,16 +93,34 @@ function invalidateImageCache(): void {
   // 30 seconds is generous enough to cover slow machines or large images
   // without risking a visible broken-image flash.
   if (staleUrls.length > 0) {
-    setTimeout(() => {
-      for (const url of staleUrls) {
-        URL.revokeObjectURL(url)
-      }
-    }, 30_000)
+    scheduleBlobUrlRevocation(staleUrls)
   }
+}
+
+function disposeImageCacheModuleState(): void {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('focus', invalidateImageCache)
+  }
+  if (pendingBlobUrlRevocationTimer !== null) {
+    clearTimeout(pendingBlobUrlRevocationTimer)
+    pendingBlobUrlRevocationTimer = null
+  }
+  revokePendingBlobUrls()
+  for (const url of blobUrlCache.values()) {
+    URL.revokeObjectURL(url)
+  }
+  blobUrlCache.clear()
+  cacheListeners.clear()
 }
 
 if (typeof window !== 'undefined') {
   window.addEventListener('focus', invalidateImageCache)
+}
+
+if (typeof import.meta !== 'undefined' && import.meta.hot) {
+  // Why: Vite can re-evaluate this module without a full renderer reload.
+  // Disposing the module-level listener and blob URLs prevents dev-session leaks.
+  import.meta.hot.dispose(disposeImageCacheModuleState)
 }
 
 /**

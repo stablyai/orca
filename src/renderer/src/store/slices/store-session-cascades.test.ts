@@ -5,6 +5,7 @@ import type { AppState } from '../types'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type {
   BrowserTab,
+  DetectedWorktreeListResult,
   TerminalLayoutSnapshot,
   TerminalTab,
   Worktree
@@ -212,6 +213,24 @@ function makeLayout(): TerminalLayoutSnapshot {
   return { root: null, activeLeafId: null, expandedLeafId: null }
 }
 
+function makeDetectedWorktreeResult(
+  repoId: string,
+  worktrees: Worktree[],
+  authoritative = true
+): DetectedWorktreeListResult {
+  return {
+    repoId,
+    authoritative,
+    source: authoritative ? 'git' : 'metadata-fallback',
+    worktrees: worktrees.map((worktree) => ({
+      ...worktree,
+      ownership: 'orca-managed',
+      selectedCheckout: false,
+      visible: true
+    }))
+  }
+}
+
 function makeBrowserTab(
   overrides: Partial<BrowserTab> & { id: string; worktreeId: string; url: string }
 ): BrowserTab {
@@ -393,6 +412,141 @@ describe('hydrateWorkspaceSession', () => {
     // hydrateWorkspaceSession. It flips to true in reconnectPersistedTerminals()
     // after all eager PTY spawns complete.
     expect(s.workspaceSessionReady).toBe(false)
+  })
+
+  it('preserves tabs for a known repo whose worktrees have not loaded yet', () => {
+    // Why (#1158): empty per-repo worktrees can mean a degraded local fetch or
+    // SSH reconnect race, not that every persisted tab for the repo is stale.
+    const store = createTestStore()
+    const stalledWt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [] }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: stalledWt,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [stalledWt]: [makeTab({ id: 'tab1', worktreeId: stalledWt })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: makeLayout()
+      }
+    })
+
+    const s = store.getState()
+    expect(s.tabsByWorktree[stalledWt]).toHaveLength(1)
+    expect(s.tabsByWorktree[stalledWt][0].id).toBe('tab1')
+    expect(s.terminalLayoutsByTabId['tab1']).toBeDefined()
+    expect(s.activeWorktreeId).toBe(stalledWt)
+    expect(s.activeTabId).toBe('tab1')
+  })
+
+  it('preserves tabs for a known repo after a non-authoritative worktree fetch', () => {
+    // Why (#1158): metadata fallback means the runtime did not prove deletion.
+    const store = createTestStore()
+    const stalledWt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [] },
+      detectedWorktreesByRepo: {
+        repo1: makeDetectedWorktreeResult('repo1', [], false)
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: stalledWt,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [stalledWt]: [makeTab({ id: 'tab1', worktreeId: stalledWt })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: makeLayout()
+      }
+    })
+
+    const s = store.getState()
+    expect(s.tabsByWorktree[stalledWt]).toHaveLength(1)
+    expect(s.terminalLayoutsByTabId['tab1']).toBeDefined()
+    expect(s.activeWorktreeId).toBe(stalledWt)
+    expect(s.activeTabId).toBe('tab1')
+  })
+
+  it('drops tabs when an authoritative scan reports no matching worktrees', () => {
+    // Why: once git has answered authoritatively, an empty repo list means
+    // deleted local worktrees, not a startup race.
+    const store = createTestStore()
+    const staleWt = 'repo1::/path/deleted'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [] },
+      detectedWorktreesByRepo: {
+        repo1: makeDetectedWorktreeResult('repo1', [])
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: staleWt,
+      activeTabId: 'tab-stale',
+      tabsByWorktree: {
+        [staleWt]: [makeTab({ id: 'tab-stale', worktreeId: staleWt })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-stale': makeLayout()
+      }
+    })
+
+    const s = store.getState()
+    expect(s.tabsByWorktree[staleWt]).toBeUndefined()
+    expect(s.terminalLayoutsByTabId['tab-stale']).toBeUndefined()
+    expect(s.activeWorktreeId).toBeNull()
+    expect(s.activeTabId).toBeNull()
+  })
+
+  it('drops tabs for an unknown repo', () => {
+    // Why: the carve-out only forgives missing worktrees for repos that still
+    // exist in the repos list. If the user removed the whole repo, its tabs
+    // are genuinely stale and must be dropped.
+    const store = createTestStore()
+    const orphanWt = 'repoGone::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [] }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: orphanWt,
+      activeTabId: 'tab-orphan',
+      tabsByWorktree: {
+        [orphanWt]: [makeTab({ id: 'tab-orphan', worktreeId: orphanWt })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-orphan': makeLayout()
+      }
+    })
+
+    const s = store.getState()
+    expect(s.tabsByWorktree[orphanWt]).toBeUndefined()
+    expect(s.terminalLayoutsByTabId['tab-orphan']).toBeUndefined()
+    expect(s.activeWorktreeId).toBeNull()
+    expect(s.activeTabId).toBeNull()
   })
 
   it('restores valid activeWorktreeId and activeTabId', () => {

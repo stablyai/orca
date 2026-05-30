@@ -10,7 +10,7 @@ import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailable } from '../pwsh'
-import { isWslAvailable } from '../wsl'
+import { isWslAvailable, listWslDistros } from '../wsl'
 import { resolveGitBashPath } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { authorizeExternalPath } from './filesystem-auth'
@@ -118,6 +118,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
+  ipcMain.handle('wsl:listDistros', (): string[] => listWslDistros())
   ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())
   ipcMain.handle('gitBash:resolvePath', (): string | null => resolveGitBashPath())
 

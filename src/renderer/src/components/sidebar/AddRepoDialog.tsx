@@ -56,6 +56,7 @@ function defaultProjectGroupNameForPath(path: string): string {
 
 const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
+  const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
@@ -108,6 +109,18 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   // Why: monotonic ID so stale clone callbacks can detect they were superseded.
   const cloneGenRef = useRef(0)
+  // Why: local folder picking/scanning can outlive the dialog; resetState
+  // invalidates stale continuations before they can repopulate closed UI.
+  const localAddGenRef = useRef(0)
+  // Why: server path adds share the same dialog but run against a runtime
+  // server; resetState cancels their stale scan/add/fetch continuations.
+  const serverAddGenRef = useRef(0)
+  // Why: setup actions can await settings/worktree refreshes; resetState
+  // cancels stale continuations when the setup step is dismissed.
+  const setupActionGenRef = useRef(0)
+  // Why: a dropped path is modal data, so ordinary state updates must not
+  // re-run the import while the Add Project dialog advances through steps.
+  const droppedLocalPathHandledRef = useRef<string | null>(null)
   // Why: track whether we've already auto-filled for this entry into the clone step,
   // so a late settings hydration still gets a chance to set the default.
   const cloneStepAutoFilledRef = useRef(false)
@@ -197,6 +210,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   }, [step, cloneDestination, settings?.activeRuntimeEnvironmentId, settings?.workspaceDir])
 
   const isOpen = activeModal === 'add-repo'
+  const droppedLocalPath =
+    typeof modalData.droppedLocalPath === 'string' ? modalData.droppedLocalPath : ''
   const projectId = addedRepo?.id ?? ''
   const isRuntimeEnvironmentActive = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
 
@@ -234,6 +249,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   const resetState = useCallback(() => {
     cloneGenRef.current++
+    localAddGenRef.current++
+    serverAddGenRef.current++
+    setupActionGenRef.current++
     // Why: kill the git clone process if one is running, so backing out
     // or closing the dialog doesn't leave a clone running on disk.
     void window.api.repos.cloneAbort()
@@ -261,6 +279,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   // Why: reset state on close so reopening doesn't show stale step/repo.
   useEffect(() => {
     if (!isOpen) {
+      droppedLocalPathHandledRef.current = null
       resetState()
     }
   }, [isOpen, resetState])
@@ -272,49 +291,92 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     step === 'create' ||
     step === 'nested'
 
+  const handleAddLocalPath = useCallback(
+    async (path: string, source: AddRepoExistingWorkspaceSource) => {
+      if (settings?.activeRuntimeEnvironmentId?.trim()) {
+        toast.error('Use a server path to add projects from a remote runtime.')
+        closeModal()
+        return
+      }
+      const gen = ++localAddGenRef.current
+      setIsAdding(true)
+      try {
+        const attemptId = createNestedRepoTelemetryAttemptId()
+        const scan = await scanNestedRepos(path)
+        if (gen !== localAddGenRef.current) {
+          return
+        }
+        track(
+          'add_repo_nested_scan_result',
+          buildNestedRepoScanTelemetry({
+            attemptId,
+            surface: 'sidebar',
+            runtimeKind: 'local',
+            scan
+          })
+        )
+        if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+          setNestedScan(scan)
+          setNestedSelectedPaths(new Set(scan.repos.map((repo) => repo.path)))
+          setNestedGroupName(defaultProjectGroupNameForPath(path))
+          setNestedConnectionId(null)
+          setNestedAttemptId(attemptId)
+          setNestedRuntimeKind('local')
+          setStep('nested')
+          return
+        }
+        const repo = await addRepoPath(path)
+        if (gen !== localAddGenRef.current) {
+          return
+        }
+        if (repo && isGitRepoKind(repo)) {
+          setAddedRepo(repo)
+          setExistingWorkspaceSource(source)
+          await fetchWorktrees(repo.id)
+          if (gen !== localAddGenRef.current) {
+            return
+          }
+          setStep('setup')
+        } else if (repo) {
+          // Why: folder repos skip the Git worktree setup step and activate
+          // their synthetic root workspace in the folder add flow.
+          closeModal()
+        }
+      } finally {
+        if (gen === localAddGenRef.current) {
+          setIsAdding(false)
+        }
+      }
+    },
+    [addRepoPath, closeModal, fetchWorktrees, scanNestedRepos, settings?.activeRuntimeEnvironmentId]
+  )
+
+  useEffect(() => {
+    if (!isOpen || !droppedLocalPath) {
+      return
+    }
+    if (droppedLocalPathHandledRef.current === droppedLocalPath) {
+      return
+    }
+    droppedLocalPathHandledRef.current = droppedLocalPath
+    void handleAddLocalPath(droppedLocalPath, 'local_folder_picker')
+  }, [droppedLocalPath, handleAddLocalPath, isOpen])
+
   const handleBrowse = useCallback(async () => {
+    const gen = ++localAddGenRef.current
     setIsAdding(true)
     try {
       const path = await window.api.repos.pickFolder()
-      if (!path) {
+      if (!path || gen !== localAddGenRef.current) {
         return
       }
-      const attemptId = createNestedRepoTelemetryAttemptId()
-      const scan = await scanNestedRepos(path)
-      track(
-        'add_repo_nested_scan_result',
-        buildNestedRepoScanTelemetry({
-          attemptId,
-          surface: 'sidebar',
-          runtimeKind: 'local',
-          scan
-        })
-      )
-      if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
-        setNestedScan(scan)
-        setNestedSelectedPaths(new Set(scan.repos.map((repo) => repo.path)))
-        setNestedGroupName(defaultProjectGroupNameForPath(path))
-        setNestedConnectionId(null)
-        setNestedAttemptId(attemptId)
-        setNestedRuntimeKind('local')
-        setStep('nested')
-        return
-      }
-      const repo = await addRepoPath(path)
-      if (repo && isGitRepoKind(repo)) {
-        setAddedRepo(repo)
-        setExistingWorkspaceSource('local_folder_picker')
-        await fetchWorktrees(repo.id)
-        setStep('setup')
-      } else if (repo) {
-        // Why: folder repos skip the Git worktree setup step and activate
-        // their synthetic root workspace in the folder add flow.
-        closeModal()
-      }
+      await handleAddLocalPath(path, 'local_folder_picker')
     } finally {
-      setIsAdding(false)
+      if (gen === localAddGenRef.current) {
+        setIsAdding(false)
+      }
     }
-  }, [addRepoPath, closeModal, fetchWorktrees, scanNestedRepos])
+  }, [handleAddLocalPath])
 
   const handleImportNestedRepos = useCallback(
     async (mode: 'group' | 'separate') => {
@@ -438,11 +500,15 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       if (!path) {
         return
       }
+      const gen = ++serverAddGenRef.current
       setIsAddingServerPath(true)
       try {
         if (kind === 'git') {
           const attemptId = createNestedRepoTelemetryAttemptId()
           const scan = await scanNestedRepos(path)
+          if (gen !== serverAddGenRef.current) {
+            return
+          }
           track(
             'add_repo_nested_scan_result',
             buildNestedRepoScanTelemetry({
@@ -464,10 +530,16 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           }
         }
         const repo = await addRepoPath(path, kind)
+        if (gen !== serverAddGenRef.current) {
+          return
+        }
         if (repo && isGitRepoKind(repo)) {
           setAddedRepo(repo)
           setExistingWorkspaceSource('runtime_server_path')
           await fetchWorktrees(repo.id)
+          if (gen !== serverAddGenRef.current) {
+            return
+          }
           setStep('setup')
         } else if (repo) {
           // Why: folder repos skip the Git worktree setup step; their synthetic
@@ -475,7 +547,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           closeModal()
         }
       } finally {
-        setIsAddingServerPath(false)
+        if (gen === serverAddGenRef.current) {
+          setIsAddingServerPath(false)
+        }
       }
     },
     [addRepoPath, closeModal, fetchWorktrees, getNestedRepoRuntimeKind, scanNestedRepos, serverPath]
@@ -488,8 +562,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       toast.error('Enter a server path for the clone destination.')
       return
     }
+    const gen = cloneGenRef.current
     const dir = await window.api.repos.pickDirectory()
-    if (dir) {
+    if (dir && gen === cloneGenRef.current) {
       setCloneDestination(dir)
       setCloneError(null)
     }
@@ -542,6 +617,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       setAddedRepo(repo)
       setExistingWorkspaceSource('clone_url')
       await fetchWorktrees(repo.id)
+      if (gen !== cloneGenRef.current) {
+        return
+      }
       setStep('setup')
     } catch (err) {
       if (gen !== cloneGenRef.current) {
@@ -648,13 +726,20 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     if (!projectId) {
       return
     }
+    const gen = ++setupActionGenRef.current
     trackSetupAction('open_existing')
     if (!otherWorktreesVisible) {
       const updated = await updateRepo(projectId, { externalWorktreeVisibility: 'show' })
+      if (gen !== setupActionGenRef.current) {
+        return
+      }
       if (updated && addedRepo) {
         setAddedRepo({ ...addedRepo, externalWorktreeVisibility: 'show' })
       }
       await fetchWorktrees(projectId)
+      if (gen !== setupActionGenRef.current) {
+        return
+      }
     }
     await finishImportedRepoWithoutOpening()
   }, [

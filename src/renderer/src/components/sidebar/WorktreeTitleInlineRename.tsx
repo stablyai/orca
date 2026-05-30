@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
@@ -39,30 +39,40 @@ export function WorktreeTitleInlineRename({
   onEditingChange,
   onRename
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const editingRef = useRef(false)
   const savingRef = useRef(false)
+  const mountedRef = useRef(true)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(displayName)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    onEditingChange?.(editing)
-    return () => {
-      if (editing) {
-        onEditingChange?.(false)
-      }
-    }
-  }, [editing, onEditingChange])
+  const handleRootRef = useCallback((node: HTMLSpanElement | null): void => {
+    // Why: rename can resolve after this inline title unmounts; the rendered
+    // root owns that stale-write guard without a mount-only Effect.
+    mountedRef.current = node !== null
+  }, [])
 
-  useEffect(() => {
-    if (!editing) {
+  const setEditingMode = useCallback(
+    (nextEditing: boolean) => {
+      if (editingRef.current === nextEditing) {
+        return
+      }
+      editingRef.current = nextEditing
+      setEditing(nextEditing)
+      // Why: the parent card disables drag while renaming; an Effect leaves one draggable commit.
+      onEditingChange?.(nextEditing)
+    },
+    [onEditingChange]
+  )
+
+  const handleInputRef = useCallback((input: HTMLInputElement | null) => {
+    if (!input) {
       return
     }
-    const input = inputRef.current
-    input?.focus()
+    input.focus()
     // Why: double-click rename should make replacing the workspace title a one-keystroke action.
-    input?.select()
-  }, [editing])
+    input.select()
+  }, [])
 
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -76,15 +86,15 @@ export function WorktreeTitleInlineRename({
       event.preventDefault()
       event.stopPropagation()
       setValue(displayName)
-      setEditing(true)
+      setEditingMode(true)
     },
-    [disabled, displayName]
+    [disabled, displayName, setEditingMode]
   )
 
   const cancelRename = useCallback(() => {
     setValue(displayName)
-    setEditing(false)
-  }, [displayName])
+    setEditingMode(false)
+  }, [displayName, setEditingMode])
 
   const commitRename = useCallback(async () => {
     if (savingRef.current) {
@@ -101,14 +111,20 @@ export function WorktreeTitleInlineRename({
     setSaving(true)
     try {
       await onRename(commit.displayName)
-      setEditing(false)
+      if (mountedRef.current) {
+        setEditingMode(false)
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+      }
     } finally {
       savingRef.current = false
-      setSaving(false)
+      if (mountedRef.current) {
+        setSaving(false)
+      }
     }
-  }, [cancelRename, displayName, onRename, value])
+  }, [cancelRename, displayName, onRename, setEditingMode, value])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -127,6 +143,7 @@ export function WorktreeTitleInlineRename({
   if (editing) {
     return (
       <span
+        ref={handleRootRef}
         className={cn(
           'relative grid min-w-0 truncate leading-tight text-foreground',
           showUnreadEmphasis ? 'font-semibold' : 'font-normal',
@@ -142,7 +159,7 @@ export function WorktreeTitleInlineRename({
           {displayName}
         </span>
         <Input
-          ref={inputRef}
+          ref={handleInputRef}
           value={value}
           style={{ font: 'inherit' }}
           disabled={saving}
@@ -170,6 +187,7 @@ export function WorktreeTitleInlineRename({
 
   const title = (
     <span
+      ref={handleRootRef}
       className={cn(
         'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
         showUnreadEmphasis ? 'font-semibold' : 'font-normal',

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { cn } from '@/lib/utils'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 
 type GitHubSetupState = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
@@ -123,6 +124,7 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [connectState, setConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
   const [connectError, setConnectError] = useState<string | null>(null)
+  const mountedRef = useMountedRef()
 
   const workspaceCount = linearStatus.workspaces?.length ?? (linearStatus.connected ? 1 : 0)
 
@@ -135,6 +137,9 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
     setConnectError(null)
     try {
       const result = await connectLinear(apiKey)
+      if (!mountedRef.current) {
+        return
+      }
       if (result.ok) {
         setApiKeyDraft('')
         setConnectState('idle')
@@ -144,8 +149,10 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
       setConnectState('error')
       setConnectError(result.error)
     } catch (error) {
-      setConnectState('error')
-      setConnectError(error instanceof Error ? error.message : 'Connection failed')
+      if (mountedRef.current) {
+        setConnectState('error')
+        setConnectError(error instanceof Error ? error.message : 'Connection failed')
+      }
     }
   }
 

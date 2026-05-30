@@ -391,6 +391,10 @@ describe('file RPC methods', () => {
     [
       'non-string content',
       { worktree: 'id:wt-1', relativePath: 'assets/logo.png', contentBase64: 0 }
+    ],
+    [
+      'malformed content',
+      { worktree: 'id:wt-1', relativePath: 'assets/logo.png', contentBase64: '!!!!' }
     ]
   ])('rejects a base64 write with %s', async (_name, params) => {
     const runtime = {
@@ -454,6 +458,15 @@ describe('file RPC methods', () => {
         worktree: 'id:wt-1',
         relativePath: 'assets/video.mov',
         contentBase64: 0,
+        append: true
+      }
+    ],
+    [
+      'malformed content',
+      {
+        worktree: 'id:wt-1',
+        relativePath: 'assets/video.mov',
+        contentBase64: '!!!!',
         append: true
       }
     ]

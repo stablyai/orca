@@ -66,6 +66,8 @@ import { buildTreemapLayout, type TreemapRect } from './workspace-space-layout'
 import {
   filterWorkspaceSpaceRows,
   countWorkspaceSpaceActiveAgents,
+  getLargestWorkspaceSpaceItemSize,
+  getLargestWorkspaceSpaceRowSize,
   getSelectedDeletableWorkspaceIds,
   getVisibleDeletableWorkspaceIds,
   getWorkspaceSpaceGitStatusRefreshCandidates,
@@ -831,7 +833,7 @@ function BreakdownList({
     )
   }
 
-  const maxChildSize = Math.max(...worktree.topLevelItems.map((item) => item.sizeBytes), 0)
+  const maxChildSize = getLargestWorkspaceSpaceItemSize(worktree.topLevelItems)
   const topLevelItemCount = worktree.topLevelItems.length + worktree.omittedTopLevelItemCount
   return (
     <div className="min-h-72 rounded-lg border border-border/70 bg-background/35">
@@ -1276,7 +1278,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const zoomedWorktree =
     sourceRows.find((row) => row.worktreeId === treemapZoomWorktreeId && row.status === 'ok') ??
     null
-  const maxSize = Math.max(...rows.map((row) => row.sizeBytes), 0)
+  const maxSize = getLargestWorkspaceSpaceRowSize(rows)
   const selectedDeletableIds = useMemo(
     () => getSelectedDeletableWorkspaceIds(rows, selectedIds, isWorktreeUnavailableForDelete),
     [isWorktreeUnavailableForDelete, rows, selectedIds]

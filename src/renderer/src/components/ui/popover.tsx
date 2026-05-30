@@ -28,6 +28,18 @@ function PopoverContent({
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
   portalContainer?: HTMLElement | null
 }) {
+  const wheelFrameIdsRef = React.useRef<Set<number>>(new Set())
+
+  React.useEffect(
+    () => () => {
+      for (const frameId of wheelFrameIdsRef.current) {
+        cancelAnimationFrame(frameId)
+      }
+      wheelFrameIdsRef.current.clear()
+    },
+    []
+  )
+
   const handleWheel = React.useCallback(
     (event: React.WheelEvent<HTMLDivElement>) => {
       onWheel?.(event)
@@ -55,11 +67,13 @@ function PopoverContent({
       if (nextScrollTop !== el.scrollTop) {
         const previousScrollTop = el.scrollTop
         event.stopPropagation()
-        requestAnimationFrame(() => {
+        const frameId = requestAnimationFrame(() => {
+          wheelFrameIdsRef.current.delete(frameId)
           if (el.scrollTop === previousScrollTop) {
             el.scrollTop = nextScrollTop
           }
         })
+        wheelFrameIdsRef.current.add(frameId)
       }
     },
     [onWheel]

@@ -51,8 +51,13 @@ function toFileUrl(filePath: string): string {
   return `file:///${segments.join('/')}`
 }
 
-function fileUrlToAbsolutePath(url: URL): string {
-  let absolutePath = decodeURIComponent(url.pathname)
+function fileUrlToAbsolutePath(url: URL): string | null {
+  let absolutePath: string
+  try {
+    absolutePath = decodeURIComponent(url.pathname)
+  } catch {
+    return null
+  }
   // Windows: "/C:/foo" → "C:/foo"
   if (/^\/[A-Za-z]:\//.test(absolutePath)) {
     absolutePath = absolutePath.slice(1)
@@ -175,6 +180,9 @@ export function resolveMarkdownLinkTarget(
   }
 
   const rawAbsolutePath = fileUrlToAbsolutePath(resolved)
+  if (rawAbsolutePath === null) {
+    return null
+  }
 
   // Why: hash-based line anchor takes precedence; fall back to trailing
   // `:line:col` syntax only if no hash anchor was found.

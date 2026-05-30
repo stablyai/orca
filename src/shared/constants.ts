@@ -7,7 +7,8 @@ import type {
   PersistedState,
   PersistedUIState,
   RepoHookSettings,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  AgentActivityDisplayMode
 } from './types'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
@@ -28,6 +29,11 @@ export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
 export const DEFAULT_SHOW_SLEEPING_WORKSPACES = true
 export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
+export const DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE: AgentActivityDisplayMode = 'compact'
+
+export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
+  return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
+}
 
 // Why: the onboarding wizard's last step index. Centralized so backfill,
 // clamps, and UI step references all agree on the same upper bound.
@@ -197,6 +203,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // and Ctrl+right-click still opens the context menu when paste is enabled.
     terminalRightClickToPaste: true,
     terminalWindowsShell: 'powershell.exe',
+    terminalWindowsWslDistro: null,
+    localAccountRuntime: 'host',
+    localAccountWslDistro: null,
     // Why: Windows users expect "PowerShell" to mean modern PowerShell when it
     // is installed, with a safe fallback to the inbox Windows PowerShell.
     terminalWindowsPowerShellImplementation: 'auto',
@@ -237,6 +246,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     promptCacheTtlMs: 300_000,
     codexManagedAccounts: [],
     activeCodexManagedAccountId: null,
+    activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} },
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
@@ -277,6 +287,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalTerminalAttention: false,
     experimentalCompactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
+    experimentalUnifiedNewTabLauncher: false,
     // Why: local desktop remains the default server until the user explicitly
     // selects a saved runtime environment.
     activeRuntimeEnvironmentId: null,
@@ -374,6 +385,7 @@ export function getDefaultUIState(): PersistedUIState {
     uiZoomLevel: 0,
     editorFontZoomLevel: 0,
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+    agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
     workspaceBoardCompact: false,

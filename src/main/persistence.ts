@@ -61,6 +61,7 @@ import {
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
+  normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
@@ -2802,6 +2803,9 @@ export class Store {
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
       ),
+      agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
+        this.state.ui?.agentActivityDisplayMode
+      ),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
       workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
@@ -2831,6 +2835,10 @@ export class Store {
         updates.worktreeCardProperties !== undefined
           ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)
           : normalizeWorktreeCardProperties(this.state.ui?.worktreeCardProperties),
+      agentActivityDisplayMode:
+        updates.agentActivityDisplayMode !== undefined
+          ? normalizeAgentActivityDisplayMode(updates.agentActivityDisplayMode)
+          : normalizeAgentActivityDisplayMode(this.state.ui?.agentActivityDisplayMode),
       workspaceStatuses:
         updates.workspaceStatuses !== undefined
           ? normalizeWorkspaceStatuses(updates.workspaceStatuses)

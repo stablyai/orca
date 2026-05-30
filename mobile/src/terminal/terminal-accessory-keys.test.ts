@@ -4,20 +4,44 @@ import { buildTerminalShortcutKey, TERMINAL_ACCESSORY_KEYS } from './terminal-ac
 
 describe('TERMINAL_ACCESSORY_KEYS', () => {
   it('sends reverse-tab with a non-repeatable Shift+Tab key', () => {
-    const key = TERMINAL_ACCESSORY_KEYS.find((candidate) => candidate.label === 'Shift+Tab')
+    const key = TERMINAL_ACCESSORY_KEYS.find((candidate) => candidate.id === 'shiftTab')
 
     expect(key).toEqual({
+      id: 'shiftTab',
       label: 'Shift+Tab',
       bytes: '\x1b[Z',
       accessibilityLabel: 'Shift Tab'
     })
   })
 
+  it('includes a non-repeatable Enter default key', () => {
+    expect(TERMINAL_ACCESSORY_KEYS.find((candidate) => candidate.id === 'enter')).toEqual({
+      id: 'enter',
+      label: 'Enter',
+      bytes: '\r',
+      accessibilityLabel: 'Enter'
+    })
+  })
+
+  it('has unique non-empty built-in ids', () => {
+    const ids = TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
+
+    expect(ids.every((id) => id.length > 0)).toBe(true)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
   it('keeps repeat behavior explicit for built-in terminal keys', () => {
-    const repeatableLabels = new Set(['⌫', 'Del', '↑', '↓', '←', '→'])
+    const repeatableIds = new Set([
+      'backspace',
+      'delete',
+      'arrowUp',
+      'arrowDown',
+      'arrowLeft',
+      'arrowRight'
+    ])
 
     for (const key of TERMINAL_ACCESSORY_KEYS) {
-      expect(key.repeatable === true).toBe(repeatableLabels.has(key.label))
+      expect(key.repeatable === true).toBe(repeatableIds.has(key.id))
     }
   })
 
@@ -44,6 +68,11 @@ describe('TERMINAL_ACCESSORY_KEYS', () => {
       label: 'Shift+Tab',
       bytes: '\x1b[Z',
       accessibilityLabel: 'Shift Tab'
+    })
+    expect(buildTerminalShortcutKey({ key: 'enter', modifiers: [] })).toEqual({
+      label: 'Enter',
+      bytes: '\r',
+      accessibilityLabel: 'Enter'
     })
     expect(buildTerminalShortcutKey({ key: 'arrowRight', modifiers: ['ctrl', 'shift'] })).toEqual({
       label: 'Ctrl+Shift+→',

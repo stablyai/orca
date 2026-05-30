@@ -26,6 +26,7 @@ import { parsePaneKey } from '../../shared/stable-pane-id'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
+const NOTIFICATION_RELEASE_FALLBACK_MS = 5 * 60 * 1000
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
 const MACOS_PACKAGED_BUNDLE_ID = 'com.stablyai.orca'
 const MACOS_NOTIFICATION_SETTINGS_URL =
@@ -57,6 +58,37 @@ type NotificationSoundId = NotificationSettings['customSoundId']
 // the notification in macOS Notification Center. Prevent this by keeping a
 // strong reference until the notification is clicked or closed.
 const activeNotifications = new Set<Notification>()
+
+function retainNotificationUntilRelease(
+  notification: Notification,
+  onRelease?: () => void
+): () => void {
+  activeNotifications.add(notification)
+  let released = false
+  let releaseTimer: ReturnType<typeof setTimeout> | null = null
+
+  function release(): void {
+    if (released) {
+      return
+    }
+    released = true
+    activeNotifications.delete(notification)
+    notification.removeListener('close', release)
+    if (releaseTimer) {
+      clearTimeout(releaseTimer)
+      releaseTimer = null
+    }
+    onRelease?.()
+  }
+
+  notification.on('close', release)
+  releaseTimer = setTimeout(release, NOTIFICATION_RELEASE_FALLBACK_MS)
+  if (typeof releaseTimer.unref === 'function') {
+    releaseTimer.unref()
+  }
+
+  return release
+}
 
 function getMacNotificationSettingsUrl(): string {
   const bundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID ?? MACOS_PACKAGED_BUNDLE_ID
@@ -104,19 +136,35 @@ function waitForNotificationDisplay(notification: Notification): Promise<boolean
   return new Promise((resolve) => {
     let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
-    const settle = (displayed: boolean): void => {
+
+    function cleanup(): void {
+      notification.removeListener('show', onShow)
+      notification.removeListener('failed', onFailed)
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+    }
+
+    function settle(displayed: boolean): void {
       if (settled) {
         return
       }
       settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
+      cleanup()
       resolve(displayed)
     }
 
-    notification.once('show', () => settle(true))
-    notification.once('failed', () => settle(false))
+    function onShow(): void {
+      settle(true)
+    }
+
+    function onFailed(): void {
+      settle(false)
+    }
+
+    notification.once('show', onShow)
+    notification.once('failed', onFailed)
     timer = setTimeout(() => settle(false), NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS)
   })
 }
@@ -232,15 +280,13 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
 
       // Why: prevent GC from collecting the notification (and its click
       // handler) while it's still visible in macOS Notification Center.
-      activeNotifications.add(notification)
-      const release = (): void => {
-        activeNotifications.delete(notification)
-      }
-      notification.on('close', release)
-      // Why: on macOS the 'close' event may never fire if the OS silently
-      // discards the notification (e.g. DND, Notification Center cleared).
-      // A timeout fallback guarantees the reference is eventually freed.
-      setTimeout(release, 5 * 60 * 1000)
+      let clickHandler: (() => void) | null = null
+      const release = retainNotificationUntilRelease(notification, () => {
+        if (clickHandler) {
+          notification.removeListener('click', clickHandler)
+          clickHandler = null
+        }
+      })
 
       // Why: clicking a notification should bring Orca to the foreground and
       // switch to the worktree/pane that triggered it. Worktree activation owns
@@ -252,7 +298,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       // clicking it will not attempt to switch to an unknown worktree.
       if (args.worktreeId && args.worktreeId.includes('::')) {
         const repoId = getRepoIdFromWorktreeId(args.worktreeId)
-        notification.on('click', () => {
+        clickHandler = () => {
           release()
           const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
           if (!win) {
@@ -280,7 +326,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
               scrollToBottomIfOutputSinceLastView: true
             })
           }
-        })
+        }
+        notification.on('click', clickHandler)
       }
 
       const displayConfirmation = args.requireDisplayConfirmation
@@ -386,12 +433,29 @@ export function triggerStartupNotificationRegistration(store: Store): void {
   activeNotifications.add(notification)
 
   let handled = false
-  const cleanup = (): void => {
+  let closeTimer: ReturnType<typeof setTimeout> | null = null
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+
+  function clearStartupTimers(): void {
+    if (closeTimer) {
+      clearTimeout(closeTimer)
+      closeTimer = null
+    }
+    if (fallbackTimer) {
+      clearTimeout(fallbackTimer)
+      fallbackTimer = null
+    }
+  }
+
+  function cleanup(): void {
     if (handled) {
       return
     }
     handled = true
+    clearStartupTimers()
     activeNotifications.delete(notification)
+    notification.removeListener('click', onClick)
+    notification.removeListener('show', onShow)
     notification.close()
   }
 
@@ -399,20 +463,29 @@ export function triggerStartupNotificationRegistration(store: Store): void {
   // Notification Settings so they can verify/enable notifications for Orca.
   // Without this, the notification reads like an actionable prompt ("Allow
   // notifications…") but clicking it does nothing, which is confusing.
-  notification.on('click', () => {
+  function onClick(): void {
     cleanup()
     openNotificationSystemSettings()
-  })
+  }
 
-  notification.on('show', () => {
+  function onShow(): void {
     // Why: close after a short delay so the notification doesn't linger in
     // Notification Center. The macOS permission dialog is a system-level sheet
     // that appears independently and is not dismissed by closing this notification.
-    setTimeout(cleanup, 8000)
-  })
+    closeTimer = setTimeout(cleanup, 8000)
+    if (typeof closeTimer.unref === 'function') {
+      closeTimer.unref()
+    }
+  }
+
+  notification.on('click', onClick)
+  notification.on('show', onShow)
 
   // Fallback in case macOS doesn't fire the 'show' event (e.g. user denies).
-  setTimeout(cleanup, 10_000)
+  fallbackTimer = setTimeout(cleanup, 10_000)
+  if (typeof fallbackTimer.unref === 'function') {
+    fallbackTimer.unref()
+  }
 
   notification.show()
 }

@@ -32,6 +32,11 @@ export type ProviderRateLimits = {
   status: ProviderRateLimitStatus
 }
 
+export type RateLimitRuntimeTarget = {
+  runtime: 'host' | 'wsl'
+  wslDistro: string | null
+}
+
 export type InactiveAccountUsage = {
   accountId: string
   claude: ProviderRateLimits | null
@@ -44,6 +49,8 @@ export type RateLimitState = {
   codex: ProviderRateLimits | null
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
+  claudeTarget: RateLimitRuntimeTarget
+  codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]
   inactiveCodexAccounts: InactiveAccountUsage[]
 }

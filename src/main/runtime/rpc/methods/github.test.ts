@@ -371,6 +371,29 @@ describe('github RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
+  it('sets PR auto-merge on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      setRepoPRAutoMerge: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.setPRAutoMerge', {
+        repo: 'repo-1',
+        prNumber: 7,
+        enabled: true,
+        prRepo: { owner: 'acme', repo: 'widgets' }
+      })
+    )
+
+    expect(runtime.setRepoPRAutoMerge).toHaveBeenCalledWith('repo-1', 7, true, {
+      owner: 'acme',
+      repo: 'widgets'
+    })
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
   it('routes PR reviewer mutations on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

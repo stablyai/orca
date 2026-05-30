@@ -213,4 +213,26 @@ describe('browser RPC methods', () => {
       value: 'enabled'
     })
   })
+
+  it('rejects non-boolean browser check states instead of coercing them to true', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browserCheck: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('browser.check', {
+        page: 'page-1',
+        element: 'ref-1',
+        checked: 'false'
+      })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument' }
+    })
+    expect(runtime.browserCheck).not.toHaveBeenCalled()
+  })
 })

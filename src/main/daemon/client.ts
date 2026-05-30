@@ -179,20 +179,27 @@ export class DaemonClient {
   private connectSocket(): Promise<Socket> {
     return new Promise((resolve, reject) => {
       const socket = connect(this.socketPath)
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        socket.removeListener('connect', onConnect)
+        socket.removeListener('error', onError)
+      }
+      const onConnect = (): void => {
+        cleanup()
+        resolve(socket)
+      }
+      const onError = (err: Error): void => {
+        cleanup()
+        reject(err)
+      }
       const timer = setTimeout(() => {
+        cleanup()
         socket.destroy()
         reject(new DaemonProtocolError('Connection timed out'))
       }, CONNECT_TIMEOUT_MS)
 
-      socket.on('connect', () => {
-        clearTimeout(timer)
-        resolve(socket)
-      })
-
-      socket.on('error', (err) => {
-        clearTimeout(timer)
-        reject(err)
-      })
+      socket.on('connect', onConnect)
+      socket.on('error', onError)
     })
   }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { SshDestructiveActionDialog } from './SshDestructiveActionDialog'
 import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
 
@@ -31,6 +32,7 @@ export function SshTargetDestructiveActions({
   const [pendingRemove, setPendingRemove] = useState<PendingTargetAction | null>(null)
   const [pendingReset, setPendingReset] = useState<PendingTargetAction | null>(null)
   const [pendingTerminate, setPendingTerminate] = useState<PendingTargetAction | null>(null)
+  const mountedRef = useMountedRef()
   // Why: confirmed SSH actions keep running after the dialog click, so this
   // state blocks overlapping relay/session teardown for the same target.
   const targetActionsInFlightRef = useRef(new Map<string, SshTargetBusyAction>())
@@ -55,12 +57,17 @@ export function SshTargetDestructiveActions({
     []
   )
 
-  const finishTargetAction = useCallback((targetId: string): void => {
-    const nextActions = new Map(targetActionsInFlightRef.current)
-    nextActions.delete(targetId)
-    targetActionsInFlightRef.current = nextActions
-    setTargetActionsInFlight(nextActions)
-  }, [])
+  const finishTargetAction = useCallback(
+    (targetId: string): void => {
+      const nextActions = new Map(targetActionsInFlightRef.current)
+      nextActions.delete(targetId)
+      targetActionsInFlightRef.current = nextActions
+      if (mountedRef.current) {
+        setTargetActionsInFlight(nextActions)
+      }
+    },
+    [mountedRef]
+  )
 
   const runConfirmedTargetAction = async (
     pendingTarget: PendingTargetAction | null,
@@ -75,7 +82,9 @@ export function SshTargetDestructiveActions({
     const targetId = pendingTarget.id
     try {
       await operation(targetId)
-      clearPendingTarget()
+      if (mountedRef.current) {
+        clearPendingTarget()
+      }
     } finally {
       finishTargetAction(targetId)
     }

@@ -2,7 +2,15 @@
 controls share one parsed document/update path for this first notebook editor
 slice; splitting before the model stabilizes would make save/run mutations
 harder to audit. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject
+} from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import DOMPurify from 'dompurify'
 import Markdown from 'react-markdown'
@@ -69,6 +77,31 @@ type IpynbViewerProps = {
 }
 
 const NOTEBOOK_SOURCE_COMMIT_DELAY_MS = 400
+
+function cancelIpynbStructuralContentFrames(frameIds: MutableRefObject<number[]>): void {
+  for (const frameId of frameIds.current) {
+    cancelAnimationFrame(frameId)
+  }
+  frameIds.current = []
+}
+
+function requestIpynbStructuralContentFrame(
+  frameIds: MutableRefObject<number[]>,
+  callback: FrameRequestCallback
+): void {
+  let completed = false
+  let frameId: number | undefined
+  frameId = requestAnimationFrame((timestamp) => {
+    completed = true
+    if (frameId !== undefined) {
+      frameIds.current = frameIds.current.filter((pendingFrameId) => pendingFrameId !== frameId)
+    }
+    callback(timestamp)
+  })
+  if (!completed) {
+    frameIds.current.push(frameId)
+  }
+}
 
 function valueToText(value: unknown): string {
   if (Array.isArray(value)) {
@@ -264,11 +297,16 @@ function CodeCell({
         void onSaveRequestRef.current()
       }
     )
-    editorInstance.onDidDispose(() => cleanupSaveShortcut())
-    editorInstance.addCommand(monacoInstance.KeyCode.Escape, () => {
+    const blurSub = editorInstance.onDidBlurEditorWidget(() => {
       onDeactivateRef.current()
     })
-    editorInstance.onDidBlurEditorWidget(() => {
+    editorInstance.onDidDispose(() => {
+      // Why: the inline source editor owns both the save shortcut and blur
+      // subscription for this Monaco editor instance.
+      cleanupSaveShortcut()
+      blurSub.dispose()
+    })
+    editorInstance.addCommand(monacoInstance.KeyCode.Escape, () => {
       onDeactivateRef.current()
     })
   }, [])
@@ -486,6 +524,7 @@ export default function IpynbViewer({
   const onContentChangeRef = useRef(onContentChange)
   const onDirtyStateHintRef = useRef(onDirtyStateHint)
   const sourceCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const structuralContentFrameIdsRef = useRef<number[]>([])
   const fontSize = computeEditorFontSize(13, editorFontZoomLevel)
   const parsed = useMemo(() => {
     try {
@@ -551,6 +590,7 @@ export default function IpynbViewer({
   useEffect(() => {
     return () => {
       void flushSourceDrafts()
+      cancelIpynbStructuralContentFrames(structuralContentFrameIdsRef)
     }
   }, [flushSourceDrafts])
 
@@ -680,7 +720,7 @@ export default function IpynbViewer({
     // Exit edit mode first, then reorder/replace cells on the next frame so
     // structural notebook actions do not dispose an editor mid-render.
     setEditingCellKey(null)
-    requestAnimationFrame(() => {
+    requestIpynbStructuralContentFrame(structuralContentFrameIdsRef, () => {
       applyContent(getNextContent(latestContent))
     })
   }

@@ -18,6 +18,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Separator } from '../ui/separator'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Minus, Plus } from 'lucide-react'
 import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal-theme'
 import {
@@ -75,6 +76,10 @@ type TerminalPaneProps = {
   ghostty: UseGhosttyImportReturn
   /** Whether WSL is installed on this Windows machine. */
   wslAvailable?: boolean
+  /** Installed WSL distro names, used to choose the default WSL terminal target. */
+  wslDistros?: string[]
+  /** Whether WSL capability probing is still in flight. */
+  wslCapabilitiesLoading?: boolean
   /** Whether PowerShell 7+ (pwsh.exe) is installed on this Windows machine. */
   pwshAvailable?: boolean
   /** Resolved Git for Windows bash.exe path, when installed on this machine. */
@@ -90,6 +95,8 @@ export function TerminalPane({
   setScrollbackMode,
   ghostty,
   wslAvailable,
+  wslDistros = [],
+  wslCapabilitiesLoading = false,
   pwshAvailable,
   gitBashPath
 }: TerminalPaneProps): React.JSX.Element {
@@ -116,6 +123,12 @@ export function TerminalPane({
   const scrollbackToggleValue =
     scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackMb}` : 'custom'
   const windowsShell = settings.terminalWindowsShell ?? 'powershell.exe'
+  const selectedWslDistroName = settings.terminalWindowsWslDistro?.trim() || null
+  const selectedWslDistro = selectedWslDistroName || '__default__'
+  const wslDistroOptions =
+    selectedWslDistroName && !wslDistros.includes(selectedWslDistroName)
+      ? [selectedWslDistroName, ...wslDistros]
+      : wslDistros
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
   const showWindowsPowerShellImplementation = isWindows && windowsShell === 'powershell.exe'
   const showGitBashOption = Boolean(gitBashPath) || windowsShell === WINDOWS_GIT_BASH_SHELL
@@ -170,6 +183,45 @@ export function TerminalPane({
               }
             />
           </SearchableSetting>
+          {windowsShell === 'wsl.exe' ? (
+            <SearchableSetting
+              title="WSL Distribution"
+              description="Choose which WSL distribution new WSL terminals and local agent scans use."
+              keywords={['terminal', 'windows', 'wsl', 'linux', 'distribution', 'distro', 'ubuntu']}
+            >
+              <SettingsRow
+                label="WSL Distribution"
+                description="Used for new WSL terminal panes and local agent detection when the active workspace is not already inside WSL."
+                control={
+                  <Select
+                    value={selectedWslDistro}
+                    onValueChange={(value) =>
+                      updateSettings({
+                        terminalWindowsWslDistro: value === '__default__' ? null : value
+                      })
+                    }
+                    disabled={wslCapabilitiesLoading || !wslAvailable}
+                  >
+                    <SelectTrigger size="sm" aria-label="WSL Distribution" className="min-w-44">
+                      <SelectValue
+                        placeholder={
+                          wslCapabilitiesLoading ? 'Loading distributions' : 'Windows default'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">Windows default</SelectItem>
+                      {wslDistroOptions.map((distro) => (
+                        <SelectItem key={distro} value={distro}>
+                          {distro}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                }
+              />
+            </SearchableSetting>
+          ) : null}
         </div>
       </section>
     ) : null,

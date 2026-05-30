@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { sendNotificationSettingsTestNotification } from '@/components/settings/NotificationsPane'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import logo from '../../../../../resources/logo.svg'
 
 export type NotificationDraft = {
@@ -51,6 +52,7 @@ export function NotificationStep({
   const [showMacSettingsPreview, setShowMacSettingsPreview] = useState(false)
   const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
   const syncedNotificationSettingsRef = useRef(notificationSettings)
+  const mountedRef = useMountedRef()
 
   if (syncedNotificationSettingsRef.current !== notificationSettings) {
     syncedNotificationSettingsRef.current = notificationSettings
@@ -100,7 +102,9 @@ export function NotificationStep({
   const handleMacPermission = async (): Promise<void> => {
     setShowMacSettingsPreview(true)
     const status = await window.api.notifications.requestPermission()
-    setPermissionStatus(status)
+    if (mountedRef.current) {
+      setPermissionStatus(status)
+    }
     await window.api.notifications.openSystemSettings()
   }
 
@@ -115,7 +119,9 @@ export function NotificationStep({
       volume: getCustomSoundVolume()
     })
     if (!result.played) {
-      toast.error('Notification sound could not be played')
+      if (mountedRef.current) {
+        toast.error('Notification sound could not be played')
+      }
     }
   }
 
@@ -128,7 +134,9 @@ export function NotificationStep({
         await previewSound('custom')
       }
     } finally {
-      setIsPickingSound(false)
+      if (mountedRef.current) {
+        setIsPickingSound(false)
+      }
     }
   }
 

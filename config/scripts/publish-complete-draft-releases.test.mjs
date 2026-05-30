@@ -125,6 +125,7 @@ describe('writeGithubOutputs', () => {
         `${[
           'published_count=1',
           'skipped_count=1',
+          'latest_published_tag=v1.4.2-rc.7',
           'published_tags=v1.4.2-rc.7',
           'skipped_tags=v1.4.2-rc.8'
         ].join('\n')}\n`

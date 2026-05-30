@@ -4,12 +4,15 @@ export const LINUX_LID_SLEEP_ASSERTION_RETRY_MS = 30_000
 
 type Logger = Pick<Console, 'debug' | 'warn'>
 
+type SystemdInhibitErrorListener = (error: Error & { code?: string }) => void
+type SystemdInhibitExitListener = (code: number | null, signal: NodeJS.Signals | null) => void
+
 type SystemdInhibitProcess = {
   kill: () => boolean
-  on: {
-    (event: 'error', listener: (error: Error & { code?: string }) => void): void
-    (event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void): void
-  }
+  on(event: 'error', listener: SystemdInhibitErrorListener): void
+  on(event: 'exit', listener: SystemdInhibitExitListener): void
+  off(event: 'error', listener: SystemdInhibitErrorListener): void
+  off(event: 'exit', listener: SystemdInhibitExitListener): void
   pid?: number
 }
 
@@ -41,6 +44,7 @@ export class LinuxLidSleepAssertion {
   private warnedForLastFailure = false
   private readonly intentionalStops = new WeakSet<SystemdInhibitProcess>()
   private readonly reportedFailures = new WeakSet<SystemdInhibitProcess>()
+  private readonly childCleanups = new WeakMap<SystemdInhibitProcess, () => void>()
 
   constructor(options: LinuxLidSleepAssertionOptions = {}) {
     this.logger = options.logger ?? console
@@ -84,7 +88,7 @@ export class LinuxLidSleepAssertion {
     }
 
     this.child = child
-    child.on('error', (error) => {
+    const onError: SystemdInhibitErrorListener = (error) => {
       this.handleChildFailure(
         child,
         `error:${String(error.code ?? error.message)}`,
@@ -92,13 +96,19 @@ export class LinuxLidSleepAssertion {
         reason,
         error
       )
-    })
-    child.on('exit', (code, signal) => {
+    }
+    const onExit: SystemdInhibitExitListener = (code, signal) => {
       this.handleChildFailure(child, `exit:${String(code)}:${String(signal)}`, 'exit', reason, {
         code,
         signal
       })
+    }
+    this.childCleanups.set(child, () => {
+      child.off('error', onError)
+      child.off('exit', onExit)
     })
+    child.on('error', onError)
+    child.on('exit', onExit)
     this.resetRetrySuppression()
     this.resetFailureStreak()
   }
@@ -112,6 +122,7 @@ export class LinuxLidSleepAssertion {
     const child = this.child
     this.child = null
     this.intentionalStops.add(child)
+    this.detachChildListeners(child)
     try {
       child.kill()
     } catch (error) {
@@ -132,6 +143,7 @@ export class LinuxLidSleepAssertion {
     startReason: string,
     details: unknown
   ): void {
+    this.detachChildListeners(child)
     if (this.intentionalStops.has(child)) {
       this.intentionalStops.delete(child)
       return
@@ -144,6 +156,15 @@ export class LinuxLidSleepAssertion {
       this.child = null
     }
     this.handleFailure(failureKey, startReason, details, failureType)
+  }
+
+  private detachChildListeners(child: SystemdInhibitProcess): void {
+    const cleanup = this.childCleanups.get(child)
+    if (!cleanup) {
+      return
+    }
+    cleanup()
+    this.childCleanups.delete(child)
   }
 
   private handleFailure(

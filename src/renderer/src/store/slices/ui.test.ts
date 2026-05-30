@@ -589,6 +589,29 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().worktreeCardProperties).toEqual(expected)
     expect(setUI).toHaveBeenCalledWith({ worktreeCardProperties: expected })
   })
+
+  it('persists the agent activity display mode', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setAgentActivityDisplayMode('full')
+
+    expect(store.getState().agentActivityDisplayMode).toBe('full')
+    expect(setUI).toHaveBeenCalledWith({ agentActivityDisplayMode: 'full' })
+  })
+
+  it('normalizes invalid persisted agent activity display modes', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentActivityDisplayMode: 'bogus' as PersistedUIState['agentActivityDisplayMode']
+      })
+    )
+
+    expect(store.getState().agentActivityDisplayMode).toBe('compact')
+  })
 })
 
 describe('createUISlice settings navigation', () => {

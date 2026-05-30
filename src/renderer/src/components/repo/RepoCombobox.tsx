@@ -13,6 +13,7 @@ import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { Repo } from '../../../../shared/types'
 import RepoBadgeLabel from './RepoBadgeLabel'
 
@@ -49,6 +50,7 @@ export default function RepoCombobox({
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
   const focusFrameRef = React.useRef<number | null>(null)
+  const mountedRef = useMountedRef()
 
   const selectedRepo = useMemo(
     () => repos.find((repo) => repo.id === value) ?? null,
@@ -56,10 +58,17 @@ export default function RepoCombobox({
   )
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
 
-  const focusSearchInput = useCallback(() => {
+  const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
       cancelAnimationFrame(focusFrameRef.current)
+      focusFrameRef.current = null
     }
+  }, [])
+
+  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+
+  const focusSearchInput = useCallback(() => {
+    cancelFocusFrame()
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       const repoSearchInput = inputRef.current
@@ -73,7 +82,7 @@ export default function RepoCombobox({
       const end = repoSearchInput.value.length
       repoSearchInput.setSelectionRange(end, end)
     })
-  }, [])
+  }, [cancelFocusFrame])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -82,16 +91,13 @@ export default function RepoCombobox({
         setCommandValue(value)
         return
       }
-      if (focusFrameRef.current !== null) {
-        cancelAnimationFrame(focusFrameRef.current)
-        focusFrameRef.current = null
-      }
+      cancelFocusFrame()
       // Why: the create-worktree dialog delays its own field reset until after
       // close animation, so the repo picker must clear its local filter here or a
       // stale query can reopen to an apparently missing repo list.
       setQuery('')
     },
-    [value]
+    [cancelFocusFrame, value]
   )
 
   const handleSelect = useCallback(
@@ -147,14 +153,19 @@ export default function RepoCombobox({
         if (isGitRepoKind(repo)) {
           await fetchWorktrees(repo.id)
         }
+        if (!mountedRef.current) {
+          return
+        }
         onValueChange(repo.id)
         setOpen(false)
         setQuery('')
       }
     } finally {
-      setIsAdding(false)
+      if (mountedRef.current) {
+        setIsAdding(false)
+      }
     }
-  }, [addRepo, fetchWorktrees, isAdding, onValueChange])
+  }, [addRepo, fetchWorktrees, isAdding, mountedRef, onValueChange])
 
   return (
     <div className="flex w-full items-center gap-1.5">

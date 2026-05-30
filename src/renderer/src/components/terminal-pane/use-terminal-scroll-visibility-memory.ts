@@ -40,6 +40,7 @@ export function useTerminalScrollVisibilityMemory({
   const scrollDisposablesRef = useRef<Map<number, IDisposable>>(new Map())
   const suppressScrollTrackingRef = useRef(false)
   const pendingFollowOutputPaneIdsRef = useRef<Set<number>>(new Set())
+  const followOutputFrameIdsRef = useRef<number[]>([])
 
   const captureVisibleScrollSnapshot = useCallback(
     (terminal: Terminal): VisibleScrollSnapshot => ({
@@ -126,15 +127,37 @@ export function useTerminalScrollVisibilityMemory({
     return didScroll
   }, [isVisibleRef, managerRef, rememberVisibleScrollSnapshot, visibleResumeCompleteRef])
 
+  const cancelPendingFollowOutputFrames = useCallback((): void => {
+    for (const frameId of followOutputFrameIdsRef.current) {
+      cancelAnimationFrame(frameId)
+    }
+    followOutputFrameIdsRef.current = []
+  }, [])
+
   const scheduleFollowOutputIfNeeded = useCallback(
     (paneId: number): void => {
       pendingFollowOutputPaneIdsRef.current.add(paneId)
-      requestAnimationFrame(() => {
-        requestAnimationFrame(applyPendingFollowOutputRequests)
+      if (followOutputFrameIdsRef.current.length > 0) {
+        return
+      }
+      const firstFrameId = requestAnimationFrame(() => {
+        followOutputFrameIdsRef.current = followOutputFrameIdsRef.current.filter(
+          (frameId) => frameId !== firstFrameId
+        )
+        const secondFrameId = requestAnimationFrame(() => {
+          followOutputFrameIdsRef.current = followOutputFrameIdsRef.current.filter(
+            (frameId) => frameId !== secondFrameId
+          )
+          applyPendingFollowOutputRequests()
+        })
+        followOutputFrameIdsRef.current.push(secondFrameId)
       })
+      followOutputFrameIdsRef.current.push(firstFrameId)
     },
     [applyPendingFollowOutputRequests]
   )
+
+  useEffect(() => cancelPendingFollowOutputFrames, [cancelPendingFollowOutputFrames])
 
   useEffect(() => {
     const manager = managerRef.current

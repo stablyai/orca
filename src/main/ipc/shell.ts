@@ -84,21 +84,31 @@ async function launchExternalEditor(pathValue: string, command?: string): Promis
       windowsHide: true
     })
     let settled = false
-    const settle = (callback: () => void): void => {
+
+    function cleanup(): void {
+      child.off('error', onError)
+      child.off('spawn', onSpawn)
+    }
+
+    function settle(callback: () => void): void {
       if (settled) {
         return
       }
       settled = true
+      cleanup()
       callback()
     }
 
-    child.once('error', (error) => {
+    function onError(error: Error): void {
       settle(() => rejectPromise(error))
-    })
-    child.once('spawn', () => {
+    }
+
+    function onSpawn(): void {
       child.unref()
       settle(resolvePromise)
-    })
+    }
+    child.once('error', onError)
+    child.once('spawn', onSpawn)
   })
 }
 

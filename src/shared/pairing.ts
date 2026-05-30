@@ -20,18 +20,40 @@ export function encodePairingOffer(offer: PairingOffer): string {
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '')
-  return `orca://pair#${base64url}`
+  // Why: Android camera intents and Expo Router preserve query params more
+  // reliably than URL fragments when launching a custom-scheme app.
+  return `orca://pair?code=${base64url}`
 }
 
 export function decodePairingOffer(url: string): PairingOffer {
-  const hashIndex = url.indexOf('#')
-  if (!url.startsWith('orca://pair') || hashIndex === -1) {
-    throw new Error('Invalid pairing URL: must start with orca://pair#')
+  const code = extractPairingCodeFromUrl(url)
+  if (!code) {
+    throw new Error('Invalid pairing URL: must start with orca://pair and include a pairing code')
   }
-  return decodePairingBase64(url.slice(hashIndex + 1))
+  return decodePairingBase64(code)
 }
 
-// Why: accept either an `orca://pair#<base64>` URL or the bare base64
+function extractPairingCodeFromUrl(url: string): string | null {
+  if (!url.startsWith('orca://pair')) {
+    return null
+  }
+  const queryIndex = url.indexOf('?')
+  if (queryIndex !== -1) {
+    const query = url.slice(queryIndex + 1).split('#')[0] ?? ''
+    const params = new URLSearchParams(query)
+    const code = params.get('code')
+    if (code) {
+      return code
+    }
+  }
+  const hashIndex = url.indexOf('#')
+  if (hashIndex !== -1) {
+    return url.slice(hashIndex + 1) || null
+  }
+  return null
+}
+
+// Why: accept either an `orca://pair?...` URL or the bare base64
 // string so the mobile paste-pair flow can take whichever the user
 // actually copied from desktop.
 export function parsePairingCode(input: string): PairingOffer | null {
