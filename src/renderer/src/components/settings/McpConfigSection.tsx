@@ -223,6 +223,8 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     }
   }, [])
 
+  useEffect(() => clearCreateConfirmResetTimer, [clearCreateConfirmResetTimer])
+
   const handleOpen = (config: LoadedMcpConfigInspection): void => {
     setActiveWorktree(targetWorktreeId)
     const targetGroupId = ensureWorktreeRootGroup(targetWorktreeId)
