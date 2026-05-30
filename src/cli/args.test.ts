@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseArgs } from './args'
+import { parseArgs, validateCommandAndFlags } from './args'
 
 describe('parseArgs', () => {
   it('keeps an empty string as a flag value', () => {
@@ -36,5 +36,37 @@ describe('parseArgs', () => {
     expect(parsed.commandPath).toEqual(['tab', 'create'])
     expect(parsed.flags.get('json')).toBe(true)
     expect(parsed.flags.get('url')).toBe('https://example.com')
+  })
+})
+
+describe('validateCommandAndFlags', () => {
+  const specs = [
+    {
+      path: ['demo'],
+      summary: 'Demo command',
+      usage: 'orca demo',
+      allowedFlags: []
+    }
+  ]
+
+  it('allows global runtime selector flags even when the command spec omits them', () => {
+    const parsed = parseArgs([
+      'demo',
+      '--pairing-code',
+      'remote-runtime',
+      '--environment',
+      'server',
+      '--json'
+    ])
+
+    expect(() => validateCommandAndFlags(specs, parsed)).not.toThrow()
+  })
+
+  it('still rejects unknown command-specific flags', () => {
+    const parsed = parseArgs(['demo', '--bogus'])
+
+    expect(() => validateCommandAndFlags(specs, parsed)).toThrow(
+      'Unknown flag --bogus for command: demo'
+    )
   })
 })
