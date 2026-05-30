@@ -62,6 +62,52 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('openclaude')
   })
 
+  it("uses completed OpenClaude hook identity over Claude's generic task-title heuristic", () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: null,
+        hasObservedAgentSignal: true,
+        shellForegroundAfterAgentSignal: true,
+        isRemote: false,
+        title: '✳ Say hi',
+        hookAgent: null,
+        hasCompletedHook: true,
+        completedHookAgent: 'openclaude',
+        launchAgent: 'openclaude'
+      })
+    ).toBe('openclaude')
+  })
+
+  it("uses OpenClaude launch intent over Claude's generic task-title heuristic before hooks arrive", () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: false,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
+        title: '✳ Say hi',
+        hookAgent: null,
+        hasCompletedHook: false,
+        launchAgent: 'openclaude'
+      })
+    ).toBe('openclaude')
+  })
+
+  it('keeps explicit Claude Code titles authoritative over stale OpenClaude launch intent', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: false,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
+        title: '✳ Claude Code',
+        hookAgent: null,
+        hasCompletedHook: false,
+        launchAgent: 'openclaude'
+      })
+    ).toBe('claude')
+  })
+
   it('lets shell foreground clear the icon after an agent was observed running', () => {
     expect(
       resolveTabAgentFromSignals({
