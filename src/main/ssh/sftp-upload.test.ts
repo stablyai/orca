@@ -58,11 +58,20 @@ describe('sftp-upload', () => {
 
   it('does not create the remote file when the local source is a symlink', async () => {
     const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
-    await writeFile(join(localDir, 'target.txt'), 'secret')
-    await symlink(join(localDir, 'target.txt'), join(localDir, 'link.txt'))
+    const targetPath = join(localDir, process.platform === 'win32' ? 'target-dir' : 'target.txt')
+    const linkPath = join(localDir, process.platform === 'win32' ? 'link-dir' : 'link.txt')
+    if (process.platform === 'win32') {
+      await mkdir(targetPath)
+      // Why: file symlinks often require Developer Mode/admin on Windows, while
+      // junctions still exercise the symlink rejection branch.
+      await symlink(targetPath, linkPath, 'junction')
+    } else {
+      await writeFile(targetPath, 'secret')
+      await symlink(targetPath, linkPath)
+    }
     const sftp = createSftpMock()
 
-    await expect(uploadFile(sftp, join(localDir, 'link.txt'), '/remote/link.txt')).rejects.toThrow()
+    await expect(uploadFile(sftp, linkPath, '/remote/link.txt')).rejects.toThrow()
 
     expect(sftp.createWriteStream).not.toHaveBeenCalled()
   })
