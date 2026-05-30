@@ -3,12 +3,14 @@ import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
 const restoreScrollState = vi.hoisted(() => vi.fn())
+const releaseScrollStateMarker = vi.hoisted(() => vi.fn())
 
 vi.mock('./pane-scroll', () => ({
+  releaseScrollStateMarker,
   restoreScrollState
 }))
 
-import { scheduleSplitScrollRestore } from './pane-split-scroll'
+import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 
 const scrollState = {
   bufferType: 'normal',
@@ -93,6 +95,7 @@ describe('scheduleSplitScrollRestore', () => {
       return 1
     })
     restoreScrollState.mockClear()
+    releaseScrollStateMarker.mockClear()
   })
 
   afterEach(() => {
@@ -222,5 +225,36 @@ describe('scheduleSplitScrollRestore', () => {
     expect(bufferChangeDisposables[1].dispose).toHaveBeenCalledTimes(1)
     expect(pane.pendingSplitScrollBufferDisposable).toBeNull()
     expect(reattachWebgl).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels pending split restore handles and releases captured state', () => {
+    let nextFrameId = 10
+    const cancelAnimationFrame = vi.fn()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => nextFrameId++)
+    )
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
+    const { pane } = createPane('normal')
+
+    scheduleSplitScrollRestore(
+      () => pane,
+      pane.id,
+      scrollState,
+      () => false
+    )
+
+    expect(pane.pendingSplitScrollRafIds).toEqual([10])
+    expect(pane.pendingSplitScrollTimerId).not.toBeNull()
+    expect(vi.getTimerCount()).toBe(1)
+
+    clearPendingSplitScrollRestore(pane)
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(10)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(pane.pendingSplitScrollRafIds).toEqual([])
+    expect(pane.pendingSplitScrollTimerId).toBeNull()
+    expect(pane.pendingSplitScrollState).toBeNull()
+    expect(releaseScrollStateMarker).toHaveBeenCalledWith(scrollState)
   })
 })

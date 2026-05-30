@@ -107,4 +107,22 @@ describe('TerminalWebView scroll routing', () => {
     expect(source).toContain('var FRICTION = 0.972;')
     expect(source).toContain('var MIN_VEL = 0.012;')
   })
+
+  it('keeps selection edge autoscroll active and extends the dragged endpoint', () => {
+    const startBlock = sliceBetween('function startEdgeScroll(dir)', 'function stopEdgeScroll()')
+    expect(startBlock.indexOf('stopEdgeScroll();')).toBeLessThan(
+      startBlock.indexOf('edgeScrollDir = dir;')
+    )
+    expect(startBlock.indexOf('term.scrollLines(edgeScrollDir);')).toBeLessThan(
+      startBlock.indexOf('syncEdgeScrollSelectionEndpoint();')
+    )
+
+    const dragMoveBlock = sliceBetween(
+      'function handleDragMove(handle, clientX, clientY)',
+      '  // ============================================================\n  // LATCHING TOUCH DISPATCHER'
+    )
+    expect(dragMoveBlock).toContain('edgeScrollClientX = clientX;')
+    expect(dragMoveBlock).toContain('edgeScrollClientY = clientY;')
+    expect(dragMoveBlock).toContain('syncSelectionHandleToViewportPoint(handle, clientX, clientY)')
+  })
 })

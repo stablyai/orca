@@ -882,6 +882,8 @@ const XTERM_HTML = `<!DOCTYPE html>
   var longPressOrigin = null; // {x,y, identifier}
   var edgeScrollTimer = null;
   var edgeScrollDir = 0;
+  var edgeScrollClientX = 0;
+  var edgeScrollClientY = 0;
 
   // Eviction watchdog: linesEverWritten counts onLineFeed since last init.
   // Once buffer is full, every onLineFeed evicts the top row in xterm and
@@ -1370,10 +1372,30 @@ const XTERM_HTML = `<!DOCTYPE html>
     selMenu.style.left = clampedLeft + 'px';
   }
 
+  function syncSelectionHandleToViewportPoint(handle, clientX, clientY) {
+    var c = viewportToCell(clientX, clientY);
+    if (!c || !sel) return false;
+    if (handle === 'start') sel.anchor = c;
+    else sel.focus = c;
+    applyXtermSelection();
+    return true;
+  }
+
+  function syncEdgeScrollSelectionEndpoint() {
+    if (!sel || !sel.activeHandle) return false;
+    // Why: WebView may not emit new touchmove events while a handle is held
+    // at the edge; resample the stored finger point after each viewport scroll.
+    return syncSelectionHandleToViewportPoint(
+      sel.activeHandle,
+      edgeScrollClientX,
+      edgeScrollClientY
+    );
+  }
+
   function startEdgeScroll(dir) {
     if (edgeScrollDir === dir) return;
-    edgeScrollDir = dir;
     stopEdgeScroll();
+    edgeScrollDir = dir;
     edgeScrollTimer = setInterval(function() {
       if (!term || edgeScrollDir === 0) return;
       var beforeY = term.buffer.active.viewportY;
@@ -1384,6 +1406,7 @@ const XTERM_HTML = `<!DOCTYPE html>
         stopEdgeScroll();
         return;
       }
+      syncEdgeScrollSelectionEndpoint();
       repositionOverlay();
     }, EDGE_SCROLL_INTERVAL);
   }
@@ -1397,11 +1420,9 @@ const XTERM_HTML = `<!DOCTYPE html>
   }
 
   function handleDragMove(handle, clientX, clientY) {
-    var c = viewportToCell(clientX, clientY);
-    if (!c || !sel) return;
-    if (handle === 'start') sel.anchor = c;
-    else sel.focus = c;
-    applyXtermSelection();
+    edgeScrollClientX = clientX;
+    edgeScrollClientY = clientY;
+    if (!syncSelectionHandleToViewportPoint(handle, clientX, clientY)) return;
     repositionOverlay();
     if (clientY < EDGE_SCROLL_PX) startEdgeScroll(-1);
     else if (clientY > window.innerHeight - EDGE_SCROLL_PX) startEdgeScroll(1);

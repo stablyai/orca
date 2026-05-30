@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import { Check, Copy, Share2 } from 'lucide-react'
 import { Button } from '../ui/button'
@@ -20,14 +20,14 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
   const cardRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const [capturing, setCapturing] = useState(false)
+  const copiedResetTimerRef = useRef<number | null>(null)
 
-  useEffect(() => {
-    if (!copied) {
-      return
+  const clearCopiedResetTimer = useCallback((): void => {
+    if (copiedResetTimerRef.current !== null) {
+      window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = null
     }
-    const timeout = window.setTimeout(() => setCopied(false), 2000)
-    return () => window.clearTimeout(timeout)
-  }, [copied])
+  }, [])
 
   const captureToClipboard = useCallback(async () => {
     if (!cardRef.current || capturing) {
@@ -49,9 +49,14 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
   const handleCopy = useCallback(async () => {
     const ok = await captureToClipboard()
     if (ok) {
+      clearCopiedResetTimer()
       setCopied(true)
+      copiedResetTimerRef.current = window.setTimeout(() => {
+        copiedResetTimerRef.current = null
+        setCopied(false)
+      }, 2000)
     }
-  }, [captureToClipboard])
+  }, [captureToClipboard, clearCopiedResetTimer])
 
   const handleShareToX = useCallback(async () => {
     const { provider, summary, range } = props

@@ -1,6 +1,6 @@
 import type { IBuffer, IDisposable } from '@xterm/xterm'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
-import { restoreScrollState } from './pane-scroll'
+import { releaseScrollStateMarker, restoreScrollState } from './pane-scroll'
 
 function refreshAfterReparent(pane: ManagedPaneInternal): void {
   try {
@@ -13,6 +13,28 @@ function refreshAfterReparent(pane: ManagedPaneInternal): void {
 function clearPendingSplitScrollBufferDisposable(pane: ManagedPaneInternal): void {
   pane.pendingSplitScrollBufferDisposable?.dispose()
   pane.pendingSplitScrollBufferDisposable = null
+}
+
+function cancelPendingSplitScrollHandles(pane: ManagedPaneInternal): void {
+  clearPendingSplitScrollBufferDisposable(pane)
+  if (typeof cancelAnimationFrame === 'function') {
+    for (const rafId of pane.pendingSplitScrollRafIds ?? []) {
+      cancelAnimationFrame(rafId)
+    }
+  }
+  pane.pendingSplitScrollRafIds = []
+  if (pane.pendingSplitScrollTimerId != null) {
+    clearTimeout(pane.pendingSplitScrollTimerId)
+    pane.pendingSplitScrollTimerId = null
+  }
+}
+
+export function clearPendingSplitScrollRestore(pane: ManagedPaneInternal): void {
+  cancelPendingSplitScrollHandles(pane)
+  if (pane.pendingSplitScrollState) {
+    releaseScrollStateMarker(pane.pendingSplitScrollState)
+    pane.pendingSplitScrollState = null
+  }
 }
 
 function runAfterNormalBuffer(
@@ -76,12 +98,21 @@ export function scheduleSplitScrollRestore(
   isDestroyed: () => boolean,
   reattachWebgl?: (pane: ManagedPaneInternal) => void
 ): void {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  const scheduledPane = getPaneById(paneId)
+  if (scheduledPane) {
+    cancelPendingSplitScrollHandles(scheduledPane)
+  }
+
+  const firstRafId = requestAnimationFrame(() => {
+    const liveAfterFirstFrame = getPaneById(paneId)
+    const secondRafId = requestAnimationFrame(() => {
+      const live = getPaneById(paneId)
+      if (live) {
+        live.pendingSplitScrollRafIds = []
+      }
       if (isDestroyed()) {
         return
       }
-      const live = getPaneById(paneId)
       if (!live?.pendingSplitScrollState) {
         return
       }
@@ -96,13 +127,26 @@ export function scheduleSplitScrollRestore(
       restoreScrollState(live.terminal, scrollState)
       refreshAfterReparent(live)
     })
+    if (liveAfterFirstFrame) {
+      liveAfterFirstFrame.pendingSplitScrollRafIds = [
+        ...(liveAfterFirstFrame.pendingSplitScrollRafIds ?? []),
+        secondRafId
+      ]
+    }
   })
+  if (scheduledPane) {
+    scheduledPane.pendingSplitScrollRafIds = [firstRafId]
+  }
 
-  setTimeout(() => {
+  const settleTimerId = setTimeout(() => {
+    const live = getPaneById(paneId)
+    if (live?.pendingSplitScrollTimerId === settleTimerId) {
+      live.pendingSplitScrollTimerId = null
+      live.pendingSplitScrollRafIds = []
+    }
     if (isDestroyed()) {
       return
     }
-    const live = getPaneById(paneId)
     if (!live) {
       return
     }
@@ -134,4 +178,7 @@ export function scheduleSplitScrollRestore(
     }
     restoreCapturedScrollState(live, scrollState, reattachWebgl)
   }, 200)
+  if (scheduledPane) {
+    scheduledPane.pendingSplitScrollTimerId = settleTimerId
+  }
 }

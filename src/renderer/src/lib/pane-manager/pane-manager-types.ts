@@ -105,6 +105,10 @@ export type ManagedPaneInternal = {
   // value means "currently disabled".
   ligaturesAddon: LigaturesAddon | null
   fitResizeObserver: ResizeObserver | null
+  // Stored so disposePane() can cancel the first post-open fit if a pane closes before paint.
+  pendingInitialFitRafId?: number | null
+  // Stored so disposePane() can cancel the post-WebGL-teardown refresh frame.
+  pendingWebglRefreshRafId?: number | null
   pendingObservedFitRafId: number | null
   serializeAddon: SerializeAddon
   unicode11Addon: Unicode11Addon
@@ -114,6 +118,10 @@ export type ManagedPaneInternal = {
   // Why: splitPane reparents DOM; its delayed restore owns scroll until the
   // browser settles, so intermediate fits must not compete with it.
   pendingSplitScrollState: ScrollState | null
+  // Stored so repeated split restores and disposePane() can cancel deferred
+  // restore handles instead of leaving stale pane closures alive.
+  pendingSplitScrollRafIds?: number[]
+  pendingSplitScrollTimerId?: ReturnType<typeof setTimeout> | null
   // Stored so repeated split restores and disposePane() can remove the
   // deferred alt-screen buffer listener instead of stacking callbacks.
   pendingSplitScrollBufferDisposable?: IDisposable | null
