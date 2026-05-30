@@ -19,6 +19,11 @@ import { useAppStore } from '../../store'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './RepositoryIconPicker'
 import { getRepositoryPaneSearchEntries } from './repository-search'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import {
+  AUTO_SLEEP_INACTIVE_WORKSPACE_PRESETS,
+  autoSleepPresetValueFromMs
+} from '../../../../shared/auto-sleep-inactive-workspaces'
 export { getRepositoryPaneSearchEntries }
 
 type RepositoryPaneProps = {
@@ -117,9 +122,13 @@ export function RepositoryPane({
 
   const allEntries = getRepositoryPaneSearchEntries(repo)
   const identityEntries = allEntries.filter((entry) =>
-    ['Display Name', 'Project Icon', 'Default Worktree Base', 'Remove Project'].includes(
-      entry.title
-    )
+    [
+      'Display Name',
+      'Project Icon',
+      'Default Worktree Base',
+      'Auto-Sleep Inactive Workspaces',
+      'Remove Project'
+    ].includes(entry.title)
   )
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
@@ -259,6 +268,52 @@ export function RepositoryPane({
             />
           </SearchableSetting>
         ) : null}
+
+        <SearchableSetting
+          title="Auto-Sleep Inactive Workspaces"
+          description="Sleeps workspaces after a period of inactivity. Does not affect the active workspace, pinned workspaces, or workspaces with working agents."
+          keywords={[
+            repo.displayName,
+            'sleep',
+            'inactive',
+            'workspace',
+            'memory',
+            'resource',
+            'auto sleep'
+          ]}
+          className="space-y-2"
+        >
+          <Label className="text-sm font-semibold">Auto-Sleep Inactive Workspaces</Label>
+          <p className="text-xs text-muted-foreground">
+            Sleeps workspaces after a period of inactivity. Does not affect the active workspace,
+            pinned workspaces, or workspaces with working agents.
+          </p>
+          <Select
+            value={autoSleepPresetValueFromMs(repo.autoSleepInactiveWorkspacesAfterMs)}
+            onValueChange={(value) => {
+              const preset = AUTO_SLEEP_INACTIVE_WORKSPACE_PRESETS.find(
+                (entry) => entry.value === value
+              )
+              if (!preset) {
+                return
+              }
+              void updateRepo(repo.id, {
+                autoSleepInactiveWorkspacesAfterMs: preset.ms
+              })
+            }}
+          >
+            <SelectTrigger size="sm" className="min-w-[220px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {AUTO_SLEEP_INACTIVE_WORKSPACE_PRESETS.map((preset) => (
+                <SelectItem key={preset.value} value={preset.value}>
+                  {preset.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SearchableSetting>
       </section>
     ) : null,
     hooksSection,

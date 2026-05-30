@@ -48,6 +48,21 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
           }
         ]),
     {
+      title: 'Auto-Sleep Inactive Workspaces',
+      description:
+        'Sleeps workspaces after a period of inactivity. Does not affect the active workspace, pinned workspaces, or workspaces with working agents.',
+      keywords: [
+        repo.displayName,
+        'sleep',
+        'inactive',
+        'workspace',
+        'memory',
+        'resource',
+        'auto sleep',
+        'hibernate'
+      ]
+    },
+    {
       title: 'Remove Project',
       description: 'Remove this project from Orca.',
       keywords: [repo.displayName, 'delete', 'project', 'repository']

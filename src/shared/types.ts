@@ -105,6 +105,9 @@ export type Repo = {
    *  "what to link", the global flag is the "whether to link at all" switch.
    *  Undefined/empty means no symlinks are created for this repo. */
   symlinkPaths?: string[]
+  /** When set, background workspaces in this project auto-sleep after this many
+   *  ms without user focus. null/undefined = disabled (default). */
+  autoSleepInactiveWorkspacesAfterMs?: number | null
   /** Durable sidebar-only repo organization. Execution remains repo-scoped. */
   projectGroupId?: string | null
   /** User-authored ordering inside the project group or ungrouped bucket. */

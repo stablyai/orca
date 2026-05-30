@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { hasSleepableWorkspaceActivity } from '@/lib/worktree-sleepable-activity'
 import {
-  hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
   shouldUseNativeContextMenu,
   shouldIgnoreNestedWorktreeContextMenuScope,

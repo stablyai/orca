@@ -64,6 +64,7 @@ import {
 } from '@/lib/floating-workspace-terminal-actions'
 import { DictationController } from './components/dictation/DictationController'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
+import { AutoSleepInactiveWorkspaces } from './components/workspaces/AutoSleepInactiveWorkspaces'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
@@ -1579,6 +1580,7 @@ function App(): React.JSX.Element {
       <TooltipProvider delayDuration={400}>
         <ConfirmationDialogProvider>
           <WorkspacePortScanner />
+          <AutoSleepInactiveWorkspaces />
           {/* Why: leaf-mounted retention sync keeps agent-status retention
             subscriptions from re-rendering the App tree. */}
           <RetainedAgentsSyncGate />
