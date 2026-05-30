@@ -26,7 +26,28 @@ function isGuestCancellationPayload(rawPayload: unknown): boolean {
     return false
   }
   const payload = rawPayload as Record<string, unknown>
-  return payload.__orcaCancelled === true || payload.message === 'cancelled'
+  if (payload.__orcaCancelled === true) {
+    return true
+  }
+  // Why: old guest/Electron paths can serialize cancellation as a plain error
+  // object, but valid grab payloads may also carry page-authored fields.
+  if (payload.message !== 'cancelled') {
+    return false
+  }
+  return !('page' in payload) && !('target' in payload) && !('payload' in payload)
+}
+
+function getGuestErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message
+  }
+  if (err && typeof err === 'object') {
+    const message = (err as Record<string, unknown>).message
+    if (typeof message === 'string') {
+      return message
+    }
+  }
+  return 'Selection failed'
 }
 
 export class BrowserGrabSessionController {
@@ -138,7 +159,7 @@ export class BrowserGrabSessionController {
             payload
           })
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Selection failed'
+          const message = getGuestErrorMessage(err)
           if (message.includes('cancelled')) {
             settleOnce({ opId, kind: 'cancelled', reason: 'user' })
           } else {
