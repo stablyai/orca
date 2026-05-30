@@ -181,6 +181,9 @@ export default function CombinedDiffViewer({
   const [clearNotesDialogOpen, setClearNotesDialogOpen] = useState(false)
   const [isClearingNotes, setIsClearingNotes] = useState(false)
   const [notesCopied, setNotesCopied] = useState(false)
+  // Why: clipboard IPC can resolve after the combined diff unmounts; skip
+  // copied feedback instead of starting a reset timer on a stale viewer.
+  const notesCopyMountedRef = useRef(false)
   const [fileTreeCollapsed, setFileTreeCollapsedState] = useState(() =>
     getInitialCombinedDiffFileTreeCollapsed(settings?.combinedDiffFileTreeVisibleByDefault)
   )
@@ -863,6 +866,13 @@ export default function CombinedDiffViewer({
   }, [branchSummary, file, openAllDiffs, openBranchAllDiffs])
 
   useEffect(() => {
+    notesCopyMountedRef.current = true
+    return () => {
+      notesCopyMountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
     if (diffCommentCount === 0 && !isClearingNotes) {
       setClearNotesDialogOpen(false)
     }
@@ -882,6 +892,9 @@ export default function CombinedDiffViewer({
     }
     try {
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
+      if (!notesCopyMountedRef.current) {
+        return
+      }
       setNotesCopied(true)
     } catch {
       // Why: clipboard writes can fail while the app is not focused; this
