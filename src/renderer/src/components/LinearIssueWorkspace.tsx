@@ -35,6 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import {
   buildLinearIssueBranchName,
@@ -395,6 +396,7 @@ export default function LinearIssueWorkspace({
   const hydratedIssueKeyRef = useRef<string | null>(null)
   const hasEditedRef = useRef(false)
   const optimisticCommentsRef = useRef<LinearComment[]>([])
+  const mountedRef = useMountedRef()
 
   const handleEditStateChange = useCallback((patch: Partial<LinearEditState>) => {
     hasEditedRef.current = true
@@ -412,15 +414,17 @@ export default function LinearIssueWorkspace({
 
   const loadComments = useCallback(
     async (targetIssue: LinearIssue, requestId: number): Promise<void> => {
-      setCommentsLoading(true)
-      setCommentsError(null)
+      if (mountedRef.current) {
+        setCommentsLoading(true)
+        setCommentsError(null)
+      }
       try {
         let fetched = (await linearIssueComments(
           settings,
           targetIssue.id,
           targetIssue.workspaceId
         )) as LinearComment[]
-        if (requestId !== requestIdRef.current) {
+        if (!mountedRef.current || requestId !== requestIdRef.current) {
           return
         }
         const optimistic = optimisticCommentsRef.current
@@ -430,16 +434,16 @@ export default function LinearIssueWorkspace({
         }
         setComments(fetched)
       } catch (error) {
-        if (requestId === requestIdRef.current) {
+        if (mountedRef.current && requestId === requestIdRef.current) {
           setCommentsError(error instanceof Error ? error.message : 'Failed to load comments.')
         }
       } finally {
-        if (requestId === requestIdRef.current) {
+        if (mountedRef.current && requestId === requestIdRef.current) {
           setCommentsLoading(false)
         }
       }
     },
-    [settings]
+    [mountedRef, settings]
   )
 
   useEffect(() => {
@@ -475,7 +479,7 @@ export default function LinearIssueWorkspace({
     // failure should not blank the issue detail the user selected.
     void linearGetIssue(settings, issue.id, issue.workspaceId)
       .then((issueResult) => {
-        if (requestId !== requestIdRef.current) {
+        if (!mountedRef.current || requestId !== requestIdRef.current) {
           return
         }
         if (issueResult) {
@@ -507,13 +511,13 @@ export default function LinearIssueWorkspace({
         /* The list issue remains useful if detail hydration is temporarily unavailable. */
       })
       .finally(() => {
-        if (requestId === requestIdRef.current) {
+        if (mountedRef.current && requestId === requestIdRef.current) {
           setIssueLoading(false)
         }
       })
 
     void loadComments(issue, requestId)
-  }, [issue, loadComments, settings])
+  }, [issue, loadComments, mountedRef, settings])
 
   const displayed = fullIssue ?? issue
 
