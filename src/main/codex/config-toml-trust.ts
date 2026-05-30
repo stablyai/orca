@@ -346,21 +346,12 @@ function upsertTrustBlock(content: string, key: string, hash: string): string {
 
 // Why: Codex emits the canonical form with the key double-quoted; we never
 // share this slot with another tool, so we don't bother accepting bare
-// dotted-key variants.
-// Why: accept both LF and CRLF — Windows editors (and some user-edited files)
-// terminate the header line with \r\n.
-// Why: TOML allows leading whitespace before headers, so accept indented
-// headers — the reader does too, and a column-0-only writer would otherwise
-// append a duplicate block on hand-indented configs.
-// Why: trailing newline is a lookahead so a header at EOS without a final
-// newline still matches (otherwise we append a duplicate block).
-// Why: TOML allows `# inline comment` after `]`, so accept it before the
-// line-end lookahead — otherwise a user-annotated header would force the
-// no-match branch and append a duplicate block.
-function buildHeaderPattern(key: string): RegExp {
+// dotted-key variants. The caller applies this only to complete physical lines
+// outside TOML multi-line strings.
+function buildHeaderLinePattern(key: string): RegExp {
   const escapedKey = escapeRegex(escapeTomlString(key))
   return new RegExp(
-    `(^|\\r?\\n)[ \\t]*\\[hooks\\.state\\."${escapedKey}"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`
+    `^[ \\t]*\\[hooks\\.state\\."${escapedKey}"\\][ \\t]*(?:#[^\\r\\n]*)?$`
   )
 }
 
@@ -371,22 +362,27 @@ type TrustBlockRange = {
 }
 
 function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
-  const headerPattern = buildHeaderPattern(key)
+  const headerPattern = buildHeaderLinePattern(key)
   const ranges: TrustBlockRange[] = []
-  let offset = 0
-  while (offset < content.length) {
-    const match = headerPattern.exec(content.slice(offset))
-    if (!match) {
-      break
+  let cursor = 0
+  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  while (cursor < content.length) {
+    const newlineIdx = content.indexOf('\n', cursor)
+    const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
+    const rawLine = content.slice(cursor, lineEnd)
+    const line = rawLine.replace(/\r$/, '')
+    const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
+    if (!isInsideTomlMultilineString(multilineState) && headerPattern.test(line)) {
+      const headerLineEnd = rawLine.endsWith('\r') ? lineEnd - 1 : lineEnd
+      const after = content.slice(headerLineEnd)
+      const nextHeaderRel = findNextTableHeader(after)
+      const blockEnd = nextHeaderRel === -1 ? content.length : headerLineEnd + nextHeaderRel
+      ranges.push({ start: cursor, headerLineEnd, end: blockEnd })
+      cursor = Math.max(blockEnd, nextCursor)
+      continue
     }
-    const matchIndex = offset + match.index
-    const headerStart = matchIndex + (match[1] ? match[1].length : 0)
-    const headerLineEnd = matchIndex + match[0].length
-    const after = content.slice(headerLineEnd)
-    const nextHeaderRel = findNextTableHeader(after)
-    const blockEnd = nextHeaderRel === -1 ? content.length : headerLineEnd + nextHeaderRel
-    ranges.push({ start: headerStart, headerLineEnd, end: blockEnd })
-    offset = Math.max(blockEnd, headerLineEnd + 1)
+    multilineState = updateTomlMultilineState(multilineState, line)
+    cursor = nextCursor
   }
   return ranges
 }
@@ -402,22 +398,13 @@ function buildProjectHeaderPattern(projectPath: string): RegExp {
 // a flat regex misclassifies both cases.
 function findNextTableHeader(text: string): number {
   let cursor = 0
-  let inMultilineBasic = false
-  let inMultilineLiteral = false
+  let multilineState: TomlMultilineState = { basic: false, literal: false }
   while (cursor < text.length) {
     const newlineIdx = text.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? text.length : newlineIdx
     const rawLine = text.slice(cursor, lineEnd)
     const line = rawLine.replace(/\r$/, '')
-    if (inMultilineBasic) {
-      if (countUnescapedTripleQuote(line, '"""') % 2 === 1) {
-        inMultilineBasic = false
-      }
-    } else if (inMultilineLiteral) {
-      if (countTripleQuote(line, "'''") % 2 === 1) {
-        inMultilineLiteral = false
-      }
-    } else {
+    if (!isInsideTomlMultilineString(multilineState)) {
       const trimmed = line.trimStart()
       // Why: stop at both `[table]` and `[[array.of.tables]]` — both end our
       // block. Skipping `[[ ]]` here would let our slice consume past array
@@ -425,52 +412,14 @@ function findNextTableHeader(text: string): number {
       if (trimmed.startsWith('[') && isCompleteTableHeader(trimmed)) {
         return cursor
       }
-      // Odd count means this line opens a multi-line string without closing it.
-      if (countUnescapedTripleQuote(line, '"""') % 2 === 1) {
-        inMultilineBasic = true
-      }
-      if (countTripleQuote(line, "'''") % 2 === 1) {
-        inMultilineLiteral = true
-      }
     }
+    multilineState = updateTomlMultilineState(multilineState, line)
     if (newlineIdx === -1) {
       return -1
     }
     cursor = newlineIdx + 1
   }
   return -1
-}
-
-// Why: literal strings (`'''`) don't honor escapes, so a plain indexOf scan
-// suffices.
-function countTripleQuote(line: string, quote: string): number {
-  let count = 0
-  let i = 0
-  while ((i = line.indexOf(quote, i)) !== -1) {
-    count++
-    i += 3
-  }
-  return count
-}
-
-// Why: basic multi-line strings honor `\"` (and `\\`) escapes. Skip past
-// `\<char>` so an escaped quote doesn't count toward triple-quote scans.
-function countUnescapedTripleQuote(line: string, quote: '"""'): number {
-  let count = 0
-  let i = 0
-  while (i < line.length) {
-    if (line[i] === '\\' && i + 1 < line.length) {
-      i += 2
-      continue
-    }
-    if (line.startsWith(quote, i)) {
-      count++
-      i += 3
-      continue
-    }
-    i++
-  }
-  return count
 }
 
 // Why: walk the header byte-by-byte so `]` inside a quoted key segment
@@ -531,6 +480,92 @@ function isCompleteTableHeader(line: string): boolean {
   return false
 }
 
+type TomlMultilineState = {
+  basic: boolean
+  literal: boolean
+}
+
+type TomlMultilineMode = 'basic' | 'literal' | null
+
+function isInsideTomlMultilineString(state: TomlMultilineState): boolean {
+  return state.basic || state.literal
+}
+
+function updateTomlMultilineState(state: TomlMultilineState, line: string): TomlMultilineState {
+  let mode: TomlMultilineMode = state.basic ? 'basic' : state.literal ? 'literal' : null
+  let index = 0
+  while (index < line.length) {
+    if (mode === 'basic') {
+      if (line[index] === '\\') {
+        index += 2
+        continue
+      }
+      if (line.startsWith('"""', index)) {
+        mode = null
+        index += 3
+        continue
+      }
+      index++
+      continue
+    }
+    if (mode === 'literal') {
+      if (line.startsWith("'''", index)) {
+        mode = null
+        index += 3
+        continue
+      }
+      index++
+      continue
+    }
+
+    const char = line[index]
+    if (char === '#') {
+      break
+    }
+    if (line.startsWith('"""', index)) {
+      mode = 'basic'
+      index += 3
+      continue
+    }
+    if (line.startsWith("'''", index)) {
+      mode = 'literal'
+      index += 3
+      continue
+    }
+    if (char === '"') {
+      index = skipTomlBasicString(line, index + 1)
+      continue
+    }
+    if (char === "'") {
+      index = skipTomlLiteralString(line, index + 1)
+      continue
+    }
+    index++
+  }
+  return { basic: mode === 'basic', literal: mode === 'literal' }
+}
+
+function skipTomlBasicString(line: string, startIndex: number): number {
+  let index = startIndex
+  while (index < line.length) {
+    const char = line[index]
+    if (char === '\\') {
+      index += 2
+      continue
+    }
+    if (char === '"') {
+      return index + 1
+    }
+    index++
+  }
+  return index
+}
+
+function skipTomlLiteralString(line: string, startIndex: number): number {
+  const endIndex = line.indexOf("'", startIndex)
+  return endIndex === -1 ? line.length : endIndex + 1
+}
+
 // Why: same atomic-rename + .bak rotation pattern as writeHooksJson — a
 // half-written config.toml can brick a user's Codex install, so write to
 // tmp and rename. Random-suffix tmp name avoids cross-process races on
@@ -574,19 +609,18 @@ export function removeHookTrustEntries(configPath: string, keys: readonly string
 }
 
 function removeTrustBlock(content: string, key: string): string {
-  const headerPattern = buildHeaderPattern(key)
-  const match = headerPattern.exec(content)
-  if (!match) {
+  const ranges = findTrustBlockRanges(content, key)
+  if (ranges.length === 0) {
     return content
   }
-  // Why: skip past the captured leading newline so we don't fuse the previous
-  // line into the next header (e.g. `a = 1[other]` — invalid TOML).
-  const cutStart = match.index + (match[1] ? match[1].length : 0)
-  const headerLineEnd = match.index + match[0].length
-  const after = content.slice(headerLineEnd)
-  const nextHeaderRel = findNextTableHeader(after)
-  const cutEnd = nextHeaderRel === -1 ? content.length : headerLineEnd + nextHeaderRel
-  return content.slice(0, cutStart) + content.slice(cutEnd)
+
+  let cursor = 0
+  let updated = ''
+  for (const range of ranges) {
+    updated += content.slice(cursor, range.start)
+    cursor = range.end
+  }
+  return updated + content.slice(cursor)
 }
 
 export function readHookTrustEntries(configPath: string): Map<string, CodexHookTrustState> {
@@ -601,29 +635,16 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
   // and rejecting hides a real entry, making getStatus misreport trustMissing.
   const headerLineRegex = /^[ \t]*\[hooks\.state\."((?:[^"\\]|\\.)*)"\][ \t]*(?:#[^\r\n]*)?$/
   let cursor = 0
-  let inMultilineBasic = false
-  let inMultilineLiteral = false
+  let multilineState: TomlMultilineState = { basic: false, literal: false }
   while (cursor < content.length) {
     const newlineIdx = content.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
     const rawLine = content.slice(cursor, lineEnd)
     const line = rawLine.replace(/\r$/, '')
     const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
-    if (inMultilineBasic) {
-      if (countUnescapedTripleQuote(line, '"""') % 2 === 1) {
-        inMultilineBasic = false
-      }
-      cursor = nextCursor
-      continue
-    }
-    if (inMultilineLiteral) {
-      if (countTripleQuote(line, "'''") % 2 === 1) {
-        inMultilineLiteral = false
-      }
-      cursor = nextCursor
-      continue
-    }
-    const headerMatch = headerLineRegex.exec(line)
+    const headerMatch = isInsideTomlMultilineString(multilineState)
+      ? null
+      : headerLineRegex.exec(line)
     if (headerMatch) {
       const escapedKey = headerMatch[1]
       const key = unescapeTomlString(escapedKey)
@@ -643,12 +664,7 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
       cursor = nextCursor
       continue
     }
-    if (countUnescapedTripleQuote(line, '"""') % 2 === 1) {
-      inMultilineBasic = true
-    }
-    if (countTripleQuote(line, "'''") % 2 === 1) {
-      inMultilineLiteral = true
-    }
+    multilineState = updateTomlMultilineState(multilineState, line)
     cursor = nextCursor
   }
   return result
