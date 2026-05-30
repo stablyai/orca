@@ -274,6 +274,7 @@ export function normalizeFieldValue(
         .filter((u): u is GitHubProjectUser => u !== null)
       return { kind: 'users', fieldId, users }
     }
+    case undefined:
     default:
       // Unknown __typename → forward-compat: drop silently, do not throw,
       // do not classify as drift (see design §Error Handling).

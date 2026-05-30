@@ -307,7 +307,9 @@ describe('AgentBrowserBridge', () => {
 
   it('strips --cdp and --session from exec commands', async () => {
     succeedWith({ output: 'ok' })
-    await bridge.exec('dblclick @e3 --cdp ws://evil --session hijack')
+    await bridge.exec(
+      'dblclick @e3 --cdp ws://evil --session hijack --cdp=ws://evil-equals --session=hijack-equals'
+    )
 
     // Why: find the actual exec call (contains 'dblclick'), not the stale-session close
     const execCall = execFileMock.mock.calls.find((c: unknown[]) =>
@@ -315,9 +317,11 @@ describe('AgentBrowserBridge', () => {
     )
     const args = execCall![1] as string[]
     // The bridge's own --session and --cdp (for session init) are expected.
-    // Verify the user-injected ones were stripped: no 'ws://evil' or 'hijack'
+    // Verify the user-injected ones were stripped, including --flag=value forms.
     expect(args.join(' ')).not.toContain('ws://evil')
+    expect(args.join(' ')).not.toContain('ws://evil-equals')
     expect(args.join(' ')).not.toContain('hijack')
+    expect(args.join(' ')).not.toContain('hijack-equals')
     expect(args).toContain('dblclick')
     expect(args).toContain('@e3')
   })
@@ -522,9 +526,9 @@ describe('AgentBrowserBridge', () => {
         expect(wc.on).toHaveBeenCalledWith('did-finish-load', expect.any(Function))
       })
 
-      const finishListener = wc.on.mock.calls.find(([event]) => event === 'did-finish-load')?.[1] as
-        | (() => void)
-        | undefined
+      const finishListener = wc.on.mock.calls.find(
+        ([event]) => event === 'did-finish-load'
+      )?.[1] as (() => void) | undefined
       const failListener = wc.on.mock.calls.find(([event]) => event === 'did-fail-load')?.[1] as
         | (() => void)
         | undefined
@@ -1101,6 +1105,20 @@ describe('AgentBrowserBridge', () => {
     const args = execFileMock.mock.calls.at(-1)![1] as string[]
     expect(args).toContain('goto')
     expect(args).toContain('https://example.com')
+  })
+
+  it('builds valid fill eval JavaScript for multiline values', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@textarea', "line one\nline two with 'quote' and \\ slash")
+
+    const evalCall = execFileMock.mock.calls.find((call: unknown[]) =>
+      (call[1] as string[]).includes('eval')
+    )
+    expect(evalCall).toBeDefined()
+    const args = evalCall![1] as string[]
+    const expression = args[args.indexOf('eval') + 1]
+    expect(() => new Function(expression)).not.toThrow()
   })
 
   // ── Cookie command arg building ──

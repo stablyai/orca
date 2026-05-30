@@ -310,6 +310,23 @@ describe('orchestration RPC methods', () => {
       expect(stillUnread).toHaveLength(1)
     })
 
+    it('--all applies type filters without marking rows as read', async () => {
+      setup()
+      db.insertMessage({ from: 'a', to: 'b', subject: 'status', type: 'status' })
+      db.insertMessage({ from: 'a', to: 'b', subject: 'dispatch', type: 'dispatch' })
+      db.insertMessage({ from: 'a', to: 'b', subject: 'done', type: 'worker_done' })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        all: true,
+        types: 'worker_done,dispatch'
+      })) as { messages: { type: string }[]; count: number }
+
+      expect(result.count).toBe(2)
+      expect(result.messages.map((m) => m.type).sort()).toEqual(['dispatch', 'worker_done'])
+      expect(db.getUnreadMessages('b')).toHaveLength(3)
+    })
+
     it('--all returns rows with delivered_at set after push-on-idle stamped them', async () => {
       setup()
       const msg = db.insertMessage({ from: 'a', to: 'b', subject: 'hi' })

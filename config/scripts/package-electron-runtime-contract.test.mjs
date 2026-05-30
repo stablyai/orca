@@ -86,7 +86,7 @@ describe('Electron runtime package contract', () => {
     expect(releaseWorkflow.jobs['homebrew-bump'].if).toContain(
       "startsWith(needs.cut.outputs.tag, 'v')"
     )
-    expect(releaseWorkflow.jobs['homebrew-bump'].if).not.toContain("-rc.")
+    expect(releaseWorkflow.jobs['homebrew-bump'].if).not.toContain('-rc.')
     expect(releaseWorkflow.jobs['homebrew-bump-published-rc-draft'].with.tag).toBe(
       '${{ needs.cut.outputs.latest_published_rc_tag }}'
     )

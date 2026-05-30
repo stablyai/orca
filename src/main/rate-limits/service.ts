@@ -153,21 +153,28 @@ export class RateLimitService {
     const refreshOnResume = (): void => {
       void this.refreshIfWindowActive()
     }
-    mainWindow.on('focus', refreshOnResume)
-    mainWindow.on('show', refreshOnResume)
-    mainWindow.on('restore', refreshOnResume)
-    this.detachWindowListeners = () => {
+    // Why: attach() can replace windows; the previous closed listener also
+    // captures this service and must be removed with the focus listeners.
+    const detachWindowListeners = (): void => {
       mainWindow.removeListener('focus', refreshOnResume)
       mainWindow.removeListener('show', refreshOnResume)
       mainWindow.removeListener('restore', refreshOnResume)
+      mainWindow.removeListener('closed', onClosed)
     }
-    mainWindow.on('closed', () => {
-      this.detachWindowListeners?.()
-      this.detachWindowListeners = null
+    const onClosed = (): void => {
+      detachWindowListeners()
+      if (this.detachWindowListeners === detachWindowListeners) {
+        this.detachWindowListeners = null
+      }
       if (this.mainWindow === mainWindow) {
         this.mainWindow = null
       }
-    })
+    }
+    mainWindow.on('focus', refreshOnResume)
+    mainWindow.on('show', refreshOnResume)
+    mainWindow.on('restore', refreshOnResume)
+    mainWindow.on('closed', onClosed)
+    this.detachWindowListeners = detachWindowListeners
   }
 
   start(): void {

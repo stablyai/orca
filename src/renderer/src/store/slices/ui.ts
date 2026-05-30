@@ -155,7 +155,7 @@ function presetToQuery(presetId: TaskViewPresetId | null): string {
       return 'review-requested:@me is:pr is:open'
     case 'my-prs':
       return 'author:@me is:pr is:open'
-    default:
+    case null:
       return 'is:issue is:open'
   }
 }

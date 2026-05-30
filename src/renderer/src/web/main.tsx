@@ -3,6 +3,7 @@ import '../assets/main.css'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import WebConnect from './WebConnect'
+import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
   clearPairingInputFromAddressBar,
   parseWebPairingInput,
@@ -48,4 +49,13 @@ function WebRoot(): React.JSX.Element {
   )
 }
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(<WebRoot />)
+ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+  <RecoverableRenderErrorBoundary
+    boundaryId="web.root"
+    surface="web-root"
+    title="Orca web hit a renderer error."
+    description="Retry the web client or reconnect to the paired runtime."
+  >
+    <WebRoot />
+  </RecoverableRenderErrorBoundary>
+)

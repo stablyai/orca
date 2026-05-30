@@ -26,7 +26,6 @@ import {
   LayoutGrid,
   List,
   LoaderCircle,
-  Lock,
   Minus,
   Plus,
   RefreshCw,
@@ -76,7 +75,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
-import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
+import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
+import { LinearScopeSelector } from '@/components/linear-scope-selector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
@@ -143,6 +143,7 @@ import type {
   LinearIssue,
   LinearProjectSummary,
   LinearTeam,
+  LinearWorkspaceSelection,
   LinearWorkflowState,
   Repo,
   TaskProvider,
@@ -1968,7 +1969,6 @@ export default function TaskPage(): React.JSX.Element {
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
-  const connectLinear = useAppStore((s) => s.connectLinear)
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
@@ -2055,6 +2055,10 @@ export default function TaskPage(): React.JSX.Element {
     linearStatus.activeWorkspaceId ??
     linearWorkspaces[0]?.id ??
     null
+  const selectedLinearWorkspace =
+    selectedLinearWorkspaceId && selectedLinearWorkspaceId !== 'all'
+      ? (linearWorkspaces.find((workspace) => workspace.id === selectedLinearWorkspaceId) ?? null)
+      : null
   const preferredVisibleTaskProviders = useMemo(
     () => normalizeVisibleTaskProviders(settings?.visibleTaskProviders),
     [settings?.visibleTaskProviders]
@@ -2607,6 +2611,7 @@ export default function TaskPage(): React.JSX.Element {
   // all teams the user belongs to, not just teams with issues in the current
   // fetch window. Fetched once when the Linear tab is active and connected.
   const [availableTeams, setAvailableTeams] = useState<LinearTeam[]>([])
+  const [linearTeamRefreshNonce, setLinearTeamRefreshNonce] = useState(0)
 
   useEffect(() => {
     if (!taskResumeApplied) {
@@ -2641,6 +2646,7 @@ export default function TaskPage(): React.JSX.Element {
     taskSource,
     linearStatus.connected,
     selectedLinearWorkspaceId,
+    linearTeamRefreshNonce,
     taskResumeApplied,
     getCachedLinearTeams,
     listLinearTeams
@@ -3174,19 +3180,6 @@ export default function TaskPage(): React.JSX.Element {
   }, [newLinearStates.data, newLinearIssueStateId])
 
   const [linearConnectOpen, setLinearConnectOpen] = useState(false)
-  const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
-  const [linearConnectState, setLinearConnectState] = useState<'idle' | 'connecting' | 'error'>(
-    'idle'
-  )
-  const [linearConnectError, setLinearConnectError] = useState<string | null>(null)
-  const linearConnectMountedRef = useRef(true)
-
-  useEffect(() => {
-    linearConnectMountedRef.current = true
-    return () => {
-      linearConnectMountedRef.current = false
-    }
-  }, [])
 
   const activeGithubTaskKind = getGitHubTaskKind(activeTaskPreset, appliedTaskSearch)
   const selectedGitHubRepoExternalLink = useMemo(() => {
@@ -4272,33 +4265,48 @@ export default function TaskPage(): React.JSX.Element {
     [openComposerForLinearItem]
   )
 
-  const handleLinearConnect = useCallback(async (): Promise<void> => {
-    const key = linearApiKeyDraft.trim()
-    if (!key) {
-      return
-    }
-    setLinearConnectState('connecting')
-    setLinearConnectError(null)
-    try {
-      const result = await connectLinear(key)
-      if (!linearConnectMountedRef.current) {
-        return
-      }
-      if (result.ok) {
-        setLinearApiKeyDraft('')
-        setLinearConnectState('idle')
-        setLinearConnectOpen(false)
-      } else {
-        setLinearConnectState('error')
-        setLinearConnectError(result.error)
-      }
-    } catch (error) {
-      if (linearConnectMountedRef.current) {
-        setLinearConnectState('error')
-        setLinearConnectError(error instanceof Error ? error.message : 'Connection failed')
-      }
-    }
-  }, [connectLinear, linearApiKeyDraft])
+  const handleLinearWorkspaceChange = useCallback(
+    (workspaceId: LinearWorkspaceSelection): void => {
+      clearSelectedLinearIssue()
+      setLinearIssues([])
+      setLinearError(null)
+      setLinearLoading(true)
+      void selectLinearWorkspace(workspaceId)
+        .then(() => {
+          setLinearTeamRefreshNonce((n) => n + 1)
+        })
+        .catch(() => {
+          toast.error('Failed to switch Linear workspace.')
+        })
+    },
+    [clearSelectedLinearIssue, selectLinearWorkspace]
+  )
+
+  const handleLinearTeamSelectionChange = useCallback(
+    (next: ReadonlySet<string>, persisted: string[] | null): void => {
+      setLinearTeamSelection(new Set(next))
+      void updateSettings({ defaultLinearTeamSelection: persisted }).catch(() => {
+        toast.error('Failed to save team selection.')
+      })
+    },
+    [updateSettings]
+  )
+
+  const handleLinearScopeOpen = useCallback((): void => {
+    void checkLinearConnection(true)
+    void listLinearTeams(selectedLinearWorkspaceId, { force: true })
+      .then((teams) => {
+        setAvailableTeams(teams)
+      })
+      .catch(() => {
+        console.warn('[TaskPage] Failed to refresh Linear teams')
+      })
+  }, [checkLinearConnection, listLinearTeams, selectedLinearWorkspaceId])
+
+  const handleLinearAccessConnected = useCallback((): void => {
+    setLinearTeamRefreshNonce((n) => n + 1)
+    setLinearRefreshNonce((n) => n + 1)
+  }, [])
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
@@ -4380,32 +4388,17 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                   {taskSource === 'linear' && linearStatus.connected ? (
                     <div className="flex items-center gap-2">
-                      {linearWorkspaces.length > 1 ? (
-                        <Select
-                          value={selectedLinearWorkspaceId ?? undefined}
-                          onValueChange={(value) => {
-                            clearSelectedLinearIssue()
-                            setLinearIssues([])
-                            setLinearError(null)
-                            setLinearLoading(true)
-                            void selectLinearWorkspace(value).catch(() => {
-                              toast.error('Failed to switch Linear workspace.')
-                            })
-                          }}
-                        >
-                          <SelectTrigger className="h-8 w-[200px] rounded-md border-border/50 bg-muted/50 text-xs font-medium shadow-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All workspaces</SelectItem>
-                            {linearWorkspaces.map((workspace) => (
-                              <SelectItem key={workspace.id} value={workspace.id}>
-                                {workspace.organizationName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : null}
+                      <LinearScopeSelector
+                        workspaces={linearWorkspaces}
+                        selectedWorkspaceId={selectedLinearWorkspaceId}
+                        teams={linearTeamOptions}
+                        selectedTeamIds={linearTeamSelection}
+                        teamSelectionIsStickyAll={defaultLinearTeamSelection == null}
+                        onWorkspaceChange={handleLinearWorkspaceChange}
+                        onTeamSelectionChange={handleLinearTeamSelectionChange}
+                        onAddTeamAccess={() => setLinearConnectOpen(true)}
+                        onOpen={handleLinearScopeOpen}
+                      />
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -4418,6 +4411,7 @@ export default function TaskPage(): React.JSX.Element {
                               }
                               void window.api.shell.openUrl(selectedLinearTeamForExternalLink.url)
                             }}
+                            disabled={!selectedLinearTeamForExternalLink}
                             aria-label={
                               selectedLinearTeamForExternalLink
                                 ? `Open ${selectedLinearTeamForExternalLink.name} in Linear`
@@ -4434,27 +4428,6 @@ export default function TaskPage(): React.JSX.Element {
                             : 'Select one team to open in Linear'}
                         </TooltipContent>
                       </Tooltip>
-                      <div className="min-w-0 w-full sm:w-[200px]">
-                        <TeamMultiCombobox
-                          teams={linearTeamOptions}
-                          selected={linearTeamSelection}
-                          onChange={(next) => {
-                            setLinearTeamSelection(next)
-                            void updateSettings({ defaultLinearTeamSelection: [...next] }).catch(
-                              () => {
-                                toast.error('Failed to save team selection.')
-                              }
-                            )
-                          }}
-                          onSelectAll={() => {
-                            setLinearTeamSelection(new Set(linearTeamOptions.map((t) => t.id)))
-                            void updateSettings({ defaultLinearTeamSelection: null }).catch(() => {
-                              toast.error('Failed to save team selection.')
-                            })
-                          }}
-                          triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                        />
-                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -5690,13 +5663,10 @@ export default function TaskPage(): React.JSX.Element {
               <Button
                 className="mt-5"
                 onClick={() => {
-                  setLinearApiKeyDraft('')
-                  setLinearConnectState('idle')
-                  setLinearConnectError(null)
                   setLinearConnectOpen(true)
                 }}
               >
-                Connect Linear
+                Add Linear access
               </Button>
             </div>
           ) : (
@@ -5854,11 +5824,11 @@ export default function TaskPage(): React.JSX.Element {
 
                 {!linearLoading && linearIssues.length === 0 && !linearError ? (
                   <div className="px-4 py-10 text-center">
-                    <p className="text-sm font-medium text-foreground">No Linear issues found</p>
+                    <p className="text-sm font-medium text-foreground">No Linear issues fetched</p>
                     <p className="mt-2 text-sm text-muted-foreground">
                       {linearSearchInput
-                        ? 'Try a different search query.'
-                        : 'No assigned issues. Try searching for something.'}
+                        ? 'No fetched Linear issues match this search query.'
+                        : 'No current Linear issues were fetched for this view.'}
                     </p>
                   </div>
                 ) : null}
@@ -5866,10 +5836,11 @@ export default function TaskPage(): React.JSX.Element {
                 {!linearLoading && linearIssues.length > 0 && filteredLinearIssues.length === 0 ? (
                   <div className="px-4 py-10 text-center">
                     <p className="text-sm font-medium text-foreground">
-                      No issues match the selected teams
+                      No fetched issues match the selected teams
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Try selecting more teams or click &ldquo;All teams&rdquo;.
+                      Try selecting more teams or refreshing; team filters apply to the current
+                      fetched issue set.
                     </p>
                   </div>
                 ) : null}
@@ -6930,94 +6901,13 @@ export default function TaskPage(): React.JSX.Element {
         onClose={() => setGitlabDialogItem(null)}
       />
 
-      <Dialog
+      <LinearApiKeyDialog
         open={linearConnectOpen}
-        onOpenChange={(open) => {
-          if (linearConnectState !== 'connecting') {
-            setLinearConnectOpen(open)
-          }
-        }}
-      >
-        <DialogContent
-          className="sm:max-w-md"
-          onKeyDown={(e) => {
-            if (
-              e.key === 'Enter' &&
-              linearApiKeyDraft.trim() &&
-              linearConnectState !== 'connecting'
-            ) {
-              e.preventDefault()
-              void handleLinearConnect()
-            }
-          }}
-        >
-          <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">Connect Linear workspace</DialogTitle>
-            <DialogDescription>
-              Paste a <strong className="font-semibold text-foreground">Personal API key</strong> to
-              browse issues from that workspace.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            <Input
-              autoFocus
-              type="password"
-              placeholder="lin_api_..."
-              value={linearApiKeyDraft}
-              onChange={(e) => {
-                setLinearApiKeyDraft(e.target.value)
-                if (linearConnectState === 'error') {
-                  setLinearConnectState('idle')
-                  setLinearConnectError(null)
-                }
-              }}
-              disabled={linearConnectState === 'connecting'}
-            />
-            {linearConnectState === 'error' && linearConnectError && (
-              <p className="text-xs text-destructive">{linearConnectError}</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Create one in{' '}
-              <button
-                className="text-primary underline-offset-2 hover:underline"
-                onClick={() =>
-                  window.api.shell.openUrl('https://linear.app/settings/account/security')
-                }
-              >
-                Linear Settings → Security
-              </button>{' '}
-              → <strong className="font-semibold text-foreground">New API key</strong> (not{' '}
-              <span className="text-foreground">New passkey</span>).
-            </p>
-            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-              <Lock className="size-3 shrink-0" />
-              Your key is encrypted via the OS keychain and stored locally.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setLinearConnectOpen(false)}
-              disabled={linearConnectState === 'connecting'}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleLinearConnect()}
-              disabled={!linearApiKeyDraft.trim() || linearConnectState === 'connecting'}
-            >
-              {linearConnectState === 'connecting' ? (
-                <>
-                  <LoaderCircle className="size-4 animate-spin" />
-                  Verifying…
-                </>
-              ) : (
-                'Connect'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setLinearConnectOpen}
+        workspace={selectedLinearWorkspace}
+        connectLabel={linearStatus.connected ? 'Update access' : 'Add Linear access'}
+        onConnected={handleLinearAccessConnected}
+      />
     </div>
   )
 }

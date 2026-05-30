@@ -1060,6 +1060,7 @@ export type LinearWorkspace = LinearViewer & {
   id: string
   organizationId: string
   isLegacy?: true
+  credentialRevision?: number
 }
 
 export type LinearWorkspaceSelection = string | 'all'

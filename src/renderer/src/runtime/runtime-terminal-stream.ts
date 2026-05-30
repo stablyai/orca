@@ -27,9 +27,13 @@ export function parseRemoteRuntimePtyId(ptyId: string): RemoteRuntimePtyIdParts 
   if (separatorIndex === -1) {
     return { environmentId: null, handle: rest }
   }
-  return {
-    environmentId: decodeURIComponent(rest.slice(0, separatorIndex)),
-    handle: decodeURIComponent(rest.slice(separatorIndex + REMOTE_PTY_OWNER_SEPARATOR.length))
+  try {
+    return {
+      environmentId: decodeURIComponent(rest.slice(0, separatorIndex)),
+      handle: decodeURIComponent(rest.slice(separatorIndex + REMOTE_PTY_OWNER_SEPARATOR.length))
+    }
+  } catch {
+    return null
   }
 }
 

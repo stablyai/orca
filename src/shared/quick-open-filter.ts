@@ -132,7 +132,7 @@ export function buildExcludePathPrefixes(rootPath: string, excludePaths?: unknow
       : // Fall back to path-flavor relative so we do not accidentally use the
         // local OS's semantics on remote paths.
         flavor.relative(trimmedRoot, raw).replace(/\\/g, '/')
-    if (!rel || rel.startsWith('..') || rel.startsWith('/')) {
+    if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
       continue
     }
     // Strip any trailing slash so boundary checks are unambiguous.
@@ -187,6 +187,11 @@ function escapeGlob(segment: string): string {
 function escapeGlobPath(relPath: string): string {
   // Split on '/' so the separators are not themselves escaped.
   return relPath.split('/').map(escapeGlob).join('/')
+}
+
+function isParentRelativePath(relPath: string): boolean {
+  // Why: `..name` is a valid child path; only `..` and `../...` escape.
+  return relPath === '..' || relPath.startsWith('../')
 }
 
 // ─── rg traversal-pruning globs ──────────────────────────────────────
@@ -305,7 +310,7 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
     } else if (rel === '.') {
       return null
     }
-    if (!rel || rel.startsWith('/') || rel.startsWith('..')) {
+    if (!rel || rel.startsWith('/') || isParentRelativePath(rel)) {
       return null
     }
     return rel
@@ -316,7 +321,11 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
   // into single-slash POSIX-looking paths that no rg output can match.
   const normalizedRoot = `${outputMode.rootPath.replace(/\\/g, '/').replace(/\/+$/, '')}/`
   if (normalized.startsWith(normalizedRoot)) {
-    return normalized.substring(normalizedRoot.length)
+    const rel = normalized.substring(normalizedRoot.length)
+    if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
+      return null
+    }
+    return rel
   }
   return null
 }
