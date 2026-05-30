@@ -1047,6 +1047,9 @@ export default function TerminalPane({
     cwd,
     isActive,
     isVisible,
+    // Why: hidden startup probes are opacity-hidden but measurable; ordinary
+    // hidden tabs are display:none and refit on visibility resume instead.
+    isSyncFitEnabled: isVisible || shouldMeasureHiddenStartup,
     paneCount,
     managerRef,
     containerRef,
