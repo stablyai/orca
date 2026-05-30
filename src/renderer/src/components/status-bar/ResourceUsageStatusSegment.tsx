@@ -1080,19 +1080,21 @@ export function ResourceUsageStatusSegment({
     } catch {
       /* already dead — fall through */
     } finally {
-      setKilling(false)
-      setKillConfirm(null)
-      // Why: after the killed row unmounts, focus would otherwise drop to
-      // <body>. Park focus on the popover body so keyboard users land back
-      // in the list rather than outside the popover.
-      cancelPopoverBodyFocusFrame()
-      if (popoverBodyRef.current) {
-        popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
-          popoverBodyFocusFrameRef.current = null
-          popoverBodyRef.current?.focus()
-        })
+      if (mountedRef.current) {
+        setKilling(false)
+        setKillConfirm(null)
+        // Why: after the killed row unmounts, focus would otherwise drop to
+        // <body>. Park focus on the popover body so keyboard users land back
+        // in the list rather than outside the popover.
+        cancelPopoverBodyFocusFrame()
+        if (popoverBodyRef.current) {
+          popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
+            popoverBodyFocusFrameRef.current = null
+            popoverBodyRef.current?.focus()
+          })
+        }
+        void refreshSessions()
       }
-      void refreshSessions()
     }
   }, [cancelPopoverBodyFocusFrame, killConfirm, refreshSessions])
 
