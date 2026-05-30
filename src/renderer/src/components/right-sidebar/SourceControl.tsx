@@ -240,6 +240,31 @@ function createDefaultCollapsedSections(): Set<string> {
   return new Set(DEFAULT_COLLAPSED_SECTIONS)
 }
 
+function cancelSourceControlEditorRevealFrames(frameIds: React.MutableRefObject<number[]>): void {
+  for (const frameId of frameIds.current) {
+    cancelAnimationFrame(frameId)
+  }
+  frameIds.current = []
+}
+
+function requestSourceControlEditorRevealFrame(
+  frameIds: React.MutableRefObject<number[]>,
+  callback: FrameRequestCallback
+): void {
+  let completed = false
+  let frameId: number | undefined
+  frameId = requestAnimationFrame((timestamp) => {
+    completed = true
+    if (frameId !== undefined) {
+      frameIds.current = frameIds.current.filter((pendingFrameId) => pendingFrameId !== frameId)
+    }
+    callback(timestamp)
+  })
+  if (!completed) {
+    frameIds.current.push(frameId)
+  }
+}
+
 // Why: the pure state-machine logic now lives in
 // ./source-control-primary-action.ts. It is imported directly by callers
 // (tests and other components) instead of going through this module.
@@ -895,6 +920,7 @@ export function HostedReviewHeaderLink({
 
 function SourceControlInner(): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement>(null)
+  const pendingCommentEditorRevealFrameIdsRef = useRef<number[]>([])
   // Why: React setState is async, so a rapid double-click on the Commit
   // button can both pass the isCommitting state guard before the disabled
   // state re-renders. A ref flipped synchronously at the start of
@@ -1002,6 +1028,10 @@ function SourceControlInner(): React.JSX.Element {
   const [pendingDiffCommentsClear, setPendingDiffCommentsClear] =
     useState<PendingDiffCommentsClear | null>(null)
   const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
+
+  useEffect(() => {
+    return () => cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
+  }, [])
 
   const handleCopyDiffComments = useCallback(async (): Promise<void> => {
     if (diffCommentsForActive.length === 0) {
@@ -3515,6 +3545,7 @@ function SourceControlInner(): React.JSX.Element {
       const commentId = comment.id
       // Defensively clear any dangling prior scroll request before routing
       // this click; only the diff branches below will re-stamp it.
+      cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
       setScrollToDiffCommentId(null)
       if (getDiffCommentSource(comment) === 'markdown') {
         const absPath = joinPath(worktreePath, filePath)
@@ -3529,8 +3560,8 @@ function SourceControlInner(): React.JSX.Element {
           mode: 'edit'
         })
         setPendingEditorReveal(null)
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
+        requestSourceControlEditorRevealFrame(pendingCommentEditorRevealFrameIdsRef, () => {
+          requestSourceControlEditorRevealFrame(pendingCommentEditorRevealFrameIdsRef, () => {
             setPendingEditorReveal({
               filePath: absPath,
               line: comment.lineNumber,
