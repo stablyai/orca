@@ -109,6 +109,17 @@ function hasSleepableWorkspaceActivity(
   return hasLiveTerminal || hasBrowser
 }
 
+function shouldShowResetLayoutAction(
+  config:
+    | {
+        groups?: Record<string, unknown>
+        rules?: Record<string, unknown>
+      }
+    | undefined
+): boolean {
+  return Object.keys(config?.groups ?? {}).length > 0 || Object.keys(config?.rules ?? {}).length > 0
+}
+
 function shouldRemoveFolderProjectFromContextMenu(
   isFolder: boolean,
   worktree: Pick<Worktree, 'isMainWorktree'>
@@ -218,10 +229,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
-  // Why: visible only when a config exists or the last fetch was invalid
-  // — prefetch lock would also flag config-less worktrees (no-op there).
-  const showResetLayout = useAppStore(
-    (s) => !!s.layoutConfigByWorktree[worktree.id] || s.layoutConfigInvalidIds.has(worktree.id)
+  // Why: Reset Layout is for repos with declarative layout config only;
+  // ordinary workspaces should not advertise a no-op recovery action.
+  const showResetLayout = useAppStore((s) =>
+    shouldShowResetLayoutAction(s.layoutConfigByWorktree[worktree.id])
   )
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
@@ -729,6 +740,7 @@ export {
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
   hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
+  shouldShowResetLayoutAction,
   shouldRemoveFolderProjectFromContextMenu,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,
