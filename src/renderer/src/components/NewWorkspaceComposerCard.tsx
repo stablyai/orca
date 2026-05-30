@@ -558,7 +558,7 @@ export default function NewWorkspaceComposerCard({
               )}
             >
               {smartNameSelection ? (
-                // Why: when a source (PR/issue/Linear/branch) is picked the
+                // Why: when a source (PR/issue/Linear/Jira/branch) is picked the
                 // smart field shows a pill instead of an editable name, so
                 // surface the auto-derived workspace name here under Advanced
                 // where it can be reviewed/overridden. When the user typed an

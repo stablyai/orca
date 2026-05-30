@@ -14,6 +14,7 @@ export function buildLinearIssueLinkedWorkItem(
 ): LinkedWorkItemSummary {
   return {
     type: 'issue',
+    provider: 'linear',
     // Why: Linear issue identifiers are strings; keep numeric issue metadata
     // empty while preserving the real source through `linearIdentifier`.
     number: 0,

@@ -41,6 +41,7 @@ import {
   buildAgentPromptWithContext,
   ensureAgentStartupInTerminal,
   getAttachmentLabel,
+  getLinkedWorkItemProvider,
   getLinkedWorkItemSuggestedName,
   getSetupConfig,
   getWorkspaceSeedName,
@@ -368,8 +369,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     if (
       initialLinkedWorkItem?.type === 'issue' &&
-      !initialLinkedWorkItem.linearIdentifier &&
-      !isGitLabIssueUrl(initialLinkedWorkItem.url)
+      getLinkedWorkItemProvider(initialLinkedWorkItem) === 'github'
     ) {
       return String(initialLinkedWorkItem.number)
     }
@@ -1116,6 +1116,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       setLinkedWorkItem({
         type: item.type,
+        provider: 'github',
         number: item.number,
         title: item.title,
         url: item.url
@@ -1191,6 +1192,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       setLinkedWorkItem({
         type: item.type,
+        provider: 'gitlab',
         number: item.number,
         title: item.title,
         url: item.url
@@ -1761,16 +1763,23 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const smartNameSelection = useMemo<SmartWorkspaceNameSelection | null>(() => {
     if (linkedWorkItem) {
-      const isLinear = linkedWorkItem.number === 0 && !linkedWorkItem.url.includes('github.com')
+      const provider = getLinkedWorkItemProvider(linkedWorkItem)
+      const isLinear = provider === 'linear'
       const kind: SmartWorkspaceNameSelection['kind'] = isLinear
         ? 'linear'
-        : linkedWorkItem.type === 'pr'
-          ? 'github-pr'
-          : 'github-issue'
+        : provider === 'jira'
+          ? 'jira'
+          : provider === 'gitlab'
+            ? linkedWorkItem.type === 'mr'
+              ? 'gitlab-mr'
+              : 'gitlab-issue'
+            : linkedWorkItem.type === 'pr'
+              ? 'github-pr'
+              : 'github-issue'
       return {
         kind,
         label:
-          isLinear || linkedWorkItem.number === 0
+          isLinear || provider === 'jira' || linkedWorkItem.number === 0
             ? linkedWorkItem.title
             : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
         url: linkedWorkItem.url
@@ -1885,7 +1894,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : await ensureHooksConfirmed(useAppStore.getState(), repoId, 'issueCommand')
       }
 
-      const linkedLinearIssue = submitLinkedWorkItem?.linearIdentifier
+      const linkedLinearIssue =
+        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+          ? submitLinkedWorkItem.linearIdentifier
+          : undefined
       const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
         branchNameOverride,
         branchAutoName: branchAutoNameRef.current,
@@ -2109,7 +2121,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? 'skip'
             : ((submitResolvedSetupDecision ?? 'inherit') as SetupDecision)
 
-        const linkedLinearIssue = submitLinkedWorkItem?.linearIdentifier
+        const linkedLinearIssue =
+          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
+            ? submitLinkedWorkItem.linearIdentifier
+            : undefined
         const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
           branchNameOverride,
           branchAutoName: branchAutoNameRef.current,

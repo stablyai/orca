@@ -40,6 +40,7 @@ vi.mock('@/lib/telemetry', () => ({
 
 import {
   ensureAgentStartupInTerminal,
+  getLinkedWorkItemProvider,
   getSetupConfig,
   getWorkspaceSeedName,
   isGitLabIssueUrl
@@ -311,5 +312,43 @@ describe('getSetupConfig', () => {
         }
       )
     ).toBeNull()
+  })
+})
+
+describe('getLinkedWorkItemProvider', () => {
+  it('uses explicit provider metadata when available', () => {
+    expect(
+      getLinkedWorkItemProvider({
+        type: 'issue',
+        provider: 'jira',
+        number: 0,
+        title: 'ORCA-123 Fix Jira',
+        url: 'https://example.atlassian.net/browse/ORCA-123',
+        jiraIdentifier: 'ORCA-123'
+      })
+    ).toBe('jira')
+  })
+
+  it('does not treat Jira issue URLs as Linear just because they have no numeric issue id', () => {
+    expect(
+      getLinkedWorkItemProvider({
+        type: 'issue',
+        number: 0,
+        title: 'ORCA-123 Fix Jira',
+        url: 'https://example.atlassian.net/browse/ORCA-123'
+      })
+    ).toBe('jira')
+  })
+
+  it('keeps legacy Linear linked issues working', () => {
+    expect(
+      getLinkedWorkItemProvider({
+        type: 'issue',
+        number: 0,
+        title: 'Fix Linear',
+        url: 'https://linear.app/team/issue/ENG-123/fix-linear',
+        linearIdentifier: 'ENG-123'
+      })
+    ).toBe('linear')
   })
 })

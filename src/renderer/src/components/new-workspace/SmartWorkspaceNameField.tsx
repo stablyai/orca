@@ -42,6 +42,7 @@ import { lookupSmartGitHubSubmitItem } from '@/lib/smart-github-submit'
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { JiraIcon } from '@/components/icons/JiraIcon'
 import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
 import {
   buildSmartWorkspaceSourceRows,
@@ -95,7 +96,7 @@ type SmartWorkspaceNameFieldProps = {
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear'
+  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
   label: string
   url?: string
 }
@@ -1243,6 +1244,9 @@ function SelectionIcon({ kind }: { kind: SmartWorkspaceNameSelection['kind'] }):
   }
   if (kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
+  }
+  if (kind === 'jira') {
+    return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
   }
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }

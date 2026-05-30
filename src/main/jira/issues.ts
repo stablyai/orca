@@ -49,8 +49,16 @@ type JiraSearchResponse = {
 }
 
 type JiraPagedResponse<T> = {
+  startAt?: number
+  maxResults?: number
+  total?: number
+  isLast?: boolean
   values?: T[]
+  issueTypes?: T[]
+  comments?: T[]
 }
+
+type JiraPageItemKey = 'values' | 'issueTypes' | 'comments'
 
 function clampLimit(limit: number | undefined, fallback = 30): number {
   return Math.min(Math.max(1, Number.isFinite(limit) ? Number(limit) : fallback), 100)
@@ -72,6 +80,61 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : []
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function getPageItems<T>(response: JiraPagedResponse<T>, key: JiraPageItemKey): T[] {
+  const keyedItems = response[key]
+  if (Array.isArray(keyedItems)) {
+    return keyedItems
+  }
+  return response.values ?? []
+}
+
+function shouldFetchNextPage<T>(
+  response: JiraPagedResponse<T>,
+  startAt: number,
+  items: T[],
+  requestedMaxResults: number
+): boolean {
+  if (response.isLast === true || items.length === 0) {
+    return false
+  }
+  const total = asFiniteNumber(response.total)
+  const pageSize = asFiniteNumber(response.maxResults)
+  if (total !== null) {
+    return startAt + items.length < total && (pageSize ?? requestedMaxResults) > 0
+  }
+  if (response.isLast === false) {
+    return (pageSize ?? requestedMaxResults) > 0
+  }
+  return pageSize !== null && items.length >= pageSize
+}
+
+async function fetchPagedRecords(
+  entry: JiraClientForSite,
+  key: JiraPageItemKey,
+  pathForPage: (startAt: number, maxResults: number) => string,
+  maxResults = 100
+): Promise<JiraRecord[]> {
+  const records: JiraRecord[] = []
+  let startAt = 0
+  for (let guard = 0; guard < 100; guard += 1) {
+    const response = await jiraRequest<JiraPagedResponse<JiraRecord>>(
+      entry,
+      pathForPage(startAt, maxResults)
+    )
+    const items = getPageItems(response, key)
+    records.push(...items)
+    if (!shouldFetchNextPage(response, startAt, items, maxResults)) {
+      break
+    }
+    startAt += asFiniteNumber(response.maxResults) ?? maxResults
+  }
+  return records
 }
 
 function avatarUrl(value: unknown): string | undefined {
@@ -484,11 +547,15 @@ export async function getIssueComments(
   }
   await acquire()
   try {
-    const response = await jiraRequest<JiraPagedResponse<JiraRecord>>(
-      entry,
-      `/rest/api/3/issue/${encodeURIComponent(key)}/comment?maxResults=100&orderBy=created`
-    )
-    return (response.values ?? []).map(mapComment)
+    const comments = await fetchPagedRecords(entry, 'comments', (startAt, maxResults) => {
+      const params = new URLSearchParams({
+        maxResults: String(maxResults),
+        orderBy: 'created',
+        startAt: String(startAt)
+      })
+      return `/rest/api/3/issue/${encodeURIComponent(key)}/comment?${params.toString()}`
+    })
+    return comments.map(mapComment)
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
@@ -510,11 +577,14 @@ export async function listProjects(siteId?: JiraSiteSelection | null): Promise<J
     entries.map(async (entry) => {
       await acquire()
       try {
-        const response = await jiraRequest<JiraPagedResponse<JiraRecord>>(
-          entry,
-          '/rest/api/3/project/search?maxResults=100'
-        )
-        return (response.values ?? []).map((project) => mapProject(project, entry.site))
+        const projects = await fetchPagedRecords(entry, 'values', (startAt, maxResults) => {
+          const params = new URLSearchParams({
+            maxResults: String(maxResults),
+            startAt: String(startAt)
+          })
+          return `/rest/api/3/project/search?${params.toString()}`
+        })
+        return projects.map((project) => mapProject(project, entry.site))
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.site.id)
@@ -543,11 +613,16 @@ export async function listIssueTypes(
   }
   await acquire()
   try {
-    const response = await jiraRequest<JiraPagedResponse<JiraRecord>>(
-      entry,
-      `/rest/api/3/issue/createmeta/${encodeURIComponent(projectIdOrKey)}/issuetypes?maxResults=100`
-    )
-    return (response.values ?? []).map(mapIssueType)
+    const issueTypes = await fetchPagedRecords(entry, 'issueTypes', (startAt, maxResults) => {
+      const params = new URLSearchParams({
+        maxResults: String(maxResults),
+        startAt: String(startAt)
+      })
+      return `/rest/api/3/issue/createmeta/${encodeURIComponent(
+        projectIdOrKey
+      )}/issuetypes?${params.toString()}`
+    })
+    return issueTypes.map(mapIssueType)
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
