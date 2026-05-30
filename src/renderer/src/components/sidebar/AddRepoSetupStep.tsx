@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { GitBranch, GitBranchPlus, Settings } from 'lucide-react'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -143,22 +143,35 @@ export function ProjectAddedContent({
     getInitialProjectAddedChoice(hiddenWorktreeCount, primaryBranchName)
   )
   const radioGroupRef = useRef<HTMLDivElement>(null)
+  const radioFocusFrameRef = useRef<number | null>(null)
   const trimmedName = worktreeName.trim()
   const hasHiddenWorktrees = hiddenWorktreeCount > 0
   const normalizedPrimaryBranchName = primaryBranchName.trim()
   const choices = getProjectAddedChoiceOrder(hiddenWorktreeCount, normalizedPrimaryBranchName)
   const selectedChoice = choices.includes(choice) ? choice : (choices[0] ?? 'create')
 
+  const cancelRadioFocusFrame = useCallback((): void => {
+    if (radioFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(radioFocusFrameRef.current)
+    radioFocusFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelRadioFocusFrame, [cancelRadioFocusFrame])
+
   const cycleChoice = useCallback(() => {
     const index = choices.indexOf(selectedChoice)
     const nextChoice = choices[(index + 1) % choices.length] ?? 'create'
     setChoice(nextChoice)
-    requestAnimationFrame(() => {
+    cancelRadioFocusFrame()
+    radioFocusFrameRef.current = requestAnimationFrame(() => {
+      radioFocusFrameRef.current = null
       radioGroupRef.current
         ?.querySelector<HTMLButtonElement>(`[data-choice="${nextChoice}"]`)
         ?.focus()
     })
-  }, [choices, selectedChoice])
+  }, [cancelRadioFocusFrame, choices, selectedChoice])
 
   const handlePrimaryAction = (): void => {
     if (selectedChoice === 'primary') {

@@ -5,7 +5,7 @@
  * oxlint limit, following the same pattern as useRemoteRepo.
  */
 
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Folder, GitBranch, Home, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -291,18 +291,31 @@ export function CreateStep({
   onCreate
 }: CreateStepProps): React.JSX.Element {
   const radioGroupRef = useRef<HTMLDivElement>(null)
+  const radioFocusFrameRef = useRef<number | null>(null)
+
+  const cancelRadioFocusFrame = useCallback((): void => {
+    if (radioFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(radioFocusFrameRef.current)
+    radioFocusFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelRadioFocusFrame, [cancelRadioFocusFrame])
 
   // Arrow keys cycle selection within the radiogroup (WAI-ARIA radio pattern).
   const cycleKind = useCallback(() => {
     const next = createKind === 'git' ? 'folder' : 'git'
     onKindChange(next)
-    requestAnimationFrame(() => {
+    cancelRadioFocusFrame()
+    radioFocusFrameRef.current = requestAnimationFrame(() => {
+      radioFocusFrameRef.current = null
       const nextEl = radioGroupRef.current?.querySelector<HTMLButtonElement>(
         `[data-kind="${next}"]`
       )
       nextEl?.focus()
     })
-  }, [createKind, onKindChange])
+  }, [cancelRadioFocusFrame, createKind, onKindChange])
 
   const trimmedName = createName.trim()
   const canSubmit = trimmedName.length > 0 && createParent.trim().length > 0 && !isCreating
