@@ -38,6 +38,7 @@ import {
   SettingsSwitch,
   SettingsSwitchRow
 } from './SettingsFormControls'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 function createOpenInApplication(): OpenInApplication {
   return {
@@ -83,6 +84,7 @@ type GeneralPaneProps = {
 export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const updateStatus = useAppStore((s) => s.updateStatus)
+  const mountedRef = useMountedRef()
   // Why: the 'error' variant of UpdateStatus does not carry a `version` field.
   // The main process emits `{ state: 'error' }` for both check failures (no
   // version known yet) and download/install failures (version was known from
@@ -163,10 +165,14 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
     setStarState('starring')
     const ok = await window.api.gh.starOrca('settings')
     if (!ok) {
-      setStarState('error')
+      if (mountedRef.current) {
+        setStarState('error')
+      }
       return
     }
-    setStarState('starred')
+    if (mountedRef.current) {
+      setStarState('starred')
+    }
     // Why: clicking star anywhere should also permanently mute the
     // threshold-based nag so the user isn't re-prompted via the popup.
     await window.api.starNag.complete()
