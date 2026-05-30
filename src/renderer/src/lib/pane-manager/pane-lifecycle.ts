@@ -22,6 +22,7 @@ import {
   attachPaneFitResizeObserver,
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
+import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
 import {
   ENABLE_WEBGL_RENDERER,
@@ -135,6 +136,8 @@ export function createPaneDOM(
     ligaturesAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
+    pendingSplitScrollRafIds: [],
+    pendingSplitScrollTimerId: null,
     pendingSplitScrollBufferDisposable: null,
     debugLabel: options.debugLabel ?? null
   }
@@ -312,8 +315,7 @@ export function disposePane(
     pane.compositionHandler = null
   }
   try {
-    pane.pendingSplitScrollBufferDisposable?.dispose()
-    pane.pendingSplitScrollBufferDisposable = null
+    clearPendingSplitScrollRestore(pane)
   } catch {
     /* ignore */
   }
