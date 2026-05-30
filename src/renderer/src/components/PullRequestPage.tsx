@@ -3241,6 +3241,14 @@ function CommentReplyForm({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -3254,11 +3262,16 @@ function CommentReplyForm({
     setSubmitting(true)
     try {
       const ok = await onSubmit(trimmed)
+      if (!mountedRef.current) {
+        return
+      }
       if (ok) {
         setBody('')
       }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }, [body, onSubmit, submitting])
 
@@ -4903,6 +4916,14 @@ function GHCommentComposer({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
@@ -4927,6 +4948,9 @@ function GHCommentComposer({
         body: trimmed,
         type: itemType
       })
+      if (!mountedRef.current) {
+        return
+      }
       if (result.ok) {
         setBody('')
         requestAnimationFrame(autoGrow)
@@ -4937,9 +4961,13 @@ function GHCommentComposer({
         toast.error(result.error ?? 'Failed to add comment')
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }, [autoGrow, body, repoPath, repoId, issueNumber, itemType, onCommentAdded])
 
