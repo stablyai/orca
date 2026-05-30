@@ -56,6 +56,7 @@ const mockApi = {
     ),
     listLineage: vi.fn().mockResolvedValue({}),
     remove: vi.fn().mockResolvedValue(undefined),
+    forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
     resolvePrBase: vi.fn(),
     updateMeta: vi.fn().mockResolvedValue(undefined),
     updateLineage: vi.fn().mockResolvedValue(null)

@@ -14,6 +14,7 @@ import type {
   BrowserViewportOverride,
   CreateWorktreeArgs,
   CustomPet,
+  ForceDeleteWorktreeBranchResult,
   FsChangedPayload,
   GetRateLimitResult,
   GitHubPRRefreshCandidate,
@@ -36,6 +37,7 @@ import type {
   FloatingTerminalCwdRequest,
   MarkdownDocument,
   SearchResult,
+  RemoveWorktreeResult,
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
@@ -587,8 +589,18 @@ const api = {
     }): Promise<{ baseBranch: string; pushTarget?: unknown } | { error: string }> =>
       ipcRenderer.invoke('worktrees:resolveMrBase', args),
 
-    remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }): Promise<void> =>
-      ipcRenderer.invoke('worktrees:remove', args),
+    remove: (args: {
+      worktreeId: string
+      force?: boolean
+      skipArchive?: boolean
+    }): Promise<RemoveWorktreeResult> => ipcRenderer.invoke('worktrees:remove', args),
+
+    forceDeletePreservedBranch: (args: {
+      worktreeId: string
+      branchName: string
+      expectedHead: string
+    }): Promise<ForceDeleteWorktreeBranchResult> =>
+      ipcRenderer.invoke('worktrees:forceDeletePreservedBranch', args),
 
     updateMeta: (args: {
       worktreeId: string

@@ -69,6 +69,7 @@ const {
   MOCK_GIT_WORKTREES,
   addWorktreeMock,
   removeWorktreeMock,
+  forceDeleteLocalBranchMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
   sshGitProviders,
@@ -118,6 +119,7 @@ const {
     ],
     addWorktreeMock: vi.fn(),
     removeWorktreeMock: vi.fn(),
+    forceDeleteLocalBranchMock: vi.fn(),
     computeWorktreePathMock: vi.fn(),
     ensurePathWithinWorkspaceMock: vi.fn(),
     sshGitProviders,
@@ -161,7 +163,8 @@ vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
   assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
   addWorktree: addWorktreeMock,
-  removeWorktree: removeWorktreeMock
+  removeWorktree: removeWorktreeMock,
+  forceDeleteLocalBranch: forceDeleteLocalBranchMock
 }))
 
 vi.mock('../terminal-history', () => ({
@@ -314,6 +317,8 @@ afterEach(() => {
   vi.mocked(assertWorktreeCleanForRemoval).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
   vi.mocked(removeWorktree).mockReset()
+  vi.mocked(forceDeleteLocalBranchMock).mockReset()
+  vi.mocked(forceDeleteLocalBranchMock).mockResolvedValue(undefined)
   sshGitProviders.clear()
   getSshGitProviderMock.mockReset()
   getSshGitProviderMock.mockImplementation((connectionId: string) =>
@@ -9181,7 +9186,7 @@ describe('OrcaRuntimeService', () => {
         archive: 'pnpm worktree:archive'
       }
     })
-    vi.mocked(removeWorktree).mockResolvedValue(undefined)
+    vi.mocked(removeWorktree).mockResolvedValue({})
 
     const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
@@ -9193,6 +9198,41 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('force-deletes a branch that was preserved by runtime worktree removal', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(removeWorktree).mockResolvedValue({
+      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+    })
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+    const result = await runtime.forceDeletePreservedBranch(
+      TEST_WORKTREE_ID,
+      'feature/test',
+      'def456'
+    )
+
+    expect(result).toEqual({ deleted: true })
+    expect(forceDeleteLocalBranchMock).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      'feature/test',
+      'def456'
+    )
+  })
+
+  it('rejects stale preserved-branch runtime cleanup actions with an old head', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(removeWorktree).mockResolvedValue({
+      preservedBranch: { branchName: 'feature/test', head: 'new456' }
+    })
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    await expect(
+      runtime.forceDeletePreservedBranch(TEST_WORKTREE_ID, 'feature/test', 'old123')
+    ).rejects.toThrow('No preserved branch cleanup is pending')
+    expect(forceDeleteLocalBranchMock).not.toHaveBeenCalled()
+  })
+
   it('coalesces concurrent runtime worktree removals for the same worktree id', async () => {
     const runtime = new OrcaRuntimeService(store)
     const removeStarted = deferred<void>()
@@ -9200,6 +9240,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(removeWorktree).mockImplementation(async () => {
       removeStarted.resolve()
       await finishRemoval.promise
+      return {}
     })
 
     const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)
@@ -9220,6 +9261,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(removeWorktree).mockImplementation(async () => {
       removeStarted.resolve()
       await finishRemoval.promise
+      return {}
     })
 
     const first = runtime.removeManagedWorktree(TEST_WORKTREE_ID)
@@ -9509,7 +9551,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
-    vi.mocked(removeWorktree).mockResolvedValue(undefined)
+    vi.mocked(removeWorktree).mockResolvedValue({})
 
     await runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, true)
 
@@ -9538,7 +9580,7 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
-    vi.mocked(removeWorktree).mockResolvedValue(undefined)
+    vi.mocked(removeWorktree).mockResolvedValue({})
 
     const token = runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
     await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
@@ -10101,6 +10143,7 @@ describe('OrcaRuntimeService', () => {
       })
       vi.mocked(removeWorktree).mockImplementation(async () => {
         callOrder.push('git-removeWorktree')
+        return {}
       })
 
       const runtime = new OrcaRuntimeService(store, undefined, {
@@ -10149,7 +10192,7 @@ describe('OrcaRuntimeService', () => {
       const runtime = new OrcaRuntimeService(store, undefined, {
         getLocalProvider: () => currentProvider as never
       })
-      vi.mocked(removeWorktree).mockResolvedValue(undefined)
+      vi.mocked(removeWorktree).mockResolvedValue({})
 
       // Simulate daemon-init swapping the provider after construction.
       currentProvider = postDaemonProvider

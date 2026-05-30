@@ -26,6 +26,7 @@ import type {
   CustomPet,
   DetectedWorktreeListResult,
   DirEntry,
+  ForceDeleteWorktreeBranchResult,
   FsChangedPayload,
   GhosttyImportPreview,
   GlobalSettings,
@@ -107,6 +108,7 @@ import type {
   WorktreeLineage,
   WorktreeMeta,
   WorktreeRemoteBranchConflictEvent,
+  RemoveWorktreeResult,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
   WorkspaceSessionState
@@ -742,7 +744,16 @@ export type PreloadApi = {
       sourceBranch?: string
       isCrossRepository?: boolean
     }) => Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>
-    remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => Promise<void>
+    remove: (args: {
+      worktreeId: string
+      force?: boolean
+      skipArchive?: boolean
+    }) => Promise<RemoveWorktreeResult>
+    forceDeletePreservedBranch: (args: {
+      worktreeId: string
+      branchName: string
+      expectedHead: string
+    }) => Promise<ForceDeleteWorktreeBranchResult>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
     listLineage: () => Promise<Record<string, WorktreeLineage>>
     updateLineage: (args: {

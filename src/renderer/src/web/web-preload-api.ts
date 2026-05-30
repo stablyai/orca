@@ -6,11 +6,13 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   DetectedWorktreeListResult,
   DirEntry,
+  ForceDeleteWorktreeBranchResult,
   GlobalSettings,
   MemorySnapshot,
   OnboardingState,
   PersistedUIState,
   Repo,
+  RemoveWorktreeResult,
   SearchResult,
   StatsSummary,
   Worktree,
@@ -979,8 +981,14 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
       }),
     remove: async ({ worktreeId, force }) => {
       invalidateRuntimeWorktreeCaches()
-      await callRuntimeResult('worktree.rm', { worktree: worktreeId, force })
+      return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', { worktree: worktreeId, force })
     },
+    forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead }) =>
+      callRuntimeResult<ForceDeleteWorktreeBranchResult>('worktree.forceDeleteBranch', {
+        worktree: worktreeId,
+        branchName,
+        expectedHead
+      }),
     updateMeta: async ({ worktreeId, updates }) =>
       (
         await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {

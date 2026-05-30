@@ -12,7 +12,8 @@ import type {
   GitConflictOperation,
   GitPushTarget,
   GitUpstreamStatus,
-  GitWorktreeInfo
+  GitWorktreeInfo,
+  RemoveWorktreeResult
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import { buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
@@ -433,8 +434,12 @@ export class SshGitProvider implements IGitProvider {
     worktreePath: string,
     force?: boolean,
     options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
-  ): Promise<void> {
-    await this.mux.request('git.removeWorktree', { worktreePath, force, ...options })
+  ): Promise<RemoveWorktreeResult> {
+    return ((await this.mux.request('git.removeWorktree', {
+      worktreePath,
+      force,
+      ...options
+    })) ?? {}) as RemoveWorktreeResult
   }
 
   async worktreeIsClean(worktreePath: string): Promise<{ clean: boolean; stdout?: string }> {
