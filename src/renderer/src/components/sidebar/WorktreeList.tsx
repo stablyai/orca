@@ -114,8 +114,17 @@ import {
   buildWorktreeDragPreviewOffsets,
   buildManualOrderUpdatesForVisibleGroups,
   expandDraggedWorktreeIdsForVisibleLineage,
+  shouldWriteManualOrderForGroupDrop,
   type WorktreeDragGroup
 } from './worktree-manual-order'
+import {
+  buildWorkspaceKanbanSidebarDropUpdates,
+  clearWorkspaceKanbanSidebarDropTargetVisual,
+  getWorkspaceKanbanSidebarDropGroups,
+  getWorkspaceKanbanSidebarDropTarget,
+  hasWorkspaceKanbanSidebarDropBoard,
+  updateWorkspaceKanbanSidebarDropTargetVisual
+} from './workspace-kanban-sidebar-drop'
 import {
   getFullDropIndexForWorktreeDragUnit,
   getWorktreeDragUnitGroups
@@ -362,6 +371,16 @@ type VirtualizedWorktreeViewportProps = {
   onMoveWorktreesToStatus: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onPinWorktree: (worktreeId: string) => void
   onPinWorktrees: (worktreeIds: readonly string[]) => void
+  onDropWorktreesOnWorkspaceBoard: (args: {
+    worktreeIds: readonly string[]
+    status: WorkspaceStatus
+    dropIndex: number
+    groups: readonly WorktreeDragGroup[]
+  }) => void
+  shouldShowWorkspaceBoardDropIndicator: (
+    worktreeIds: readonly string[],
+    status: WorkspaceStatus
+  ) => boolean
   onReorderWorktrees: (args: {
     groups: readonly WorktreeDragGroup[]
     sourceGroupKey: string
@@ -616,6 +635,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   onMoveWorktreesToStatus,
   onPinWorktree,
   onPinWorktrees,
+  onDropWorktreesOnWorkspaceBoard,
+  shouldShowWorkspaceBoardDropIndicator,
   onReorderWorktrees,
   showInlineAgentCards,
   scrollOffsetRef,
@@ -1398,6 +1419,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     setSidebarPointerDragDocumentStyles(false)
     setDragOverStatus(null)
     setPinDragOver(false)
+    clearWorkspaceKanbanSidebarDropTargetVisual()
   }, [cancelWorktreePointerAutoscroll])
 
   const clearWorktreeDrag = useCallback(() => {
@@ -1427,6 +1449,34 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       clearWorktreeDrag()
       return
     }
+    const boardTarget = updateWorkspaceKanbanSidebarDropTargetVisual({
+      x: drag.currentX,
+      y: drag.currentY,
+      shouldShowDropIndicator: (target) =>
+        Boolean(
+          target.status && shouldShowWorkspaceBoardDropIndicator(drag.draggedIds, target.status)
+        )
+    })
+    if (boardTarget.status || boardTarget.isPinDrop) {
+      setDragOverStatus(null)
+      setPinDragOver(false)
+      setWorktreeDragState((prev) =>
+        prev.dropIndex === null &&
+        prev.dropIndicatorY === null &&
+        prev.pointerY === drag.currentY &&
+        prev.previewOffsetsByWorktreeId.size === 0
+          ? prev
+          : {
+              ...prev,
+              dropIndex: null,
+              dropIndicatorY: null,
+              previewOffsetsByWorktreeId: EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS,
+              pointerY: drag.currentY
+            }
+      )
+      return
+    }
+
     const drop = computeWorktreeDrop(drag.currentY)
     const sidebarContainer = scrollRef.current
     if (!drop) {
@@ -1455,6 +1505,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       )
       return
     }
+    clearWorkspaceKanbanSidebarDropTargetVisual()
     setDragOverStatus(null)
     setPinDragOver(false)
     setWorktreeDragState((prev) =>
@@ -1468,7 +1519,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         ? prev
         : { ...prev, ...drop, pointerY: drag.currentY }
     )
-  }, [clearWorktreeDrag, computeWorktreeDrop, refreshWorktreeDragSession])
+  }, [
+    clearWorktreeDrag,
+    computeWorktreeDrop,
+    refreshWorktreeDragSession,
+    shouldShowWorkspaceBoardDropIndicator
+  ])
 
   const scheduleWorktreePointerDragFrame = useCallback(
     (drag: WorktreePointerDrag) => {
@@ -1585,7 +1641,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         return
       }
       const rects = getWorktreeSidebarDragRectsForGroup(container, sourceGroupKey)
-      if (rects.length <= 1) {
+      if (rects.length <= 1 && !hasWorkspaceKanbanSidebarDropBoard()) {
         return
       }
       const draggedIds =
@@ -1668,29 +1724,41 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         clearWorktreeDrag()
         return
       }
-      const drop = computeWorktreeDrop(event.clientY)
-      const container = scrollRef.current
-      if (drop) {
-        onReorderWorktrees({
-          groups: worktreeDragGroups,
-          sourceGroupKey: drag.sourceGroupKey,
-          draggedIds: drag.reorderDraggedIds,
-          dropIndex: getFullDropIndexForWorktreeDragUnit({
-            groups: worktreeDragUnitGroups,
+      const boardDropTarget = getWorkspaceKanbanSidebarDropTarget(event.clientX, event.clientY)
+      if (boardDropTarget.isPinDrop) {
+        onPinWorktrees(drag.draggedIds)
+      } else if (boardDropTarget.status) {
+        onDropWorktreesOnWorkspaceBoard({
+          worktreeIds: drag.draggedIds,
+          status: boardDropTarget.status,
+          dropIndex: boardDropTarget.dropIndex,
+          groups: getWorkspaceKanbanSidebarDropGroups()
+        })
+      } else {
+        const drop = computeWorktreeDrop(event.clientY)
+        if (drop) {
+          onReorderWorktrees({
+            groups: worktreeDragGroups,
             sourceGroupKey: drag.sourceGroupKey,
-            dropIndex: drop.dropIndex
+            draggedIds: drag.reorderDraggedIds,
+            dropIndex: getFullDropIndexForWorktreeDragUnit({
+              groups: worktreeDragUnitGroups,
+              sourceGroupKey: drag.sourceGroupKey,
+              dropIndex: drop.dropIndex
+            })
           })
-        })
-      } else if (container) {
-        const target = getPointerDropStatusTarget({
-          container,
-          x: event.clientX,
-          y: event.clientY
-        })
-        if (target.isPinDrop) {
-          onPinWorktrees(drag.draggedIds)
-        } else if (target.status) {
-          onMoveWorktreesToStatus(drag.draggedIds, target.status)
+        } else if (scrollRef.current) {
+          const container = scrollRef.current
+          const target = getPointerDropStatusTarget({
+            container,
+            x: event.clientX,
+            y: event.clientY
+          })
+          if (target.isPinDrop) {
+            onPinWorktrees(drag.draggedIds)
+          } else if (target.status) {
+            onMoveWorktreesToStatus(drag.draggedIds, target.status)
+          }
         }
       }
       clearWorktreeDrag()
@@ -1717,13 +1785,29 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     clearWorktreeDrag,
     computeWorktreeDrop,
     onMoveWorktreesToStatus,
+    onDropWorktreesOnWorkspaceBoard,
     onPinWorktrees,
     onReorderWorktrees,
     refreshWorktreeDragSession,
     scheduleWorktreePointerDragFrame,
+    shouldShowWorkspaceBoardDropIndicator,
     worktreeDragGroups,
     worktreeDragUnitGroups
   ])
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent): void => {
+      if (window.performance.now() >= suppressWorktreeClickUntilRef.current) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+    }
+
+    document.addEventListener('click', handleClick, true)
+    return () => document.removeEventListener('click', handleClick, true)
+  }, [])
 
   const runWorktreeNativeAutoscrollFrame = useCallback(
     (frameTime: number) => {
@@ -1896,6 +1980,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         return
       }
       if (!refreshWorktreeDragSession()) {
+        clearWorktreeDrag()
+        return
+      }
+      const boardDropTarget = getWorkspaceKanbanSidebarDropTarget(event.clientX, event.clientY)
+      if (boardDropTarget.status || boardDropTarget.isPinDrop) {
         clearWorktreeDrag()
         return
       }
@@ -3576,6 +3665,49 @@ const WorktreeList = React.memo(function WorktreeList({
     [setSortBy, updateWorktreesMeta, worktreeMap]
   )
 
+  const shouldShowWorkspaceBoardDropIndicator = useCallback(
+    (worktreeIds: readonly string[], status: WorkspaceStatus) => {
+      const sourceGroupKeys = worktreeIds.flatMap((worktreeId) => {
+        const worktree = worktreeMap.get(worktreeId)
+        return worktree ? [getWorkspaceStatus(worktree, workspaceStatuses)] : []
+      })
+      return shouldWriteManualOrderForGroupDrop({
+        sortBy,
+        sourceGroupKeys,
+        targetGroupKey: status
+      })
+    },
+    [sortBy, worktreeMap, workspaceStatuses]
+  )
+
+  const dropWorktreesOnWorkspaceBoard = useCallback(
+    (args: {
+      worktreeIds: readonly string[]
+      status: WorkspaceStatus
+      dropIndex: number
+      groups: readonly WorktreeDragGroup[]
+    }) => {
+      const result = buildWorkspaceKanbanSidebarDropUpdates({
+        ...args,
+        worktreeById: worktreeMap,
+        workspaceStatuses,
+        sortBy,
+        now: Date.now()
+      })
+      if (result.updates.size === 0) {
+        return
+      }
+      // Why: when the drop changes visual order, the board/sidebar must both
+      // switch to Manual so the committed placement remains visible.
+      if (result.shouldSwitchToManual) {
+        setSortBy('manual')
+      }
+      useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
+      void updateWorktreesMeta(result.updates)
+    },
+    [setSortBy, sortBy, updateWorktreesMeta, worktreeMap, workspaceStatuses]
+  )
+
   // Why: hideDefaultBranchWorkspace is counted as a filter here so the
   // empty-sidebar escape hatch (Clear Filters button below) is reachable when
   // it's the only reason the list is empty — otherwise a user whose only
@@ -3734,6 +3866,8 @@ const WorktreeList = React.memo(function WorktreeList({
         onMoveWorktreesToStatus={moveWorktreesToStatus}
         onPinWorktree={pinWorktree}
         onPinWorktrees={pinWorktrees}
+        onDropWorktreesOnWorkspaceBoard={dropWorktreesOnWorkspaceBoard}
+        shouldShowWorkspaceBoardDropIndicator={shouldShowWorkspaceBoardDropIndicator}
         onReorderWorktrees={reorderWorktrees}
         showInlineAgentCards={cardProps.includes('inline-agents')}
         scrollOffsetRef={scrollOffsetRef}
