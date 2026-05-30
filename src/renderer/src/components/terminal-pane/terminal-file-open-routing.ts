@@ -47,6 +47,13 @@ export function getTerminalFileContext(
   }
 }
 
+export function shouldOpenTerminalFileWithSystemDefault(
+  fileContext: RuntimeFileOperationArgs,
+  filePath: string
+): boolean {
+  return !fileContext.connectionId && !isRemoteRuntimeFileOperation(fileContext, filePath)
+}
+
 let latestOpenDetectedFilePathRequestId = 0
 let pendingEditorRevealFrameIds: number[] = []
 
@@ -88,11 +95,11 @@ export function openDetectedFilePath(
 
   void (async () => {
     let statResult
+    const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    const opensWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, filePath)
     try {
-      const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
-      const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, filePath)
       // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
-      if (!fileContext.connectionId && !isRemoteRuntimePath) {
+      if (opensWithSystemDefault) {
         await window.api.fs.authorizeExternalPath({ targetPath: filePath })
       }
       statResult = await statRuntimePath(fileContext, filePath)
@@ -104,24 +111,24 @@ export function openDetectedFilePath(
       return
     }
 
-    if (statResult.isDirectory) {
-      const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
-      if (fileContext.connectionId || isRemoteRuntimeFileOperation(fileContext, filePath)) {
+    if (opensWithSystemDefault) {
+      // Why: local terminal file links should honor the user's OS file
+      // associations without adding editor-specific settings in Orca.
+      const openedWithSystemDefault = await window.api.shell.openFilePath(filePath)
+      if (openedWithSystemDefault || statResult.isDirectory) {
         return
       }
-      await window.api.shell.openFilePath(filePath)
+    }
+
+    if (statResult.isDirectory) {
       return
     }
 
-    // Why: .html/.htm files render in Orca's embedded browser instead of opening
-    // as source in Monaco — ⌘/Ctrl+click on an HTML path in the terminal should
-    // feel like clicking an http link and render the page, not dump HTML source.
-    // Mirrors the editor's "Open Preview to the Side" action.
-    const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    // Why: if the OS default opener fails for a local HTML file, Orca's browser
+    // fallback still renders the page instead of dumping HTML source in Monaco.
     if (
       isHtmlFilePath(filePath) &&
-      !fileContext.connectionId &&
-      !isRemoteRuntimeFileOperation(fileContext, filePath)
+      shouldOpenTerminalFileWithSystemDefault(fileContext, filePath)
     ) {
       openHtmlFileInBrowser(filePath, worktreeId)
       return

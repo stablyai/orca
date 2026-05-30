@@ -128,6 +128,19 @@ async function openInExternalEditor(
   }
 }
 
+async function openWithSystemDefault(pathValue: string): Promise<boolean> {
+  const target = await validateLocalPathTarget(pathValue)
+  if (!target.ok) {
+    return false
+  }
+  try {
+    const errorMessage = await shell.openPath(target.path)
+    return errorMessage.length === 0
+  } catch {
+    return false
+  }
+}
+
 export function registerShellHandlers(): void {
   ipcMain.handle('shell:openPath', (_event, path: string) => {
     shell.showItemInFolder(path)
@@ -159,16 +172,8 @@ export function registerShellHandlers(): void {
     return shell.openExternal(parsed.toString())
   })
 
-  ipcMain.handle('shell:openFilePath', async (_event, filePath: string) => {
-    const target = await validateLocalPathTarget(filePath)
-    if (!target.ok) {
-      return
-    }
-    try {
-      await shell.openPath(target.path)
-    } catch {
-      // Why: legacy file-open IPC is best-effort; callers already treat failure as a no-op.
-    }
+  ipcMain.handle('shell:openFilePath', async (_event, filePath: string): Promise<boolean> => {
+    return openWithSystemDefault(filePath)
   })
 
   ipcMain.handle('shell:openFileUri', async (_event, rawUri: string) => {
@@ -200,11 +205,7 @@ export function registerShellHandlers(): void {
       return
     }
 
-    try {
-      await shell.openPath(target.path)
-    } catch {
-      // Why: legacy file-open IPC is best-effort; callers already treat failure as a no-op.
-    }
+    await openWithSystemDefault(target.path)
   })
 
   ipcMain.handle('shell:pathExists', async (_event, filePath: string): Promise<boolean> => {
