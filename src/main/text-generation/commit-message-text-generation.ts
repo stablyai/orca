@@ -293,14 +293,21 @@ export async function discoverCommitMessageModelsLocal(
     let stderr = ''
     let outputLimitExceeded = false
     let settled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let detachChildListeners = (): void => {}
     const finish = (result: DiscoverCommitMessageModelsResult): void => {
       if (settled) {
         return
       }
       settled = true
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      detachChildListeners()
       resolve(result)
     }
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       killProcessTree(child)
       finish({
         success: false,
@@ -312,15 +319,15 @@ export async function discoverCommitMessageModelsLocal(
       if (stdout.length + stderr.length + chunk.byteLength > MAX_AGENT_OUTPUT_BYTES) {
         outputLimitExceeded = true
         killProcessTree(child)
+        finish({ success: false, error: `${spec.label} returned too much model data.` })
         return
       }
       append(chunk.toString('utf-8'))
     }
 
-    child.stdout?.on('data', (chunk: Buffer) => onData(chunk, (text) => (stdout += text)))
-    child.stderr?.on('data', (chunk: Buffer) => onData(chunk, (text) => (stderr += text)))
-    child.on('error', (error) => {
-      clearTimeout(timer)
+    const onStdoutData = (chunk: Buffer): void => onData(chunk, (text) => (stdout += text))
+    const onStderrData = (chunk: Buffer): void => onData(chunk, (text) => (stderr += text))
+    const onError = (error: Error): void => {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         finish({
           success: false,
@@ -332,9 +339,8 @@ export async function discoverCommitMessageModelsLocal(
         success: false,
         error: `${spec.label} model discovery failed to start. Check the agent CLI configuration and try again.`
       })
-    })
-    child.on('close', (code) => {
-      clearTimeout(timer)
+    }
+    const onClose = (code: number | null): void => {
       if (outputLimitExceeded) {
         finish({ success: false, error: `${spec.label} returned too much model data.` })
         return
@@ -344,7 +350,18 @@ export async function discoverCommitMessageModelsLocal(
         return
       }
       finish(finalizeModelDiscoveryOutput(spec, stdout, stderr, code))
-    })
+    }
+
+    child.stdout?.on('data', onStdoutData)
+    child.stderr?.on('data', onStderrData)
+    child.on('error', onError)
+    child.on('close', onClose)
+    detachChildListeners = () => {
+      child.stdout?.off?.('data', onStdoutData)
+      child.stderr?.off?.('data', onStderrData)
+      child.off?.('error', onError)
+      child.off?.('close', onClose)
+    }
   })
 }
 

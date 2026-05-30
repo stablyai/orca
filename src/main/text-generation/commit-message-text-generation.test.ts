@@ -3,6 +3,7 @@
    cross-path invariants these tests protect. */
 import { spawn } from 'child_process'
 import type * as ChildProcess from 'child_process'
+import { EventEmitter } from 'events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { sourceControlAiSettingsFromLegacy } from '../../shared/source-control-ai'
@@ -28,6 +29,24 @@ vi.mock('child_process', async (importOriginal) => {
 })
 
 const spawnMock = vi.mocked(spawn)
+
+type MockDiscoveryChild = EventEmitter & {
+  pid: number
+  kill: ReturnType<typeof vi.fn>
+  stdout: EventEmitter
+  stderr: EventEmitter
+  stdin: { end: ReturnType<typeof vi.fn> }
+}
+
+function createMockDiscoveryChild(): MockDiscoveryChild {
+  const child = new EventEmitter() as MockDiscoveryChild
+  child.pid = 123
+  child.kill = vi.fn()
+  child.stdout = new EventEmitter()
+  child.stderr = new EventEmitter()
+  child.stdin = { end: vi.fn() }
+  return child
+}
 
 function syncSourceControlAiFromLegacy(settings: GlobalSettings): void {
   settings.sourceControlAi = sourceControlAiSettingsFromLegacy(settings.commitMessageAi)
@@ -391,6 +410,50 @@ describe('discoverCommitMessageModelsLocal', () => {
       defaultModelId: 'github-copilot/gpt-5.4-mini',
       models: [{ id: 'github-copilot/gpt-5.4-mini' }, { id: 'openai-codex/gpt-5.5' }]
     })
+  })
+
+  it('settles and detaches model discovery when timeout kill is ignored', async () => {
+    vi.useFakeTimers()
+    const child = createMockDiscoveryChild()
+    spawnMock.mockReturnValue(child as never)
+
+    try {
+      const pending = discoverCommitMessageModelsLocal('cursor', undefined)
+      const assertion = expect(pending).resolves.toMatchObject({
+        success: false,
+        error: 'Cursor model discovery timed out after 60s.'
+      })
+
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      await assertion
+      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+      expect(child.stdout.listenerCount('data')).toBe(0)
+      expect(child.stderr.listenerCount('data')).toBe(0)
+      expect(child.listenerCount('error')).toBe(0)
+      expect(child.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('settles and detaches model discovery when output exceeds the limit', async () => {
+    const child = createMockDiscoveryChild()
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = discoverCommitMessageModelsLocal('cursor', undefined)
+
+    child.stdout.emit('data', Buffer.alloc(4 * 1024 * 1024 + 1))
+
+    await expect(pending).resolves.toMatchObject({
+      success: false,
+      error: 'Cursor returned too much model data.'
+    })
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
   })
 })
 
