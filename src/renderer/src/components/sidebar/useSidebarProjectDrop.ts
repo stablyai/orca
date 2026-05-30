@@ -4,6 +4,7 @@ import {
   NATIVE_FILE_DROP_TARGET,
   hasNativeFileDragTypes
 } from '../../../../shared/native-file-drop'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import {
   getSidebarProjectDropAffordance,
@@ -28,6 +29,7 @@ export function useSidebarProjectDrop(): {
   const [isHandlingDrop, setIsHandlingDrop] = useState(false)
   const dragDepthRef = useRef(0)
   const remoteRuntimeActive = isRemoteRuntimeActive(settings)
+  const mountedRef = useMountedRef()
 
   const clearDragState = useCallback(() => {
     dragDepthRef.current = 0
@@ -64,20 +66,27 @@ export function useSidebarProjectDrop(): {
       try {
         await window.api.fs.authorizeExternalPath({ targetPath: pathResolution.path })
         const stat = await window.api.fs.stat({ filePath: pathResolution.path })
+        if (!mountedRef.current) {
+          return
+        }
         if (!stat.isDirectory) {
           toast.error('Drop a folder to add it as a project.')
           return
         }
         openModal('add-repo', { droppedLocalPath: pathResolution.path })
       } catch (error) {
-        toast.error('Could not add dropped folder.', {
-          description: error instanceof Error ? error.message : String(error)
-        })
+        if (mountedRef.current) {
+          toast.error('Could not add dropped folder.', {
+            description: error instanceof Error ? error.message : String(error)
+          })
+        }
       } finally {
-        setIsHandlingDrop(false)
+        if (mountedRef.current) {
+          setIsHandlingDrop(false)
+        }
       }
     },
-    [openModal, remoteRuntimeActive]
+    [mountedRef, openModal, remoteRuntimeActive]
   )
 
   useEffect(() => {
