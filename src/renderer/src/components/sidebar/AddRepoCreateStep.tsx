@@ -5,7 +5,7 @@
  * oxlint limit, following the same pattern as useRemoteRepo.
  */
 
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Folder, GitBranch, Home, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -300,6 +300,8 @@ export function CreateStep({
     cancelAnimationFrame(radioFocusFrameRef.current)
     radioFocusFrameRef.current = null
   }, [])
+
+  useEffect(() => cancelRadioFocusFrame, [cancelRadioFocusFrame])
 
   const setRadioGroupNode = useCallback(
     (node: HTMLDivElement | null): void => {
