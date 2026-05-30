@@ -1030,9 +1030,19 @@ function SourceControlInner(): React.JSX.Element {
   const [pendingDiffCommentsClear, setPendingDiffCommentsClear] =
     useState<PendingDiffCommentsClear | null>(null)
   const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
+  // Why: clipboard IPC can resolve after Source Control unmounts; skip copied
+  // feedback instead of starting a reset timer on a stale panel.
+  const diffCommentsCopyMountedRef = useRef(false)
 
   useEffect(() => {
     return () => cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
+  }, [])
+
+  useEffect(() => {
+    diffCommentsCopyMountedRef.current = true
+    return () => {
+      diffCommentsCopyMountedRef.current = false
+    }
   }, [])
 
   const handleCopyDiffComments = useCallback(async (): Promise<void> => {
@@ -1041,6 +1051,9 @@ function SourceControlInner(): React.JSX.Element {
     }
     try {
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
+      if (!diffCommentsCopyMountedRef.current) {
+        return
+      }
       setDiffCommentsCopied(true)
     } catch {
       // Why: swallow — clipboard write can fail when the window isn't focused.
@@ -5843,6 +5856,16 @@ function DiffCommentsInlineList({
   }, [comments])
 
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  // Why: clipboard IPC can resolve after the inline notes list unmounts; skip
+  // copied feedback instead of starting a reset timer on a stale list.
+  const copiedIdMountedRef = useRef(false)
+
+  useEffect(() => {
+    copiedIdMountedRef.current = true
+    return () => {
+      copiedIdMountedRef.current = false
+    }
+  }, [])
 
   // Why: auto-dismiss the per-row "copied" indicator so the button returns to
   // its default icon after a brief confirmation window. Matches the top-level
@@ -5858,6 +5881,9 @@ function DiffCommentsInlineList({
   const handleCopyOne = useCallback(async (c: DiffComment): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(formatDiffComment(c))
+      if (!copiedIdMountedRef.current) {
+        return
+      }
       setCopiedId(c.id)
     } catch {
       // Why: swallow — clipboard write can fail when the window isn't focused.
