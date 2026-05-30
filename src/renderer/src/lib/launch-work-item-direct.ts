@@ -4,6 +4,10 @@ import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
+import {
+  buildPersonalizedAgentPrompt,
+  resolveAgentPersonalizationPrompt
+} from '../../../shared/agent-personalization'
 import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
@@ -266,6 +270,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       })
     }
     const draftContent = item.pasteContent ?? item.url
+    const personalizationPrompt =
+      effectiveAgent === null ? '' : resolveAgentPersonalizationPrompt(settings, effectiveAgent)
 
     // Why: agents that gate first-launch behind a "Do you trust this folder?"
     // menu (cursor-agent, copilot) consume the bracketed paste as menu input.
@@ -302,7 +308,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
             agent: effectiveAgent,
             draft: draftContent,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
-            platform: CLIENT_PLATFORM
+            platform: CLIENT_PLATFORM,
+            personalizationPrompt
           })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -319,7 +326,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         prompt: '',
         cmdOverrides: settings?.agentCmdOverrides ?? {},
         platform: CLIENT_PLATFORM,
-        allowEmptyPromptLaunch: true
+        allowEmptyPromptLaunch: true,
+        personalizationPrompt
       })
     }
 
@@ -352,7 +360,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return
   }
 
-  const content = item.pasteContent ?? item.url
+  const content = buildPersonalizedAgentPrompt({
+    prompt: item.pasteContent ?? item.url,
+    personalizationPrompt:
+      effectiveAgent === null ? '' : resolveAgentPersonalizationPrompt(settings, effectiveAgent)
+  })
   // Why: the workspace is already created and visible; do not block selection
   // latency on agent readiness. Run the paste in the background so the
   // "Use" CTA's spinner ends when the worktree is ready, not when the TUI

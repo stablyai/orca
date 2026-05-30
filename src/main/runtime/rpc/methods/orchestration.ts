@@ -408,7 +408,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           dispatchId: 'ctx_dryrun',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          devMode: params.devMode
+          devMode: params.devMode,
+          personalizationPrompt: await runtime.getPersonalizationPrompt(params.to)
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
       }
@@ -448,7 +449,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         dispatchId: ctx.id,
         taskSpec: task.spec,
         coordinatorHandle: params.from ?? 'coordinator',
-        devMode: params.devMode
+        devMode: params.devMode,
+        personalizationPrompt: await runtime.getPersonalizationPrompt(to)
       })
 
       let injected = false
@@ -475,7 +477,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.dispatchShow',
     params: DispatchShowParams,
-    handler: (params, { runtime }) => {
+    handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {
         throw new Error('Missing --task')
@@ -499,7 +501,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           dispatchId: ctx?.id ?? 'ctx_preview',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          devMode: params.devMode
+          devMode: params.devMode,
+          personalizationPrompt: await runtime.getPersonalizationPrompt(
+            ctx?.assignee_handle ?? undefined
+          )
         })
         return { dispatch: ctx ?? null, preamble }
       }

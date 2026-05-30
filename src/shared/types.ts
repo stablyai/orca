@@ -1881,6 +1881,12 @@ export type GlobalSettings = {
   /** Agents hidden from future picker and automatic launch choices. Detection
    *  remains a raw PATH capability snapshot. */
   disabledTuiAgents: TuiAgent[]
+  /** Global custom instructions prepended to agent task prompts. */
+  personalizationPrompt: string
+  /** Whether all agents use the global prompt or each agent can override it. */
+  personalizationPromptMode: 'global' | 'per-agent'
+  /** Per-agent custom instruction overrides used when personalizationPromptMode is per-agent. */
+  agentPersonalizationPrompts: Partial<Record<TuiAgent, string>>
   /** Why: worktree deletion is destructive (git worktree remove + rm -rf of the
    *  working directory), so Orca shows a confirmation dialog by default. Users
    *  who delete frequently can opt into skipping the dialog via a "Don't ask

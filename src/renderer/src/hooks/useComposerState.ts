@@ -16,6 +16,10 @@ import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/wor
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import {
+  buildPersonalizedAgentPrompt,
+  resolveAgentPersonalizationPrompt
+} from '../../../shared/agent-personalization'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -1750,6 +1754,23 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [updateWorktreeMeta]
   )
 
+  const resolvePersonalizationPrompt = useCallback(
+    (agent: TuiAgent): string =>
+      resolveAgentPersonalizationPrompt(
+        {
+          personalizationPrompt: settings?.personalizationPrompt,
+          personalizationPromptMode: settings?.personalizationPromptMode,
+          agentPersonalizationPrompts: settings?.agentPersonalizationPrompts
+        },
+        agent
+      ),
+    [
+      settings?.agentPersonalizationPrompts,
+      settings?.personalizationPrompt,
+      settings?.personalizationPromptMode
+    ]
+  )
+
   const submit = useCallback(async (): Promise<void> => {
     if (
       !repoId ||
@@ -1874,7 +1895,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         agent: tuiAgent,
         prompt: submitStartupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
-        platform: CLIENT_PLATFORM
+        platform: CLIENT_PLATFORM,
+        personalizationPrompt: resolvePersonalizationPrompt(tuiAgent)
       })
 
       // Why: thread agent_started telemetry through the queued startup so
@@ -1956,6 +1978,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     resolvePendingSmartGitHubSubmit,
     resolvedSetupDecision,
     resolvedInitialWorkspaceStatus,
+    resolvePersonalizationPrompt,
     selectedRepo,
     selectedRepoIsGit,
     selectedRepoRequiresConnection,
@@ -2088,6 +2111,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const quickPrompt = isLinearTypedOnly && trimmedNote ? trimmedNote : ''
         const quickDraftPrompt =
           submitLinkedWorkItem && !isLinearTypedOnly ? submitLinkedWorkItem.url : null
+        const personalizationPrompt = agent === null ? '' : resolvePersonalizationPrompt(agent)
 
         // Why: agents that gate first-launch behind a "Do you trust this
         // folder?" menu (cursor-agent, copilot) consume the bracketed paste
@@ -2120,7 +2144,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 agent,
                 draft: quickDraftPrompt,
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
-                platform: CLIENT_PLATFORM
+                platform: CLIENT_PLATFORM,
+                personalizationPrompt
               })
 
         let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
@@ -2138,10 +2163,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             prompt: quickPrompt,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
             platform: CLIENT_PLATFORM,
-            allowEmptyPromptLaunch: true
+            allowEmptyPromptLaunch: true,
+            personalizationPrompt
           })
           if (startupPlan && quickDraftPrompt) {
-            startupPlan.draftPrompt = quickDraftPrompt
+            startupPlan.draftPrompt = buildPersonalizedAgentPrompt({
+              prompt: quickDraftPrompt,
+              personalizationPrompt
+            })
           }
         }
 
@@ -2222,6 +2251,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       resolvePendingSmartGitHubSubmit,
       resolvedSetupDecision,
       resolvedInitialWorkspaceStatus,
+      resolvePersonalizationPrompt,
       selectedRepo,
       selectedRepoIsGit,
       selectedRepoRequiresConnection,

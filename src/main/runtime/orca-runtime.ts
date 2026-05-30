@@ -17,7 +17,7 @@ import {
 } from '../git/repo-clone-path'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createHash, randomUUID } from 'crypto'
-import { isAbsolute, join } from 'path'
+import { isAbsolute, join, posix, win32 } from 'path'
 import { mkdir, readFile, readdir, rm, stat } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
@@ -68,6 +68,7 @@ import { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
+import { resolveAgentPersonalizationPrompt } from '../../shared/agent-personalization'
 import { detectInstalledAgents, detectRemoteAgents } from '../ipc/preflight'
 import {
   markCodexProjectTrusted,
@@ -470,6 +471,9 @@ type RuntimeStore = {
     experimentalWorktreeSymlinks?: boolean
     mobileAutoRestoreFitMs?: number | null
     voice?: VoiceSettings
+    personalizationPrompt?: GlobalSettings['personalizationPrompt']
+    personalizationPromptMode?: GlobalSettings['personalizationPromptMode']
+    agentPersonalizationPrompts?: GlobalSettings['agentPersonalizationPrompts']
   }
   // Why: narrow to `unknown` return so test mocks can return void without
   // a cast. The runtime never reads the return value — the persisted value
@@ -3681,6 +3685,31 @@ export class OrcaRuntimeService {
       return null
     }
     return Math.min(Math.max(raw, MOBILE_AUTO_RESTORE_FIT_MIN_MS), MOBILE_AUTO_RESTORE_FIT_MAX_MS)
+  }
+
+  private async getTuiAgentForTerminalHandle(handle?: string): Promise<TuiAgent | null> {
+    if (!handle) {
+      return null
+    }
+    try {
+      const { leaf } = this.getLiveLeafForHandle(handle)
+      if (!leaf.ptyId || !this.ptyController) {
+        return null
+      }
+      const processName = await this.ptyController.getForegroundProcess(leaf.ptyId)
+      return processName ? resolveTuiAgentFromProcessName(processName) : null
+    } catch {
+      return null
+    }
+  }
+
+  async getPersonalizationPrompt(terminalHandle?: string): Promise<string> {
+    const settings = this.store?.getSettings()
+    if (!settings) {
+      return ''
+    }
+    const agent = await this.getTuiAgentForTerminalHandle(terminalHandle)
+    return resolveAgentPersonalizationPrompt(settings, agent)
   }
 
   // Why: invoked when the user changes mobileAutoRestoreFitMs to `null`
@@ -13046,6 +13075,29 @@ function findResolvedWorktreeIdForPath(
     .filter((worktree) => isPathInsideOrEqual(worktree.path, cwd))
     .sort((left, right) => right.path.length - left.path.length)
   return matches[0]?.id ?? null
+}
+
+function normalizeForegroundProcessName(processName: string): string {
+  return win32
+    .basename(posix.basename(processName.trim()))
+    .replace(/\.exe$/i, '')
+    .toLowerCase()
+}
+
+function resolveTuiAgentFromProcessName(processName: string): TuiAgent | null {
+  const normalized = normalizeForegroundProcessName(processName)
+  for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
+    TuiAgent,
+    (typeof TUI_AGENT_CONFIG)[TuiAgent]
+  ][]) {
+    if (
+      normalized === normalizeForegroundProcessName(config.expectedProcess) ||
+      normalized === normalizeForegroundProcessName(config.detectCmd)
+    ) {
+      return agent
+    }
+  }
+  return null
 }
 
 function getLeafWorktreeStatus(

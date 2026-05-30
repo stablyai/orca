@@ -11,13 +11,19 @@ const mockTrack = vi.fn()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 const store = {
-  settings: { agentCmdOverrides: {} },
+  settings: {
+    agentCmdOverrides: {},
+    personalizationPrompt: 'Prefer small, reviewed patches.',
+    personalizationPromptMode: 'global' as const,
+    agentPersonalizationPrompts: {}
+  },
   tabsByWorktree: {
     'wt-1': [{ id: 'tab-1' }]
   },
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
+  activeWorktreeId: 'wt-1',
   terminalLayoutsByTabId: {} as Record<string, { activeLeafId: string | null }>,
   createTab: mockCreateTab,
   queueTabStartupCommand: mockQueueTabStartupCommand,
@@ -58,11 +64,17 @@ vi.mock('@/lib/telemetry', () => ({
 describe('launchAgentInNewTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    store.settings = { agentCmdOverrides: {} }
+    store.settings = {
+      agentCmdOverrides: {},
+      personalizationPrompt: 'Prefer small, reviewed patches.',
+      personalizationPromptMode: 'global',
+      agentPersonalizationPrompts: {}
+    }
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
     store.openFiles = []
     store.browserTabsByWorktree = {}
     store.tabBarOrderByWorktree = {}
+    store.activeWorktreeId = 'wt-1'
     store.terminalLayoutsByTabId = {}
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
@@ -93,7 +105,8 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "command-code --trust 'fix the spinner'",
+        command:
+          "command-code --trust 'Custom instructions:\nPrefer small, reviewed patches.\n\nTask:\nfix the spinner'",
         initialAgentStatus: {
           agent: 'command-code',
           prompt: 'fix the spinner'
@@ -149,7 +162,8 @@ describe('launchAgentInNewTab', () => {
     expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
       expect.objectContaining({
         tabId: 'tab-1',
-        content: 'large generated prompt',
+        content:
+          'Custom instructions:\nPrefer small, reviewed patches.\n\nTask:\nlarge generated prompt',
         agent: 'command-code',
         submit: true,
         forcePaste: true
@@ -176,5 +190,34 @@ describe('launchAgentInNewTab', () => {
     await Promise.resolve()
 
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+  })
+
+  it('prepends custom instructions to followup-agent pasted drafts', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'aider',
+      worktreeId: 'wt-1',
+      prompt: 'Refactor this module.',
+      launchSource: 'diff_notes_send'
+    })
+
+    expect(result?.startupPlan.launchCommand).toBe('aider')
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+      command: 'aider',
+      telemetry: {
+        agent_kind: 'aider',
+        launch_source: 'diff_notes_send',
+        request_kind: 'new'
+      }
+    })
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'tab-1',
+        agent: 'aider',
+        content:
+          'Custom instructions:\nPrefer small, reviewed patches.\n\nTask:\nRefactor this module.'
+      })
+    )
   })
 })

@@ -101,6 +101,20 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('refactor the auth module')
   })
 
+  it('places custom instructions before the task spec when configured', () => {
+    const result = buildDispatchPreamble(
+      baseParams({
+        personalizationPrompt: 'Prefer small patches.'
+      })
+    )
+
+    expect(result).toContain('=== CUSTOM INSTRUCTIONS ===')
+    expect(result).toContain('Prefer small patches.')
+    expect(result.indexOf('=== CUSTOM INSTRUCTIONS ===')).toBeLessThan(
+      result.indexOf('=== TASK ===')
+    )
+  })
+
   it('uses orca CLI by default when devMode is not set', () => {
     const result = buildDispatchPreamble(baseParams())
     expect(result).toContain('orca orchestration send')

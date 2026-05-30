@@ -1,4 +1,5 @@
 import { isShellProcess } from './agent-detection'
+import { buildPersonalizedAgentPrompt } from './agent-personalization'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { TuiAgent } from './types'
 
@@ -66,10 +67,18 @@ export function buildAgentStartupPlan(args: {
   platform: NodeJS.Platform
   shell?: AgentStartupShell
   allowEmptyPromptLaunch?: boolean
+  personalizationPrompt?: string | null
 }): AgentStartupPlan | null {
-  const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
+  const {
+    agent,
+    prompt,
+    cmdOverrides,
+    platform,
+    allowEmptyPromptLaunch = false,
+    personalizationPrompt
+  } = args
   const shell = resolveStartupShell(platform, args.shell)
-  const trimmedPrompt = prompt.trim()
+  const trimmedPrompt = buildPersonalizedAgentPrompt({ prompt, personalizationPrompt })
   const config = TUI_AGENT_CONFIG[agent]
   const baseCommand = resolveBaseCommand({
     agent,
@@ -148,12 +157,13 @@ export function buildAgentDraftLaunchPlan(args: {
   cmdOverrides: Partial<Record<TuiAgent, string>>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
+  personalizationPrompt?: string | null
 }): AgentDraftLaunchPlan | null {
-  const { agent, draft, cmdOverrides, platform } = args
+  const { agent, draft, cmdOverrides, platform, personalizationPrompt } = args
   const shell = resolveStartupShell(platform, args.shell)
   const config = TUI_AGENT_CONFIG[agent]
-  const trimmed = draft.trim()
-  if (!trimmed) {
+  const preparedDraft = buildPersonalizedAgentPrompt({ prompt: draft, personalizationPrompt })
+  if (!preparedDraft) {
     return null
   }
   const baseCommand = resolveBaseCommand({
@@ -162,7 +172,7 @@ export function buildAgentDraftLaunchPlan(args: {
     shell
   })
   if (config.draftPromptFlag) {
-    const quoted = quoteStartupArg(trimmed, shell)
+    const quoted = quoteStartupArg(preparedDraft, shell)
     return {
       agent,
       launchCommand: `${baseCommand} ${config.draftPromptFlag} ${quoted}`,
@@ -175,7 +185,7 @@ export function buildAgentDraftLaunchPlan(args: {
       agent,
       launchCommand: `${baseCommand}${commandSeparator(shell)}${clearVar}`,
       expectedProcess: config.expectedProcess,
-      env: { [config.draftPromptEnvVar]: trimmed }
+      env: { [config.draftPromptEnvVar]: preparedDraft }
     }
   }
   return null

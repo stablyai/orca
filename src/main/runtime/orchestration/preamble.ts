@@ -1,3 +1,5 @@
+import { buildPersonalizationPreambleSection } from '../../../shared/agent-personalization'
+
 export type PreambleParams = {
   taskId: string
   // Why: the heartbeat payload attributes liveness to a specific dispatch
@@ -10,6 +12,7 @@ export type PreambleParams = {
   taskSpec: string
   coordinatorHandle: string
   devMode?: boolean
+  personalizationPrompt?: string | null
   // Why: populated by the coordinator's dispatch pre-flight (§3.1) only
   // when the target worktree is behind its tracking remote. When absent
   // or when `behind === 0`, the preamble emits no drift section. Callers
@@ -125,8 +128,9 @@ to the previous task's follow-ups after a re-dispatch.`
   // of discovering it via stale line numbers in artifacts later.
   const drift =
     params.baseDrift && params.baseDrift.behind > 0 ? buildDriftSection(params.baseDrift) : ''
+  const personalization = buildPersonalizationPreambleSection(params.personalizationPrompt)
 
-  return `${header}${drift}
+  return `${header}${drift}${personalization}
 
 === TASK ===
 ${params.taskSpec}`

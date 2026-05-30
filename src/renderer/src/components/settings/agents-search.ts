@@ -13,7 +13,8 @@ import {
 export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Agents',
-    description: 'Configure AI coding agents, default agent, and command overrides.',
+    description:
+      'Configure AI coding agents, default agent, custom instructions, and command overrides.',
     keywords: [
       'agent',
       'default',
@@ -50,6 +51,9 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'github copilot',
       'command',
       'override',
+      'custom instructions',
+      'personalization',
+      'system prompt',
       'install',
       'detected',
       'enable',
