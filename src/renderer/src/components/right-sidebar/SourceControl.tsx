@@ -955,25 +955,25 @@ function hostedReviewLabel(review: HostedReviewInfo): string {
 
 export function HostedReviewHeaderLink({
   review,
-  onOpenGitHubPRInChecks
+  onOpenHostedReviewInChecks
 }: {
   review: HostedReviewInfo
-  onOpenGitHubPRInChecks: () => void
+  onOpenHostedReviewInChecks: () => void
 }): React.JSX.Element {
   const label = hostedReviewLabel(review)
   const className =
     'shrink-0 border-0 bg-transparent p-0 text-left font-medium leading-none text-foreground opacity-80 hover:text-foreground hover:underline'
 
-  if (review.provider === 'github') {
+  if (review.provider === 'github' || review.provider === 'gitlab') {
     return (
       <button
         type="button"
         className={className}
         onClick={(e) => {
           e.stopPropagation()
-          // Why: GitHub PR details already live in Orca's Checks tab; keep
+          // Why: GitHub PR and GitLab MR details live in Orca's Checks tab; keep
           // the sidebar workflow in-app instead of opening the browser.
-          onOpenGitHubPRInChecks()
+          onOpenHostedReviewInChecks()
         }}
       >
         {label}
@@ -2369,7 +2369,7 @@ function SourceControlInner(): React.JSX.Element {
     ]
   )
 
-  const openHostedGitHubPRInChecks = useCallback(() => {
+  const openHostedReviewInChecks = useCallback(() => {
     setRightSidebarOpen(true)
     setRightSidebarTab('checks')
   }, [setRightSidebarOpen, setRightSidebarTab])
@@ -4019,7 +4019,7 @@ function SourceControlInner(): React.JSX.Element {
               <HostedReviewIcon review={hostedReview} className="size-3 shrink-0" />
               <HostedReviewHeaderLink
                 review={hostedReview}
-                onOpenGitHubPRInChecks={openHostedGitHubPRInChecks}
+                onOpenHostedReviewInChecks={openHostedReviewInChecks}
               />
             </div>
           )}
