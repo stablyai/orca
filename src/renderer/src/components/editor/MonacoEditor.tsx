@@ -33,6 +33,7 @@ import { buildGitConflictDecorations, hasGitConflictMarkers } from './monaco-con
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { DiffComment } from '../../../../shared/types'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
+import { formatMarkdownReviewNotes, type MarkdownReviewNote } from '@/lib/markdown-review-notes'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import {
@@ -202,6 +203,10 @@ export default function MonacoEditor({
       ? scrollToDiffCommentId
       : null
   }, [markdownComments, scrollToDiffCommentId, shouldShowMarkdownAnnotations])
+  const formatMarkdownCommentPrompt = useCallback(
+    (comment: DiffComment) => formatMarkdownReviewNotes([comment as MarkdownReviewNote], content),
+    [content]
+  )
 
   useDiffCommentDecorator({
     editor: shouldShowMarkdownAnnotations ? mountedEditor : null,
@@ -225,6 +230,7 @@ export default function MonacoEditor({
       }
     },
     onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
+    formatCommentPrompt: formatMarkdownCommentPrompt,
     pendingScrollCommentId: pendingScrollForThisEditor,
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })

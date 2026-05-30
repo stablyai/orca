@@ -819,6 +819,18 @@ export default function MarkdownPreview({
                 sentAt={comment.sentAt}
                 onDelete={() => void deleteDiffComment(sourceWorktree.id, comment.id)}
                 onSubmitEdit={(body) => updateDiffComment(sourceWorktree.id, comment.id, body)}
+                headerActions={
+                  <MarkdownSingleNoteSendMenu
+                    worktreeId={sourceWorktree.id}
+                    filePath={filePath}
+                    content={renderedContent}
+                    note={comment as MarkdownReviewNote}
+                    modeSlot="preview-inline"
+                    onDelivered={(notes) =>
+                      void clearDeliveredDiffComments(sourceWorktree.id, notes)
+                    }
+                  />
+                }
               />
             </div>
           ))}
@@ -829,9 +841,12 @@ export default function MarkdownPreview({
       activeAnnotationBlockKey,
       activeReviewCommentId,
       addDiffComment,
+      clearDeliveredDiffComments,
       deleteDiffComment,
+      filePath,
       markdownAnnotationsEnabled,
       markdownComments,
+      renderedContent,
       sourceRelativePath,
       sourceWorktree,
       updateDiffComment
@@ -1580,12 +1595,60 @@ function MarkdownReviewNotesPanel({
                 sentAt={note.sentAt}
                 onDelete={() => onDelete(note.id)}
                 onSubmitEdit={(body) => onSubmitEdit(note.id, body)}
+                headerActions={
+                  <MarkdownSingleNoteSendMenu
+                    worktreeId={worktreeId}
+                    filePath={filePath}
+                    content={content}
+                    note={note}
+                    modeSlot="preview-panel"
+                    onDelivered={(deliveredNotes) =>
+                      void clearDeliveredDiffComments(worktreeId, deliveredNotes)
+                    }
+                  />
+                }
               />
             </div>
           ))
         )}
       </div>
     </aside>
+  )
+}
+
+function MarkdownSingleNoteSendMenu({
+  worktreeId,
+  filePath,
+  content,
+  note,
+  modeSlot,
+  onDelivered
+}: {
+  worktreeId: string
+  filePath: string
+  content: string
+  note: MarkdownReviewNote
+  modeSlot: string
+  onDelivered: (notes: readonly MarkdownReviewNote[]) => void
+}): React.JSX.Element {
+  return (
+    <NotesSendMenu
+      worktreeId={worktreeId}
+      groupId={worktreeId}
+      modeIdParts={['markdown-notes', worktreeId, filePath, modeSlot, note.id]}
+      scopes={[
+        {
+          id: 'note',
+          label: 'This note',
+          notes: note.sentAt ? [] : [note],
+          prompt: formatMarkdownReviewNotes([note], content)
+        }
+      ]}
+      targetModeLabel="This note"
+      triggerClassName="markdown-review-icon-button"
+      disabledTooltip="Note already sent"
+      onDelivered={onDelivered}
+    />
   )
 }
 

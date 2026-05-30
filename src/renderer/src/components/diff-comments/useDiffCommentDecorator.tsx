@@ -7,8 +7,11 @@ import type { editor as monacoEditor, IDisposable } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
 import type { DiffComment } from '../../../../shared/types'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
+import { formatDiffComments } from '@/lib/diff-comments-format'
+import { useAppStore } from '@/store'
 import { DiffCommentCard } from './DiffCommentCard'
 import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
+import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
 
 // Why: Monaco glyph-margin *decorations* don't expose click events in a way
 // that lets us show a polished popover anchored to a line. So instead we own a
@@ -40,6 +43,7 @@ type DecoratorArgs = {
   // diffs persisted to WorktreeMeta). GitHub PR review surfaces don't pass
   // this — their notes are remote and can't be edited via this slice.
   onUpdateComment?: (commentId: string, body: string) => Promise<boolean>
+  formatCommentPrompt?: (comment: DecoratedDiffComment) => string
   // Why: pending-scroll request from the SourceControl sidebar. When this id
   // matches a comment in this surface the decorator reveals that line in the
   // editor and calls the ack callback so the same id can be requested again
@@ -74,7 +78,10 @@ const ZONE_CHROME_PX = 52
 const ZONE_LINE_PX = 18
 const ZONE_MIN_PX = 72
 
-function getRenderSignature(comment: DecoratedDiffComment): string {
+function getRenderSignature(
+  comment: DecoratedDiffComment,
+  formatCommentPrompt?: (comment: DecoratedDiffComment) => string
+): string {
   return JSON.stringify({
     body: comment.body,
     sentAt: comment.sentAt ?? null,
@@ -83,8 +90,23 @@ function getRenderSignature(comment: DecoratedDiffComment): string {
     createdAtLabel: comment.createdAtLabel ?? null,
     url: comment.url ?? null,
     canDelete: comment.canDelete ?? null,
-    canEdit: comment.canEdit ?? null
+    canEdit: comment.canEdit ?? null,
+    sendPrompt: formatCommentPrompt ? formatCommentPrompt(comment) : null
   })
+}
+
+function getSingleCommentSendScopes(
+  comment: DecoratedDiffComment,
+  formatCommentPrompt?: (comment: DecoratedDiffComment) => string
+): NotesSendMenuScope<DecoratedDiffComment>[] {
+  return [
+    {
+      id: 'note',
+      label: 'This note',
+      notes: comment.sentAt ? [] : [comment],
+      prompt: formatCommentPrompt ? formatCommentPrompt(comment) : formatDiffComments([comment])
+    }
+  ]
 }
 
 export function useDiffCommentDecorator({
@@ -97,9 +119,14 @@ export function useDiffCommentDecorator({
   onAddCommentClick,
   onDeleteComment,
   onUpdateComment,
+  formatCommentPrompt,
   pendingScrollCommentId,
   onPendingScrollConsumed
 }: DecoratorArgs): void {
+  const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
+  const activeGroupId = useAppStore((s) =>
+    worktreeId ? (s.activeGroupIdByWorktree[worktreeId] ?? worktreeId) : worktreeId
+  )
   const hoverLineRef = useRef<number | null>(null)
   // Why: one React root per view zone. Body updates re-render into the
   // existing root, so Monaco's zone DOM stays in place and only the card
@@ -481,6 +508,20 @@ export function useDiffCommentDecorator({
               : undefined
           }
           onContentResize={() => resizeZone(comment.id)}
+          headerActions={
+            worktreeId && comment.author === undefined ? (
+              <NotesSendMenu
+                worktreeId={worktreeId}
+                groupId={activeGroupId}
+                modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
+                scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
+                targetModeLabel="This note"
+                triggerClassName="orca-diff-comment-edit"
+                disabledTooltip="Note already sent"
+                onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+              />
+            ) : null
+          }
         />
       )
     }
@@ -566,7 +607,7 @@ export function useDiffCommentDecorator({
           domNode: dom,
           delegate,
           root,
-          lastRenderSignature: getRenderSignature(c),
+          lastRenderSignature: getRenderSignature(c, formatCommentPrompt),
           laidOut: false
         })
       }
@@ -578,7 +619,7 @@ export function useDiffCommentDecorator({
         if (!entry) {
           continue
         }
-        const renderSignature = getRenderSignature(c)
+        const renderSignature = getRenderSignature(c, formatCommentPrompt)
         if (entry.lastRenderSignature === renderSignature) {
           continue
         }
@@ -601,7 +642,15 @@ export function useDiffCommentDecorator({
     // forcing a full rebuild — exactly the flicker this diff-based pass is
     // meant to avoid. Zone teardown lives in the editor-scoped effect above,
     // which only fires when the editor itself is replaced/unmounted.
-  }, [editor, filePath, worktreeId, comments])
+  }, [
+    activeGroupId,
+    clearDeliveredDiffComments,
+    editor,
+    filePath,
+    formatCommentPrompt,
+    worktreeId,
+    comments
+  ])
 
   // Why: route a sidebar scroll-to-note request into the decorator. We mirror
   // VS Code's commentsController.revealCommentThread (which awaits
