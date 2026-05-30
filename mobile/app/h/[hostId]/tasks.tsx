@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ActivityIndicator,
@@ -2020,9 +2020,6 @@ export default function MobileTasksScreen() {
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
-  // Why: async task loads use this ref as a stale-client guard; update it
-  // before commit so a just-rendered load path does not see the old client.
-  clientRef.current = client
   const reposRef = useRef<RepoSummary[]>([])
   const loadGenerationRef = useRef(0)
   const taskResumeRef = useRef<TaskResumeState>({})
@@ -2536,6 +2533,12 @@ export default function MobileTasksScreen() {
     }
     return [...logins].sort().join(',')
   }, [projectRowDetail, projectRowItem?.content.assignees])
+
+  // Why: task-loading effects use this as a stale-client guard, so the ref
+  // must be current before those passive effects can run after commit.
+  useLayoutEffect(() => {
+    clientRef.current = client
+  }, [client])
 
   const persistTaskResumeState = useCallback(
     (updates: Partial<TaskResumeState>) => {
