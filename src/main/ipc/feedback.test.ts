@@ -122,6 +122,33 @@ describe('submitFeedback', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('does not retry the fallback when the fallback fails after a primary server error', async () => {
+    vi.useFakeTimers()
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('api.onorca.dev')) {
+        return Promise.resolve({ ok: false, status: 500 } as Response)
+      }
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('fallback aborted')))
+      })
+    })
+
+    const result = submitFeedback({
+      feedback: 'primary 500 and fallback stalled',
+      submitAnonymously: false,
+      githubLogin: 'trusted-user',
+      githubEmail: 'trusted@example.com'
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    await expect(Promise.race([result, Promise.resolve('pending')])).resolves.toEqual({
+      ok: false,
+      status: null,
+      error: 'fallback aborted'
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('forces renderer IPC submissions onto the feedback lane', async () => {
     registerFeedbackHandlers()
     await handlers.get('feedback:submit')?.(null, {

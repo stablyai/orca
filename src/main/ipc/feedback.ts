@@ -78,6 +78,33 @@ async function postFeedback(url: string, body: FeedbackSubmitBody): Promise<Resp
   }
 }
 
+function messageFromError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+async function submitFallbackFeedback(
+  body: FeedbackSubmitBody,
+  primaryError?: unknown
+): Promise<FeedbackSubmitResult> {
+  try {
+    const fallback = await postFeedback(FEEDBACK_API_FALLBACK_URL, body)
+    if (fallback.ok) {
+      return { ok: true }
+    }
+    return { ok: false, status: fallback.status, error: `status ${fallback.status}` }
+  } catch (fallbackError) {
+    const message = messageFromError(fallbackError)
+    if (primaryError === undefined) {
+      return { ok: false, status: null, error: message }
+    }
+    return {
+      ok: false,
+      status: null,
+      error: `${messageFromError(primaryError)}; fallback: ${message}`
+    }
+  }
+}
+
 export async function submitFeedback(
   args: InternalFeedbackSubmitArgs
 ): Promise<FeedbackSubmitResult> {
@@ -91,28 +118,14 @@ export async function submitFeedback(
     // 404/5xx-style results and network errors — don't mask real 4xx responses
     // from a healthy host.
     if (res.status === 404 || res.status >= 500) {
-      const fallback = await postFeedback(FEEDBACK_API_FALLBACK_URL, body)
-      if (fallback.ok) {
-        return { ok: true }
-      }
-      return { ok: false, status: fallback.status, error: `status ${fallback.status}` }
+      return submitFallbackFeedback(body)
     }
     return { ok: false, status: res.status, error: `status ${res.status}` }
   } catch (error) {
     // Why: falling back on any network-level failure preserves the prior
     // behavior where DNS/connect failures on the primary host transparently
     // try the website-hosted versioned endpoint.
-    try {
-      const fallback = await postFeedback(FEEDBACK_API_FALLBACK_URL, body)
-      if (fallback.ok) {
-        return { ok: true }
-      }
-      return { ok: false, status: fallback.status, error: `status ${fallback.status}` }
-    } catch (fallbackError) {
-      const message = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
-      const primaryMessage = error instanceof Error ? error.message : String(error)
-      return { ok: false, status: null, error: `${primaryMessage}; fallback: ${message}` }
-    }
+    return submitFallbackFeedback(body, error)
   }
 }
 
