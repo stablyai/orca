@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react'
-import { ChevronDown, Ellipsis } from 'lucide-react'
+import React, { useState } from 'react'
+import { Ellipsis } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -25,6 +25,12 @@ type ImportedWorktreesVisibilityCardProps = {
 }
 
 const PREVIEW_LIMIT = 3
+const UNKNOWN_LOCATION_LABEL = 'Unknown location'
+
+type ImportedWorktreePathGroup = {
+  path: string
+  worktrees: ImportedWorktreeVisibilityPreview[]
+}
 
 function pluralizeWorktree(count: number): string {
   return count === 1 ? 'worktree' : 'worktrees'
@@ -38,15 +44,38 @@ function getWorktreeKey(
   return worktree.id ?? worktree.path ?? `${prefix}-${worktree.displayName}-${index}`
 }
 
-function getDetailText(worktree: ImportedWorktreeVisibilityPreview): string {
-  const parts = [worktree.displayName]
-  if (worktree.path) {
-    parts.push(worktree.path)
+function getParentPath(path: string | undefined): string {
+  if (!path) {
+    return UNKNOWN_LOCATION_LABEL
   }
-  if (worktree.branch) {
-    parts.push(worktree.branch)
+  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '')
+  const separatorIndex = normalized.lastIndexOf('/')
+  if (separatorIndex < 0) {
+    return UNKNOWN_LOCATION_LABEL
   }
-  return parts.join(' · ')
+  if (separatorIndex === 0) {
+    return '/'
+  }
+  return normalized.slice(0, separatorIndex)
+}
+
+function groupWorktreesByParentPath(
+  worktrees: readonly ImportedWorktreeVisibilityPreview[]
+): ImportedWorktreePathGroup[] {
+  const groups: ImportedWorktreePathGroup[] = []
+  const groupByPath = new Map<string, ImportedWorktreePathGroup>()
+  for (const worktree of worktrees) {
+    const path = getParentPath(worktree.path)
+    const existing = groupByPath.get(path)
+    if (existing) {
+      existing.worktrees.push(worktree)
+      continue
+    }
+    const group = { path, worktrees: [worktree] }
+    groupByPath.set(path, group)
+    groups.push(group)
+  }
+  return groups
 }
 
 export default function ImportedWorktreesVisibilityCard({
@@ -59,14 +88,12 @@ export default function ImportedWorktreesVisibilityCard({
   onKeepHidden,
   className
 }: ImportedWorktreesVisibilityCardProps): React.JSX.Element | null {
-  const [detailsOpen, setDetailsOpen] = useState(false)
-  const detailsId = React.useId()
+  const [isExpanded, setIsExpanded] = useState(false)
   const hiddenCount = hiddenWorktrees.length
   const worktreeNoun = pluralizeWorktree(hiddenCount)
-  const previewWorktrees = useMemo(() => hiddenWorktrees.slice(0, PREVIEW_LIMIT), [hiddenWorktrees])
-  const hasExtraRows = hiddenWorktrees.length > PREVIEW_LIMIT
-  const hasPathDetails = hiddenWorktrees.some((worktree) => worktree.path || worktree.branch)
-  const hasDetails = hasExtraRows || hasPathDetails
+  const visibleWorktrees = isExpanded ? hiddenWorktrees : hiddenWorktrees.slice(0, PREVIEW_LIMIT)
+  const visibleWorktreeGroups = groupWorktreesByParentPath(visibleWorktrees)
+  const remainingCount = Math.max(0, hiddenWorktrees.length - visibleWorktrees.length)
 
   if (hiddenCount === 0) {
     return null
@@ -86,7 +113,7 @@ export default function ImportedWorktreesVisibilityCard({
       aria-busy={pending}
       className={cn(
         'mx-1 my-1.5 rounded-lg border border-sidebar-border bg-sidebar-accent/60 p-2.5 text-sidebar-foreground',
-        placement === 'repo-group' ? 'ml-7' : 'ml-5',
+        placement === 'repo-group' ? 'ml-9' : 'ml-7',
         className
       )}
     >
@@ -95,76 +122,43 @@ export default function ImportedWorktreesVisibilityCard({
           <h3 className="truncate text-[13px] font-semibold leading-5">{title}</h3>
           <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{subtitle}</p>
         </div>
-
-        {hasDetails ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-controls={detailsId}
-            aria-expanded={detailsOpen}
-            aria-label={
-              detailsOpen ? 'Hide imported worktree details' : 'Show imported worktree details'
-            }
-            disabled={pending}
-            onClick={() => setDetailsOpen((open) => !open)}
-            className="mt-0.5 shrink-0 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <ChevronDown
-              className={cn('size-3 transition-transform', detailsOpen ? 'rotate-180' : '')}
-            />
-          </Button>
-        ) : null}
       </div>
 
-      <div className="mt-2 grid gap-1" aria-label="Imported worktree preview">
-        {previewWorktrees.map((worktree, index) => (
-          <div
-            key={getWorktreeKey(worktree, index, 'preview')}
-            className="flex min-h-6 min-w-0 items-center justify-between gap-2 rounded-md bg-sidebar px-2 text-xs"
-          >
-            <span className="min-w-0 truncate font-medium text-sidebar-foreground">
-              {worktree.displayName}
-            </span>
-            <span className="shrink-0 text-[11px] text-muted-foreground">hidden</span>
+      <div className="mt-2 grid gap-1.5" aria-label="Imported worktree preview">
+        {visibleWorktreeGroups.map((group) => (
+          <div key={group.path} className="grid min-w-0 gap-1">
+            <div
+              className="min-w-0 truncate px-1 text-[10px] font-medium uppercase leading-4 text-muted-foreground"
+              title={group.path}
+            >
+              {group.path}
+            </div>
+            {group.worktrees.map((worktree, index) => (
+              <div
+                key={getWorktreeKey(worktree, index, 'preview')}
+                className="flex min-h-6 min-w-0 items-center justify-between gap-2 rounded-md bg-sidebar px-2 text-xs"
+              >
+                <span className="min-w-0 truncate font-medium text-sidebar-foreground">
+                  {worktree.displayName}
+                </span>
+                <span className="shrink-0 text-[11px] text-muted-foreground">hidden</span>
+              </div>
+            ))}
           </div>
         ))}
       </div>
 
-      {hasDetails ? (
-        <div className="mt-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-controls={detailsId}
-            aria-expanded={detailsOpen}
-            disabled={pending}
-            onClick={() => setDetailsOpen((open) => !open)}
-            className="h-6 px-2 text-[11px] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            {detailsOpen ? 'Hide details' : 'Show details'}
-            <ChevronDown
-              className={cn('size-3 transition-transform', detailsOpen ? 'rotate-180' : '')}
-            />
-          </Button>
-
-          <div
-            id={detailsId}
-            hidden={!detailsOpen}
-            className="mt-2 grid gap-1 border-t border-sidebar-border pt-2"
-          >
-            {hiddenWorktrees.map((worktree, index) => (
-              <div
-                key={getWorktreeKey(worktree, index, 'detail')}
-                className="min-w-0 truncate text-[11px] leading-4 text-muted-foreground"
-                title={getDetailText(worktree)}
-              >
-                {getDetailText(worktree)}
-              </div>
-            ))}
-          </div>
-        </div>
+      {remainingCount > 0 ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          disabled={pending}
+          onClick={() => setIsExpanded(true)}
+          className="mt-1.5 h-6 px-2 text-[11px] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        >
+          Show {remainingCount} more
+        </Button>
       ) : null}
 
       {placement === 'repo-group' ? (

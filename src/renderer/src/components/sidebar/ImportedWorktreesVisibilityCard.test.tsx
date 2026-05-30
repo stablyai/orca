@@ -8,19 +8,19 @@ const hiddenWorktrees = [
   {
     id: 'hidden-1',
     displayName: 'payments-refactor',
-    path: '../payments-refactor',
+    path: '/worktrees/demo-project/payments-refactor',
     branch: 'refs/heads/payments-refactor'
   },
   {
     id: 'hidden-2',
     displayName: 'auth-cache-debug',
-    path: '../auth-cache-debug',
+    path: '/worktrees/demo-project/auth-cache-debug',
     branch: 'refs/heads/auth-cache-debug'
   },
   {
     id: 'hidden-3',
     displayName: 'legacy-oauth-fix',
-    path: '../legacy-oauth-fix',
+    path: '/worktrees/legacy/legacy-oauth-fix',
     branch: 'refs/heads/legacy-oauth-fix'
   },
   {
@@ -59,8 +59,13 @@ describe('ImportedWorktreesVisibilityCard', () => {
     expect(markup).toContain('payments-refactor')
     expect(markup).toContain('auth-cache-debug')
     expect(markup).toContain('legacy-oauth-fix')
+    expect(markup).toContain('/worktrees/demo-project')
+    expect(markup).toContain('/worktrees/legacy')
     expect((markup.match(/>hidden</g) ?? []).length).toBe(3)
-    expect(markup).toContain('Show details')
+    expect(markup).toContain('Show 1 more')
+    expect(markup).not.toContain('ssh-worktree')
+    expect(markup).not.toContain('refs/heads/payments-refactor')
+    expect(markup).not.toContain('/worktrees/demo-project/payments-refactor')
     expect(markup).toContain('repo options')
     expect(markup).toContain('Keep hidden')
     expect(markup).toContain('Show')
