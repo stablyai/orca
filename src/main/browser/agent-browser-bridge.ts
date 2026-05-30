@@ -171,6 +171,22 @@ function parseShellArgs(input: string): string[] {
   return args
 }
 
+function stripAgentBrowserTargetArgs(args: string[]): string[] {
+  const stripped: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === '--cdp' || arg === '--session') {
+      index++
+      continue
+    }
+    if (arg.startsWith('--cdp=') || arg.startsWith('--session=')) {
+      continue
+    }
+    stripped.push(arg)
+  }
+  return stripped
+}
+
 // Why: agent-browser returns generic error messages for stale/unknown refs.
 // Map them to a specific code so agents can reliably detect and re-snapshot.
 function classifyErrorCode(message: string): string {
@@ -1695,12 +1711,9 @@ export class AgentBrowserBridge {
 
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: strip --cdp and --session from raw command to prevent session/target injection
-      const sanitized = command
-        .replace(/--cdp\s+\S+/g, '')
-        .replace(/--session\s+\S+/g, '')
-        .trim()
-      const args = parseShellArgs(sanitized)
+      // Why: strip target/session flags from raw passthrough commands so a
+      // caller cannot override Orca's selected browser page or CDP proxy.
+      const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
       return await this.execAgentBrowser(sessionName, args)
     })
   }
