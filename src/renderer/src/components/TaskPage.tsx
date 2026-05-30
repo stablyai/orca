@@ -142,9 +142,14 @@ import {
 } from '@/components/task-page-cache-selectors'
 import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-summary'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import {
+  GITHUB_PR_MERGE_METHOD_LABELS,
+  resolveGitHubPRMergeMethods
+} from '../../../shared/github-pr-merge-methods'
 import type {
   GitHubOwnerRepo,
   GitHubAssignableUser,
+  GitHubPRMergeMethod,
   GitHubWorkItem,
   GitLabTodo,
   GitLabWorkItem,
@@ -1935,14 +1940,14 @@ function PRMergeCell({
     return <span className="text-[11px] text-muted-foreground">Issue</span>
   }
   const mergePresentation = presentGitHubPRMergeState(item)
+  const mergeMethods = resolveGitHubPRMergeMethods(item.mergeMethodSettings)
   const mergeDisabled = !repo || merging || !mergePresentation.directMergeAvailable
 
-  const handleMerge = async (method: 'merge' | 'squash' | 'rebase'): Promise<void> => {
+  const handleMerge = async (method: GitHubPRMergeMethod): Promise<void> => {
     if (!repo || mergeDisabled) {
       return
     }
-    const label =
-      method === 'squash' ? 'Squash and merge' : method === 'rebase' ? 'Rebase and merge' : 'Merge'
+    const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
     const confirmed = await confirm({
       title: `${label} PR #${item.number}?`,
       description: 'This will update the pull request on GitHub.',
@@ -2035,18 +2040,16 @@ function PRMergeCell({
           </DropdownMenuItem>
         )}
         {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
-        <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('squash')}>
-          <GitMerge className="size-4" />
-          Squash and merge
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('merge')}>
-          <GitMerge className="size-4" />
-          Create merge commit
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('rebase')}>
-          <GitMerge className="size-4" />
-          Rebase and merge
-        </DropdownMenuItem>
+        {mergeMethods.methods.map(({ method, label }) => (
+          <DropdownMenuItem
+            key={method}
+            disabled={mergeDisabled}
+            onSelect={() => void handleMerge(method)}
+          >
+            <GitMerge className="size-4" />
+            {label}
+          </DropdownMenuItem>
+        ))}
         <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
           <ExternalLink className="size-4" />
           Open GitHub merge box

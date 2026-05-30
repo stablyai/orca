@@ -24,15 +24,9 @@ import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type { GitHubPRMergeMethod } from '../../../../shared/types'
+import { resolveGitHubPRMergeMethods } from '../../../../shared/github-pr-merge-methods'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
-
-const MERGE_METHODS = ['squash', 'merge', 'rebase'] as const
-
-const MERGE_LABELS: Record<(typeof MERGE_METHODS)[number], string> = {
-  squash: 'Squash and merge',
-  merge: 'Create a merge commit',
-  rebase: 'Rebase and merge'
-}
 
 type HostedReviewActionInfo = Pick<
   HostedReviewInfo,
@@ -141,6 +135,11 @@ export default function HostedReviewActions({
       mergeQueueRequired: review.mergeQueueRequired
     })
   }, [githubPR, isGitLab, review])
+  const mergeMethods = useMemo(
+    () =>
+      resolveGitHubPRMergeMethods(isGitLab ? null : (githubPR?.mergeMethodSettings ?? null)),
+    [githubPR?.mergeMethodSettings, isGitLab]
+  )
   const isUpdatingReviewState = stateUpdating !== null
   const primaryMergeDisabled =
     merging ||
@@ -151,7 +150,7 @@ export default function HostedReviewActions({
   const menuDisabled = merging || isUpdatingReviewState
 
   const handleMerge = useCallback(
-    async (method: 'merge' | 'squash' | 'rebase' = 'squash') => {
+    async (method: GitHubPRMergeMethod = mergeMethods.defaultMethod) => {
       setMerging(true)
       setActionError(null)
       try {
@@ -179,7 +178,15 @@ export default function HostedReviewActions({
         setMerging(false)
       }
     },
-    [githubPR?.prRepo, isGitLab, onRefreshReview, repo.id, repo.path, review.number]
+    [
+      githubPR?.prRepo,
+      isGitLab,
+      mergeMethods.defaultMethod,
+      onRefreshReview,
+      repo.id,
+      repo.path,
+      review.number
+    ]
   )
 
   const handleAutoMerge = useCallback(async () => {
@@ -312,7 +319,7 @@ export default function HostedReviewActions({
                     onClick={() =>
                       mergePresentation.autoMergeAction && !mergePresentation.directMergeAvailable
                         ? void handleAutoMerge()
-                        : void handleMerge('squash')
+                        : void handleMerge(mergeMethods.defaultMethod)
                     }
                     disabled={primaryMergeDisabled}
                   >
@@ -324,7 +331,7 @@ export default function HostedReviewActions({
                     {merging
                       ? 'Working...'
                       : mergePresentation.directMergeAvailable
-                        ? 'Squash and merge'
+                        ? mergeMethods.defaultLabel
                         : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
                   </Button>
                 </span>
@@ -369,14 +376,14 @@ export default function HostedReviewActions({
                     <DropdownMenuSeparator />
                   </>
                 )}
-                {MERGE_METHODS.map((method) => (
+                {mergeMethods.methods.map(({ method, label }) => (
                   <DropdownMenuItem
                     key={method}
                     disabled={directMergeDisabled}
                     onSelect={() => void handleMerge(method)}
                   >
                     <GitMerge className="size-3.5" />
-                    {MERGE_LABELS[method]}
+                    {label}
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />

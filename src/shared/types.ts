@@ -719,6 +719,13 @@ export type PRConflictSummary = {
 
 export type GitHubRepositoryIdentity = { owner: string; repo: string }
 
+export type GitHubPRMergeMethod = 'merge' | 'squash' | 'rebase'
+
+export type GitHubPRMergeMethodSettings = {
+  defaultMethod: GitHubPRMergeMethod
+  allowedMethods: Record<GitHubPRMergeMethod, boolean>
+}
+
 export type PRInfo = {
   number: number
   title: string
@@ -730,6 +737,7 @@ export type PRInfo = {
   reviewDecision?: PRReviewDecision | null
   autoMergeEnabled?: boolean
   mergeQueueRequired?: boolean | null
+  mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   // Why: check-runs are keyed by the PR head commit, not the mutable branch name.
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
@@ -998,6 +1006,7 @@ export type GitHubWorkItem = {
   mergeable?: PRMergeableState
   autoMergeEnabled?: boolean
   mergeQueueRequired?: boolean | null
+  mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean
   // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
