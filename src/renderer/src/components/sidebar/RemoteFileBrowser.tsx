@@ -81,8 +81,14 @@ export function RemoteFileBrowser({
     setFileHint(false)
   }, [])
 
+  const invalidateBrowseRequests = useCallback(() => {
+    genRef.current++
+    previewGenRef.current++
+  }, [])
+
   useEffect(() => {
     return () => {
+      invalidateBrowseRequests()
       if (fileHintTimerRef.current) {
         clearTimeout(fileHintTimerRef.current)
         fileHintTimerRef.current = null
@@ -96,7 +102,7 @@ export function RemoteFileBrowser({
         pasteResolveTimerRef.current = null
       }
     }
-  }, [])
+  }, [invalidateBrowseRequests])
 
   const fetchListing = useCallback(
     async (dirPath: string): Promise<BrowseResult> => {
