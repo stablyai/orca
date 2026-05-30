@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import React, { useState, useCallback } from 'react'
 import { X, Wrench, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -121,6 +122,11 @@ type Props = {
   reserveDisclosureGutter?: boolean
   // Why: chevron indentation replaces fixed-offset lineage connector art.
   hideLineageConnectors?: boolean
+  // Why: send-popover target mode temporarily turns sidebar rows into the
+  // picker surface, so row clicks must send/no-op instead of navigating.
+  sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
+  sendTargetDisabledReason?: string
+  onSendTargetClick?: (paneKey: string) => void
 }
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
@@ -137,7 +143,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   childAgentsExpanded = false,
   onToggleChildAgents,
   reserveDisclosureGutter = false,
-  hideLineageConnectors = false
+  hideLineageConnectors = false,
+  sendTargetStatus,
+  sendTargetDisabledReason,
+  onSendTargetClick
 }: Props) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -185,6 +194,26 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       onActivate(agent.tab.id, agent.paneKey)
     },
     [onActivate, agent.tab.id, agent.paneKey]
+  )
+  const handleSendTargetClickCapture = useCallback(
+    (e: React.MouseEvent) => {
+      if (!sendTargetStatus) {
+        return
+      }
+      const target = e.target
+      if (
+        target instanceof Element &&
+        target.closest('button, a, input, textarea, select, [role="button"]')
+      ) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      if (sendTargetStatus === 'eligible') {
+        onSendTargetClick?.(agent.paneKey)
+      }
+    },
+    [agent.paneKey, onSendTargetClick, sendTargetStatus]
   )
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
@@ -236,6 +265,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     tsParts.push(`done ${formatTimeAgo(doneAt, now)}`)
   }
 
+  const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts
+
   return (
     // Why: NOT role="button" / tabIndex={0}. The row contains real <button>
     // children (dismiss X, expand chevron) and tooltip triggers that forward
@@ -245,6 +276,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     // the agent via the child buttons and the tab switcher; the outer <div>
     // stays a plain clickable surface for pointer activation.
     <div
+      onClickCapture={handleSendTargetClickCapture}
       onClick={handleActivate}
       className={cn(
         // Why: this row owns the timestamp/X hover boundary; anonymous
@@ -254,10 +286,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         // Why: inline agent rows sit inside a hoverable workspace card, so
         // their hover wash must stay softer than the parent card highlight.
         // The focused-pane state reuses the same class via data attribute.
-        'cursor-pointer rounded-sm worktree-agent-row-hover'
+        'cursor-pointer rounded-sm worktree-agent-row-hover',
+        (sendTargetStatus === 'eligible' || sendTargetStatus === 'sending') &&
+          'ring-1 ring-sidebar-ring/40 ring-offset-1 ring-offset-sidebar',
+        sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
+        sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
       data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
-      title={tsParts.length > 0 ? tsParts.join(' • ') : undefined}
+      data-agent-send-target={sendTargetStatus}
+      title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
       aria-level={participatesInLineage ? (lineage?.depth ?? 0) + 1 : undefined}
     >

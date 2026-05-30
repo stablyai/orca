@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Send, Sparkles } from 'lucide-react'
 import type { DiffComment } from '../../../../shared/types'
 import { useAppStore } from '@/store'
@@ -43,6 +43,9 @@ export function DiffNotesSendMenu({
   align?: 'start' | 'center' | 'end'
 }): React.JSX.Element {
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
+  const openAgentSendPopoverTargetMode = useAppStore((s) => s.openAgentSendPopoverTargetMode)
+  const closeAgentSendPopoverTargetMode = useAppStore((s) => s.closeAgentSendPopoverTargetMode)
+  const activeTargetModeId = useAppStore((s) => s.agentSendPopoverTargetMode?.id ?? null)
   const unsentNotes = useMemo(() => comments.filter((comment) => !comment.sentAt), [comments])
   const unsentPrompt = useMemo(() => formatDiffComments(unsentNotes), [unsentNotes])
   const fileNotes = useMemo(
@@ -53,9 +56,76 @@ export function DiffNotesSendMenu({
   const unsentFilePrompt = useMemo(() => formatDiffComments(unsentFileNotes), [unsentFileNotes])
   const hasUnsentNotes = unsentNotes.length > 0
   const canSendFileScope = showFileScope && Boolean(filePath)
+  const [sendMenuOpen, setSendMenuOpen] = useState(false)
+  const targetModeId = `diff-notes:${worktreeId}:${groupId}:${filePath ?? 'all'}`
+
+  const openDiffTargetMode = useCallback(
+    (notes: readonly DiffComment[], prompt: string, label: string) => {
+      openAgentSendPopoverTargetMode({
+        id: targetModeId,
+        worktreeId,
+        source: 'diff-notes',
+        prompt,
+        label,
+        launchSource: 'notes_send',
+        onPromptDelivered: () => void clearDeliveredDiffComments(worktreeId, notes)
+      })
+    },
+    [clearDeliveredDiffComments, openAgentSendPopoverTargetMode, targetModeId, worktreeId]
+  )
+
+  const openAllNotesTargetMode = useCallback(() => {
+    openDiffTargetMode(unsentNotes, unsentPrompt, 'All unsent notes')
+  }, [openDiffTargetMode, unsentNotes, unsentPrompt])
+
+  const openFileNotesTargetMode = useCallback(() => {
+    if (unsentFileNotes.length === 0) {
+      return
+    }
+    openDiffTargetMode(unsentFileNotes, unsentFilePrompt, 'This file')
+  }, [openDiffTargetMode, unsentFileNotes, unsentFilePrompt])
+
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      setSendMenuOpen(open)
+      if (open) {
+        // Why: file-scoped menus have two prompt scopes. Default to the local
+        // file scope so a sidebar-row click before hovering a submenu cannot
+        // accidentally broaden delivery to every unsent note.
+        if (canSendFileScope && unsentFileNotes.length > 0) {
+          openFileNotesTargetMode()
+        } else {
+          openAllNotesTargetMode()
+        }
+      } else {
+        closeAgentSendPopoverTargetMode(targetModeId)
+      }
+    },
+    [
+      canSendFileScope,
+      closeAgentSendPopoverTargetMode,
+      openAllNotesTargetMode,
+      openFileNotesTargetMode,
+      targetModeId,
+      unsentFileNotes.length
+    ]
+  )
+
+  useEffect(() => {
+    if (sendMenuOpen && activeTargetModeId !== targetModeId) {
+      setSendMenuOpen(false)
+    }
+  }, [activeTargetModeId, sendMenuOpen, targetModeId])
+
+  useEffect(
+    () => () => {
+      closeAgentSendPopoverTargetMode(targetModeId)
+    },
+    [closeAgentSendPopoverTargetMode, targetModeId]
+  )
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false} open={sendMenuOpen} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -92,7 +162,12 @@ export function DiffNotesSendMenu({
           {hasUnsentNotes ? 'Send notes to a new agent' : 'All notes sent'}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align={align} className="min-w-[220px]">
+      <DropdownMenuContent
+        align={align}
+        className="min-w-[220px]"
+        onInteractOutside={preventAgentSendTargetOutsideDismiss}
+        onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+      >
         {canSendFileScope ? (
           <>
             <DropdownMenuLabel>Send notes</DropdownMenuLabel>
@@ -100,6 +175,8 @@ export function DiffNotesSendMenu({
               <DropdownMenuSubTrigger
                 disabled={unsentFileNotes.length === 0}
                 className="[&>svg:last-child]:ml-0"
+                onPointerEnter={openFileNotesTargetMode}
+                onFocus={openFileNotesTargetMode}
               >
                 <NoteScopeMenuRow label="This file" count={unsentFileNotes.length} />
               </DropdownMenuSubTrigger>
@@ -121,6 +198,8 @@ export function DiffNotesSendMenu({
               <DropdownMenuSubTrigger
                 disabled={unsentNotes.length === 0}
                 className="[&>svg:last-child]:ml-0"
+                onPointerEnter={openAllNotesTargetMode}
+                onFocus={openAllNotesTargetMode}
               >
                 <NoteScopeMenuRow label="All unsent notes" count={unsentNotes.length} />
               </DropdownMenuSubTrigger>
@@ -151,6 +230,20 @@ export function DiffNotesSendMenu({
       </DropdownMenuContent>
     </DropdownMenu>
   )
+}
+
+function preventAgentSendTargetOutsideDismiss(event: CustomEvent<{ originalEvent: Event }>) {
+  const target = event.detail.originalEvent.target
+  if (!(target instanceof Element)) {
+    return
+  }
+  if (
+    target.closest(
+      '[data-agent-send-target="eligible"], [data-agent-send-target="disabled"], [data-agent-send-target="sending"]'
+    )
+  ) {
+    event.preventDefault()
+  }
 }
 
 function NoteScopeMenuRow({ label, count }: { label: string; count: number }): React.JSX.Element {

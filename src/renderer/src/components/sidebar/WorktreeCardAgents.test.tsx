@@ -14,6 +14,8 @@ let mockAgents: unknown[] = [
   }
 ]
 let mockFocusedAgentPaneKey: string | null = null
+const mockSendPromptToSidebarAgentTarget = vi.fn()
+let mockStoreState: Record<string, unknown>
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -21,7 +23,13 @@ vi.mock('@/store', () => ({
       acknowledgedAgentsByPaneKey: {},
       dropAgentStatus: vi.fn(),
       dismissRetainedAgent: vi.fn(),
-      acknowledgeAgents: vi.fn()
+      acknowledgeAgents: vi.fn(),
+      agentSendPopoverTargetMode: null,
+      agentStatusByPaneKey: {},
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sendPromptToSidebarAgentTarget: mockSendPromptToSidebarAgentTarget,
+      ...mockStoreState
     })
 }))
 
@@ -37,12 +45,18 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
   default: ({
     agent,
     isFocusedPane,
+    sendTargetStatus,
+    sendTargetDisabledReason,
+    onSendTargetClick,
     childAgentCount,
     childAgentsExpanded,
     onToggleChildAgents
   }: {
     agent: { paneKey: string }
     isFocusedPane?: boolean
+    sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
+    sendTargetDisabledReason?: string
+    onSendTargetClick?: (paneKey: string) => void
     childAgentCount?: number
     childAgentsExpanded?: boolean
     onToggleChildAgents?: () => void
@@ -50,6 +64,9 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     <div
       data-testid="agent-row"
       data-focused={isFocusedPane ? 'true' : 'false'}
+      data-agent-send-target={sendTargetStatus}
+      data-disabled-reason={sendTargetDisabledReason}
+      data-has-send-handler={typeof onSendTargetClick === 'function' ? 'true' : 'false'}
       data-pane-key={agent.paneKey}
     >
       {agent.paneKey}
@@ -94,6 +111,8 @@ describe('WorktreeCardAgents', () => {
       }
     ]
     mockFocusedAgentPaneKey = null
+    mockSendPromptToSidebarAgentTarget.mockReset()
+    mockStoreState = {}
   })
 
   it('renders ordinary rows in a labeled group without a child disclosure', async () => {
@@ -130,8 +149,10 @@ describe('WorktreeCardAgents', () => {
 
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
-    expect(markup).toContain('data-focused="false" data-pane-key="tab-1:1"')
-    expect(markup).toContain('data-focused="true" data-pane-key="tab-1:2"')
+    expect(markup).toContain('data-focused="false"')
+    expect(markup).toContain('data-pane-key="tab-1:1"')
+    expect(markup).toContain('data-focused="true"')
+    expect(markup).toContain('data-pane-key="tab-1:2"')
   })
 
   it('collapses orchestration child agent rows behind a parent disclosure by default', async () => {
@@ -243,5 +264,166 @@ describe('WorktreeCardAgents', () => {
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
     expect(markup).toBe('')
+  })
+
+  it('marks active-worktree rows as eligible or disabled send targets from live store state', async () => {
+    const now = Date.now()
+    const readyPaneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    const workingPaneKey = 'tab-1:22222222-2222-4222-8222-222222222222'
+    mockAgents = [
+      {
+        paneKey: readyPaneKey,
+        tab: { id: 'tab-1' },
+        state: 'done',
+        entry: {
+          stateStartedAt: now,
+          orchestration: undefined
+        }
+      },
+      {
+        paneKey: workingPaneKey,
+        tab: { id: 'tab-1' },
+        state: 'working',
+        entry: {
+          stateStartedAt: now,
+          orchestration: undefined
+        }
+      }
+    ]
+    mockStoreState = {
+      agentSendPopoverTargetMode: {
+        id: 'send-1',
+        worktreeId: 'wt-1',
+        source: 'diff-notes',
+        prompt: 'Review this',
+        label: 'Send',
+        launchSource: 'diff-notes',
+        eligiblePaneKeys: [],
+        disabledPaneKeys: {},
+        status: 'open'
+      },
+      agentStatusByPaneKey: {
+        [readyPaneKey]: {
+          state: 'done',
+          prompt: 'Ready',
+          updatedAt: now,
+          stateStartedAt: now,
+          agentType: 'codex',
+          paneKey: readyPaneKey,
+          stateHistory: []
+        },
+        [workingPaneKey]: {
+          state: 'working',
+          prompt: 'Busy',
+          updatedAt: now,
+          stateStartedAt: now,
+          agentType: 'codex',
+          paneKey: workingPaneKey,
+          stateHistory: []
+        }
+      },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          ptyIdsByLeafId: {
+            '11111111-1111-4111-8111-111111111111': 'pty-1',
+            '22222222-2222-4222-8222-222222222222': 'pty-2'
+          }
+        }
+      }
+    }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('data-agent-send-target="eligible"')
+    expect(markup).toContain(`data-pane-key="${readyPaneKey}"`)
+    expect(markup).toContain('data-agent-send-target="disabled"')
+    expect(markup).toContain('data-disabled-reason="Agent is working"')
+    expect(markup).toContain('data-has-send-handler="true"')
+  })
+
+  it('leaves other worktree rows in ordinary mode during target selection', async () => {
+    mockStoreState = {
+      agentSendPopoverTargetMode: {
+        id: 'send-1',
+        worktreeId: 'wt-other',
+        source: 'diff-notes',
+        prompt: 'Review this',
+        label: 'Send',
+        launchSource: 'diff-notes',
+        eligiblePaneKeys: [],
+        disabledPaneKeys: {},
+        status: 'open'
+      }
+    }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('data-pane-key="tab-1:1"')
+    expect(markup).not.toContain('data-agent-send-target="eligible"')
+    expect(markup).not.toContain('data-agent-send-target="disabled"')
+    expect(markup).toContain('data-has-send-handler="false"')
+  })
+
+  it('marks the currently sending row', async () => {
+    const now = Date.now()
+    const readyPaneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    mockAgents = [
+      {
+        paneKey: readyPaneKey,
+        tab: { id: 'tab-1' },
+        state: 'done',
+        entry: {
+          stateStartedAt: now,
+          orchestration: undefined
+        }
+      }
+    ]
+    mockStoreState = {
+      agentSendPopoverTargetMode: {
+        id: 'send-1',
+        worktreeId: 'wt-1',
+        source: 'diff-notes',
+        prompt: 'Review this',
+        label: 'Send',
+        launchSource: 'diff-notes',
+        eligiblePaneKeys: [readyPaneKey],
+        disabledPaneKeys: {},
+        status: 'sending',
+        sendingPaneKey: readyPaneKey
+      },
+      agentStatusByPaneKey: {
+        [readyPaneKey]: {
+          state: 'done',
+          prompt: 'Ready',
+          updatedAt: now,
+          stateStartedAt: now,
+          agentType: 'codex',
+          paneKey: readyPaneKey,
+          stateHistory: []
+        }
+      },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          ptyIdsByLeafId: {
+            '11111111-1111-4111-8111-111111111111': 'pty-1'
+          }
+        }
+      }
+    }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('data-agent-send-target="sending"')
+    expect(markup).toContain('data-disabled-reason="Sending..."')
+    expect(markup).toContain(`data-pane-key="${readyPaneKey}"`)
   })
 })

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { pasteDraftWhenAgentReady } from './agent-paste-draft'
+import { pasteDraftWhenAgentReady, sendBracketedPasteToRunningAgent } from './agent-paste-draft'
 
 const testState = vi.hoisted(() => ({
   appState: {
@@ -225,6 +225,30 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
 
     await expect(promise).resolves.toBe(false)
+  })
+
+  it('submits to an already running agent without waiting for readiness signals', async () => {
+    const promise = sendBracketedPasteToRunningAgent({
+      ptyId: 'pty-1',
+      content: ISSUE_URL
+    })
+
+    expect(testState.subscribeToPtyData).not.toHaveBeenCalled()
+    expect(testState.subscribeToRuntimeTerminalData).not.toHaveBeenCalled()
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(49)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, {}, 'pty-1', '\r')
   })
 })
 
