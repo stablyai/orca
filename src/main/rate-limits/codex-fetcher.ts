@@ -160,19 +160,43 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       }
     })
 
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true
+    let timeout: ReturnType<typeof setTimeout> | null = null
+
+    function cleanupListeners(): void {
+      if (timeout) {
+        clearTimeout(timeout)
+        timeout = null
+      }
+      child.stdout.off('data', onStdoutData)
+      child.stderr.off('data', onStderrData)
+      child.off('error', onError)
+      child.off('close', onClose)
+    }
+
+    function settle(result: ProviderRateLimits, options?: { kill?: boolean }): void {
+      if (resolved) {
+        return
+      }
+      resolved = true
+      cleanupListeners()
+      if (options?.kill) {
         child.kill()
-        resolve({
+      }
+      resolve(result)
+    }
+
+    timeout = setTimeout(() => {
+      settle(
+        {
           provider: 'codex',
           session: null,
           weekly: null,
           updatedAt: Date.now(),
           error: 'RPC timeout',
           status: 'error'
-        })
-      }
+        },
+        { kill: true }
+      )
     }, rpcTimeoutMs)
 
     function sendRpc(method: string, params?: unknown): number {
@@ -196,7 +220,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params: {} })}\n`)
     }
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    function onStdoutData(chunk: Buffer): void {
       buffer += chunk.toString()
 
       // JSON-RPC messages are newline-delimited
@@ -228,19 +252,19 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
             if (resolved) {
               return
             }
-            resolved = true
-            clearTimeout(timeout)
-            child.kill()
 
             if (msg.error) {
-              resolve({
-                provider: 'codex',
-                session: null,
-                weekly: null,
-                updatedAt: Date.now(),
-                error: withMacTailscaleDnsHint(msg.error.message, stderr),
-                status: 'error'
-              })
+              settle(
+                {
+                  provider: 'codex',
+                  session: null,
+                  weekly: null,
+                  updatedAt: Date.now(),
+                  error: withMacTailscaleDnsHint(msg.error.message, stderr),
+                  status: 'error'
+                },
+                { kill: true }
+              )
               return
             }
 
@@ -249,64 +273,64 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
             const session = mapRpcWindow(result?.primary, 300)
             const weekly = mapRpcWindow(result?.secondary, 10080)
 
-            resolve({
-              provider: 'codex',
-              session,
-              weekly,
-              updatedAt: Date.now(),
-              error: null,
-              status: 'ok'
-            })
+            settle(
+              {
+                provider: 'codex',
+                session,
+                weekly,
+                updatedAt: Date.now(),
+                error: null,
+                status: 'ok'
+              },
+              { kill: true }
+            )
           }
         } catch {
           // Non-JSON line from the RPC server — ignore
         }
       }
-    })
+    }
 
-    child.stderr.on('data', (chunk: Buffer) => {
+    function onStderrData(chunk: Buffer): void {
       stderr += chunk.toString()
       // Why: this background poll only needs recent failure context for hints.
       if (stderr.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
         stderr = stderr.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
       }
-    })
+    }
 
-    child.on('error', (err) => {
-      if (!resolved) {
-        resolved = true
-        clearTimeout(timeout)
-        const isEnoent = (err as NodeJS.ErrnoException).code === 'ENOENT'
-        const isBareCommand = codexCommand === 'codex'
-        resolve({
-          provider: 'codex',
-          session: null,
-          weekly: null,
-          updatedAt: Date.now(),
-          error: isEnoent
-            ? isBareCommand
-              ? 'Codex CLI not found'
-              : 'Codex CLI found but could not run — Node.js may not be in your PATH'
-            : withMacTailscaleDnsHint(err.message, stderr),
-          status: isEnoent && isBareCommand ? 'unavailable' : 'error'
-        })
-      }
-    })
+    function onError(err: Error): void {
+      const isEnoent = (err as NodeJS.ErrnoException).code === 'ENOENT'
+      const isBareCommand = codexCommand === 'codex'
+      settle({
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: isEnoent
+          ? isBareCommand
+            ? 'Codex CLI not found'
+            : 'Codex CLI found but could not run — Node.js may not be in your PATH'
+          : withMacTailscaleDnsHint(err.message, stderr),
+        status: isEnoent && isBareCommand ? 'unavailable' : 'error'
+      })
+    }
 
-    child.on('close', () => {
-      if (!resolved) {
-        resolved = true
-        clearTimeout(timeout)
-        resolve({
-          provider: 'codex',
-          session: null,
-          weekly: null,
-          updatedAt: Date.now(),
-          error: withMacTailscaleDnsHint('RPC process exited unexpectedly', stderr),
-          status: 'error'
-        })
-      }
-    })
+    function onClose(): void {
+      settle({
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: withMacTailscaleDnsHint('RPC process exited unexpectedly', stderr),
+        status: 'error'
+      })
+    }
+
+    child.stdout.on('data', onStdoutData)
+    child.stderr.on('data', onStderrData)
+    child.on('error', onError)
+    child.on('close', onClose)
   })
 }
 
