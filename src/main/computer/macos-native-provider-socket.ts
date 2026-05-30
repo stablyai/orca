@@ -24,14 +24,20 @@ export async function connectMacOSProviderSocket(
 function connectSocket(socketPath: string): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(socketPath)
-    const onError = (error: Error) => {
+    const cleanup = (): void => {
+      socket.off('error', onError)
+      socket.off('connect', onConnect)
+    }
+    const onError = (error: Error): void => {
+      cleanup()
       socket.destroy()
       reject(error)
     }
-    socket.once('error', onError)
-    socket.once('connect', () => {
-      socket.off('error', onError)
+    const onConnect = (): void => {
+      cleanup()
       resolve(socket)
-    })
+    }
+    socket.once('error', onError)
+    socket.once('connect', onConnect)
   })
 }

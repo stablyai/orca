@@ -117,6 +117,8 @@ export const GENERAL_AGENT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'agent',
       'default',
       'claude',
+      'openclaude',
+      'open claude',
       'codex',
       'opencode',
       'pi',

@@ -2860,6 +2860,103 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('does not send renderer PTY data while renderer output is paused', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const pauseCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:pauseOutput')
+      if (!pauseCall) {
+        throw new Error('missing pty:pauseOutput listener')
+      }
+      const pauseRendererOutput = pauseCall[1] as (
+        event: unknown,
+        args: { id: string; paused: boolean }
+      ) => void
+      mainWindow.webContents.send.mockClear()
+
+      pauseRendererOutput(null, { id: spawnResult.id, paused: true })
+      mockProc.emitData('hidden output')
+      vi.advanceTimersByTime(50)
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'hidden output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps 250 paused background PTYs off the renderer input path', async () => {
+    vi.useFakeTimers()
+    const backgroundCount = 250
+    const procs = Array.from({ length: backgroundCount + 1 }, () => createMockProc())
+    let spawnIndex = 0
+    spawnMock.mockImplementation(() => procs[spawnIndex++].proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const activeSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const backgroundSpawns: { id: string }[] = []
+      for (let index = 0; index < backgroundCount; index++) {
+        backgroundSpawns.push(
+          (await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            cwd: '/tmp'
+          })) as { id: string }
+        )
+      }
+      const pauseCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:pauseOutput')
+      if (!pauseCall) {
+        throw new Error('missing pty:pauseOutput listener')
+      }
+      const pauseRendererOutput = pauseCall[1] as (
+        event: unknown,
+        args: { id: string; paused: boolean }
+      ) => void
+      for (const spawn of backgroundSpawns) {
+        pauseRendererOutput(null, { id: spawn.id, paused: true })
+      }
+      mainWindow.webContents.send.mockClear()
+
+      for (let index = 0; index < backgroundCount; index++) {
+        procs[index + 1].emitData(`hidden ${index}\n`)
+      }
+      vi.advanceTimersByTime(100)
+
+      for (let index = 0; index < backgroundCount; index++) {
+        expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+          id: backgroundSpawns[index].id,
+          data: `hidden ${index}\n`
+        })
+      }
+
+      const writeListener = getPtyWriteListener()
+      writeListener(null, { id: activeSpawn.id, data: 'a' })
+      procs[0].emitData('redraw')
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: activeSpawn.id,
+        data: 'redraw'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('sends small PTY redraws immediately after terminal input', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()
@@ -2889,6 +2986,158 @@ describe('registerPtyHandlers', () => {
       })
       vi.advanceTimersByTime(8)
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('holds background PTY output briefly after foreground input', async () => {
+    vi.useFakeTimers()
+    const activeProc = createMockProc()
+    const backgroundProc = createMockProc()
+    spawnMock.mockReturnValueOnce(activeProc.proc).mockReturnValueOnce(backgroundProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const activeSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const backgroundSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+      mainWindow.webContents.send.mockClear()
+
+      backgroundProc.emitData('background output')
+      writeListener(null, {
+        id: activeSpawn.id,
+        data: 'a'
+      })
+
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+
+      activeProc.emitData('\x1b[20;2Hredraw')
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: activeSpawn.id,
+        data: '\x1b[20;2Hredraw'
+      })
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+
+      vi.advanceTimersByTime(41)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+
+      vi.advanceTimersByTime(1)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not hold foreground PTY batch output behind background output', async () => {
+    vi.useFakeTimers()
+    const activeProc = createMockProc()
+    const backgroundProc = createMockProc()
+    spawnMock.mockReturnValueOnce(activeProc.proc).mockReturnValueOnce(backgroundProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const activeSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const backgroundSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+      mainWindow.webContents.send.mockClear()
+
+      backgroundProc.emitData('background output')
+      writeListener(null, {
+        id: activeSpawn.id,
+        data: 'a'
+      })
+      const foregroundOutput = 'x'.repeat(1025)
+      activeProc.emitData(foregroundOutput)
+
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: activeSpawn.id,
+        data: foregroundOutput
+      })
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not starve background PTY output during continuous input', async () => {
+    vi.useFakeTimers()
+    const activeProc = createMockProc()
+    const backgroundProc = createMockProc()
+    spawnMock.mockReturnValueOnce(activeProc.proc).mockReturnValueOnce(backgroundProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const activeSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const backgroundSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+      mainWindow.webContents.send.mockClear()
+
+      backgroundProc.emitData('background output')
+      for (let index = 0; index < 7; index++) {
+        writeListener(null, {
+          id: activeSpawn.id,
+          data: 'a'
+        })
+        vi.advanceTimersByTime(40)
+      }
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
+
+      writeListener(null, {
+        id: activeSpawn.id,
+        data: 'a'
+      })
+      vi.advanceTimersByTime(10)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: backgroundSpawn.id,
+        data: 'background output'
+      })
     } finally {
       vi.useRealTimers()
     }

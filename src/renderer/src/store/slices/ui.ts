@@ -19,6 +19,7 @@ import type {
   TuiAgent,
   UpdateStatus,
   WorkspaceStatusDefinition,
+  AgentActivityDisplayMode,
   WorktreeCardProperty
 } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
@@ -42,9 +43,11 @@ import {
 } from '../../../../shared/task-providers'
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
+  DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
+  normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
@@ -57,6 +60,10 @@ import {
 } from '../../../../shared/workspace-statuses'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
+import {
+  filterSetupScriptPromptDismissalsToValidRepos,
+  getSetupScriptPromptDismissalKey
+} from '../../lib/setup-script-prompt'
 import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
 import { revokeCustomPetBlobUrl } from '../../components/pet/pet-blob-cache'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
@@ -221,19 +228,6 @@ function filterTrustedOrcaHooksToValidRepos(
   for (const [repoId, entry] of Object.entries(trust)) {
     if (validRepoIds.has(repoId)) {
       next[repoId] = entry
-    }
-  }
-  return next
-}
-
-function filterRepoIdListToValidRepos(value: unknown, validRepoIds: Set<string>): string[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-  const next: string[] = []
-  for (const repoId of value) {
-    if (typeof repoId === 'string' && validRepoIds.has(repoId) && !next.includes(repoId)) {
-      next.push(repoId)
     }
   }
   return next
@@ -530,6 +524,7 @@ export type UISlice = {
     | 'create-worktree'
     | 'edit-meta'
     | 'delete-worktree'
+    | 'confirm-add-project-from-folder'
     | 'confirm-non-git-folder'
     | 'confirm-remove-folder'
     | 'add-repo'
@@ -575,6 +570,8 @@ export type UISlice = {
   toggleCollapsedGroup: (key: string) => void
   worktreeCardProperties: WorktreeCardProperty[]
   toggleWorktreeCardProperty: (prop: WorktreeCardProperty) => void
+  agentActivityDisplayMode: AgentActivityDisplayMode
+  setAgentActivityDisplayMode: (mode: AgentActivityDisplayMode) => void
   workspaceStatuses: WorkspaceStatusDefinition[]
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
   workspaceBoardOpacity: number
@@ -1015,12 +1012,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeNavHistoryIndex: nextHistoryIndex
       }
     }),
-  openSpacePage: () =>
+  openSpacePage: () => {
+    get().recordFeatureInteraction?.('workspace-cleanup')
     set((state) => ({
       activeView: 'space',
       previousViewBeforeSpace:
         state.activeView === 'space' ? state.previousViewBeforeSpace : state.activeView
-    })),
+    }))
+  },
   closeSpacePage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeSpace
@@ -1047,7 +1046,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
-  openSettingsPage: () =>
+  openSettingsPage: () => {
+    // Why: settings search is a transient page filter; opening Settings
+    // should never inherit hidden sections from the previous visit.
+    get().setSettingsSearchQuery('')
     set((state) => ({
       activeView: 'settings',
       // Why: Settings is a temporary detour from either terminal or the
@@ -1056,7 +1058,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       // dumping the user into terminal.
       previousViewBeforeSettings:
         state.activeView === 'settings' ? state.previousViewBeforeSettings : state.activeView
-    })),
+    }))
+  },
   closeSettingsPage: () =>
     set((state) => {
       const previousView =
@@ -1178,10 +1181,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setupScriptPromptDismissedRepoIds: [],
   dismissSetupScriptPrompt: (repoId) =>
     set((s) => {
-      if (!repoId || s.setupScriptPromptDismissedRepoIds.includes(repoId)) {
+      const dismissalKey = getSetupScriptPromptDismissalKey(repoId)
+      if (!repoId || s.setupScriptPromptDismissedRepoIds.includes(dismissalKey)) {
         return s
       }
-      const next = [...s.setupScriptPromptDismissedRepoIds, repoId]
+      const next = [...s.setupScriptPromptDismissedRepoIds, dismissalKey]
       window.api.ui.set({ setupScriptPromptDismissedRepoIds: next }).catch(console.error)
       return { setupScriptPromptDismissedRepoIds: next }
     }),
@@ -1224,6 +1228,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
 
   worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+  agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   toggleWorktreeCardProperty: (prop) =>
     set((s) => {
       const current = normalizeWorktreeCardProperties(s.worktreeCardProperties)
@@ -1234,6 +1239,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ worktreeCardProperties: updated }).catch(console.error)
       return { worktreeCardProperties: updated }
     }),
+  setAgentActivityDisplayMode: (mode) => {
+    const normalized = normalizeAgentActivityDisplayMode(mode)
+    window.api.ui.set({ agentActivityDisplayMode: normalized }).catch(console.error)
+    set({ agentActivityDisplayMode: normalized })
+  },
 
   workspaceStatuses: cloneDefaultWorkspaceStatuses(),
   setWorkspaceStatuses: (statuses) => {
@@ -1428,6 +1438,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         uiZoomLevel: ui.uiZoomLevel ?? 0,
         editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
         worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
+        agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),
@@ -1468,7 +1479,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           ui.trustedOrcaHooks ?? {},
           validRepoIds
         ),
-        setupScriptPromptDismissedRepoIds: filterRepoIdListToValidRepos(
+        setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
           ui.setupScriptPromptDismissedRepoIds,
           validRepoIds
         ),

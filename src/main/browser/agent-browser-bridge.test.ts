@@ -157,6 +157,40 @@ describe('AgentBrowserBridge', () => {
     expect(clickCall![1]).not.toContain('--cdp')
   })
 
+  it('continues when stale agent-browser session close hangs during session creation', async () => {
+    vi.useFakeTimers()
+    try {
+      const closeKill = vi.fn()
+      execFileMock.mockImplementation(
+        (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+          if (args.includes('close')) {
+            return { kill: closeKill }
+          }
+          if (args.includes('snapshot')) {
+            cb(null, JSON.stringify({ success: true, data: { snapshot: 'ready' } }), '')
+            return { kill: vi.fn() }
+          }
+          throw new Error(`unexpected agent-browser args ${args.join(' ')}`)
+        }
+      )
+
+      const promise = bridge.snapshot()
+      let settled = false
+      void promise.finally(() => {
+        settled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(3_000)
+      await Promise.resolve()
+
+      expect(settled).toBe(true)
+      await expect(promise).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'ready' })
+      expect(closeKill).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // ── --json always appended ──
 
   it('always appends --json to commands', async () => {

@@ -146,26 +146,19 @@ import {
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
 } from '../shared/updater-renderer-events'
+import {
+  NATIVE_FILE_DROP_TARGET,
+  ORCA_INTERNAL_FILE_DRAG_TYPE,
+  hasNativeFileDragTypes,
+  resolveNativeFileDropPath,
+  type NativeDropResolution,
+  type NativeFileDropPayload,
+  type NativeFileDropPathEntry
+} from '../shared/native-file-drop'
 import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
 import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
 import type { HostedReviewForBranchArgs } from '../shared/hosted-review'
 import type { CrashReportSubmitArgs, CrashReportSubmitResult } from '../shared/crash-reporting'
-
-type NativeDropResolution =
-  | { target: 'editor' }
-  | { target: 'terminal'; tabId?: string }
-  | { target: 'composer' }
-  | { target: 'file-explorer'; destinationDir: string }
-  // Why: returned when the explorer marker was found but no destinationDir
-  // could be resolved. The caller must suppress the drop entirely instead of
-  // falling back to 'editor' — fail-closed behavior per design §7.1.
-  | { target: 'rejected' }
-
-type NativeFileDropPayload =
-  | { paths: string[]; target: 'editor' }
-  | { paths: string[]; target: 'terminal'; tabId?: string }
-  | { paths: string[]; target: 'composer' }
-  | { paths: string[]; target: 'file-explorer'; destinationDir: string }
 
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
@@ -298,43 +291,17 @@ function disposeCachedNotificationSound(): void {
  * "inside this folder".
  */
 function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
-  const path = event.composedPath()
-  let foundExplorer = false
-  let destinationDir: string | undefined
-
-  for (const entry of path) {
-    if (!(entry instanceof HTMLElement)) {
-      continue
-    }
-
-    const target = entry.dataset.nativeFileDropTarget
-    if (target === 'terminal') {
-      return { target, tabId: entry.dataset.terminalTabId }
-    }
-    if (target === 'editor' || target === 'composer') {
-      return { target }
-    }
-    if (target === 'file-explorer') {
-      foundExplorer = true
-    }
-
-    // Pick the nearest (innermost) destination directory marker
-    if (destinationDir === undefined && entry.dataset.nativeFileDropDir) {
-      destinationDir = entry.dataset.nativeFileDropDir
+  const pathEntries: NativeFileDropPathEntry[] = []
+  for (const entry of event.composedPath()) {
+    if (entry instanceof HTMLElement) {
+      pathEntries.push({
+        nativeFileDropTarget: entry.dataset.nativeFileDropTarget,
+        nativeFileDropDir: entry.dataset.nativeFileDropDir,
+        terminalTabId: entry.dataset.terminalTabId
+      })
     }
   }
-
-  if (foundExplorer) {
-    // Why: routing must fail closed for explorer drops. If preload sees the
-    // explorer target marker but cannot resolve a destinationDir, it rejects
-    // the gesture and emits no fallback editor drop event.
-    if (!destinationDir) {
-      return { target: 'rejected' }
-    }
-    return { target: 'file-explorer', destinationDir }
-  }
-
-  return null
+  return resolveNativeFileDropPath(pathEntries)
 }
 
 // ---------------------------------------------------------------------------
@@ -347,7 +314,7 @@ document.addEventListener(
   (e) => {
     // Let in-app drags (e.g. file explorer drag-to-move) through to React handlers
     // so they can set their own dropEffect. Only override for native OS file drops.
-    if (e.dataTransfer?.types.includes('text/x-orca-file-path')) {
+    if (e.dataTransfer && !hasNativeFileDragTypes(e.dataTransfer.types)) {
       return
     }
     e.preventDefault()
@@ -362,7 +329,7 @@ document.addEventListener(
   'drop',
   (e) => {
     // Let in-app drags (e.g. file explorer → terminal) through to React handlers
-    if (e.dataTransfer?.types.includes('text/x-orca-file-path')) {
+    if (e.dataTransfer?.types.includes(ORCA_INTERNAL_FILE_DRAG_TYPE)) {
       return
     }
 
@@ -398,20 +365,20 @@ document.addEventListener(
     // The preload layer already has the full FileList. Re-emitting one IPC
     // message per path and asking the renderer to reconstruct the gesture via
     // timing would be both fragile and slower under large drops.
-    if (resolution?.target === 'file-explorer') {
+    if (resolution?.target === NATIVE_FILE_DROP_TARGET.fileExplorer) {
       ipcRenderer.send('terminal:file-dropped-from-preload', {
         paths,
-        target: 'file-explorer',
+        target: NATIVE_FILE_DROP_TARGET.fileExplorer,
         destinationDir: resolution.destinationDir
       })
     } else {
       // Why: falls back to 'editor' so drops on surfaces without an explicit
-      // marker (sidebar, editor body, etc.) preserve the prior open-in-editor
-      // behavior instead of being silently discarded.
+      // marker preserve the prior open-in-editor behavior instead of being
+      // silently discarded.
       ipcRenderer.send('terminal:file-dropped-from-preload', {
         paths,
-        target: resolution?.target ?? 'editor',
-        ...(resolution?.target === 'terminal' && resolution.tabId
+        target: resolution?.target ?? NATIVE_FILE_DROP_TARGET.editor,
+        ...(resolution?.target === NATIVE_FILE_DROP_TARGET.terminal && resolution.tabId
           ? { tabId: resolution.tabId }
           : {})
       })
@@ -770,6 +737,10 @@ const api = {
 
     ackColdRestore: (id: string): void => {
       ipcRenderer.send('pty:ackColdRestore', { id })
+    },
+
+    pauseOutput: (id: string, paused: boolean): void => {
+      ipcRenderer.send('pty:pauseOutput', { id, paused })
     },
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
@@ -1465,12 +1436,15 @@ const api = {
   agentHooks: {
     claudeStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:claudeStatus'),
+    openClaudeStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:openClaudeStatus'),
     codexStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:codexStatus'),
     geminiStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:geminiStatus'),
     antigravityStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:antigravityStatus'),
+    ampStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:ampStatus'),
     cursorStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:cursorStatus'),
     droidStatus: (): Promise<AgentHookInstallStatus> =>
@@ -1980,8 +1954,12 @@ const api = {
   hooks: {
     check: (args: {
       repoId: string
-    }): Promise<{ hasHooks: boolean; hooks: unknown; mayNeedUpdate: boolean }> =>
-      ipcRenderer.invoke('hooks:check', args),
+    }): Promise<{
+      status?: 'ok' | 'error'
+      hasHooks: boolean
+      hooks: unknown
+      mayNeedUpdate: boolean
+    }> => ipcRenderer.invoke('hooks:check', args),
 
     inspectSetupScriptImports: (args: { repoId: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),
@@ -1996,6 +1974,7 @@ const api = {
     readIssueCommand: (args: {
       repoId: string
     }): Promise<{
+      status?: 'ok' | 'error'
       localContent: string | null
       sharedContent: string | null
       effectiveContent: string | null
@@ -2282,6 +2261,11 @@ const api = {
       connectionId?: string
       pushTarget?: GitPushTarget
     }): Promise<void> => ipcRenderer.invoke('git:pull', args),
+    fastForward: (args: {
+      worktreePath: string
+      connectionId?: string
+      pushTarget?: GitPushTarget
+    }): Promise<void> => ipcRenderer.invoke('git:fastForward', args),
     rebaseFromBase: (args: {
       worktreePath: string
       baseRef: string

@@ -15,7 +15,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from '../status-bar/icons'
 import { toast } from 'sonner'
@@ -39,6 +39,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../ui/dialog'
+import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 
 export { ACCOUNTS_PANE_SEARCH_ENTRIES }
 
@@ -234,6 +235,8 @@ export function AccountsPane({
   wslCapabilitiesLoading = false
 }: AccountsPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
+  const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
@@ -249,6 +252,7 @@ export function AccountsPane({
     activeAccountId: null,
     activeAccountIdsByRuntime: { host: null, wsl: {} }
   })
+  const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
   const [codexAction, setCodexAction] = useState<
     'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
   >('idle')
@@ -270,6 +274,17 @@ export function AccountsPane({
   )
   const activeCodexAccountId = getActiveCodexAccountIdForRuntime(codexAccounts, accountRuntime)
   const activeClaudeAccountId = getActiveClaudeAccountIdForRuntime(claudeAccounts, accountRuntime)
+  const activeCodexAuthWarning = codexAccountsLoaded
+    ? getCodexAccountAuthWarning({
+        limits: codexRateLimits,
+        target: codexRateLimitTarget,
+        runtime: accountRuntime,
+        activeAccountId: activeCodexAccountId,
+        accountId: activeCodexAccountId
+      })
+    : null
+  const systemCodexNeedsReauthentication =
+    activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
   const accountRuntimeUnavailable =
     accountRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
 
@@ -289,6 +304,7 @@ export function AccountsPane({
         const nextCodex = await window.api.codexAccounts.list()
         if (!stale) {
           setCodexAccounts(nextCodex)
+          setCodexAccountsLoaded(true)
         }
       } catch (error) {
         if (!stale) {
@@ -324,6 +340,7 @@ export function AccountsPane({
 
   const syncCodexAccounts = async (next: CodexRateLimitAccountsState): Promise<void> => {
     setCodexAccounts(next)
+    setCodexAccountsLoaded(true)
     await fetchSettings()
   }
 
@@ -700,6 +717,16 @@ export function AccountsPane({
           the status-bar account switcher. Keeping a stable DOM anchor here
           avoids dumping the user at the top of Accounts and making them hunt
           for the actual Codex account controls. */}
+          {activeCodexAuthWarning ? (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                {activeCodexAccountId
+                  ? 'Codex reported that the active account needs a fresh sign-in. Re-authenticate it before starting new Codex sessions.'
+                  : `Codex reported that the ${accountRuntime.label} login needs a fresh sign-in. Sign in again before starting new Codex sessions.`}
+              </span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-0.5">
               <Label>Accounts</Label>
@@ -746,9 +773,11 @@ export function AccountsPane({
               }
               disabled={codexAction !== 'idle' || accountRuntimeUnavailable}
               className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-                activeCodexAccountId === null
-                  ? 'border-foreground/20 bg-accent/15'
-                  : 'border-border/70 hover:border-border hover:bg-accent/8'
+                systemCodexNeedsReauthentication
+                  ? 'border-destructive/50 bg-destructive/5'
+                  : activeCodexAccountId === null
+                    ? 'border-foreground/20 bg-accent/15'
+                    : 'border-border/70 hover:border-border hover:bg-accent/8'
               } disabled:cursor-default disabled:opacity-100`}
             >
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -762,9 +791,23 @@ export function AccountsPane({
                       Active
                     </Badge>
                   ) : null}
+                  {systemCodexNeedsReauthentication ? (
+                    <Badge
+                      variant="destructive"
+                      className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none"
+                    >
+                      Needs sign-in
+                    </Badge>
+                  ) : null}
                 </div>
-                <span className="truncate text-[11px] text-muted-foreground">
-                  Use your current {accountRuntime.label} Codex login.
+                <span
+                  className={`truncate text-[11px] ${
+                    systemCodexNeedsReauthentication ? 'text-destructive' : 'text-muted-foreground'
+                  }`}
+                >
+                  {systemCodexNeedsReauthentication
+                    ? `Codex reported this ${accountRuntime.label} login is out of date.`
+                    : `Use your current ${accountRuntime.label} Codex login.`}
                 </span>
               </div>
             </button>
@@ -776,6 +819,14 @@ export function AccountsPane({
             ) : (
               visibleCodexAccounts.map((account) => {
                 const isActive = activeCodexAccountId === account.id
+                const accountAuthWarning = getCodexAccountAuthWarning({
+                  limits: codexRateLimits,
+                  target: codexRateLimitTarget,
+                  runtime: accountRuntime,
+                  activeAccountId: activeCodexAccountId,
+                  accountId: account.id
+                })
+                const needsReauthentication = Boolean(accountAuthWarning)
                 const isReauthing = codexAction === `reauth:${account.id}`
                 const isRemoving = codexAction === `remove:${account.id}`
                 const isBusy = codexAction !== 'idle' || accountRuntimeUnavailable
@@ -784,9 +835,11 @@ export function AccountsPane({
                   <div
                     key={account.id}
                     className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-                      isActive
-                        ? 'border-foreground/20 bg-accent/15'
-                        : 'border-border/70 hover:border-border hover:bg-accent/8'
+                      needsReauthentication
+                        ? 'border-destructive/50 bg-destructive/5'
+                        : isActive
+                          ? 'border-foreground/20 bg-accent/15'
+                          : 'border-border/70 hover:border-border hover:bg-accent/8'
                     }`}
                   >
                     <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
@@ -820,12 +873,28 @@ export function AccountsPane({
                               Active
                             </Badge>
                           ) : null}
+                          {needsReauthentication ? (
+                            <Badge
+                              variant="destructive"
+                              className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none"
+                            >
+                              Needs re-auth
+                            </Badge>
+                          ) : null}
                         </div>
-                        <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground max-sm:flex-wrap">
-                          {account.workspaceLabel ? (
+                        <div
+                          className={`flex min-w-0 items-center gap-1.5 text-[11px] max-sm:flex-wrap ${
+                            needsReauthentication ? 'text-destructive' : 'text-muted-foreground'
+                          }`}
+                        >
+                          {needsReauthentication ? (
+                            <span className="truncate">
+                              Codex reported this sign-in is out of date
+                            </span>
+                          ) : account.workspaceLabel ? (
                             <span className="truncate">{account.workspaceLabel}</span>
                           ) : null}
-                          {account.workspaceLabel ? (
+                          {needsReauthentication || account.workspaceLabel ? (
                             <span className="shrink-0 opacity-50">•</span>
                           ) : null}
                           <span className="shrink-0">

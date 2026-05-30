@@ -35,6 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import {
   buildLinearIssueBranchName,
@@ -111,6 +112,7 @@ function LinearIssueSubIssueButton({
   const [subIssues, setSubIssues] = useState<LinearIssueChildSummary[]>(issue.subIssues ?? [])
   const [submitting, setSubmitting] = useState(false)
   const [openingSubIssueId, setOpeningSubIssueId] = useState<string | null>(null)
+  const mountedRef = useMountedRef()
 
   useEffect(() => {
     setSubIssues(issue.subIssues ?? [])
@@ -121,18 +123,25 @@ function LinearIssueSubIssueButton({
       setOpeningSubIssueId(subIssue.id)
       try {
         const fullIssue = await fetchLinearIssue(subIssue.id, issue.workspaceId)
+        if (!mountedRef.current) {
+          return
+        }
         if (fullIssue) {
           onOpenIssue(fullIssue)
         } else {
           toast.error('Failed to load sub-issue')
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to load sub-issue')
+        if (mountedRef.current) {
+          toast.error(error instanceof Error ? error.message : 'Failed to load sub-issue')
+        }
       } finally {
-        setOpeningSubIssueId(null)
+        if (mountedRef.current) {
+          setOpeningSubIssueId(null)
+        }
       }
     },
-    [fetchLinearIssue, issue.workspaceId, onOpenIssue]
+    [fetchLinearIssue, issue.workspaceId, mountedRef, onOpenIssue]
   )
 
   const handleCreate = useCallback(async () => {
@@ -395,6 +404,7 @@ export default function LinearIssueWorkspace({
   const hydratedIssueKeyRef = useRef<string | null>(null)
   const hasEditedRef = useRef(false)
   const optimisticCommentsRef = useRef<LinearComment[]>([])
+  const mountedRef = useMountedRef()
 
   const handleEditStateChange = useCallback((patch: Partial<LinearEditState>) => {
     hasEditedRef.current = true
@@ -412,15 +422,17 @@ export default function LinearIssueWorkspace({
 
   const loadComments = useCallback(
     async (targetIssue: LinearIssue, requestId: number): Promise<void> => {
-      setCommentsLoading(true)
-      setCommentsError(null)
+      if (mountedRef.current) {
+        setCommentsLoading(true)
+        setCommentsError(null)
+      }
       try {
         let fetched = (await linearIssueComments(
           settings,
           targetIssue.id,
           targetIssue.workspaceId
         )) as LinearComment[]
-        if (requestId !== requestIdRef.current) {
+        if (!mountedRef.current || requestId !== requestIdRef.current) {
           return
         }
         const optimistic = optimisticCommentsRef.current
@@ -430,16 +442,16 @@ export default function LinearIssueWorkspace({
         }
         setComments(fetched)
       } catch (error) {
-        if (requestId === requestIdRef.current) {
+        if (mountedRef.current && requestId === requestIdRef.current) {
           setCommentsError(error instanceof Error ? error.message : 'Failed to load comments.')
         }
       } finally {
-        if (requestId === requestIdRef.current) {
+        if (mountedRef.current && requestId === requestIdRef.current) {
           setCommentsLoading(false)
         }
       }
     },
-    [settings]
+    [mountedRef, settings]
   )
 
   useEffect(() => {
@@ -475,7 +487,7 @@ export default function LinearIssueWorkspace({
     // failure should not blank the issue detail the user selected.
     void linearGetIssue(settings, issue.id, issue.workspaceId)
       .then((issueResult) => {
-        if (requestId !== requestIdRef.current) {
+        if (!mountedRef.current || requestId !== requestIdRef.current) {
           return
         }
         if (issueResult) {
@@ -507,13 +519,13 @@ export default function LinearIssueWorkspace({
         /* The list issue remains useful if detail hydration is temporarily unavailable. */
       })
       .finally(() => {
-        if (requestId === requestIdRef.current) {
+        if (mountedRef.current && requestId === requestIdRef.current) {
           setIssueLoading(false)
         }
       })
 
     void loadComments(issue, requestId)
-  }, [issue, loadComments, settings])
+  }, [issue, loadComments, mountedRef, settings])
 
   const displayed = fullIssue ?? issue
 

@@ -359,6 +359,25 @@ function App(): React.JSX.Element {
   // Why: the floating workspace is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
+  const floatingTerminalReturnFocusFrameRef = useRef<number | null>(null)
+
+  const cancelFloatingTerminalReturnFocusFrame = useCallback((): void => {
+    if (floatingTerminalReturnFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(floatingTerminalReturnFocusFrameRef.current)
+    floatingTerminalReturnFocusFrameRef.current = null
+  }, [])
+
+  const setAppRootNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: return-focus frames are only valid while the App root is mounted.
+      if (!node) {
+        cancelFloatingTerminalReturnFocusFrame()
+      }
+    },
+    [cancelFloatingTerminalReturnFocusFrame]
+  )
 
   const rememberFloatingTerminalReturnFocus = useCallback((): void => {
     const active = document.activeElement
@@ -381,10 +400,15 @@ function App(): React.JSX.Element {
     if (!target || !document.contains(target)) {
       return
     }
-    requestAnimationFrame(() => {
+    cancelFloatingTerminalReturnFocusFrame()
+    floatingTerminalReturnFocusFrameRef.current = requestAnimationFrame(() => {
+      floatingTerminalReturnFocusFrameRef.current = null
+      if (!document.contains(target)) {
+        return
+      }
       target.focus({ preventScroll: true })
     })
-  }, [])
+  }, [cancelFloatingTerminalReturnFocusFrame])
 
   const setFloatingTerminalOpenWithFocus = useCallback(
     (nextOpen: SetStateAction<boolean>): void => {
@@ -1546,6 +1570,7 @@ function App(): React.JSX.Element {
 
   return (
     <div
+      ref={setAppRootNode}
       className="flex flex-col h-screen w-screen overflow-hidden"
       style={
         {

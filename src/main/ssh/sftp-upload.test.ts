@@ -32,6 +32,9 @@ describe('sftp-upload', () => {
     expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/.logo.orca-upload', {
       flags: 'wx'
     })
+    const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
+    expect(writeStream.listenerCount('close')).toBe(0)
+    expect(writeStream.listenerCount('error')).toBe(0)
   })
 
   it('uses no-clobber writes for nested files during exclusive directory upload', async () => {
@@ -48,6 +51,42 @@ describe('sftp-upload', () => {
     expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/nested/asset.txt', {
       flags: 'wx'
     })
+    const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
+    expect(writeStream.listenerCount('close')).toBe(0)
+    expect(writeStream.listenerCount('error')).toBe(0)
+  })
+
+  it('uploads files from valid dot-dot-prefixed local directories', async () => {
+    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
+    await mkdir(join(localDir, '..fixtures'))
+    await writeFile(join(localDir, '..fixtures', 'asset.txt'), 'asset')
+    const sftp = createSftpMock()
+
+    await uploadDirectory(sftp, localDir, '/remote/assets', await realpath(localDir), {
+      exclusive: true
+    })
+
+    expect(sftp.mkdir).toHaveBeenCalledWith('/remote/assets/..fixtures', expect.any(Function))
+    expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/..fixtures/asset.txt', {
+      flags: 'wx'
+    })
+  })
+
+  it('rejects sibling directories outside the upload root', async () => {
+    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
+    const escapedDir = `${localDir}-sibling`
+    await mkdir(escapedDir)
+    await writeFile(join(escapedDir, 'asset.txt'), 'asset')
+    const sftp = createSftpMock()
+
+    await expect(
+      uploadDirectory(sftp, escapedDir, '/remote/assets', await realpath(localDir), {
+        exclusive: true
+      })
+    ).rejects.toThrow('Path escaped upload root')
+
+    expect(sftp.mkdir).not.toHaveBeenCalled()
+    expect(sftp.createWriteStream).not.toHaveBeenCalled()
   })
 
   it('does not create the remote file when the local source is a symlink', async () => {

@@ -734,26 +734,36 @@ export class CodexAccountService {
         }
       }
 
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      const cleanupListeners = (): void => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        child.stdout.off('data', appendOutput)
+        child.stderr.off('data', appendOutput)
+        child.off('error', onError)
+        child.off('close', onClose)
+      }
+
       const settle = (callback: () => void): void => {
         if (settled) {
           return
         }
         settled = true
-        clearTimeout(timeout)
+        cleanupListeners()
         callback()
       }
 
-      const timeout = setTimeout(() => {
+      const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
+      timeout = setTimeout(() => {
         child.kill()
         settle(() => {
-          rejectPromise(new Error('Codex sign-in took too long to finish. Please try again.'))
+          rejectPromise(timeoutError)
         })
       }, LOGIN_TIMEOUT_MS)
 
-      child.stdout.on('data', appendOutput)
-      child.stderr.on('data', appendOutput)
-
-      child.on('error', (error) => {
+      const onError = (error: Error): void => {
         settle(() => {
           const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
           // Why: ENOENT can mean either the codex binary doesn't exist OR the
@@ -767,9 +777,9 @@ export class CodexAccountService {
             : error.message
           rejectPromise(new Error(message))
         })
-      })
+      }
 
-      child.on('close', (code) => {
+      const onClose = (code: number | null): void => {
         settle(() => {
           if (code === 0) {
             resolvePromise()
@@ -784,7 +794,12 @@ export class CodexAccountService {
             )
           )
         })
-      })
+      }
+
+      child.stdout.on('data', appendOutput)
+      child.stderr.on('data', appendOutput)
+      child.on('error', onError)
+      child.on('close', onClose)
     })
   }
 

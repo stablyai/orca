@@ -175,7 +175,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // pty-transport → pty:spawn IPC → main, where main fires `agent_started`
   // only after the spawn succeeds. `request_kind: 'new'` because
   // quick-launch always opens a fresh session.
-  const tab = store.createTab(worktreeId, groupId)
+  //
+  // Why: stamp the launched agent on the tab so the tab bar shows the provider
+  // icon immediately, before the agent's first hook event arrives.
+  const tab = store.createTab(worktreeId, groupId, undefined, { launchAgent: agent })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),

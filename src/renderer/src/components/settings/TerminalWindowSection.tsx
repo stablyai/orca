@@ -6,6 +6,7 @@ import { Label } from '../ui/label'
 import { ColorField, NumberField } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 type TerminalWindowSectionProps = {
   settings: GlobalSettings
@@ -85,6 +86,7 @@ export function TerminalWindowSection({
   const blurAtMountRef = useRef<boolean>(settings.windowBackgroundBlur ?? false)
   const blurPendingRestart = (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
   const [relaunchingBlur, setRelaunchingBlur] = useState(false)
+  const mountedRef = useMountedRef()
 
   // Why: the mount-time snapshot captures local state, not main-process state.
   // If the setting is persisted and read correctly on next boot we never need
@@ -104,7 +106,9 @@ export function TerminalWindowSection({
     try {
       await window.api.app.relaunch()
     } catch {
-      setRelaunchingBlur(false)
+      if (mountedRef.current) {
+        setRelaunchingBlur(false)
+      }
     }
   }
 

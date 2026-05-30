@@ -469,6 +469,12 @@ export type TerminalTab = {
    *  PTY and tab icon stay stable even if the default shell setting changes
    *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
+  /** Why: the coding-harness agent Orca launched in this tab. Lets the tab bar
+   *  show the provider icon immediately, before the agent emits its first hook
+   *  event (a freshly-launched, idle agent reports no live status yet). Live
+   *  hook status overrides this once the agent does anything. Plain terminals
+   *  and manually-started agents omit it. */
+  launchAgent?: TuiAgent
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
    *  not by the user doing work. Without this flag the resulting
@@ -1565,6 +1571,7 @@ export type ClaudeManagedAccountRuntimeSelection = {
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
 export type TuiAgent =
   | 'claude' // Claude Code
+  | 'openclaude' // OpenClaude
   | 'codex' // OpenAI Codex
   | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
@@ -2204,6 +2211,8 @@ export type WorktreeCardProperty =
   // view options.
   | 'inline-agents'
 
+export type AgentActivityDisplayMode = 'compact' | 'full'
+
 export type StatusBarItem =
   | 'claude'
   | 'codex'
@@ -2252,6 +2261,7 @@ export type PersistedUIState = {
   uiZoomLevel: number
   editorFontZoomLevel: number
   worktreeCardProperties: WorktreeCardProperty[]
+  agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardCompact?: boolean

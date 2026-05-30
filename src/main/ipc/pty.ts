@@ -78,6 +78,9 @@ const ptySizes = new Map<string, { cols: number; rows: number }>()
 // is PTY-scoped and must be cleared by every teardown path, including SSH and
 // daemon shutdowns that do not flow through the local provider exit listener.
 const lastInputAtByPty = new Map<string, number>()
+// Why: hidden renderer panes restore from main-owned snapshots, so ordinary
+// PTY bytes do not need to wake the renderer while a pane is hidden.
+const rendererPausedOutputPtys = new Set<string>()
 // Why: the agent-hooks server caches per-paneKey state (last prompt, last
 // tool) that otherwise grows unbounded as panes come and go. Track the
 // spawn-time paneKey so clearProviderPtyState can clear that cache on PTY
@@ -103,6 +106,10 @@ const AGENT_HOOK_RUNTIME_ENV_KEYS = [
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
   return paneKeyPtyId.get(paneKey)
+}
+
+export function isRendererPtyOutputPaused(ptyId: string): boolean {
+  return rendererPausedOutputPtys.has(ptyId)
 }
 
 // Why: consumers (currently the cursor-agent synthesized-spinner loop in
@@ -724,6 +731,7 @@ export function clearProviderPtyState(id: string): void {
   piTitlebarExtensionService.clearPty(id)
   ptySizes.delete(id)
   lastInputAtByPty.delete(id)
+  rendererPausedOutputPtys.delete(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
@@ -849,6 +857,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:getMainBufferSnapshot')
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
+  ipcMain.removeAllListeners('pty:pauseOutput')
   ipcMain.removeAllListeners('pty:ackColdRestore')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
 
@@ -930,6 +939,11 @@ export function registerPtyHandlers(
   // large output and non-interactive output must still use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
+  const BACKGROUND_OUTPUT_INPUT_QUIET_MS = 50
+  const BACKGROUND_OUTPUT_MAX_INPUT_HOLD_MS = 250
+  let lastRendererInputAt = Number.NEGATIVE_INFINITY
+  let lastRendererInputPtyId: string | null = null
+  let backgroundFlushHeldSince: number | null = null
 
   function getChunkStartSeq(endSeq: number | undefined, data: string): number | undefined {
     return typeof endSeq === 'number' ? Math.max(0, endSeq - data.length) : undefined
@@ -972,15 +986,32 @@ export function registerPtyHandlers(
     flushTimer = setTimeout(flushPendingData, delayMs)
   }
 
-  function flushPendingData(): void {
-    flushTimer = null
-    if (mainWindow.isDestroyed()) {
-      pendingData.clear()
-      return
+  function hasRecentRendererInput(now: number): boolean {
+    return now - lastRendererInputAt < BACKGROUND_OUTPUT_INPUT_QUIET_MS
+  }
+
+  function hasPendingDataOutsideRecentInputPty(): boolean {
+    for (const id of pendingData.keys()) {
+      if (id !== lastRendererInputPtyId) {
+        return true
+      }
     }
+    return false
+  }
+
+  function drainPendingDataEntries(
+    maxWrites: number,
+    shouldDrain: (id: string) => boolean = () => true
+  ): number {
     let writes = 0
-    while (pendingData.size > 0 && writes < PTY_BATCH_FLUSH_MAX_WRITES) {
-      const next = pendingData.entries().next().value
+    while (writes < maxWrites) {
+      let next: [string, PendingPtyData] | undefined
+      for (const entry of pendingData.entries()) {
+        if (shouldDrain(entry[0])) {
+          next = entry
+          break
+        }
+      }
       if (!next) {
         break
       }
@@ -999,6 +1030,51 @@ export function registerPtyHandlers(
       mainWindow.webContents.send('pty:data', makePtyDataPayload(id, chunk, pending.startSeq))
       writes++
     }
+    return writes
+  }
+
+  function shouldHoldBackgroundFlushForInput(now: number): boolean {
+    if (
+      pendingData.size === 0 ||
+      !hasRecentRendererInput(now) ||
+      !hasPendingDataOutsideRecentInputPty()
+    ) {
+      backgroundFlushHeldSince = null
+      return false
+    }
+    backgroundFlushHeldSince ??= now
+    if (now - backgroundFlushHeldSince >= BACKGROUND_OUTPUT_MAX_INPUT_HOLD_MS) {
+      backgroundFlushHeldSince = null
+      return false
+    }
+    return true
+  }
+
+  function flushPendingData(): void {
+    flushTimer = null
+    if (mainWindow.isDestroyed()) {
+      pendingData.clear()
+      return
+    }
+    const now = performance.now()
+    let writes = 0
+    if (hasRecentRendererInput(now) && lastRendererInputPtyId !== null) {
+      writes += drainPendingDataEntries(
+        PTY_BATCH_FLUSH_MAX_WRITES,
+        (id) => id === lastRendererInputPtyId
+      )
+    }
+    if (shouldHoldBackgroundFlushForInput(now)) {
+      // Why: hidden PTYs can keep producing output while the user types in a
+      // foreground TUI. Holding background IPC briefly lets those bytes
+      // coalesce instead of flooding the renderer ahead of key echo frames.
+      const quietDelay = Math.max(1, BACKGROUND_OUTPUT_INPUT_QUIET_MS - (now - lastRendererInputAt))
+      schedulePendingDataFlush(quietDelay)
+      return
+    }
+    if (writes < PTY_BATCH_FLUSH_MAX_WRITES) {
+      writes += drainPendingDataEntries(PTY_BATCH_FLUSH_MAX_WRITES - writes)
+    }
     if (pendingData.size > 0) {
       // Why: a background terminal can dump megabytes at once. Yield between
       // small IPC slices so keystroke writes are not stuck behind one flush.
@@ -1012,6 +1088,16 @@ export function registerPtyHandlers(
     }
     clearTimeout(flushTimer)
     flushTimer = null
+  }
+
+  function setRendererPtyOutputPaused(id: string, paused: boolean): void {
+    if (paused) {
+      rendererPausedOutputPtys.add(id)
+      pendingData.delete(id)
+      clearFlushTimerIfIdle()
+      return
+    }
+    rendererPausedOutputPtys.delete(id)
   }
 
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
@@ -1044,6 +1130,11 @@ export function registerPtyHandlers(
           flushTimer = null
         }
         pendingData.clear()
+        return
+      }
+      if (rendererPausedOutputPtys.has(payload.id)) {
+        pendingData.delete(payload.id)
+        clearFlushTimerIfIdle()
         return
       }
       const existing = pendingData.get(payload.id)
@@ -1093,6 +1184,10 @@ export function registerPtyHandlers(
           pendingData.delete(payload.id)
         }
         lastInputAtByPty.delete(payload.id)
+        if (lastRendererInputPtyId === payload.id) {
+          lastRendererInputPtyId = null
+        }
+        rendererPausedOutputPtys.delete(payload.id)
         mainWindow.webContents.send('pty:exit', payload)
       }
     })
@@ -2065,7 +2160,10 @@ export function registerPtyHandlers(
       return false
     }
     try {
-      lastInputAtByPty.set(args.id, performance.now())
+      const now = performance.now()
+      lastRendererInputAt = now
+      lastRendererInputPtyId = args.id
+      lastInputAtByPty.set(args.id, now)
       provider.write(args.id, args.data)
       return true
     } catch {
@@ -2089,7 +2187,10 @@ export function registerPtyHandlers(
       return false
     }
     try {
-      lastInputAtByPty.set(args.id, performance.now())
+      const now = performance.now()
+      lastRendererInputAt = now
+      lastRendererInputPtyId = args.id
+      lastInputAtByPty.set(args.id, now)
       provider.write(args.id, args.data)
       return true
     } catch {
@@ -2100,6 +2201,14 @@ export function registerPtyHandlers(
   ipcMain.on('pty:write', (_event, args: { id: string; data: string }) => {
     writePtyInput(args)
   })
+
+  ipcMain.on('pty:pauseOutput', (_event, args: { id?: string; paused?: boolean }) => {
+    if (typeof args?.id !== 'string') {
+      return
+    }
+    setRendererPtyOutputPaused(args.id, args.paused === true)
+  })
+
   ipcMain.handle('pty:writeAccepted', (_event, args: { id: string; data: string }): boolean => {
     return writePtyInputAccepted(args)
   })

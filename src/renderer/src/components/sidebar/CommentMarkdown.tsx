@@ -265,7 +265,11 @@ function transformGitHubReferenceChildren(
   const nextChildren: MarkdownNode[] = []
   for (const child of node.children) {
     if (child.type === 'text' && child.value !== undefined) {
-      nextChildren.push(...splitGitHubReferenceText(child.value, defaultRepo))
+      // Why: generated agent comments can contain thousands of issue refs;
+      // appending iteratively avoids V8's argument-list limit.
+      for (const part of splitGitHubReferenceText(child.value, defaultRepo)) {
+        nextChildren.push(part)
+      }
     } else {
       transformGitHubReferenceChildren(child, defaultRepo)
       nextChildren.push(child)

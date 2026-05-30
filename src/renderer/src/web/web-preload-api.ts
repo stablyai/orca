@@ -21,7 +21,8 @@ import {
   getDefaultOnboardingState,
   getDefaultSettings,
   getDefaultUIState,
-  getDefaultWorkspaceSession
+  getDefaultWorkspaceSession,
+  normalizeAgentActivityDisplayMode
 } from '../../../shared/constants'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
@@ -70,6 +71,10 @@ const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
 // Why: browser-paired clients need desktop parity for large dev sessions; the
 // runtime's no-limit default remains capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
+const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = 24 * 1024 * 1024
+export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
+export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
+const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
 let activeClient: WebRuntimeClient | null = null
@@ -77,6 +82,64 @@ let activeClientEnvironmentId: string | null = null
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 let cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : ''
+      const commaIndex = result.indexOf(',')
+      resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1))
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read clipboard image'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob)
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    const context = canvas.getContext('2d')
+    if (!context || canvas.width <= 0 || canvas.height <= 0) {
+      throw new Error('Clipboard image could not be decoded')
+    }
+    context.drawImage(bitmap, 0, 0)
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((png) => {
+        if (!png) {
+          reject(new Error('Clipboard image could not be encoded as PNG'))
+          return
+        }
+        resolve(png)
+      }, 'image/png')
+    })
+  } finally {
+    bitmap.close()
+  }
+}
+
+async function readClipboardImagePngBase64(): Promise<string | null> {
+  const clipboard = navigator.clipboard as
+    | (Clipboard & { read?: () => Promise<ClipboardItem[]> })
+    | undefined
+  if (!clipboard?.read) {
+    return null
+  }
+  const items = await clipboard.read()
+  for (const item of items) {
+    const imageType = item.types.find((type) => type.startsWith('image/'))
+    if (!imageType) {
+      continue
+    }
+    const blob = await item.getType(imageType)
+    const pngBlob = imageType === 'image/png' ? blob : await convertImageBlobToPng(blob)
+    return blobToBase64(pngBlob)
+  }
+  return null
+}
 
 function invalidateRuntimeWorktreeCaches(): void {
   cachedWorktrees = null
@@ -442,8 +505,13 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     pty: createPtyApi(),
     ssh: createSshApi(),
-    wsl: { isAvailable: () => Promise.resolve(false), listDistros: () => Promise.resolve([]) },
-    pwsh: { isAvailable: () => Promise.resolve(false) },
+    wsl: {
+      isAvailable: () => callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),
+      listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])
+    },
+    pwsh: {
+      isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)
+    },
     agentStatus: {
       onSet: () => noopUnsubscribe,
       getSnapshot: () => Promise.resolve([]),
@@ -1114,6 +1182,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.pull', { worktree: worktree.id, pushTarget })
     },
+    fastForward: async ({ worktreePath, pushTarget }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.fastForward', { worktree: worktree.id, pushTarget })
+    },
     rebaseFromBase: async ({ worktreePath, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.rebaseFromBase', { worktree: worktree.id, baseRef })
@@ -1542,8 +1614,16 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    saveClipboardImageAsTempFile: (_args?: { connectionId?: string | null }) =>
-      Promise.resolve(null),
+    saveClipboardImageAsTempFile: async (args?: { connectionId?: string | null }) => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return null
+      }
+      const contentBase64 = await readClipboardImagePngBase64()
+      if (!contentBase64) {
+        return null
+      }
+      return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
+    },
     writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
@@ -1706,9 +1786,11 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
   const status = (
     agent:
       | 'claude'
+      | 'openclaude'
       | 'codex'
       | 'gemini'
       | 'antigravity'
+      | 'amp'
       | 'cursor'
       | 'droid'
       | 'command-code'
@@ -1725,9 +1807,11 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     } as const)
   return {
     claudeStatus: () => status('claude'),
+    openClaudeStatus: () => status('openclaude'),
     codexStatus: () => status('codex'),
     geminiStatus: () => status('gemini'),
     antigravityStatus: () => status('antigravity'),
+    ampStatus: () => status('amp'),
     cursorStatus: () => status('cursor'),
     droidStatus: () => status('droid'),
     commandCodeStatus: () => status('command-code'),
@@ -1877,6 +1961,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     signal: () => {},
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
+    pauseOutput: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
@@ -1971,6 +2056,70 @@ async function callRuntimeResult<TResult>(
     throw new Error(response.error.message)
   }
   return response.result as TResult
+}
+
+async function saveClipboardImageAsTempFileInRuntime(
+  contentBase64: string,
+  args?: { connectionId?: string | null }
+): Promise<string> {
+  if (contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
+    throw new Error('Clipboard image is too large')
+  }
+  const connectionId = args?.connectionId ?? null
+  const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(
+    'clipboard.startImageUpload',
+    { expectedBase64Length: contentBase64.length, connectionId },
+    CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+  )
+  if (!startResponse.ok) {
+    if (
+      startResponse.error.code === 'method_not_found' &&
+      contentBase64.length <= CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
+    ) {
+      return callRuntimeResult<string>(
+        'clipboard.saveImageAsTempFile',
+        { contentBase64, connectionId },
+        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+      )
+    }
+    throw new Error(startResponse.error.message)
+  }
+
+  const { uploadId } = startResponse.result
+  try {
+    for (
+      let offset = 0;
+      offset < contentBase64.length;
+      offset += CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+    ) {
+      await callRuntimeResult(
+        'clipboard.appendImageUploadChunk',
+        {
+          uploadId,
+          offset,
+          contentBase64: contentBase64.slice(
+            offset,
+            offset + CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+          )
+        },
+        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+      )
+    }
+    return await callRuntimeResult<string>(
+      'clipboard.commitImageUpload',
+      { uploadId },
+      CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+    )
+  } catch (error) {
+    // Why: once chunked paste has created server-side state, failed append or
+    // commit must not wait for TTL cleanup before releasing the bounded slot.
+    await callRuntimeResult(
+      'clipboard.abortImageUpload',
+      { uploadId },
+      CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+    ).catch(() => {})
+    throw error
+  }
 }
 
 async function getRemoteRuntimeStatus(): Promise<RuntimeStatus> {
@@ -2117,7 +2266,10 @@ function mergeWebUIState(
 ): PersistedUIState {
   return {
     ...base,
-    ...updates
+    ...updates,
+    agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
+      updates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+    )
   }
 }
 

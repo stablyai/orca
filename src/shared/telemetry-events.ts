@@ -50,6 +50,7 @@ import type {
 // should map to concrete values; see `tuiAgentToAgentKind`.
 export const AGENT_KIND_VALUES = [
   'claude-code',
+  'openclaude',
   'codex',
   'autohand',
   'opencode',
@@ -459,30 +460,79 @@ function validateSetupScriptPromptProvider(
     ctx.addIssue({
       code: 'custom',
       path: ['provider'],
-      message: 'provider is required when setup import is available'
+      message: 'provider is required when a setup candidate is available'
     })
   }
   if (props.mode === 'configure_needed' && props.provider !== undefined) {
     ctx.addIssue({
       code: 'custom',
       path: ['provider'],
-      message: 'provider is only valid when setup import is available'
+      message: 'provider is only valid when a setup candidate is available'
     })
   }
 }
-// Why: setup-import telemetry is for a retention cohort, not debugging a
+// Why: setup-candidate telemetry is for a retention cohort, not debugging a
 // user's repo, so it carries only closed enums and count buckets.
 const setupScriptPromptShownSchema = z
   .object(setupScriptPromptContextSchema)
   .strict()
   .superRefine(validateSetupScriptPromptProvider)
+const setupScriptDetectedSaveActions = [
+  'save_detected_setup_clicked',
+  'save_detected_setup_completed',
+  'save_detected_setup_failed'
+] as const
+
+function isSetupScriptDetectedSaveAction(action: unknown): boolean {
+  return setupScriptDetectedSaveActions.includes(action as never)
+}
+
+function validateSetupScriptPromptAction(
+  props: SetupScriptPromptContextTelemetry & {
+    action?: string
+    edited_before_save?: boolean
+  },
+  ctx: z.RefinementCtx
+): void {
+  validateSetupScriptPromptProvider(props, ctx)
+  const isDetectedSave = isSetupScriptDetectedSaveAction(props.action)
+  if (isDetectedSave && props.provider !== 'package-manager') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['provider'],
+      message: 'detected setup save actions require the package-manager provider'
+    })
+  }
+  if (isDetectedSave && props.edited_before_save === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['edited_before_save'],
+      message: 'edited_before_save is required for detected setup save actions'
+    })
+  }
+  if (!isDetectedSave && props.edited_before_save !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['edited_before_save'],
+      message: 'edited_before_save is only valid for detected setup save actions'
+    })
+  }
+}
+
 const setupScriptPromptActionSchema = z
   .object({
     ...setupScriptPromptContextSchema,
-    action: z.enum(['import_completed', 'import_failed', 'configure_clicked', 'dismissed'])
+    action: z.enum([
+      'import_completed',
+      'import_failed',
+      'configure_clicked',
+      'dismissed',
+      ...setupScriptDetectedSaveActions
+    ]),
+    edited_before_save: z.boolean().optional()
   })
   .strict()
-  .superRefine(validateSetupScriptPromptProvider)
+  .superRefine(validateSetupScriptPromptAction)
 
 // Managed-hook installer per-agent label. Distinct from `AGENT_KIND_VALUES`:
 // hook installation only targets the agents in `AGENT_HOOK_TARGETS` and the

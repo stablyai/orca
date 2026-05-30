@@ -21,12 +21,22 @@ export const ACCOUNTS_CODEX_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Codex Accounts',
     description: 'Optional account switching for Codex and live rate limit fetching.',
-    keywords: ['codex', 'account', 'rate limit', 'status bar', 'quota', 'optional']
+    keywords: [
+      'codex',
+      'account',
+      'rate limit',
+      'status bar',
+      'quota',
+      'optional',
+      'reauthenticate',
+      'expired',
+      'out of date'
+    ]
   },
   {
     title: 'Active Codex Account',
     description: 'Choose which optional saved Codex account powers live quota reads.',
-    keywords: ['codex', 'account', 'switch', 'active', 'status bar', 'optional']
+    keywords: ['codex', 'account', 'switch', 'active', 'status bar', 'optional', 'sign in']
   }
 ]
 

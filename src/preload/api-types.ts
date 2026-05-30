@@ -7,6 +7,7 @@ import type {
   HostedReviewForBranchArgs,
   HostedReviewInfo
 } from '../shared/hosted-review'
+import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { AppIdentity } from '../shared/app-identity'
 import type {
   BaseRefDefaultResult,
@@ -818,6 +819,7 @@ export type PreloadApi = {
     signal: (id: string, signal: string) => void
     kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
     ackColdRestore: (id: string) => void
+    pauseOutput: (id: string, paused: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
@@ -1380,9 +1382,11 @@ export type PreloadApi = {
   }
   agentHooks: {
     claudeStatus: () => Promise<AgentHookInstallStatus>
+    openClaudeStatus: () => Promise<AgentHookInstallStatus>
     codexStatus: () => Promise<AgentHookInstallStatus>
     geminiStatus: () => Promise<AgentHookInstallStatus>
     antigravityStatus: () => Promise<AgentHookInstallStatus>
+    ampStatus: () => Promise<AgentHookInstallStatus>
     cursorStatus: () => Promise<AgentHookInstallStatus>
     droidStatus: () => Promise<AgentHookInstallStatus>
     commandCodeStatus: () => Promise<AgentHookInstallStatus>
@@ -1453,9 +1457,12 @@ export type PreloadApi = {
   }
   browser: BrowserApi
   hooks: {
-    check: (args: {
-      repoId: string
-    }) => Promise<{ hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
+    check: (args: { repoId: string }) => Promise<{
+      status?: 'ok' | 'error'
+      hasHooks: boolean
+      hooks: OrcaHooks | null
+      mayNeedUpdate: boolean
+    }>
     inspectSetupScriptImports: (args: { repoId: string }) => Promise<SetupScriptImportCandidate[]>
     createIssueCommandRunner: (args: {
       repoId: string
@@ -1463,6 +1470,7 @@ export type PreloadApi = {
       command: string
     }) => Promise<WorktreeSetupLaunch>
     readIssueCommand: (args: { repoId: string }) => Promise<{
+      status?: 'ok' | 'error'
       localContent: string | null
       sharedContent: string | null
       effectiveContent: string | null
@@ -1680,6 +1688,11 @@ export type PreloadApi = {
       pushTarget?: GitPushTarget
     }) => Promise<void>
     pull: (args: {
+      worktreePath: string
+      connectionId?: string
+      pushTarget?: GitPushTarget
+    }) => Promise<void>
+    fastForward: (args: {
       worktreePath: string
       connectionId?: string
       pushTarget?: GitPushTarget
@@ -1945,15 +1958,7 @@ export type PreloadApi = {
     writeClipboardText: (text: string) => Promise<void>
     writeSelectionClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
-    onFileDrop: (
-      callback: (
-        data:
-          | { paths: string[]; target: 'editor' }
-          | { paths: string[]; target: 'terminal'; tabId?: string }
-          | { paths: string[]; target: 'composer' }
-          | { paths: string[]; target: 'file-explorer'; destinationDir: string }
-      ) => void
-    ) => () => void
+    onFileDrop: (callback: (data: NativeFileDropPayload) => void) => () => void
     getZoomLevel: () => number
     setZoomLevel: (level: number) => void
     syncTrafficLights: (zoomFactor: number) => void

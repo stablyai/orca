@@ -55,7 +55,10 @@ import {
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
-import { acquireSingleInstanceLock } from './startup/single-instance-lock'
+import {
+  acquireSingleInstanceLock,
+  logSingleInstanceLockFailure
+} from './startup/single-instance-lock'
 import { RateLimitService } from './rate-limits/service'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
@@ -79,7 +82,8 @@ import {
   getPtyIdForPaneKey,
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
-  registerHeadlessPtyRuntime
+  registerHeadlessPtyRuntime,
+  isRendererPtyOutputPaused
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
@@ -273,14 +277,9 @@ function getExpectedTeardownScope(webContentsId?: number): ExpectedTeardownScope
 const hasSingleInstanceLock =
   is.dev && !isServeMode ? true : acquireSingleInstanceLock(app, focusExistingWindow)
 if (!hasSingleInstanceLock) {
-  if (is.dev) {
-    // Why: packaged runs have no attached console, but dev runs do. Emit a
-    // single line so a `pnpm dev` operator does not mistake a silent exit
-    // for a broken launcher.
-    console.log(
-      '[single-instance] Another Orca instance is already running against this userData path — focusing existing window.'
-    )
-  }
+  // Why: if Electron returns a false negative here, packaged macOS launches
+  // otherwise look like silent crashes. `open --stderr` can capture this line.
+  logSingleInstanceLockFailure()
   app.quit()
 }
 
@@ -870,6 +869,9 @@ registerPaneKeyTeardownListener((paneKey) => {
 
 function sendSyntheticTitle(ptyId: string, data: string, options: { force?: boolean } = {}): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
+    return
+  }
+  if (options.force !== true && isRendererPtyOutputPaused(ptyId)) {
     return
   }
   // Why: repeated working-spinner frames are decorative and can arrive every

@@ -325,6 +325,44 @@ describe('handleOscLink', () => {
     )
   })
 
+  it('opens Windows UNC file URL links from Windows worktrees', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'file://server/share/repo/test.txt',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        worktreePath: '\\\\server\\share\\repo'
+      }
+    )
+    await flushAsyncWork()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: '//server/share/repo/test.txt'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '//server/share/repo/test.txt' })
+    )
+  })
+
+  it('rejects hosted file URL links when the active worktree is not Windows-local', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'file://server/share/repo/test.txt',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        worktreePath: '/home/user/repo'
+      }
+    )
+    await flushAsyncWork()
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+  })
+
   it('preserves #L line anchors from file URL links', async () => {
     setPlatform('Macintosh')
 

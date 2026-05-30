@@ -1,7 +1,9 @@
 import { lstat, mkdtemp, mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const execFileMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => ({
   app: {
@@ -9,6 +11,10 @@ vi.mock('electron', () => ({
     getPath: () => tmpdir(),
     getAppPath: () => tmpdir()
   }
+}))
+
+vi.mock('node:child_process', () => ({
+  execFile: execFileMock
 }))
 
 import { CliInstaller } from './cli-installer'
@@ -28,7 +34,12 @@ async function makeFixture(): Promise<{
 }
 
 describe('CliInstaller', () => {
+  beforeEach(() => {
+    execFileMock.mockReset()
+  })
+
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -155,6 +166,38 @@ describe('CliInstaller', () => {
     const removed = await installer.remove()
     expect(removed.state).toBe('not_installed')
     expect(userPath).not.toContain(join(fixture.root, 'Programs', 'Orca', 'bin'))
+  })
+
+  it('settles when the Windows PATH query hangs', async () => {
+    vi.useFakeTimers()
+    const fixture = await makeFixture()
+    const installPath = join(fixture.root, 'Programs', 'Orca', 'bin', 'orca.cmd')
+    const killMock = vi.fn()
+    execFileMock.mockImplementation(() => ({ kill: killMock }))
+    const installer = new CliInstaller({
+      platform: 'win32',
+      isPackaged: false,
+      userDataPath: fixture.userDataPath,
+      execPath: 'C:\\Users\\me\\AppData\\Local\\Orca\\Orca.exe',
+      appPath: fixture.appPath,
+      commandPathOverride: installPath
+    })
+
+    const promise = installer.getStatus()
+    let settled = false
+    void promise
+      .catch(() => undefined)
+      .finally(() => {
+        settled = true
+      })
+
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalled())
+    await vi.advanceTimersByTimeAsync(5_000)
+    await Promise.resolve()
+
+    expect(settled).toBe(true)
+    await expect(promise).rejects.toThrow('Windows PATH command timed out')
+    expect(killMock).toHaveBeenCalled()
   })
 
   // Why: this test creates a Unix symlink to /tmp/not-orca, which only applies on macOS/Linux.

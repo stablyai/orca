@@ -342,7 +342,8 @@ function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktr
               tabs.map((tab) => ({
                 id: tab.id,
                 title: tab.title,
-                customTitle: tab.customTitle
+                customTitle: tab.customTitle,
+                launchAgent: tab.launchAgent
               }))
             )
           }
@@ -810,13 +811,18 @@ function buildMobileSessionGroupProjection(
       continue
     }
     const tabOrder = visibleOrder.map((item) => item.tabId ?? item.id)
-    order.push(...visibleOrder)
+    const tabOrderSet = new Set(tabOrder)
+    // Why: persisted split groups can contain very large tab orders; append
+    // iteratively so mobile sync does not hit V8's argument-list limit.
+    for (const item of visibleOrder) {
+      order.push(item)
+    }
     tabGroups.push({
       id: group.id,
       activeTabId:
-        group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null,
+        group.activeTabId && tabOrderSet.has(group.activeTabId) ? group.activeTabId : null,
       tabOrder,
-      recentTabIds: group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId)) ?? []
+      recentTabIds: group.recentTabIds?.filter((tabId) => tabOrderSet.has(tabId)) ?? []
     })
   }
 
@@ -1003,6 +1009,7 @@ function buildMobileTerminalSurfaceTabs(
       ptyId,
       ...(terminalTheme ? { terminalTheme } : {}),
       ...(agentStatus ? { agentStatus } : {}),
+      ...(terminal.launchAgent ? { launchAgent: terminal.launchAgent } : {}),
       parentLayout,
       isActive: isDesktopTabActive && leafId === activeLeafId
     }

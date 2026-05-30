@@ -1,5 +1,13 @@
 import { Buffer } from 'buffer'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 import {
   ActivityIndicator,
   AppState,
@@ -180,6 +188,17 @@ export function MobileBrowserPane({
     }
   }, [])
 
+  const setRootViewRef = useCallback(
+    (node: View | null) => {
+      // Why: long-press right-click timers belong to this responder surface;
+      // clearing from ref cleanup preserves the same unmount boundary.
+      if (node === null) {
+        clearLongPressTimer()
+      }
+    },
+    [clearLongPressTimer]
+  )
+
   const resetBrowserZoomState = useCallback(() => {
     clearLongPressTimer()
     pinchRef.current = null
@@ -209,21 +228,14 @@ export function MobileBrowserPane({
     }
   }, [addressFocused, tab.url])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Why: gesture and stream handlers need committed values before passive
+    // Effects flush, without leaking refs from an uncommitted render.
     frameMetadataRef.current = frameMetadata
-  }, [frameMetadata])
-
-  useEffect(() => {
     layoutRef.current = layout
-  }, [layout])
-
-  useEffect(() => {
     dialogRef.current = dialog
-  }, [dialog])
-
-  useEffect(() => {
     zoomRef.current = zoom
-  }, [zoom])
+  }, [dialog, frameMetadata, layout, zoom])
 
   useEffect(() => {
     lastZoomResetUrlRef.current = tab.url || 'about:blank'
@@ -693,8 +705,6 @@ export function MobileBrowserPane({
     [client, flushPendingWheelCommand, pageParams]
   )
 
-  useEffect(() => () => clearLongPressTimer(), [clearLongPressTimer])
-
   const mapTouchPoint = useCallback((locationX: number, locationY: number): BrowserPoint | null => {
     return mapScreenToBrowserPoint(
       locationX,
@@ -1016,7 +1026,7 @@ export function MobileBrowserPane({
   )
 
   return (
-    <View style={styles.root}>
+    <View ref={setRootViewRef} style={styles.root}>
       <View style={styles.toolbar}>
         <ToolbarIconButton
           disabled={controlsDisabled || !tab.canGoBack}

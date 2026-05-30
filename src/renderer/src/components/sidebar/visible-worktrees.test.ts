@@ -144,7 +144,7 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([])
   })
 
-  it('treats paired web host terminal mirrors as active while their stream handle is pending', () => {
+  it('hides paired web host terminal mirrors while their stream handle is pending', () => {
     const wt = makeWorktree('wt-web-pending')
 
     const result = computeVisibleWorktreeIds(
@@ -154,6 +154,22 @@ describe('computeVisibleWorktreeIds', () => {
         showSleepingWorkspaces: false,
         tabsByWorktree: { [wt.id]: [makeTab('web-terminal-host-tab-1', wt.id, null)] },
         ptyIdsByTabId: {}
+      })
+    )
+
+    expect(result).toEqual([])
+  })
+
+  it('keeps paired web host terminal mirrors visible after their stream handle is ready', () => {
+    const wt = makeWorktree('wt-web-ready')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({
+        showSleepingWorkspaces: false,
+        tabsByWorktree: { [wt.id]: [makeTab('web-terminal-host-tab-1', wt.id, null)] },
+        ptyIdsByTabId: { 'web-terminal-host-tab-1': ['pty-web-ready'] }
       })
     )
 

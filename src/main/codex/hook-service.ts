@@ -857,8 +857,10 @@ export class CodexHookService {
       // Why: system user hook approvals are mirrored into runtime CODEX_HOME.
       // If the user later revokes approval in ~/.codex/config.toml, preserving
       // all old runtime [hooks.state.*] blocks would keep Orca Codex trusted.
-      removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
+      // Upsert first so duplicate repair can preserve a disabled managed copy
+      // before stale cleanup removes old managed hook keys.
       upsertHookTrustEntries(tomlPath, trustEntries)
+      removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
       applyMirroredRuntimeUserHookTrustStates(tomlPath, mirroredUserTrustEntries)
     } catch (error) {
       return {
@@ -998,8 +1000,10 @@ export class CodexHookService {
       syncSystemConfigIntoManagedCodexHome()
       // Why: this path is used when Orca status hooks are disabled. The
       // runtime CODEX_HOME should keep user hooks, but not Orca-managed trust.
-      removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
+      // Write current mirrored user trust first so stale cleanup compares
+      // against current hashes while deleting old managed hook keys.
       upsertHookTrustEntries(tomlPath, trustEntries)
+      removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
       applyMirroredRuntimeUserHookTrustStates(tomlPath, hookPlan.trustEntries)
     } catch (error) {
       return {

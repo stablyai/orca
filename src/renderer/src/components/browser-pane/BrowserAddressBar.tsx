@@ -71,16 +71,25 @@ export default function BrowserAddressBar({
   const blurCloseTimerRef = useRef<number | null>(null)
   const closingResetTimerRef = useRef<number | null>(null)
 
-  useEffect(() => {
-    return () => {
-      if (blurCloseTimerRef.current !== null) {
-        window.clearTimeout(blurCloseTimerRef.current)
-      }
-      if (closingResetTimerRef.current !== null) {
-        window.clearTimeout(closingResetTimerRef.current)
-      }
+  const clearAddressBarTimers = useCallback((): void => {
+    if (blurCloseTimerRef.current !== null) {
+      window.clearTimeout(blurCloseTimerRef.current)
+      blurCloseTimerRef.current = null
+    }
+    if (closingResetTimerRef.current !== null) {
+      window.clearTimeout(closingResetTimerRef.current)
+      closingResetTimerRef.current = null
     }
   }, [])
+
+  const setAddressBarFormRef = useCallback(
+    (node: HTMLFormElement | null) => {
+      if (node === null) {
+        clearAddressBarTimers()
+      }
+    },
+    [clearAddressBarTimers]
+  )
 
   const searchEngine: SearchEngine =
     (browserDefaultSearchEngine as SearchEngine | null) ?? DEFAULT_SEARCH_ENGINE
@@ -279,6 +288,7 @@ export default function BrowserAddressBar({
     >
       <PopoverTrigger asChild>
         <form
+          ref={setAddressBarFormRef}
           className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-background px-3 py-1 shadow-sm"
           onSubmit={(event) => {
             event.preventDefault()

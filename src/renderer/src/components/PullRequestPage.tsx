@@ -69,6 +69,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 import { setWithLRU } from '@/lib/scroll-cache'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
 import {
   CombinedDiffFileTree,
@@ -478,6 +479,34 @@ function PRReviewersPanel({
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const settings = useAppStore((s) => s.settings)
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
+  const reviewerInputFocusFrameRef = useRef<number | null>(null)
+  const reviewerPanelMountedRef = useRef(true)
+
+  const cancelReviewerInputFocusFrame = useCallback((): void => {
+    if (reviewerInputFocusFrameRef.current !== null) {
+      cancelAnimationFrame(reviewerInputFocusFrameRef.current)
+      reviewerInputFocusFrameRef.current = null
+    }
+  }, [])
+
+  const scheduleReviewerInputFocus = useCallback((): void => {
+    if (!reviewerPanelMountedRef.current) {
+      return
+    }
+    cancelReviewerInputFocusFrame()
+    reviewerInputFocusFrameRef.current = requestAnimationFrame(() => {
+      reviewerInputFocusFrameRef.current = null
+      reviewerInputRef.current?.focus()
+    })
+  }, [cancelReviewerInputFocusFrame])
+
+  useEffect(() => {
+    reviewerPanelMountedRef.current = true
+    return () => {
+      reviewerPanelMountedRef.current = false
+      cancelReviewerInputFocusFrame()
+    }
+  }, [cancelReviewerInputFocusFrame])
 
   useEffect(() => {
     setLocalReviewRequests(item.reviewRequests ?? [])
@@ -659,6 +688,9 @@ function PRReviewersPanel({
               prNumber: item.number,
               reviewers: logins
             })
+      if (!reviewerPanelMountedRef.current) {
+        return
+      }
       if (!result.ok) {
         toast.error(result.error ?? 'Failed to request reviewer')
         return
@@ -674,9 +706,13 @@ function PRReviewersPanel({
       setReviewerInput('')
       toast.success(logins.length === 1 ? 'Reviewer requested' : 'Reviewers requested')
     } catch {
-      toast.error('Failed to request reviewer')
+      if (reviewerPanelMountedRef.current) {
+        toast.error('Failed to request reviewer')
+      }
     } finally {
-      setSubmitting(false)
+      if (reviewerPanelMountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
@@ -712,6 +748,9 @@ function PRReviewersPanel({
               prNumber: item.number,
               reviewers: logins
             })
+      if (!reviewerPanelMountedRef.current) {
+        return
+      }
       if (!result.ok) {
         toast.error(result.error ?? 'Failed to remove reviewer')
         return
@@ -726,9 +765,13 @@ function PRReviewersPanel({
       setReviewerInput('')
       toast.success(logins.length === 1 ? 'Reviewer removed' : 'Reviewers removed')
     } catch {
-      toast.error('Failed to remove reviewer')
+      if (reviewerPanelMountedRef.current) {
+        toast.error('Failed to remove reviewer')
+      }
     } finally {
-      setSubmitting(false)
+      if (reviewerPanelMountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
@@ -736,7 +779,7 @@ function PRReviewersPanel({
     await (selectedReviewerLogins.has(reviewer.login.toLowerCase())
       ? handleRemoveReviewers([reviewer.login])
       : handleRequestReview([reviewer.login]))
-    requestAnimationFrame(() => reviewerInputRef.current?.focus())
+    scheduleReviewerInputFocus()
   }
 
   const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
@@ -745,7 +788,7 @@ function PRReviewersPanel({
     }
     setOpen(nextOpen)
     if (nextOpen) {
-      requestAnimationFrame(() => reviewerInputRef.current?.focus())
+      scheduleReviewerInputFocus()
       return
     }
     setReviewerInput('')
@@ -2447,6 +2490,7 @@ function ConversationTab({
   const [bodyEditing, setBodyEditing] = useState(false)
   const [bodySaving, setBodySaving] = useState(false)
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const bodyTextareaFocusFrameRef = useRef<number | null>(null)
   const repoAssignees = useRepoAssignees(repoPath, item.repoId)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = useMemo(
@@ -2465,6 +2509,13 @@ function ConversationTab({
     [comments, detailsParticipants, item, repoAssignees.data]
   )
 
+  const cancelBodyTextareaFocusFrame = useCallback((): void => {
+    if (bodyTextareaFocusFrameRef.current !== null) {
+      cancelAnimationFrame(bodyTextareaFocusFrameRef.current)
+      bodyTextareaFocusFrameRef.current = null
+    }
+  }, [])
+
   useEffect(() => {
     if (replyingTo !== null && !visibleComments.some((comment) => comment.id === replyingTo)) {
       setReplyingTo(null)
@@ -2478,10 +2529,17 @@ function ConversationTab({
   }, [body, bodyEditing, item.id])
 
   useEffect(() => {
-    if (bodyEditing) {
-      requestAnimationFrame(() => bodyTextareaRef.current?.focus())
+    if (!bodyEditing) {
+      cancelBodyTextareaFocusFrame()
+      return cancelBodyTextareaFocusFrame
     }
-  }, [bodyEditing])
+    cancelBodyTextareaFocusFrame()
+    bodyTextareaFocusFrameRef.current = requestAnimationFrame(() => {
+      bodyTextareaFocusFrameRef.current = null
+      bodyTextareaRef.current?.focus()
+    })
+    return cancelBodyTextareaFocusFrame
+  }, [bodyEditing, cancelBodyTextareaFocusFrame])
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const markdownGitHubRepo = useMemo(
@@ -3198,6 +3256,14 @@ function CommentReplyForm({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -3211,11 +3277,16 @@ function CommentReplyForm({
     setSubmitting(true)
     try {
       const ok = await onSubmit(trimmed)
+      if (!mountedRef.current) {
+        return
+      }
       if (ok) {
         setBody('')
       }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }, [body, onSubmit, submitting])
 
@@ -3439,6 +3510,7 @@ function ChecksTab({
   const [detailsByCheckKey, setDetailsByCheckKey] = useState<Record<string, CheckDetailsLoadState>>(
     {}
   )
+  const mountedRef = useMountedRef()
   const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
   const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const sorted = [...list].sort(
@@ -3630,6 +3702,9 @@ function ChecksTab({
           prRepo
         })
         .then((details) => {
+          if (!mountedRef.current) {
+            return
+          }
           setDetailsByCheckKey((current) => ({
             ...current,
             [key]: {
@@ -3640,6 +3715,9 @@ function ChecksTab({
           }))
         })
         .catch((err) => {
+          if (!mountedRef.current) {
+            return
+          }
           setDetailsByCheckKey((current) => ({
             ...current,
             [key]: {
@@ -3650,7 +3728,7 @@ function ChecksTab({
           }))
         })
     },
-    [detailsByCheckKey, prRepo, repoId, repoPath]
+    [detailsByCheckKey, mountedRef, prRepo, repoId, repoPath]
   )
 
   const refreshAction = (
@@ -4860,6 +4938,14 @@ function GHCommentComposer({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
@@ -4884,6 +4970,9 @@ function GHCommentComposer({
         body: trimmed,
         type: itemType
       })
+      if (!mountedRef.current) {
+        return
+      }
       if (result.ok) {
         setBody('')
         requestAnimationFrame(autoGrow)
@@ -4894,9 +4983,13 @@ function GHCommentComposer({
         toast.error(result.error ?? 'Failed to add comment')
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }, [autoGrow, body, repoPath, repoId, issueNumber, itemType, onCommentAdded])
 
@@ -5282,6 +5375,12 @@ export default function PullRequestPage({
   const files = details?.files ?? []
   const checks = details?.checks ?? []
   const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
+  // Why: clipboard IPC can resolve after the page unmounts; skip copied-state
+  // feedback instead of starting its reset timer on a stale surface.
+  const linkCopyMountedRef = useRef(false)
+  const setLinkCopyButtonRef = useCallback((node: HTMLButtonElement | null) => {
+    linkCopyMountedRef.current = node !== null
+  }, [])
 
   useEffect(() => {
     setLinkCopied(false)
@@ -5303,6 +5402,9 @@ export default function PullRequestPage({
       // Why: Electron's clipboard IPC is reliable even when browser clipboard
       // APIs lose focus/activation inside nested overlay surfaces.
       await window.api.ui.writeClipboardText(workItem.url)
+      if (!linkCopyMountedRef.current) {
+        return
+      }
       setLinkCopied(true)
       toast.success('GitHub link copied')
     } catch {
@@ -5428,6 +5530,7 @@ export default function PullRequestPage({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  ref={setLinkCopyButtonRef}
                   type="button"
                   variant="ghost"
                   size="icon-sm"
@@ -5480,12 +5583,14 @@ export default function PullRequestPage({
                   type="button"
                   size="sm"
                   onClick={handleOpenOrUsePR}
-                  className="gap-1.5 whitespace-nowrap"
+                  className="gap-1.5 whitespace-nowrap font-semibold"
                   aria-label={
-                    attachedWorkspace ? 'Open workspace attached to PR' : 'Start workspace from PR'
+                    attachedWorkspace
+                      ? 'Resume workspace attached to PR'
+                      : 'Start workspace from PR'
                   }
                 >
-                  {attachedWorkspace ? 'Open workspace' : 'Start workspace from PR'}
+                  {attachedWorkspace ? 'Resume workspace' : 'Start workspace from PR'}
                   <ArrowRight className="size-3.5" />
                 </Button>
                 <DropdownMenuTrigger asChild>

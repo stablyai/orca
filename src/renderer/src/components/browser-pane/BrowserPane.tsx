@@ -2111,7 +2111,7 @@ function RemoteBrowserPagePane({
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         const parsed = readRemoteContextMenuResult(result)
-        if (parsed) {
+        if (parsed && mountedRef.current && isCurrentRemoteOperationToken(operationToken)) {
           setContextMenu((current) =>
             current
               ? {

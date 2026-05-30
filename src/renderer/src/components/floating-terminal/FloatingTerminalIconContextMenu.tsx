@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { EyeOff, PanelBottom, PanelTop } from 'lucide-react'
 import {
   DropdownMenu,
@@ -28,15 +28,14 @@ export function FloatingTerminalIconContextMenu({
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const reopenFrameRef = useRef<number | null>(null)
 
-  useEffect(
-    () => () => {
+  const setTriggerRef = useCallback((node: HTMLSpanElement | null): void => {
+    if (node === null) {
       if (reopenFrameRef.current !== null) {
         window.cancelAnimationFrame(reopenFrameRef.current)
         reopenFrameRef.current = null
       }
-    },
-    []
-  )
+    }
+  }, [])
 
   const moveAction = useMemo(() => {
     if (currentLocation === 'floating-button') {
@@ -56,6 +55,7 @@ export function FloatingTerminalIconContextMenu({
   return (
     <>
       <span
+        ref={setTriggerRef}
         className={className}
         style={style}
         data-floating-terminal-toggle

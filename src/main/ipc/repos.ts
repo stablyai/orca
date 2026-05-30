@@ -84,6 +84,14 @@ function emitRepoAdded(method: RepoMethod, alreadyExisted: boolean): void {
   track('repo_added', { method, ...getCohortAtEmit() })
 }
 
+function getRemoteRepoFolderName(remotePath: string): string {
+  const trimmed = remotePath.replace(/[\\/]+$/, '')
+  if (!trimmed) {
+    return remotePath
+  }
+  return trimmed.split(/[\\/]/).at(-1) || remotePath
+}
+
 type ActiveCloneMetadata = {
   path: string
   pathKey: string
@@ -601,9 +609,6 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { repo: existing }
       }
 
-      const pathSegments = resolvedPath.replace(/\/+$/, '').split('/')
-      let folderName = pathSegments.at(-1) || resolvedPath
-
       if (args.kind !== 'folder') {
         // Why: when kind is not explicitly 'folder', verify the remote path is
         // a git repo. Return an error on failure so the renderer can show the "Open as
@@ -626,6 +631,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           return { error: `Not a valid git repository: ${args.remotePath}` }
         }
       }
+
+      const folderName = getRemoteRepoFolderName(resolvedPath)
 
       // When folderName is the home directory basename (e.g. 'ubuntu'),
       // use SSH target label for a more descriptive name

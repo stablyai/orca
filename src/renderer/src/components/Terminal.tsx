@@ -227,6 +227,14 @@ function Terminal(): React.JSX.Element | null {
   // so the stray click from the previous dialog is absorbed while a genuine
   // new click on the next dialog still works.
   const isClosingRef = useRef(false)
+  const closeDialogDebounceTimersRef = useRef<Set<number>>(new Set())
+  const releaseCloseDialogGuardAfterDebounce = useCallback(() => {
+    const timer = window.setTimeout(() => {
+      closeDialogDebounceTimersRef.current.delete(timer)
+      isClosingRef.current = false
+    }, CLOSE_DIALOG_DEBOUNCE_MS)
+    closeDialogDebounceTimersRef.current.add(timer)
+  }, [])
 
   // Window close confirmation dialog — shown for local terminals with running
   // child processes. SSH terminals detach/persist through the relay lifecycle.
@@ -399,9 +407,7 @@ function Terminal(): React.JSX.Element | null {
         (id) => id !== fileId
       )
       advanceEditorCloseQueue()
-      setTimeout(() => {
-        isClosingRef.current = false
-      }, CLOSE_DIALOG_DEBOUNCE_MS)
+      releaseCloseDialogGuardAfterDebounce()
       return
     }
 
@@ -433,9 +439,7 @@ function Terminal(): React.JSX.Element | null {
           (id) => id !== fileId
         )
         advanceEditorCloseQueue()
-        setTimeout(() => {
-          isClosingRef.current = false
-        }, CLOSE_DIALOG_DEBOUNCE_MS)
+        releaseCloseDialogGuardAfterDebounce()
         return
       }
       toast.error('Save timed out or failed. Fix errors before closing.')
@@ -450,10 +454,13 @@ function Terminal(): React.JSX.Element | null {
       (id) => id !== fileId
     )
     advanceEditorCloseQueue()
-    setTimeout(() => {
-      isClosingRef.current = false
-    }, CLOSE_DIALOG_DEBOUNCE_MS)
-  }, [advanceEditorCloseQueue, saveDialogFileId, waitForFileClosed])
+    releaseCloseDialogGuardAfterDebounce()
+  }, [
+    advanceEditorCloseQueue,
+    releaseCloseDialogGuardAfterDebounce,
+    saveDialogFileId,
+    waitForFileClosed
+  ])
 
   const handleSaveDialogDiscard = useCallback(async () => {
     if (isClosingRef.current) {
@@ -488,10 +495,14 @@ function Terminal(): React.JSX.Element | null {
       (id) => id !== fileId
     )
     advanceEditorCloseQueue()
-    setTimeout(() => {
-      isClosingRef.current = false
-    }, CLOSE_DIALOG_DEBOUNCE_MS)
-  }, [advanceEditorCloseQueue, closeFile, markFileDirty, saveDialogFileId])
+    releaseCloseDialogGuardAfterDebounce()
+  }, [
+    advanceEditorCloseQueue,
+    closeFile,
+    markFileDirty,
+    releaseCloseDialogGuardAfterDebounce,
+    saveDialogFileId
+  ])
 
   const handleSaveDialogCancel = useCallback(() => {
     if (isClosingRef.current) {
@@ -501,10 +512,8 @@ function Terminal(): React.JSX.Element | null {
     pendingEditorCloseQueueRef.current = []
     windowCloseAfterDirtyRef.current = null
     setSaveDialogFileId(null)
-    setTimeout(() => {
-      isClosingRef.current = false
-    }, CLOSE_DIALOG_DEBOUNCE_MS)
-  }, [])
+    releaseCloseDialogGuardAfterDebounce()
+  }, [releaseCloseDialogGuardAfterDebounce])
 
   useEffect(() => {
     const onRequestEditorClose = (event: Event): void => {
@@ -550,6 +559,7 @@ function Terminal(): React.JSX.Element | null {
   const [, setBackgroundMountRevision] = useState(0)
   useEffect(() => {
     const timers = measurableBackgroundWorktreeTimersRef.current
+    const closeDialogDebounceTimers = closeDialogDebounceTimersRef.current
     const onBackgroundMountTerminalWorktree = (event: Event): void => {
       const customEvent = event as CustomEvent<BackgroundMountTerminalWorktreeDetail>
       const worktreeId = customEvent.detail?.worktreeId
@@ -588,6 +598,12 @@ function Terminal(): React.JSX.Element | null {
         window.clearTimeout(timer)
       }
       timers.clear()
+      // Why: close-dialog debounce timers are Terminal-owned and only need
+      // unmount cleanup; keep them with the existing Terminal lifetime cleanup.
+      for (const timer of closeDialogDebounceTimers) {
+        window.clearTimeout(timer)
+      }
+      closeDialogDebounceTimers.clear()
     }
   }, [])
   // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting

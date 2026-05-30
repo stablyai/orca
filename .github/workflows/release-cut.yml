@@ -62,6 +62,7 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
+      latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
     steps:
       - name: Checkout ref
         uses: actions/checkout@v6
@@ -766,11 +767,22 @@ jobs:
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
 
+  homebrew-bump-published-rc-draft:
+    needs:
+      - cut
+    # Why: publish-complete-draft-releases can expose a recovered RC without
+    # running the build/publish jobs; still advance the RC cask to that tag.
+    if: ${{ needs.cut.outputs.latest_published_rc_tag != '' }}
+    uses: ./.github/workflows/homebrew-bump.yml
+    with:
+      tag: ${{ needs.cut.outputs.latest_published_rc_tag }}
+    secrets: inherit
+
   homebrew-bump:
     needs:
       - cut
       - publish-release
-    if: ${{ !contains(needs.cut.outputs.tag, '-rc.') }}
+    if: ${{ needs.cut.outputs.tag != '' && startsWith(needs.cut.outputs.tag, 'v') }}
     uses: ./.github/workflows/homebrew-bump.yml
     with:
       tag: ${{ needs.cut.outputs.tag }}
