@@ -26,7 +26,7 @@ import {
 import { getBranchConflictKind, getDefaultBaseRef } from '../git/repo'
 import type { OrchestrationDb } from './orchestration/db'
 import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
-import { appendNormalizedToTailBuffer, OrcaRuntimeService } from './orca-runtime'
+import { appendNormalizedToTailBuffer, buildPreview, OrcaRuntimeService } from './orca-runtime'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
@@ -3946,6 +3946,22 @@ describe('OrcaRuntimeService', () => {
       'line-3004'
     ])
     expect(shiftCallCount).toBe(0)
+  })
+
+  it('builds terminal previews without mapping the full retained tail', () => {
+    const lines = Array.from({ length: 5000 }, (_, index) =>
+      index % 2 === 0 ? `line-${index}` : '   '
+    )
+    const mapSpy = vi.spyOn(Array.prototype, 'map')
+
+    const preview = buildPreview(lines, 'partial-tail')
+    const mapCallCount = mapSpy.mock.calls.length
+    mapSpy.mockRestore()
+
+    expect(preview).toBe(
+      ['line-4990', 'line-4992', 'line-4994', 'line-4996', 'line-4998', 'partial-tail'].join('\n')
+    )
+    expect(mapCallCount).toBe(0)
   })
 
   it('bounds retained partial terminal output before preview reads', async () => {

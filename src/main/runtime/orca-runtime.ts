@@ -12665,11 +12665,27 @@ function withTimeoutResult<T>(
   })
 }
 
-function buildPreview(lines: string[], partialLine: string): string {
-  const previewLines = buildTailLines(lines, partialLine)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(-MAX_PREVIEW_LINES)
+export function buildPreview(lines: string[], partialLine: string): string {
+  const previewLines: string[] = []
+  const collectVisibleLine = (line: string): void => {
+    const trimmed = line.trim()
+    if (trimmed.length > 0) {
+      previewLines.push(trimmed)
+    }
+  }
+
+  if (partialLine.length > 0) {
+    collectVisibleLine(partialLine)
+  }
+  for (
+    let index = lines.length - 1;
+    index >= 0 && previewLines.length < MAX_PREVIEW_LINES;
+    index--
+  ) {
+    collectVisibleLine(lines[index])
+  }
+  previewLines.reverse()
+
   const preview = previewLines.join('\n')
   return preview.length > MAX_PREVIEW_CHARS
     ? preview.slice(preview.length - MAX_PREVIEW_CHARS)
