@@ -81,21 +81,27 @@ describe('running agent send targets', () => {
           }
         }
       }),
-      WORKTREE_ID
+      WORKTREE_ID,
+      NOW
     )
 
     expect(targets).toMatchObject([{ paneKey, ptyId: 'pty-left', status: 'eligible' }])
     expect(targets[0]).not.toHaveProperty('disabledReason')
   })
 
-  it('allows any visible agent state when the pane has a leaf PTY', () => {
+  it('allows fresh waiting and blocked agent states when the pane has a leaf PTY', () => {
     const workingPaneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
-    const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+    const waitingPaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+    const blockedPaneKey = makePaneKey(OTHER_TAB_ID, OTHER_LEAF_ID)
     const targets = deriveRunningAgentSendTargets(
       state({
         agentStatusByPaneKey: {
           [workingPaneKey]: entry(workingPaneKey, 'working'),
-          [stalePaneKey]: entry(stalePaneKey, 'waiting', NOW - 31 * 60 * 1000)
+          [waitingPaneKey]: entry(waitingPaneKey, 'waiting'),
+          [blockedPaneKey]: entry(blockedPaneKey, 'blocked')
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(TAB_ID), tab(OTHER_TAB_ID, WORKTREE_ID)]
         },
         terminalLayoutsByTabId: {
           [TAB_ID]: {
@@ -111,20 +117,61 @@ describe('running agent send targets', () => {
               [LEFT_LEAF_ID]: 'pty-left',
               [RIGHT_LEAF_ID]: 'pty-right'
             }
+          },
+          [OTHER_TAB_ID]: {
+            root: { type: 'leaf', leafId: OTHER_LEAF_ID },
+            activeLeafId: OTHER_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [OTHER_LEAF_ID]: 'pty-other' }
           }
         }
       }),
-      WORKTREE_ID
+      WORKTREE_ID,
+      NOW
     )
 
     expect(resolveRunningAgentSendTarget(state(), WORKTREE_ID, 'missing')).toBeNull()
     expect(targets.find((target) => target.paneKey === workingPaneKey)).toMatchObject({
-      status: 'eligible',
+      status: 'disabled',
+      disabledReason: 'Agent is working',
       ptyId: 'pty-left'
     })
-    expect(targets.find((target) => target.paneKey === stalePaneKey)).toMatchObject({
+    expect(targets.find((target) => target.paneKey === waitingPaneKey)).toMatchObject({
       status: 'eligible',
       ptyId: 'pty-right'
+    })
+    expect(targets.find((target) => target.paneKey === blockedPaneKey)).toMatchObject({
+      status: 'eligible',
+      ptyId: 'pty-other'
+    })
+  })
+
+  it('disables stale agent status rows even when the pane still has a leaf PTY', () => {
+    const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+    const target = resolveRunningAgentSendTarget(
+      state({
+        agentStatusByPaneKey: {
+          [stalePaneKey]: entry(stalePaneKey, 'waiting', NOW - 31 * 60 * 1000)
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: RIGHT_LEAF_ID },
+            activeLeafId: RIGHT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [RIGHT_LEAF_ID]: 'pty-right' }
+          }
+        }
+      }),
+      WORKTREE_ID,
+      stalePaneKey,
+      NOW
+    )
+
+    expect(target).toMatchObject({
+      paneKey: stalePaneKey,
+      ptyId: 'pty-right',
+      status: 'disabled',
+      disabledReason: 'Agent status is stale'
     })
   })
 
@@ -148,7 +195,8 @@ describe('running agent send targets', () => {
         }
       }),
       WORKTREE_ID,
-      paneKey
+      paneKey,
+      NOW
     )
 
     expect(target).toMatchObject({
@@ -183,8 +231,10 @@ describe('running agent send targets', () => {
       }
     })
 
-    expect(deriveRunningAgentSendTargets(base, WORKTREE_ID)).toHaveLength(1)
-    expect(resolveRunningAgentSendTarget(base, OTHER_WORKTREE_ID, remotePaneKey)).toMatchObject({
+    expect(deriveRunningAgentSendTargets(base, WORKTREE_ID, NOW)).toHaveLength(1)
+    expect(
+      resolveRunningAgentSendTarget(base, OTHER_WORKTREE_ID, remotePaneKey, NOW)
+    ).toMatchObject({
       status: 'eligible',
       ptyId: 'remote:env@@terminal-1'
     })
@@ -210,7 +260,8 @@ describe('running agent send targets', () => {
           }
         }
       }),
-      WORKTREE_ID
+      WORKTREE_ID,
+      NOW
     )
 
     expect(targets.map((target) => target.paneKey)).toEqual([validPaneKey])

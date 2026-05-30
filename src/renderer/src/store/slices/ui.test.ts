@@ -180,8 +180,10 @@ describe('createUISlice agent send target mode', () => {
 
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
       id: 'send-1',
-      eligiblePaneKeys: [readyPaneKey, workingPaneKey],
-      disabledPaneKeys: {},
+      eligiblePaneKeys: [readyPaneKey],
+      disabledPaneKeys: {
+        [workingPaneKey]: 'Agent is working'
+      },
       status: 'open'
     })
     expect(store.getState().pendingRevealWorktree).toMatchObject({
@@ -290,7 +292,7 @@ describe('createUISlice agent send target mode', () => {
     })
   })
 
-  it('can send to a working agent row', async () => {
+  it('does not send to a working agent row', async () => {
     const store = createUIStore()
     seedAgentSendState(store)
     mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(true)
@@ -304,15 +306,15 @@ describe('createUISlice agent send target mode', () => {
     })
 
     await expect(store.getState().sendPromptToSidebarAgentTarget(workingPaneKey)).resolves.toBe(
-      true
+      false
     )
 
-    expect(mocks.sendBracketedPasteToRunningAgent).toHaveBeenCalledWith({
-      ptyId: 'pty-working',
-      content: 'Review this'
+    expect(mocks.sendBracketedPasteToRunningAgent).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      status: 'open'
     })
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Sent to Codex')
-    expect(store.getState().agentSendPopoverTargetMode).toBeNull()
   })
 
   it('does not let an older send close a reopened popover with the same id', async () => {

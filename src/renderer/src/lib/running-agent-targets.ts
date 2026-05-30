@@ -1,7 +1,11 @@
 import type { AppState } from '@/store/types'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry
+} from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { isExplicitAgentStatusFresh } from './agent-status'
 
 type RunningAgentTargetState = Pick<
   AppState,
@@ -21,7 +25,8 @@ export type RunningAgentSendTarget = {
 
 export function deriveRunningAgentSendTargets(
   state: RunningAgentTargetState,
-  worktreeId: string
+  worktreeId: string,
+  now = Date.now()
 ): RunningAgentSendTarget[] {
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   if (tabs.length === 0) {
@@ -45,8 +50,12 @@ export function deriveRunningAgentSendTargets(
       state.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
     let disabledReason: string | undefined
 
-    if (!ptyId) {
+    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      disabledReason = 'Agent status is stale'
+    } else if (!ptyId) {
       disabledReason = 'Terminal is no longer available'
+    } else if (entry.state === 'working') {
+      disabledReason = 'Agent is working'
     }
 
     targets.push({
@@ -67,7 +76,10 @@ export function deriveRunningAgentSendTargets(
 export function resolveRunningAgentSendTarget(
   state: RunningAgentTargetState,
   worktreeId: string,
-  paneKey: string
+  paneKey: string,
+  now = Date.now()
 ): RunningAgentSendTarget | null {
-  return deriveRunningAgentSendTargets(state, worktreeId).find((t) => t.paneKey === paneKey) ?? null
+  return (
+    deriveRunningAgentSendTargets(state, worktreeId, now).find((t) => t.paneKey === paneKey) ?? null
+  )
 }

@@ -266,7 +266,7 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toBe('')
   })
 
-  it('marks all active-worktree rows with live PTYs as eligible send targets', async () => {
+  it('marks eligible active-worktree rows and disables working send targets', async () => {
     const now = Date.now()
     const readyPaneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
     const workingPaneKey = 'tab-1:22222222-2222-4222-8222-222222222222'
@@ -340,7 +340,8 @@ describe('WorktreeCardAgents', () => {
 
     expect(markup).toContain('data-agent-send-target="eligible"')
     expect(markup).toContain(`data-pane-key="${readyPaneKey}"`)
-    expect(markup).not.toContain('data-agent-send-target="disabled"')
+    expect(markup).toContain('data-agent-send-target="disabled"')
+    expect(markup).toContain('data-disabled-reason="Agent is working"')
     expect(markup).toContain(`data-pane-key="${workingPaneKey}"`)
     expect(markup).toContain('data-has-send-handler="true"')
     expect(markup).not.toContain('gap-1')
