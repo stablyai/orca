@@ -55,8 +55,9 @@ export function useCreateRepo(
       toast.error('Enter a server parent path.')
       return
     }
+    const gen = createGenRef.current
     const dir = await window.api.repos.pickDirectory()
-    if (dir) {
+    if (dir && gen === createGenRef.current) {
       setCreateParent(dir)
       setCreateError(null)
     }
