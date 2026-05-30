@@ -3308,6 +3308,32 @@ describe('Claude hook normalization', () => {
     expect(result?.payload.lastAssistantMessage).toBe('what is up my dude')
   })
 
+  it('StopFailure maps to done without copying provider error text', () => {
+    _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'say hi'
+      }),
+      'production'
+    )
+
+    const result = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'StopFailure',
+        error: 'invalid_request',
+        error_details: 'model is not supported',
+        last_assistant_message: 'API Error: model is not supported'
+      }),
+      'production'
+    )
+
+    expect(result?.payload.state).toBe('done')
+    expect(result?.payload.prompt).toBe('say hi')
+    expect(result?.payload.lastAssistantMessage).toBeUndefined()
+  })
+
   describe('Stop transcript scan', () => {
     let tmpDir: string
     let transcriptPath: string

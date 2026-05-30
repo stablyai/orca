@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: the supported-agent catalog, icon glyphs,
+   and fallback icon renderer must stay in one place so agent option labels and
+   status-surface icons do not drift. */
 import React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import type { TuiAgent } from '../../../shared/types'
@@ -15,8 +18,6 @@ export type AgentCatalogEntry = {
   homepageUrl: string
 }
 
-// Full catalog of supported agents — ordered by priority for auto-default selection.
-// homepageUrl matches the href used in the README agent badge list.
 export const AGENT_CATALOG: AgentCatalogEntry[] = [
   {
     id: 'claude',

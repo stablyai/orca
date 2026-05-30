@@ -18,6 +18,7 @@ import { ClaudeHookService } from '../claude/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { HermesHookService } from '../hermes/hook-service'
+import { openClaudeHookService } from '../openclaude/hook-service'
 
 type FakeFs = {
   files: Map<string, string>
@@ -122,6 +123,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/claude-hook.sh',
           install: (sftp: SFTPWrapper) => new ClaudeHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/openclaude-hook.sh',
+          install: (sftp: SFTPWrapper) => openClaudeHookService.installRemote(sftp, '/home/dev')
         },
         {
           path: '/home/dev/.orca/agent-hooks/codex-hook.sh',

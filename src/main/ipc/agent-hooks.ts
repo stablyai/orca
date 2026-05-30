@@ -21,6 +21,7 @@ import { commandCodeHookService } from '../command-code/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
+import { openClaudeHookService } from '../openclaude/hook-service'
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
@@ -34,6 +35,7 @@ export function registerAgentHookHandlers(): void {
   // register-core-handlers.ts prevents re-entry, but decoupling from that guard
   // future-proofs this file.
   ipcMain.removeHandler('agentHooks:claudeStatus')
+  ipcMain.removeHandler('agentHooks:openClaudeStatus')
   ipcMain.removeHandler('agentHooks:codexStatus')
   ipcMain.removeHandler('agentHooks:geminiStatus')
   ipcMain.removeHandler('agentHooks:antigravityStatus')
@@ -94,6 +96,19 @@ export function registerAgentHookHandlers(): void {
     } catch (err) {
       return {
         agent: 'claude',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:openClaudeStatus', (): AgentHookInstallStatus => {
+    try {
+      return openClaudeHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'openclaude',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

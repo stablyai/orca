@@ -1909,7 +1909,7 @@ function normalizeClaudeEvent(
       ? 'working'
       : eventName === 'PermissionRequest'
         ? 'waiting'
-        : eventName === 'Stop'
+        : eventName === 'Stop' || eventName === 'StopFailure'
           ? 'done'
           : null
 
