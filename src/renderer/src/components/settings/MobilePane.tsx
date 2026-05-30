@@ -61,6 +61,8 @@ export function MobilePane(): React.JSX.Element {
     }
   }, [])
 
+  useEffect(() => clearCodeCopiedResetTimer, [clearCodeCopiedResetTimer])
+
   const loadDevices = useCallback(async () => {
     try {
       const result = await window.api.mobile.listDevices()

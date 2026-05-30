@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import React, { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
@@ -74,6 +74,8 @@ function InstallRgGuidance({
       copiedResetTimerRef.current = null
     }
   }, [])
+
+  useEffect(() => clearCopiedResetTimer, [clearCopiedResetTimer])
 
   const handleCopy = useCallback(() => {
     if (!command) {

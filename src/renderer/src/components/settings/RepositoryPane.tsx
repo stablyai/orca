@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { Button } from '../ui/button'
@@ -60,12 +60,14 @@ export function RepositoryPane({
   // request to hide every child row that does not repeat the project name.
   const forceFullPaneForRepoMatch = matchesRepositoryIdentitySearch(searchQuery, repo)
 
-  const clearCopiedTemplateResetTimer = (): void => {
+  const clearCopiedTemplateResetTimer = useCallback((): void => {
     if (copiedTemplateResetTimerRef.current !== null) {
       window.clearTimeout(copiedTemplateResetTimerRef.current)
       copiedTemplateResetTimerRef.current = null
     }
-  }
+  }, [])
+
+  useEffect(() => clearCopiedTemplateResetTimer, [clearCopiedTemplateResetTimer])
 
   const handleRemoveProject = (repoId: string) => {
     if (confirmingRemove === repoId) {

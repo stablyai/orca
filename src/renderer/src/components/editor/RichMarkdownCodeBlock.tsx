@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
@@ -58,6 +58,8 @@ export function RichMarkdownCodeBlock({
       copiedResetTimerRef.current = null
     }
   }, [])
+
+  useEffect(() => clearCopiedResetTimer, [clearCopiedResetTimer])
 
   const onChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
