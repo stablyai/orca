@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -30,6 +30,13 @@ type BrowserPaneProps = {
   onOpenComputerUse?: () => void
 }
 
+function cancelBrowserSessionCookieScrollFrames(frameIds: MutableRefObject<number[]>): void {
+  for (const frameId of frameIds.current) {
+    cancelAnimationFrame(frameId)
+  }
+  frameIds.current = []
+}
+
 export function BrowserPane({
   settings,
   updateSettings,
@@ -51,6 +58,7 @@ export function BrowserPane({
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
+  const sessionCookieScrollFrameIdsRef = useRef<number[]>([])
 
   // Why: sync draft with store value whenever it changes externally (e.g. the
   // in-app browser tab's address bar saves a home page). Without this, the
@@ -58,6 +66,10 @@ export function BrowserPane({
   useEffect(() => {
     setHomePageDraft(browserDefaultUrl ?? '')
   }, [browserDefaultUrl])
+
+  useEffect(() => {
+    return () => cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
+  }, [])
 
   const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
 
@@ -67,7 +79,25 @@ export function BrowserPane({
   const showCookies = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[3]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, BROWSER_USE_PANE_SEARCH_ENTRIES)
 
+  const requestSessionCookieScrollFrame = (callback: FrameRequestCallback): void => {
+    let completed = false
+    let frameId: number | undefined
+    frameId = requestAnimationFrame((timestamp) => {
+      completed = true
+      if (frameId !== undefined) {
+        sessionCookieScrollFrameIdsRef.current = sessionCookieScrollFrameIdsRef.current.filter(
+          (pendingFrameId) => pendingFrameId !== frameId
+        )
+      }
+      callback(timestamp)
+    })
+    if (!completed) {
+      sessionCookieScrollFrameIdsRef.current.push(frameId)
+    }
+  }
+
   const scrollToSessionCookies = (): void => {
+    cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
     // Why: the "Session & Cookies" block is search-gated, so if the user has
     // filtered to a query that excludes it the target element won't be in the
     // DOM. Clear the search first, then scroll on the next frame so the block
@@ -76,8 +106,8 @@ export function BrowserPane({
     // Why: double RAF to ensure React has committed the re-render triggered by
     // the store update before we query the DOM — a single RAF can fire before
     // commit and miss the newly-mounted element.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    requestSessionCookieScrollFrame(() => {
+      requestSessionCookieScrollFrame(() => {
         const el = document.getElementById('browser-session-cookies')
         if (!el) {
           return

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Why: invoked via ~/.local/bin/orca symlink (from CliInstaller); resolve it
+# Why: invoked via ~/.local/bin/orca-ide symlink (from CliInstaller); resolve it
 # so APP_DIR points at the real install, not the symlink's parent.
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do

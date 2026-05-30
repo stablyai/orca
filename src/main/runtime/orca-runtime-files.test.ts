@@ -1,4 +1,6 @@
-/* eslint-disable max-lines */
+/* eslint-disable max-lines -- Why: runtime file command tests share mocked fs,
+   authorization, and watcher lifecycle fixtures; splitting would duplicate the
+   setup that makes cross-command filesystem behavior comparable. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Fs from 'fs'
 import type * as FsPromises from 'fs/promises'
@@ -78,20 +80,36 @@ function dirEntry(args: { name: string; directory?: boolean; symlink?: boolean }
   }
 }
 
-function createRuntimeFileCommands() {
+function mockLocalPathStats(entries: Record<string, [number, number]>) {
+  resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+  lstatMock.mockImplementation(async (p: string) => {
+    const entry = entries[p]
+    if (entry) {
+      return mockStats(entry[0], entry[1])
+    }
+    throw enoent()
+  })
+}
+
+function createRuntimeFileCommands(options?: {
+  path?: string
+  openDiff?: ReturnType<typeof vi.fn>
+}) {
   const store = {
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
   }
+  const path = options?.path ?? '/repo'
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
     requireStore: () => store,
     resolveWorktreeSelector: vi.fn(async () => ({
       id: 'wt-1',
       repoId: 'repo-1',
-      path: '/repo'
+      path
     })),
     resolveRuntimeGitTarget: vi.fn(),
-    openFile: vi.fn()
+    openFile: vi.fn(),
+    ...(options?.openDiff ? { openDiff: options.openDiff } : {})
   } as never)
   return { commands, store }
 }
@@ -128,18 +146,7 @@ describe('RuntimeFileCommands', () => {
 
   it('opens source control diffs through the renderer host', async () => {
     const openDiff = vi.fn()
-    const commands = new RuntimeFileCommands({
-      getRuntimeId: () => 'runtime-1',
-      requireStore: () => ({ getRepo: vi.fn(() => undefined) }),
-      resolveWorktreeSelector: vi.fn(async () => ({
-        id: 'wt-1',
-        repoId: 'repo-1',
-        path: '/repo'
-      })),
-      resolveRuntimeGitTarget: vi.fn(),
-      openFile: vi.fn(),
-      openDiff
-    } as never)
+    const { commands } = createRuntimeFileCommands({ openDiff })
 
     const result = await commands.openMobileDiff('id:wt-1', 'docs/readme.md', true)
 
@@ -180,12 +187,9 @@ describe('RuntimeFileCommands', () => {
 
   it('allows runtime-local case-only rename with IPC parity guard behavior', async () => {
     const { commands } = createRuntimeFileCommands()
-    resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === '/repo/README.md' || p === '/repo/readme.md') {
-        return mockStats(10, 100)
-      }
-      throw enoent()
+    mockLocalPathStats({
+      '/repo/README.md': [10, 100],
+      '/repo/readme.md': [10, 100]
     })
 
     await commands.renameFileExplorerPath('id:wt-1', 'README.md', 'readme.md')
@@ -195,15 +199,9 @@ describe('RuntimeFileCommands', () => {
 
   it('rejects runtime-local true destination collisions', async () => {
     const { commands } = createRuntimeFileCommands()
-    resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === '/repo/old.ts') {
-        return mockStats(11, 110)
-      }
-      if (p === '/repo/new.ts') {
-        return mockStats(11, 111)
-      }
-      throw enoent()
+    mockLocalPathStats({
+      '/repo/old.ts': [11, 110],
+      '/repo/new.ts': [11, 111]
     })
 
     await expect(commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')).rejects.toThrow(
@@ -215,12 +213,9 @@ describe('RuntimeFileCommands', () => {
 
   it('rejects runtime-local hard-link alias collisions', async () => {
     const { commands } = createRuntimeFileCommands()
-    resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === '/repo/README.md' || p === '/repo/README-hardlink.md') {
-        return mockStats(12, 120)
-      }
-      throw enoent()
+    mockLocalPathStats({
+      '/repo/README.md': [12, 120],
+      '/repo/README-hardlink.md': [12, 120]
     })
 
     await expect(
@@ -232,12 +227,9 @@ describe('RuntimeFileCommands', () => {
 
   it('rejects runtime-local cross-parent case-only collisions', async () => {
     const { commands } = createRuntimeFileCommands()
-    resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === '/repo/src/README.md' || p === '/repo/docs/readme.md') {
-        return mockStats(13, 130)
-      }
-      throw enoent()
+    mockLocalPathStats({
+      '/repo/src/README.md': [13, 130],
+      '/repo/docs/readme.md': [13, 130]
     })
 
     await expect(
@@ -277,7 +269,6 @@ describe('RuntimeFileCommands', () => {
       value: 'win32'
     })
 
-    const store = { getRepo: vi.fn(() => undefined) }
     const close = vi.fn()
     const on = vi.fn()
     let listener: (() => void) | null = null
@@ -287,18 +278,7 @@ describe('RuntimeFileCommands', () => {
     })
     resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
-
-    const commands = new RuntimeFileCommands({
-      getRuntimeId: () => 'runtime-1',
-      requireStore: () => store,
-      resolveWorktreeSelector: vi.fn(async () => ({
-        id: 'wt-1',
-        repoId: 'repo-1',
-        path: 'C:\\repo'
-      })),
-      resolveRuntimeGitTarget: vi.fn(),
-      openFile: vi.fn()
-    } as never)
+    const { commands } = createRuntimeFileCommands({ path: 'C:\\repo' })
     const onEvents = vi.fn()
 
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', onEvents)
@@ -321,7 +301,6 @@ describe('RuntimeFileCommands', () => {
   })
 
   it('tracks native Parcel watcher unsubscribe work so shutdown can await it', async () => {
-    const { commands } = createRuntimeFileCommands()
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
     let resolveUnsubscribe: () => void = () => {}
@@ -332,6 +311,7 @@ describe('RuntimeFileCommands', () => {
         })
     )
     subscribeParcelWatcherMock.mockResolvedValue({ unsubscribe: unsubscribeMock })
+    const { commands } = createRuntimeFileCommands()
 
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', vi.fn())
     unsubscribe()

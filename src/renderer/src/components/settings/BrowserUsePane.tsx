@@ -124,7 +124,7 @@ export function BrowserUseSetup({
         onStatusChange: setCliStatus
       })
       if (isOrcaCliAvailableOnPath(next)) {
-        toast.success('Registered `orca` in PATH.')
+        toast.success('Registered the Orca CLI in PATH.')
       }
     } finally {
       setCliBusy(false)
@@ -254,7 +254,7 @@ export function BrowserUseSetup({
       {showStep1 ? (
         <SearchableSetting
           title="Enable Orca CLI"
-          description="Register the orca shell command so agents can drive the browser."
+          description="Register the Orca CLI so agents can drive the browser."
           keywords={BROWSER_USE_PANE_SEARCH_ENTRIES[0].keywords}
           className="rounded-xl border border-border/60 bg-card/50 p-4"
         >
@@ -266,8 +266,8 @@ export function BrowserUseSetup({
             <div className="min-w-0 flex-1 space-y-1">
               <p className="text-sm font-medium">Enable Orca CLI</p>
               <p className="text-xs text-muted-foreground">
-                Registers the <code className="rounded bg-muted px-1 py-0.5 text-[11px]">orca</code>{' '}
-                command so agents can orchestrate the browser from their shell.
+                Registers the Orca CLI command so agents can orchestrate the browser from their
+                shell.
               </p>
               {cliStatus?.commandPath && cliEnabled ? (
                 <p className="text-[11px] text-muted-foreground">

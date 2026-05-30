@@ -223,9 +223,14 @@ export default function IsolateToggleButton({
 }
 
 function findWorktree(
-  worktreesByRepo: Record<string, Worktree[]>,
+  worktreesByRepo: Record<string, Worktree[]> | null | undefined,
   worktreeId: string
 ): Worktree | undefined {
+  // Why: the sidebar can render before workspace lists hydrate, and SSR tests
+  // often mock only the WorktreeCard inputs rather than the full store slice.
+  if (!worktreesByRepo) {
+    return undefined
+  }
   for (const worktrees of Object.values(worktreesByRepo)) {
     const found = worktrees.find((worktree) => worktree.id === worktreeId)
     if (found) {

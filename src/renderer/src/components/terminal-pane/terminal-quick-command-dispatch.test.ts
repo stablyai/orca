@@ -91,4 +91,25 @@ describe('sendTerminalQuickCommandToPane', () => {
     expect(sendInput).toHaveBeenCalledWith('echo one; echo two')
     expect(pane.terminal.focus).toHaveBeenCalledOnce()
   })
+
+  it('does not write agent prompt quick commands into the current pane', () => {
+    const sendInput = vi.fn(() => true)
+    const focus = vi.fn()
+
+    const sent = sendTerminalQuickCommandToPane({
+      command: {
+        id: 'agent',
+        label: 'Agent',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this'
+      },
+      pane: { terminal: { focus } },
+      transport: { sendInput }
+    })
+
+    expect(sent).toBe(false)
+    expect(sendInput).not.toHaveBeenCalled()
+    expect(focus).not.toHaveBeenCalled()
+  })
 })

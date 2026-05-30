@@ -17,6 +17,7 @@ type OnboardingInlineCommandTerminalProps = {
   ariaLabel: string
   terminalHeightPx?: number
   terminalTopMarginPx?: number
+  descriptionPaddingClassName?: string
   autoScrollIntoView?: boolean
   worktreeId?: string
   onOpened?: () => void
@@ -30,6 +31,7 @@ export function OnboardingInlineCommandTerminal({
   ariaLabel,
   terminalHeightPx = 280,
   terminalTopMarginPx = 20,
+  descriptionPaddingClassName = 'px-4 py-3',
   autoScrollIntoView = true,
   worktreeId = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
   onOpened,
@@ -80,7 +82,7 @@ export function OnboardingInlineCommandTerminal({
 
   useEffect(() => {
     if (!autoScrollIntoView) {
-      return
+      return undefined
     }
     if (prefersReducedMotion) {
       const scrollFrame = window.requestAnimationFrame(() => {
@@ -91,20 +93,32 @@ export function OnboardingInlineCommandTerminal({
     // Why: double rAF guarantees the browser commits the initial collapsed
     // styles before we flip to `entered`, so the height/opacity transition
     // actually plays instead of snapping straight to the final state.
+    let enteredFrame: number | null = null
     const enterFrame = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => setEntered(true))
+      enteredFrame = window.requestAnimationFrame(() => setEntered(true))
     })
-    return () => window.cancelAnimationFrame(enterFrame)
+    return () => {
+      window.cancelAnimationFrame(enterFrame)
+      if (enteredFrame !== null) {
+        window.cancelAnimationFrame(enteredFrame)
+      }
+    }
   }, [autoScrollIntoView, prefersReducedMotion])
 
   useEffect(() => {
     if (autoScrollIntoView) {
-      return
+      return undefined
     }
+    let enteredFrame: number | null = null
     const enterFrame = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => setEntered(true))
+      enteredFrame = window.requestAnimationFrame(() => setEntered(true))
     })
-    return () => window.cancelAnimationFrame(enterFrame)
+    return () => {
+      window.cancelAnimationFrame(enterFrame)
+      if (enteredFrame !== null) {
+        window.cancelAnimationFrame(enteredFrame)
+      }
+    }
   }, [autoScrollIntoView])
 
   // Why: tracking scroll *during* the height transition is unavoidably
@@ -225,7 +239,7 @@ export function OnboardingInlineCommandTerminal({
         className="min-h-0 overflow-hidden rounded-xl border border-border bg-card"
       >
         {description ? (
-          <div className="border-b border-border px-4 py-3">
+          <div className={`border-b border-border ${descriptionPaddingClassName}`}>
             <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
           </div>
         ) : null}

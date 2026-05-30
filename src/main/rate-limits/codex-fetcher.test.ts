@@ -110,6 +110,23 @@ describe('fetchCodexRateLimits', () => {
     })
   })
 
+  it('does not start the PTY fallback when disabled for background account previews', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    rpcChild.emit('close')
+    await vi.advanceTimersByTimeAsync(0)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      status: 'error'
+    })
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
   it('normalizes Codex RPC remaining-minute windows to fixed display durations', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
@@ -151,5 +168,139 @@ describe('fetchCodexRateLimits', () => {
 
     expect(result.session?.windowMinutes).toBe(300)
     expect(result.weekly?.windowMinutes).toBe(10080)
+  })
+
+  it('runs rate-limit RPC through WSL when the Codex home is a WSL managed account', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: { rateLimits: { primary: { usedPercent: 11 } } }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    try {
+      const resultPromise = fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
+      })
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(1)
+      await resultPromise
+
+      expect(childSpawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        [
+          '-d',
+          'Ubuntu',
+          '--',
+          'bash',
+          '-lc',
+          "export CODEX_HOME='/home/alice/.local/share/orca/account/home'; exec codex '-s' 'read-only' '-a' 'untrusted' 'app-server'"
+        ],
+        expect.objectContaining({
+          env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
+        })
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('runs rate-limit PTY fallback through WSL when RPC cannot read usage', async () => {
+    const originalPlatform = process.platform
+    const originalCodexHome = process.env.CODEX_HOME
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    process.env.CODEX_HOME = 'C:\\Users\\alice\\.codex'
+
+    const rpcChild = makeRpcChild()
+    const ptyHandlers: { onData?: (data: string) => void } = {}
+    childSpawnMock.mockReturnValue(rpcChild)
+    ptySpawnMock.mockReturnValue({
+      onData: vi.fn((callback) => {
+        ptyHandlers.onData = callback
+        return makeDisposable()
+      }),
+      onExit: vi.fn(() => makeDisposable()),
+      write: vi.fn(),
+      kill: vi.fn()
+    })
+
+    try {
+      const resultPromise = fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
+      })
+      rpcChild.emit('close')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(ptySpawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        [
+          '-d',
+          'Ubuntu',
+          '--',
+          'bash',
+          '-lc',
+          "export CODEX_HOME='/home/alice/.local/share/orca/account/home'; exec codex "
+        ],
+        expect.objectContaining({
+          env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
+        })
+      )
+
+      const onPtyData = ptyHandlers.onData
+      if (!onPtyData) {
+        throw new Error('PTY data handler was not registered')
+      }
+      onPtyData('>')
+      onPtyData('5h limit: 17%\nWeekly limit: 23%\n')
+      await vi.advanceTimersByTimeAsync(500)
+
+      await expect(resultPromise).resolves.toMatchObject({
+        session: { usedPercent: 17 },
+        weekly: { usedPercent: 23 },
+        status: 'ok'
+      })
+    } finally {
+      if (originalCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = originalCodexHome
+      }
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
   })
 })

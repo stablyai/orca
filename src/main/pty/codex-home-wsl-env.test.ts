@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isHostCodexHomeForWsl } from './codex-home-wsl-env'
+import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from './codex-home-wsl-env'
 
 describe('isHostCodexHomeForWsl', () => {
   it('matches Windows paths that WSL Codex cannot use as CODEX_HOME', () => {
@@ -13,5 +13,11 @@ describe('isHostCodexHomeForWsl', () => {
     expect(isHostCodexHomeForWsl('/home/jin/.codex')).toBe(false)
     expect(isHostCodexHomeForWsl('')).toBe(false)
     expect(isHostCodexHomeForWsl(undefined)).toBe(false)
+  })
+
+  it('matches Linux paths that host Codex cannot use on Windows', () => {
+    expect(isWslCodexHomeForHost('/home/jin/.local/share/orca/codex-accounts/a/home')).toBe(true)
+    expect(isWslCodexHomeForHost('C:\\Users\\jin\\.codex')).toBe(false)
+    expect(isWslCodexHomeForHost(undefined)).toBe(false)
   })
 })

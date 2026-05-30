@@ -57,6 +57,8 @@ const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
+const DELETE_POSITION_RESTORE_MAX_FRAMES = 180
+const DELETE_POSITION_RESTORE_STABLE_FRAMES = 6
 
 function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
   const maybeElement = target as {
@@ -127,6 +129,18 @@ function findSidebarVirtualRowByKey(sidebar: Element, rowKey: string): HTMLEleme
   )
 }
 
+export function shouldContinueDeleteSiblingPositionRestore(args: {
+  attempts: number
+  stableFrames: number
+}): boolean {
+  // Why: slow deletes leave the target row mounted; after initial focus/remount
+  // settling, the restore loop must stop so user scrolling wins.
+  return (
+    args.attempts < DELETE_POSITION_RESTORE_MAX_FRAMES &&
+    args.stableFrames < DELETE_POSITION_RESTORE_STABLE_FRAMES
+  )
+}
+
 function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => void {
   const sidebar = scope?.closest('[data-worktree-sidebar]')
   const row = scope?.closest('[data-worktree-virtual-row]')
@@ -173,7 +187,12 @@ function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => void {
         stableFrames = 0
       }
       attempts += 1
-      if (attempts < 180 && (currentTarget || stableFrames < 6)) {
+      if (
+        shouldContinueDeleteSiblingPositionRestore({
+          attempts,
+          stableFrames
+        })
+      ) {
         window.requestAnimationFrame(restore)
       }
     }

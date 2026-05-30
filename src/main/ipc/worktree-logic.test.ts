@@ -247,6 +247,7 @@ describe('mergeWorktree', () => {
       isPinned: true,
       sortOrder: 5,
       lastActivityAt: 1000,
+      isolation: 'host',
       workspaceStatus: 'in-review',
       diffComments: []
     })

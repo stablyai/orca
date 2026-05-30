@@ -8,6 +8,7 @@ export const AGENT_HOOK_TARGETS = [
   'codex',
   'gemini',
   'antigravity',
+  'amp',
   'cursor',
   'droid',
   'command-code',
