@@ -174,6 +174,14 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
   return formatted
 }
 
+function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
+  const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
+  if (!trimmed || trimmed === 'xterm-256color') {
+    return null
+  }
+  return trimmed.split(/[\\/]/).pop() || null
+}
+
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
@@ -395,7 +403,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return null
       }
       try {
-        return proc.process || null
+        return normalizeForegroundProcessName(proc.process)
       } catch {
         return null
       }

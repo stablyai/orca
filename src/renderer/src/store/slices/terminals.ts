@@ -299,6 +299,7 @@ export type TerminalSlice = {
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
+  clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   /** Mark a tab as having unread activity (agent working→idle transition).
@@ -1025,6 +1026,27 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
       return nextState
+    })
+  },
+
+  clearTabLaunchAgent: (tabId) => {
+    set((s) => {
+      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+      if (!ownerWorktreeId) {
+        return s
+      }
+      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
+      const tabIndex = tabs.findIndex((t) => t.id === tabId)
+      const currentTab = tabs[tabIndex]
+      if (!currentTab?.launchAgent) {
+        return s
+      }
+      const { launchAgent: _launchAgent, ...tabWithoutLaunchAgent } = currentTab
+      void _launchAgent
+      const nextTabs = [...tabs]
+      nextTabs[tabIndex] = tabWithoutLaunchAgent
+      scheduleRuntimeGraphSync()
+      return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
     })
   },
 

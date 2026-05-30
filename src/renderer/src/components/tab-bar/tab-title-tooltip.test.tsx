@@ -76,6 +76,15 @@ vi.mock('./shell-icons', () => ({
   ShellIcon: () => <span data-shell-icon />
 }))
 
+vi.mock('@/lib/agent-catalog', () => ({
+  AgentIcon: ({ agent }: { agent: string }) => <span data-agent-catalog-icon={agent} />
+}))
+
+vi.mock('@/lib/agent-title-decoration', () => ({
+  stripLeadingAgentTitleDecoration: (title: string) =>
+    title.replace(/^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/, '').trimStart() || title
+}))
+
 vi.mock('@/lib/use-tab-agent', () => ({
   useTabAgent: () => mockTabAgent
 }))

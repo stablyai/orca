@@ -56,6 +56,16 @@ describe('resolveTabAgent', () => {
     expect(resolveTabAgent(map, layout(LEAF_A), 'tab-1')).toBeNull()
   })
 
+  it('does not keep a hook-only icon for a completed agent turn', () => {
+    const map = {
+      [`tab-1:${LEAF_A}`]: {
+        ...entry(`tab-1:${LEAF_A}`, 'claude'),
+        state: 'done' as const
+      }
+    }
+    expect(resolveTabAgent(map, layout(LEAF_A), 'tab-1')).toBeNull()
+  })
+
   it('keeps the terminal glyph for an agent Orca has no icon for', () => {
     const map = { [`tab-1:${LEAF_A}`]: entry(`tab-1:${LEAF_A}`, 'totally-custom-agent') }
     expect(resolveTabAgent(map, layout(LEAF_A), 'tab-1')).toBeNull()

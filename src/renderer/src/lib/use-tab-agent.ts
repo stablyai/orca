@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
 import { isShellProcess, getAgentLabel } from '../../../shared/agent-detection'
 import { worktreeUsesRemoteConnection } from '@/store/slices/terminals'
-import { resolveTabAgent } from './tab-agent'
+import { hasCompletedTabAgent, resolveTabAgent } from './tab-agent'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
 // Maps getAgentLabel()'s product labels to TuiAgent ids — the fallback for
@@ -30,6 +30,57 @@ function agentFromTitle(title: string): TuiAgent | null {
   return label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
 }
 
+function getTitleForegroundKey(title: string): string {
+  const titleAgent = agentFromTitle(title)
+  if (titleAgent) {
+    return `agent:${titleAgent}`
+  }
+  if (isShellProcess(title)) {
+    return 'shell'
+  }
+  const stableTitle = title
+    .trim()
+    .toLowerCase()
+    // Why: unknown agents may still animate leading status glyphs. Include the
+    // stable title body so first launch from "Terminal 1" triggers one poll,
+    // without polling on every spinner frame.
+    .replace(/^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/, '')
+    .slice(0, 48)
+  return `unknown:${stableTitle}`
+}
+
+export function resolveTabAgentFromSignals(args: {
+  foreground: TuiAgent | null | undefined
+  hasObservedAgentSignal: boolean
+  shellForegroundAfterAgentSignal: boolean
+  isRemote: boolean
+  title: string
+  hookAgent: TuiAgent | null
+  hasCompletedHook: boolean
+  launchAgent?: TuiAgent
+}): TuiAgent | null {
+  const titleAgent = agentFromTitle(args.title)
+  const titleLooksShell = isShellProcess(args.title)
+  const launchAgent =
+    args.hasCompletedHook || (titleLooksShell && args.hasObservedAgentSignal)
+      ? null
+      : (args.launchAgent ?? null)
+  const fallbackAgent = titleAgent ?? args.hookAgent ?? launchAgent
+  if (args.isRemote || args.foreground === undefined) {
+    return fallbackAgent
+  }
+  if (args.foreground) {
+    return args.foreground
+  }
+  if (titleAgent) {
+    return titleAgent
+  }
+  // Why: a freshly spawned agent tab can briefly report the shell before the
+  // queued launch command owns the PTY. Only let shell clear the icon after
+  // this pane has actually been observed running an agent.
+  return args.shellForegroundAfterAgentSignal ? null : fallbackAgent
+}
+
 /**
  * Resolve which coding-harness agent a terminal tab is running, for its tab-bar
  * icon. Layered signals, most-authoritative first:
@@ -50,6 +101,8 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
   const hookAgent = useAppStore((s) =>
     resolveTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
   )
+  const hasCompletedHook = useAppStore((s) => hasCompletedTabAgent(s.agentStatusByPaneKey, tab.id))
+  const clearTabLaunchAgent = useAppStore((s) => s.clearTabLaunchAgent)
 
   // The focused pane's PTY (single-pane tabs have exactly one leaf).
   const ptyId = useAppStore((s) => {
@@ -63,10 +116,27 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
   // undefined = no conclusive local reading (defer to title/hook/launchAgent);
   // null = foreground is a shell; TuiAgent = recognized agent process.
   const [foreground, setForeground] = useState<TuiAgent | null | undefined>(undefined)
+  const [hasObservedAgentSignal, setHasObservedAgentSignal] = useState(false)
+  const [shellForegroundAfterAgentSignal, setShellForegroundAfterAgentSignal] = useState(false)
+  const hasObservedAgentSignalRef = useRef(false)
+  const titleForegroundKey = getTitleForegroundKey(tab.title)
+
+  useEffect(() => {
+    setForeground(undefined)
+    setHasObservedAgentSignal(false)
+    hasObservedAgentSignalRef.current = false
+    setShellForegroundAfterAgentSignal(false)
+  }, [ptyId, isRemote])
+
+  useEffect(() => {
+    if (agentFromTitle(tab.title) || hookAgent) {
+      hasObservedAgentSignalRef.current = true
+      setHasObservedAgentSignal(true)
+    }
+  }, [hookAgent, tab.title])
 
   useEffect(() => {
     if (!ptyId || isRemote) {
-      setForeground(undefined)
       return
     }
     let cancelled = false
@@ -81,8 +151,11 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
         }
         const recognized = recognizeAgentProcess(process)
         if (recognized) {
+          hasObservedAgentSignalRef.current = true
+          setHasObservedAgentSignal(true)
           setForeground(recognized.agent)
         } else if (process && isShellProcess(process)) {
+          setShellForegroundAfterAgentSignal(hasObservedAgentSignalRef.current)
           setForeground(null)
         } else {
           setForeground(undefined)
@@ -96,11 +169,41 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     return () => {
       cancelled = true
     }
-  }, [ptyId, isRemote, tab.title])
+  }, [ptyId, isRemote, titleForegroundKey])
 
-  // Foreground is the live truth when conclusive (agent, or shell ⇒ null).
-  if (!isRemote && foreground !== undefined) {
-    return foreground
-  }
-  return agentFromTitle(tab.title) ?? hookAgent ?? tab.launchAgent ?? null
+  useEffect(() => {
+    if (!tab.launchAgent) {
+      return
+    }
+    const titleLooksShell = isShellProcess(tab.title)
+    const titleAgent = agentFromTitle(tab.title)
+    const foregroundSawExitedAgent =
+      !isRemote && foreground === null && shellForegroundAfterAgentSignal && !titleAgent
+    const titleSawExitedAgent = titleLooksShell && hasObservedAgentSignal
+    const remoteHookCompletedAtShellTitle = isRemote && hasCompletedHook && titleLooksShell
+    if (foregroundSawExitedAgent || titleSawExitedAgent || remoteHookCompletedAtShellTitle) {
+      clearTabLaunchAgent(tab.id)
+    }
+  }, [
+    clearTabLaunchAgent,
+    foreground,
+    hasCompletedHook,
+    hasObservedAgentSignal,
+    isRemote,
+    shellForegroundAfterAgentSignal,
+    tab.id,
+    tab.launchAgent,
+    tab.title
+  ])
+
+  return resolveTabAgentFromSignals({
+    foreground,
+    hasObservedAgentSignal,
+    shellForegroundAfterAgentSignal,
+    isRemote,
+    title: tab.title,
+    hookAgent,
+    hasCompletedHook,
+    launchAgent: tab.launchAgent
+  })
 }

@@ -68,6 +68,19 @@ describe('launchAgentInNewTab', () => {
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
   })
 
+  it('stamps the launched agent on the new tab for immediate provider icon bootstrap', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1'
+    })
+
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      launchAgent: 'codex'
+    })
+  })
+
   it('queues initial working status for Command Code argv prompt launches', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 

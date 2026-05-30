@@ -21,20 +21,39 @@ export function resolveTabAgent(
 ): TuiAgent | null {
   const activeLeafId = layout?.activeLeafId
   if (activeLeafId && isTerminalLeafId(activeLeafId)) {
-    const focused = agentTypeToIconAgent(
-      agentStatusByPaneKey[makePaneKey(tabId, activeLeafId)]?.agentType
-    )
+    const focused = agentFromStatusEntry(agentStatusByPaneKey[makePaneKey(tabId, activeLeafId)])
     if (focused) {
       return focused
     }
   }
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
     if (parsePaneKey(paneKey)?.tabId === tabId) {
-      const agent = agentTypeToIconAgent(entry.agentType)
+      const agent = agentFromStatusEntry(entry)
       if (agent) {
         return agent
       }
     }
   }
   return null
+}
+
+function agentFromStatusEntry(entry: AgentStatusEntry | undefined): TuiAgent | null {
+  if (!entry || entry.state === 'done') {
+    return null
+  }
+  return agentTypeToIconAgent(entry.agentType)
+}
+
+export function hasCompletedTabAgent(
+  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  tabId: string
+): boolean {
+  for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
+    if (entry.state === 'done' && parsePaneKey(paneKey)?.tabId === tabId) {
+      if (agentTypeToIconAgent(entry.agentType)) {
+        return true
+      }
+    }
+  }
+  return false
 }

@@ -513,12 +513,20 @@ const SHELL_NAMES = new Set([
   'zsh',
   'sh',
   'fish',
+  'cmd',
   'cmd.exe',
+  'powershell',
   'powershell.exe',
+  'pwsh',
   'pwsh.exe',
   'nu'
 ])
 
 export function isShellProcess(processName: string): boolean {
-  return SHELL_NAMES.has(processName.trim().toLowerCase())
+  const normalized = processName
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .toLowerCase()
+  const basename = normalized.split(/[\\/]/).pop() ?? normalized
+  return SHELL_NAMES.has(normalized) || SHELL_NAMES.has(basename)
 }
