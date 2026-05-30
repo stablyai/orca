@@ -82,8 +82,8 @@ type TerminalPaneProps = {
   wslCapabilitiesLoading?: boolean
   /** Whether PowerShell 7+ (pwsh.exe) is installed on this Windows machine. */
   pwshAvailable?: boolean
-  /** Resolved Git for Windows bash.exe path, when installed on this machine. */
-  gitBashPath?: string | null
+  /** Whether Git for Windows bash.exe is installed on this machine. */
+  gitBashAvailable?: boolean
 }
 
 export function TerminalPane({
@@ -98,7 +98,7 @@ export function TerminalPane({
   wslDistros = [],
   wslCapabilitiesLoading = false,
   pwshAvailable,
-  gitBashPath
+  gitBashAvailable = false
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isWindows = isWindowsUserAgent()
@@ -131,7 +131,7 @@ export function TerminalPane({
       : wslDistros
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
   const showWindowsPowerShellImplementation = isWindows && windowsShell === 'powershell.exe'
-  const showGitBashOption = Boolean(gitBashPath) || windowsShell === WINDOWS_GIT_BASH_SHELL
+  const showGitBashOption = gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
 
   const visibleSections = [
     isWindows && matchesSettingsSearch(searchQuery, TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY) ? (
@@ -173,7 +173,7 @@ export function TerminalPane({
                           {
                             value: WINDOWS_GIT_BASH_SHELL,
                             label: 'Git Bash',
-                            disabled: !gitBashPath
+                            disabled: !gitBashAvailable
                           }
                         ]
                       : []),

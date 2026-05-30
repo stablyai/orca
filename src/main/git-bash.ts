@@ -70,14 +70,18 @@ export function getGitBashCandidatePaths(env: NodeJS.ProcessEnv = process.env): 
       if (!segment) {
         continue
       }
-      pushCandidate(candidates, seen, pathWin32.join(segment, 'bash.exe'))
+      const directBashCandidate = pathWin32.join(segment, 'bash.exe')
+      if (isGitForWindowsBashPath(directBashCandidate)) {
+        pushCandidate(candidates, seen, directBashCandidate)
+      }
 
       const basename = pathWin32.basename(segment).toLowerCase()
       const parent = pathWin32.dirname(segment)
-      if (basename === 'cmd') {
+      const parentBasename = pathWin32.basename(parent).toLowerCase()
+      if (basename === 'cmd' && (parentBasename === 'git' || parentBasename === 'portablegit')) {
         pushCandidate(candidates, seen, pathWin32.join(parent, 'bin', 'bash.exe'))
         pushCandidate(candidates, seen, pathWin32.join(parent, 'usr', 'bin', 'bash.exe'))
-      } else if (basename === 'git') {
+      } else if (basename === 'git' || basename === 'portablegit') {
         pushCandidate(candidates, seen, pathWin32.join(segment, 'bin', 'bash.exe'))
         pushCandidate(candidates, seen, pathWin32.join(segment, 'usr', 'bin', 'bash.exe'))
       }
@@ -94,7 +98,7 @@ export function resolveGitBashPath(options: GitBashPathOptions = {}): string | n
   }
   const exists = options.exists ?? existsSync
   for (const candidate of getGitBashCandidatePaths(options.env ?? process.env)) {
-    if (exists(candidate)) {
+    if (isGitForWindowsBashPath(candidate) && exists(candidate)) {
       return candidate
     }
   }
@@ -103,6 +107,11 @@ export function resolveGitBashPath(options: GitBashPathOptions = {}): string | n
 
 export function isGitBashAvailable(): boolean {
   return resolveGitBashPath() !== null
+}
+
+export function isGitForWindowsBashPath(shellPath: string): boolean {
+  const normalized = pathWin32.normalize(shellPath).toLowerCase()
+  return /(?:^|\\)(?:git|portablegit)(?:\\usr)?\\bin\\bash\.exe$/.test(normalized)
 }
 
 export function resolveWindowsGitBashShellPath(
@@ -123,12 +132,12 @@ export function resolveWindowsGitBashShellPath(
   }
 
   if (pathWin32.isAbsolute(trimmed) || trimmed.includes('\\') || trimmed.includes('/')) {
-    return trimmed
+    return isGitForWindowsBashPath(trimmed) ? trimmed : null
   }
 
-  return resolveGitBashPath(options) ?? trimmed
+  return resolveGitBashPath(options)
 }
 
 export function isWindowsGitBashShellPath(shellPath: string): boolean {
-  return pathWin32.basename(shellPath).toLowerCase() === 'bash.exe'
+  return isGitForWindowsBashPath(shellPath)
 }

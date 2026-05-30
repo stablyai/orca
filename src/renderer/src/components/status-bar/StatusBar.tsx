@@ -50,7 +50,10 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
 import { summarizeCodexRestartStatus } from './codex-restart-status-summary'
-import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import {
+  getWindowsTerminalCapabilityOwnerKey,
+  useWindowsTerminalCapabilities
+} from '@/lib/windows-terminal-capabilities'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -599,7 +602,9 @@ function ClaudeSwitcherMenu({
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
-    navigator.userAgent.includes('Windows')
+    navigator.userAgent.includes('Windows'),
+    false,
+    getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId)
   )
   const claudeAccountSyncKey = useAppStore((s) => {
     const settings = s.settings
@@ -1083,7 +1088,9 @@ function CodexSwitcherMenu({
   const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const settings = useAppStore((s) => s.settings)
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
-    navigator.userAgent.includes('Windows')
+    navigator.userAgent.includes('Windows'),
+    false,
+    getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId)
   )
   const codexAccountSyncKey = useAppStore((s) => {
     const settings = s.settings

@@ -1,7 +1,7 @@
 import { defineMethod, type RpcMethod } from '../core'
 import { isPwshAvailable } from '../../../pwsh'
 import { isWslAvailable, listWslDistros } from '../../../wsl'
-import { resolveGitBashPath } from '../../../git-bash'
+import { isGitBashAvailable } from '../../../git-bash'
 
 export const HOST_CAPABILITY_METHODS: RpcMethod[] = [
   defineMethod({
@@ -25,8 +25,8 @@ export const HOST_CAPABILITY_METHODS: RpcMethod[] = [
     handler: async () => isPwshAvailable()
   }),
   defineMethod({
-    name: 'host.gitBash.resolvePath',
+    name: 'host.gitBash.isAvailable',
     params: null,
-    handler: async () => resolveGitBashPath()
+    handler: async () => isGitBashAvailable()
   })
 ]

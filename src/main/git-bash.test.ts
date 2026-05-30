@@ -11,13 +11,14 @@ describe('Git Bash path discovery', () => {
     const candidates = getGitBashCandidatePaths({
       ProgramFiles: 'C:\\Program Files',
       LOCALAPPDATA: 'C:\\Users\\alice\\AppData\\Local',
-      Path: '"C:\\Program Files\\Git\\cmd";C:\\tools'
+      Path: '"C:\\Program Files\\Git\\cmd";C:\\tools;C:\\PortableGit\\bin'
     })
 
     expect(candidates).toContain('C:\\Program Files\\Git\\bin\\bash.exe')
     expect(candidates).toContain('C:\\Users\\alice\\AppData\\Local\\Programs\\Git\\bin\\bash.exe')
     expect(candidates).toContain('C:\\Program Files\\Git\\usr\\bin\\bash.exe')
-    expect(candidates).toContain('C:\\tools\\bash.exe')
+    expect(candidates).toContain('C:\\PortableGit\\bin\\bash.exe')
+    expect(candidates).not.toContain('C:\\tools\\bash.exe')
   })
 
   it('resolves the first existing common bash.exe path on Windows', () => {
@@ -60,5 +61,20 @@ describe('Git Bash path discovery', () => {
 
   it('recognizes Git Bash executable paths case-insensitively', () => {
     expect(isWindowsGitBashShellPath('D:\\PortableGit\\BIN\\BASH.EXE')).toBe(true)
+  })
+
+  it('does not classify arbitrary bash.exe paths as Git Bash', () => {
+    expect(resolveWindowsGitBashShellPath('C:\\msys64\\usr\\bin\\bash.exe')).toBeNull()
+    expect(isWindowsGitBashShellPath('C:\\cygwin64\\bin\\bash.exe')).toBe(false)
+  })
+
+  it('ignores non-Git bash.exe candidates discovered through PATH', () => {
+    expect(
+      resolveGitBashPath({
+        platform: 'win32',
+        env: { Path: 'C:\\msys64\\usr\\bin' },
+        exists: (path) => path === 'C:\\msys64\\usr\\bin\\bash.exe'
+      })
+    ).toBeNull()
   })
 })

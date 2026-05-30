@@ -3,16 +3,16 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
-const { isPwshAvailable, isWslAvailable, listWslDistros, resolveGitBashPath } = vi.hoisted(() => ({
+const { isPwshAvailable, isWslAvailable, listWslDistros, isGitBashAvailable } = vi.hoisted(() => ({
   isPwshAvailable: vi.fn(),
   isWslAvailable: vi.fn(),
   listWslDistros: vi.fn(),
-  resolveGitBashPath: vi.fn()
+  isGitBashAvailable: vi.fn()
 }))
 
 vi.mock('../../../pwsh', () => ({ isPwshAvailable }))
 vi.mock('../../../wsl', () => ({ isWslAvailable, listWslDistros }))
-vi.mock('../../../git-bash', () => ({ resolveGitBashPath }))
+vi.mock('../../../git-bash', () => ({ isGitBashAvailable }))
 
 import { HOST_CAPABILITY_METHODS } from './host-capabilities'
 
@@ -25,14 +25,14 @@ describe('host capability RPC methods', () => {
     isPwshAvailable.mockReset()
     isWslAvailable.mockReset()
     listWslDistros.mockReset()
-    resolveGitBashPath.mockReset()
+    isGitBashAvailable.mockReset()
   })
 
   it('reports Windows shell capability probes through explicit methods', async () => {
     isPwshAvailable.mockReturnValue(true)
     isWslAvailable.mockReturnValue(true)
     listWslDistros.mockReturnValue(['Ubuntu'])
-    resolveGitBashPath.mockReturnValue('C:\\Program Files\\Git\\bin\\bash.exe')
+    isGitBashAvailable.mockReturnValue(true)
     const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: HOST_CAPABILITY_METHODS })
 
@@ -49,10 +49,10 @@ describe('host capability RPC methods', () => {
       result: ['Ubuntu']
     })
     await expect(
-      dispatcher.dispatch(makeRequest('host.gitBash.resolvePath'))
+      dispatcher.dispatch(makeRequest('host.gitBash.isAvailable'))
     ).resolves.toMatchObject({
       ok: true,
-      result: 'C:\\Program Files\\Git\\bin\\bash.exe'
+      result: true
     })
   })
 })

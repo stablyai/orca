@@ -246,7 +246,7 @@ describe('TerminalPane PowerShell version setting', () => {
       ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
-      gitBashPath: null
+      gitBashAvailable: false
     })
 
     expect(collectText(element)).toContain('Auto uses Windows PowerShell now')
@@ -272,7 +272,7 @@ describe('TerminalPane PowerShell version setting', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: false,
-      gitBashPath: null
+      gitBashAvailable: false
     })
 
     expect(collectText(element)).toContain('WSL')
@@ -294,7 +294,7 @@ describe('TerminalPane PowerShell version setting', () => {
       ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
-      gitBashPath: null
+      gitBashAvailable: false
     })
 
     expect(collectText(element)).not.toContain('WSL')
@@ -318,7 +318,7 @@ describe('TerminalPane PowerShell version setting', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu', 'Debian'],
       pwshAvailable: false,
-      gitBashPath: null
+      gitBashAvailable: false
     })
 
     const text = collectText(element)
@@ -344,7 +344,7 @@ describe('TerminalPane PowerShell version setting', () => {
       ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
-      gitBashPath: 'C:\\Program Files\\Git\\bin\\bash.exe'
+      gitBashAvailable: true
     })
 
     expect(collectText(element)).toContain('Git Bash')
@@ -366,7 +366,7 @@ describe('TerminalPane PowerShell version setting', () => {
       ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
-      gitBashPath: null
+      gitBashAvailable: false
     })
 
     expect(collectText(element)).not.toContain('Git Bash')

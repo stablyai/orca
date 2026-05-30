@@ -47,7 +47,10 @@ import { matchesSettingsSearch } from './settings-search'
 import { cn } from '@/lib/utils'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
-import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import {
+  getWindowsTerminalCapabilityOwnerKey,
+  useWindowsTerminalCapabilities
+} from '@/lib/windows-terminal-capabilities'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import {
@@ -432,12 +435,16 @@ function Settings(): React.JSX.Element {
       }),
     [activeSectionId, mountedSectionIds, navSections, settingsSearchQuery, visibleSectionIds]
   )
+  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
+    settings?.activeRuntimeEnvironmentId
+  )
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     isWindows &&
       (neededSectionIds.has('terminal') ||
         neededSectionIds.has('accounts') ||
         neededSectionIds.has('agents')),
-    true
+    true,
+    windowsTerminalCapabilityOwnerKey
   )
 
   useEffect(() => {
@@ -956,7 +963,7 @@ function Settings(): React.JSX.Element {
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
                       pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
-                      gitBashPath={windowsTerminalCapabilities.gitBashPath}
+                      gitBashAvailable={windowsTerminalCapabilities.gitBashAvailable}
                     />
                   ) : null}
                 </SettingsSection>

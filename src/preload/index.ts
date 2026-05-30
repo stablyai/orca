@@ -438,7 +438,7 @@ const api = {
   },
 
   gitBash: {
-    resolvePath: (): Promise<string | null> => ipcRenderer.invoke('gitBash:resolvePath')
+    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('gitBash:isAvailable')
   },
 
   repos: {

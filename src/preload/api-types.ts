@@ -2138,7 +2138,7 @@ export type PreloadApi = {
     isAvailable: () => Promise<boolean>
   }
   gitBash: {
-    resolvePath: () => Promise<string | null>
+    isAvailable: () => Promise<boolean>
   }
   agentStatus: {
     /** Listen for agent status updates forwarded from native hook receivers. */
