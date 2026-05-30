@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: co-locating all checks-panel sub-components (checks list,
 conflict sections, threaded PR comments) keeps the shared icon/color maps in one place. */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import {
   CircleCheck,
   CircleX,
@@ -365,7 +365,14 @@ function CopyButton({ text }: { text: string }): React.JSX.Element {
     }
   }, [])
 
-  useEffect(() => clearCopiedResetTimer, [clearCopiedResetTimer])
+  const setCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (node === null) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
 
   const handleCopy = useCallback(
     (e: React.MouseEvent) => {
@@ -384,6 +391,7 @@ function CopyButton({ text }: { text: string }): React.JSX.Element {
 
   return (
     <button
+      ref={setCopyButtonRef}
       className="p-1 rounded hover:bg-accent text-muted-foreground/40 hover:text-foreground transition-colors shrink-0"
       title="Copy comment"
       onClick={handleCopy}
@@ -412,7 +420,14 @@ function ResolveButton({
     }
   }, [])
 
-  useEffect(() => clearLoadingResetTimer, [clearLoadingResetTimer])
+  const setResolveButtonRootRef = useCallback(
+    (node: HTMLSpanElement | null) => {
+      if (node === null) {
+        clearLoadingResetTimer()
+      }
+    },
+    [clearLoadingResetTimer]
+  )
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -428,17 +443,19 @@ function ResolveButton({
     [clearLoadingResetTimer, threadId, isResolved, onResolve]
   )
 
-  if (loading) {
-    return <LoaderCircle className="size-3 animate-spin text-muted-foreground shrink-0" />
-  }
-
   return (
-    <button
-      className="text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent"
-      onClick={handleClick}
-    >
-      {isResolved ? 'Unresolve' : 'Resolve'}
-    </button>
+    <span ref={setResolveButtonRootRef} className="contents">
+      {loading ? (
+        <LoaderCircle className="size-3 animate-spin text-muted-foreground shrink-0" />
+      ) : (
+        <button
+          className="text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+          onClick={handleClick}
+        >
+          {isResolved ? 'Unresolve' : 'Resolve'}
+        </button>
+      )}
+    </span>
   )
 }
 
