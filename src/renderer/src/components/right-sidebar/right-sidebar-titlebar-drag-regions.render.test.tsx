@@ -1,9 +1,13 @@
 import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RightSidebar from './index'
 import { TopActivityOverflowMenu } from './activity-bar-buttons'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from './right-sidebar-titlebar-drag-regions'
+
+const mockAppState = vi.hoisted(() => ({
+  activityBarPosition: 'top' as 'top' | 'side'
+}))
 
 vi.mock('@/hooks/useSidebarResize', () => ({
   useSidebarResize: () => ({
@@ -26,7 +30,7 @@ vi.mock('@/store', () => ({
       rightSidebarTab: 'explorer',
       setRightSidebarTab: vi.fn(),
       toggleRightSidebar: vi.fn(),
-      activityBarPosition: 'top',
+      activityBarPosition: mockAppState.activityBarPosition,
       setActivityBarPosition: vi.fn(),
       checksByWorktreeId: {},
       keybindings: {}
@@ -111,14 +115,39 @@ function openingTag(markup: string, className: string): string {
   return match[0]
 }
 
+function buttonOpeningTag(markup: string, ariaLabelPrefix: string): string {
+  const escapedPrefix = ariaLabelPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = markup.match(new RegExp(`<button[^>]+aria-label="${escapedPrefix}[^"]*"[^>]*>`))
+  if (!match) {
+    throw new Error(`button with aria-label prefix "${ariaLabelPrefix}" not found in ${markup}`)
+  }
+  return match[0]
+}
+
+function expectNoDrag(tag: string): void {
+  expect(tag).toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
+}
+
 describe('rendered right sidebar titlebar drag regions', () => {
+  beforeEach(() => {
+    mockAppState.activityBarPosition = 'top'
+  })
+
   it('keeps the rendered top activity strip draggable and only controls no-drag', () => {
     const markup = renderToStaticMarkup(<RightSidebar />)
+    const header = openingTag(markup, 'right-sidebar-header-drag')
     const activityStrip = openingTag(markup, 'right-sidebar-activity-strip')
 
+    expect(header).not.toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
     expect(activityStrip).not.toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
+    expect(activityStrip).toContain('data-context-menu-trigger="true"')
     expect(markup).toContain('right-sidebar-header-drag')
-    expect(markup).toContain(`class="sidebar-toggle mr-1"`)
+
+    expectNoDrag(buttonOpeningTag(markup, 'Explorer'))
+    expectNoDrag(buttonOpeningTag(markup, 'Search'))
+    expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
+    expectNoDrag(buttonOpeningTag(markup, 'Checks'))
+    expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
     expect(markup).toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
   })
 
@@ -140,5 +169,23 @@ describe('rendered right sidebar titlebar drag regions', () => {
 
     const overflowButton = openingTag(markup, RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
     expect(overflowButton).toContain('aria-label="More sidebar tabs"')
+  })
+
+  it('keeps side activity-bar controls no-drag without cancelling the side header drag region', () => {
+    mockAppState.activityBarPosition = 'side'
+
+    const markup = renderToStaticMarkup(<RightSidebar />)
+    const sideHeader = openingTag(markup, 'right-sidebar-header-drag')
+    const sideStrip = openingTag(markup, 'side-activity-bar-windows-inset')
+
+    expect(sideHeader).not.toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
+    expect(sideHeader).toContain('right-sidebar-header-side-inset')
+    expect(sideStrip).toContain('data-context-menu-trigger="true"')
+
+    expectNoDrag(buttonOpeningTag(markup, 'Explorer'))
+    expectNoDrag(buttonOpeningTag(markup, 'Search'))
+    expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
+    expectNoDrag(buttonOpeningTag(markup, 'Checks'))
+    expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
   })
 })
