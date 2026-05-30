@@ -356,15 +356,31 @@ export function FloatingTerminalPanel({
   }, [bounds.left, bounds.width, open])
 
   useEffect(() => {
+    let cancelled = false
     void window.api.app
       .getFloatingTerminalCwd({
         path: floatingTerminalCwd
       })
-      .then(setCwd)
+      .then((nextCwd) => {
+        if (!cancelled) {
+          setCwd(nextCwd)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
   }, [floatingTerminalCwd])
 
   useEffect(() => {
-    void window.api.app.getFloatingMarkdownDirectory().then(setMarkdownCwd)
+    let cancelled = false
+    void window.api.app.getFloatingMarkdownDirectory().then((nextMarkdownCwd) => {
+      if (!cancelled) {
+        setMarkdownCwd(nextMarkdownCwd)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {

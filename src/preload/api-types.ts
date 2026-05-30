@@ -7,6 +7,7 @@ import type {
   HostedReviewForBranchArgs,
   HostedReviewInfo
 } from '../shared/hosted-review'
+import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { AppIdentity } from '../shared/app-identity'
 import type {
   BaseRefDefaultResult,
@@ -1951,15 +1952,7 @@ export type PreloadApi = {
     writeClipboardText: (text: string) => Promise<void>
     writeSelectionClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
-    onFileDrop: (
-      callback: (
-        data:
-          | { paths: string[]; target: 'editor' }
-          | { paths: string[]; target: 'terminal'; tabId?: string }
-          | { paths: string[]; target: 'composer' }
-          | { paths: string[]; target: 'file-explorer'; destinationDir: string }
-      ) => void
-    ) => () => void
+    onFileDrop: (callback: (data: NativeFileDropPayload) => void) => () => void
     getZoomLevel: () => number
     setZoomLevel: (level: number) => void
     syncTrafficLights: (zoomFactor: number) => void

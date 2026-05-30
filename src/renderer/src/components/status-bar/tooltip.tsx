@@ -36,6 +36,11 @@ function formatDuration(ms: number): string {
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
 }
 
+export function formatResetCountdown(ms: number): string {
+  const duration = formatDuration(ms)
+  return duration === 'now' ? 'Resets now' : `Resets in ${duration}`
+}
+
 // ---------------------------------------------------------------------------
 // Shared icon component
 // ---------------------------------------------------------------------------
@@ -129,7 +134,7 @@ function TooltipWindowSection({
     return null
   }
   const leftPct = Math.max(0, Math.round(100 - w.usedPercent))
-  const resetIn = w.resetsAt ? formatDuration(w.resetsAt - Date.now()) : null
+  const resetLabel = w.resetsAt ? formatResetCountdown(w.resetsAt - Date.now()) : null
 
   return (
     <div className="space-y-1">
@@ -142,7 +147,7 @@ function TooltipWindowSection({
       </div>
       <div className="flex justify-between text-background/60">
         <span>{leftPct}% left</span>
-        {resetIn && <span>Resets in {resetIn}</span>}
+        {resetLabel && <span>{resetLabel}</span>}
       </div>
     </div>
   )
@@ -289,7 +294,7 @@ export function ProviderPanel({
       return null
     }
     const leftPct = Math.max(0, Math.round(100 - w.usedPercent))
-    const resetIn = w.resetsAt ? formatDuration(w.resetsAt - Date.now()) : null
+    const resetLabel = w.resetsAt ? formatResetCountdown(w.resetsAt - Date.now()) : null
 
     return (
       <div className="space-y-1">
@@ -302,7 +307,7 @@ export function ProviderPanel({
         </div>
         <div className={`flex justify-between ${mutedClass}`}>
           <span>{leftPct}% left</span>
-          {resetIn && <span>Resets in {resetIn}</span>}
+          {resetLabel && <span>{resetLabel}</span>}
         </div>
       </div>
     )
