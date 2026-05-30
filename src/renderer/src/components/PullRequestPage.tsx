@@ -748,6 +748,9 @@ function PRReviewersPanel({
               prNumber: item.number,
               reviewers: logins
             })
+      if (!reviewerPanelMountedRef.current) {
+        return
+      }
       if (!result.ok) {
         toast.error(result.error ?? 'Failed to remove reviewer')
         return
@@ -762,9 +765,13 @@ function PRReviewersPanel({
       setReviewerInput('')
       toast.success(logins.length === 1 ? 'Reviewer removed' : 'Reviewers removed')
     } catch {
-      toast.error('Failed to remove reviewer')
+      if (reviewerPanelMountedRef.current) {
+        toast.error('Failed to remove reviewer')
+      }
     } finally {
-      setSubmitting(false)
+      if (reviewerPanelMountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
