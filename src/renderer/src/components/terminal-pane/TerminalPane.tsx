@@ -902,11 +902,8 @@ export default function TerminalPane({
     const snapshots = activityIsolationSnapshotRef.current
     return () => {
       restoreExpandedLayoutFrom(snapshots)
+      cancelPendingPaneSizeRefreshFrames({ pendingPaneSizeRefreshFrameIdsRef })
     }
-  }, [])
-
-  useEffect(() => {
-    return () => cancelPendingPaneSizeRefreshFrames({ pendingPaneSizeRefreshFrameIdsRef })
   }, [])
 
   const handleRestartCodexPane = useCallback(
