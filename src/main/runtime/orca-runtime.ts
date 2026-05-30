@@ -12686,7 +12686,7 @@ function buildTerminalWaitText(lines: string[], partialLine: string, preview: st
   return waitText.length > 0 ? waitText : preview
 }
 
-function appendNormalizedToTailBuffer(
+export function appendNormalizedToTailBuffer(
   previousLines: string[],
   previousPartialLine: string,
   normalizedChunk: string
@@ -12719,8 +12719,8 @@ function appendNormalizedToTailBuffer(
       : previousLines
   let truncated = previousPartialWasCapped || nextPartialLine.length > MAX_TAIL_PARTIAL_CHARS
 
-  while (nextLines.length > MAX_TAIL_LINES) {
-    nextLines.shift()
+  if (nextLines.length > MAX_TAIL_LINES) {
+    nextLines = nextLines.slice(nextLines.length - MAX_TAIL_LINES)
     truncated = true
   }
 

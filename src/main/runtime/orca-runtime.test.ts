@@ -26,7 +26,7 @@ import {
 import { getBranchConflictKind, getDefaultBaseRef } from '../git/repo'
 import type { OrchestrationDb } from './orchestration/db'
 import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
-import { OrcaRuntimeService } from './orca-runtime'
+import { appendNormalizedToTailBuffer, OrcaRuntimeService } from './orca-runtime'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
@@ -3927,6 +3927,25 @@ describe('OrcaRuntimeService', () => {
 
     expect(collected).toHaveLength(lines.length)
     expect(collected.findIndex((line, index) => line !== lines[index])).toBe(-1)
+  })
+
+  it('trims oversized terminal output bursts without per-line array shifts', async () => {
+    const shiftSpy = vi.spyOn(Array.prototype, 'shift')
+    const lines = Array.from({ length: 5000 }, (_, index) => `line-${index}`)
+    const result = appendNormalizedToTailBuffer([], '', `${lines.join('\n')}\n`)
+    const shiftCallCount = shiftSpy.mock.calls.length
+    shiftSpy.mockRestore()
+
+    expect(result.truncated).toBe(true)
+    expect(result.lines).toHaveLength(2000)
+    expect(result.lines.slice(0, 5)).toEqual([
+      'line-3000',
+      'line-3001',
+      'line-3002',
+      'line-3003',
+      'line-3004'
+    ])
+    expect(shiftCallCount).toBe(0)
   })
 
   it('bounds retained partial terminal output before preview reads', async () => {
