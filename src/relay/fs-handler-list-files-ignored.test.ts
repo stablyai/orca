@@ -159,6 +159,43 @@ describe('relay quick open ignored file listing', () => {
     }
   })
 
+  it('rg file listing rejects and detaches when a timed-out child does not emit close', async () => {
+    vi.useFakeTimers()
+    try {
+      const primaryProc = createMockProcess()
+      const ignoredProc = createMockProcess()
+      let callIndex = 0
+
+      spawnMock.mockImplementation(() => {
+        callIndex++
+        return callIndex === 1 ? primaryProc : ignoredProc
+      })
+
+      const promise = listFilesWithRg('/remote/root')
+      const outcomePromise = promise.then(
+        () => 'resolved',
+        (err: Error) => `rejected:${err.message}`
+      )
+
+      await vi.advanceTimersByTimeAsync(25_000)
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toBe('rejected:rg list timed out')
+      expect(primaryProc.kill).toHaveBeenCalled()
+      expect(ignoredProc.kill).toHaveBeenCalled()
+      expect((primaryProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((primaryProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(primaryProc.listenerCount('error')).toBe(0)
+      expect(primaryProc.listenerCount('close')).toBe(0)
+      expect((ignoredProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((ignoredProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(ignoredProc.listenerCount('error')).toBe(0)
+      expect(ignoredProc.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rg search settles and detaches when a timed-out child does not emit close', async () => {
     vi.useFakeTimers()
     try {
