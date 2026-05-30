@@ -2012,6 +2012,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllGlobals()
     vi.useRealTimers()
   })
 
@@ -2202,6 +2203,52 @@ describe('createEditorSlice activateMarkdownLink', () => {
       filePath: '/repo/docs/guide.md',
       fileId: '/repo/docs/guide.md',
       line: 10,
+      column: 1,
+      matchLength: 0
+    })
+  })
+
+  it('cancels superseded line-anchor reveal frames', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    let nextFrameId = 1
+    const pendingFrames = new Map<number, FrameRequestCallback>()
+    const canceledFrameIds = new Set<number>()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      const frameId = nextFrameId++
+      pendingFrames.set(frameId, callback)
+      return frameId
+    })
+    vi.stubGlobal('cancelAnimationFrame', (frameId: number) => {
+      canceledFrameIds.add(frameId)
+      pendingFrames.delete(frameId)
+    })
+
+    await store.getState().activateMarkdownLink('./first.md#L3', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    await store.getState().activateMarkdownLink('./second.md#L9', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(canceledFrameIds).toContain(1)
+    while (pendingFrames.size > 0) {
+      const nextPendingFrame = pendingFrames.entries().next()
+      if (nextPendingFrame.done) {
+        break
+      }
+      const [frameId, callback] = nextPendingFrame.value
+      pendingFrames.delete(frameId)
+      callback(0)
+    }
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: '/repo/docs/second.md',
+      fileId: '/repo/docs/second.md',
+      line: 9,
       column: 1,
       matchLength: 0
     })

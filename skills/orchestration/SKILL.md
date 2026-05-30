@@ -28,7 +28,7 @@ Use `orca-cli` instead for ordinary terminal control, shell commands, browser au
 ## Preconditions
 
 - Orca must be running (`orca status --json` should return `runtime: true`).
-- The `orca` CLI must be on PATH (installed via Settings > Browser > Enable Orca CLI).
+- The `orca` CLI must be on PATH (`orca-ide` on Linux; installed via Settings > Browser > Enable Orca CLI).
 - The orchestration experimental feature must be enabled in Settings > Experimental.
 - All `orca orchestration` commands are RPC calls to the running Orca runtime — they require an active Orca session.
 
@@ -92,7 +92,7 @@ orca orchestration dispatch --task <task_id> --to <handle> [--from <handle>] [--
 orca orchestration dispatch-show --task <task_id> [--json]
 ```
 
-Why: `--inject` sends a preamble that teaches the agent how to use `orca orchestration send --type worker_done` to report completion. All agents have `orca` on PATH and can execute shell commands. The preamble maximizes structured feedback but the system works without it (coordinator falls back to idle detection + output reading).
+Why: `--inject` sends a preamble that teaches the agent how to use `orca orchestration send --type worker_done` to report completion. All agents have `orca` (or `orca-ide` on Linux) on PATH and can execute shell commands. The preamble maximizes structured feedback but the system works without it (coordinator falls back to idle detection + output reading).
 
 Why: `--inject` requires a recognized agent CLI (e.g. Claude Code) running in the target terminal. If the terminal is a bare shell, omit `--inject` and send the prompt manually with `terminal send`.
 

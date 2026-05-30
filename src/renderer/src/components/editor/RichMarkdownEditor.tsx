@@ -542,6 +542,7 @@ export default function RichMarkdownEditor({
   // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
   // stuck at the first-render null value unless we read the live instance here.
   const editorRef = useRef<Editor | null>(null)
+  const cancelAutoFocusRef = useRef<(() => void) | null>(null)
   const serializeTimerRef = useRef<number | null>(null)
   // Why: normalizeSoftBreaks dispatches a ProseMirror transaction inside onCreate
   // which triggers onUpdate. Without this guard the editor immediately marks the
@@ -888,7 +889,8 @@ export default function RichMarkdownEditor({
       // otherwise opening a new markdown file (Cmd+Shift+N) or switching to
       // an existing markdown tab leaves the cursor outside the editing
       // surface and the user has to click before typing.
-      autoFocusRichEditor(nextEditor, rootRef.current)
+      cancelAutoFocusRef.current?.()
+      cancelAutoFocusRef.current = autoFocusRichEditor(nextEditor, rootRef.current)
     },
     onUpdate: ({ editor: nextEditor }) => {
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
@@ -1045,6 +1047,8 @@ export default function RichMarkdownEditor({
       if (notePositionsFrameRef.current !== null) {
         window.cancelAnimationFrame(notePositionsFrameRef.current)
       }
+      cancelAutoFocusRef.current?.()
+      cancelAutoFocusRef.current = null
     }
   }, [])
 

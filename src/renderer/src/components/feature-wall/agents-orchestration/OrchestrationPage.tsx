@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ChevronDown, Workflow } from 'lucide-react'
 import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
@@ -8,6 +8,7 @@ import {
   BUBBLE_LAND_MS,
   INITIAL_ROW_MESSAGES,
   INITIAL_ROW_STATE,
+  ORCHESTRATION_CLI_COMMAND_TIMINGS_MS,
   PHASE1_BEATS,
   type AgentKey,
   type Beat,
@@ -27,57 +28,79 @@ const INITIAL_CHILD_PENDING: RowPending = {
   'child-claude': true
 }
 
-// How long the "Creating workspaces…" spinner shows before the child cards
-// fade in. Keep it slow enough to read at a glance.
-const CREATING_CHILDREN_MS = 1400
+const CHILD_ONE_CREATE_MS = ORCHESTRATION_CLI_COMMAND_TIMINGS_MS[0]
+const CHILD_TWO_CREATE_MS = ORCHESTRATION_CLI_COMMAND_TIMINGS_MS[1]
+const FIRST_DISPATCH_MS = ORCHESTRATION_CLI_COMMAND_TIMINGS_MS[2]
 
-export function OrchestrationPage(props: { active: boolean; reducedMotion: boolean }): JSX.Element {
-  const { active, reducedMotion } = props
+export function OrchestrationPage(props: {
+  active: boolean
+  reducedMotion: boolean
+  controlledCreatedChildCount?: number
+  loopMs?: number
+  showResponseBeats?: boolean
+}): JSX.Element {
+  const {
+    active,
+    reducedMotion,
+    controlledCreatedChildCount,
+    loopMs,
+    showResponseBeats = true
+  } = props
   const stageRef = useRef<HTMLDivElement | null>(null)
   const arrowsRef = useRef<SVGSVGElement | null>(null)
   const bubbleLayerRef = useRef<HTMLDivElement | null>(null)
   const rowRefs = useRef<Partial<Record<AgentKey, HTMLDivElement | null>>>({})
+  const childCountControlledRef = useRef(controlledCreatedChildCount !== undefined)
 
   const [rowState, setRowState] = useState<RowState>(INITIAL_ROW_STATE)
   const [rowMessages, setRowMessages] = useState<RowMessages>(INITIAL_ROW_MESSAGES)
   const [rowFlash, setRowFlash] = useState<RowFlash>({})
   const [rowPending, setRowPending] = useState<RowPending>(INITIAL_CHILD_PENDING)
-  const [childrenVisible, setChildrenVisible] = useState(false)
+  const [createdChildCount, setCreatedChildCount] = useState(0)
+  const displayedChildCount = controlledCreatedChildCount ?? createdChildCount
 
   // Why: bubbles measure the recipient row at fire-time, so the pending flag
   // has to flip *before* the path is computed. React state updates are async,
   // so keep a synchronous mirror to flip styles immediately.
   const pendingMirror = useRef<RowPending>({ ...INITIAL_CHILD_PENDING })
 
-  useEffect(() => {
-    const drawArrow = (): void => {
-      const arrows = arrowsRef.current
-      const stage = stageRef.current
-      if (!arrows || !stage) {
-        return
-      }
-      arrows.removeAttribute('data-fading')
-      const stageRect = stage.getBoundingClientRect()
-      arrows.setAttribute('viewBox', `0 0 ${stageRect.width} ${stageRect.height}`)
-      arrows.setAttribute('width', String(stageRect.width))
-      arrows.setAttribute('height', String(stageRect.height))
-      const coordEl = stage.querySelector('[data-feature-wall-card="coord"]')
-      if (!(coordEl instanceof HTMLElement)) {
-        arrows.innerHTML = ''
-        return
-      }
-      const codexEl = stage.querySelector('[data-feature-wall-card="child"]')
-      const claudeEl = stage.querySelector('[data-feature-wall-card="child-claude"]')
-      const paths: string[] = []
-      if (codexEl instanceof HTMLElement) {
-        paths.push(arrowPathFromCoordTo(coordEl, codexEl, stageRect))
-      }
-      if (claudeEl instanceof HTMLElement) {
-        paths.push(arrowPathFromCoordTo(coordEl, claudeEl, stageRect))
-      }
-      arrows.innerHTML = paths.map((d) => `<path d="${d}"/>`).join('')
-    }
+  childCountControlledRef.current = controlledCreatedChildCount !== undefined
 
+  const drawArrow = useCallback((): void => {
+    const arrows = arrowsRef.current
+    const stage = stageRef.current
+    if (!arrows || !stage) {
+      return
+    }
+    arrows.removeAttribute('data-fading')
+    const stageRect = stage.getBoundingClientRect()
+    arrows.setAttribute('viewBox', `0 0 ${stageRect.width} ${stageRect.height}`)
+    arrows.setAttribute('width', String(stageRect.width))
+    arrows.setAttribute('height', String(stageRect.height))
+    const coordEl = stage.querySelector('[data-feature-wall-card="coord"]')
+    if (!(coordEl instanceof HTMLElement)) {
+      arrows.innerHTML = ''
+      return
+    }
+    const codexEl = stage.querySelector('[data-feature-wall-card="child"]')
+    const claudeEl = stage.querySelector('[data-feature-wall-card="child-claude"]')
+    const paths: string[] = []
+    if (codexEl instanceof HTMLElement) {
+      paths.push(arrowPathFromCoordTo(coordEl, codexEl, stageRect))
+    }
+    if (claudeEl instanceof HTMLElement) {
+      paths.push(arrowPathFromCoordTo(coordEl, claudeEl, stageRect))
+    }
+    arrows.innerHTML = paths.map((d) => `<path d="${d}"/>`).join('')
+  }, [])
+
+  useEffect(() => {
+    if (active && displayedChildCount >= 2) {
+      requestAnimationFrame(() => drawArrow())
+    }
+  }, [active, displayedChildCount, drawArrow])
+
+  useEffect(() => {
     if (!active) {
       // Reset everything to the initial state when the user pages away so
       // re-entering the step plays from the top.
@@ -85,7 +108,7 @@ export function OrchestrationPage(props: { active: boolean; reducedMotion: boole
       setRowMessages(INITIAL_ROW_MESSAGES)
       setRowFlash({})
       setRowPending(INITIAL_CHILD_PENDING)
-      setChildrenVisible(false)
+      setCreatedChildCount(0)
       pendingMirror.current = { ...INITIAL_CHILD_PENDING }
       const arrows = arrowsRef.current
       if (arrows) {
@@ -104,7 +127,7 @@ export function OrchestrationPage(props: { active: boolean; reducedMotion: boole
       setRowState(INITIAL_ROW_STATE)
       setRowMessages(INITIAL_ROW_MESSAGES)
       setRowPending({})
-      setChildrenVisible(true)
+      setCreatedChildCount(2)
       pendingMirror.current = {}
       requestAnimationFrame(() => drawArrow())
       return
@@ -182,33 +205,42 @@ export function OrchestrationPage(props: { active: boolean; reducedMotion: boole
       setRowState(INITIAL_ROW_STATE)
       setRowMessages(INITIAL_ROW_MESSAGES)
       setRowPending(INITIAL_CHILD_PENDING)
-      setChildrenVisible(false)
+      setCreatedChildCount(0)
       pendingMirror.current = { ...INITIAL_CHILD_PENDING }
-      // Reveal the children after a "creating workspaces…" beat. Arrows are
-      // drawn once their target cards are in the DOM and the fade-in is past
-      // its first paint.
-      later(() => {
-        setChildrenVisible(true)
-        later(() => drawArrow(), 360)
-      }, CREATING_CHILDREN_MS)
+      if (!childCountControlledRef.current) {
+        // Reveal each child workspace when the matching shell command appears,
+        // so the CLI tip reads as Claude driving the exact Orca workflow shown.
+        later(() => {
+          setCreatedChildCount(1)
+        }, CHILD_ONE_CREATE_MS)
+        later(() => {
+          setCreatedChildCount(2)
+          later(() => drawArrow(), 360)
+        }, CHILD_TWO_CREATE_MS)
+      }
+      const beats = showResponseBeats ? PHASE1_BEATS : PHASE1_BEATS.slice(0, 2)
       let beatIdx = 0
       const next = (): void => {
-        if (beatIdx >= PHASE1_BEATS.length) {
+        if (beatIdx >= beats.length) {
           later(done, 800)
           return
         }
-        fireBubble(PHASE1_BEATS[beatIdx])
+        fireBubble(beats[beatIdx])
         beatIdx += 1
         later(next, BUBBLE_GAP_MS)
       }
-      later(next, CREATING_CHILDREN_MS + 600)
+      later(next, FIRST_DISPATCH_MS)
     }
 
     const loop = (): void => {
-      runOnce(() => later(loop, 1400))
+      runOnce(() => {
+        const beatCount = showResponseBeats ? PHASE1_BEATS.length : 2
+        const elapsedMs = FIRST_DISPATCH_MS + beatCount * BUBBLE_GAP_MS + 800
+        later(loop, loopMs ? Math.max(0, loopMs - elapsedMs) : 1400)
+      })
     }
 
-    later(loop, 80)
+    loop()
 
     const onResize = (): void => drawArrow()
     window.addEventListener('resize', onResize)
@@ -222,7 +254,7 @@ export function OrchestrationPage(props: { active: boolean; reducedMotion: boole
         cleanupLayer.innerHTML = ''
       }
     }
-  }, [active, reducedMotion])
+  }, [active, reducedMotion, drawArrow, loopMs, showResponseBeats])
 
   return (
     <div
@@ -260,7 +292,11 @@ export function OrchestrationPage(props: { active: boolean; reducedMotion: boole
 
         <div
           className="flex justify-start"
-          style={{ marginLeft: 28, marginTop: 0, marginBottom: 0 }}
+          style={{
+            marginLeft: 'var(--feature-wall-child-indent, 28px)',
+            marginTop: 0,
+            marginBottom: 0
+          }}
         >
           <span
             className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-1.5 text-muted-foreground"
@@ -274,70 +310,66 @@ export function OrchestrationPage(props: { active: boolean; reducedMotion: boole
         </div>
 
         <div
-          className="feature-wall-creating-children"
-          data-hidden={childrenVisible ? 'true' : undefined}
-          style={{ marginLeft: 28 }}
-          aria-hidden={childrenVisible}
-        >
-          <div className="flex items-center gap-2 px-1.5 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            <span className="feature-wall-spawn-spinner" aria-hidden />
-            <span>Creating workspaces…</span>
-          </div>
-        </div>
-
-        <div
           className="feature-wall-children-wrapper"
-          data-visible={childrenVisible ? 'true' : undefined}
+          data-visible={displayedChildCount > 0 ? 'true' : undefined}
           style={{
-            width: 'calc(100% - 28px)',
+            width: 'calc(100% - var(--feature-wall-child-indent, 28px))',
             marginLeft: 'auto',
             display: 'flex',
             flexDirection: 'column',
             gap: 8
           }}
         >
-          <WorkspaceCard
-            variant="default"
-            name="PR 1/2: migrate users.sql"
-            dataCard="child"
-            childPadding
-            rows={[
-              <AgentRow
-                key="child-codex"
-                agentKey="child-codex"
-                icon={<OpenAIIcon size={13} />}
-                state={rowState['child-codex']}
-                message={rowMessages['child-codex']}
-                flashKey={rowFlash['child-codex'] ?? 0}
-                pending={rowPending['child-codex']}
-                spawnRow
-                registerRef={(node) => {
-                  rowRefs.current['child-codex'] = node
-                }}
+          {displayedChildCount >= 1 ? (
+            <div className="feature-wall-child-card-shell">
+              <WorkspaceCard
+                variant="default"
+                name="PR 1/2: migrate users.sql"
+                dataCard="child"
+                childPadding
+                rows={[
+                  <AgentRow
+                    key="child-codex"
+                    agentKey="child-codex"
+                    icon={<OpenAIIcon size={13} />}
+                    state={rowState['child-codex']}
+                    message={rowMessages['child-codex']}
+                    flashKey={rowFlash['child-codex'] ?? 0}
+                    pending={rowPending['child-codex']}
+                    spawnRow
+                    registerRef={(node) => {
+                      rowRefs.current['child-codex'] = node
+                    }}
+                  />
+                ]}
               />
-            ]}
-          />
-          <WorkspaceCard
-            variant="default"
-            name="PR 2/2: withSession middleware"
-            dataCard="child-claude"
-            childPadding
-            rows={[
-              <AgentRow
-                key="child-claude"
-                agentKey="child-claude"
-                icon={<ClaudeIcon size={13} />}
-                state={rowState['child-claude']}
-                message={rowMessages['child-claude']}
-                flashKey={rowFlash['child-claude'] ?? 0}
-                pending={rowPending['child-claude']}
-                spawnRow
-                registerRef={(node) => {
-                  rowRefs.current['child-claude'] = node
-                }}
+            </div>
+          ) : null}
+          {displayedChildCount >= 2 ? (
+            <div className="feature-wall-child-card-shell">
+              <WorkspaceCard
+                variant="default"
+                name="PR 2/2: withSession middleware"
+                dataCard="child-claude"
+                childPadding
+                rows={[
+                  <AgentRow
+                    key="child-claude"
+                    agentKey="child-claude"
+                    icon={<ClaudeIcon size={13} />}
+                    state={rowState['child-claude']}
+                    message={rowMessages['child-claude']}
+                    flashKey={rowFlash['child-claude'] ?? 0}
+                    pending={rowPending['child-claude']}
+                    spawnRow
+                    registerRef={(node) => {
+                      rowRefs.current['child-claude'] = node
+                    }}
+                  />
+                ]}
               />
-            ]}
-          />
+            </div>
+          ) : null}
         </div>
       </div>
 

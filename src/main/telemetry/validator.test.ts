@@ -31,6 +31,16 @@ describe('validate', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('accepts a well-formed agent_prompt_sent payload', () => {
+    const result = validate('agent_prompt_sent', {
+      agent_kind: 'claude-code',
+      launch_source: 'unknown',
+      request_kind: 'followup',
+      nth_repo_added: 1
+    })
+    expect(result.ok).toBe(true)
+  })
+
   it('drops unknown event names', () => {
     const result = validate('not_a_real_event' as never, {})
     expect(result.ok).toBe(false)

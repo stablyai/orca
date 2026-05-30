@@ -6,7 +6,11 @@ import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
 } from '../../../../shared/types'
-import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
+import {
+  getTerminalQuickCommandBody,
+  getTerminalQuickCommandScope,
+  isTerminalAgentQuickCommand
+} from '../../../../shared/terminal-quick-commands'
 import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
@@ -20,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import RepoBadgeLabel, { RepoBadgeMark } from '../repo/RepoBadgeLabel'
 import { cn } from '@/lib/utils'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 
 type QuickCommandsPaneProps = {
   settings: GlobalSettings
@@ -339,12 +344,30 @@ export function QuickCommandsPane({
                         )}
                       </Badge>
                     </div>
-                    <div className="truncate font-mono text-xs text-foreground/80">
-                      {command.command || 'No command text'}
+                    <div className="flex min-w-0 items-center gap-1.5 text-xs text-foreground/80">
+                      {isTerminalAgentQuickCommand(command) ? (
+                        <span className="shrink-0 text-muted-foreground">
+                          <AgentIcon agent={command.agent} size={12} />
+                        </span>
+                      ) : null}
+                      <span
+                        className={cn(
+                          'truncate',
+                          isTerminalAgentQuickCommand(command) ? '' : 'font-mono'
+                        )}
+                      >
+                        {isTerminalAgentQuickCommand(command)
+                          ? `${getAgentLabel(command.agent)}: ${getTerminalQuickCommandBody(command)}`
+                          : getTerminalQuickCommandBody(command) || 'No command text'}
+                      </span>
                     </div>
                   </div>
                   <div className="shrink-0 text-[11px] font-medium text-foreground/75">
-                    {command.appendEnter ? 'Enter' : 'Insert'}
+                    {isTerminalAgentQuickCommand(command)
+                      ? 'Agent'
+                      : command.appendEnter
+                        ? 'Enter'
+                        : 'Insert'}
                   </div>
                   <Button
                     type="button"

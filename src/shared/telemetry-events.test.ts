@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: telemetry schema tests keep related event
+   invariants together so cross-event payload rules stay easy to audit. */
 // Schema round-trip coverage for the event map. Fail-closed invariants that
 // must hold: agent_error is enum-only (error_message / error_stack rejected
 // by `.strict()`), unknown enum values fail, and any well-formed payload
@@ -14,6 +16,39 @@ import {
   SETTINGS_CHANGED_WHITELIST,
   settingsChangedKeySchema
 } from './telemetry-events'
+import { appStarSourceSchema } from './gh-star-source'
+
+describe('app_starred_orca schema', () => {
+  it('accepts every declared app star source', () => {
+    for (const source of appStarSourceSchema.options) {
+      const parsed = eventSchemas.app_starred_orca.safeParse({ source })
+      expect(parsed.success).toBe(true)
+    }
+  })
+
+  it('accepts cohort context on successful app star telemetry', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'settings',
+      nth_repo_added: 2
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects unknown app star source values', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'github_website'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects extra keys via .strict()', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'landing',
+      repo: 'stablyai/orca'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
 
 describe('agent_error schema', () => {
   it('round-trips a minimal {error_class, agent_kind} payload', () => {
@@ -106,6 +141,28 @@ describe('agent_started schema', () => {
     const parsed = eventSchemas.agent_started.safeParse({
       agent_kind: 'claude-code',
       launch_source: 'sidebar'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
+describe('agent_prompt_sent schema', () => {
+  it('accepts a hook-confirmed prompt-send payload with cohort context', () => {
+    const parsed = eventSchemas.agent_prompt_sent.safeParse({
+      agent_kind: 'codex',
+      launch_source: 'unknown',
+      request_kind: 'followup',
+      nth_repo_added: 1
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects prompt text via .strict()', () => {
+    const parsed = eventSchemas.agent_prompt_sent.safeParse({
+      agent_kind: 'claude-code',
+      launch_source: 'unknown',
+      request_kind: 'followup',
+      prompt: 'please inspect /Users/alice/private-repo'
     })
     expect(parsed.success).toBe(false)
   })
@@ -207,6 +264,46 @@ describe('settings_changed schema', () => {
       value_kind: 'bool'
     })
     expect(parsed.success).toBe(false)
+  })
+})
+
+describe('orca cli feature tip schemas', () => {
+  it('accepts the shown event for app-open exposure', () => {
+    const parsed = eventSchemas.orca_cli_feature_tip_shown.safeParse({
+      source: 'app_open'
+    })
+
+    expect(parsed.success).toBe(true)
+  })
+
+  it('accepts setup click and setup result events', () => {
+    expect(
+      eventSchemas.orca_cli_feature_tip_setup_clicked.safeParse({
+        source: 'app_open'
+      }).success
+    ).toBe(true)
+    expect(
+      eventSchemas.orca_cli_feature_tip_setup_result.safeParse({
+        source: 'app_open',
+        result: 'installed'
+      }).success
+    ).toBe(true)
+  })
+
+  it('rejects raw CLI details and unknown result values', () => {
+    expect(
+      eventSchemas.orca_cli_feature_tip_setup_result.safeParse({
+        source: 'app_open',
+        result: 'installed',
+        command_path: '/Users/alice/bin/orca'
+      }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.orca_cli_feature_tip_setup_result.safeParse({
+        source: 'app_open',
+        result: 'installed_after_retry'
+      }).success
+    ).toBe(false)
   })
 })
 

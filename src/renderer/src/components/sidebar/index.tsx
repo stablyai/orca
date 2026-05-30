@@ -59,10 +59,6 @@ function Sidebar({
     onDraftWidthChange: setLiveSidebarWidth
   })
 
-  useEffect(() => {
-    setLiveSidebarWidth(sidebarWidth)
-  }, [setLiveSidebarWidth, sidebarWidth])
-
   return (
     <TooltipProvider delayDuration={400}>
       <div

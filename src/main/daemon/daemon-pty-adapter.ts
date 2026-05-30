@@ -134,6 +134,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // the override makes the daemon path behave the same as the in-process
       // LocalPtyProvider.
       shellOverride: opts.shellOverride,
+      terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
       shellReadySupported: opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
     })

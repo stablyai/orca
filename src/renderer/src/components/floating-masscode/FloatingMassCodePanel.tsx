@@ -524,7 +524,7 @@ export function FloatingMassCodePanel({
               </span>
             ))}
           </div>
-          <div className="flex-1 min-h-0 overflow-auto px-3 py-2">
+          <div className="flex-1 min-h-0 overflow-auto scrollbar-sleek px-3 py-2">
             <pre className="min-w-max text-[10px] leading-4 font-mono whitespace-pre text-foreground">
               <code ref={codeRef}>{viewingSnippet.content}</code>
             </pre>
@@ -546,7 +546,7 @@ export function FloatingMassCodePanel({
           <Save className="size-3.5" />,
           () => void handleSave()
         )}
-        <div className="flex-1 p-4 space-y-4 overflow-auto flex flex-col">
+        <div className="flex-1 p-4 space-y-4 overflow-auto scrollbar-sleek flex flex-col">
           <div className="space-y-1.5 shrink-0">
             <label className="text-[10px] uppercase text-muted-foreground font-semibold">
               Title

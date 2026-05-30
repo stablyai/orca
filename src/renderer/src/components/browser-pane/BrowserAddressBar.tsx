@@ -68,6 +68,19 @@ export default function BrowserAddressBar({
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
   const closingRef = useRef(false)
   const openedAtRef = useRef(0)
+  const blurCloseTimerRef = useRef<number | null>(null)
+  const closingResetTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (blurCloseTimerRef.current !== null) {
+        window.clearTimeout(blurCloseTimerRef.current)
+      }
+      if (closingResetTimerRef.current !== null) {
+        window.clearTimeout(closingResetTimerRef.current)
+      }
+    }
+  }, [])
 
   const searchEngine: SearchEngine =
     (browserDefaultSearchEngine as SearchEngine | null) ?? DEFAULT_SEARCH_ENGINE
@@ -147,6 +160,10 @@ export default function BrowserAddressBar({
     if (closingRef.current) {
       return
     }
+    if (blurCloseTimerRef.current !== null) {
+      window.clearTimeout(blurCloseTimerRef.current)
+      blurCloseTimerRef.current = null
+    }
     inputRef.current?.select()
     openedAtRef.current = Date.now()
     setOpen(true)
@@ -164,7 +181,11 @@ export default function BrowserAddressBar({
     // — producing the "flash then disappear" on first click.
     const elapsed = Date.now() - openedAtRef.current
     const grace = elapsed < 400
-    setTimeout(() => {
+    if (blurCloseTimerRef.current !== null) {
+      window.clearTimeout(blurCloseTimerRef.current)
+    }
+    blurCloseTimerRef.current = window.setTimeout(() => {
+      blurCloseTimerRef.current = null
       if (grace && inputRef.current && document.activeElement === inputRef.current) {
         return
       }
@@ -178,7 +199,11 @@ export default function BrowserAddressBar({
       setOpen(false)
       setSelectedValueOverride(null)
       onNavigate(url)
-      setTimeout(() => {
+      if (closingResetTimerRef.current !== null) {
+        window.clearTimeout(closingResetTimerRef.current)
+      }
+      closingResetTimerRef.current = window.setTimeout(() => {
+        closingResetTimerRef.current = null
         closingRef.current = false
       }, 100)
     },

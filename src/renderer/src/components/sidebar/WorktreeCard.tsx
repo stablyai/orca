@@ -45,11 +45,14 @@ import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { runWorktreeDelete } from './delete-worktree-flow'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
+import {
+  canShowWorkspaceDeleteQuickAction,
+  useWorkspaceDeleteModifierPressed
+} from './workspace-delete-quick-action'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -91,7 +94,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
   isActive,
-  isCurrentWorktree = isActive,
   isActiveSurface = isActive,
   isMultiSelected = false,
   selectedWorktrees,
@@ -249,14 +251,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         }
     : null
   const isDeleting = deleteState?.isDeleting ?? false
-  const hasActiveActivity = useAppStore((s) =>
-    hasActiveWorkspaceActivity(
-      worktree.id,
-      s.tabsByWorktree,
-      s.ptyIdsByTabId,
-      s.browserTabsByWorktree
-    )
-  )
+  const deleteModifierPressed = useWorkspaceDeleteModifierPressed()
 
   const showPR = cardProps.includes('pr')
   const showIssue = cardProps.includes('issue')
@@ -434,9 +429,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     [worktree.id, worktree.isUnread, updateWorktreeMeta]
   )
-  // Why: deleting the active/current workspace or one with live activity is a
-  // disruptive hover action; keep the quick action delete-only and passive.
-  const showDeleteQuickAction = !isCurrentWorktree && !hasActiveActivity && !worktree.isMainWorktree
+  // Why: delete is destructive, so it only appears while the user is holding
+  // Option/Alt instead of being part of the ordinary hover chrome.
+  const showDeleteQuickAction = canShowWorkspaceDeleteQuickAction({
+    deleteModifierPressed,
+    isDeleting,
+    isMainWorktree: worktree.isMainWorktree
+  })
   const handleWorkspaceQuickAction = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
@@ -569,10 +568,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showTitleRowDetails = compactCards && (hasDetails || hasPorts)
   const showMetaRowDetails = !compactCards && (hasDetails || hasPorts)
   const showHeaderActions =
-    showTitleRowUnread ||
-    showTitleRowPrimary ||
-    showTitleRowDetails ||
-    (showDeleteQuickAction && !isDeleting)
+    showTitleRowUnread || showTitleRowPrimary || showTitleRowDetails || showDeleteQuickAction
 
   const unreadQuickAction = showUnreadQuickAction ? (
     <Tooltip>
@@ -777,7 +773,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
               {showTitleRowDetails && detailsAndPorts}
 
-              {showDeleteQuickAction && !isDeleting && (
+              {showDeleteQuickAction && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
@@ -788,7 +784,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                       className={cn(
                         'inline-flex size-4 items-center justify-center rounded bg-transparent opacity-0 transition-colors transition-opacity',
                         'group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
-                        'text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:bg-transparent focus-visible:text-foreground'
+                        'text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive'
                       )}
                       aria-label="Delete workspace"
                     >

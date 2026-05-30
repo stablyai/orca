@@ -291,18 +291,40 @@ export function CreateStep({
   onCreate
 }: CreateStepProps): React.JSX.Element {
   const radioGroupRef = useRef<HTMLDivElement>(null)
+  const radioFocusFrameRef = useRef<number | null>(null)
+
+  const cancelRadioFocusFrame = useCallback((): void => {
+    if (radioFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(radioFocusFrameRef.current)
+    radioFocusFrameRef.current = null
+  }, [])
+
+  const setRadioGroupNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued arrow-key focus is only valid while this radiogroup is mounted.
+      if (!node) {
+        cancelRadioFocusFrame()
+      }
+      radioGroupRef.current = node
+    },
+    [cancelRadioFocusFrame]
+  )
 
   // Arrow keys cycle selection within the radiogroup (WAI-ARIA radio pattern).
   const cycleKind = useCallback(() => {
     const next = createKind === 'git' ? 'folder' : 'git'
     onKindChange(next)
-    requestAnimationFrame(() => {
+    cancelRadioFocusFrame()
+    radioFocusFrameRef.current = requestAnimationFrame(() => {
+      radioFocusFrameRef.current = null
       const nextEl = radioGroupRef.current?.querySelector<HTMLButtonElement>(
         `[data-kind="${next}"]`
       )
       nextEl?.focus()
     })
-  }, [createKind, onKindChange])
+  }, [cancelRadioFocusFrame, createKind, onKindChange])
 
   const trimmedName = createName.trim()
   const canSubmit = trimmedName.length > 0 && createParent.trim().length > 0 && !isCreating
@@ -323,7 +345,7 @@ export function CreateStep({
       <div className="space-y-3.5 pt-1 min-w-0">
         {/* Kind toggle. Real radiogroup so screen readers announce it as a choice. */}
         <div
-          ref={radioGroupRef}
+          ref={setRadioGroupNode}
           role="radiogroup"
           aria-label="Project kind"
           className="grid grid-cols-2 gap-2"

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy, Maximize2, Smartphone, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
@@ -52,6 +52,14 @@ export function MobilePane(): React.JSX.Element {
   const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
+  const codeCopiedResetTimerRef = useRef<number | null>(null)
+
+  const clearCodeCopiedResetTimer = useCallback((): void => {
+    if (codeCopiedResetTimerRef.current !== null) {
+      window.clearTimeout(codeCopiedResetTimerRef.current)
+      codeCopiedResetTimerRef.current = null
+    }
+  }, [])
 
   const loadDevices = useCallback(async () => {
     try {
@@ -95,6 +103,7 @@ export function MobilePane(): React.JSX.Element {
           setQrDataUrl(result.qrDataUrl)
           setPairingUrl(result.pairingUrl)
           setEndpoint(result.endpoint)
+          clearCodeCopiedResetTimer()
           setCodeCopied(false)
           void loadDevices()
         } else {
@@ -106,7 +115,7 @@ export function MobilePane(): React.JSX.Element {
         setLoading(false)
       }
     },
-    [loadDevices, selectedAddress]
+    [clearCodeCopiedResetTimer, loadDevices, selectedAddress]
   )
 
   useEffect(() => {
@@ -140,8 +149,12 @@ export function MobilePane(): React.JSX.Element {
       // (no transient activation, non-secure context). Use the main-process
       // IPC clipboard which the rest of the app uses everywhere.
       await window.api.ui.writeClipboardText(pairingUrl)
+      clearCodeCopiedResetTimer()
       setCodeCopied(true)
-      setTimeout(() => setCodeCopied(false), 2000)
+      codeCopiedResetTimerRef.current = window.setTimeout(() => {
+        codeCopiedResetTimerRef.current = null
+        setCodeCopied(false)
+      }, 2000)
     } catch {
       toast.error('Failed to copy pairing code')
     }
