@@ -1909,10 +1909,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // Why: remote PTY reattach uses the relay's pty.attach RPC, not the
       // local terminal daemon. The loop above correctly skips SSH repos
       // (connectionId check), so there is no overlap.
-      console.debug(
-        `[terminals-hydration] remoteSessionIdsByTabId:`,
-        JSON.stringify(remoteSessionIds)
-      )
       for (const [tabId, sessionId] of Object.entries(remoteSessionIds)) {
         if (validTabIds.has(tabId)) {
           pendingReconnectPtyIdByTabId[tabId] = sessionId
