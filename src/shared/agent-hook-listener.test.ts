@@ -303,6 +303,40 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.prompt).toBe('hi')
   })
 
+  it('normalizes a Claude-compatible StopFailure to done without copying provider error text', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'say hi' }
+      },
+      'production'
+    )
+
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'StopFailure',
+          error: 'invalid_request',
+          error_details: 'model is not supported',
+          last_assistant_message: 'API Error: model is not supported'
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'say hi',
+      agentType: 'claude'
+    })
+    expect(event?.payload.lastAssistantMessage).toBeUndefined()
+  })
+
   it('rejects oversized paneKey', () => {
     const event = normalizeHookPayload(
       state,

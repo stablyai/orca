@@ -23,6 +23,7 @@ const GEMINI_PERMISSION = '\u270B' // ✋
 // explicit launch/session facts Orca owns, not this inference path.
 export const AGENT_NAMES = [
   'claude',
+  'openclaude',
   'codex',
   'copilot',
   'cursor',
@@ -320,6 +321,7 @@ export function isClaudeAgent(title: string): boolean {
   if (!title) {
     return false
   }
+  const lower = title.toLowerCase()
 
   // Why: Claude Code titles are prefixed with status indicators (✳, ". ", "* ",
   // braille spinners) followed by the task description. The task text can
@@ -334,19 +336,14 @@ export function isClaudeAgent(title: string): boolean {
     return true
   }
   if (containsBrailleSpinner(title)) {
-    // Why: Orca synthesizes `⠋ Cursor Agent` working titles for cursor-agent
-    // panes (see hook listener in main/index.ts). Those titles carry a braille
-    // spinner but are decidedly not Claude — the prompt-cache timer and other
-    // Claude-scoped paths must not fire for them.
-    if (title.toLowerCase().includes('cursor')) {
-      return false
-    }
-    return true
+    // Why: named non-Claude agents can carry braille spinners too; Claude-only
+    // prompt-cache paths must not fire for those explicit agent titles.
+    return !lower.includes('cursor') && !lower.includes('openclaude')
   }
   // Why: permission/action-required Claude titles can omit the usual prefixes.
   // Requiring "claude" at the start avoids false positives from other agents
   // whose task text merely mentions Claude.
-  if (title.toLowerCase().startsWith('claude')) {
+  if (lower.startsWith('claude')) {
     return true
   }
 
@@ -369,6 +366,9 @@ export function getAgentLabel(title: string): string | null {
   // heuristic so mixed-agent hovercards stay truthful.
   if (lower.includes('codex')) {
     return 'Codex'
+  }
+  if (lower.includes('openclaude')) {
+    return 'OpenClaude'
   }
   if (lower.includes('copilot')) {
     return 'GitHub Copilot'
@@ -507,18 +507,16 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
 // renderer (agent-ready-wait, new-workspace). A bare shell is the only process
 // type that garbles injected preambles, so this is the negative signal for
 // "is an agent running".
-const SHELL_NAMES = new Set([
-  '',
-  'bash',
-  'zsh',
-  'sh',
-  'fish',
-  'cmd.exe',
-  'powershell.exe',
-  'pwsh.exe',
-  'nu'
-])
+const SHELL_NAMES = new Set(
+  '|bash|zsh|sh|fish|cmd|cmd.exe|powershell|powershell.exe|pwsh|pwsh.exe|nu'.split('|')
+)
 
 export function isShellProcess(processName: string): boolean {
-  return SHELL_NAMES.has(processName.trim().toLowerCase())
+  const normalized = processName
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .toLowerCase()
+  return (
+    SHELL_NAMES.has(normalized) || SHELL_NAMES.has(normalized.split(/[\\/]/).pop() ?? normalized)
+  )
 }

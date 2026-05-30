@@ -123,6 +123,10 @@ describe('resolveMarkdownLinkTarget', () => {
     })
   })
 
+  it('returns null for malformed percent-encoded file URL paths', () => {
+    expect(resolveMarkdownLinkTarget('file:///repo/docs/%zz.md', SOURCE, ROOT)).toBeNull()
+  })
+
   it('returns null for empty href', () => {
     expect(resolveMarkdownLinkTarget('', SOURCE, ROOT)).toBeNull()
     expect(resolveMarkdownLinkTarget(undefined, SOURCE, ROOT)).toBeNull()

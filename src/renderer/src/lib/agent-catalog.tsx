@@ -1,5 +1,9 @@
+/* eslint-disable max-lines -- Why: the supported-agent catalog, icon glyphs,
+   and fallback icon renderer must stay in one place so agent option labels and
+   status-surface icons do not drift. */
 import React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
+import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
 
 export type AgentCatalogEntry = {
@@ -7,20 +11,29 @@ export type AgentCatalogEntry = {
   label: string
   /** Default CLI binary name used for PATH detection. */
   cmd: string
+  /** Direct or bundled image URL for agents whose project identity is not represented by a favicon service. */
+  iconUrl?: string
   /** Domain for Google's favicon service — used for agents without an SVG icon. */
   faviconDomain?: string
   /** Homepage/install docs URL, sourced from the README agent badge list. */
   homepageUrl: string
 }
 
-// Full catalog of supported agents — ordered by priority for auto-default selection.
-// homepageUrl matches the href used in the README agent badge list.
 export const AGENT_CATALOG: AgentCatalogEntry[] = [
   {
     id: 'claude',
     label: 'Claude',
     cmd: 'claude',
     homepageUrl: 'https://docs.anthropic.com/claude/docs/claude-code'
+  },
+  {
+    id: 'openclaude',
+    label: 'OpenClaude',
+    cmd: 'openclaude',
+    // Why: OpenClaude's published favicon has a padded 500px canvas; Orca
+    // uses a cropped derivative of that official asset so 12px tab icons stay legible.
+    iconUrl: openClaudeLogoUrl,
+    homepageUrl: 'https://openclaude.gitlawb.com/'
   },
   {
     id: 'codex',
@@ -410,6 +423,17 @@ export function AgentIcon({
     return <CopilotIcon size={size} />
   }
   const catalogEntry = AGENT_CATALOG.find((a) => a.id === agent)
+  if (catalogEntry?.iconUrl) {
+    return (
+      <img
+        src={catalogEntry.iconUrl}
+        width={size}
+        height={size}
+        alt=""
+        style={{ borderRadius: 2 }}
+      />
+    )
+  }
   if (catalogEntry?.faviconDomain) {
     // Why: agents without a published SVG icon use their site favicon via
     // Google's favicon service — same source the README uses for the agent badge list.

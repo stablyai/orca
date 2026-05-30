@@ -469,6 +469,12 @@ export type TerminalTab = {
    *  PTY and tab icon stay stable even if the default shell setting changes
    *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
+  /** Why: the coding-harness agent Orca launched in this tab. Lets the tab bar
+   *  show the provider icon immediately, before the agent emits its first hook
+   *  event (a freshly-launched, idle agent reports no live status yet). Live
+   *  hook status overrides this once the agent does anything. Plain terminals
+   *  and manually-started agents omit it. */
+  launchAgent?: TuiAgent
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
    *  not by the user doing work. Without this flag the resulting
@@ -688,6 +694,7 @@ export type IssueState = 'open' | 'closed'
 export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
 
 export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
+export type PRReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED'
 
 export type PRConflictSummary = {
   baseRef: string
@@ -706,6 +713,10 @@ export type PRInfo = {
   checksStatus: CheckStatus
   updatedAt: string
   mergeable: PRMergeableState
+  reviewDecision?: PRReviewDecision | null
+  autoMergeEnabled?: boolean
+  mergeQueueRequired?: boolean | null
+  mergeStateStatus?: string | null
   // Why: check-runs are keyed by the PR head commit, not the mutable branch name.
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
   // correct commit without re-querying GitHub or guessing from local branch refs.
@@ -963,12 +974,14 @@ export type GitHubWorkItem = {
   additions?: number
   deletions?: number
   changedFiles?: number
-  reviewDecision?: string | null
+  reviewDecision?: PRReviewDecision | null
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]
   assignees?: GitHubAssignableUser[]
   checksSummary?: GitHubPRCheckSummary
   mergeable?: PRMergeableState
+  autoMergeEnabled?: boolean
+  mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean
   // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
@@ -1558,6 +1571,7 @@ export type ClaudeManagedAccountRuntimeSelection = {
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
 export type TuiAgent =
   | 'claude' // Claude Code
+  | 'openclaude' // OpenClaude
   | 'codex' // OpenAI Codex
   | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode

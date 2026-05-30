@@ -425,6 +425,30 @@ describe('RateLimitService', () => {
     await firstFetch
   })
 
+  it('does not recache an inactive Codex account that becomes active during fetch-on-open', async () => {
+    const service = new RateLimitService()
+    const accountFetch = deferred<ProviderRateLimits>()
+    let inactiveAccounts = [{ id: 'account-b', managedHomePath: '/tmp/account-b/home' }]
+    service.setInactiveCodexAccountsResolver(() => inactiveAccounts)
+    service.setCodexHomePathResolver(() => '/tmp/account-b/home')
+    vi.mocked(fetchCodexRateLimits)
+      .mockReturnValueOnce(accountFetch.promise)
+      .mockResolvedValueOnce(okProvider('codex', 7, Date.now()))
+
+    const fetchOnOpen = service.fetchInactiveCodexAccountsOnOpen()
+    await Promise.resolve()
+    expect(service.getState().inactiveCodexAccounts).toEqual([
+      { accountId: 'account-b', claude: null, updatedAt: 0, isFetching: true }
+    ])
+
+    inactiveAccounts = []
+    await service.refreshForCodexAccountChange('account-a')
+    accountFetch.resolve(okProvider('codex', 42, Date.now()))
+    await fetchOnOpen
+
+    expect(service.getState().inactiveCodexAccounts).toEqual([])
+  })
+
   it('preserves Gemini buckets through getState after fetch', async () => {
     const service = new RateLimitService()
 

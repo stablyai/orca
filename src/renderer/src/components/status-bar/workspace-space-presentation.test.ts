@@ -3,6 +3,8 @@ import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-
 import {
   countWorkspaceSpaceActiveAgents,
   filterWorkspaceSpaceRows,
+  getLargestWorkspaceSpaceItemSize,
+  getLargestWorkspaceSpaceRowSize,
   getSelectedDeletableWorkspaceIds,
   getVisibleDeletableWorkspaceIds,
   getWorkspaceSpaceGitStatusRefreshCandidates,
@@ -97,6 +99,23 @@ describe('workspace space presentation helpers', () => {
       'a'
     ])
     expect(filterWorkspaceSpaceRows(rows, '', true).map((item) => item.worktreeId)).toEqual(['a'])
+  })
+
+  it('finds largest sizes without spreading large workspace arrays', () => {
+    const rows = Array.from({ length: 130_000 }, (_, index) =>
+      row({ worktreeId: `wt-${index}`, sizeBytes: index === 87_654 ? 999_999 : index })
+    )
+    const items = Array.from({ length: 130_000 }, (_, index) => ({
+      name: `item-${index}`,
+      path: `/repo/item-${index}`,
+      kind: 'directory' as const,
+      sizeBytes: index === 12_345 ? 888_888 : index
+    }))
+
+    expect(getLargestWorkspaceSpaceRowSize(rows)).toBe(999_999)
+    expect(getLargestWorkspaceSpaceItemSize(items)).toBe(888_888)
+    expect(getLargestWorkspaceSpaceRowSize([])).toBe(0)
+    expect(getLargestWorkspaceSpaceItemSize([])).toBe(0)
   })
 
   it('returns only selected worktrees that can be deleted', () => {

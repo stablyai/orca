@@ -10,6 +10,7 @@ import { buildSetupRunnerCommand } from './setup-runner'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 import { CLIENT_PLATFORM } from './new-workspace'
 import { tuiAgentToAgentKind } from './telemetry'
+import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import {
@@ -42,7 +43,11 @@ type WorktreeActivationStore = {
     worktreeId: string,
     targetGroupId?: string,
     shellOverride?: string,
-    options?: { pendingActivationSpawn?: boolean; recordInteraction?: boolean }
+    options?: {
+      pendingActivationSpawn?: boolean
+      launchAgent?: TuiAgent
+      recordInteraction?: boolean
+    }
   ) => { id: string }
   setActiveTab: (tabId: string) => void
   setTabCustomTitle: (
@@ -239,8 +244,17 @@ export function ensureWorktreeHasInitialTerminal(
   // that had no focusable surface yet. Tag it so the resulting PTY spawn
   // does not count as activity and reshuffle the Recent sort. Explicit
   // "New Tab" actions (handleNewTab in Terminal.tsx) do not set the flag.
+  //
+  // Why: the initial terminal can be seeded with a coding agent (new-workspace
+  // flow, or reopening an empty worktree created with an agent). The startup
+  // payload only carries telemetry's agent_kind, so reverse it back to a
+  // TuiAgent to stamp the tab — giving it the provider icon before any hook.
+  const launchAgent = startup?.telemetry
+    ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
+    : undefined
   const terminalTab = store.createTab(worktreeId, undefined, undefined, {
-    pendingActivationSpawn: true
+    pendingActivationSpawn: true,
+    ...(launchAgent ? { launchAgent } : {})
   })
   store.setActiveTab(terminalTab.id)
 

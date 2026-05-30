@@ -7,7 +7,10 @@ import {
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/types'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type {
+  WorkspaceSpaceItem,
+  WorkspaceSpaceWorktree
+} from '../../../../shared/workspace-space-types'
 
 export type WorkspaceSpaceSortKey = 'size' | 'name' | 'repo' | 'activity'
 export type WorkspaceSpaceSortDirection = 'asc' | 'desc'
@@ -138,6 +141,30 @@ export function getWorkspaceSpaceSearchText(worktree: WorkspaceSpaceWorktree): s
   ]
     .join(' ')
     .toLowerCase()
+}
+
+export function getLargestWorkspaceSpaceItemSize(
+  items: readonly Pick<WorkspaceSpaceItem, 'sizeBytes'>[]
+): number {
+  let maxSize = 0
+  for (const item of items) {
+    if (item.sizeBytes > maxSize) {
+      maxSize = item.sizeBytes
+    }
+  }
+  return maxSize
+}
+
+export function getLargestWorkspaceSpaceRowSize(
+  rows: readonly Pick<WorkspaceSpaceWorktree, 'sizeBytes'>[]
+): number {
+  let maxSize = 0
+  for (const row of rows) {
+    if (row.sizeBytes > maxSize) {
+      maxSize = row.sizeBytes
+    }
+  }
+  return maxSize
 }
 
 function compareRows(

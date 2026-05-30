@@ -993,4 +993,59 @@ describe('CodexAccountService config sync', () => {
 
     expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledTimes(2)
   })
+
+  it('removes command listeners when Codex login times out', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: () => void
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const spawnMock = vi.fn(() => child)
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: spawnMock
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    try {
+      const settings = createSettings()
+      const store = createStore(settings)
+      const rateLimits = createRateLimits()
+      const runtimeHome = createRuntimeHome()
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
+      const loginPromise = (
+        service as unknown as {
+          runCodexLogin(managedHomePath: string): Promise<void>
+        }
+      ).runCodexLogin(testState.fakeHomeDir)
+      const rejection = expect(loginPromise).rejects.toThrow(
+        'Codex sign-in took too long to finish.'
+      )
+
+      await vi.advanceTimersByTimeAsync(120_000)
+
+      await rejection
+      expect(child.kill).toHaveBeenCalledTimes(1)
+      expect(child.stdout.listenerCount('data')).toBe(0)
+      expect(child.stderr.listenerCount('data')).toBe(0)
+      expect(child.listenerCount('error')).toBe(0)
+      expect(child.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../codex-cli/command')
+    }
+  })
 })

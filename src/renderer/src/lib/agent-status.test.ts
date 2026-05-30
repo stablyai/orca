@@ -9,6 +9,7 @@ import {
   createAgentStatusTracker,
   getAgentLabel,
   isGeminiTerminalTitle,
+  isClaudeAgent,
   normalizeTerminalTitle,
   isExplicitAgentStatusFresh,
   mapAgentStatusStateToVisualStatus,
@@ -160,6 +161,13 @@ describe('detectAgentStatusFromTitle', () => {
 
   it('returns idle for bare agent name "opencode"', () => {
     expect(detectAgentStatusFromTitle('opencode')).toBe('idle')
+  })
+
+  it('classifies OpenClaude titles without falling through to Claude naming', () => {
+    expect(detectAgentStatusFromTitle('OpenClaude ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('OpenClaude running')).toBe('working')
+    expect(detectAgentStatusFromTitle('OpenClaude - action required')).toBe('permission')
+    expect(detectAgentStatusFromTitle('⠋ OpenClaude')).toBe('working')
   })
 
   it('detects Pi idle titles', () => {
@@ -389,6 +397,8 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
     expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Codex is thinking')).toBe('Codex')
+    expect(getAgentLabel('OpenClaude running')).toBe('OpenClaude')
+    expect(getAgentLabel('⠋ OpenClaude')).toBe('OpenClaude')
     expect(getAgentLabel('Antigravity running')).toBe('Antigravity')
     expect(getAgentLabel('agy working')).toBe('Antigravity')
     expect(getAgentLabel('Grok running')).toBe('Grok')
@@ -406,6 +416,14 @@ describe('getAgentLabel', () => {
 
   it('does not label Android titles as Droid', () => {
     expect(getAgentLabel('android emulator ready')).toBeNull()
+  })
+})
+
+describe('isClaudeAgent', () => {
+  it('keeps OpenClaude out of Claude-specific prompt-cache detection', () => {
+    expect(isClaudeAgent('⠋ Claude Code')).toBe(true)
+    expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
+    expect(isClaudeAgent('OpenClaude ready')).toBe(false)
   })
 })
 
@@ -697,6 +715,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('claude')).toBe('Claude')
   })
 
+  it("maps 'openclaude' to 'OpenClaude'", () => {
+    expect(formatAgentTypeLabel('openclaude')).toBe('OpenClaude')
+  })
+
   it("maps 'codex' to 'Codex'", () => {
     expect(formatAgentTypeLabel('codex')).toBe('Codex')
   })
@@ -741,6 +763,7 @@ describe('agentTypeToIconAgent', () => {
 
   it("round-trips iconable agent types like 'claude'", () => {
     expect(agentTypeToIconAgent('claude')).toBe('claude')
+    expect(agentTypeToIconAgent('openclaude')).toBe('openclaude')
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
   })

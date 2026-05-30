@@ -8,6 +8,7 @@ import { track } from '@/lib/telemetry'
 import { cn } from '@/lib/utils'
 import { getRepositoryLocalCommandsSectionId } from '@/components/settings/repository-settings-targets'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   checkRuntimeHooks,
   inspectRuntimeSetupScriptImports,
@@ -97,6 +98,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   const [promptState, setPromptState] = useState<PromptState | null>(null)
   const [isImporting, setIsImporting] = useState(false)
   const trackedPromptKeysRef = useRef<Set<string>>(new Set())
+  const mountedRef = useMountedRef()
 
   const activeRepo = useMemo(
     () => repos.find((repo) => repo.id === activeRepoId) ?? null,
@@ -262,7 +264,9 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             hasSharedHooks: promptState.hasSharedHooks
           })
         )
-        toast.error('Failed to import setup script')
+        if (mountedRef.current) {
+          toast.error('Failed to import setup script')
+        }
         return
       }
       track(
@@ -273,20 +277,22 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
           hasSharedHooks: promptState.hasSharedHooks
         })
       )
-      setPromptState((current) =>
-        current?.repoId === activeRepo.id ? { ...current, hasEffectiveSetup: true } : current
-      )
-      const skippedCount = promptState.candidate.unsupportedFields?.length ?? 0
-      toast.success('Setup script imported', {
-        description:
-          skippedCount > 0
-            ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved to this repo's local settings.`
-            : "Saved to this repo's local settings.",
-        action: {
-          label: 'View in Settings',
-          onClick: () => openLocalCommandSettings(importedRepoId)
-        }
-      })
+      if (mountedRef.current) {
+        setPromptState((current) =>
+          current?.repoId === activeRepo.id ? { ...current, hasEffectiveSetup: true } : current
+        )
+        const skippedCount = promptState.candidate.unsupportedFields?.length ?? 0
+        toast.success('Setup script imported', {
+          description:
+            skippedCount > 0
+              ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved to this repo's local settings.`
+              : "Saved to this repo's local settings.",
+          action: {
+            label: 'View in Settings',
+            onClick: () => openLocalCommandSettings(importedRepoId)
+          }
+        })
+      }
     } catch (error) {
       track(
         'setup_script_prompt_action',
@@ -297,11 +303,15 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
         })
       )
       console.warn('[setup-script-prompt] Failed to import setup script:', error)
-      toast.error('Failed to import setup script')
+      if (mountedRef.current) {
+        toast.error('Failed to import setup script')
+      }
     } finally {
-      setIsImporting(false)
+      if (mountedRef.current) {
+        setIsImporting(false)
+      }
     }
-  }, [activeRepo, openLocalCommandSettings, promptState, updateRepo])
+  }, [activeRepo, mountedRef, openLocalCommandSettings, promptState, updateRepo])
 
   if (
     !sidebarOpen ||

@@ -2,7 +2,7 @@
 co-locate shared layout and keyboard interaction logic, which keeps the settings
 panel wiring simple even though the file exceeds the default line limit. */
 import type React from 'react'
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ScrollArea } from '../ui/scroll-area'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -455,8 +455,20 @@ export function FontAutocomplete({
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const previewFontFamilyRef = useRef(onPreviewFontFamily)
   const optionRefs = useRef(new Map<string, HTMLButtonElement>())
   const listboxId = useId()
+
+  previewFontFamilyRef.current = onPreviewFontFamily
+
+  const setRootNode = useCallback((element: HTMLDivElement | null): void => {
+    rootRef.current = element
+    if (!element) {
+      // Why: settings search can unmount this control while a hover preview is
+      // active; the consumer must not keep rendering that transient font.
+      previewFontFamilyRef.current?.(null)
+    }
+  }, [])
 
   if (value !== prevValue) {
     setPrevValue(value)
@@ -538,17 +550,6 @@ export function FontAutocomplete({
     onPreviewFontFamily(filteredSuggestions[highlightedIndex] ?? null)
   }, [filteredSuggestions, highlightedIndex, onPreviewFontFamily, open])
 
-  // Why: clear the live preview if this autocomplete is unmounted while a
-  // hovered preview is still active (e.g. the section is filtered out by
-  // settings search) — otherwise the consumer keeps showing a stale font.
-  useEffect(
-    () => () => {
-      onPreviewFontFamily?.(null)
-    },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-    []
-  )
-
   const commitValue = (nextValue: string): void => {
     setQuery(nextValue)
     onChange(nextValue)
@@ -560,7 +561,7 @@ export function FontAutocomplete({
   }
 
   return (
-    <div ref={rootRef} className="relative max-w-sm">
+    <div ref={setRootNode} className="relative max-w-sm">
       <div className="relative">
         <Input
           ref={inputRef}

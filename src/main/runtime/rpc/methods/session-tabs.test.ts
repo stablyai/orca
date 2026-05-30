@@ -119,8 +119,67 @@ describe('session tab RPC methods', () => {
       afterTabId: undefined,
       targetGroupId: 'group-left',
       command: 'zsh',
+      agent: undefined,
       activate: true
     })
+  })
+
+  it('dispatches terminal creation with a requested agent preset', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createMobileSessionTerminal: vi.fn().mockResolvedValue({
+        tab: {
+          type: 'terminal',
+          id: 'tab-1::leaf-1',
+          parentTabId: 'tab-1',
+          leafId: 'leaf-1',
+          title: 'Terminal',
+          status: 'ready',
+          terminal: 'pty-1',
+          isActive: true
+        },
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('session.tabs.createTerminal', {
+        worktree: 'id:wt-1',
+        agent: 'codex'
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.createMobileSessionTerminal).toHaveBeenCalledWith('id:wt-1', {
+      afterTabId: undefined,
+      targetGroupId: undefined,
+      command: undefined,
+      agent: 'codex',
+      activate: undefined
+    })
+  })
+
+  it('rejects unknown agent presets without creating a terminal', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createMobileSessionTerminal: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('session.tabs.createTerminal', {
+        worktree: 'id:wt-1',
+        agent: 'not-real'
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(response).toMatchObject({
+      error: { code: 'invalid_argument', message: 'Unknown agent preset' }
+    })
+    expect(runtime.createMobileSessionTerminal).not.toHaveBeenCalled()
   })
 
   it('streams all known session tab snapshots and later updates', async () => {

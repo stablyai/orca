@@ -168,6 +168,32 @@ describe('filesystem-search-git', () => {
     expect(result.totalMatches).toBe(0)
   })
 
+  it('settles and detaches when git grep ignores the timeout kill', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const proc = createMockProcess()
+      spawnMock.mockReturnValue(proc)
+
+      const promise = searchWithGitGrep('/mock/root', { query: 'ok', rootPath: '/mock/root' }, 100)
+
+      ;(proc.stdout as unknown as EventEmitter).emit('data', 'valid.ts\x001:ok\npartial')
+
+      await vi.runOnlyPendingTimersAsync()
+
+      const result = await promise
+      expect(result.truncated).toBe(true)
+      expect(result.files).toHaveLength(1)
+      expect(proc.kill).toHaveBeenCalled()
+      expect((proc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((proc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(proc.listenerCount('error')).toBe(0)
+      expect(proc.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('skips lines without null separator', async () => {
     const proc = createMockProcess()
     spawnMock.mockReturnValue(proc)

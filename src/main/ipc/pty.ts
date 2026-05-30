@@ -930,6 +930,11 @@ export function registerPtyHandlers(
   // large output and non-interactive output must still use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
+  const BACKGROUND_OUTPUT_INPUT_QUIET_MS = 50
+  const BACKGROUND_OUTPUT_MAX_INPUT_HOLD_MS = 250
+  let lastRendererInputAt = Number.NEGATIVE_INFINITY
+  let lastRendererInputPtyId: string | null = null
+  let backgroundFlushHeldSince: number | null = null
 
   function getChunkStartSeq(endSeq: number | undefined, data: string): number | undefined {
     return typeof endSeq === 'number' ? Math.max(0, endSeq - data.length) : undefined
@@ -972,15 +977,32 @@ export function registerPtyHandlers(
     flushTimer = setTimeout(flushPendingData, delayMs)
   }
 
-  function flushPendingData(): void {
-    flushTimer = null
-    if (mainWindow.isDestroyed()) {
-      pendingData.clear()
-      return
+  function hasRecentRendererInput(now: number): boolean {
+    return now - lastRendererInputAt < BACKGROUND_OUTPUT_INPUT_QUIET_MS
+  }
+
+  function hasPendingDataOutsideRecentInputPty(): boolean {
+    for (const id of pendingData.keys()) {
+      if (id !== lastRendererInputPtyId) {
+        return true
+      }
     }
+    return false
+  }
+
+  function drainPendingDataEntries(
+    maxWrites: number,
+    shouldDrain: (id: string) => boolean = () => true
+  ): number {
     let writes = 0
-    while (pendingData.size > 0 && writes < PTY_BATCH_FLUSH_MAX_WRITES) {
-      const next = pendingData.entries().next().value
+    while (writes < maxWrites) {
+      let next: [string, PendingPtyData] | undefined
+      for (const entry of pendingData.entries()) {
+        if (shouldDrain(entry[0])) {
+          next = entry
+          break
+        }
+      }
       if (!next) {
         break
       }
@@ -998,6 +1020,51 @@ export function registerPtyHandlers(
       }
       mainWindow.webContents.send('pty:data', makePtyDataPayload(id, chunk, pending.startSeq))
       writes++
+    }
+    return writes
+  }
+
+  function shouldHoldBackgroundFlushForInput(now: number): boolean {
+    if (
+      pendingData.size === 0 ||
+      !hasRecentRendererInput(now) ||
+      !hasPendingDataOutsideRecentInputPty()
+    ) {
+      backgroundFlushHeldSince = null
+      return false
+    }
+    backgroundFlushHeldSince ??= now
+    if (now - backgroundFlushHeldSince >= BACKGROUND_OUTPUT_MAX_INPUT_HOLD_MS) {
+      backgroundFlushHeldSince = null
+      return false
+    }
+    return true
+  }
+
+  function flushPendingData(): void {
+    flushTimer = null
+    if (mainWindow.isDestroyed()) {
+      pendingData.clear()
+      return
+    }
+    const now = performance.now()
+    let writes = 0
+    if (hasRecentRendererInput(now) && lastRendererInputPtyId !== null) {
+      writes += drainPendingDataEntries(
+        PTY_BATCH_FLUSH_MAX_WRITES,
+        (id) => id === lastRendererInputPtyId
+      )
+    }
+    if (shouldHoldBackgroundFlushForInput(now)) {
+      // Why: hidden PTYs can keep producing output while the user types in a
+      // foreground TUI. Holding background IPC briefly lets those bytes
+      // coalesce instead of flooding the renderer ahead of key echo frames.
+      const quietDelay = Math.max(1, BACKGROUND_OUTPUT_INPUT_QUIET_MS - (now - lastRendererInputAt))
+      schedulePendingDataFlush(quietDelay)
+      return
+    }
+    if (writes < PTY_BATCH_FLUSH_MAX_WRITES) {
+      writes += drainPendingDataEntries(PTY_BATCH_FLUSH_MAX_WRITES - writes)
     }
     if (pendingData.size > 0) {
       // Why: a background terminal can dump megabytes at once. Yield between
@@ -1093,6 +1160,9 @@ export function registerPtyHandlers(
           pendingData.delete(payload.id)
         }
         lastInputAtByPty.delete(payload.id)
+        if (lastRendererInputPtyId === payload.id) {
+          lastRendererInputPtyId = null
+        }
         mainWindow.webContents.send('pty:exit', payload)
       }
     })
@@ -2065,7 +2135,10 @@ export function registerPtyHandlers(
       return false
     }
     try {
-      lastInputAtByPty.set(args.id, performance.now())
+      const now = performance.now()
+      lastRendererInputAt = now
+      lastRendererInputPtyId = args.id
+      lastInputAtByPty.set(args.id, now)
       provider.write(args.id, args.data)
       return true
     } catch {
@@ -2089,7 +2162,10 @@ export function registerPtyHandlers(
       return false
     }
     try {
-      lastInputAtByPty.set(args.id, performance.now())
+      const now = performance.now()
+      lastRendererInputAt = now
+      lastRendererInputPtyId = args.id
+      lastInputAtByPty.set(args.id, now)
       provider.write(args.id, args.data)
       return true
     } catch {

@@ -21,6 +21,8 @@ import {
 const execFileAsync = promisify(execFile)
 const MANAGED_MARKER = getWslLauncherMarker()
 const BRIDGE_MANAGED_MARKER = getWslBridgeMarker()
+const WSL_COMMAND_NAME = 'orca-ide'
+const LEGACY_WSL_COMMAND_NAME = 'orca'
 
 type WslCliInstallerOptions = {
   platform?: NodeJS.Platform
@@ -137,6 +139,9 @@ export class WslCliInstaller {
         `mkdir -p ${quoteShell(getPosixDirname(getBridgePathFromCommandPath(status.commandPath)))}`,
         `command_tmp=${quoteShell(`${status.commandPath}.tmp`)}.$$`,
         `bridge_path=${quoteShell(getBridgePathFromCommandPath(status.commandPath))}`,
+        `legacy_command_path=${quoteShell(
+          `${getPosixDirname(status.commandPath)}/${LEGACY_WSL_COMMAND_NAME}`
+        )}`,
         'bridge_tmp="${bridge_path}.tmp.$$"',
         'cleanup() { rm -f "$command_tmp" "$bridge_tmp"; }',
         'trap cleanup EXIT',
@@ -158,6 +163,9 @@ export class WslCliInstaller {
           getBridgePathFromCommandPath(status.commandPath),
           BRIDGE_MANAGED_MARKER
         ),
+        // Why: the command was renamed to avoid GNOME Orca; remove only the
+        // old Orca-managed WSL wrapper so unmanaged `orca` commands survive.
+        `if [ -f "$legacy_command_path" ] && grep -Fq ${quoteShell(MANAGED_MARKER)} "$legacy_command_path"; then rm -f "$legacy_command_path"; fi`,
         `mv -f "$bridge_tmp" ${quoteShell(getBridgePathFromCommandPath(status.commandPath))}`,
         `mv -f "$command_tmp" ${quoteShell(status.commandPath)}`,
         'trap - EXIT'
@@ -240,7 +248,8 @@ export class WslCliInstaller {
     }
 
     const pathDirectory = `${home}/.local/bin`
-    const commandPath = `${pathDirectory}/orca`
+    // Why: matches the Linux CLI rename to `orca-ide` (avoids GNOME Orca conflict).
+    const commandPath = `${pathDirectory}/${WSL_COMMAND_NAME}`
     const pathConfigured =
       (
         await this.run(
@@ -296,9 +305,9 @@ export class WslCliInstaller {
   }): CliInstallStatus {
     return {
       platform: 'linux',
-      commandName: 'orca',
+      commandName: WSL_COMMAND_NAME,
       commandPath: args.commandPath,
-      pathDirectory: args.commandPath.replace(/\/orca$/, ''),
+      pathDirectory: getPosixDirname(args.commandPath),
       pathConfigured: args.pathConfigured,
       launcherPath: args.launcherPath,
       installMethod: 'wrapper',
@@ -308,7 +317,7 @@ export class WslCliInstaller {
       unsupportedReason: null,
       detail:
         args.state === 'installed' && !args.pathConfigured
-          ? `${args.commandPath} is registered, but ${args.commandPath.replace(/\/orca$/, '')} is not on PATH in ${args.distro}.`
+          ? `${args.commandPath} is registered, but ${getPosixDirname(args.commandPath)} is not on PATH in ${args.distro}.`
           : args.detail
     }
   }
@@ -319,7 +328,7 @@ export class WslCliInstaller {
   ): CliInstallStatus {
     return {
       platform: 'linux',
-      commandName: 'orca',
+      commandName: WSL_COMMAND_NAME,
       commandPath: null,
       pathDirectory: null,
       pathConfigured: false,
@@ -360,5 +369,6 @@ function buildEncodedWslBashCommand(command: string): string {
 export const _internals = {
   buildEncodedWslBashCommand,
   buildWslBridgeScript,
-  buildWslLauncher
+  buildWslLauncher,
+  getBridgePathFromCommandPath
 }

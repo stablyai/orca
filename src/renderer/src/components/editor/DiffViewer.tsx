@@ -337,11 +337,15 @@ export default function DiffViewer({
           }
         )
 
-        modifiedEditor.onDidDispose(() => cleanupSaveShortcut())
-
         // Track changes
-        modifiedEditor.onDidChangeModelContent(() => {
+        const modelContentSub = modifiedEditor.onDidChangeModelContent(() => {
           onContentChangeRef.current?.(modifiedEditor.getValue())
+        })
+        modifiedEditor.onDidDispose(() => {
+          // Why: editable diff views own both the save shortcut and
+          // model-change subscription for this Monaco editor instance.
+          cleanupSaveShortcut()
+          modelContentSub.dispose()
         })
 
         modifiedEditor.focus()

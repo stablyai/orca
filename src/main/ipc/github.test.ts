@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: GitHub IPC tests share one mocked Electron
+handler harness; keeping the related route wiring together avoids duplicated setup. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -8,6 +10,7 @@ const {
   listWorkItemsMock,
   getAuthenticatedViewerMock,
   mergePRMock,
+  setPRAutoMergeMock,
   checkOrcaStarredMock,
   starOrcaMock,
   trackMock,
@@ -21,6 +24,7 @@ const {
   listWorkItemsMock: vi.fn(),
   getAuthenticatedViewerMock: vi.fn(),
   mergePRMock: vi.fn(),
+  setPRAutoMergeMock: vi.fn(),
   checkOrcaStarredMock: vi.fn(),
   starOrcaMock: vi.fn(),
   trackMock: vi.fn(),
@@ -44,6 +48,7 @@ vi.mock('../github/client', () => ({
   listWorkItems: listWorkItemsMock,
   getAuthenticatedViewer: getAuthenticatedViewerMock,
   mergePR: mergePRMock,
+  setPRAutoMerge: setPRAutoMergeMock,
   checkOrcaStarred: checkOrcaStarredMock,
   starOrca: starOrcaMock
 }))
@@ -88,6 +93,7 @@ describe('registerGitHubHandlers', () => {
     listWorkItemsMock.mockReset()
     getAuthenticatedViewerMock.mockReset()
     mergePRMock.mockReset()
+    setPRAutoMergeMock.mockReset()
     checkOrcaStarredMock.mockReset()
     starOrcaMock.mockReset()
     trackMock.mockReset()
@@ -277,6 +283,28 @@ describe('registerGitHubHandlers', () => {
     )
 
     expect(mergePRMock).toHaveBeenCalledWith('/workspace/repo', 42, 'squash', 'openclaw-2', {
+      owner: 'acme',
+      repo: 'orca'
+    })
+  })
+
+  it('threads SSH connectionId through pull request auto-merge', async () => {
+    repos[0].connectionId = 'openclaw-2'
+    setPRAutoMergeMock.mockResolvedValue({ ok: true })
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:setPRAutoMerge'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        prNumber: 42,
+        enabled: true,
+        prRepo: { owner: 'acme', repo: 'orca' }
+      }
+    )
+
+    expect(setPRAutoMergeMock).toHaveBeenCalledWith('/workspace/repo', 42, true, 'openclaw-2', {
       owner: 'acme',
       repo: 'orca'
     })

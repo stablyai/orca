@@ -62,7 +62,15 @@ export function OnboardingInlineCommandTerminal({
   }, [onOpened])
 
   useEffect(() => {
-    void window.api.app.getFloatingTerminalCwd({ path: '~' }).then(setCwd)
+    let cancelled = false
+    void window.api.app.getFloatingTerminalCwd({ path: '~' }).then((nextCwd) => {
+      if (!cancelled) {
+        setCwd(nextCwd)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -82,7 +90,7 @@ export function OnboardingInlineCommandTerminal({
 
   useEffect(() => {
     if (!autoScrollIntoView) {
-      return
+      return undefined
     }
     if (prefersReducedMotion) {
       const scrollFrame = window.requestAnimationFrame(() => {
@@ -93,20 +101,32 @@ export function OnboardingInlineCommandTerminal({
     // Why: double rAF guarantees the browser commits the initial collapsed
     // styles before we flip to `entered`, so the height/opacity transition
     // actually plays instead of snapping straight to the final state.
+    let enteredFrame: number | null = null
     const enterFrame = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => setEntered(true))
+      enteredFrame = window.requestAnimationFrame(() => setEntered(true))
     })
-    return () => window.cancelAnimationFrame(enterFrame)
+    return () => {
+      window.cancelAnimationFrame(enterFrame)
+      if (enteredFrame !== null) {
+        window.cancelAnimationFrame(enteredFrame)
+      }
+    }
   }, [autoScrollIntoView, prefersReducedMotion])
 
   useEffect(() => {
     if (autoScrollIntoView) {
-      return
+      return undefined
     }
+    let enteredFrame: number | null = null
     const enterFrame = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => setEntered(true))
+      enteredFrame = window.requestAnimationFrame(() => setEntered(true))
     })
-    return () => window.cancelAnimationFrame(enterFrame)
+    return () => {
+      window.cancelAnimationFrame(enterFrame)
+      if (enteredFrame !== null) {
+        window.cancelAnimationFrame(enteredFrame)
+      }
+    }
   }, [autoScrollIntoView])
 
   // Why: tracking scroll *during* the height transition is unavoidably

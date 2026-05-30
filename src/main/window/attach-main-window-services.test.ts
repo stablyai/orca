@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   onMock,
   removeAllListenersMock,
+  removeListenerMock,
   setPermissionRequestHandlerMock,
   setPermissionCheckHandlerMock,
   setDisplayMediaRequestHandlerMock,
@@ -22,6 +23,7 @@ const {
 } = vi.hoisted(() => ({
   onMock: vi.fn(),
   removeAllListenersMock: vi.fn(),
+  removeListenerMock: vi.fn(),
   setPermissionRequestHandlerMock: vi.fn(),
   setPermissionCheckHandlerMock: vi.fn(),
   setDisplayMediaRequestHandlerMock: vi.fn(),
@@ -52,6 +54,7 @@ vi.mock('electron', () => ({
   ipcMain: {
     on: onMock,
     removeAllListeners: removeAllListenersMock,
+    removeListener: removeListenerMock,
     removeHandler: removeHandlerMock,
     handle: handleMock
   },
@@ -152,6 +155,7 @@ describe('attachMainWindowServices', () => {
   beforeEach(() => {
     onMock.mockReset()
     removeAllListenersMock.mockReset()
+    removeListenerMock.mockReset()
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     setPermissionRequestHandlerMock.mockReset()
@@ -425,6 +429,28 @@ describe('attachMainWindowServices', () => {
     expect(closedHandler).toBeTypeOf('function')
     closedHandler?.()
     expect(browserManagerUnregisterAllMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes the native file-drop relay when the main window closes', () => {
+    const mainWindowOnMock = vi.fn()
+    const mainWindow = createMainWindow({ send: vi.fn() })
+    mainWindow.on = mainWindowOnMock
+
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const channel = 'terminal:file-dropped-from-preload'
+    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
+    expect(relayHandler).toBeTypeOf('function')
+    expect(removeAllListenersMock).toHaveBeenCalledWith(channel)
+
+    const closedHandlers = mainWindowOnMock.mock.calls
+      .filter(([event]) => event === 'closed')
+      .map(([, handler]) => handler as () => void)
+    for (const handler of closedHandlers) {
+      handler()
+    }
+
+    expect(removeListenerMock).toHaveBeenCalledWith(channel, relayHandler)
   })
 
   it('forwards runtime notifier events to the renderer', () => {

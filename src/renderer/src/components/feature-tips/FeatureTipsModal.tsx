@@ -33,6 +33,7 @@ import {
   trackOrcaCliFeatureTipSetupClicked,
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 const WAVEFORM_BAR_HEIGHTS = [30, 60, 90, 70, 100, 50, 80, 35, 65]
 const CLI_AGENT_COMMANDS = [
@@ -207,6 +208,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const modalData = useAppStore((s) => s.modalData)
+  const mountedRef = useMountedRef()
   const [primaryBusy, setPrimaryBusy] = useState(false)
   const [skillTerminalOpen, setSkillTerminalOpen] = useState(false)
   const isOpen = activeModal === 'feature-tips'
@@ -276,13 +278,19 @@ export default function FeatureTipsModal(): JSX.Element | null {
           const result = await installCliFromFeatureTip(() => window.api.cli.install())
           if (result.kind === 'installed') {
             trackOrcaCliFeatureTipSetupResult(telemetrySource, 'installed')
-            toast.success('Registered `orca` in PATH.')
             enableOrchestrationSkillSetup()
+            if (!mountedRef.current) {
+              return
+            }
+            toast.success('Registered `orca` in PATH.')
             setSkillTerminalOpen(true)
             return
           }
 
           trackOrcaCliFeatureTipSetupResult(telemetrySource, 'needs_attention')
+          if (!mountedRef.current) {
+            return
+          }
           toast.warning('Orca CLI needs attention', {
             description: result.status.detail ?? 'Open Settings to finish CLI setup.'
           })
@@ -295,16 +303,23 @@ export default function FeatureTipsModal(): JSX.Element | null {
             message.includes('Development mode uses a generated launcher for validation only')
           ) {
             trackOrcaCliFeatureTipSetupResult(telemetrySource, 'dev_preview')
-            toast.info('Development preview: opening skills setup terminal.')
             enableOrchestrationSkillSetup()
+            if (!mountedRef.current) {
+              return
+            }
+            toast.info('Development preview: opening skills setup terminal.')
             setSkillTerminalOpen(true)
             return
           }
 
           trackOrcaCliFeatureTipSetupResult(telemetrySource, 'failed')
-          toast.error(message)
+          if (mountedRef.current) {
+            toast.error(message)
+          }
         } finally {
-          setPrimaryBusy(false)
+          if (mountedRef.current) {
+            setPrimaryBusy(false)
+          }
         }
       }
     }

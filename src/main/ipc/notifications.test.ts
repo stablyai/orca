@@ -992,10 +992,14 @@ describe('registerNotificationHandlers', () => {
     const handler = getDispatchHandler()
 
     const result = handler({}, { source: 'test', requireDisplayConfirmation: true })
-    getNotificationOnceEventHandler('show')()
+    const showHandler = getNotificationOnceEventHandler('show')
+    const failedHandler = getNotificationOnceEventHandler('failed')
+    showHandler()
 
     await expect(result).resolves.toEqual({ delivered: true })
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('show', showHandler)
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('failed', failedHandler)
   })
 
   it('reports not-displayed when explicit test notifications never show', async () => {
@@ -1013,10 +1017,14 @@ describe('registerNotificationHandlers', () => {
     const handler = getDispatchHandler()
 
     const result = handler({}, { source: 'test', requireDisplayConfirmation: true })
+    const showHandler = getNotificationOnceEventHandler('show')
+    const failedHandler = getNotificationOnceEventHandler('failed')
     await vi.advanceTimersByTimeAsync(2501)
 
     await expect(result).resolves.toEqual({ delivered: false, reason: 'not-displayed' })
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('show', showHandler)
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('failed', failedHandler)
   })
 
   it('loads allowed custom sound files for preload playback', async () => {

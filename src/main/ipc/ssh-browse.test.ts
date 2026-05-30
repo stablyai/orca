@@ -59,6 +59,12 @@ describe('registerSshBrowseHandler', () => {
       ]
     })
     expect(exec).toHaveBeenCalledWith('cd "$HOME" && pwd && command ls -1Ap')
+    expect(channel.listenerCount('data')).toBe(0)
+    expect(channel.listenerCount('exit')).toBe(0)
+    expect(channel.listenerCount('close')).toBe(0)
+    expect(channel.listenerCount('error')).toBe(0)
+    expect(channel.stderr.listenerCount('data')).toBe(0)
+    expect(channel.stderr.listenerCount('error')).toBe(0)
   })
 
   it('escapes remote browse paths before invoking command ls', async () => {
@@ -80,5 +86,26 @@ describe('registerSshBrowseHandler', () => {
       entries: []
     })
     expect(exec).toHaveBeenCalledWith("cd '/tmp/it'\\''s here' && pwd && command ls -1Ap")
+  })
+
+  it('rejects and detaches listeners when the browse channel errors', async () => {
+    const channel = createMockChannel()
+    const exec = vi.fn().mockResolvedValue(channel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/tmp' })
+    await Promise.resolve()
+    channel.emit('error', new Error('remote disconnected'))
+
+    await expect(resultPromise).rejects.toThrow('remote disconnected')
+    expect(channel.listenerCount('data')).toBe(0)
+    expect(channel.listenerCount('exit')).toBe(0)
+    expect(channel.listenerCount('close')).toBe(0)
+    expect(channel.listenerCount('error')).toBe(0)
+    expect(channel.stderr.listenerCount('data')).toBe(0)
+    expect(channel.stderr.listenerCount('error')).toBe(0)
   })
 })

@@ -969,7 +969,7 @@ export class CodexRuntimeHomeService {
     for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
       const childPath = join(rootPath, entry.name)
       if (entry.isDirectory()) {
-        files.push(...this.listFilesRecursively(childPath))
+        this.appendListedFiles(files, this.listFilesRecursively(childPath))
         continue
       }
       if (entry.isFile()) {
@@ -977,6 +977,14 @@ export class CodexRuntimeHomeService {
       }
     }
     return files.sort()
+  }
+
+  private appendListedFiles(target: string[], source: readonly string[]): void {
+    // Why: migrating legacy session trees must tolerate directories larger than
+    // V8's argument limit for spread calls.
+    for (const filePath of source) {
+      target.push(filePath)
+    }
   }
 
   private getPreservedLegacySessionPath(runtimeFilePath: string, accountId: string): string {

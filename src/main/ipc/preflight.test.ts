@@ -8,6 +8,7 @@ const {
   execFileAsyncMock,
   hydrateShellPathMock,
   mergePathSegmentsMock,
+  getActiveMultiplexerMock,
   getBitbucketAuthStatusMock,
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock
@@ -17,6 +18,7 @@ const {
   execFileAsyncMock: vi.fn(),
   hydrateShellPathMock: vi.fn(),
   mergePathSegmentsMock: vi.fn(),
+  getActiveMultiplexerMock: vi.fn(),
   getBitbucketAuthStatusMock: vi.fn(),
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn()
@@ -43,6 +45,10 @@ vi.mock('../startup/hydrate-shell-path', () => ({
   mergePathSegments: mergePathSegmentsMock
 }))
 
+vi.mock('./ssh', () => ({
+  getActiveMultiplexer: getActiveMultiplexerMock
+}))
+
 vi.mock('../bitbucket/client', () => ({
   getBitbucketAuthStatus: getBitbucketAuthStatusMock
 }))
@@ -62,13 +68,7 @@ import {
   runPreflightCheck
 } from './preflight'
 
-type HandlerMap = Record<
-  string,
-  (
-    _event?: unknown,
-    args?: { force?: boolean; wslDistro?: string | null; wslDefault?: boolean }
-  ) => Promise<unknown>
->
+type HandlerMap = Record<string, (_event?: unknown, args?: unknown) => Promise<unknown>>
 
 describe('preflight', () => {
   const originalPlatform = process.platform
@@ -94,6 +94,7 @@ describe('preflight', () => {
     execFileAsyncMock.mockReset()
     hydrateShellPathMock.mockReset()
     mergePathSegmentsMock.mockReset()
+    getActiveMultiplexerMock.mockReset()
     getBitbucketAuthStatusMock.mockReset()
     getAzureDevOpsAuthStatusMock.mockReset()
     getGiteaAuthStatusMock.mockReset()
@@ -354,6 +355,9 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+      if (String(args[0]) === 'openclaude') {
+        return { stdout: '/Users/test/.local/bin/openclaude\n' }
+      }
       if (String(args[0]) === 'cursor-agent') {
         return { stdout: '/Users/test/.local/bin/cursor-agent\n' }
       }
@@ -362,7 +366,24 @@ describe('preflight', () => {
 
     registerPreflightHandlers()
 
-    await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['cursor'])
+    await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['openclaude', 'cursor'])
+  })
+
+  it('sends OpenClaude detection commands through the SSH remote preflight path', async () => {
+    const request = vi.fn().mockResolvedValue({ agents: ['openclaude'] })
+    getActiveMultiplexerMock.mockReturnValue({
+      isDisposed: () => false,
+      request
+    })
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
+    ).resolves.toEqual(['openclaude'])
+    expect(request).toHaveBeenCalledWith('preflight.detectAgents', {
+      commands: expect.arrayContaining([{ id: 'openclaude', cmd: 'openclaude' }])
+    })
   })
 
   it('detects agents from the selected WSL distro for a WSL workspace', async () => {

@@ -582,7 +582,16 @@ function getNewestDiffCommentAt(diffComments: Worktree['diffComments'] | undefin
   if (!diffComments || diffComments.length === 0) {
     return null
   }
-  return Math.max(...diffComments.map((comment) => comment.createdAt))
+  // Why: persisted diff notes can grow large enough for spread-based Math.max
+  // to exceed the JavaScript argument limit during cleanup scans.
+  let newest = diffComments[0]?.createdAt ?? null
+  for (let index = 1; index < diffComments.length; index += 1) {
+    const createdAt = diffComments[index]?.createdAt
+    if (createdAt !== undefined && (newest === null || createdAt > newest)) {
+      newest = createdAt
+    }
+  }
+  return newest
 }
 
 function createEmptyGitEvidence(): GitEvidence {

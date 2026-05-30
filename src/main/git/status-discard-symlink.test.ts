@@ -91,6 +91,53 @@ describe('discardChanges symlink safety', () => {
     await expect(access(path.join(repo, 'ignored'))).rejects.toThrow()
   })
 
+  it('treats untracked discard paths with Git glob characters as literal paths', async () => {
+    const { repo } = await createRepoWithOutsideDirectory()
+    await writeFile(path.join(repo, '.gitignore'), 'ignored.log\n')
+    execFileSync('git', ['add', '.gitignore'], { cwd: repo })
+    execFileSync('git', ['commit', '-q', '-m', 'ignore log fixture'], { cwd: repo })
+    await writeFile(path.join(repo, '*.log'), 'selected')
+    await writeFile(path.join(repo, 'keep.log'), 'unrelated')
+    await writeFile(path.join(repo, 'ignored.log'), 'ignored')
+
+    await discardChanges(repo, '*.log')
+
+    await expect(access(path.join(repo, '*.log'))).rejects.toThrow()
+    await expect(access(path.join(repo, 'keep.log'))).resolves.toBeUndefined()
+    await expect(access(path.join(repo, 'ignored.log'))).resolves.toBeUndefined()
+  })
+
+  it('treats tracked discard paths with Git glob characters as literal paths', async () => {
+    const { repo } = await createRepoWithOutsideDirectory()
+    await writeFile(path.join(repo, '*.log'), 'selected')
+    await writeFile(path.join(repo, 'keep.log'), 'keep')
+    execFileSync('git', ['add', '*.log', 'keep.log'], { cwd: repo })
+    execFileSync('git', ['commit', '-q', '-m', 'track log fixtures'], { cwd: repo })
+    await writeFile(path.join(repo, '*.log'), 'selected modified')
+    await writeFile(path.join(repo, 'keep.log'), 'keep modified')
+
+    await discardChanges(repo, '*.log')
+
+    await expect(readFile(path.join(repo, '*.log'), 'utf8')).resolves.toBe('selected')
+    await expect(readFile(path.join(repo, 'keep.log'), 'utf8')).resolves.toBe('keep modified')
+  })
+
+  it('treats bulk untracked discard paths with Git glob characters as literal paths', async () => {
+    const { repo } = await createRepoWithOutsideDirectory()
+    await writeFile(path.join(repo, '.gitignore'), 'ignored.log\n')
+    execFileSync('git', ['add', '.gitignore'], { cwd: repo })
+    execFileSync('git', ['commit', '-q', '-m', 'ignore log fixture'], { cwd: repo })
+    await writeFile(path.join(repo, '*.log'), 'selected')
+    await writeFile(path.join(repo, 'keep.log'), 'unrelated')
+    await writeFile(path.join(repo, 'ignored.log'), 'ignored')
+
+    await bulkDiscardChanges(repo, ['*.log'])
+
+    await expect(access(path.join(repo, '*.log'))).rejects.toThrow()
+    await expect(access(path.join(repo, 'keep.log'))).resolves.toBeUndefined()
+    await expect(access(path.join(repo, 'ignored.log'))).resolves.toBeUndefined()
+  })
+
   it('removes untracked nested git repos selected for discard', async () => {
     const { repo } = await createRepoWithOutsideDirectory()
     const nestedRepo = path.join(repo, 'nested')

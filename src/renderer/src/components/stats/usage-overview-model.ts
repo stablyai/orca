@@ -260,7 +260,12 @@ function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDailyPoint[
     byDay.set(entry.day, current)
   }
 
-  const maxTokens = Math.max(0, ...[...byDay.values()].map((entry) => entry.totalTokens))
+  let maxTokens = 0
+  // Why: usage history can be large enough to exceed V8's argument limit if
+  // every day is spread into Math.max.
+  for (const entry of byDay.values()) {
+    maxTokens = Math.max(maxTokens, entry.totalTokens)
+  }
   return [...byDay.values()]
     .sort((left, right) => left.day.localeCompare(right.day))
     .map((entry) => ({

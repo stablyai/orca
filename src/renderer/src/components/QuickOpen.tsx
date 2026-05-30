@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import React, { useCallback, useDeferredValue, useMemo, useState } from 'react'
+import React, { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
@@ -66,6 +66,28 @@ function InstallRgGuidance({
   guidance?: string | null
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+  const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after this guidance unmounts; avoid
+  // starting a reset timer that will outlive the component.
+  const isMountedRef = useRef(false)
+
+  const clearCopiedResetTimer = useCallback((): void => {
+    if (copiedResetTimerRef.current !== null) {
+      window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = null
+    }
+  }, [])
+
+  const setCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
+      if (node === null) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
+
   const handleCopy = useCallback(() => {
     if (!command) {
       return
@@ -77,13 +99,20 @@ function InstallRgGuidance({
     void window.api.ui
       .writeClipboardText(command)
       .then(() => {
+        if (!isMountedRef.current) {
+          return
+        }
+        clearCopiedResetTimer()
         setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
+        copiedResetTimerRef.current = window.setTimeout(() => {
+          copiedResetTimerRef.current = null
+          setCopied(false)
+        }, 1500)
       })
       .catch(() => {
         /* best-effort */
       })
-  }, [command])
+  }, [clearCopiedResetTimer, command])
 
   return (
     <div className="px-4 py-5 text-sm text-muted-foreground space-y-3">
@@ -103,6 +132,7 @@ function InstallRgGuidance({
         <div className="flex items-center gap-2 rounded border border-border bg-muted/50 px-3 py-2 font-mono text-xs text-foreground">
           <span className="flex-1 truncate">{command}</span>
           <button
+            ref={setCopyButtonRef}
             type="button"
             onClick={handleCopy}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

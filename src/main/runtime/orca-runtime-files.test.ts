@@ -2,9 +2,11 @@
    authorization, and watcher lifecycle fixtures; splitting would duplicate the
    setup that makes cross-command filesystem behavior comparable. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import type * as Fs from 'fs'
 import type * as FsPromises from 'fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
+import type * as GitRunner from '../git/runner'
 
 const {
   lstatMock,
@@ -13,14 +15,18 @@ const {
   resolveAuthorizedPathMock,
   statMock,
   subscribeParcelWatcherMock,
+  checkRgAvailableMock,
+  wslAwareSpawnMock,
   watchMock
 } = vi.hoisted(() => ({
+  checkRgAvailableMock: vi.fn(),
   lstatMock: vi.fn(),
   readdirMock: vi.fn(),
   renameMock: vi.fn(),
   resolveAuthorizedPathMock: vi.fn(),
   statMock: vi.fn(),
   subscribeParcelWatcherMock: vi.fn(),
+  wslAwareSpawnMock: vi.fn(),
   watchMock: vi.fn()
 }))
 
@@ -55,6 +61,18 @@ vi.mock('../ipc/filesystem-auth', async () => {
   }
 })
 
+vi.mock('../git/runner', async () => {
+  const actual = await vi.importActual<typeof GitRunner>('../git/runner')
+  return {
+    ...actual,
+    wslAwareSpawn: wslAwareSpawnMock
+  }
+})
+
+vi.mock('../ipc/rg-availability', () => ({
+  checkRgAvailable: checkRgAvailableMock
+}))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: vi.fn(),
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE:
@@ -63,6 +81,13 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 
 import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { SEARCH_TIMEOUT_MS } from '../../shared/text-search'
+
+type MockRuntimeSearchChild = EventEmitter & {
+  stdout: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
+  stderr: EventEmitter
+  kill: ReturnType<typeof vi.fn>
+}
 
 function enoent(): Error {
   return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
@@ -94,6 +119,7 @@ function mockLocalPathStats(entries: Record<string, [number, number]>) {
 function createRuntimeFileCommands(options?: {
   path?: string
   openDiff?: ReturnType<typeof vi.fn>
+  resolveRuntimeGitTarget?: ReturnType<typeof vi.fn>
 }) {
   const store = {
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
@@ -107,11 +133,20 @@ function createRuntimeFileCommands(options?: {
       repoId: 'repo-1',
       path
     })),
-    resolveRuntimeGitTarget: vi.fn(),
+    resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
     openFile: vi.fn(),
     ...(options?.openDiff ? { openDiff: options.openDiff } : {})
   } as never)
   return { commands, store }
+}
+
+function createRuntimeSearchChild(): MockRuntimeSearchChild {
+  const child = new EventEmitter() as MockRuntimeSearchChild
+  child.stdout = new EventEmitter() as MockRuntimeSearchChild['stdout']
+  child.stdout.setEncoding = vi.fn()
+  child.stderr = new EventEmitter()
+  child.kill = vi.fn()
+  return child
 }
 
 describe('RuntimeFileCommands', () => {
@@ -126,6 +161,8 @@ describe('RuntimeFileCommands', () => {
     statMock.mockReset()
     subscribeParcelWatcherMock.mockReset()
     watchMock.mockReset()
+    checkRgAvailableMock.mockReset()
+    wslAwareSpawnMock.mockReset()
     readdirMock.mockResolvedValue([])
     lstatMock.mockRejectedValue(enoent())
     renameMock.mockResolvedValue(undefined)
@@ -328,5 +365,38 @@ describe('RuntimeFileCommands', () => {
     resolveUnsubscribe()
     await drainPromise
     expect(drained).toBe(true)
+  })
+
+  it('settles and detaches runtime rg searches when timeout kill is ignored', async () => {
+    const resolveRuntimeGitTarget = vi.fn(async () => ({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: '/repo'
+      },
+      connectionId: null
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeGitTarget })
+    const child = createRuntimeSearchChild()
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    checkRgAvailableMock.mockResolvedValue(true)
+    wslAwareSpawnMock.mockReturnValue(child)
+
+    const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
+      query: 'needle',
+      maxResults: 10
+    })
+    await vi.advanceTimersByTimeAsync(SEARCH_TIMEOUT_MS)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      files: [],
+      totalMatches: 0,
+      truncated: true
+    })
+    expect(child.kill).toHaveBeenCalledTimes(1)
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
   })
 })

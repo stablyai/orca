@@ -23,6 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   AlertTriangle,
   ArrowUp,
+  Bot,
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
@@ -103,6 +104,11 @@ import {
   terminalRecordsEqual,
   type TerminalRecord
 } from '../../../../src/session/mobile-terminal-records'
+import {
+  buildMobileNewTabAgentOptions,
+  type MobileNewTabAgentOption,
+  type MobileNewTabAgentSettings
+} from '../../../../src/session/mobile-new-tab-agent-options'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
 
 type Terminal = TerminalRecord
@@ -299,6 +305,20 @@ type TerminalCreateResult = {
   tab: Extract<MobileSessionTab, { type: 'terminal' }>
 }
 
+type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
+
+type RuntimeRepoSummary = {
+  id: string
+  connectionId?: string | null
+}
+
+function getRepoIdFromMobileWorktreeId(id: string): string {
+  // Why: mobile cannot import desktop shared modules in its standalone tsc run,
+  // but the runtime worktree id wire format is still `${repoId}::${path}`.
+  const separatorIdx = id.indexOf('::')
+  return separatorIdx === -1 ? id : id.slice(0, separatorIdx)
+}
+
 type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
 
 const STATUS_LABELS: Record<ConnectionState, string> = {
@@ -330,6 +350,10 @@ type TerminalGestureInputQueue = {
 
 function isWheelMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | undefined): boolean {
   return mode === 'vt200' || mode === 'drag' || mode === 'any'
+}
+
+function isGestureMouseTrackingMode(mode: TerminalModes['mouseTrackingMode'] | undefined): boolean {
+  return mode === 'x10' || isWheelMouseTrackingMode(mode)
 }
 
 function TerminalPaneView({
@@ -708,6 +732,9 @@ export default function SessionScreen() {
   const [createError, setCreateError] = useState('')
   const [createWarning, setCreateWarning] = useState(initialCreateWarning)
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
+  const [createTabAgentLoadState, setCreateTabAgentLoadState] =
+    useState<MobileNewTabAgentLoadState>('idle')
+  const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
   const [markdownActionTarget, setMarkdownActionTarget] = useState<Extract<
@@ -2446,9 +2473,9 @@ export default function SessionScreen() {
       if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal')
         return
       const modes = ptyModesRef.current.get(handle)
-      // Why: WebView messages can become PTY input here. Only TUI scroll paths
-      // generate gesture input, and the bridge is rate-limited for SSH safety.
-      if (!modes?.altScreen && !isWheelMouseTrackingMode(modes?.mouseTrackingMode)) return
+      // Why: WebView gesture bytes can become PTY input here, so mouse-aware
+      // reports stay behind validation and SSH-safe rate limiting.
+      if (!modes?.altScreen && !isGestureMouseTrackingMode(modes?.mouseTrackingMode)) return
       const sequenceCount = countTerminalGestureInputSequences(bytes)
       if (sequenceCount == null) return
       if (!allowTerminalGestureInput(handle, sequenceCount)) return
@@ -2655,7 +2682,74 @@ export default function SessionScreen() {
     }
   }, [selectModeActive])
 
-  async function handleCreateTerminal() {
+  useEffect(() => {
+    if (!showCreateTabDrawer) {
+      setCreateTabAgentLoadState('idle')
+      setCreateTabAgentOptions([])
+      return
+    }
+    if (!client || connState !== 'connected') {
+      setCreateTabAgentLoadState('idle')
+      setCreateTabAgentOptions([])
+      return
+    }
+
+    let stale = false
+    setCreateTabAgentLoadState('loading')
+    setCreateTabAgentOptions([])
+
+    void (async () => {
+      const [settingsResponse, repoResponse] = await Promise.all([
+        client.sendRequest('settings.get'),
+        client.sendRequest('repo.list')
+      ])
+      if (!settingsResponse.ok) {
+        throw new Error(settingsResponse.error.message)
+      }
+      const settings = (
+        (settingsResponse as RpcSuccess).result as {
+          settings?: MobileNewTabAgentSettings
+        }
+      ).settings
+      if (!repoResponse.ok) {
+        throw new Error(repoResponse.error.message)
+      }
+      const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
+      if (!repoId) {
+        throw new Error('worktree_repo_missing')
+      }
+      const repos =
+        ((repoResponse as RpcSuccess).result as { repos?: RuntimeRepoSummary[] }).repos ?? []
+      const repo = repos.find((candidate) => candidate.id === repoId)
+      if (!repo) {
+        throw new Error('worktree_repo_not_found')
+      }
+      const connectionId = repo.connectionId?.trim() || null
+      const detectedResponse = connectionId
+        ? await client.sendRequest('preflight.detectRemoteAgents', { connectionId })
+        : await client.sendRequest('preflight.detectAgents')
+      if (!detectedResponse.ok) {
+        throw new Error(detectedResponse.error.message)
+      }
+      if (stale) {
+        return
+      }
+      const detectedAgentIds = (detectedResponse as RpcSuccess).result as unknown[]
+      setCreateTabAgentOptions(buildMobileNewTabAgentOptions(settings, detectedAgentIds))
+      setCreateTabAgentLoadState('loaded')
+    })().catch(() => {
+      if (!stale) {
+        setCreateTabAgentOptions([])
+        setCreateTabAgentLoadState('error')
+      }
+    })
+
+    return () => {
+      stale = true
+    }
+  }, [client, connState, showCreateTabDrawer, worktreeId])
+
+  async function handleCreateTerminal(agent?: MobileNewTabAgentOption['agent']) {
     if (!client || creating) return
 
     setCreating(true)
@@ -2664,7 +2758,8 @@ export default function SessionScreen() {
     try {
       const response = await client.sendRequest('session.tabs.createTerminal', {
         worktree: `id:${worktreeId}`,
-        afterTabId: activeSessionTabId ?? undefined
+        afterTabId: activeSessionTabId ?? undefined,
+        ...(agent ? { agent } : {})
       })
       if (response.ok) {
         const result = (response as RpcSuccess).result as TerminalCreateResult
@@ -2996,6 +3091,47 @@ export default function SessionScreen() {
     opacity: toastOpacityRef.current,
     transform: [{ translateY: -keyboardLift }]
   }
+  const createTabAgentActions =
+    createTabAgentLoadState === 'loading'
+      ? [
+          {
+            label: 'Detecting Agents',
+            icon: Bot,
+            disabled: true,
+            loading: true,
+            onPress: () => {}
+          }
+        ]
+      : createTabAgentOptions.length > 0
+        ? createTabAgentOptions.map((option) => ({
+            label: option.label,
+            hint: 'Agent preset',
+            icon: Bot,
+            onPress: () => {
+              setShowCreateTabDrawer(false)
+              void handleCreateTerminal(option.agent)
+            }
+          }))
+        : createTabAgentLoadState === 'loaded'
+          ? [
+              {
+                label: 'No Enabled Agents',
+                icon: Bot,
+                disabled: true,
+                onPress: () => {}
+              }
+            ]
+          : createTabAgentLoadState === 'error'
+            ? [
+                {
+                  label: 'Agent Presets Unavailable',
+                  hint: 'Check the host connection',
+                  icon: Bot,
+                  disabled: true,
+                  onPress: () => {}
+                }
+              ]
+            : []
 
   return (
     <View style={styles.container}>
@@ -3555,7 +3691,8 @@ export default function SessionScreen() {
               setShowCreateTabDrawer(false)
               void handleCreateMarkdownNote()
             }
-          }
+          },
+          ...createTabAgentActions
         ]}
         onClose={() => setShowCreateTabDrawer(false)}
       />

@@ -195,7 +195,7 @@ export const Check = BrowserTarget.extend({
   checked: z
     .unknown()
     .optional()
-    .transform((v) => v !== false)
+    .transform((v) => (v === undefined ? true : v))
     .pipe(z.boolean())
 })
 

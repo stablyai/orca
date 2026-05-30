@@ -61,7 +61,7 @@ function listCodexSessionJsonlFiles(rootPath: string): string[] {
     for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
       const childPath = join(rootPath, entry.name)
       if (entry.isDirectory()) {
-        files.push(...listCodexSessionJsonlFiles(childPath))
+        appendSessionFilePaths(files, listCodexSessionJsonlFiles(childPath))
         continue
       }
       if (entry.isFile() && entry.name.endsWith('.jsonl')) {
@@ -72,6 +72,14 @@ function listCodexSessionJsonlFiles(rootPath: string): string[] {
     console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
   }
   return files.sort()
+}
+
+function appendSessionFilePaths(target: string[], source: readonly string[]): void {
+  // Why: existing Codex homes can accumulate enough nested sessions to exceed
+  // V8's argument limit if child arrays are spread into push().
+  for (const filePath of source) {
+    target.push(filePath)
+  }
 }
 
 function linkSystemCodexSessionFile(

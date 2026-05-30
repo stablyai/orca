@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, BookOpen, Clock, FolderOpen, Loader2, RefreshCw, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +15,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
@@ -181,22 +182,30 @@ export default function SkillsPage(): React.JSX.Element {
     sourceKind: 'all',
     provider: 'all'
   })
+  const mountedRef = useMountedRef()
 
-  const loadSkills = async (): Promise<void> => {
+  const loadSkills = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
-      setResult(await window.api.skills.discover())
+      const nextResult = await window.api.skills.discover()
+      if (mountedRef.current) {
+        setResult(nextResult)
+      }
     } catch (error) {
       console.error('Failed to discover skills:', error)
-      toast.error('Could not scan local skills')
+      if (mountedRef.current) {
+        toast.error('Could not scan local skills')
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
-  }
+  }, [mountedRef])
 
   useEffect(() => {
     void loadSkills()
-  }, [])
+  }, [loadSkills])
 
   useEffect(() => {
     const hasVisibleOverlay = (): boolean =>

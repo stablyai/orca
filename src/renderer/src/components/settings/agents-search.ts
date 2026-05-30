@@ -18,6 +18,8 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'agent',
       'default',
       'claude',
+      'openclaude',
+      'open claude',
       'codex',
       'opencode',
       'pi',

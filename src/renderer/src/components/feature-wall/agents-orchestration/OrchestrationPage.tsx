@@ -96,8 +96,10 @@ export function OrchestrationPage(props: {
 
   useEffect(() => {
     if (active && displayedChildCount >= 2) {
-      requestAnimationFrame(() => drawArrow())
+      const frameId = requestAnimationFrame(() => drawArrow())
+      return () => cancelAnimationFrame(frameId)
     }
+    return undefined
   }, [active, displayedChildCount, drawArrow])
 
   useEffect(() => {
@@ -129,14 +131,24 @@ export function OrchestrationPage(props: {
       setRowPending({})
       setCreatedChildCount(2)
       pendingMirror.current = {}
-      requestAnimationFrame(() => drawArrow())
-      return
+      const frameId = requestAnimationFrame(() => drawArrow())
+      return () => cancelAnimationFrame(frameId)
     }
 
     let cancelled = false
     const timeouts: number[] = []
+    const frames = new Set<number>()
     const later = (fn: () => void, ms: number): void => {
       timeouts.push(window.setTimeout(() => !cancelled && fn(), ms))
+    }
+    const nextFrame = (fn: () => void): void => {
+      const frameId = requestAnimationFrame(() => {
+        frames.delete(frameId)
+        if (!cancelled) {
+          fn()
+        }
+      })
+      frames.add(frameId)
     }
 
     const clearArrows = (): void => {
@@ -178,7 +190,7 @@ export function OrchestrationPage(props: {
         '<path d="M3 7l9 6 9-6"/></svg>'
       layer.appendChild(bubble)
       void bubble.offsetWidth
-      requestAnimationFrame(() => bubble.classList.add('in-flight'))
+      nextFrame(() => bubble.classList.add('in-flight'))
 
       later(() => {
         // Reveal the recipient agent on landing — that's the moment work
@@ -249,6 +261,8 @@ export function OrchestrationPage(props: {
     return () => {
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))
+      frames.forEach((id) => cancelAnimationFrame(id))
+      frames.clear()
       window.removeEventListener('resize', onResize)
       if (cleanupLayer) {
         cleanupLayer.innerHTML = ''
