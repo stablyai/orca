@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
 
-const { spawnMock } = vi.hoisted(() => ({
+const { httpsGetMock, spawnMock } = vi.hoisted(() => ({
+  httpsGetMock: vi.fn(),
   spawnMock: vi.fn()
 }))
 
@@ -21,6 +22,11 @@ vi.mock('child_process', async () => {
   return { ...(actual as Record<string, unknown>), spawn: spawnMock }
 })
 
+vi.mock('https', async () => {
+  const actual = await vi.importActual('https')
+  return { ...(actual as Record<string, unknown>), get: httpsGetMock }
+})
+
 type ModelManagerInternals = {
   verifyArchiveSha256: (archivePath: string, expectedSha256: string) => Promise<void>
   downloadFile: (
@@ -28,7 +34,8 @@ type ModelManagerInternals = {
     dest: string,
     expectedSize: number,
     modelId: string,
-    isAborted: () => boolean
+    isAborted: () => boolean,
+    signal?: AbortSignal
   ) => Promise<void>
   extractArchive: (
     archivePath: string,
@@ -40,6 +47,7 @@ type ModelManagerInternals = {
 
 describe('ModelManager', () => {
   beforeEach(() => {
+    httpsGetMock.mockReset()
     spawnMock.mockReset()
   })
 
@@ -80,6 +88,54 @@ describe('ModelManager', () => {
           () => false
         )
       ).rejects.toThrow(/HTTPS/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('aborts an in-flight model download request when cancelled', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manifest = SPEECH_MODEL_CATALOG[0]
+      const errorHandlers: ((err: Error) => void)[] = []
+      const request = {
+        destroy: vi.fn((err?: Error) => {
+          queueMicrotask(() => {
+            for (const handler of errorHandlers) {
+              handler(err ?? new Error('destroyed'))
+            }
+          })
+          return request
+        }),
+        on: vi.fn((event: string, cb: (err: Error) => void) => {
+          if (event === 'error') {
+            errorHandlers.push(cb)
+          }
+          return request
+        })
+      }
+      httpsGetMock.mockImplementation(
+        (
+          _url: URL,
+          options: { signal?: AbortSignal } | ((response: unknown) => void),
+          _cb?: (response: unknown) => void
+        ) => {
+          if (typeof options !== 'function') {
+            options.signal?.addEventListener('abort', () => request.destroy(new Error('Aborted')), {
+              once: true
+            })
+          }
+          return request
+        }
+      )
+      const manager = new ModelManager(dir)
+
+      const download = manager.downloadModel(manifest.id)
+      manager.cancelDownload(manifest.id)
+      await expect(download).resolves.toBeUndefined()
+
+      expect(request.destroy).toHaveBeenCalledWith(expect.any(Error))
+      expect((await manager.getModelState(manifest.id)).status).toBe('not-downloaded')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

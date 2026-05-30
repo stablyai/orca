@@ -1046,6 +1046,8 @@ export function registerWorktreeHandlers(
         const canonicalWorktreePath = registeredWorktree.path
         const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
 
+        let shouldTearDownPtys = true
+
         // Run archive hook before removal so teardown scripts still see the worktree directory.
         const hooks = await getArchiveHooksForRemoval(repo)
         if (hooks?.scripts.archive && !args.skipArchive) {
@@ -1061,6 +1063,17 @@ export function registerWorktreeHandlers(
         }
 
         if (repo.connectionId) {
+          // Why: SSH deletion mirrors the local flow: hooks run while the
+          // directory is intact, then the clean check guards destructive removal.
+          if (!args.force) {
+            const { clean, stdout } = await provider!.worktreeIsClean(canonicalWorktreePath)
+            if (!clean) {
+              const error = new Error('Worktree has uncommitted or untracked changes.')
+              ;(error as Error & { stdout?: string }).stdout = stdout
+              throw error
+            }
+          }
+
           await (deleteBranch
             ? provider!.removeWorktree(canonicalWorktreePath, args.force)
             : provider!.removeWorktree(canonicalWorktreePath, args.force, { deleteBranch }))
@@ -1087,7 +1100,6 @@ export function registerWorktreeHandlers(
           await removeWorktreeSymlinks(canonicalWorktreePath, repo.symlinkPaths)
         }
 
-        let shouldTearDownPtys = true
         try {
           await assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false)
         } catch (error) {

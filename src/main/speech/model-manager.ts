@@ -113,10 +113,14 @@ export class ModelManager {
 
     const archivePath = join(this.modelsDir, `${modelId}.tar.bz2`)
     let aborted = false
+    const abortController = new AbortController()
 
     const handle: DownloadHandle = {
       abort: () => {
         aborted = true
+        // Why: a stalled HTTPS request may never deliver another data chunk;
+        // cancellation must tear down the request immediately.
+        abortController.abort()
       }
     }
     this.activeDownloads.set(modelId, handle)
@@ -127,7 +131,8 @@ export class ModelManager {
         archivePath,
         manifest.sizeBytes,
         modelId,
-        () => aborted
+        () => aborted,
+        abortController.signal
       )
 
       if (aborted) {
@@ -223,9 +228,15 @@ export class ModelManager {
     expectedSize: number,
     modelId: string,
     isAborted: () => boolean,
+    signal?: AbortSignal,
     redirectCount = 0
   ): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new Error('Aborted'))
+        return
+      }
+
       let parsedUrl: URL
       try {
         parsedUrl = new URL(url)
@@ -239,7 +250,8 @@ export class ModelManager {
         return
       }
 
-      const request = httpsGet(parsedUrl, (response: IncomingMessage) => {
+      let request: ReturnType<typeof httpsGet>
+      const onResponse = (response: IncomingMessage): void => {
         if (
           response.statusCode === 301 ||
           response.statusCode === 302 ||
@@ -278,6 +290,7 @@ export class ModelManager {
             expectedSize,
             modelId,
             isAborted,
+            signal,
             redirectCount + 1
           )
             .then(resolve)
@@ -298,8 +311,9 @@ export class ModelManager {
 
         response.on('data', (chunk: Buffer) => {
           if (isAborted()) {
+            request.destroy(new Error('Aborted'))
             response.destroy()
-            fileStream.close()
+            fileStream.destroy()
             return
           }
           downloaded += chunk.length
@@ -316,7 +330,11 @@ export class ModelManager {
             }
           })
           .catch(reject)
-      })
+      }
+
+      request = signal
+        ? httpsGet(parsedUrl, { signal }, onResponse)
+        : httpsGet(parsedUrl, onResponse)
 
       request.on('error', reject)
     })

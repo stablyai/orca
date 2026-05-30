@@ -64,6 +64,10 @@ export function isMissingUpdateManifestFailure(message: string): boolean {
   )
 }
 
+export function isReleaseAssetsPublishingFailure(message: string): boolean {
+  return message.toLowerCase().includes('latest release assets are still publishing')
+}
+
 /** Identifies update-check failures that are transient or infrastructure-related
  *  (e.g. network blips, GitHub release transitions) and should NOT be surfaced
  *  to the user as errors. */
@@ -79,7 +83,7 @@ export function isBenignCheckFailure(message: string): boolean {
   // During that window electron-updater may fail the check even though
   // nothing is wrong on the client side.
   return (
-    normalizedMessage.includes('latest release assets are still publishing') ||
+    isReleaseAssetsPublishingFailure(message) ||
     isGitHubReleaseTransitionFailure(normalizedMessage) ||
     normalizedMessage.includes('no published versions on github')
   )

@@ -36,16 +36,32 @@ export function notifyPermissionRequired(instructions: string): void {
   })
   activePermissionNotifications.add(notification)
 
-  const release = (): void => {
+  let releaseTimer: ReturnType<typeof setTimeout> | null = null
+  let released = false
+  function release(): void {
+    if (released) {
+      return
+    }
+    released = true
     activePermissionNotifications.delete(notification)
+    notification.removeListener('close', release)
+    notification.removeListener('click', onClick)
+    if (releaseTimer) {
+      clearTimeout(releaseTimer)
+      releaseTimer = null
+    }
   }
-  notification.on('close', release)
-  notification.on('click', () => {
+  function onClick(): void {
     release()
     if (process.platform === 'darwin') {
       void shell.openExternal(ACCESSIBILITY_SETTINGS_URL)
     }
-  })
-  setTimeout(release, 5 * 60 * 1000)
+  }
+  notification.on('close', release)
+  notification.on('click', onClick)
+  releaseTimer = setTimeout(release, 5 * 60 * 1000)
+  if (typeof releaseTimer.unref === 'function') {
+    releaseTimer.unref()
+  }
   notification.show()
 }

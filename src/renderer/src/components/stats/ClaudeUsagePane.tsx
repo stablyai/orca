@@ -91,10 +91,16 @@ export function ClaudeUsagePane(): React.JSX.Element {
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const setClaudeUsageScope = useAppStore((state) => state.setClaudeUsageScope)
   const setClaudeUsageRange = useAppStore((state) => state.setClaudeUsageRange)
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useEffect(() => {
     void fetchClaudeUsage()
   }, [fetchClaudeUsage])
+
+  const handleSetEnabled = (enabled: boolean): void => {
+    recordFeatureInteraction('usage-tracking')
+    void setClaudeUsageEnabled(enabled)
+  }
 
   if (!scanState?.enabled) {
     return (
@@ -111,7 +117,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
             role="switch"
             aria-checked={false}
             aria-label="Enable Claude usage analytics"
-            onClick={() => void setClaudeUsageEnabled(true)}
+            onClick={() => handleSetEnabled(true)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-muted-foreground/30 transition-colors"
           >
             <span className="pointer-events-none block size-3.5 translate-x-0.5 rounded-full bg-background shadow-sm transition-transform" />
@@ -205,7 +211,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
             role="switch"
             aria-checked={true}
             aria-label="Enable Claude usage analytics"
-            onClick={() => void setClaudeUsageEnabled(false)}
+            onClick={() => handleSetEnabled(false)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-foreground transition-colors"
           >
             <span className="pointer-events-none block size-3.5 translate-x-4 rounded-full bg-background shadow-sm transition-transform" />

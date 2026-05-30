@@ -55,7 +55,7 @@ import type {
   RuntimeMobileMarkdownRequest,
   RuntimeMobileMarkdownResponse
 } from '../shared/mobile-markdown-document'
-import type { RateLimitState } from '../shared/rate-limit-types'
+import type { RateLimitRuntimeTarget, RateLimitState } from '../shared/rate-limit-types'
 import type {
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
@@ -120,6 +120,7 @@ import type {
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { RefreshAgentsResult } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import type { AppStarSource } from '../shared/gh-star-source'
 import type {
   Automation,
   AutomationCreateInput,
@@ -140,6 +141,8 @@ import {
   type EditorSaveDirtyFilesDetail
 } from '../shared/editor-save-events'
 import {
+  ORCA_APP_RESTART_ABORTED_EVENT,
+  ORCA_APP_RESTART_STARTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
 } from '../shared/updater-renderer-events'
@@ -168,6 +171,62 @@ type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
 const nativeFileDropCallbacks: NativeFileDropCallback[] = []
 let nativeFileDropListenerRegistered = false
+
+type AppRestartPrepOptions = {
+  startedEventName: string
+  abortedEventName: string
+  continueOnSaveFailure: boolean
+  saveFailureLogPrefix: string
+}
+
+function requestDirtyEditorFileSave(): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let claimed = false
+    window.dispatchEvent(
+      new CustomEvent<EditorSaveDirtyFilesDetail>(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, {
+        detail: {
+          claim: () => {
+            claimed = true
+          },
+          resolve,
+          reject: (message) => {
+            reject(new Error(message))
+          }
+        }
+      })
+    )
+
+    // Why: restart paths can run when no editor surface is mounted. When
+    // nothing claims the request there are no in-memory editor buffers to
+    // flush, so proceed with the normal shutdown path immediately.
+    if (!claimed) {
+      resolve()
+    }
+  })
+}
+
+async function prepareRendererForAppRestart({
+  startedEventName,
+  abortedEventName,
+  continueOnSaveFailure,
+  saveFailureLogPrefix
+}: AppRestartPrepOptions): Promise<void> {
+  window.dispatchEvent(new Event(startedEventName))
+
+  try {
+    await requestDirtyEditorFileSave()
+  } catch (error) {
+    if (!continueOnSaveFailure) {
+      window.dispatchEvent(new Event(abortedEventName))
+      throw error
+    }
+    console.warn(saveFailureLogPrefix, error)
+  }
+
+  // Dispatch beforeunload now so terminal buffers are captured while panes are
+  // still mounted; update installs later bypass the ordinary close sequence.
+  window.dispatchEvent(new Event('beforeunload'))
+}
 
 const onNativeFileDrop = (_event: Electron.IpcRendererEvent, data: NativeFileDropPayload): void => {
   for (const callback of Array.from(nativeFileDropCallbacks)) {
@@ -208,9 +267,19 @@ let cachedNotificationSound: {
   audio: HTMLAudioElement
 } | null = null
 let isNotificationSoundPlaying = false
+// Why: audio.play() can reject before ended/error fires; keep a cleanup hook
+// so failed or replaced plays do not accumulate listeners on the cached Audio.
+let cleanupNotificationSoundPlayback: (() => void) | null = null
+
+function clearNotificationSoundPlaybackState(): void {
+  cleanupNotificationSoundPlayback?.()
+  cleanupNotificationSoundPlayback = null
+  isNotificationSoundPlaying = false
+}
 
 function disposeCachedNotificationSound(): void {
   if (cachedNotificationSound) {
+    clearNotificationSoundPlaybackState()
     cachedNotificationSound.audio.pause()
     cachedNotificationSound.audio.src = ''
     URL.revokeObjectURL(cachedNotificationSound.blobUrl)
@@ -358,6 +427,20 @@ const api = {
     getFeatureWallAssetBaseUrl: (): Promise<string> =>
       ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
     relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch'),
+    restart: async (): Promise<void> => {
+      await prepareRendererForAppRestart({
+        startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
+        abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
+        continueOnSaveFailure: false,
+        saveFailureLogPrefix: '[app-restart] Saving dirty files before restart failed:'
+      })
+      try {
+        return await ipcRenderer.invoke('app:restart')
+      } catch (error) {
+        window.dispatchEvent(new Event(ORCA_APP_RESTART_ABORTED_EVENT))
+        throw error
+      }
+    },
     reload: (): Promise<void> => ipcRenderer.invoke('app:reload'),
     // Why: on macOS this returns AppleCurrentKeyboardLayoutInputSourceID so
     // the renderer's keyboard-layout probe can distinguish Polish Pro / US
@@ -379,7 +462,8 @@ const api = {
   },
 
   wsl: {
-    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable')
+    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable'),
+    listDistros: (): Promise<string[]> => ipcRenderer.invoke('wsl:listDistros')
   },
 
   pwsh: {
@@ -453,6 +537,37 @@ const api = {
       ipcRenderer.on('repos:changed', listener)
       return () => ipcRenderer.removeListener('repos:changed', listener)
     }
+  },
+
+  projectGroups: {
+    list: (): Promise<unknown[]> => ipcRenderer.invoke('projectGroups:list'),
+    create: (args: {
+      name: string
+      parentPath?: string | null
+      parentGroupId?: string | null
+      createdFrom?: 'manual' | 'folder-scan' | 'migration'
+    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:create', args),
+    update: (args: { groupId: string; updates: Record<string, unknown> }): Promise<unknown> =>
+      ipcRenderer.invoke('projectGroups:update', args),
+    delete: (args: { groupId: string }): Promise<boolean> =>
+      ipcRenderer.invoke('projectGroups:delete', args),
+    moveProject: (args: {
+      projectId: string
+      groupId: string | null
+      order?: number
+    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:moveProject', args),
+    scanNested: (args: {
+      path: string
+      connectionId?: string
+      options?: Record<string, unknown>
+    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:scanNested', args),
+    importNested: (args: {
+      parentPath: string
+      groupName: string
+      projectPaths: string[]
+      connectionId?: string
+      mode: 'group' | 'separate'
+    }): Promise<unknown> => ipcRenderer.invoke('projectGroups:importNested', args)
   },
 
   sparsePresets: {
@@ -886,6 +1001,7 @@ const api = {
       limit?: number
       query?: string
       before?: string
+      noCache?: boolean
     }): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> =>
       ipcRenderer.invoke('gh:listWorkItems', args),
 
@@ -957,6 +1073,15 @@ const api = {
       prRepo?: { owner: string; repo: string } | null
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:mergePR', args),
+
+    setPRAutoMerge: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      enabled: boolean
+      prRepo?: { owner: string; repo: string } | null
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:setPRAutoMerge', args),
 
     updatePRState: (args: {
       repoPath: string
@@ -1049,7 +1174,8 @@ const api = {
     },
 
     checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
-    starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca'),
+    starOrca: (source: AppStarSource): Promise<boolean> =>
+      ipcRenderer.invoke('gh:starOrca', source),
 
     // Why: rate_limit is exempt from rate-limit accounting, but we still pass
     // `force` through so callers can bust the 30s in-process cache after a
@@ -1161,6 +1287,10 @@ const api = {
       workspaceId?: string
       parentIssueId?: string
       projectId?: string | null
+      stateId?: string
+      priority?: number
+      assigneeId?: string | null
+      labelIds?: string[]
     }): Promise<
       | { ok: true; id: string; identifier: string; title: string; url: string }
       | { ok: false; error: string }
@@ -1294,24 +1424,32 @@ const api = {
 
   codexAccounts: {
     list: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:list'),
-    add: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:add'),
+    add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('codexAccounts:add', args),
     reauthenticate: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:reauthenticate', args),
     remove: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:remove', args),
-    select: (args: { accountId: string | null }): Promise<unknown> =>
-      ipcRenderer.invoke('codexAccounts:select', args)
+    select: (args: {
+      accountId: string | null
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:select', args)
   },
 
   claudeAccounts: {
     list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
-    add: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:add'),
+    add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:add', args),
     reauthenticate: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeAccounts:reauthenticate', args),
     remove: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeAccounts:remove', args),
-    select: (args: { accountId: string | null }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeAccounts:select', args)
+    select: (args: {
+      accountId: string | null
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:select', args)
   },
 
   cli: {
@@ -1377,10 +1515,12 @@ const api = {
       }
       linear: { connected: boolean }
     }> => ipcRenderer.invoke('preflight:check', args),
-    detectAgents: (args?: { wslDistro?: string | null }): Promise<string[]> =>
+    detectAgents: (args?: { wslDistro?: string | null; wslDefault?: boolean }): Promise<string[]> =>
       ipcRenderer.invoke('preflight:detectAgents', args),
-    refreshAgents: (args?: { wslDistro?: string | null }): Promise<RefreshAgentsResult> =>
-      ipcRenderer.invoke('preflight:refreshAgents', args),
+    refreshAgents: (args?: {
+      wslDistro?: string | null
+      wslDefault?: boolean
+    }): Promise<RefreshAgentsResult> => ipcRenderer.invoke('preflight:refreshAgents', args),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
       ipcRenderer.invoke('preflight:detectRemoteAgents', args)
   },
@@ -1441,11 +1581,21 @@ const api = {
           audio.volume = Math.min(1, Math.max(0, options.volume / 100))
         }
         isNotificationSoundPlaying = true
+        cleanupNotificationSoundPlayback?.()
         const release = (): void => {
+          cleanup()
+          if (cleanupNotificationSoundPlayback === cleanup) {
+            cleanupNotificationSoundPlayback = null
+          }
           isNotificationSoundPlaying = false
         }
-        audio.addEventListener('ended', release, { once: true })
-        audio.addEventListener('error', release, { once: true })
+        const cleanup = (): void => {
+          audio.removeEventListener('ended', release)
+          audio.removeEventListener('error', release)
+        }
+        cleanupNotificationSoundPlayback = cleanup
+        audio.addEventListener('ended', release)
+        audio.addEventListener('error', release)
         try {
           await audio.play()
         } catch {
@@ -1454,7 +1604,7 @@ const api = {
         }
         return { played: true }
       } catch {
-        isNotificationSoundPlaying = false
+        clearNotificationSoundPlaybackState()
         return { played: false, reason: 'playback-failed' }
       }
     }
@@ -1898,53 +2048,16 @@ const api = {
     download: (): Promise<void> => ipcRenderer.invoke('updater:download'),
     dismissNudge: (): Promise<void> => ipcRenderer.invoke('updater:dismissNudge'),
     quitAndInstall: async (): Promise<void> => {
-      // Why: quitAndInstall closes the BrowserWindow directly from the main
-      // process. Renderer beforeunload guards treat that like a normal window
-      // close unless we mark the updater path explicitly, and #300 introduced
-      // longer-lived editor dirty/autosave state that can otherwise veto the
-      // restart even after the update payload has been downloaded.
-      window.dispatchEvent(new Event(ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT))
-
-      // Why: we wrap the save attempt in try/catch so that a save failure
-      // (e.g., unsupported dirty files or a write error) never silently
-      // prevents the update from installing. The user already clicked
-      // "install update" — proceeding with the restart is better than
-      // leaving them stuck with no feedback.
-      try {
-        await new Promise<void>((resolve, reject) => {
-          let claimed = false
-          window.dispatchEvent(
-            new CustomEvent<EditorSaveDirtyFilesDetail>(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, {
-              detail: {
-                claim: () => {
-                  claimed = true
-                },
-                resolve,
-                reject: (message) => {
-                  reject(new Error(message))
-                }
-              }
-            })
-          )
-
-          // Why: updater installs can run when no editor surface is mounted.
-          // When nothing claims the request there are no in-memory editor buffers
-          // to flush, so proceed with the normal shutdown path immediately.
-          if (!claimed) {
-            resolve()
-          }
-        })
-      } catch (error) {
-        console.warn(
-          '[updater] Saving dirty files before quit failed; proceeding with install anyway:',
-          error
-        )
-      }
-
-      // Dispatch beforeunload to trigger terminal buffer capture before the
-      // update process bypasses the normal window close sequence (quitAndInstall
-      // removes close listeners, preventing beforeunload from firing naturally).
-      window.dispatchEvent(new Event('beforeunload'))
+      // Why: update installs must proceed even when a dirty-file auto-save
+      // fails; otherwise a downloaded update can get stuck behind hidden editor
+      // state. Manual app restart uses the same prep but aborts on save failure.
+      await prepareRendererForAppRestart({
+        startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
+        abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+        continueOnSaveFailure: true,
+        saveFailureLogPrefix:
+          '[updater] Saving dirty files before quit failed; proceeding with install anyway:'
+      })
       try {
         return await ipcRenderer.invoke('updater:quitAndInstall')
       } catch (error) {
@@ -2126,6 +2239,10 @@ const api = {
     ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
     conflictOperation: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('git:conflictOperation', args),
+    abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:abortMerge', args),
+    abortRebase: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:abortRebase', args),
     diff: (args: {
       worktreePath: string
       filePath: string
@@ -2256,6 +2373,8 @@ const api = {
   ui: {
     get: (): Promise<unknown> => ipcRenderer.invoke('ui:get'),
     set: (args: Record<string, unknown>): Promise<void> => ipcRenderer.invoke('ui:set', args),
+    recordFeatureInteraction: (id: string): Promise<unknown> =>
+      ipcRenderer.invoke('ui:recordFeatureInteraction', id),
     onOpenSettings: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openSettings', listener)
@@ -2959,6 +3078,10 @@ const api = {
   rateLimits: {
     get: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:get'),
     refresh: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refresh'),
+    refreshCodexForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
+      ipcRenderer.invoke('rateLimits:refreshCodexForTarget', target),
+    refreshClaudeForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
+      ipcRenderer.invoke('rateLimits:refreshClaudeForTarget', target),
     setPollingInterval: (ms: number): Promise<void> =>
       ipcRenderer.invoke('rateLimits:setPollingInterval', ms),
     fetchInactiveClaudeAccounts: (): Promise<void> =>

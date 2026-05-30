@@ -22,7 +22,7 @@
 import { rebuild } from '@electron/rebuild'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, globSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { platform as osPlatform } from 'node:os'
 import { resolve } from 'node:path'
 
@@ -137,20 +137,18 @@ function ensureElectronPackageInstalled() {
   }
 
   // Why: CI has observed Electron's postinstall exiting cleanly without
-  // writing path.txt; native rebuild and tests both need the binary path.
-  console.log('[rebuild] Electron package binary is missing; rerunning Electron install.')
+  // writing path.txt; use our strict installer instead of Electron's install.js
+  // so partial extracts and poisoned caches are rejected before native rebuild.
+  console.log('[rebuild] Electron package binary is missing; installing Electron package binary.')
+  resetPartialElectronInstall()
   try {
-    execFileSync(process.execPath, [require.resolve('electron/install.js')], {
-      cwd: projectDir,
-      env: {
-        ...process.env,
-        ELECTRON_SKIP_BINARY_DOWNLOAD: '',
-        force_no_cache: 'true'
-      },
-      stdio: 'inherit'
-    })
+    runElectronPackageBinaryInstall()
   } catch (/** @type {any} */ err) {
     console.error('[rebuild] Electron install retry failed:', err?.message ?? err)
+    logElectronInstallDiagnostics()
+    if (continuePostinstallWithoutElectron()) {
+      process.exit(0)
+    }
     process.exit(1)
   }
 
@@ -158,6 +156,10 @@ function ensureElectronPackageInstalled() {
     require('electron')
   } catch (/** @type {any} */ err) {
     if (!repairElectronPathFile()) {
+      logElectronInstallDiagnostics()
+      if (continuePostinstallWithoutElectron()) {
+        process.exit(0)
+      }
       console.error(
         '[rebuild] Electron package is still unavailable after retry:',
         err?.message ?? err
@@ -176,6 +178,51 @@ function ensureElectronPackageInstalled() {
   }
 }
 
+function runElectronPackageBinaryInstall() {
+  const env = { ...process.env }
+  delete env.ELECTRON_SKIP_BINARY_DOWNLOAD
+  delete env.npm_config_electron_skip_binary_download
+
+  const result = spawnSync(
+    process.execPath,
+    ['config/scripts/install-electron-package-binary.mjs'],
+    {
+      cwd: projectDir,
+      env,
+      stdio: 'inherit'
+    }
+  )
+
+  if (result.error) {
+    throw result.error
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `config/scripts/install-electron-package-binary.mjs exited with status ${result.status}`
+    )
+  }
+}
+
+function resetPartialElectronInstall() {
+  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+  // Why: Electron's installer can leave a partial dist/ tree behind after
+  // skipped or interrupted postinstall runs; retry from a clean target.
+  rmSync(resolve(electronPackageDir, 'dist'), { recursive: true, force: true })
+  rmSync(resolve(electronPackageDir, 'path.txt'), { force: true })
+}
+
+function continuePostinstallWithoutElectron() {
+  if (!isPostinstall() || process.env.ORCA_STRICT_ELECTRON_INSTALL === '1') {
+    return false
+  }
+  console.error(
+    '[rebuild] Continuing postinstall because Electron binary installation failed. ' +
+      'Electron-consuming package scripts and release jobs run ' +
+      'config/scripts/ensure-native-runtime.mjs --runtime=electron before launching Electron.'
+  )
+  return true
+}
+
 function repairElectronPathFile() {
   const electronPackageDir = resolve(projectDir, 'node_modules/electron')
   const platformPath = getElectronPlatformPath()
@@ -192,6 +239,27 @@ function repairElectronPathFile() {
   writeFileSync(resolve(electronPackageDir, 'path.txt'), platformPath)
   console.log(`[rebuild] Repaired Electron path.txt -> ${platformPath}`)
   return true
+}
+
+function logElectronInstallDiagnostics() {
+  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+  const electronDistDir = resolve(electronPackageDir, 'dist')
+  const pathFile = resolve(electronPackageDir, 'path.txt')
+  console.error('[rebuild] Electron install diagnostics:')
+  console.error(`  packageDir=${electronPackageDir} exists=${existsSync(electronPackageDir)}`)
+  console.error(`  distDir=${electronDistDir} exists=${existsSync(electronDistDir)}`)
+  console.error(`  pathFile=${pathFile} exists=${existsSync(pathFile)}`)
+  if (existsSync(electronDistDir)) {
+    console.error(`  distEntries=${safeReaddir(electronDistDir).join(', ')}`)
+  }
+}
+
+function safeReaddir(targetPath) {
+  try {
+    return readdirSync(targetPath).slice(0, 20)
+  } catch {
+    return []
+  }
 }
 
 function getElectronPlatformPath() {

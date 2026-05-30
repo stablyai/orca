@@ -17,6 +17,7 @@ type OnboardingInlineCommandTerminalProps = {
   ariaLabel: string
   terminalHeightPx?: number
   terminalTopMarginPx?: number
+  descriptionPaddingClassName?: string
   autoScrollIntoView?: boolean
   worktreeId?: string
   onOpened?: () => void
@@ -30,6 +31,7 @@ export function OnboardingInlineCommandTerminal({
   ariaLabel,
   terminalHeightPx = 280,
   terminalTopMarginPx = 20,
+  descriptionPaddingClassName = 'px-4 py-3',
   autoScrollIntoView = true,
   worktreeId = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
   onOpened,
@@ -65,15 +67,16 @@ export function OnboardingInlineCommandTerminal({
 
   useEffect(() => {
     const tab = createTab(worktreeId, undefined, undefined, {
-      activate: false
+      activate: false,
+      recordInteraction: false
     })
     setActiveTabForWorktree(worktreeId, tab.id)
-    setTabCustomTitle(tab.id, title)
+    setTabCustomTitle(tab.id, title, { recordInteraction: false })
     setTabId(tab.id)
     return () => {
       // Why: inline setup panels can disappear after detection succeeds; close
       // the backing tab so installer shells do not keep running invisibly.
-      closeTab(tab.id)
+      closeTab(tab.id, { recordInteraction: false })
     }
   }, [closeTab, createTab, setActiveTabForWorktree, setTabCustomTitle, title, worktreeId])
 
@@ -224,7 +227,7 @@ export function OnboardingInlineCommandTerminal({
         className="min-h-0 overflow-hidden rounded-xl border border-border bg-card"
       >
         {description ? (
-          <div className="border-b border-border px-4 py-3">
+          <div className={`border-b border-border ${descriptionPaddingClassName}`}>
             <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
           </div>
         ) : null}
@@ -241,8 +244,8 @@ export function OnboardingInlineCommandTerminal({
               cwd={cwd}
               isActive
               isVisible
-              onPtyExit={() => closeTab(tabId)}
-              onCloseTab={() => closeTab(tabId)}
+              onPtyExit={() => closeTab(tabId, { recordInteraction: false })}
+              onCloseTab={() => closeTab(tabId, { recordInteraction: false })}
             />
           ) : (
             <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">

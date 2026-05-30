@@ -193,23 +193,35 @@ describe('fetchNewerReleaseTag', () => {
     expect(await fetchNewerReleaseTags('1.3.51-rc.6', 2)).toEqual(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
   })
 
-  it('skips feed tags whose platform updater manifest is missing', async () => {
+  it('reports not-ready with last-good when newer platform updater manifests are missing', async () => {
     respondWithAtom(
       ['v1.4.1-rc.4', 'v1.4.1-rc.3', 'v1.4.1-rc.2', 'v1.4.1-rc.1'],
       ['v1.4.1-rc.4', 'v1.4.1-rc.3']
     )
 
-    const { fetchNewerReleaseTags } = await import('./updater-prerelease-feed')
+    const { fetchNewerReleaseTag, fetchNewerReleaseTagsWithReadiness } =
+      await import('./updater-prerelease-feed')
 
-    expect(await fetchNewerReleaseTags('1.4.1-rc.1', 2)).toEqual(['v1.4.1-rc.2', 'v1.4.1-rc.1'])
+    expect(await fetchNewerReleaseTag('1.4.1-rc.1')).toBeNull()
+    expect(await fetchNewerReleaseTagsWithReadiness('1.4.1-rc.1', 2)).toEqual({
+      tags: [],
+      state: 'not-ready',
+      lastGoodTag: 'v1.4.1-rc.2'
+    })
   })
 
-  it('skips feed tags whose manifest asset is not reachable yet', async () => {
+  it('reports not-ready with last-good when newer manifest assets are not reachable yet', async () => {
     respondWithAtom(['v1.4.3', 'v1.4.2', 'v1.4.1'], [], ['v1.4.3'])
 
-    const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
+    const { fetchNewerReleaseTag, fetchNewerReleaseTagsWithReadiness } =
+      await import('./updater-prerelease-feed')
 
-    expect(await fetchNewerReleaseTag('1.4.0')).toBe('v1.4.2')
+    expect(await fetchNewerReleaseTag('1.4.0')).toBeNull()
+    expect(await fetchNewerReleaseTagsWithReadiness('1.4.0', 1)).toEqual({
+      tags: [],
+      state: 'not-ready',
+      lastGoodTag: 'v1.4.2'
+    })
   })
 
   it('returns null when the only newer tag has a manifest but its asset still 404s', async () => {

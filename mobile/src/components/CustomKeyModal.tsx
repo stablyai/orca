@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -61,6 +61,7 @@ type Props = {
   visible: boolean
   onClose: () => void
   onKeysChanged: (keys: CustomKey[]) => void
+  onManageShortcuts?: () => void
 }
 
 export async function loadCustomKeys(): Promise<CustomKey[]> {
@@ -76,15 +77,19 @@ export async function saveCustomKeys(keys: CustomKey[]): Promise<void> {
   await AsyncStorage.setItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, JSON.stringify(keys))
 }
 
-export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
+export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortcuts }: Props) {
   const [step, setStep] = useState<Step>('choose-type')
   const [shortcutKey, setShortcutKey] = useState('c')
   const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(['ctrl'])
   const [macroLabel, setMacroLabel] = useState('')
   const [macroText, setMacroText] = useState('')
   const [macroEnter, setMacroEnter] = useState(true)
+  const [previousVisible, setPreviousVisible] = useState(visible)
 
-  useEffect(() => {
+  // Why: reset before the opening commit so the drawer does not flash the last
+  // custom-key draft; keep close state unchanged for the slide-out animation.
+  if (visible !== previousVisible) {
+    setPreviousVisible(visible)
     if (visible) {
       setStep('choose-type')
       setShortcutKey('c')
@@ -93,7 +98,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
       setMacroText('')
       setMacroEnter(true)
     }
-  }, [visible])
+  }
 
   const addKey = useCallback(
     async (key: Omit<CustomKey, 'id'>) => {
@@ -212,6 +217,18 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged }: Props) {
             <Text style={styles.rowLabel}>Text Macro</Text>
             <Text style={styles.rowHint}>Send custom text command</Text>
           </Pressable>
+          {onManageShortcuts ? (
+            <>
+              <View style={styles.separator} />
+              <Pressable
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                onPress={onManageShortcuts}
+              >
+                <Text style={styles.rowLabel}>Manage Shortcuts</Text>
+                <Text style={styles.rowHint}>Show or hide default shortcut keys</Text>
+              </Pressable>
+            </>
+          ) : null}
         </View>
       )}
 

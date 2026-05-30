@@ -73,6 +73,43 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
+diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
+index ccc111c9e03a4a661ccfd5d8e8f0ee699571b5dd..f92c6bef7d46dc35c941c87ef186aa46d8ed9c44 100644
+--- a/lib/conpty_console_list_agent.js
++++ b/lib/conpty_console_list_agent.js
+@@ -9,7 +9,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
+ var utils_1 = require("./utils");
+ var getConsoleProcessList = utils_1.loadNativeModule('conpty_console_list').module.getConsoleProcessList;
+ var shellPid = parseInt(process.argv[2], 10);
+-var consoleProcessList = getConsoleProcessList(shellPid);
++var consoleProcessList;
++try {
++    consoleProcessList = getConsoleProcessList(shellPid);
++}
++catch (_a) {
++    // Why: AttachConsole can fail after the shell exits; parent already has this fallback.
++    consoleProcessList = [shellPid];
++}
+ process.send({ consoleProcessList: consoleProcessList });
+ process.exit(0);
+ //# sourceMappingURL=conpty_console_list_agent.js.map
+diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
+index f6a653893e0b9b548c514db29d75599538ee1acb..1d5400489f200ef0161ca687e672e1cc02d29c95 100644
+--- a/src/conpty_console_list_agent.ts
++++ b/src/conpty_console_list_agent.ts
+@@ -11,5 +11,11 @@ import { loadNativeModule } from './utils';
+ const getConsoleProcessList = loadNativeModule('conpty_console_list').module.getConsoleProcessList;
+ const shellPid = parseInt(process.argv[2], 10);
+-const consoleProcessList = getConsoleProcessList(shellPid);
++let consoleProcessList: number[];
++try {
++  consoleProcessList = getConsoleProcessList(shellPid);
++} catch {
++  // Why: AttachConsole can fail after the shell exits; parent already has this fallback.
++  consoleProcessList = [shellPid];
++}
+ process.send!({ consoleProcessList });
+ process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
 index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca850564e6368d9 100644
 --- a/src/unix/pty.cc

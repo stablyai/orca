@@ -17,6 +17,7 @@ import {
   isBenignCheckFailure,
   isMissingUpdateManifestFailure,
   isPrereleaseVersion,
+  isReleaseAssetsPublishingFailure,
   statusesEqual
 } from './updater-fallback'
 import {
@@ -54,10 +55,14 @@ let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 let _getLastUpdateCheckAt: (() => number | null) | null = null
 let backgroundCheckLaunchPending = false
+// Why: a manually promoted background check can emit an error event before the
+// paired promise catch runs; keep the promotion attached to that launch.
+let backgroundCheckPromotedToUserInitiated = false
 let activeUpdateNudgeId: string | null = null
 let awaitingNudgeCheckOutcome = false
 let nudgeCheckInFlight = false
 let lastNudgeCheckAt = 0
+let publishingWindowLastGoodCheck: { lastGoodTag: string } | null = null
 let pendingPrereleaseFallback: {
   primaryTag: string
   fallbackTag: string
@@ -108,6 +113,19 @@ function clearPendingUpdateNudge(): void {
   _setPendingUpdateNudgeId?.(null)
 }
 
+function deferPendingUpdateNudgeUntilRetry(): void {
+  activeUpdateNudgeId = null
+  awaitingNudgeCheckOutcome = false
+}
+
+function clearPublishingWindowLastGoodCheck(): void {
+  publishingWindowLastGoodCheck = null
+}
+
+function getPublishingWindowLastGoodCheck(): { lastGoodTag: string } | null {
+  return publishingWindowLastGoodCheck
+}
+
 function getPersistedPendingUpdateNudgeId(): string | null {
   return _getPendingUpdateNudgeId?.() ?? null
 }
@@ -126,28 +144,55 @@ function decorateStatusWithActiveNudge(status: UpdateStatus): UpdateStatus {
 }
 
 function sendStatus(status: UpdateStatus): void {
+  const shouldPreserveNudgeForPublishingWindow =
+    publishingWindowLastGoodCheck !== null &&
+    (status.state === 'idle' ||
+      status.state === 'not-available' ||
+      status.state === 'available' ||
+      status.state === 'error')
   if (awaitingNudgeCheckOutcome) {
     if (status.state === 'available') {
-      awaitingNudgeCheckOutcome = false
+      if (shouldPreserveNudgeForPublishingWindow) {
+        // Why: a last-good available update is only a temporary fallback; don't
+        // let dismissing that card consume the newest-release nudge campaign.
+        deferPendingUpdateNudgeUntilRetry()
+      } else {
+        awaitingNudgeCheckOutcome = false
+      }
     } else if (
       status.state === 'idle' ||
       status.state === 'not-available' ||
       status.state === 'error'
     ) {
-      // Why: when a nudge-triggered check finds no update (or errors out),
-      // move the campaign to dismissed so it doesn't re-fire on the next
-      // poll cycle. Without this, a nudge whose version range includes
-      // already-up-to-date users would loop every 30 minutes, each time
-      // triggering a redundant checkForUpdates() and clearing the persisted
-      // dismissedUpdateVersion.
-      if (activeUpdateNudgeId) {
-        _setDismissedUpdateNudgeId?.(activeUpdateNudgeId)
+      if (shouldPreserveNudgeForPublishingWindow) {
+        // Why: last-good checks can legitimately say "not available" while
+        // the campaign's newest release is still publishing.
+        deferPendingUpdateNudgeUntilRetry()
+      } else {
+        // Why: when a nudge-triggered check finds no update (or errors out),
+        // move the campaign to dismissed so it doesn't re-fire on the next
+        // poll cycle. Without this, a nudge whose version range includes
+        // already-up-to-date users would loop every 30 minutes, each time
+        // triggering a redundant checkForUpdates() and clearing the persisted
+        // dismissedUpdateVersion.
+        if (activeUpdateNudgeId) {
+          _setDismissedUpdateNudgeId?.(activeUpdateNudgeId)
+        }
+        clearPendingUpdateNudge()
       }
-      clearPendingUpdateNudge()
     }
   }
 
   const decoratedStatus = decorateStatusWithActiveNudge(status)
+
+  if (
+    status.state === 'idle' ||
+    status.state === 'not-available' ||
+    status.state === 'available' ||
+    status.state === 'error'
+  ) {
+    clearPublishingWindowLastGoodCheck()
+  }
 
   // Why: reset the in-flight guard when the status moves past the
   // window where duplicate download() calls are possible.
@@ -299,6 +344,12 @@ async function sendCheckFailureStatus(
         // actionable cause.
         sendErrorStatus("Couldn't reach the update server. Try again in a few minutes.", true)
       } else {
+        if (isReleaseAssetsPublishingFailure(message)) {
+          // Why: a nudge-triggered check can land during the brief window where
+          // GitHub exposes a release before its updater assets are reachable.
+          // Keep the campaign pending so the short retry can still show it.
+          deferPendingUpdateNudgeUntilRetry()
+        }
         sendStatus({ state: 'idle' })
       }
       return
@@ -468,6 +519,7 @@ async function pinDefaultReleaseFeed(): Promise<void> {
   // the updater on a user's machine when something goes wrong. Cheap to keep,
   // invaluable when triaging.
   if (newerTag) {
+    clearPublishingWindowLastGoodCheck()
     const url = getReleaseDownloadUrl(newerTag)
     console.info(
       `[updater] release feed pinned: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
@@ -475,12 +527,25 @@ async function pinDefaultReleaseFeed(): Promise<void> {
     autoUpdater.setFeedURL({ provider: 'generic', url })
   } else if (releaseTagsResult.state === 'not-ready') {
     clearPrereleaseFallbackContext()
+    if (releaseTagsResult.lastGoodTag) {
+      // Why: during a publish window the newest tag is unsafe, but a verified
+      // last-good concrete feed lets electron-updater emit a real result.
+      const url = getReleaseDownloadUrl(releaseTagsResult.lastGoodTag)
+      console.info(
+        `[updater] release feed pinned to last-good: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
+      )
+      publishingWindowLastGoodCheck = { lastGoodTag: releaseTagsResult.lastGoodTag }
+      autoUpdater.setFeedURL({ provider: 'generic', url })
+      return
+    }
+    clearPublishingWindowLastGoodCheck()
     console.info(
       `[updater] release feed deferred: current=${currentVersion} includePrerelease=${includePrerelease}; newest release assets are still publishing`
     )
     throw new Error('Latest release assets are still publishing')
   } else {
     clearPrereleaseFallbackContext()
+    clearPublishingWindowLastGoodCheck()
     const url = 'https://github.com/stablyai/orca/releases/latest/download'
     console.info(
       `[updater] release feed fallback: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
@@ -558,14 +623,21 @@ function runBackgroundUpdateCheck(
   // currentStatus flips to 'checking'. Track the launch in memory to dedupe
   // that gap without persisting a successful-check timestamp before the result.
   backgroundCheckLaunchPending = true
+  backgroundCheckPromotedToUserInitiated = false
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
   const autoUpdater = getAutoUpdater()
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
   const run = pinDefaultReleaseFeed().then(launch)
   void Promise.resolve(run).catch((err) => {
+    const wasUserInitiated =
+      userInitiatedCheck || backgroundCheckPromotedToUserInitiated || undefined
     backgroundCheckLaunchPending = false
-    void sendCheckFailureStatus(String(err?.message ?? err), undefined, 'promise', err)
+    backgroundCheckPromotedToUserInitiated = false
+    if (wasUserInitiated) {
+      userInitiatedCheck = false
+    }
+    void sendCheckFailureStatus(String(err?.message ?? err), wasUserInitiated, 'promise', err)
   })
 }
 
@@ -612,13 +684,20 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
     enableIncludePrerelease()
   }
 
+  const checkAlreadyInFlight = backgroundCheckLaunchPending || currentStatus.state === 'checking'
   userInitiatedCheck = true
   // Why: a manual check is independent of any active nudge campaign. Reset the
   // nudge marker so the resulting status is not decorated with activeNudgeId,
   // which would cause a later dismiss to consume the campaign by accident.
   activeUpdateNudgeId = null
-  // Don't send 'checking' here — the 'checking-for-update' event handler does it,
-  // and sending it from both places causes duplicate notifications (issue #35).
+  // Why: manual checks should visibly respond before feed pinning or the
+  // electron-updater event fires; duplicate event broadcasts are suppressed by
+  // status equality below.
+  sendStatus({ state: 'checking', userInitiated: true })
+  if (checkAlreadyInFlight) {
+    backgroundCheckPromotedToUserInitiated = true
+    return
+  }
 
   const autoUpdater = getAutoUpdater()
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
@@ -809,6 +888,7 @@ export function setupAutoUpdater(
     clearAvailableUpdateContext,
     consumeMissingManifestPrereleaseFallbackResult,
     getMissingManifestPrereleaseFallbackUserInitiated,
+    getPublishingWindowLastGoodCheck,
     getCurrentStatus: () => currentStatus,
     getKnownReleaseUrl,
     getPendingInstallVersion,

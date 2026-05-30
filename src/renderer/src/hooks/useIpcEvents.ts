@@ -76,6 +76,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import {
   createFloatingWorkspaceTerminalTab,
+  isEmptyFloatingWorkspacePanelVisible,
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
@@ -592,7 +593,9 @@ export function useIpcEvents(): void {
           // selected server instead of local-disk changes.
           return
         }
-        useAppStore.getState().fetchRepos()
+        const state = useAppStore.getState()
+        void state.fetchProjectGroups()
+        void state.fetchRepos()
       })
     )
 
@@ -938,7 +941,7 @@ export function useIpcEvents(): void {
             // the runtime's stored title would otherwise silently overwrite on
             // every focus.
             if (title && !reusedTab) {
-              store.setTabCustomTitle(tab.id, title)
+              store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
             }
             if (leafId && ptyId) {
               if (splitFromLeafId) {
@@ -1055,7 +1058,7 @@ export function useIpcEvents(): void {
             worktreeId,
             data.targetGroupId,
             undefined,
-            shouldActivate ? undefined : { activate: false }
+            shouldActivate ? undefined : { activate: false, recordInteraction: false }
           )
           if (data.afterTabId) {
             const createdUnifiedTab = useAppStore
@@ -1079,7 +1082,9 @@ export function useIpcEvents(): void {
                 0,
                 createdUnifiedTab.id
               )
-              useAppStore.getState().reorderUnifiedTabs(createdUnifiedTab.groupId, order)
+              useAppStore.getState().reorderUnifiedTabs(createdUnifiedTab.groupId, order, {
+                recordInteraction: false
+              })
             }
           }
           if (shouldActivate) {
@@ -1088,7 +1093,7 @@ export function useIpcEvents(): void {
             store.revealWorktreeInSidebar(worktreeId)
           }
           if (data.title) {
-            store.setTabCustomTitle(tab.id, data.title)
+            store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })
           }
           if (data.command) {
             store.queueTabStartupCommand(tab.id, { command: data.command })
@@ -1646,6 +1651,10 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onCloseActiveTab(() => {
+        if (isEmptyFloatingWorkspacePanelVisible()) {
+          window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
+          return
+        }
         const store = useAppStore.getState()
         if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
           if (isRuntimeEnvironmentActive() && store.activeWorktreeId) {
@@ -2421,7 +2430,10 @@ function resolvePaneKey(
       owningWorktreeId
     }
   }
-  const leafExists = layout ? collectLeafIdsInOrder(layout.root).includes(leafId) : true
+  // Why: inactive worktree switches can leave the tab's layout at the empty
+  // snapshot while the tab and PTY are still live. Treat that like missing
+  // layout metadata; a non-empty layout that lacks the leaf still means closed.
+  const leafExists = layout?.root ? collectLeafIdsInOrder(layout.root).includes(leafId) : true
   if (!leafExists) {
     return {
       exists: false,

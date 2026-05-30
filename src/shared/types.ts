@@ -13,9 +13,14 @@ import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
+import type { FeatureInteractionState } from './feature-interactions'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
+import type {
+  RepoSourceControlAiOverrides,
+  SourceControlAiSettings
+} from './source-control-ai-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -100,6 +105,66 @@ export type Repo = {
    *  "what to link", the global flag is the "whether to link at all" switch.
    *  Undefined/empty means no symlinks are created for this repo. */
   symlinkPaths?: string[]
+  /** Durable sidebar-only repo organization. Execution remains repo-scoped. */
+  projectGroupId?: string | null
+  /** User-authored ordering inside the project group or ungrouped bucket. */
+  projectGroupOrder?: number
+  /** Repo-specific source-control AI overrides. Missing fields inherit global settings. */
+  sourceControlAi?: RepoSourceControlAiOverrides
+}
+
+export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
+
+export type ProjectGroup = {
+  id: string
+  name: string
+  parentPath: string | null
+  parentGroupId: string | null
+  createdFrom: ProjectGroupCreatedFrom
+  tabOrder: number
+  isCollapsed: boolean
+  color: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type NestedRepoScanOptions = {
+  maxDepth?: number
+  maxRepos?: number
+  timeoutMs?: number
+}
+
+export type NestedRepoCandidate = {
+  path: string
+  displayName: string
+  depth: number
+}
+
+export type NestedRepoScanResult = {
+  selectedPath: string
+  selectedPathKind: 'git_repo' | 'non_git_folder'
+  repos: NestedRepoCandidate[]
+  truncated: boolean
+  timedOut: boolean
+  durationMs: number
+  maxDepth: number
+}
+
+export type ProjectGroupImportMode = 'group' | 'separate'
+
+export type ProjectGroupImportProjectResult = {
+  path: string
+  projectId?: string
+  status: 'imported' | 'already-known' | 'failed'
+  error?: string
+}
+
+export type ProjectGroupImportResult = {
+  group?: ProjectGroup
+  projects: ProjectGroupImportProjectResult[]
+  importedCount: number
+  alreadyKnownCount: number
+  failedCount: number
 }
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
@@ -415,11 +480,11 @@ export type TerminalTab = {
    *  not by the user doing work. Without this flag the resulting
    *  `updateTabPtyId` call would call `bumpWorktreeActivity` and flip the
    *  sidebar's recency sort on every click — the reorder-on-click bug. The
-   *  flag is set by `setActiveWorktree` and consumed (cleared) by the first
-   *  `updateTabPtyId` that follows, which then suppresses the activity bump
-   *  and the `sortEpoch` increment. Never persisted — it is a transient
-   *  handoff between the two calls. */
-  pendingActivationSpawn?: boolean
+   *  flag is set by `setActiveWorktree` and consumed by the activation-driven
+   *  PTY lifecycle calls that follow, which then suppress activity bumps and
+   *  `sortEpoch` increments. Split layouts use a numeric count because one tab
+   *  can remount several panes. Never persisted — it is a transient handoff. */
+  pendingActivationSpawn?: boolean | number
 }
 
 export type BrowserHistoryEntry = {
@@ -629,6 +694,7 @@ export type IssueState = 'open' | 'closed'
 export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
 
 export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
+export type PRReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED'
 
 export type PRConflictSummary = {
   baseRef: string
@@ -647,6 +713,10 @@ export type PRInfo = {
   checksStatus: CheckStatus
   updatedAt: string
   mergeable: PRMergeableState
+  reviewDecision?: PRReviewDecision | null
+  autoMergeEnabled?: boolean
+  mergeQueueRequired?: boolean | null
+  mergeStateStatus?: string | null
   // Why: check-runs are keyed by the PR head commit, not the mutable branch name.
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
   // correct commit without re-querying GitHub or guessing from local branch refs.
@@ -904,12 +974,14 @@ export type GitHubWorkItem = {
   additions?: number
   deletions?: number
   changedFiles?: number
-  reviewDecision?: string | null
+  reviewDecision?: PRReviewDecision | null
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]
   assignees?: GitHubAssignableUser[]
   checksSummary?: GitHubPRCheckSummary
   mergeable?: PRMergeableState
+  autoMergeEnabled?: boolean
+  mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean
   // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
@@ -1075,6 +1147,7 @@ export type GitHubPullRequestStateUpdate = {
 export type LinearIssueUpdate = {
   stateId?: string
   title?: string
+  description?: string
   assigneeId?: string | null
   estimate?: number | null
   priority?: number
@@ -1420,6 +1493,9 @@ export type CodexManagedAccount = {
   id: string
   email: string
   managedHomePath: string
+  managedHomeRuntime?: 'host' | 'wsl'
+  wslDistro?: string | null
+  wslLinuxHomePath?: string | null
   providerAccountId?: string | null
   workspaceLabel?: string | null
   workspaceAccountId?: string | null
@@ -1431,6 +1507,8 @@ export type CodexManagedAccount = {
 export type CodexManagedAccountSummary = {
   id: string
   email: string
+  managedHomeRuntime?: 'host' | 'wsl'
+  wslDistro?: string | null
   providerAccountId?: string | null
   workspaceLabel?: string | null
   workspaceAccountId?: string | null
@@ -1442,12 +1520,21 @@ export type CodexManagedAccountSummary = {
 export type CodexRateLimitAccountsState = {
   accounts: CodexManagedAccountSummary[]
   activeAccountId: string | null
+  activeAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
+}
+
+export type CodexManagedAccountRuntimeSelection = {
+  host: string | null
+  wsl: Record<string, string | null>
 }
 
 export type ClaudeManagedAccount = {
   id: string
   email: string
   managedAuthPath: string
+  managedAuthRuntime?: 'host' | 'wsl'
+  wslDistro?: string | null
+  wslLinuxAuthPath?: string | null
   authMethod: 'subscription-oauth' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
@@ -1459,6 +1546,8 @@ export type ClaudeManagedAccount = {
 export type ClaudeManagedAccountSummary = {
   id: string
   email: string
+  managedAuthRuntime?: 'host' | 'wsl'
+  wslDistro?: string | null
   authMethod: 'subscription-oauth' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
@@ -1470,6 +1559,12 @@ export type ClaudeManagedAccountSummary = {
 export type ClaudeRateLimitAccountsState = {
   accounts: ClaudeManagedAccountSummary[]
   activeAccountId: string | null
+  activeAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
+}
+
+export type ClaudeManagedAccountRuntimeSelection = {
+  host: string | null
+  wsl: Record<string, string | null>
 }
 
 /** All AI coding agents Orca knows how to launch. Used for the agent picker in the new-workspace
@@ -1554,13 +1649,27 @@ export type TerminalQuickCommandScope =
       repoId: string
     }
 
-export type TerminalQuickCommand = {
+export type TerminalQuickCommandAction = 'terminal-command' | 'agent-prompt'
+
+export type TerminalQuickCommandBase = {
   id: string
   label: string
-  command: string
-  appendEnter: boolean
   scope?: TerminalQuickCommandScope
 }
+
+export type TerminalCommandQuickCommand = TerminalQuickCommandBase & {
+  action?: 'terminal-command'
+  command: string
+  appendEnter: boolean
+}
+
+export type TerminalAgentQuickCommand = TerminalQuickCommandBase & {
+  action: 'agent-prompt'
+  agent: TuiAgent
+  prompt: string
+}
+
+export type TerminalQuickCommand = TerminalCommandQuickCommand | TerminalAgentQuickCommand
 
 export type OpenInApplication = {
   id: string
@@ -1580,6 +1689,10 @@ export type GlobalSettings = {
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
+  /** When enabled, Orca renames a workspace's auto-generated creature branch to
+   *  a short name derived from the first prompt once work begins. Opt-in;
+   *  uses the same agent configured for AI commit messages. */
+  autoRenameBranchFromWork: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
@@ -1647,6 +1760,20 @@ export type GlobalSettings = {
    *  user's preferred shell. Defaults to 'powershell.exe' which is the
    *  modern choice for an IDE context. Only consulted on Windows. */
   terminalWindowsShell: string
+  /** Why: when WSL is the Windows default shell, users with multiple distros
+   *  need Orca to launch terminals and scan agents in the same chosen distro
+   *  instead of whatever WSL currently marks as its global default. */
+  terminalWindowsWslDistro?: string | null
+  /** Why: account/auth location is independent from the user's preferred
+   *  terminal shell. A user may default new terminals to WSL while still
+   *  inspecting or adding Windows-scoped provider accounts. */
+  localAccountRuntime: 'host' | 'wsl'
+  localAccountWslDistro?: string | null
+  /** Why: installed-agent detection is also a local environment choice. Keep
+   *  it independent so users can inspect Windows and WSL PATH state without
+   *  changing the default terminal shell. */
+  localAgentRuntime?: 'host' | 'wsl'
+  localAgentWslDistro?: string | null
   /** Why: "PowerShell" is the product-facing shell family. Auto resolves to
    *  PowerShell 7+ when present and falls back to inbox Windows PowerShell. */
   terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
@@ -1734,11 +1861,13 @@ export type GlobalSettings = {
    *  and external terminal sessions. */
   codexManagedAccounts: CodexManagedAccount[]
   activeCodexManagedAccountId: string | null
+  activeCodexManagedAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
   /** Why: Claude Code keeps conversations under one shared config root. Orca
    *  persists only per-account auth material here so switching accounts does
    *  not fork prior chat/session context the way CLAUDE_CONFIG_DIR swapping would. */
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
+  activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
   /** When true, each worktree gets its own shell history file so ArrowUp
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */
@@ -1748,6 +1877,9 @@ export type GlobalSettings = {
    *  - 'blank': blank terminal (no agent launched)
    *  - TuiAgent: a specific agent id */
   defaultTuiAgent: TuiAgent | 'blank' | null
+  /** Agents hidden from future picker and automatic launch choices. Detection
+   *  remains a raw PATH capability snapshot. */
+  disabledTuiAgents: TuiAgent[]
   /** Why: worktree deletion is destructive (git worktree remove + rm -rf of the
    *  working directory), so Orca shows a confirmation dialog by default. Users
    *  who delete frequently can opt into skipping the dialog via a "Don't ask
@@ -1839,12 +1971,22 @@ export type GlobalSettings = {
   /** One-shot migration guard for defaulting the Agents view off for all
    *  users. Once set, later explicit opt-ins persist normally. */
   experimentalActivityDefaultedOffForAllUsers?: boolean
+  /** Experimental: persistent terminal pane attention ring for terminal bell
+   *  and agent-completion events. Opt-in while the signal/noise balance is
+   *  being tested. */
+  experimentalTerminalAttention: boolean
+  /** Experimental: compact worktree cards by hiding a redundant metadata row
+   *  when the title and branch already say the same thing. */
+  experimentalCompactWorktreeCards: boolean
   /** Experimental: when creating a worktree, automatically symlink a
    *  user-configured set of files/folders from the primary checkout (e.g.
    *  `.env`, `node_modules`) into the new worktree. Opt-in while the
    *  configuration surface and edge cases (conflicts with existing paths,
    *  cleanup on worktree delete) are still being worked out. */
   experimentalWorktreeSymlinks: boolean
+  /** Experimental: replaces the New Tab menu's static preview row with a
+   *  command-style launcher for terminals, detected agents, URLs, and files. */
+  experimentalUnifiedNewTabLauncher: boolean
   /** Active non-local runtime environment for client-routed RPC. `null`
    *  preserves the current local desktop behavior. */
   activeRuntimeEnvironmentId?: string | null
@@ -1857,6 +1999,8 @@ export type GlobalSettings = {
    *  user-customizable prompt suffix. Optional so existing profiles do not
    *  require a migration step before this feature lands. */
   commitMessageAi?: CommitMessageAiSettings
+  /** Source-control AI generation settings for commit messages and hosted-review drafts. */
+  sourceControlAi?: SourceControlAiSettings
   /** GitLab project preferences — pinned + recent project paths.
    *  Optional for backward compatibility with profiles saved before
    *  GitLab support; the persistence merge fills the empty default. */
@@ -2240,6 +2384,9 @@ export type PersistedUIState = {
   /** Feature tips already surfaced to the user. Startup only opens the tips
    *  modal when this list is missing one of the current tip ids. */
   featureTipsSeenIds?: FeatureTipId[]
+  /** Local product-state facts: feature ids the user has actually used.
+   *  Used by education surfaces to avoid teaching already-discovered features. */
+  featureInteractions?: FeatureInteractionState
 }
 
 export const PET_SIZE_MIN = 60
@@ -2317,6 +2464,7 @@ export type LegacyPaneKeyAliasEntry = {
 export type PersistedState = {
   schemaVersion: number
   repos: Repo[]
+  projectGroups: ProjectGroup[]
   /** Sparse-checkout presets keyed by repoId. Empty record on first launch;
    *  presets are managed from the new-workspace composer and repo settings. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>

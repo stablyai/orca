@@ -1,8 +1,14 @@
-export type FeatureTipId = 'voice-dictation'
+import {
+  hasFeatureInteraction,
+  type FeatureInteractionId,
+  type FeatureInteractionState
+} from './feature-interactions'
+
+export type FeatureTipId = 'voice-dictation' | 'orca-cli'
 
 export type FeatureTipPriority = 'new' | 'unseen'
 
-export type FeatureTipAction = 'enable-voice'
+export type FeatureTipAction = 'enable-voice' | 'setup-cli'
 
 export type FeatureTip = {
   id: FeatureTipId
@@ -12,22 +18,37 @@ export type FeatureTip = {
   description: string
   action: FeatureTipAction
   ctaLabel: string
+  /** Feature interactions that mean this tip is no longer useful to show. */
+  completedByFeatureInteractions?: readonly FeatureInteractionId[]
 }
 
 export type CompletedFeatureTipState = {
+  cliInstalled: boolean
   voiceDictationEnabled: boolean
+  featureInteractions?: FeatureInteractionState
 }
 
 export const FEATURE_TIPS = [
   {
-    id: 'voice-dictation',
+    id: 'orca-cli',
     priority: 'new',
-    eyebrow: 'New',
+    eyebrow: 'Tip',
+    title: 'Let agents drive Orca with the Orca CLI',
+    description: 'Enable agents to coordinate child workspaces and communicate between workspaces.',
+    action: 'setup-cli',
+    ctaLabel: 'Install CLI & Skills',
+    completedByFeatureInteractions: []
+  },
+  {
+    id: 'voice-dictation',
+    priority: 'unseen',
+    eyebrow: 'Tip',
     title: 'Voice Dictation is here',
     description:
       'Speak into any focused pane and Orca will transcribe it. Press the dictation shortcut to start and stop.',
     action: 'enable-voice',
-    ctaLabel: 'Set Up Voice'
+    ctaLabel: 'Set Up Voice',
+    completedByFeatureInteractions: ['voice-dictation']
   }
 ] as const satisfies readonly FeatureTip[]
 
@@ -53,8 +74,20 @@ export function normalizeFeatureTipIds(value: unknown): FeatureTipId[] {
 
 export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<FeatureTipId> {
   const completedIds = new Set<FeatureTipId>()
+  if (state.cliInstalled) {
+    completedIds.add('orca-cli')
+  }
   if (state.voiceDictationEnabled) {
     completedIds.add('voice-dictation')
+  }
+  for (const tip of FEATURE_TIPS) {
+    if (
+      tip.completedByFeatureInteractions?.some((id) =>
+        hasFeatureInteraction(state.featureInteractions, id)
+      )
+    ) {
+      completedIds.add(tip.id)
+    }
   }
   return completedIds
 }

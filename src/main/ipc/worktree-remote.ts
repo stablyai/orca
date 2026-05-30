@@ -922,7 +922,14 @@ export async function createRemoteWorktree(
       if (!checkoutExistingBranch) {
         await unsetRemoteWorktreeCreationBase(provider, remotePath, branchName)
       }
-      await provider.removeWorktree(remotePath, true).catch(() => undefined)
+      await provider
+        .removeWorktree(remotePath, true, {
+          deleteBranch: !checkoutExistingBranch,
+          // Why: sparse setup failed before the user could work in the new
+          // branch, so rollback should remove the just-created remote branch.
+          forceBranchDelete: !checkoutExistingBranch
+        })
+        .catch(() => undefined)
       throw err
     }
   }

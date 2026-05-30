@@ -3,6 +3,7 @@ import {
   compareVersions,
   isBenignCheckFailure,
   isMissingUpdateManifestFailure,
+  isReleaseAssetsPublishingFailure,
   isPrereleaseVersion
 } from './updater-fallback'
 
@@ -46,5 +47,16 @@ describe('isMissingUpdateManifestFailure', () => {
 describe('isBenignCheckFailure', () => {
   it('treats in-progress release asset publication as retryable', () => {
     expect(isBenignCheckFailure('Latest release assets are still publishing')).toBe(true)
+  })
+})
+
+describe('isReleaseAssetsPublishingFailure', () => {
+  it('only matches the explicit release-asset publishing sentinel', () => {
+    expect(isReleaseAssetsPublishingFailure('Latest release assets are still publishing')).toBe(
+      true
+    )
+    expect(
+      isReleaseAssetsPublishingFailure('Cannot find channel "latest-mac.yml" update info: 404')
+    ).toBe(false)
   })
 })

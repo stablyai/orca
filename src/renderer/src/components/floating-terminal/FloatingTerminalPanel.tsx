@@ -729,7 +729,7 @@ export function FloatingTerminalPanel({
         context,
         terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
       }
-      const nativeEvent = event.nativeEvent ?? event
+      const nativeEvent = event.nativeEvent
       const matches = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, nativeEvent, platform, state.keybindings, matchOptions)
 
@@ -1156,7 +1156,7 @@ export function FloatingTerminalPanel({
                 className={isActive ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
                 aria-hidden={!isActive}
               >
-                <BrowserPane browserTab={tab} isActive={isActive} />
+                <BrowserPane browserTab={tab} isActive={open && isActive} />
               </div>
             )
           })}
@@ -1307,6 +1307,7 @@ function FloatingTerminalEmptyState({
   return (
     <div
       className="absolute inset-0 flex items-center justify-center"
+      data-floating-terminal-empty-state
       data-floating-terminal-shortcut-surface
       onPointerDown={onFocusPanel}
     >

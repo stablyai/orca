@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 
 type BrowserAutomationVisibilityBridge = {
   acquire: (browserPageId: string) => Promise<string | null>
@@ -75,11 +75,8 @@ export function getBrowserAutomationVisiblePageIds(browserPageIds: readonly stri
 }
 
 export function useBrowserAutomationVisiblePageIds(browserPageIds: readonly string[]): Set<string> {
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  return useMemo(
-    () => getBrowserAutomationVisiblePageIds(browserPageIds),
-    [browserPageIds, snapshot]
-  )
+  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return getBrowserAutomationVisiblePageIds(browserPageIds)
 }
 
 export function acquireBrowserAutomationVisibility(browserPageId: string): string {

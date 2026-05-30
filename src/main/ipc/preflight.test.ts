@@ -62,7 +62,13 @@ import {
   runPreflightCheck
 } from './preflight'
 
-type HandlerMap = Record<string, (_event?: unknown, args?: { force?: boolean }) => Promise<unknown>>
+type HandlerMap = Record<
+  string,
+  (
+    _event?: unknown,
+    args?: { force?: boolean; wslDistro?: string | null; wslDefault?: boolean }
+  ) => Promise<unknown>
+>
 
 describe('preflight', () => {
   const originalPlatform = process.platform
@@ -379,6 +385,30 @@ describe('preflight', () => {
     })
 
     await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
+  })
+
+  it('detects agents from the default WSL distro when requested', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'wsl.exe') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      const script = String(args[3])
+      if (script === "command -v 'codex'") {
+        return { stdout: '/home/test/.local/bin/codex\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents({ wslDefault: true })).resolves.toEqual(['codex'])
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['--', 'bash', '-lc', "command -v 'codex'"],
+      { encoding: 'utf-8', timeout: 5000 }
+    )
   })
 
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {

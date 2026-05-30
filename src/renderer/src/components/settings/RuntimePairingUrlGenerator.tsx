@@ -113,6 +113,17 @@ export function RuntimePairingUrlGenerator({
   const networkInterfaceLoadIdRef = useRef(0)
   const accessGrantLoadIdRef = useRef(0)
 
+  useEffect(() => {
+    if (copiedTarget === null) {
+      return
+    }
+    const target = copiedTarget
+    const timeout = window.setTimeout(() => {
+      setCopiedTarget((current) => (current === target ? null : current))
+    }, 1400)
+    return () => window.clearTimeout(timeout)
+  }, [copiedTarget])
+
   const loadRuntimeAccessGrants = useCallback(
     async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
       const loadId = accessGrantLoadIdRef.current + 1
@@ -240,9 +251,6 @@ export function RuntimePairingUrlGenerator({
       await window.api.ui.writeClipboardText(value)
       setCopiedTarget(target)
       toast.success(target === 'web' ? 'Copied web client URL.' : 'Copied pairing URL.')
-      window.setTimeout(() => {
-        setCopiedTarget((current) => (current === target ? null : current))
-      }, 1400)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to copy URL.')
     }

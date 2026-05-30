@@ -6,12 +6,13 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import {
   createFilePathLinkProvider,
   getTerminalHtmlFileOpenHint,
-  handleOscLink,
   installFilePathLinkClickFallback,
   isTerminalLinkActivation,
   openFilePathLinkAtBufferPosition,
   openDetectedFilePath
 } from './terminal-link-handlers'
+import { handleOscLink } from './terminal-osc-link-routing'
+import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { getConnectionId } from '@/lib/connection-context'
 import {
@@ -114,6 +115,9 @@ beforeEach(() => {
   })
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
     return setTimeout(() => callback(0), 0) as unknown as number
+  })
+  vi.stubGlobal('cancelAnimationFrame', (handle: number): void => {
+    clearTimeout(handle)
   })
 })
 
@@ -274,6 +278,24 @@ describe('handleOscLink', () => {
     })
   })
 
+  it('cancels a pending Monaco reveal frame when another file open starts', async () => {
+    setPlatform('Macintosh')
+    const cancelAnimationFrame = vi.fn()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 42)
+    )
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
+
+    openDetectedFilePath('/tmp/src/main.ts', 42, null, deps)
+    await flushAsyncWork()
+
+    openDetectedFilePath('/tmp/src/other.ts', null, null, deps)
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42)
+    expect(setPendingEditorRevealMock).toHaveBeenCalledWith(null)
+  })
+
   it('advertises the browser-open behavior in the html hover hint', () => {
     setPlatform('Macintosh')
     expect(getTerminalHtmlFileOpenHint()).toBe('⌘+click to open in browser')
@@ -364,6 +386,31 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/tmp/project/docs/README.md',
         relativePath: 'project/docs/README.md'
+      })
+    )
+  })
+
+  it('opens tilde OSC file links against explicit terminal home when cwd is outside home', async () => {
+    setPlatform('Macintosh')
+
+    handleOscLink(
+      '~/file.ts',
+      { metaKey: true, ctrlKey: false },
+      {
+        ...deps,
+        startupCwd: '/workspace/project',
+        terminalHomePath: '/home/alice'
+      }
+    )
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: '/home/alice/file.ts'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/home/alice/file.ts'
       })
     )
   })
@@ -592,7 +639,9 @@ describe('createFilePathLinkProvider range bounds', () => {
         linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
         pathExistsCache: new Map<string, boolean>([
           ['/repo/CLAUDE.md', true],
-          ['/repo/package.json', true]
+          ['/repo/package.json', true],
+          ['/repo/Folder With Space/content.js', true],
+          ['/repo/My Folder', true]
         ])
       },
       { textContent: '', style: { display: '' } } as unknown as HTMLElement,
@@ -637,7 +686,8 @@ describe('createFilePathLinkProvider range bounds', () => {
   }
 
   function makeFallbackTerminal(rows: TestBufferLine[]): {
-    terminal: Parameters<typeof installFilePathLinkClickFallback>[1]
+    terminal: Parameters<typeof installFilePathLinkClickFallback>[1] &
+      Parameters<typeof installHttpLinkClickFallback>[0]
     element: {
       addEventListener: ReturnType<typeof vi.fn>
       removeEventListener: ReturnType<typeof vi.fn>
@@ -683,6 +733,16 @@ describe('createFilePathLinkProvider range bounds', () => {
     )
     expect(registration, 'mouseup handler should be registered').toBeDefined()
     expect(registration![2]).toEqual({ capture: true })
+    return registration![1] as (event: MouseEvent) => void
+  }
+
+  function getRegisteredBubbleMouseUpHandler(element: {
+    addEventListener: ReturnType<typeof vi.fn>
+  }): (event: MouseEvent) => void {
+    const registration = element.addEventListener.mock.calls.find(
+      ([eventName, _handler, options]) => eventName === 'mouseup' && options === undefined
+    )
+    expect(registration, 'bubble mouseup handler should be registered').toBeDefined()
     return registration![1] as (event: MouseEvent) => void
   }
 
@@ -736,6 +796,51 @@ describe('createFilePathLinkProvider range bounds', () => {
     )
   })
 
+  it('opens a tilde-prefixed path from a direct modifier-click fallback', async () => {
+    setPlatform('Macintosh')
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([makeBufferLine('~/Documents/Path/file_name')]),
+      { x: 4, y: 1 },
+      80,
+      {
+        startupCwd: '/Users/alice/project',
+        worktreeId: 'wt-1',
+        worktreePath: '/Users/alice/project',
+        runtimeEnvironmentId: null
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/Users/alice/Documents/Path/file_name' })
+    )
+  })
+
+  it('opens a tilde path using explicit terminal home when cwd is outside home', async () => {
+    setPlatform('Macintosh')
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([makeBufferLine('~/Documents/Path/file_name')]),
+      { x: 4, y: 1 },
+      80,
+      {
+        startupCwd: '/workspace/project',
+        terminalHomePath: '/home/alice',
+        worktreeId: 'wt-1',
+        worktreePath: '/workspace/project',
+        runtimeEnvironmentId: null
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/home/alice/Documents/Path/file_name' })
+    )
+  })
+
   it('opens a wrapped continuation-row html path from a direct modifier-click fallback', async () => {
     setPlatform('Macintosh')
     const rows = [
@@ -761,6 +866,65 @@ describe('createFilePathLinkProvider range bounds', () => {
       'wt-1',
       'file:///tmp/mobile/mock-homepage.html',
       expect.objectContaining({ title: 'mock-homepage.html', activate: true })
+    )
+  })
+
+  it('returns one file link for an absolute path containing spaces', async () => {
+    const pathText = '/repo/Folder With Space/content.js'
+    const links = await collectLinks(pathText)
+
+    expect(links.map((link) => link.text)).toEqual([pathText])
+    expect(links[0].range).toEqual({
+      start: { x: 1, y: 1 },
+      end: { x: pathText.length, y: 1 }
+    })
+  })
+
+  it('returns one file link for an extensionless path ending in a spaced segment', async () => {
+    const pathText = '/repo/My Folder'
+    const links = await collectLinks(pathText)
+
+    expect(links.map((link) => link.text)).toEqual([pathText])
+    expect(links[0].range).toEqual({
+      start: { x: 1, y: 1 },
+      end: { x: pathText.length, y: 1 }
+    })
+  })
+
+  it('returns an existing extensionless spaced prefix before trailing prose', async () => {
+    vi.mocked(window.api.shell.pathExists).mockImplementation(async (pathValue) => {
+      return pathValue === '/repo/My Folder'
+    })
+
+    const links = await collectLinks('see /repo/My Folder now')
+
+    expect(links.map((link) => link.text)).toEqual(['/repo/My Folder'])
+  })
+
+  it('opens an existing extensionless spaced prefix from direct fallback cache', async () => {
+    setPlatform('Macintosh')
+    const line = 'see /repo/My Folder now'
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([makeBufferLine(line)]),
+      { x: line.indexOf('Folder') + 1, y: 1 },
+      80,
+      {
+        startupCwd: '/repo',
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        runtimeEnvironmentId: null,
+        pathExistsCache: new Map<string, boolean>([
+          ['active\0/repo/My Folder now', false],
+          ['active\0/repo/My Folder', true]
+        ])
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/repo/My Folder' })
     )
   })
 
@@ -808,6 +972,103 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     disposable.dispose()
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp, { capture: true })
+  })
+
+  it('does not intercept regular URL clicks in the file-path fallback', async () => {
+    setPlatform('Macintosh')
+    const rows = [
+      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
+    ]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installFilePathLinkClickFallback(1, terminal, {
+      startupCwd: '/tmp',
+      worktreeId: 'wt-1',
+      worktreePath: '/tmp',
+      runtimeEnvironmentId: null,
+      managerRef: { current: null },
+      linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+      pathExistsCache: new Map<string, boolean>()
+    })
+    const mouseUp = getRegisteredMouseUpHandler(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      clientX: 230,
+      clientY: 25,
+      preventDefault,
+      stopPropagation
+    } as unknown as MouseEvent)
+    await flushAsyncWork()
+
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(stopPropagation).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).not.toHaveBeenCalled()
+
+    disposable.dispose()
+  })
+
+  it('opens regular URLs from a direct modifier-click fallback when xterm did not handle them', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+    const rows = [
+      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
+    ]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      defaultPrevented: false,
+      clientX: 230,
+      clientY: 25,
+      preventDefault,
+      stopPropagation
+    } as unknown as MouseEvent)
+
+    expect(openUrlMock).toHaveBeenCalledWith(
+      'https://github.com/stablyai/orca-marketing-website/pull/82'
+    )
+    expect(preventDefault).toHaveBeenCalled()
+    expect(stopPropagation).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).toHaveBeenCalled()
+
+    disposable.dispose()
+    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
+  })
+
+  it('does not double-open URLs when xterm already handled the mouseup', () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+    const rows = [makeBufferLine('Open https://github.com/stablyai/orca/pull/2914')]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      defaultPrevented: true,
+      clientX: 90,
+      clientY: 25,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent)
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).not.toHaveBeenCalled()
+
+    disposable.dispose()
   })
 
   it('opens a deeply wrapped absolute path from its final short continuation row', async () => {

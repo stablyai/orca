@@ -91,6 +91,18 @@ function tokenCount(markup: string, token: string): number {
   return classTokens(markup).filter((classToken) => classToken === token).length
 }
 
+function classTokensForTaggedElement(markup: string, dataAttribute: string): string[] {
+  const tagMatch = markup.match(new RegExp(`<[^>]+${dataAttribute}[^>]*>`))
+  if (!tagMatch) {
+    throw new Error(`Expected tagged element for ${dataAttribute}`)
+  }
+  const classMatch = tagMatch[0].match(/class="([^"]*)"/)
+  if (!classMatch) {
+    throw new Error(`Expected class attribute for ${dataAttribute}`)
+  }
+  return classMatch[1].split(/\s+/).filter(Boolean)
+}
+
 describe('DashboardAgentRow', () => {
   it('uses the hover background as the focused-pane row highlight', () => {
     const markup = renderToStaticMarkup(
@@ -191,6 +203,28 @@ describe('DashboardAgentRow', () => {
     expect(markup).not.toContain('data-slot="badge"')
     expect(interruptedIndex).toBeGreaterThan(promptIndex)
     expect(markup).not.toContain('lucide-circle-check')
+  })
+
+  it('reserves a real working tool line before tool metadata arrives', () => {
+    const emptyToolMarkup = renderRow(makeAgent())
+    const activeToolMarkup = renderRow(
+      makeAgent({}, { toolName: 'ListDir', toolInput: '/Users/nwparker/orca' })
+    )
+
+    // Why: Antigravity emits working hooks without tool metadata between
+    // tool-specific hooks; a whitespace placeholder collapses and makes the
+    // sidebar row jump from one secondary line to two.
+    expect(emptyToolMarkup).toContain('data-agent-row-tool-slot=""')
+    expect(activeToolMarkup).toContain('data-agent-row-tool-slot=""')
+    expect(
+      classTokensForTaggedElement(emptyToolMarkup, 'data-agent-row-tool-placeholder="true"')
+    ).toContain('h-[1lh]')
+    expect(
+      classTokensForTaggedElement(activeToolMarkup, 'data-agent-row-tool-header="true"')
+    ).toContain('h-[1lh]')
+    expect(emptyToolMarkup).not.toContain('lucide-wrench')
+    expect(activeToolMarkup).toContain('lucide-wrench')
+    expect(activeToolMarkup).toContain('ListDir')
   })
 
   it('renders orchestration child rows with a connector and tree level', () => {

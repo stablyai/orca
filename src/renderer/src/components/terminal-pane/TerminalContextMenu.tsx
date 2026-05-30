@@ -26,7 +26,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../shared/types'
+import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { AgentIcon } from '@/lib/agent-catalog'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -86,6 +88,25 @@ export default function TerminalContextMenu({
   const closeShortcut = useShortcutLabel('terminal.closePane')
   const hasQuickCommands = repoQuickCommands.length > 0 || globalQuickCommands.length > 0
   const showEqualizeShortcut = equalizeShortcut !== 'Unassigned'
+  const renderQuickCommandItem = (command: TerminalQuickCommand): React.JSX.Element => (
+    <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
+      {isTerminalAgentQuickCommand(command) ? (
+        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground">
+          <AgentIcon agent={command.agent} size={14} />
+        </span>
+      ) : (
+        <Play
+          className="size-3.5 shrink-0 text-muted-foreground"
+          fill="currentColor"
+          strokeWidth={0}
+        />
+      )}
+      <span className="min-w-0 flex-1 truncate">{command.label}</span>
+      {!isTerminalAgentQuickCommand(command) && !command.appendEnter ? (
+        <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
+      ) : null}
+    </DropdownMenuItem>
+  )
 
   return (
     <DropdownMenu
@@ -154,14 +175,7 @@ export default function TerminalContextMenu({
                     <DropdownMenuLabel className="truncate">
                       {quickCommandRepoLabel}
                     </DropdownMenuLabel>
-                    {repoQuickCommands.map((command) => (
-                      <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
-                        <span className="truncate">{command.label}</span>
-                        {!command.appendEnter ? (
-                          <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
-                        ) : null}
-                      </DropdownMenuItem>
-                    ))}
+                    {repoQuickCommands.map(renderQuickCommandItem)}
                   </>
                 ) : null}
                 {globalQuickCommands.length > 0 ? (
@@ -170,14 +184,7 @@ export default function TerminalContextMenu({
                     {repoQuickCommands.length > 0 ? (
                       <DropdownMenuLabel>Global</DropdownMenuLabel>
                     ) : null}
-                    {globalQuickCommands.map((command) => (
-                      <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
-                        <span className="truncate">{command.label}</span>
-                        {!command.appendEnter ? (
-                          <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
-                        ) : null}
-                      </DropdownMenuItem>
-                    ))}
+                    {globalQuickCommands.map(renderQuickCommandItem)}
                   </>
                 ) : null}
               </>

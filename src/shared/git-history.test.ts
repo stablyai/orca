@@ -63,13 +63,14 @@ function createHistoryExecutor(limitRecords = 2): {
       return { stdout: `${BASE_OID}\n` }
     }
     if (command === 'log') {
+      const includesRemoteRoot = args.includes(REMOTE_OID)
       return {
         stdout: Array.from({ length: limitRecords }, (_, index) =>
           logRecord({
             hash:
               index === 0
                 ? HEAD_OID
-                : index === 1
+                : includesRemoteRoot && index === 1
                   ? REMOTE_OID
                   : (index % 16).toString(16).repeat(40),
             parents: [BASE_OID],
@@ -129,15 +130,86 @@ describe('git history loader', () => {
         '--topo-order',
         '--decorate=full',
         '-n51',
-        HEAD_OID,
-        REMOTE_OID
+        HEAD_OID
       ])
     )
+    expect(logCall).not.toContain(REMOTE_OID)
     expect(calls.filter((args) => args[0] === 'log')).toHaveLength(1)
     expect(result.items).toHaveLength(2)
+    expect(result.items.map((item) => item.id)).not.toContain(REMOTE_OID)
     expect(result.hasIncomingChanges).toBe(true)
     expect(result.hasOutgoingChanges).toBe(true)
     expect(result.mergeBase).toBe(BASE_OID)
+  })
+
+  it('does not list newly fetched upstream commits in old workspace history', async () => {
+    const upstreamOnlyOid = 'd'.repeat(40)
+    const calls: string[][] = []
+    const executor = vi.fn(async (args: string[], cwd: string) => {
+      expect(cwd).toBe('/repo')
+      calls.push(args)
+      const command = args[0]
+
+      if (command === 'rev-parse' && args.includes('HEAD^{commit}')) {
+        return { stdout: `${HEAD_OID}\n` }
+      }
+      if (command === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
+        return { stdout: `${REMOTE_OID}\n` }
+      }
+      if (command === 'rev-parse' && args.includes('origin/main^{commit}')) {
+        return { stdout: `${REMOTE_OID}\n` }
+      }
+      if (command === 'rev-parse' && args.includes('origin/main')) {
+        return { stdout: 'refs/remotes/origin/main\n' }
+      }
+      if (command === 'symbolic-ref') {
+        return { stdout: 'old-workspace\n' }
+      }
+      if (command === 'for-each-ref') {
+        return { stdout: 'refs/remotes/origin/main\0origin/main\n' }
+      }
+      if (command === 'merge-base') {
+        return { stdout: `${HEAD_OID}\n` }
+      }
+      if (command === 'log') {
+        const includesRemoteRoot = args.includes(REMOTE_OID)
+        return {
+          stdout: includesRemoteRoot
+            ? [
+                logRecord({
+                  hash: upstreamOnlyOid,
+                  parents: [REMOTE_OID],
+                  message: 'new upstream commit'
+                }),
+                logRecord({
+                  hash: HEAD_OID,
+                  decorations: 'HEAD -> refs/heads/old-workspace',
+                  message: 'old workspace base'
+                })
+              ].join('')
+            : logRecord({
+                hash: HEAD_OID,
+                decorations: 'HEAD -> refs/heads/old-workspace',
+                message: 'old workspace base'
+              })
+        }
+      }
+
+      throw new Error(`unexpected git command: ${args.join(' ')}`)
+    })
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', {
+      limit: 50,
+      baseRef: 'origin/main'
+    })
+
+    const logCall = calls.find((args) => args[0] === 'log')
+    expect(logCall).not.toContain(REMOTE_OID)
+    expect(result.remoteRef?.revision).toBe(REMOTE_OID)
+    expect(result.baseRef).toBeUndefined()
+    expect(result.hasIncomingChanges).toBe(true)
+    expect(result.hasOutgoingChanges).toBe(false)
+    expect(result.items.map((item) => item.id)).toEqual([HEAD_OID])
   })
 
   it('clamps oversized limits before shelling out to git log', async () => {

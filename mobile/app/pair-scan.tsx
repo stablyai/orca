@@ -210,7 +210,7 @@ export default function PairScanScreen() {
           visible={pasteVisible}
           title="Paste pairing code"
           message="Copy the code shown under the QR on your computer."
-          placeholder="orca://pair#... or paste the code"
+          placeholder="orca://pair?code=... or paste the code"
           onSubmit={handlePasteSubmit}
           onCancel={() => setPasteVisible(false)}
         />
@@ -306,7 +306,7 @@ export default function PairScanScreen() {
         visible={pasteVisible}
         title="Paste pairing code"
         message="Copy the code shown under the QR on your computer."
-        placeholder="orca://pair#... or paste the code"
+        placeholder="orca://pair?code=... or paste the code"
         onSubmit={handlePasteSubmit}
         onCancel={() => setPasteVisible(false)}
       />

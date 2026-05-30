@@ -20,9 +20,13 @@ description: >-
 
 Use this skill when the task should go through Orca's control plane rather than directly through `git`, shell PTYs, or ad hoc filesystem access.
 
+## Platform Note
+
+On Linux, the CLI command is `orca-ide` (not `orca`) to avoid conflicting with GNOME Orca, the accessibility screen reader. Everywhere this document says `orca <subcommand>`, Linux users should substitute `orca-ide <subcommand>`. macOS and Windows are unaffected.
+
 ## When To Use
 
-Use `orca` for:
+Use `orca` (or `orca-ide` on Linux) for:
 
 - worktree orchestration inside a running Orca app
 - updating the current worktree comment with meaningful progress checkpoints
@@ -30,7 +34,7 @@ Use `orca` for:
 - stopping or waiting on Orca-managed terminals
 - creating and managing scheduled Orca automations
 - accessing repos known to Orca
-Do not use `orca` when plain shell tools are simpler and Orca state does not matter.
+Do not use `orca` / `orca-ide` when plain shell tools are simpler and Orca state does not matter.
 
 Examples:
 
@@ -42,27 +46,30 @@ Examples:
 
 ## Preconditions
 
-- Prefer the public `orca` command first
+- Prefer the public `orca` command first (`orca-ide` on Linux)
 - Orca editor/runtime should already be running, or the agent should start it with `orca open`
-- Do not begin by inspecting Orca source files just to decide how to invoke the CLI. The first step is to check whether the installed `orca` command exists.
+- Do not begin by inspecting Orca source files just to decide how to invoke the CLI. The first step is to check whether the installed `orca` / `orca-ide` command exists.
 - Do not assume a generic shell environment variable proves the agent is "inside Orca". For normal agent flows, the public CLI is the supported surface, but avoid wasting a round trip on probe-only checks when a direct Orca action would answer the question.
 
 First verify the public CLI is installed:
 
 ```bash
+# macOS / Windows
 command -v orca
+# Linux
+command -v orca-ide
 ```
 
 Then use the public command:
 
 ```bash
-orca status --json
+orca status --json        # or orca-ide on Linux
 ```
 
 If the task is about Orca worktrees or Orca terminals, do this before any codebase exploration:
 
 ```bash
-command -v orca
+command -v orca           # or orca-ide on Linux
 orca status --json
 ```
 
@@ -72,7 +79,7 @@ If the agent truly needs to confirm that the current directory is inside an Orca
 orca worktree current --json
 ```
 
-If `orca` is not on PATH, say so explicitly and stop or ask the user to install/register the CLI before continuing.
+If `orca` / `orca-ide` is not on PATH, say so explicitly and stop or ask the user to install/register the CLI before continuing.
 
 ## Core Workflow
 
@@ -237,7 +244,7 @@ Why: `--direction horizontal` splits the pane **left and right** (new pane appea
 - Treat `orca worktree set --worktree active --comment ... --json` as a default coding-agent behavior whenever the agent reaches a meaningful checkpoint in the current Orca-managed worktree; the user does not need to explicitly ask for each update.
 - Update the worktree comment at significant checkpoints, not every trivial command. Good checkpoints include reproducing a bug, confirming a hypothesis, starting a risky migration, finishing a meaningful implementation slice, switching from investigation to fix, or blocking on external input.
 - Write comments as short status snapshots of the current state, for example `debugging AWS CLI profile resolution`, `confirmed flaky test is caused by temp-dir race`, or `fix implemented; running integration tests`.
-- Prefer optimistic execution over probe-first flows for checkpoint updates: if `orca` is on `PATH`, call `orca worktree set --worktree active --comment ... --json` directly at the checkpoint instead of spending an extra cycle on `orca worktree current`.
+- Prefer optimistic execution over probe-first flows for checkpoint updates: if `orca` (or `orca-ide` on Linux) is on `PATH`, call `orca worktree set --worktree active --comment ... --json` directly at the checkpoint instead of spending an extra cycle on `orca worktree current`.
 - If that direct update fails because Orca is unavailable or the shell is not inside an Orca-managed worktree, continue the main task and treat the comment update as best-effort unless the user explicitly made Orca state part of the task.
 - Use `orca worktree current --json` only when the agent actually needs the worktree identity for later logic, not as a preflight before every comment update.
 - Orca only injects `ORCA_WORKTREE_PATH`-style variables for some setup-hook flows, so they are not a general detection contract for agents.
@@ -249,12 +256,12 @@ Why: `--direction horizontal` splits the pane **left and right** (new pane appea
 - Use `terminal create` to spin up new terminal tabs programmatically, optionally with a `--command` for startup (e.g. `--command "claude"` to launch Claude Code) and `--title` for labeling. In local Orca sessions, `--command "codex"` is routed through Orca's visible terminal path automatically so Codex does not start as a headless/background PTY. After creating a `--command` terminal, use `terminal wait --for tui-idle` to wait for the agent to boot before dispatching.
 - Use `terminal split` to create split panes within an existing terminal tab. Pass `--command` to run a command in the new pane.
 - Prefer Orca worktree selectors over hardcoded paths when Orca identity already exists.
-- If the user asks for CLI UX feedback, test the public `orca` command first. Only inspect `src/cli` or use `node out/cli/index.js` if the public command is missing or the task is explicitly about implementation internals.
-- If a command fails, prefer retrying with the public `orca` command before concluding the CLI is broken, unless the failure already came from `orca` itself.
+- If the user asks for CLI UX feedback, test the public `orca` / `orca-ide` command first. Only inspect `src/cli` or use `node out/cli/index.js` if the public command is missing or the task is explicitly about implementation internals.
+- If a command fails, prefer retrying with the public `orca` / `orca-ide` command before concluding the CLI is broken, unless the failure already came from the CLI itself.
 
 ## Browser Automation
 
-The `orca` CLI also drives the built-in Orca browser. The core workflow is a **snapshot-interact-re-snapshot** loop:
+The `orca` CLI (or `orca-ide` on Linux) also drives the built-in Orca browser. The core workflow is a **snapshot-interact-re-snapshot** loop:
 
 1. **Snapshot** the page to see interactive elements and their refs.
 2. **Interact** using refs (`@e1`, `@e3`, etc.) to click, fill, or select.
@@ -626,7 +633,7 @@ When `orca tab create` opens a new tab, it is automatically set as the active ta
 - Terminal handles are ephemeral and tied to the current Orca runtime. If Orca restarts, handles change.
 - `terminal wait` supports `--for exit` (wait for process exit) and `--for tui-idle` (wait for a recognized agent CLI like Claude Code, Gemini, or Codex to finish its current task, detected via OSC title transitions). `tui-idle` defaults to a 5-minute timeout if `--timeout-ms` is not specified. Real coding tasks routinely take 15-60 minutes — always pass `--timeout-ms` explicitly.
 - Orca is the source of truth for worktree/terminal state; do not duplicate that state with manual assumptions.
-- The public `orca` command is the interface users experience. Agents should validate and use that surface, not repo-local implementation entrypoints.
+- The public `orca` command (`orca-ide` on Linux) is the interface users experience. Agents should validate and use that surface, not repo-local implementation entrypoints.
 - The default bounded `terminal read` preview is for status monitoring. For retained transcript extraction, use `terminal read --json` with `oldestCursor`/`nextCursor`, `--cursor`, and `--limit`.
 
 ## References

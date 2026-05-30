@@ -14,6 +14,8 @@ import {
   type RpcResponse
 } from './core'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
+import type { FeatureInteractionId } from '../../../shared/feature-interactions'
+import { isBrowserPaneUiRuntimeRpcParams } from '../../../shared/runtime-rpc-feature-interaction-source'
 import { errorResponse, mapBrowserError, mapRuntimeError, successResponse } from './errors'
 import { ALL_RPC_METHODS } from './methods'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -66,6 +68,7 @@ export class RpcDispatcher {
         runtime: this.runtime,
         signal: options?.signal
       })
+      this.recordRuntimeFeatureInteraction(request.method, result, undefined, request.params)
       return successResponse(request.id, meta, result)
     } catch (error) {
       return this.mapError(request, meta, error)
@@ -116,6 +119,7 @@ export class RpcDispatcher {
           sendBinary: options?.sendBinary,
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler
         })
+        this.recordRuntimeFeatureInteraction(request.method, result, undefined, request.params)
         reply(JSON.stringify(successResponse(request.id, meta, result)))
       } catch (error) {
         reply(JSON.stringify(this.mapError(request, meta, error)))
@@ -123,14 +127,21 @@ export class RpcDispatcher {
       return
     }
 
+    const recordedStreamingFeatureInteractions = new Set<FeatureInteractionId>()
     const emit = (result: unknown): void => {
+      this.recordRuntimeFeatureInteraction(
+        request.method,
+        result,
+        recordedStreamingFeatureInteractions,
+        request.params
+      )
       const response = successResponse(request.id, meta, result)
       response.streaming = true
       reply(JSON.stringify(response))
     }
 
     try {
-      await method.handler(
+      const result = await method.handler(
         parsedParams.value,
         {
           runtime: this.runtime,
@@ -141,6 +152,12 @@ export class RpcDispatcher {
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler
         },
         emit
+      )
+      this.recordRuntimeFeatureInteraction(
+        request.method,
+        result,
+        recordedStreamingFeatureInteractions,
+        request.params
       )
     } catch (error) {
       reply(JSON.stringify(this.mapError(request, meta, error)))
@@ -182,4 +199,63 @@ export class RpcDispatcher {
   private meta(): RpcEnvelopeMeta {
     return { runtimeId: this.runtime.getRuntimeId() }
   }
+
+  private recordRuntimeFeatureInteraction(
+    method: string,
+    result: unknown,
+    alreadyRecorded?: Set<FeatureInteractionId>,
+    rawParams?: unknown
+  ): void {
+    const id = getRuntimeFeatureInteractionId(method, result, rawParams)
+    if (!id) {
+      return
+    }
+    if (alreadyRecorded?.has(id)) {
+      return
+    }
+    try {
+      this.runtime.recordFeatureInteraction(id)
+      alreadyRecorded?.add(id)
+    } catch {
+      // Best-effort education state must not break runtime tools.
+    }
+  }
+}
+
+function getRuntimeFeatureInteractionId(
+  method: string,
+  result: unknown,
+  rawParams?: unknown
+): FeatureInteractionId | null {
+  if (method === 'browser.profileImportFromBrowser') {
+    return hasBooleanResult(result, 'ok') ? 'cookie-import' : null
+  }
+  if (method === 'browser.profileClearDefaultCookies') {
+    return hasBooleanResult(result, 'cleared') ? 'cookie-import' : null
+  }
+  if (method === 'browser.screencast.unsubscribe') {
+    return null
+  }
+  if (method.startsWith('browser.') && isBrowserPaneUiRuntimeRpcParams(rawParams)) {
+    return null
+  }
+  if (method.startsWith('browser.') && !method.startsWith('browser.profile')) {
+    return 'agent-browser-use'
+  }
+  if (method === 'computer.permissions') {
+    return 'computer-use-setup'
+  }
+  if (method.startsWith('computer.') && method !== 'computer.capabilities') {
+    return 'computer-use'
+  }
+  if (method.startsWith('orchestration.')) {
+    return 'agent-orchestration'
+  }
+  return null
+}
+
+function hasBooleanResult(value: unknown, key: string): boolean {
+  return (
+    value !== null && typeof value === 'object' && (value as Record<string, unknown>)[key] === true
+  )
 }

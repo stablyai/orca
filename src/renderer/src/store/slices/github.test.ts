@@ -2685,6 +2685,91 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     expect(after.error).toBeNull()
   })
 
+  it('threads noCache only when explicitly requested for work-item fetches', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems
+      .mockResolvedValueOnce({
+        items: [],
+        sources: { issues: null, prs: null, upstreamCandidate: null }
+      })
+      .mockResolvedValueOnce({
+        items: [],
+        sources: { issues: null, prs: null, upstreamCandidate: null }
+      })
+      .mockResolvedValueOnce({
+        items: [],
+        sources: { issues: null, prs: null, upstreamCandidate: null }
+      })
+
+    await store.getState().fetchWorkItems('repo-normal', '/repo/normal', 24, '')
+    await store.getState().fetchWorkItems('repo-force', '/repo/force', 24, '', { force: true })
+    await store.getState().fetchWorkItems('repo-fresh', '/repo/fresh', 24, '', {
+      force: true,
+      noCache: true
+    })
+
+    expect(mockApi.gh.listWorkItems).toHaveBeenNthCalledWith(1, {
+      repoPath: '/repo/normal',
+      repoId: 'repo-normal',
+      limit: 24,
+      query: undefined
+    })
+    expect(mockApi.gh.listWorkItems).toHaveBeenNthCalledWith(2, {
+      repoPath: '/repo/force',
+      repoId: 'repo-force',
+      limit: 24,
+      query: undefined
+    })
+    expect(mockApi.gh.listWorkItems).toHaveBeenNthCalledWith(3, {
+      repoPath: '/repo/fresh',
+      repoId: 'repo-fresh',
+      limit: 24,
+      query: undefined,
+      noCache: true
+    })
+  })
+
+  it('does not dedupe a no-cache forced fetch onto a cacheable forced request', async () => {
+    const store = createTestStore()
+    type WorkItemsEnvelope = {
+      items: []
+      sources: { issues: null; prs: null; upstreamCandidate: null }
+    }
+    let resolveCacheable: (value: WorkItemsEnvelope) => void = () => {}
+    const cacheableRequest = new Promise<WorkItemsEnvelope>((resolve) => {
+      resolveCacheable = resolve
+    })
+    mockApi.gh.listWorkItems.mockReturnValueOnce(cacheableRequest).mockResolvedValueOnce({
+      items: [],
+      sources: { issues: null, prs: null, upstreamCandidate: null }
+    })
+
+    const landingProbe = store
+      .getState()
+      .fetchWorkItems('repo-id', '/repo', 24, '', { force: true })
+    await Promise.resolve()
+    const noCacheRefresh = store
+      .getState()
+      .fetchWorkItems('repo-id', '/repo', 24, '', { force: true, noCache: true })
+
+    expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(1)
+    resolveCacheable({
+      items: [],
+      sources: { issues: null, prs: null, upstreamCandidate: null }
+    })
+    await landingProbe
+    await noCacheRefresh
+
+    expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
+    expect(mockApi.gh.listWorkItems).toHaveBeenNthCalledWith(2, {
+      repoPath: '/repo',
+      repoId: 'repo-id',
+      limit: 24,
+      query: undefined,
+      noCache: true
+    })
+  })
+
   it('routes work item fetches through repo-scoped IPC even when a runtime is active', async () => {
     const store = createTestStore()
     store.setState({

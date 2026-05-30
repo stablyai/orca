@@ -215,6 +215,14 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     void loadConfigs()
   }, [loadConfigs])
 
+  useEffect(() => {
+    if (!createConfirm) {
+      return
+    }
+    const timeout = window.setTimeout(() => setCreateConfirm(false), 3000)
+    return () => window.clearTimeout(timeout)
+  }, [createConfirm])
+
   const handleOpen = (config: LoadedMcpConfigInspection): void => {
     setActiveWorktree(targetWorktreeId)
     const targetGroupId = ensureWorktreeRootGroup(targetWorktreeId)
@@ -234,7 +242,6 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const handleCreateStarter = async (): Promise<void> => {
     if (!createConfirm) {
       setCreateConfirm(true)
-      window.setTimeout(() => setCreateConfirm(false), 3000)
       return
     }
 

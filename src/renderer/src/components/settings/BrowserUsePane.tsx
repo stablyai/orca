@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: Browser Use setup keeps enablement, CLI registration, skill install, cookie import, examples, and interaction tracking in one pane so the three-step setup state stays coherent. */
 import { useEffect, useState } from 'react'
 import { Import, Loader2, MousePointerClick } from 'lucide-react'
 import { toast } from 'sonner'
@@ -69,6 +70,9 @@ export function BrowserUseSetup({
   const toggleBrowserUse = (value: boolean): void => {
     setBrowserUseEnabled(value)
     localStorage.setItem(BROWSER_USE_ENABLED_STORAGE_KEY, value ? '1' : '0')
+    if (value) {
+      useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
+    }
   }
 
   const refreshCli = async (): Promise<void> => {
@@ -120,7 +124,7 @@ export function BrowserUseSetup({
         onStatusChange: setCliStatus
       })
       if (isOrcaCliAvailableOnPath(next)) {
-        toast.success('Registered `orca` in PATH.')
+        toast.success('Registered the Orca CLI in PATH.')
       }
     } finally {
       setCliBusy(false)
@@ -250,7 +254,7 @@ export function BrowserUseSetup({
       {showStep1 ? (
         <SearchableSetting
           title="Enable Orca CLI"
-          description="Register the orca shell command so agents can drive the browser."
+          description="Register the Orca CLI so agents can drive the browser."
           keywords={BROWSER_USE_PANE_SEARCH_ENTRIES[0].keywords}
           className="rounded-xl border border-border/60 bg-card/50 p-4"
         >
@@ -262,8 +266,8 @@ export function BrowserUseSetup({
             <div className="min-w-0 flex-1 space-y-1">
               <p className="text-sm font-medium">Enable Orca CLI</p>
               <p className="text-xs text-muted-foreground">
-                Registers the <code className="rounded bg-muted px-1 py-0.5 text-[11px]">orca</code>{' '}
-                command so agents can orchestrate the browser from their shell.
+                Registers the Orca CLI command so agents can orchestrate the browser from their
+                shell.
               </p>
               {cliStatus?.commandPath && cliEnabled ? (
                 <p className="text-[11px] text-muted-foreground">
@@ -323,6 +327,7 @@ export function BrowserUseSetup({
             disabled={!cliEnabled}
             preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
             onBeforeOpenTerminal={async () => {
+              useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
               await ensureOrcaCliAvailableForAgentSkillTerminal({ onStatusChange: setCliStatus })
             }}
             onRecheck={refreshSkill}
