@@ -134,6 +134,13 @@ export function shouldApplyWebSessionTabsSnapshot(
   environmentId: string
 ): boolean {
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+  if ((snapshot as { removed?: unknown }).removed === true) {
+    // Why: removed worktrees can stop publishing snapshots, so their
+    // freshness/mapping entries need explicit cleanup instead of waiting for
+    // a later replacement snapshot that may never arrive.
+    clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
+    return true
+  }
   const current = latestSessionTabsSnapshotByWorktree.get(key)
   if (
     current &&
@@ -152,6 +159,26 @@ export function shouldApplyWebSessionTabsSnapshot(
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
+}
+
+export function _getWebSessionTabsTrackingCountsForTest(): {
+  freshness: number
+  hostMappings: number
+} {
+  return {
+    freshness: latestSessionTabsSnapshotByWorktree.size,
+    hostMappings: hostSessionTabIdByLocalKey.size
+  }
+}
+
+function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeId: string): void {
+  latestSessionTabsSnapshotByWorktree.delete(sessionTabsFreshnessKey(environmentId, worktreeId))
+  const keyPrefix = `${environmentId}:${worktreeId}:`
+  for (const key of hostSessionTabIdByLocalKey.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      hostSessionTabIdByLocalKey.delete(key)
+    }
+  }
 }
 
 function hostSessionTabMappingKey(args: {
