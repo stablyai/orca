@@ -253,6 +253,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -269,6 +270,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: (
             listener: NonNullable<typeof requestTabCreateListenerRef.current>
           ) => {
@@ -456,6 +458,7 @@ describe('useIpcEvents updater integration', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -472,6 +475,7 @@ describe('useIpcEvents updater integration', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -691,6 +695,7 @@ describe('useIpcEvents updater integration', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -707,6 +712,7 @@ describe('useIpcEvents updater integration', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -1073,6 +1079,7 @@ describe('useIpcEvents updater integration', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onActivateWorktree: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onCreateTerminal: (
@@ -1118,6 +1125,7 @@ describe('useIpcEvents updater integration', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -1589,6 +1597,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -1605,6 +1614,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: (
@@ -1801,6 +1811,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -1817,6 +1828,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: (
@@ -2008,6 +2020,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -2024,6 +2037,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: (
@@ -2233,6 +2247,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: (
             listener: (data: {
@@ -2258,6 +2273,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -2427,6 +2443,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       clearTabPtyId: vi.fn(),
       runtimePaneTitlesByTabId: {},
       terminalLayoutsByTabId: {},
+      agentStatusByPaneKey: {},
       repos: [],
       worktreesByRepo: {},
       tabsByWorktree: {},
@@ -2462,6 +2479,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
@@ -2478,6 +2496,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -2741,6 +2760,81 @@ describe('useIpcEvents agent status snapshot integration', () => {
       'Inactive Tab',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 }
     )
+  })
+
+  it('drops nested child done push events when the parent pane agent is still active', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
+      agentStatusByPaneKey: {
+        [FUTURE_PANE_KEY]: {
+          state: 'working',
+          prompt: 'parent codex',
+          agentType: 'codex',
+          updatedAt: 1_700_000_000_000,
+          stateStartedAt: 1_700_000_000_000,
+          paneKey: FUTURE_PANE_KEY,
+          stateHistory: []
+        }
+      },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Codex' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [FUTURE_LEAF_ID]: 'pty-1' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-future': ['pty-1'] }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'done',
+      prompt: 'nested claude',
+      agentType: 'claude',
+      lastAssistantMessage: 'child finished',
+      receivedAt: 1_700_000_000_200,
+      stateStartedAt: 1_700_000_000_200
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
   })
 
   it('keeps OpenClaude hook status distinct when it arrives through Claude-compatible hooks', async () => {

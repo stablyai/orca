@@ -27,8 +27,10 @@ import type {
   TabGroup,
   TabGroupLayoutNode,
   TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode
+  TerminalPaneLayoutNode,
+  TerminalTab
 } from '../../../shared/types'
+import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import {
   getActiveTabNavOrder,
   getGroupVisibleTabOrder,
@@ -184,6 +186,7 @@ export type RuntimeMobileSessionSyncKey = {
   activeBrowserTabIdByWorktree: AppState['activeBrowserTabIdByWorktree']
   agentStatusEpoch: number
   agentStatusProjection: string
+  generatedTabTitlesEnabled: boolean
   systemPrefersDark: boolean | null
   terminalThemeProjection: string
   // Why: these projections still need value-level inspection because the
@@ -280,6 +283,7 @@ export function getRuntimeMobileSessionSyncKey(
       canReusePrevious && agentStatusByPaneKey === previousAgentStatusByPaneKey
         ? previousKey.agentStatusProjection
         : buildRuntimeMobileAgentStatusProjection(agentStatusByPaneKey),
+    generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     systemPrefersDark: terminalThemeSystemPrefersDark,
     terminalThemeProjection:
       canReusePrevious &&
@@ -342,6 +346,7 @@ function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktr
               tabs.map((tab) => ({
                 id: tab.id,
                 title: tab.title,
+                generatedTitle: tab.generatedTitle,
                 customTitle: tab.customTitle,
                 launchAgent: tab.launchAgent
               }))
@@ -357,6 +362,14 @@ function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktr
     projection: `{${parts.join(',')}}`
   }
   return cachedTabsProjection.projection
+}
+
+function resolveRuntimeTerminalTitle(
+  tab: Pick<TerminalTab, 'customTitle' | 'generatedTitle' | 'title'>,
+  generatedTitlesEnabled: boolean,
+  liveTitle = tab.title
+): string {
+  return resolveTerminalTabTitle({ ...tab, title: liveTitle }, generatedTitlesEnabled, liveTitle)
 }
 
 function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles']): string {
@@ -465,6 +478,7 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.activeBrowserTabIdByWorktree === b.activeBrowserTabIdByWorktree &&
     a.agentStatusEpoch === b.agentStatusEpoch &&
     a.agentStatusProjection === b.agentStatusProjection &&
+    a.generatedTabTitlesEnabled === b.generatedTabTitlesEnabled &&
     a.systemPrefersDark === b.systemPrefersDark &&
     a.terminalThemeProjection === b.terminalThemeProjection &&
     a.tabsProjection === b.tabsProjection &&
@@ -492,6 +506,7 @@ async function syncRuntimeGraph(): Promise<void> {
       .flat()
       .map((tab) => [tab.id, tab])
   )
+  const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const graph: RuntimeSyncWindowGraph = {
     tabs: [],
     leaves: [],
@@ -516,7 +531,7 @@ async function syncRuntimeGraph(): Promise<void> {
     graph.tabs.push({
       tabId,
       worktreeId: registeredTab.worktreeId,
-      title: tab.customTitle ?? tab.title,
+      title: resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled),
       activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
       layout: serializePaneTree(root)
     })
@@ -544,7 +559,11 @@ async function syncRuntimeGraph(): Promise<void> {
         paneRuntimeId: pane.id,
         ptyId,
         paneTitle: paneTitles[pane.id] ?? null,
-        title: state.runtimePaneTitlesByTabId[tabId]?.[pane.id] ?? tab.customTitle ?? tab.title
+        title: resolveRuntimeTerminalTitle(
+          tab,
+          generatedTitlesEnabled,
+          state.runtimePaneTitlesByTabId[tabId]?.[pane.id] ?? tab.title
+        )
       })
     }
   }
@@ -811,13 +830,18 @@ function buildMobileSessionGroupProjection(
       continue
     }
     const tabOrder = visibleOrder.map((item) => item.tabId ?? item.id)
-    order.push(...visibleOrder)
+    const tabOrderSet = new Set(tabOrder)
+    // Why: persisted split groups can contain very large tab orders; append
+    // iteratively so mobile sync does not hit V8's argument-list limit.
+    for (const item of visibleOrder) {
+      order.push(item)
+    }
     tabGroups.push({
       id: group.id,
       activeTabId:
-        group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null,
+        group.activeTabId && tabOrderSet.has(group.activeTabId) ? group.activeTabId : null,
       tabOrder,
-      recentTabIds: group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId)) ?? []
+      recentTabIds: group.recentTabIds?.filter((tabId) => tabOrderSet.has(tabId)) ?? []
     })
   }
 
@@ -960,6 +984,7 @@ function buildMobileTerminalSurfaceTabs(
       ? (manager?.getLeafId(liveActivePaneId) ?? null)
       : (state.terminalLayoutsByTabId[terminal.id]?.activeLeafId ?? leafIds[0] ?? null)
   const paneTitles = state.runtimePaneTitlesByTabId[terminal.id] ?? {}
+  const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const savedLayout = state.terminalLayoutsByTabId[terminal.id]
   const sanitizedSavedLayout = savedLayout
     ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminal)
@@ -998,7 +1023,11 @@ function buildMobileTerminalSurfaceTabs(
     return {
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
-      title: paneTitle ?? terminal.customTitle ?? terminal.title ?? 'Terminal',
+      title: resolveRuntimeTerminalTitle(
+        terminal,
+        generatedTitlesEnabled,
+        paneTitle ?? terminal.title ?? 'Terminal'
+      ),
       parentTabId: terminal.id,
       leafId,
       ptyId,

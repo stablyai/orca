@@ -64,15 +64,7 @@ type PreflightCommandResult = { stdout: string; stderr: string }
 
 // Why: a broken PATH shim or auth helper should not keep startup/settings
 // preflight IPC pending forever; WSL probes already use the same deadline.
-async function execLocalPreflightCommand(
-  command: string,
-  args: string[]
-): Promise<PreflightCommandResult> {
-  const commandPromise = execFileAsync(command, args, {
-    encoding: 'utf-8',
-    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS
-  }) as Promise<PreflightCommandResult>
-
+async function withPreflightTimeout<T>(command: string, commandPromise: Promise<T>): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | null = null
   try {
     return await Promise.race([
@@ -96,15 +88,28 @@ async function execLocalPreflightCommand(
   }
 }
 
+async function execLocalPreflightCommand(
+  command: string,
+  args: string[]
+): Promise<PreflightCommandResult> {
+  const commandPromise = execFileAsync(command, args, {
+    encoding: 'utf-8',
+    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS
+  }) as Promise<PreflightCommandResult>
+
+  return withPreflightTimeout(command, commandPromise)
+}
+
 async function execCommandInWsl(
   target: WslPreflightTarget,
   command: string
 ): Promise<{ stdout: string; stderr: string }> {
   const distroArgs = target.distro ? ['-d', target.distro] : []
-  return execFileAsync('wsl.exe', [...distroArgs, '--', 'bash', '-lc', command], {
+  const commandPromise = execFileAsync('wsl.exe', [...distroArgs, '--', 'bash', '-lc', command], {
     encoding: 'utf-8',
     timeout: PREFLIGHT_COMMAND_TIMEOUT_MS
   }) as Promise<{ stdout: string; stderr: string }>
+  return withPreflightTimeout('wsl.exe', commandPromise)
 }
 
 async function isCommandAvailable(

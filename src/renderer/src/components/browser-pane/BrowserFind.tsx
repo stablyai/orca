@@ -14,19 +14,10 @@ export default function BrowserFind({
   webviewRef
 }: BrowserFindProps): React.JSX.Element | null {
   const inputRef = useRef<HTMLInputElement>(null)
+  const wasOpenRef = useRef(isOpen)
   const [query, setQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [activeMatch, setActiveMatch] = useState(0)
   const [totalMatches, setTotalMatches] = useState(0)
-
-  // Why: findInPage re-highlights the active match on every call, which causes
-  // a visible flash as the user types. Debounce to only re-run once typing
-  // settles. Enter (findNext/findPrevious) still uses the live `query` so
-  // explicit navigation is immediate.
-  useEffect(() => {
-    const id = setTimeout(() => setDebouncedQuery(query), 200)
-    return () => clearTimeout(id)
-  }, [query])
 
   const safeFindInPage = useCallback(
     (text: string, opts?: Electron.FindInPageOptions): void => {
@@ -80,16 +71,29 @@ export default function BrowserFind({
   }, [isOpen, safeStopFindInPage])
 
   useEffect(() => {
-    if (!debouncedQuery) {
+    const wasOpen = wasOpenRef.current
+    wasOpenRef.current = isOpen
+    if (!isOpen) {
+      return
+    }
+    if (!query) {
       safeStopFindInPage()
       setActiveMatch(0)
       setTotalMatches(0)
       return
     }
-    if (isOpen) {
-      safeFindInPage(debouncedQuery)
+
+    const runFind = (): void => safeFindInPage(query)
+    if (!wasOpen) {
+      runFind()
+      return
     }
-  }, [debouncedQuery, isOpen, safeFindInPage, safeStopFindInPage])
+    // Why: findInPage re-highlights the active match on every call, which can
+    // flash while typing. Debounce typing changes, while reopen and Enter
+    // navigation still use the live query immediately.
+    const id = window.setTimeout(runFind, 200)
+    return () => window.clearTimeout(id)
+  }, [isOpen, query, safeFindInPage, safeStopFindInPage])
 
   // Why: this effect captures `webviewRef.current` into a local variable, so
   // if the webview element were replaced while `isOpen` stays true the listener

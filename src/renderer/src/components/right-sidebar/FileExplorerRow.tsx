@@ -313,17 +313,18 @@ export function FileExplorerRow({
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
-  const { handleDragOver, handleDragEnter, handleDragLeave, handleDrop } = useFileExplorerRowDrag({
-    rowDropDir,
-    isDirectory: node.isDirectory,
-    nodePath: node.path,
-    isExpanded,
-    onDragTargetChange,
-    onDragExpandDir,
-    onNativeDragTargetChange,
-    onNativeDragExpandDir,
-    onMoveDrop
-  })
+  const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
+    useFileExplorerRowDrag({
+      rowDropDir,
+      isDirectory: node.isDirectory,
+      nodePath: node.path,
+      isExpanded,
+      onDragTargetChange,
+      onDragExpandDir,
+      onNativeDragTargetChange,
+      onNativeDragExpandDir,
+      onMoveDrop
+    })
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return
@@ -344,6 +345,7 @@ export function FileExplorerRow({
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
           style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+          ref={setRowDragNode}
           data-native-file-drop-dir={rowDropDir}
           draggable
           onDragStart={(event) => {

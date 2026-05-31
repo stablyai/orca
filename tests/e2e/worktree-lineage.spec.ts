@@ -189,7 +189,9 @@ test.describe('Worktree Lineage', () => {
     const parentAgentPrompt = await seedWorkspaceAgentStatus(orcaPage, parentId, 'PARENT')
     const childAgentPrompt = await seedWorkspaceAgentStatus(orcaPage, childId, 'CHILD')
 
-    await expect(parentRow.locator(`span[title="${parentAgentPrompt}"]`)).toBeVisible()
-    await expect(childRow.locator(`span[title="${childAgentPrompt}"]`)).toBeVisible()
+    await expect(
+      parentRow.getByRole('treeitem').filter({ hasText: parentAgentPrompt })
+    ).toBeVisible()
+    await expect(childRow.getByRole('treeitem').filter({ hasText: childAgentPrompt })).toBeVisible()
   })
 })

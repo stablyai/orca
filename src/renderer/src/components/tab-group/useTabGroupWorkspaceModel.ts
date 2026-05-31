@@ -10,6 +10,7 @@ import type {
   TabGroup,
   TerminalTab
 } from '../../../../shared/types'
+import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import { useAppStore } from '../../store'
 import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
 import { requestEditorFileClose } from '../editor/editor-autosave'
@@ -53,7 +54,8 @@ export function useTabGroupWorkspaceModel({
       terminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS,
       openFiles: state.openFiles,
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
-      expandedPaneByTabId: state.expandedPaneByTabId
+      expandedPaneByTabId: state.expandedPaneByTabId,
+      generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true
     }))
   )
 
@@ -114,8 +116,16 @@ export function useTabGroupWorkspaceModel({
             unifiedTabId: item.id,
             ptyId: terminalTab?.ptyId ?? null,
             worktreeId,
-            title: item.label,
+            title: resolveUnifiedTabLabel(
+              {
+                ...item,
+                generatedLabel: item.generatedLabel ?? terminalTab?.generatedTitle
+              },
+              worktreeState.generatedTabTitlesEnabled,
+              item.label
+            ),
             defaultTitle: terminalTab?.defaultTitle,
+            generatedTitle: terminalTab?.generatedTitle ?? item.generatedLabel ?? null,
             customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
             color: item.color ?? terminalTab?.color ?? null,
             sortOrder: item.sortOrder,
@@ -130,7 +140,7 @@ export function useTabGroupWorkspaceModel({
             pendingActivationSpawn: terminalTab?.pendingActivationSpawn
           }
         }),
-    [groupTabs, terminalTabById, worktreeId]
+    [groupTabs, terminalTabById, worktreeId, worktreeState.generatedTabTitlesEnabled]
   )
 
   const editorItems = useMemo<GroupEditorItem[]>(

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: co-locating all checks-panel sub-components (checks list,
 conflict sections, threaded PR comments) keeps the shared icon/color maps in one place. */
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CircleCheck,
   CircleX,
@@ -13,9 +13,13 @@ import {
   Check,
   MessageSquare,
   ChevronDown,
+  ChevronRight,
   Sparkles,
   RefreshCw,
-  Wrench
+  Wrench,
+  AlertTriangle,
+  Maximize2,
+  Plus
 } from 'lucide-react'
 import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -25,6 +29,14 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import {
@@ -46,8 +58,19 @@ import {
   PR_COMMENT_RESOLVED_CONTAINER_CLASS,
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
-import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
+import type {
+  PRInfo,
+  PRCheckDetail,
+  PRCheckRunDetails,
+  PRComment,
+  PRConflictSummary,
+  PRMergeableState
+} from '../../../../shared/types'
 import { useCheckDetailsResize } from './check-details-resize'
+import {
+  RightPanelCommentComposer,
+  type RightPanelCommentSubmitResult
+} from './right-panel-comment-composer'
 
 export const PullRequestIcon = GitPullRequest
 
@@ -69,6 +92,11 @@ export const CHECK_COLOR: Record<string, string> = {
   skipped: 'text-muted-foreground/60',
   cancelled: 'text-muted-foreground/60',
   timed_out: 'text-rose-500'
+}
+
+type ConflictReview = {
+  mergeable: PRMergeableState
+  conflictSummary?: PRConflictSummary
 }
 
 function ResolveConflictsWithAIButton({
@@ -109,7 +137,7 @@ export function ConflictingFilesSection({
   resolveDisabled,
   resolveDisabledReason
 }: {
-  pr: PRInfo
+  pr: ConflictReview
   isResolvingWithAI: boolean
   onResolveWithAI: () => void
   resolveDisabled?: boolean
@@ -153,21 +181,13 @@ export function ConflictingFilesSection({
   )
 }
 
-/** Fallback shown when GitHub reports merge conflicts but no file list is available yet. */
+/** Fallback shown when the hosted review reports merge conflicts but no file list is available yet. */
 export function MergeConflictNotice({
   pr,
-  isRefreshingConflictDetails,
-  isResolvingWithAI,
-  onResolveWithAI,
-  resolveDisabled,
-  resolveDisabledReason
+  isRefreshingConflictDetails
 }: {
-  pr: PRInfo
+  pr: ConflictReview
   isRefreshingConflictDetails: boolean
-  isResolvingWithAI: boolean
-  onResolveWithAI: () => void
-  resolveDisabled?: boolean
-  resolveDisabledReason?: string
 }): React.JSX.Element | null {
   if (pr.mergeable !== 'CONFLICTING' || (pr.conflictSummary?.files.length ?? 0) > 0) {
     return null
@@ -183,12 +203,135 @@ export function MergeConflictNotice({
           ? 'Refreshing conflict details…'
           : 'Conflict file details are unavailable'}
       </div>
-      <ResolveConflictsWithAIButton
-        isResolvingWithAI={isResolvingWithAI}
-        onResolveWithAI={onResolveWithAI}
-        disabled={resolveDisabled}
-        disabledReason={resolveDisabledReason}
-      />
+    </div>
+  )
+}
+
+export function PRTriageStrip({
+  pr,
+  checks,
+  isResolvingConflictsWithAI,
+  onResolveConflictsWithAI,
+  resolveConflictsDisabled,
+  resolveConflictsDisabledReason,
+  isFixingChecksWithAI,
+  onFixChecksWithAI,
+  fixChecksDisabled,
+  fixChecksDisabledReason
+}: {
+  pr: PRInfo
+  checks: PRCheckDetail[]
+  isResolvingConflictsWithAI: boolean
+  onResolveConflictsWithAI: () => void
+  resolveConflictsDisabled?: boolean
+  resolveConflictsDisabledReason?: string
+  isFixingChecksWithAI: boolean
+  onFixChecksWithAI: () => void
+  fixChecksDisabled?: boolean
+  fixChecksDisabledReason?: string
+}): React.JSX.Element {
+  const failingCount = checks.filter((check) => isFailedCheck(check)).length
+  const pendingCount = checks.filter(
+    (check) => check.conclusion === 'pending' || check.conclusion === null
+  ).length
+
+  if (pr.mergeable === 'CONFLICTING') {
+    return (
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-medium text-foreground">
+              Conflicts block this PR
+            </div>
+            <div className="truncate text-[10px] text-muted-foreground">
+              Resolve conflicts before checks and merge can complete.
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="default"
+            size="xs"
+            disabled={isResolvingConflictsWithAI || resolveConflictsDisabled}
+            title={resolveConflictsDisabled ? resolveConflictsDisabledReason : undefined}
+            onClick={onResolveConflictsWithAI}
+          >
+            {isResolvingConflictsWithAI ? (
+              <RefreshCw className="size-3 animate-spin" />
+            ) : (
+              <Sparkles className="size-3" />
+            )}
+            Resolve
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (failingCount > 0) {
+    return (
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <CircleX className="size-3.5 shrink-0 text-rose-500" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-medium text-foreground">
+              {failingCount} failing check{failingCount === 1 ? '' : 's'}
+            </div>
+            <div className="truncate text-[10px] text-muted-foreground">
+              Inspect details or start an AI fix pass.
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="default"
+            size="xs"
+            disabled={isFixingChecksWithAI || fixChecksDisabled}
+            title={fixChecksDisabled ? fixChecksDisabledReason : undefined}
+            onClick={onFixChecksWithAI}
+          >
+            {isFixingChecksWithAI ? (
+              <RefreshCw className="size-3 animate-spin" />
+            ) : (
+              <Wrench className="size-3" />
+            )}
+            Fix
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (pendingCount > 0) {
+    return (
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <LoaderCircle className="size-3.5 shrink-0 animate-spin text-amber-500" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-medium text-foreground">
+              {pendingCount} check{pendingCount === 1 ? '' : 's'} pending
+            </div>
+            <div className="truncate text-[10px] text-muted-foreground">
+              Orca will refresh checks while this panel stays open.
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="border-b border-border px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <CircleCheck className="size-3.5 shrink-0 text-emerald-500" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[11px] font-medium text-foreground">
+            No blocking PR action
+          </div>
+          <div className="truncate text-[10px] text-muted-foreground">
+            Checks and comments below show the current fetched context.
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -203,26 +346,516 @@ const CHECK_SORT_ORDER: Record<string, number> = {
   success: 5
 }
 
+type CheckDetailsLoadState = {
+  loading: boolean
+  details: PRCheckRunDetails | null
+  error: string | null
+}
+
+function getCheckIdentityKey(check: PRCheckDetail, index: number): string {
+  if (check.checkRunId) {
+    return `check-run:${check.checkRunId}`
+  }
+  if (check.workflowRunId) {
+    return `workflow-run:${check.workflowRunId}`
+  }
+  if (check.url) {
+    return `url:${check.url}`
+  }
+  return `fallback:${check.name}:${index}`
+}
+
+function getCheckDetailsKey(contextKey: string, check: PRCheckDetail, index: number): string {
+  return `${contextKey}::${getCheckIdentityKey(check, index)}`
+}
+
+function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
+  return check.conclusion ?? 'pending'
+}
+
+function isFailedCheck(check: PRCheckDetail): boolean {
+  return ['failure', 'cancelled', 'timed_out'].includes(getCheckConclusion(check))
+}
+
+function isFailureState(state: string | null | undefined): boolean {
+  return state === 'failure' || state === 'failed' || state === 'cancelled' || state === 'timed_out'
+}
+
+function getCheckStatusLabel(check: PRCheckDetail): string {
+  const conclusion = getCheckConclusion(check)
+  if (conclusion === 'success') {
+    return 'Successful'
+  }
+  if (conclusion === 'failure') {
+    return 'Failed'
+  }
+  if (conclusion === 'cancelled') {
+    return 'Cancelled'
+  }
+  if (conclusion === 'timed_out') {
+    return 'Timed out'
+  }
+  if (conclusion === 'neutral') {
+    return 'Neutral'
+  }
+  if (conclusion === 'skipped') {
+    return 'Skipped'
+  }
+  if (check.status === 'queued') {
+    return 'Queued'
+  }
+  if (check.status === 'in_progress') {
+    return 'In progress'
+  }
+  return 'Pending'
+}
+
+function formatCheckTimestamp(input: string | null | undefined): string | null {
+  if (!input) {
+    return null
+  }
+  const date = new Date(input)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  })
+}
+
+export function getFailedChecksForDetails(checks: PRCheckDetail[]): PRCheckDetail[] {
+  return checks.filter(isFailedCheck)
+}
+
+function CheckRunDetails({
+  check,
+  state
+}: {
+  check: PRCheckDetail
+  state: CheckDetailsLoadState | undefined
+}): React.JSX.Element {
+  const details = state?.details
+  const openUrl = details?.detailsUrl ?? details?.url ?? check.url
+  const startedAt = formatCheckTimestamp(details?.startedAt)
+  const completedAt = formatCheckTimestamp(details?.completedAt)
+  const detailsStatusCheck: PRCheckDetail = {
+    ...check,
+    status: (details?.status as PRCheckDetail['status'] | undefined) ?? check.status,
+    conclusion: (details?.conclusion as PRCheckDetail['conclusion'] | undefined) ?? check.conclusion
+  }
+  const failedJobs =
+    details?.jobs.filter((job) => {
+      const state = job.conclusion ?? job.status
+      return isFailureState(state)
+    }) ?? []
+  const jobs = failedJobs.length > 0 ? failedJobs : (details?.jobs ?? [])
+  const hasOutput = Boolean(details?.title || details?.summary || details?.text)
+  const hasAnnotations = (details?.annotations.length ?? 0) > 0
+  const hasJobs = jobs.length > 0
+
+  return (
+    <div className="mx-3 mb-2 min-w-0 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
+      {state?.loading ? (
+        <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
+          <LoaderCircle className="size-3.5 animate-spin" />
+          Loading check details…
+        </div>
+      ) : (
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+            <span>
+              Status:{' '}
+              {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
+            </span>
+            {startedAt && <span>Started {startedAt}</span>}
+            {completedAt && <span>Completed {completedAt}</span>}
+            {check.checkRunId && <span className="font-mono">check #{check.checkRunId}</span>}
+            {check.workflowRunId && (
+              <span className="font-mono">workflow #{check.workflowRunId}</span>
+            )}
+          </div>
+
+          {state?.error && <div className="text-[12px] text-muted-foreground">{state.error}</div>}
+
+          {hasOutput && (
+            <div className="min-w-0 rounded-md border border-border/40 bg-background/70 px-2.5 py-2">
+              {details?.title && (
+                <div className="mb-1 text-[12px] font-medium text-foreground">{details.title}</div>
+              )}
+              {details?.summary && (
+                <CommentMarkdown
+                  content={details.summary}
+                  variant="document"
+                  className="min-w-0 max-w-full overflow-hidden break-words text-[12px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
+                />
+              )}
+              {details?.text && (
+                <CommentMarkdown
+                  content={details.text}
+                  variant="document"
+                  className="mt-2 min-w-0 max-w-full overflow-hidden break-words text-[12px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
+                />
+              )}
+            </div>
+          )}
+
+          {hasAnnotations && (
+            <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
+              <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
+                Annotations
+              </div>
+              <div className="flex max-h-40 flex-col overflow-y-auto scrollbar-sleek">
+                {details!.annotations.map((annotation, index) => (
+                  <div
+                    key={`${annotation.path ?? 'annotation'}-${index}`}
+                    className={cn(
+                      'min-w-0 px-2.5 py-2 text-[12px]',
+                      index > 0 && 'border-t border-border/30'
+                    )}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+                        {annotation.path ?? 'Annotation'}
+                        {annotation.startLine ? `:${annotation.startLine}` : ''}
+                      </span>
+                      {annotation.annotationLevel && (
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          {annotation.annotationLevel}
+                        </span>
+                      )}
+                    </div>
+                    {annotation.title && (
+                      <div className="mt-1 text-[12px] font-medium text-foreground">
+                        {annotation.title}
+                      </div>
+                    )}
+                    <div className="mt-1 break-words text-[12px] text-foreground">
+                      {annotation.message}
+                    </div>
+                    {annotation.rawDetails && (
+                      <pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground scrollbar-sleek">
+                        {annotation.rawDetails}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {details!.annotations.length >= 20 && (
+                <div className="border-t border-border/40 px-2.5 py-1.5 text-[10px] text-muted-foreground">
+                  Showing first 20 annotations
+                </div>
+              )}
+            </div>
+          )}
+
+          {hasJobs && (
+            <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
+              <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
+                {failedJobs.length > 0 ? 'Failed jobs' : 'Jobs'}
+              </div>
+              <div className="flex max-h-48 flex-col overflow-y-auto scrollbar-sleek">
+                {jobs.map((job, index) => (
+                  <div
+                    key={`${job.name}-${index}`}
+                    className={cn('min-w-0 px-2.5 py-2', index > 0 && 'border-t border-border/30')}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-foreground">
+                        {job.name}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {job.conclusion ?? job.status ?? 'unknown'}
+                      </span>
+                    </div>
+                    {job.steps.length > 0 && (
+                      <div className="mt-1 grid gap-1">
+                        {job.steps
+                          .filter((step) => {
+                            const state = step.conclusion ?? step.status
+                            return isFailureState(state)
+                          })
+                          .map((step) => (
+                            <div
+                              key={step.name}
+                              className="flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground"
+                            >
+                              <span className="min-w-0 flex-1 truncate">{step.name}</span>
+                              <span className="shrink-0">{step.conclusion ?? step.status}</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {(details?.jobs.length ?? 0) >= 100 && (
+                <div className="border-t border-border/40 px-2.5 py-1.5 text-[10px] text-muted-foreground">
+                  Showing first 100 jobs
+                </div>
+              )}
+            </div>
+          )}
+
+          {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
+            <div className="text-[12px] text-muted-foreground">
+              No inline details are available for this check.
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-1">
+            {!state?.loading && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="h-7 gap-1 px-2 text-[11px]"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    View full details
+                    <Maximize2 className="size-3" />
+                  </Button>
+                </DialogTrigger>
+                <CheckRunDetailsDialog
+                  check={check}
+                  state={state}
+                  detailsStatusCheck={detailsStatusCheck}
+                  jobs={jobs}
+                  openUrl={openUrl}
+                />
+              </Dialog>
+            )}
+            {openUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="h-7 gap-1 px-2 text-[11px]"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  window.api.shell.openUrl(openUrl)
+                }}
+              >
+                Open details
+                <ExternalLink className="size-3" />
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CheckRunDetailsDialog({
+  check,
+  state,
+  detailsStatusCheck,
+  jobs,
+  openUrl
+}: {
+  check: PRCheckDetail
+  state: CheckDetailsLoadState | undefined
+  detailsStatusCheck: PRCheckDetail
+  jobs: NonNullable<PRCheckRunDetails['jobs']>
+  openUrl: string | null | undefined
+}): React.JSX.Element {
+  const details = state?.details
+  const startedAt = formatCheckTimestamp(details?.startedAt)
+  const completedAt = formatCheckTimestamp(details?.completedAt)
+  const hasOutput = Boolean(details?.title || details?.summary || details?.text)
+  const hasAnnotations = (details?.annotations.length ?? 0) > 0
+  const hasJobs = jobs.length > 0
+
+  return (
+    <DialogContent
+      className="flex max-h-[85vh] w-[min(760px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden p-0"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <DialogHeader className="border-b border-border px-5 py-4 pr-12">
+        <DialogTitle className="truncate text-base">{check.name}</DialogTitle>
+        <DialogDescription className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          <span>
+            Status: {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
+          </span>
+          {startedAt && <span>Started {startedAt}</span>}
+          {completedAt && <span>Completed {completedAt}</span>}
+          {check.checkRunId && <span className="font-mono">check #{check.checkRunId}</span>}
+          {check.workflowRunId && (
+            <span className="font-mono">workflow #{check.workflowRunId}</span>
+          )}
+        </DialogDescription>
+      </DialogHeader>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 scrollbar-sleek">
+        <div className="grid gap-4">
+          {state?.error && <div className="text-sm text-muted-foreground">{state.error}</div>}
+
+          {hasOutput && (
+            <section className="rounded-md border border-border bg-background">
+              <div className="border-b border-border px-3 py-2 text-sm font-medium">Output</div>
+              <div className="px-3 py-3">
+                {details?.title && (
+                  <div className="mb-2 text-sm font-medium text-foreground">{details.title}</div>
+                )}
+                {details?.summary && (
+                  <CommentMarkdown
+                    content={details.summary}
+                    variant="document"
+                    className="min-w-0 max-w-full overflow-hidden break-words text-sm leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
+                  />
+                )}
+                {details?.text && (
+                  <CommentMarkdown
+                    content={details.text}
+                    variant="document"
+                    className="mt-3 min-w-0 max-w-full overflow-hidden break-words text-sm leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
+                  />
+                )}
+              </div>
+            </section>
+          )}
+
+          {hasAnnotations && (
+            <section className="rounded-md border border-border bg-background">
+              <div className="border-b border-border px-3 py-2 text-sm font-medium">
+                Annotations
+              </div>
+              <div className="divide-y divide-border/50">
+                {details!.annotations.map((annotation, index) => (
+                  <div key={`${annotation.path ?? 'annotation'}-${index}`} className="px-3 py-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="min-w-0 break-all font-mono text-xs text-muted-foreground">
+                        {annotation.path ?? 'Annotation'}
+                        {annotation.startLine ? `:${annotation.startLine}` : ''}
+                      </span>
+                      {annotation.annotationLevel && (
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {annotation.annotationLevel}
+                        </span>
+                      )}
+                    </div>
+                    {annotation.title && (
+                      <div className="mt-2 text-sm font-medium text-foreground">
+                        {annotation.title}
+                      </div>
+                    )}
+                    <div className="mt-2 break-words text-sm text-foreground">
+                      {annotation.message}
+                    </div>
+                    {annotation.rawDetails && (
+                      <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek">
+                        {annotation.rawDetails}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {hasJobs && (
+            <section className="rounded-md border border-border bg-background">
+              <div className="border-b border-border px-3 py-2 text-sm font-medium">Jobs</div>
+              <div className="divide-y divide-border/50">
+                {jobs.map((job, index) => (
+                  <div key={`${job.name}-${index}`} className="px-3 py-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                        {job.name}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {job.conclusion ?? job.status ?? 'unknown'}
+                      </span>
+                    </div>
+                    {job.steps.length > 0 && (
+                      <div className="mt-2 grid gap-1">
+                        {job.steps.map((step) => (
+                          <div
+                            key={step.name}
+                            className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
+                          >
+                            <span className="min-w-0 flex-1 truncate">{step.name}</span>
+                            <span className="shrink-0">{step.conclusion ?? step.status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
+            <div className="text-sm text-muted-foreground">
+              No details are available for this check.
+            </div>
+          )}
+        </div>
+      </div>
+      {openUrl && (
+        <div className="flex justify-end border-t border-border px-5 py-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation()
+              window.api.shell.openUrl(openUrl)
+            }}
+          >
+            Open details
+            <ExternalLink className="size-3.5" />
+          </Button>
+        </div>
+      )}
+    </DialogContent>
+  )
+}
+
 /** Renders the checks summary bar + scrollable check list. */
 export function ChecksList({
   checks,
   checksLoading,
-  isFixingWithAI,
-  onFixWithAI
+  checkDetailsContextKey,
+  onLoadCheckDetails
 }: {
   checks: PRCheckDetail[]
   checksLoading: boolean
-  isFixingWithAI?: boolean
-  onFixWithAI?: () => void
+  checkDetailsContextKey: string
+  onLoadCheckDetails?: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
 }): React.JSX.Element {
   const [checksExpanded, setChecksExpanded] = useState(true)
+  const [expandedCheckKeys, setExpandedCheckKeys] = useState<Set<string>>(new Set())
+  const [detailsByCheckKey, setDetailsByCheckKey] = useState<Record<string, CheckDetailsLoadState>>(
+    {}
+  )
+  const detailsContextRef = useRef(checkDetailsContextKey)
+  const autoExpandedContextRef = useRef<string | null>(null)
   const { detailsHeight, handleResizeStart } = useCheckDetailsResize(
     checksExpanded && checks.length > 0
   )
-  const sorted = [...checks].sort(
-    (a, b) =>
-      (CHECK_SORT_ORDER[a.conclusion ?? 'pending'] ?? 3) -
-      (CHECK_SORT_ORDER[b.conclusion ?? 'pending'] ?? 3)
+  detailsContextRef.current = checkDetailsContextKey
+  const sorted = React.useMemo(
+    () =>
+      [...checks].sort(
+        (a, b) =>
+          (CHECK_SORT_ORDER[a.conclusion ?? 'pending'] ?? 3) -
+          (CHECK_SORT_ORDER[b.conclusion ?? 'pending'] ?? 3)
+      ),
+    [checks]
+  )
+  const rows = React.useMemo(
+    () =>
+      sorted.map((check, index) => ({
+        check,
+        key: getCheckDetailsKey(checkDetailsContextKey, check, index)
+      })),
+    [checkDetailsContextKey, sorted]
   )
   const passingCount = checks.filter((c) => c.conclusion === 'success').length
   const failingCount = checks.filter(
@@ -232,6 +865,123 @@ export function ChecksList({
   const pendingCount = checks.filter(
     (c) => c.conclusion === 'pending' || c.conclusion === null
   ).length
+
+  useEffect(() => {
+    const validKeys = new Set(rows.map((row) => row.key))
+    setDetailsByCheckKey((current) => {
+      const next: Record<string, CheckDetailsLoadState> = {}
+      for (const [key, state] of Object.entries(current)) {
+        if (validKeys.has(key)) {
+          next[key] = state
+        }
+      }
+      return next
+    })
+    setExpandedCheckKeys((current) => {
+      const next = new Set([...current].filter((key) => validKeys.has(key)))
+      if (autoExpandedContextRef.current !== checkDetailsContextKey) {
+        const firstFailed = rows.find((row) => isFailedCheck(row.check))
+        if (firstFailed) {
+          next.add(firstFailed.key)
+        }
+        autoExpandedContextRef.current = checkDetailsContextKey
+      }
+      return next
+    })
+  }, [checkDetailsContextKey, rows])
+
+  const requestCheckDetails = useCallback(
+    (row: { check: PRCheckDetail; key: string }) => {
+      if (detailsByCheckKey[row.key]?.loading || detailsByCheckKey[row.key]?.details) {
+        return
+      }
+      if (!row.check.checkRunId && !row.check.workflowRunId && !row.check.url) {
+        setDetailsByCheckKey((current) => ({
+          ...current,
+          [row.key]: {
+            loading: false,
+            details: null,
+            error: 'No inline details are available for this check.'
+          }
+        }))
+        return
+      }
+      if (!onLoadCheckDetails) {
+        setDetailsByCheckKey((current) => ({
+          ...current,
+          [row.key]: {
+            loading: false,
+            details: null,
+            error: 'No inline details are available for this check.'
+          }
+        }))
+        return
+      }
+      const requestContextKey = checkDetailsContextKey
+      setDetailsByCheckKey((current) => ({
+        ...current,
+        [row.key]: { loading: true, details: null, error: null }
+      }))
+      void onLoadCheckDetails(row.check)
+        .then((details) => {
+          if (detailsContextRef.current !== requestContextKey) {
+            return
+          }
+          setDetailsByCheckKey((current) => ({
+            ...current,
+            [row.key]: {
+              loading: false,
+              details,
+              error: details ? null : 'No inline details are available for this check.'
+            }
+          }))
+        })
+        .catch((err) => {
+          if (detailsContextRef.current !== requestContextKey) {
+            return
+          }
+          setDetailsByCheckKey((current) => ({
+            ...current,
+            [row.key]: {
+              loading: false,
+              details: null,
+              error: err instanceof Error ? err.message : 'Failed to load check details.'
+            }
+          }))
+        })
+    },
+    [checkDetailsContextKey, detailsByCheckKey, onLoadCheckDetails]
+  )
+
+  useEffect(() => {
+    if (!checksExpanded) {
+      return
+    }
+    for (const row of rows) {
+      if (expandedCheckKeys.has(row.key) && !detailsByCheckKey[row.key]) {
+        requestCheckDetails(row)
+      }
+    }
+  }, [checksExpanded, detailsByCheckKey, expandedCheckKeys, requestCheckDetails, rows])
+
+  const toggleCheckExpanded = useCallback(
+    (row: { check: PRCheckDetail; key: string }) => {
+      const willExpand = !expandedCheckKeys.has(row.key)
+      setExpandedCheckKeys((current) => {
+        const next = new Set(current)
+        if (next.has(row.key)) {
+          next.delete(row.key)
+        } else {
+          next.add(row.key)
+        }
+        return next
+      })
+      if (willExpand) {
+        requestCheckDetails(row)
+      }
+    },
+    [expandedCheckKeys, requestCheckDetails]
+  )
 
   return (
     <>
@@ -269,29 +1019,6 @@ export function ChecksList({
         </button>
       )}
 
-      {/* Why: surface a one-click "Fix with AI" path right at the top of the
-          checks list so users can hand failing CI off to the default agent
-          without leaving the right sidebar — mirrors the Tasks page action. */}
-      {failingCount > 0 && onFixWithAI && (
-        <div className="border-b border-border px-3 py-2">
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            className="h-7 w-full text-xs"
-            disabled={isFixingWithAI}
-            onClick={onFixWithAI}
-          >
-            {isFixingWithAI ? (
-              <RefreshCw className="size-3.5 animate-spin" />
-            ) : (
-              <Wrench className="size-3.5" />
-            )}
-            Fix with AI
-          </Button>
-        </div>
-      )}
-
       {/* Checks List */}
       {checksLoading && checks.length === 0 ? (
         <div className="flex items-center justify-center py-8">
@@ -307,34 +1034,42 @@ export function ChecksList({
             className="overflow-y-auto py-1 scrollbar-sleek"
             style={{ maxHeight: detailsHeight }}
           >
-            {sorted.map((check) => {
+            {rows.map((row) => {
+              const check = row.check
               const conclusion = check.conclusion ?? 'pending'
               const Icon = CHECK_ICON[conclusion] ?? CircleDashed
               const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
+              const expanded = expandedCheckKeys.has(row.key)
               return (
-                <div
-                  key={check.name}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-1.5 hover:bg-accent/40 transition-colors',
-                    check.url && 'cursor-pointer'
-                  )}
-                  onClick={() => {
-                    if (check.url) {
-                      window.api.shell.openUrl(check.url)
-                    }
-                  }}
-                >
-                  <Icon
+                <div key={row.key} className="min-w-0">
+                  <div
                     className={cn(
-                      'size-3.5 shrink-0',
-                      color,
-                      conclusion === 'pending' && 'animate-spin'
+                      'flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
+                      expanded && 'bg-accent/25'
                     )}
-                  />
-                  <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
-                  {check.url && (
-                    <ExternalLink className="size-3 shrink-0 text-muted-foreground/40" />
-                  )}
+                    onClick={() => toggleCheckExpanded(row)}
+                  >
+                    <ChevronRight
+                      className={cn(
+                        'size-3 shrink-0 text-muted-foreground transition-transform',
+                        expanded && 'rotate-90'
+                      )}
+                    />
+                    <Icon
+                      className={cn(
+                        'size-3.5 shrink-0',
+                        color,
+                        conclusion === 'pending' && 'animate-spin'
+                      )}
+                    />
+                    <span className="flex-1 truncate text-[12px] text-foreground">
+                      {check.name}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {getCheckStatusLabel(check)}
+                    </span>
+                  </div>
+                  {expanded && <CheckRunDetails check={check} state={detailsByCheckKey[row.key]} />}
                 </div>
               )
             })}
@@ -348,6 +1083,11 @@ export function ChecksList({
           >
             <div className="h-px w-full bg-transparent transition-colors group-hover:bg-ring/40" />
           </div>
+          {checks.length >= 100 && (
+            <div className="border-b border-border px-3 py-1.5 text-[10px] text-muted-foreground">
+              Showing first 100 checks
+            </div>
+          )}
         </>
       )}
     </>
@@ -415,7 +1155,7 @@ function ResolveButton({
 }: {
   threadId: string
   isResolved: boolean
-  onResolve: (threadId: string, resolve: boolean) => void
+  onResolve: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
 }): React.JSX.Element {
   const [loading, setLoading] = useState(false)
   const loadingResetTimerRef = useRef<number | null>(null)
@@ -441,11 +1181,7 @@ function ResolveButton({
       e.stopPropagation()
       clearLoadingResetTimer()
       setLoading(true)
-      loadingResetTimerRef.current = window.setTimeout(() => {
-        loadingResetTimerRef.current = null
-        setLoading(false)
-      }, 300)
-      onResolve(threadId, !isResolved)
+      void Promise.resolve(onResolve(threadId, !isResolved)).finally(() => setLoading(false))
     },
     [clearLoadingResetTimer, threadId, isResolved, onResolve]
   )
@@ -492,12 +1228,20 @@ function CommentRow({
   comment,
   isReply,
   showResolve,
-  onResolve
+  showReply,
+  replyDisabled,
+  replyDisabledReason,
+  onResolve,
+  onReply
 }: {
   comment: PRComment
   isReply: boolean
   showResolve: boolean
-  onResolve?: (threadId: string, resolve: boolean) => void
+  showReply?: boolean
+  replyDisabled?: boolean
+  replyDisabledReason?: string
+  onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
+  onReply?: (comment: PRComment) => void
 }): React.JSX.Element {
   const automated = isBotPRComment(comment)
   return (
@@ -555,6 +1299,19 @@ function CommentRow({
                 onResolve={onResolve}
               />
             )}
+            {showReply && onReply && (
+              <button
+                className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                title={replyDisabled ? replyDisabledReason : 'Reply'}
+                disabled={replyDisabled}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onReply(comment)
+                }}
+              >
+                Reply
+              </button>
+            )}
             <CopyButton text={buildCopyText(comment)} />
           </div>
         </div>
@@ -562,7 +1319,7 @@ function CommentRow({
           content={comment.body}
           className={cn(
             'mt-1 text-[11px] leading-snug text-muted-foreground',
-            'break-words [&_p]:my-1 [&_pre]:max-h-none [&_table]:min-w-max',
+            'break-words [&_p]:my-1 [&_pre]:max-h-none [&_pre]:max-w-full [&_pre]:whitespace-pre-wrap [&_table]:w-full [&_table]:max-w-full',
             isReply ? 'pl-5' : 'pl-[22px]'
           )}
         />
@@ -571,24 +1328,72 @@ function CommentRow({
   )
 }
 
-function renderCommentGroup(
-  group: PRCommentGroup,
-  onResolve?: (threadId: string, resolve: boolean) => void
-): React.JSX.Element {
+function PRCommentGroupView({
+  group,
+  replyingGroupId,
+  replyDisabled,
+  replyDisabledReason,
+  onResolve,
+  onStartReply,
+  onCancelReply,
+  onReply
+}: {
+  group: PRCommentGroup
+  replyingGroupId: string | null
+  replyDisabled?: boolean
+  replyDisabledReason?: string
+  onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
+  onStartReply?: (groupId: string) => void
+  onCancelReply?: () => void
+  onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
+}): React.JSX.Element {
+  const groupId = getPRCommentGroupId(group)
+  const root = getPRCommentGroupRoot(group)
+  const replyComposer =
+    replyingGroupId === groupId && onReply ? (
+      <div className={cn('px-3 pb-2', group.kind === 'thread' && 'pl-6')}>
+        <RightPanelCommentComposer
+          placeholder={`Reply to ${root.author}`}
+          submitLabel="Reply"
+          autoFocus
+          disabled={replyDisabled}
+          disabledReason={replyDisabledReason}
+          onCancel={onCancelReply}
+          onSubmit={(body) => onReply(root, body)}
+        />
+      </div>
+    ) : null
+  const startReply = onStartReply ? () => onStartReply(groupId) : undefined
+
   if (group.kind === 'standalone') {
     return (
-      <CommentRow
-        key={group.comment.id}
-        comment={group.comment}
-        isReply={false}
-        showResolve={false}
-        onResolve={onResolve}
-      />
+      <div key={group.comment.id}>
+        <CommentRow
+          comment={group.comment}
+          isReply={false}
+          showResolve={false}
+          showReply={Boolean(onReply)}
+          replyDisabled={replyDisabled}
+          replyDisabledReason={replyDisabledReason}
+          onResolve={onResolve}
+          onReply={startReply ? () => startReply() : undefined}
+        />
+        {replyComposer}
+      </div>
     )
   }
   return (
     <div key={group.threadId} className="py-0.5">
-      <CommentRow comment={group.root} isReply={false} showResolve={true} onResolve={onResolve} />
+      <CommentRow
+        comment={group.root}
+        isReply={false}
+        showResolve={true}
+        showReply={Boolean(onReply)}
+        replyDisabled={replyDisabled}
+        replyDisabledReason={replyDisabledReason}
+        onResolve={onResolve}
+        onReply={startReply ? () => startReply() : undefined}
+      />
       {group.replies.length > 0 && (
         <div className="ml-3 border-l-2 border-border/50">
           {group.replies.map((reply) => (
@@ -597,21 +1402,35 @@ function renderCommentGroup(
               comment={reply}
               isReply={true}
               showResolve={false}
+              showReply={false}
               onResolve={onResolve}
             />
           ))}
         </div>
       )}
+      {replyComposer}
     </div>
   )
 }
 
 function ResolvedCommentGroupAccordion({
   group,
-  onResolve
+  replyingGroupId,
+  replyDisabled,
+  replyDisabledReason,
+  onResolve,
+  onStartReply,
+  onCancelReply,
+  onReply
 }: {
   group: PRCommentGroup
-  onResolve?: (threadId: string, resolve: boolean) => void
+  replyingGroupId: string | null
+  replyDisabled?: boolean
+  replyDisabledReason?: string
+  onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
+  onStartReply?: (groupId: string) => void
+  onCancelReply?: () => void
+  onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
 }): React.JSX.Element {
   const root = getPRCommentGroupRoot(group)
   const count = getPRCommentGroupCount(group)
@@ -625,7 +1444,16 @@ function ResolvedCommentGroupAccordion({
           </span>
         </AccordionTrigger>
         <AccordionContent className="pb-1 pt-0">
-          {renderCommentGroup(group, onResolve)}
+          <PRCommentGroupView
+            group={group}
+            replyingGroupId={replyingGroupId}
+            replyDisabled={replyDisabled}
+            replyDisabledReason={replyDisabledReason}
+            onResolve={onResolve}
+            onStartReply={onStartReply}
+            onCancelReply={onCancelReply}
+            onReply={onReply}
+          />
         </AccordionContent>
       </AccordionItem>
     </Accordion>
@@ -636,13 +1464,23 @@ function ResolvedCommentGroupAccordion({
 export function PRCommentsList({
   comments,
   commentsLoading,
+  commentsDisabled,
+  commentsDisabledReason,
+  onAddComment,
+  onReply,
   onResolve
 }: {
   comments: PRComment[]
   commentsLoading: boolean
-  onResolve?: (threadId: string, resolve: boolean) => void
+  commentsDisabled?: boolean
+  commentsDisabledReason?: string
+  onAddComment?: (body: string) => Promise<RightPanelCommentSubmitResult>
+  onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
+  onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
 }): React.JSX.Element {
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
+  const [replyingGroupId, setReplyingGroupId] = useState<string | null>(null)
+  const [isAddingComment, setIsAddingComment] = useState(false)
   const commentCounts = React.useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = React.useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
@@ -683,6 +1521,11 @@ export function PRCommentsList({
             })}
           </div>
         )}
+        {comments.length >= 100 && (
+          <div className="mt-1.5 text-[10px] text-muted-foreground">
+            Showing first 100 comments per source
+          </div>
+        )}
       </div>
 
       {/* List */}
@@ -706,12 +1549,59 @@ export function PRCommentsList({
                 <ResolvedCommentGroupAccordion
                   key={getPRCommentGroupId(group)}
                   group={group}
+                  replyingGroupId={replyingGroupId}
+                  replyDisabled={commentsDisabled}
+                  replyDisabledReason={commentsDisabledReason}
                   onResolve={onResolve}
+                  onStartReply={setReplyingGroupId}
+                  onCancelReply={() => setReplyingGroupId(null)}
+                  onReply={onReply}
                 />
               )
             }
-            return renderCommentGroup(group, onResolve)
+            return (
+              <PRCommentGroupView
+                key={getPRCommentGroupId(group)}
+                group={group}
+                replyingGroupId={replyingGroupId}
+                replyDisabled={commentsDisabled}
+                replyDisabledReason={commentsDisabledReason}
+                onResolve={onResolve}
+                onStartReply={setReplyingGroupId}
+                onCancelReply={() => setReplyingGroupId(null)}
+                onReply={onReply}
+              />
+            )
           })}
+        </div>
+      )}
+      {onAddComment && (
+        <div className="border-t border-border px-3 py-2">
+          {isAddingComment ? (
+            <RightPanelCommentComposer
+              placeholder="Add a PR comment"
+              submitLabel="Comment"
+              autoFocus
+              disabled={commentsDisabled}
+              disabledReason={commentsDisabledReason}
+              onCancel={() => setIsAddingComment(false)}
+              onSubmit={onAddComment}
+            />
+          ) : (
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                disabled={commentsDisabled}
+                title={commentsDisabled ? commentsDisabledReason : undefined}
+                onClick={() => setIsAddingComment(true)}
+              >
+                <Plus className="size-3" />
+                Add Comment
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

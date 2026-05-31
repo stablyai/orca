@@ -372,7 +372,7 @@ export function registerRemoteWorkspaceHandlers(
 
   ipcMain.handle(
     'remoteWorkspace:setForConnectedTargets',
-    async (_event, args: { session: WorkspaceSessionState; hydratedTargetIds?: unknown }) => {
+    async (_event, args: { session?: WorkspaceSessionState; hydratedTargetIds?: unknown }) => {
       const hydratedTargetIds = getExplicitHydratedTargetIds(args.hydratedTargetIds)
       if (!hydratedTargetIds) {
         // Why: an omitted hydration set used to broadcast one session to every
@@ -387,8 +387,9 @@ export function registerRemoteWorkspaceHandlers(
           ) ?? []
 
       const results: { targetId: string; result: RemoteWorkspacePatchResult }[] = []
+      const workspaceSession = args.session ?? store.getWorkspaceSession()
       for (const target of targets) {
-        const session = exportSessionForTarget(store, target.id, args.session)
+        const session = exportSessionForTarget(store, target.id, workspaceSession)
         const result = await queueRemoteWorkspacePatch(target.id, () =>
           patchRemoteWorkspaceSession(target, session)
         )

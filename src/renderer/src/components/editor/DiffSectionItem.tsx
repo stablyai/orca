@@ -15,7 +15,7 @@ import type { editor as monacoEditor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
-import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { computeDiffEditorFontSize } from '@/lib/editor-font-zoom'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   useDiffCommentDecorator,
@@ -36,6 +36,7 @@ import { cn } from '@/lib/utils'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { Button } from '@/components/ui/button'
 import { installEditorSaveShortcut } from './editor-shortcuts'
+import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -119,7 +120,7 @@ export function DiffSectionItem({
       `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}`,
     [section.key, worktreeId]
   )
-  const editorFontSize = computeEditorFontSize(
+  const diffEditorFontSize = computeDiffEditorFontSize(
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
@@ -148,14 +149,23 @@ export function DiffSectionItem({
       }
     }, 0)
   }, [modelPathBase])
+  const disposeDiffModelsRef = useRef(disposeDiffModels)
+  disposeDiffModelsRef.current = disposeDiffModels
+
+  const setSectionRootNode = useCallback((node: HTMLDivElement | null): void => {
+    if (node) {
+      return
+    }
+    // Why: virtualized diff rows remount as their keyed section/collapse state
+    // changes; the row root is the owner of the detached Monaco models.
+    disposeDiffModelsRef.current()
+  }, [])
 
   useEffect(() => {
     if (section.collapsed) {
       disposeDiffModels()
     }
   }, [disposeDiffModels, section.collapsed])
-
-  useEffect(() => () => disposeDiffModels(), [disposeDiffModels])
 
   // Why: only forward the pending scroll id when it matches a comment in this
   // section so unrelated sections don't keep re-rendering their decorator
@@ -418,7 +428,7 @@ export function DiffSectionItem({
   }, [index, loadSection])
 
   return (
-    <div className="border-b border-border">
+    <div ref={setSectionRootNode} className="border-b border-border">
       <DiffSectionHeader
         path={section.path}
         dirty={section.dirty}
@@ -524,12 +534,12 @@ export function DiffSectionItem({
                 renderSideBySide: sideBySide,
                 minimap: { enabled: false },
                 scrollBeyondLastLine: false,
-                fontSize: editorFontSize,
+                fontSize: diffEditorFontSize,
                 fontFamily: settings?.terminalFontFamily || 'monospace',
                 lineNumbers: 'on',
                 automaticLayout: true,
                 renderOverviewRuler: false,
-                scrollbar: { vertical: 'hidden', handleMouseWheel: false },
+                scrollbar: combinedDiffSectionScrollbarOptions,
                 hideUnchangedRegions: { enabled: true },
                 find: {
                   addExtraSpaceOnTop: false,

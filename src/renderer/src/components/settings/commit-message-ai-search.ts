@@ -34,24 +34,18 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Advanced model overrides',
-    description:
-      'Optional per-operation model choices for commit messages, PR details, and branch names.',
-    keywords: ['model', 'override', 'commit', 'pull request', 'pr', 'branch', 'thinking']
+    description: 'Optional per-operation model choices for commit messages and PR details.',
+    keywords: ['model', 'override', 'commit', 'pull request', 'pr', 'thinking']
   },
   {
-    title: 'Commit message instructions',
-    description: 'Optional instructions appended only to commit-message prompts.',
-    keywords: ['prompt', 'instructions', 'conventional commits', 'gitmoji', 'style']
+    title: 'Commit message prompt',
+    description: 'Additional prompt text appended only when generating commit messages.',
+    keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
   },
   {
-    title: 'Pull request instructions',
-    description: 'Optional instructions appended only to pull-request detail prompts.',
-    keywords: ['prompt', 'instructions', 'pull request', 'pr', 'description', 'template']
-  },
-  {
-    title: 'Branch name instructions',
-    description: 'Optional instructions appended only to auto branch-name prompts.',
-    keywords: ['prompt', 'instructions', 'branch', 'branch name', 'rename', 'slug']
+    title: 'Pull request prompt',
+    description: 'Additional prompt text appended only when generating pull request details.',
+    keywords: ['prompt', 'pull request', 'pr', 'description', 'template']
   },
   {
     title: 'PR creation defaults',

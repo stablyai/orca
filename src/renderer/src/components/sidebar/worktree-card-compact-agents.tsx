@@ -6,6 +6,9 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import CommentMarkdown from './CommentMarkdown'
+
+const MARKDOWN_IMAGE_PATTERN = /!\[[^\]\n]*\]\([^)]+\)/
 
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
   switch (state) {
@@ -15,9 +18,8 @@ function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
     case 'done':
     case 'idle':
       return state
-    default:
-      return 'idle'
   }
+  return 'idle'
 }
 
 function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {
@@ -126,6 +128,12 @@ function summarizeAgents(agents: DashboardAgentRowData[], subjectLabel: string):
                 : 'idle'
     return `${count} ${label}`
   })
+  if (parts.length === 1) {
+    const onlyStatusLabel = parts[0].replace(/^\d+\s+/, '')
+    return agents.length === 1
+      ? `${subjectLabel} ${onlyStatusLabel}`
+      : `All ${subjectLabel} ${onlyStatusLabel}`
+  }
   return `${subjectLabel}: ${parts.join(', ')}`
 }
 
@@ -218,6 +226,7 @@ export function CompactAgentSummaryButton({
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const summary = summarizeAgents(agents, subjectLabel)
   const iconAgents = selectSummaryIconAgents(agents, 3)
+  const hiddenIconAgentCount = Math.max(0, agents.length - iconAgents.length)
   const stopPointerPropagation = useCallback((e: React.SyntheticEvent) => {
     e.stopPropagation()
   }, [])
@@ -246,7 +255,7 @@ export function CompactAgentSummaryButton({
       onPointerDown={stopPointerPropagation}
       onDragStart={stopPointerPropagation}
     >
-      <span className="flex shrink-0 items-center -space-x-1" aria-hidden>
+      <span className="flex shrink-0 items-center gap-0.5" aria-hidden>
         {iconAgents.map((agent) => (
           <span
             key={agent.paneKey}
@@ -258,9 +267,11 @@ export function CompactAgentSummaryButton({
         ))}
       </span>
       <span className="min-w-0 flex-1 truncate">{summary}</span>
-      <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
-        +{agents.length}
-      </span>
+      {hiddenIconAgentCount > 0 && (
+        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
+          +{hiddenIconAgentCount}
+        </span>
+      )}
       <ChevronRight
         className={cn('size-3 shrink-0 transition-transform duration-150', expanded && 'rotate-90')}
         aria-hidden
@@ -298,7 +309,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     typeof onToggleChildAgents === 'function'
   const dotState = getAgentDotState(agent)
   const primary = getCompactAgentPrimary(agent)
-  const secondary = getCompactAgentSecondary(agent)
+  const assistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
+  const hasAssistantImage = MARKDOWN_IMAGE_PATTERN.test(assistantMessage)
+  const secondary = hasAssistantImage
+    ? formatAgentTypeLabel(agent.agentType)
+    : getCompactAgentSecondary(agent)
   const shortTime = getCompactAgentTime(agent, now)
 
   const handleActivate = useCallback(
@@ -317,24 +332,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     [onToggleChildAgents]
   )
 
-  return (
-    <div
-      draggable={false}
-      className={cn(
-        'group/compact-agent-row flex h-6 min-w-0 cursor-pointer items-center gap-1 rounded-sm px-1 text-[11px] leading-none',
-        'text-muted-foreground worktree-agent-row-hover',
-        isFocusedPane && 'bg-sidebar-accent'
-      )}
-      onClick={handleActivate}
-      onMouseDown={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-      onDragStart={(e) => e.stopPropagation()}
-      data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
-      role={agent.lineage ? 'treeitem' : undefined}
-      aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
-      aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
-      title={`${primary}${secondary ? ` - ${secondary}` : ''}`}
-    >
+  const rowBody = (
+    <>
       {hasChildDisclosure ? (
         <button
           type="button"
@@ -376,6 +375,39 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/60">
           {shortTime}
         </span>
+      )}
+    </>
+  )
+
+  return (
+    <div
+      draggable={false}
+      className={cn(
+        'group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
+        'text-muted-foreground worktree-agent-row-hover',
+        hasAssistantImage ? 'flex flex-col py-0.5' : 'flex h-6 items-center gap-1',
+        isFocusedPane && 'bg-sidebar-accent'
+      )}
+      onClick={handleActivate}
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onDragStart={(e) => e.stopPropagation()}
+      data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
+      role={agent.lineage ? 'treeitem' : undefined}
+      aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
+      aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
+      title={`${primary}${secondary ? ` - ${secondary}` : ''}`}
+    >
+      {hasAssistantImage ? (
+        <>
+          <div className="flex h-6 min-w-0 items-center gap-1">{rowBody}</div>
+          <CommentMarkdown
+            content={assistantMessage}
+            className="ml-5 max-h-36 max-w-full overflow-hidden text-[10px] leading-snug text-muted-foreground/80 [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
+          />
+        </>
+      ) : (
+        rowBody
       )}
     </div>
   )

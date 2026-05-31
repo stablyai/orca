@@ -1,6 +1,13 @@
 import type { CliInstallStatus } from '../../shared/cli-install-types'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const execFileMock = vi.hoisted(() => vi.fn())
+
+vi.mock('node:child_process', () => ({
+  execFile: execFileMock
+}))
+
 import { WslCliInstaller, _internals } from './wsl-cli-installer'
-import { describe, expect, it, vi } from 'vitest'
 
 function makeHostStatus(launcherPath = 'C:\\Users\\me\\AppData\\Local\\Orca\\bin\\orca.cmd') {
   return {
@@ -80,6 +87,14 @@ function createWslRunner(initialFile: string | null = null, pathIncludesLocalBin
 }
 
 describe('WslCliInstaller', () => {
+  beforeEach(() => {
+    execFileMock.mockReset()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('installs a WSL launcher that forwards to the Windows Orca launcher', async () => {
     const wsl = createWslRunner()
     const installer = new WslCliInstaller({
@@ -206,6 +221,32 @@ describe('WslCliInstaller', () => {
     expect(wrapped).toContain('set -o pipefail;')
     expect(encoded).toBeTruthy()
     expect(Buffer.from(encoded as string, 'base64').toString('utf8')).toBe(command)
+  })
+
+  it('settles when wsl.exe never reports completion', async () => {
+    vi.useFakeTimers()
+    const killMock = vi.fn()
+    execFileMock.mockImplementation(() => ({ kill: killMock }))
+    const installer = new WslCliInstaller({
+      platform: 'win32',
+      distro: 'Ubuntu',
+      hostInstaller: { getStatus: async () => makeHostStatus() }
+    })
+
+    const promise = installer.getStatus()
+    let settled = false
+    void promise
+      .catch(() => undefined)
+      .finally(() => {
+        settled = true
+      })
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    await Promise.resolve()
+
+    expect(settled).toBe(true)
+    await expect(promise).rejects.toThrow('WSL command timed out')
+    expect(killMock).toHaveBeenCalled()
   })
 
   it('refuses to remove an old managed launcher when the bridge path is user-owned', async () => {

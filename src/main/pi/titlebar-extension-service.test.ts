@@ -59,6 +59,18 @@ describe('PiTitlebarExtensionService', () => {
     mkdirSync(join(piHome, 'sessions'), { recursive: true })
     writeFileSync(join(piHome, 'sessions', 'session-1.json'), '{}')
     writeFileSync(join(piHome, 'auth.json'), 'secret token')
+    writeFileSync(
+      join(piHome, 'settings.json'),
+      JSON.stringify({
+        defaultProvider: 'amazon-bedrock',
+        hideThinkingBlock: false,
+        packages: ['npm:pi-web-access'],
+        terminal: {
+          showImages: false,
+          clearOnShrink: false
+        }
+      })
+    )
   })
 
   afterEach(() => {
@@ -79,6 +91,15 @@ describe('PiTitlebarExtensionService', () => {
       'user extension'
     )
     expect(readFileSync(join(piHome, 'sessions', 'session-1.json'), 'utf-8')).toBe('{}')
+    expect(JSON.parse(readFileSync(join(piHome, 'settings.json'), 'utf-8'))).toEqual({
+      defaultProvider: 'amazon-bedrock',
+      hideThinkingBlock: false,
+      packages: ['npm:pi-web-access'],
+      terminal: {
+        showImages: false,
+        clearOnShrink: false
+      }
+    })
   }
 
   it('buildPtyEnv mirrors the user agent dir into an overlay under userData', () => {
@@ -101,6 +122,17 @@ describe('PiTitlebarExtensionService', () => {
     expect(statusExtensionSource).toContain('/hook/pi')
     expect(statusExtensionSource).toContain('process.title')
     expect(statusExtensionSource).toContain("return '/hook/omp'")
+    expect(
+      JSON.parse(readFileSync(join(env.PI_CODING_AGENT_DIR!, 'settings.json'), 'utf-8'))
+    ).toEqual({
+      defaultProvider: 'amazon-bedrock',
+      hideThinkingBlock: true,
+      packages: ['npm:pi-web-access'],
+      terminal: {
+        showImages: false,
+        clearOnShrink: true
+      }
+    })
     // User's top-level resources are reachable via the overlay.
     expect(existsSync(join(env.PI_CODING_AGENT_DIR!, 'skills', 'my-skill', 'SKILL.md'))).toBe(true)
     expect(existsSync(join(env.PI_CODING_AGENT_DIR!, 'auth.json'))).toBe(true)
@@ -264,6 +296,12 @@ describe('PiTitlebarExtensionService', () => {
           'orca-prefill.ts',
           'orca-titlebar-spinner.ts'
         ])
+        expect(
+          JSON.parse(readFileSync(join(env.PI_CODING_AGENT_DIR!, 'settings.json'), 'utf-8'))
+        ).toEqual({
+          hideThinkingBlock: true,
+          terminal: { clearOnShrink: true }
+        })
       } finally {
         homedirOverride.current = ''
         rmSync(join(userDataDir, 'omp-agent-overlays', 'pty-omp-empty'), {

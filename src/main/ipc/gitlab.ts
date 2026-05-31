@@ -3,7 +3,13 @@ GitLab IPC handlers co-located keeps the repo-path validation pattern
 reviewable as one surface. */
 import { ipcMain } from 'electron'
 import { resolve } from 'path'
-import type { GitLabIssueUpdate, GitLabWorkItem, Repo } from '../../shared/types'
+import type {
+  GitLabIssueUpdate,
+  GitLabMRInlineCommentInput,
+  GitLabMRUpdate,
+  GitLabWorkItem,
+  Repo
+} from '../../shared/types'
 import type { Store } from '../persistence'
 import {
   normalizeGitLabIssueAssignee,
@@ -14,14 +20,18 @@ import {
 import { recordGitLabProjectRecent } from '../gitlab/gitlab-project-recents'
 import {
   addIssueComment,
+  addMRInlineComment,
   addMRComment,
   closeMR,
   createIssue,
+  diagnoseAuth,
   getAuthenticatedViewer,
+  getJobTrace,
   getIssue,
   getMergeRequest,
   getMergeRequestForBranch,
   getProjectSlug,
+  getRateLimit,
   getWorkItemByProjectRef,
   listAssignableUsers,
   listIssues,
@@ -31,7 +41,11 @@ import {
   listWorkItems,
   mergeMR,
   reopenMR,
-  updateIssue
+  resolveMRDiscussion,
+  retryJob,
+  updateIssue,
+  updateMR,
+  updateMRReviewers
 } from '../gitlab/client'
 import { getWorkItemDetails } from '../gitlab/work-item-details'
 import type { ProjectRef } from '../gitlab/gl-utils'
@@ -56,6 +70,14 @@ export function registerGitLabHandlers(store: Store): void {
   ipcMain.handle('gitlab:viewer', async () => {
     return getAuthenticatedViewer()
   })
+
+  ipcMain.handle('gitlab:diagnoseAuth', async () => diagnoseAuth())
+
+  ipcMain.handle(
+    'gitlab:rateLimit',
+    async (_event, args?: { force?: boolean; host?: string | null }) =>
+      getRateLimit({ force: Boolean(args?.force), host: args?.host ?? null })
+  )
 
   ipcMain.handle('gitlab:projectSlug', async (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
@@ -277,6 +299,43 @@ export function registerGitLabHandlers(store: Store): void {
   )
 
   ipcMain.handle(
+    'gitlab:updateMR',
+    async (_event, args: { repoPath: string; iid: number; updates: GitLabMRUpdate }) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return updateMR(
+        repo.path,
+        args.iid,
+        args.updates,
+        repo.issueSourcePreference,
+        repoConnectionId(repo)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gitlab:updateMRReviewers',
+    async (
+      _event,
+      args: {
+        repoPath: string
+        iid: number
+        reviewerIds: number[]
+        projectRef?: ProjectRef | null
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return updateMRReviewers(
+        repo.path,
+        args.iid,
+        args.reviewerIds,
+        repo.issueSourcePreference,
+        repoConnectionId(repo),
+        args.projectRef
+      )
+    }
+  )
+
+  ipcMain.handle(
     'gitlab:addMRComment',
     async (_event, args: { repoPath: string; iid: number; body: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
@@ -286,6 +345,75 @@ export function registerGitLabHandlers(store: Store): void {
         args.body,
         repo.issueSourcePreference,
         repoConnectionId(repo)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gitlab:addMRInlineComment',
+    async (
+      _event,
+      args: {
+        repoPath: string
+        iid: number
+        input: GitLabMRInlineCommentInput
+        projectRef?: ProjectRef | null
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return addMRInlineComment(
+        repo.path,
+        args.iid,
+        args.input,
+        repo.issueSourcePreference,
+        repoConnectionId(repo),
+        args.projectRef
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gitlab:resolveMRDiscussion',
+    async (
+      _event,
+      args: { repoPath: string; iid: number; discussionId: string; resolved: boolean }
+    ) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return resolveMRDiscussion(
+        repo.path,
+        args.iid,
+        args.discussionId,
+        args.resolved,
+        repo.issueSourcePreference,
+        repoConnectionId(repo)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gitlab:jobTrace',
+    async (_event, args: { repoPath: string; jobId: number; projectRef?: ProjectRef | null }) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return getJobTrace(
+        repo.path,
+        args.jobId,
+        repo.issueSourcePreference,
+        repoConnectionId(repo),
+        args.projectRef
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gitlab:retryJob',
+    async (_event, args: { repoPath: string; jobId: number; projectRef?: ProjectRef | null }) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return retryJob(
+        repo.path,
+        args.jobId,
+        repo.issueSourcePreference,
+        repoConnectionId(repo),
+        args.projectRef
       )
     }
   )

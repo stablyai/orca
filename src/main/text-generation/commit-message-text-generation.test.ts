@@ -1334,7 +1334,7 @@ describe('generateBranchNameFromContext', () => {
     })
   })
 
-  it('includes branch-name custom instructions in the generated prompt', async () => {
+  it('includes the branch-name custom prompt in the generated prompt', async () => {
     let prompt = ''
     await generateBranchNameFromContext(
       { firstPrompt: 'Fix login flow' },
@@ -1360,7 +1360,7 @@ describe('generateBranchNameFromContext', () => {
       }
     )
 
-    expect(prompt).toContain('Additional user instructions:')
+    expect(prompt).toContain('Additional user prompt:')
     expect(prompt).toContain('Prefer auth terminology.')
   })
 })

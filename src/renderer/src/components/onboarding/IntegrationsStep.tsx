@@ -1,20 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, Github, Loader2, Terminal } from 'lucide-react'
+import { ExternalLink, Github, Terminal } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
+import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { useAppStore } from '@/store'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { cn } from '@/lib/utils'
-import { useMountedRef } from '@/hooks/useMountedRef'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 
 type GitHubSetupState = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
@@ -118,43 +109,10 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
   const { compact = false } = props
   const linearStatus = useAppStore((s) => s.linearStatus)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
-  const connectLinear = useAppStore((s) => s.connectLinear)
 
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [apiKeyDraft, setApiKeyDraft] = useState('')
-  const [connectState, setConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
-  const [connectError, setConnectError] = useState<string | null>(null)
-  const mountedRef = useMountedRef()
 
   const workspaceCount = linearStatus.workspaces?.length ?? (linearStatus.connected ? 1 : 0)
-
-  const handleConnect = async (): Promise<void> => {
-    const apiKey = apiKeyDraft.trim()
-    if (!apiKey || connectState === 'connecting') {
-      return
-    }
-    setConnectState('connecting')
-    setConnectError(null)
-    try {
-      const result = await connectLinear(apiKey)
-      if (!mountedRef.current) {
-        return
-      }
-      if (result.ok) {
-        setApiKeyDraft('')
-        setConnectState('idle')
-        setDialogOpen(false)
-        return
-      }
-      setConnectState('error')
-      setConnectError(result.error)
-    } catch (error) {
-      if (mountedRef.current) {
-        setConnectState('error')
-        setConnectError(error instanceof Error ? error.message : 'Connection failed')
-      }
-    }
-  }
 
   return (
     <>
@@ -173,19 +131,19 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
               </div>
               <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                 {linearStatus.connected
-                  ? `${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'} linked. Add another any time.`
-                  : 'Paste a Linear API key to link issues to workspaces. Stored locally; nothing leaves this machine.'}
+                  ? `${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'} linked. Add another workspace or replace a restricted key any time.`
+                  : 'Add Linear access with a Personal API key. Full-access keys can show every team the key owner can access.'}
               </p>
             </div>
           </div>
           <div className={cn('flex items-center gap-2', compact ? 'flex-wrap' : 'shrink-0')}>
             {linearStatus.connected ? (
               <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>
-                Add workspace
+                Add workspace access
               </Button>
             ) : (
               <Button size="sm" onClick={() => setDialogOpen(true)}>
-                Connect
+                Add Linear access
               </Button>
             )}
             {!linearStatus.connected ? (
@@ -197,104 +155,30 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
         </div>
       </div>
 
-      <Dialog
+      <LinearApiKeyDialog
         open={dialogOpen}
-        onOpenChange={(open) => {
-          if (connectState !== 'connecting') {
-            setDialogOpen(open)
-          }
-        }}
-      >
-        <DialogContent
-          overlayClassName="z-[110]"
-          className="z-[120] sm:max-w-md"
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && apiKeyDraft.trim() && connectState !== 'connecting') {
-              event.preventDefault()
-              void handleConnect()
-            }
-          }}
-        >
-          <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">Connect Linear workspace</DialogTitle>
-            <DialogDescription>
-              Paste a Personal API key to add a Linear workspace to Orca.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              autoFocus
-              type="password"
-              placeholder="lin_api_..."
-              value={apiKeyDraft}
-              onChange={(event) => {
-                setApiKeyDraft(event.target.value)
-                if (connectState === 'error') {
-                  setConnectState('idle')
-                  setConnectError(null)
-                }
-              }}
-              disabled={connectState === 'connecting'}
-            />
-            {connectState === 'error' && connectError ? (
-              <p className="text-xs text-destructive">{connectError}</p>
-            ) : null}
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Create one in{' '}
-              <button
-                className="text-primary underline-offset-2 hover:underline"
-                onClick={() =>
-                  window.api.shell.openUrl('https://linear.app/settings/account/security')
-                }
-              >
-                Linear Settings &rarr; Security
-              </button>
-              .
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDialogOpen(false)}
-              disabled={connectState === 'connecting'}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleConnect()}
-              disabled={!apiKeyDraft.trim() || connectState === 'connecting'}
-            >
-              {connectState === 'connecting' ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Verifying...
-                </>
-              ) : (
-                'Connect'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setDialogOpen}
+        overlayClassName="z-[110]"
+        contentClassName="z-[120]"
+        connectLabel="Add Linear access"
+      />
     </>
   )
 }
 
 const CAPABILITIES = [
-  'Start a workspace from any issue, PR, or Linear ticket, prefilled with its title and context',
-  'Browse your assigned tasks in the Tasks view without leaving Orca',
-  'See issue state, PR review status, and CI checks on every worktree',
+  'Start a workspace from any GitHub issue or pull request, prefilled with its title and context',
+  'Browse GitHub issues and pull requests in the Tasks view without leaving Orca',
+  'See issue state, review status, and CI checks on every worktree',
   'Read, comment on, and merge pull requests without leaving Orca'
 ] as const
 
 export function IntegrationsStep(): React.JSX.Element {
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
-  const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
 
   useEffect(() => {
     void refreshPreflightStatus()
-    void checkLinearConnection()
-  }, [checkLinearConnection, refreshPreflightStatus])
+  }, [refreshPreflightStatus])
 
   return (
     <div className="space-y-6">
@@ -309,15 +193,14 @@ export function IntegrationsStep(): React.JSX.Element {
 
       <div className="space-y-3">
         <GitHubRow />
-        <LinearRow />
-        <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-muted/10 px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <span className="text-[14px] font-medium text-foreground/70">Jira</span>
-            <span className="text-[13px] text-muted-foreground">
-              Issues, sprints, and assignees.
+        <div className="mt-4 rounded-xl border border-border bg-muted/10 px-5 py-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-[14px] font-medium text-foreground/70">More task sources</span>
+            <span className="text-[13px] leading-relaxed text-muted-foreground">
+              Linear, GitLab, Bitbucket, Azure DevOps, Gitea, and Jira live in Settings &gt;
+              Integrations.
             </span>
           </div>
-          <IntegrationStatusPill tone="neutral">Coming soon</IntegrationStatusPill>
         </div>
       </div>
     </div>

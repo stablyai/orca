@@ -26,8 +26,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type { TuiAgent } from '../../../../shared/types'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
 import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
@@ -161,8 +161,7 @@ export function TerminalQuickCommandDialog({
     (isTerminalAgentQuickCommand(draft)
       ? draft.prompt.trimEnd().length > 0 && supportsTerminalAgentQuickCommand(draft.agent)
       : draft.command.trimEnd().length > 0)
-  const isMac = isMacUserAgent()
-  const submitShortcutLabel = isMac ? '⌘↵' : 'Ctrl+Enter'
+  const submitShortcutLabel = getScreenSubmitShortcutLabel()
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -179,11 +178,7 @@ export function TerminalQuickCommandDialog({
         <div
           className="space-y-4"
           onKeyDown={(event) => {
-            // Why: cross-platform submit shortcut — Cmd+Enter on Mac, Ctrl+Enter
-            // elsewhere. Falls through to native textarea/Input newline insertion
-            // when the platform modifier isn't held.
-            const platformSubmit = isMac ? event.metaKey : event.ctrlKey
-            if (event.key === 'Enter' && platformSubmit && canSave) {
+            if (isScreenSubmitShortcut(event) && canSave) {
               event.preventDefault()
               saveDraft()
             }

@@ -224,9 +224,38 @@ describe('createExternalAutomation', () => {
         '--workdir',
         '/repo'
       ],
-      { encoding: 'utf-8' },
+      { encoding: 'utf-8', timeout: 30_000 },
       expect.any(Function)
     )
+  })
+
+  it('settles when local Hermes cron creation hangs', async () => {
+    vi.useFakeTimers()
+    const killMock = vi.fn()
+    execFileMock.mockImplementation(() => ({ kill: killMock }))
+
+    const promise = createExternalAutomation({
+      managerId: 'hermes:local',
+      provider: 'hermes',
+      target: { type: 'local' },
+      name: 'Nightly audit',
+      prompt: 'Audit the repo',
+      schedule: '0 9 * * 1-5',
+      workdir: null
+    })
+    let settled = false
+    void promise
+      .catch(() => undefined)
+      .finally(() => {
+        settled = true
+      })
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    await Promise.resolve()
+
+    expect(settled).toBe(true)
+    await expect(promise).rejects.toThrow('Local automation command timed out')
+    expect(killMock).toHaveBeenCalled()
   })
 
   it('updates local Hermes cron jobs through the CLI', async () => {
@@ -256,7 +285,7 @@ describe('createExternalAutomation', () => {
         '--workdir',
         '/repo'
       ],
-      { encoding: 'utf-8' },
+      { encoding: 'utf-8', timeout: 30_000 },
       expect.any(Function)
     )
   })
@@ -275,7 +304,7 @@ describe('runExternalAutomationAction', () => {
     expect(execFileMock).toHaveBeenCalledWith(
       'hermes',
       ['cron', 'run', 'job-1'],
-      { encoding: 'utf-8' },
+      { encoding: 'utf-8', timeout: 30_000 },
       expect.any(Function)
     )
   })
@@ -306,7 +335,7 @@ describe('runExternalAutomationAction', () => {
     expect(execFileMock).toHaveBeenCalledWith(
       'openclaw',
       ['cron', 'disable', 'job-1'],
-      { encoding: 'utf-8' },
+      { encoding: 'utf-8', timeout: 30_000 },
       expect.any(Function)
     )
   })

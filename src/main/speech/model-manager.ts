@@ -179,6 +179,11 @@ export class ModelManager {
         this.updateState(modelId, 'error', undefined, String(err))
       }
       this.cleanup(modelId, archivePath)
+      if (!aborted) {
+        // Why: the settings UI awaits this promise to show download failures;
+        // cancellation stays quiet, but real failures must reach the caller.
+        throw err
+      }
     } finally {
       this.activeDownloads.delete(modelId)
       try {
@@ -347,7 +352,10 @@ export class ModelManager {
 
         const fileStream = createWriteStream(dest)
 
-        response.on('data', (chunk: Buffer) => {
+        const cleanupResponseProgressListener = (): void => {
+          response.off('data', onResponseData)
+        }
+        const onResponseData = (chunk: Buffer): void => {
           if (isAborted()) {
             request?.destroy(new Error('Aborted'))
             response.destroy()
@@ -357,17 +365,22 @@ export class ModelManager {
           downloaded += chunk.length
           const progress = Math.min(0.9, downloaded / totalSize)
           this.updateState(modelId, 'downloading', progress)
-        })
+        }
 
+        response.on('data', onResponseData)
         pipeline(response, fileStream)
           .then(() => {
+            cleanupResponseProgressListener()
             if (isAborted()) {
               rejectOnce(new Error('Aborted'))
             } else {
               resolveOnce()
             }
           })
-          .catch(rejectOnce)
+          .catch((error: Error) => {
+            cleanupResponseProgressListener()
+            rejectOnce(error)
+          })
       }
 
       request = signal
@@ -386,19 +399,49 @@ export class ModelManager {
     return new Promise((resolve, reject) => {
       const hash = createHash('sha256')
       const stream = createReadStream(archivePath)
+      let settled = false
 
-      stream.on('data', (chunk) => hash.update(chunk))
-      stream.on('error', reject)
-      stream.on('end', () => {
+      const cleanup = (): void => {
+        stream.off('data', onData)
+        stream.off('error', onError)
+        stream.off('end', onEnd)
+      }
+      const settleResolve = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        resolve()
+      }
+      const settleReject = (error: Error): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(error)
+      }
+      const onData = (chunk: Buffer): void => {
+        hash.update(chunk)
+      }
+      const onError = (error: Error): void => {
+        settleReject(error)
+      }
+      const onEnd = (): void => {
         const actualSha256 = hash.digest('hex')
         if (actualSha256 !== expectedSha256.toLowerCase()) {
           // Why: these archives feed native model parsers; filename checks do
           // not protect against compromised or redirected release assets.
-          reject(new Error('Downloaded model archive failed integrity verification'))
+          settleReject(new Error('Downloaded model archive failed integrity verification'))
           return
         }
-        resolve()
-      })
+        settleResolve()
+      }
+
+      stream.on('data', onData)
+      stream.on('error', onError)
+      stream.on('end', onEnd)
     })
   }
 

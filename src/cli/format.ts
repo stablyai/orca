@@ -584,15 +584,55 @@ export function formatListWindows(result: ComputerListWindowsResult): string {
     .join('\n')
 }
 
-export function formatComputerAction(verb: string, result: ComputerActionResult): string {
+export type ComputerActionFollowUpTarget = {
+  session?: string
+  worktree?: string
+  windowId?: number
+  windowIndex?: number
+  restoreWindow?: boolean
+}
+
+export function formatComputerAction(
+  verb: string,
+  result: ComputerActionResult,
+  target: ComputerActionFollowUpTarget = {}
+): string {
   const path = result.action?.path ? ` via ${result.action.path}` : ''
   const verification = formatActionVerification(result.action?.verification)
-  const app = shellQuote(result.snapshot.app.bundleId ?? result.snapshot.app.name)
-  const windowId =
-    result.snapshot.window.id === null || result.snapshot.window.id === undefined
-      ? ''
-      : ` --window-id ${result.snapshot.window.id}`
-  return `${formatActionVerb(verb)} completed${path}${verification}; ${result.snapshot.elementCount} elements in current window. Use \`orca computer get-app-state --app ${app}${windowId}\` to inspect.`
+  const followUpCommand = formatComputerFollowUpCommand(result, target)
+  return `${formatActionVerb(verb)} completed${path}${verification}; ${result.snapshot.elementCount} elements in current window. Use \`${followUpCommand}\` to inspect.`
+}
+
+function formatComputerFollowUpCommand(
+  result: ComputerActionResult,
+  target: ComputerActionFollowUpTarget
+): string {
+  const args = [
+    'orca',
+    'computer',
+    'get-app-state',
+    '--app',
+    shellQuote(result.snapshot.app.bundleId ?? result.snapshot.app.name)
+  ]
+  if (target.session) {
+    args.push('--session', shellQuote(target.session))
+  } else if (target.worktree) {
+    args.push('--worktree', shellQuote(target.worktree))
+  }
+  if (target.windowId !== undefined) {
+    args.push('--window-id', String(target.windowId))
+  } else if (target.windowIndex !== undefined) {
+    args.push('--window-index', String(target.windowIndex))
+  } else {
+    const windowId = result.action?.targetWindowId ?? result.snapshot.window.id
+    if (windowId !== null && windowId !== undefined) {
+      args.push('--window-id', String(windowId))
+    }
+  }
+  if (target.restoreWindow) {
+    args.push('--restore-window')
+  }
+  return args.join(' ')
 }
 
 function formatActionVerification(verification: ComputerActionVerification | undefined): string {

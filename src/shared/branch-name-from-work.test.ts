@@ -74,12 +74,12 @@ describe('buildBranchNamePrompt', () => {
     expect(prompt).toContain("I'll wire it into the header.")
   })
 
-  it('appends custom branch-name instructions when present', () => {
+  it('appends a custom branch-name prompt when present', () => {
     const prompt = buildBranchNamePrompt(
       { firstPrompt: 'Add a logout button' },
       'Prefer product nouns.'
     )
-    expect(prompt).toContain('Additional user instructions:')
+    expect(prompt).toContain('Additional user prompt:')
     expect(prompt).toContain('Prefer product nouns.')
   })
 })

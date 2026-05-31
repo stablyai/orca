@@ -3,10 +3,20 @@ co-locating GitLab MR/issue/work-item operations keeps the concurrency
 acquire/release pattern obvious across operations. */
 import type {
   ClassifiedError,
+  GitLabAssignableUser,
+  GitLabAuthDiagnostic,
+  GitLabDiscussionResolveResult,
+  GitLabJobTraceResult,
   GitLabPagedResult,
+  GitLabPipelineJob,
+  GitLabRateLimitSnapshot,
+  GitLabMRInlineCommentInput,
+  GitLabMRReviewersUpdateResult,
+  GitLabRetryJobResult,
   GitLabTodo,
   GitLabViewer,
   GitLabWorkItem,
+  GetGitLabRateLimitResult,
   IssueSourcePreference,
   ListMergeRequestsResult,
   MRComment,
@@ -25,6 +35,7 @@ import {
   glabRepoExecOptions,
   glabApiWithHeaders,
   glabExecFileAsync,
+  parseGlabAuthStatusHosts,
   release,
   resolveIssueSource,
   type ProjectRef
@@ -36,6 +47,9 @@ import type { IssueListState } from './issues'
 function encodedProject(projectPath: string): string {
   return encodeURIComponent(projectPath)
 }
+
+const GITLAB_RATE_LIMIT_CACHE_TTL_MS = 30_000
+const gitLabRateLimitCache = new Map<string, GitLabRateLimitSnapshot>()
 
 /**
  * Get the authenticated GitLab viewer. Mirrors getAuthenticatedViewer
@@ -56,6 +70,119 @@ export async function getAuthenticatedViewer(): Promise<GitLabViewer | null> {
     }
   } catch {
     return null
+  } finally {
+    release()
+  }
+}
+
+export async function diagnoseAuth(): Promise<GitLabAuthDiagnostic> {
+  const envTokenInProcess = process.env.GITLAB_TOKEN
+    ? 'GITLAB_TOKEN'
+    : process.env.GLAB_TOKEN
+      ? 'GLAB_TOKEN'
+      : null
+  try {
+    const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'])
+    const output = `${stdout}\n${stderr}`
+    const hosts = parseGlabAuthStatusHosts(output)
+    return {
+      glabAvailable: true,
+      authenticated:
+        /logged in|authenticated|token/i.test(output) && !/not logged in/i.test(output),
+      hosts,
+      activeHost: hosts[0] ?? null,
+      envTokenInProcess,
+      error: null
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      glabAvailable: !/ENOENT|not found|spawn/i.test(message),
+      authenticated: false,
+      hosts: [],
+      activeHost: null,
+      envTokenInProcess,
+      error: message
+    }
+  }
+}
+
+function parseRateLimitHeader(
+  headers: Record<string, string>,
+  keys: readonly string[]
+): number | null {
+  for (const key of keys) {
+    const parsed = Number.parseInt(headers[key], 10)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+  return null
+}
+
+function parseRateLimitResetAt(headers: Record<string, string>): number | null {
+  const numeric = parseRateLimitHeader(headers, ['ratelimit-reset', 'x-ratelimit-reset'])
+  if (numeric !== null) {
+    return numeric
+  }
+  const resetTime = headers['ratelimit-resettime'] ?? headers['x-ratelimit-resettime']
+  if (!resetTime) {
+    return null
+  }
+  const millis = Date.parse(resetTime)
+  return Number.isFinite(millis) ? Math.floor(millis / 1000) : null
+}
+
+function parseGitLabRateLimitSnapshot(
+  headers: Record<string, string>,
+  host: string | null
+): GitLabRateLimitSnapshot {
+  const limit = parseRateLimitHeader(headers, ['ratelimit-limit', 'x-ratelimit-limit'])
+  const remaining = parseRateLimitHeader(headers, ['ratelimit-remaining', 'x-ratelimit-remaining'])
+  const resetAt = parseRateLimitResetAt(headers)
+  return {
+    host,
+    fetchedAt: Date.now(),
+    rest:
+      limit === null && remaining === null && resetAt === null
+        ? null
+        : {
+            limit: limit ?? 0,
+            remaining: remaining ?? 0,
+            resetAt
+          }
+  }
+}
+
+/** @internal — test-only */
+export function _resetGitLabRateLimitCache(): void {
+  gitLabRateLimitCache.clear()
+}
+
+export async function getRateLimit(options?: {
+  force?: boolean
+  host?: string | null
+}): Promise<GetGitLabRateLimitResult> {
+  const host = options?.host?.trim() || null
+  const cacheKey = host ?? 'default'
+  const cached = gitLabRateLimitCache.get(cacheKey)
+  if (!options?.force && cached && Date.now() - cached.fetchedAt < GITLAB_RATE_LIMIT_CACHE_TTL_MS) {
+    return { ok: true, snapshot: cached }
+  }
+
+  await acquire()
+  try {
+    // Why: GitLab.com and self-managed GitLab instances expose REST budget
+    // headers inconsistently. Query a cheap authenticated endpoint and report
+    // the headers when present; a null bucket means this host omitted them.
+    const args = host ? ['--hostname', host, 'user'] : ['user']
+    const { headers } = await glabApiWithHeaders(args)
+    const snapshot = parseGitLabRateLimitSnapshot(headers, host)
+    gitLabRateLimitCache.set(cacheKey, snapshot)
+    return { ok: true, snapshot }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { ok: false, error: message }
   } finally {
     release()
   }
@@ -766,6 +893,305 @@ export async function addMRComment(
         }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      } finally {
+        release()
+      }
+    },
+    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+  )
+}
+
+export async function addMRInlineComment(
+  repoPath: string,
+  iid: number,
+  input: GitLabMRInlineCommentInput,
+  preference?: IssueSourcePreference,
+  connectionId?: string | null,
+  projectRef?: ProjectRef | null
+): Promise<{ ok: true; comment: MRComment } | { ok: false; error: string }> {
+  return withProjectRef<{ ok: true; comment: MRComment } | { ok: false; error: string }>(
+    repoPath,
+    preference,
+    connectionId,
+    projectRef,
+    async (projectRef) => {
+      const body = input.body.trim()
+      if (!body) {
+        return { ok: false, error: 'Comment body is required' }
+      }
+      await acquire()
+      try {
+        const oldPath = input.oldPath ?? input.path
+        const { stdout } = await glabExecFileAsync(
+          [
+            'api',
+            ...glabHostnameArgs(projectRef, connectionId),
+            '-X',
+            'POST',
+            `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/discussions`,
+            '-f',
+            `body=${body}`,
+            '-f',
+            'position[position_type]=text',
+            '-f',
+            `position[base_sha]=${input.baseSha}`,
+            '-f',
+            `position[start_sha]=${input.startSha}`,
+            '-f',
+            `position[head_sha]=${input.headSha}`,
+            '-f',
+            `position[old_path]=${oldPath}`,
+            '-f',
+            `position[new_path]=${input.path}`,
+            '-f',
+            `position[new_line]=${input.line}`
+          ],
+          glabRepoExecOptions(repoPath, connectionId)
+        )
+        const data = JSON.parse(stdout) as {
+          id?: string
+          notes?: {
+            id?: number
+            author?: { username?: string; avatar_url?: string; state?: string } | null
+            body?: string
+            created_at?: string
+            position?: { new_path?: string; new_line?: number } | null
+          }[]
+        }
+        const note = data.notes?.[0]
+        return {
+          ok: true,
+          comment: {
+            id: note?.id ?? Date.now(),
+            author: note?.author?.username ?? 'You',
+            authorAvatarUrl: note?.author?.avatar_url ?? '',
+            body: note?.body ?? body,
+            createdAt: note?.created_at ?? new Date().toISOString(),
+            url: '',
+            threadId: data.id,
+            isResolved: false,
+            isBot: note?.author?.state === 'bot',
+            path: note?.position?.new_path ?? input.path,
+            line: note?.position?.new_line ?? input.line
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { ok: false, error: classifyGlabError(msg).message }
+      } finally {
+        release()
+      }
+    },
+    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+  )
+}
+
+export async function resolveMRDiscussion(
+  repoPath: string,
+  iid: number,
+  discussionId: string,
+  resolved: boolean,
+  preference?: IssueSourcePreference,
+  connectionId?: string | null,
+  projectRef?: ProjectRef | null
+): Promise<GitLabDiscussionResolveResult> {
+  return withProjectRef<GitLabDiscussionResolveResult>(
+    repoPath,
+    preference,
+    connectionId,
+    projectRef,
+    async (projectRef) => {
+      const trimmedDiscussionId = discussionId.trim()
+      if (!trimmedDiscussionId) {
+        return { ok: false, error: 'Discussion id is required' }
+      }
+      await acquire()
+      try {
+        // Why: GitLab resolves/reopens the whole discussion thread, not a single
+        // note; this mirrors GitHub's thread-level resolve mutation.
+        await glabExecFileAsync(
+          [
+            'api',
+            ...glabHostnameArgs(projectRef, connectionId),
+            '-X',
+            'PUT',
+            `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/discussions/${encodeURIComponent(trimmedDiscussionId)}`,
+            '-f',
+            `resolved=${resolved ? 'true' : 'false'}`
+          ],
+          glabRepoExecOptions(repoPath, connectionId)
+        )
+        return { ok: true }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { ok: false, error: classifyGlabError(msg).message }
+      } finally {
+        release()
+      }
+    },
+    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+  )
+}
+
+function mapRetriedPipelineJob(
+  data: {
+    id?: number
+    pipeline?: { id?: number | null } | null
+    name?: string
+    stage?: string
+    status?: string
+    web_url?: string
+    duration?: number | null
+  },
+  fallbackJobId: number
+): GitLabPipelineJob {
+  return {
+    id: data.id ?? fallbackJobId,
+    ...(typeof data.pipeline?.id === 'number' ? { pipelineId: data.pipeline.id } : {}),
+    name: data.name ?? '',
+    stage: data.stage ?? '',
+    status: data.status ?? '',
+    webUrl: data.web_url ?? '',
+    duration: typeof data.duration === 'number' ? data.duration : null
+  }
+}
+
+function mapGitLabReviewer(raw: {
+  id?: number
+  username?: string | null
+  name?: string | null
+  avatar_url?: string | null
+  state?: string | null
+}): GitLabAssignableUser | null {
+  if (!raw.username) {
+    return null
+  }
+  return {
+    ...(typeof raw.id === 'number' ? { id: raw.id } : {}),
+    username: raw.username,
+    name: raw.name ?? null,
+    avatarUrl: raw.avatar_url ?? '',
+    ...(raw.state !== undefined ? { state: raw.state } : {})
+  }
+}
+
+export async function updateMRReviewers(
+  repoPath: string,
+  iid: number,
+  reviewerIds: number[],
+  preference?: IssueSourcePreference,
+  connectionId?: string | null,
+  projectRef?: ProjectRef | null
+): Promise<GitLabMRReviewersUpdateResult> {
+  return withProjectRef<GitLabMRReviewersUpdateResult>(
+    repoPath,
+    preference,
+    connectionId,
+    projectRef,
+    async (projectRef) => {
+      await acquire()
+      try {
+        const fields =
+          reviewerIds.length > 0
+            ? reviewerIds.map((id) => ['-f', `reviewer_ids[]=${id}`]).flat()
+            : ['-f', 'reviewer_ids=']
+        const { stdout } = await glabExecFileAsync(
+          [
+            'api',
+            ...glabHostnameArgs(projectRef, connectionId),
+            '-X',
+            'PUT',
+            `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`,
+            ...fields
+          ],
+          glabRepoExecOptions(repoPath, connectionId)
+        )
+        const data = JSON.parse(stdout) as { reviewers?: Parameters<typeof mapGitLabReviewer>[0][] }
+        return {
+          ok: true,
+          reviewers: (data.reviewers ?? [])
+            .map(mapGitLabReviewer)
+            .filter((u): u is GitLabAssignableUser => !!u)
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { ok: false, error: classifyGlabError(msg).message }
+      } finally {
+        release()
+      }
+    },
+    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+  )
+}
+
+export async function getJobTrace(
+  repoPath: string,
+  jobId: number,
+  preference?: IssueSourcePreference,
+  connectionId?: string | null,
+  projectRef?: ProjectRef | null
+): Promise<GitLabJobTraceResult> {
+  return withProjectRef<GitLabJobTraceResult>(
+    repoPath,
+    preference,
+    connectionId,
+    projectRef,
+    async (projectRef) => {
+      await acquire()
+      try {
+        const { stdout } = await glabExecFileAsync(
+          [
+            'api',
+            ...glabHostnameArgs(projectRef, connectionId),
+            `projects/${encodedProject(projectRef.path)}/jobs/${jobId}/trace`
+          ],
+          glabRepoExecOptions(repoPath, connectionId)
+        )
+        return { ok: true, trace: stdout }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { ok: false, error: classifyGlabError(msg).message }
+      } finally {
+        release()
+      }
+    },
+    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+  )
+}
+
+export async function retryJob(
+  repoPath: string,
+  jobId: number,
+  preference?: IssueSourcePreference,
+  connectionId?: string | null,
+  projectRef?: ProjectRef | null
+): Promise<GitLabRetryJobResult> {
+  return withProjectRef<GitLabRetryJobResult>(
+    repoPath,
+    preference,
+    connectionId,
+    projectRef,
+    async (projectRef) => {
+      await acquire()
+      try {
+        const { stdout } = await glabExecFileAsync(
+          [
+            'api',
+            ...glabHostnameArgs(projectRef, connectionId),
+            '-X',
+            'POST',
+            `projects/${encodedProject(projectRef.path)}/jobs/${jobId}/retry`
+          ],
+          glabRepoExecOptions(repoPath, connectionId)
+        )
+        const trimmed = stdout.trim()
+        return {
+          ok: true,
+          ...(trimmed ? { job: mapRetriedPipelineJob(JSON.parse(trimmed), jobId) } : {})
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { ok: false, error: classifyGlabError(msg).message }
       } finally {
         release()
       }

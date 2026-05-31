@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: repo Source Control AI settings keep one
    draft/save flow across model, instruction, and PR-default override groups. */
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Repo } from '../../../../shared/types'
 import type {
   RepoSourceControlAiOverrides,
@@ -48,20 +48,20 @@ const OPERATIONS: {
   {
     operation: 'commitMessage',
     modelLabel: 'Commit message model',
-    instructionLabel: 'Commit message instructions',
-    globalPlaceholder: 'Global commit message instructions are empty.'
+    instructionLabel: 'Commit message prompt',
+    globalPlaceholder: 'Global commit message prompt is empty.'
   },
   {
     operation: 'pullRequest',
     modelLabel: 'PR details model',
-    instructionLabel: 'Pull request instructions',
-    globalPlaceholder: 'Global pull request instructions are empty.'
+    instructionLabel: 'Pull request prompt',
+    globalPlaceholder: 'Global pull request prompt is empty.'
   },
   {
     operation: 'branchName',
     modelLabel: 'Branch name model',
-    instructionLabel: 'Branch name instructions',
-    globalPlaceholder: 'Global branch name instructions are empty.'
+    instructionLabel: 'Branch name prompt',
+    globalPlaceholder: 'Global branch name prompt is empty.'
   }
 ]
 
@@ -72,11 +72,11 @@ type RepoAiDraftState = {
   baseSerialized: string
 }
 
-function hasOwnInstruction(
-  instructions: RepoSourceControlAiOverrides['instructionsByOperation'],
+function hasOwnPrompt(
+  prompts: RepoSourceControlAiOverrides['instructionsByOperation'],
   operation: SourceControlAiOperation
 ): boolean {
-  return typeof instructions?.[operation] === 'string'
+  return typeof prompts?.[operation] === 'string'
 }
 
 function triStateValue(value: boolean | null | undefined): 'inherit' | 'on' | 'off' {
@@ -97,6 +97,48 @@ function normalizeRepoAiDraft(
 
 function serializeRepoAiDraft(value: RepoSourceControlAiOverrides): string {
   return JSON.stringify(normalizeRepoAiDraft(value))
+}
+
+export function createRepoAiDraftState(
+  repoId: string,
+  value: RepoSourceControlAiOverrides
+): RepoAiDraftState {
+  const normalized = normalizeRepoAiDraft(value)
+  return {
+    repoId,
+    value: normalized,
+    baseSerialized: serializeRepoAiDraft(normalized)
+  }
+}
+
+export function resolveRepoAiDraftState(
+  current: RepoAiDraftState,
+  repoId: string,
+  persistedRepoAi: RepoSourceControlAiOverrides,
+  persistedSerialized = serializeRepoAiDraft(persistedRepoAi)
+): RepoAiDraftState {
+  const currentSerialized = serializeRepoAiDraft(current.value)
+  // Why: render-time draft sync relies on object identity to avoid repeating
+  // the same state update during server-rendered settings tests.
+  if (
+    current.repoId === repoId &&
+    currentSerialized === persistedSerialized &&
+    current.baseSerialized === persistedSerialized
+  ) {
+    return current
+  }
+  if (
+    current.repoId !== repoId ||
+    currentSerialized === current.baseSerialized ||
+    currentSerialized === persistedSerialized
+  ) {
+    return {
+      repoId,
+      value: persistedRepoAi,
+      baseSerialized: persistedSerialized
+    }
+  }
+  return current
 }
 
 export function RepositorySourceControlAiSection({
@@ -139,44 +181,47 @@ export function RepositorySourceControlAiSection({
   )
   // Why: repo.sourceControlAi is saved as one nested value; a local draft keeps
   // textarea keystrokes and sibling controls from racing over IPC/RPC.
-  const [draftState, setDraftState] = useState<RepoAiDraftState>(() => ({
-    repoId: repo.id,
-    value: persistedRepoAi,
-    baseSerialized: persistedSerialized
-  }))
+  const [draftState, setDraftState] = useState<RepoAiDraftState>(() =>
+    createRepoAiDraftState(repo.id, persistedRepoAi)
+  )
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  useEffect(() => {
-    setDraftState((current) => {
-      const currentSerialized = serializeRepoAiDraft(current.value)
-      if (
-        current.repoId !== repo.id ||
-        currentSerialized === current.baseSerialized ||
-        currentSerialized === persistedSerialized
-      ) {
-        return {
-          repoId: repo.id,
-          value: persistedRepoAi,
-          baseSerialized: persistedSerialized
-        }
-      }
-      return current
-    })
-    setSaveError(null)
-  }, [persistedRepoAi, persistedSerialized, repo.id])
+  const resolvedDraftState = resolveRepoAiDraftState(
+    draftState,
+    repo.id,
+    persistedRepoAi,
+    persistedSerialized
+  )
+  if (resolvedDraftState !== draftState) {
+    // Why: repo settings may be refreshed externally; clean drafts should
+    // follow that source before paint, while dirty edits stay in place.
+    setDraftState(resolvedDraftState)
+    if (saveError !== null) {
+      setSaveError(null)
+    }
+  }
 
-  const repoAi = draftState.value
+  const repoAi = resolvedDraftState.value
   const draftSerialized = useMemo(() => serializeRepoAiDraft(repoAi), [repoAi])
-  const isDirty = draftState.repoId !== repo.id || draftSerialized !== draftState.baseSerialized
+  const isDirty =
+    resolvedDraftState.repoId !== repo.id || draftSerialized !== resolvedDraftState.baseSerialized
 
   const updateDraftRepoAi = (
     update: (current: RepoSourceControlAiOverrides) => RepoSourceControlAiOverrides
   ): void => {
-    setDraftState((current) => ({
-      ...current,
-      value: normalizeRepoAiDraft(update(current.value))
-    }))
+    setDraftState((current) => {
+      const resolved = resolveRepoAiDraftState(
+        current,
+        repo.id,
+        persistedRepoAi,
+        persistedSerialized
+      )
+      return {
+        ...resolved,
+        value: normalizeRepoAiDraft(update(resolved.value))
+      }
+    })
     setSaveError(null)
   }
 
@@ -184,7 +229,7 @@ export function RepositorySourceControlAiSection({
     if (!isDirty || isSaving) {
       return
     }
-    const next = normalizeRepoAiDraft(draftState.value)
+    const next = normalizeRepoAiDraft(resolvedDraftState.value)
     const nextSerialized = serializeRepoAiDraft(next)
     setIsSaving(true)
     setSaveError(null)
@@ -220,11 +265,7 @@ export function RepositorySourceControlAiSection({
   }
 
   const discardDraft = (): void => {
-    setDraftState({
-      repoId: repo.id,
-      value: persistedRepoAi,
-      baseSerialized: persistedSerialized
-    })
+    setDraftState(createRepoAiDraftState(repo.id, persistedRepoAi))
     setSaveError(null)
   }
 
@@ -279,13 +320,13 @@ export function RepositorySourceControlAiSection({
     inheritedValue: string
   ): void => {
     updateDraftRepoAi((current) => {
-      const nextInstructions = { ...current.instructionsByOperation }
+      const nextPrompts = { ...current.instructionsByOperation }
       if (mode === PROMPT_MODE_INHERIT) {
-        delete nextInstructions[operation]
-      } else if (!hasOwnInstruction(nextInstructions, operation)) {
-        nextInstructions[operation] = inheritedValue
+        delete nextPrompts[operation]
+      } else if (!hasOwnPrompt(nextPrompts, operation)) {
+        nextPrompts[operation] = inheritedValue
       }
-      return { ...current, instructionsByOperation: nextInstructions }
+      return { ...current, instructionsByOperation: nextPrompts }
     })
   }
 
@@ -459,7 +500,7 @@ export function RepositorySourceControlAiSection({
       <div className="space-y-3">
         {OPERATIONS.map((row) => {
           const inherited = source.instructionsByOperation[row.operation]?.trim() ?? ''
-          const hasOverride = hasOwnInstruction(repoAi.instructionsByOperation, row.operation)
+          const hasOverride = hasOwnPrompt(repoAi.instructionsByOperation, row.operation)
           const value = hasOverride ? (repoAi.instructionsByOperation?.[row.operation] ?? '') : ''
           return (
             <div key={row.instructionLabel} className="space-y-2">

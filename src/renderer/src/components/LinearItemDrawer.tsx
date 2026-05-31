@@ -76,6 +76,10 @@ export function formatLinearEstimateLabel(estimate: number | null | undefined): 
   return estimate === null || estimate === undefined ? 'Set estimate' : `Estimate ${estimate}`
 }
 
+function formatLinearEstimateInput(estimate: number | null | undefined): string {
+  return estimate === null || estimate === undefined ? '' : String(estimate)
+}
+
 function LinearEditChipAdornment({
   loading,
   pending
@@ -139,7 +143,6 @@ export function LinearIssueEditSection({
 }: EditSectionProps): React.JSX.Element {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [estimatePopoverOpen, setEstimatePopoverOpen] = useState(false)
-  const [estimateInput, setEstimateInput] = useState('')
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const settings = useAppStore((s) => s.settings)
   const { isPending, run } = useImmediateMutation()
@@ -152,19 +155,22 @@ export function LinearIssueEditSection({
     labelIds: localLabelIds,
     labels: localLabels
   } = editState
+  const [estimateInput, setEstimateInput] = useState(() => formatLinearEstimateInput(localEstimate))
 
   const teamId = issue.team?.id || null
   const states = useTeamStates(teamId, settings, issue.workspaceId)
   const labels = useTeamLabels(teamId, settings, issue.workspaceId)
   const members = useTeamMembers(teamId, settings, issue.workspaceId)
 
-  useEffect(() => {
-    if (!estimatePopoverOpen) {
-      setEstimateInput(
-        localEstimate === null || localEstimate === undefined ? '' : String(localEstimate)
-      )
-    }
-  }, [estimatePopoverOpen, localEstimate])
+  const handleEstimatePopoverOpenChange = useCallback(
+    (open: boolean) => {
+      setEstimatePopoverOpen(open)
+      if (open) {
+        setEstimateInput(formatLinearEstimateInput(localEstimate))
+      }
+    },
+    [localEstimate]
+  )
 
   const handleStateChange = useCallback(
     (stateId: string) => {
@@ -525,7 +531,7 @@ export function LinearIssueEditSection({
               </PopoverContent>
             </Popover>
 
-            <Popover open={estimatePopoverOpen} onOpenChange={setEstimatePopoverOpen}>
+            <Popover open={estimatePopoverOpen} onOpenChange={handleEstimatePopoverOpenChange}>
               <PopoverTrigger asChild>
                 <button
                   type="button"
@@ -758,7 +764,7 @@ export function LinearIssueEditSection({
       </Popover>
 
       {/* Estimate */}
-      <Popover open={estimatePopoverOpen} onOpenChange={setEstimatePopoverOpen}>
+      <Popover open={estimatePopoverOpen} onOpenChange={handleEstimatePopoverOpenChange}>
         <PopoverTrigger asChild>
           <button
             type="button"

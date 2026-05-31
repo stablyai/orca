@@ -839,6 +839,11 @@ export function createMainWindow(
       return
     }
 
+    if (action.type === 'deleteCurrentWorkspace') {
+      mainWindow.webContents.send('ui:deleteCurrentWorkspace')
+      return
+    }
+
     if (action.type === 'openTasks') {
       mainWindow.webContents.send('ui:openTasks')
       return
@@ -851,6 +856,11 @@ export function createMainWindow(
 
     if (action.type === 'jumpToWorktreeIndex') {
       mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
+      return
+    }
+
+    if (action.type === 'jumpToTabIndex') {
+      mainWindow.webContents.send('ui:jumpToTabIndex', action.index)
       return
     }
 

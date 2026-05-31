@@ -34,6 +34,7 @@ export class RemoteRuntimeRequestConnection {
   private state: ConnectionState = 'closed'
   private ws: WebSocket | null = null
   private sharedKey: Uint8Array | null = null
+  private socketCleanup: (() => void) | null = null
   private readonly pendingRequests = new Map<string, PendingRequest<unknown>>()
   private readonly readyWaiters: ReadyWaiter[] = []
   private idleCloseTimer: ReturnType<typeof setTimeout> | null = null
@@ -75,8 +76,10 @@ export class RemoteRuntimeRequestConnection {
 
   close(error?: Error): void {
     const ws = this.ws
+    const cleanup = this.socketCleanup
     this.ws = null
     this.sharedKey = null
+    this.socketCleanup = null
     this.state = 'closed'
     this.clearIdleCloseTimer()
 
@@ -89,6 +92,7 @@ export class RemoteRuntimeRequestConnection {
     }
 
     try {
+      cleanup?.()
       ws?.close()
     } catch {
       // Best-effort shutdown for a cached remote control connection.
@@ -136,6 +140,7 @@ export class RemoteRuntimeRequestConnection {
     }
     this.ws = opened.socket.ws
     this.sharedKey = opened.socket.sharedKey
+    this.socketCleanup = opened.socket.cleanup
     this.state = 'awaiting_ready'
   }
 

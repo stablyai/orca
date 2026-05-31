@@ -8,6 +8,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { getSparsePresetOperationErrorMessage } from './sparse-preset-operation-error'
 import { formatSparsePresetUpdatedAt } from './sparse-preset-date'
 
 type SparsePresetSettingsSectionProps = {
@@ -53,6 +54,8 @@ export function SparsePresetSettingsSection({
   repoId
 }: SparsePresetSettingsSectionProps): React.JSX.Element {
   const presets = useAppStore((s) => s.sparsePresetsByRepo[repoId])
+  const loadStatus = useAppStore((s) => s.sparsePresetsLoadStatusByRepo[repoId] ?? 'idle')
+  const loadError = useAppStore((s) => s.sparsePresetsErrorByRepo[repoId])
   const fetchSparsePresets = useAppStore((s) => s.fetchSparsePresets)
   const saveSparsePreset = useAppStore((s) => s.saveSparsePreset)
   const removeSparsePreset = useAppStore((s) => s.removeSparsePreset)
@@ -60,13 +63,21 @@ export function SparsePresetSettingsSection({
   const [draft, setDraft] = useState<SparsePresetDraft | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
+  const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null)
+  const [operationError, setOperationError] = useState<string | null>(null)
   const mountedRef = useMountedRef()
 
   useEffect(() => {
-    if (presets === undefined) {
-      void fetchSparsePresets(repoId)
+    if (presets === undefined && loadStatus === 'idle') {
+      void fetchSparsePresets(repoId).catch((error: unknown) => {
+        if (mountedRef.current) {
+          setOperationError(
+            getSparsePresetOperationErrorMessage(error, 'Failed to load sparse presets.')
+          )
+        }
+      })
     }
-  }, [fetchSparsePresets, presets, repoId])
+  }, [fetchSparsePresets, loadStatus, mountedRef, presets, repoId])
 
   const sortedPresets = presets ?? []
   const parsedDirectories = draft ? parseSparsePresetDirectories(draft.directoriesText) : null
@@ -89,9 +100,11 @@ export function SparsePresetSettingsSection({
           : null
   const canSaveDraft =
     !!draft && !submitting && !nameError && parsedDirectories !== null && !parsedDirectories.error
+  const visibleError = operationError ?? loadError ?? null
 
   const startNewPreset = (): void => {
     setConfirmingDeleteId(null)
+    setOperationError(null)
     setDraft({
       mode: 'new',
       name: '',
@@ -101,6 +114,7 @@ export function SparsePresetSettingsSection({
 
   const startEditPreset = (preset: SparsePreset): void => {
     setConfirmingDeleteId(null)
+    setOperationError(null)
     setDraft({
       mode: 'edit',
       presetId: preset.id,
@@ -114,6 +128,7 @@ export function SparsePresetSettingsSection({
       return
     }
     setSubmitting(true)
+    setOperationError(null)
     try {
       const saved = await saveSparsePreset({
         repoId,
@@ -123,6 +138,19 @@ export function SparsePresetSettingsSection({
       })
       if (saved && mountedRef.current) {
         setDraft(null)
+      } else if (mountedRef.current) {
+        setOperationError(
+          draft.mode === 'new' ? 'Failed to save preset.' : 'Failed to update preset.'
+        )
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        setOperationError(
+          getSparsePresetOperationErrorMessage(
+            error,
+            draft.mode === 'new' ? 'Failed to save preset.' : 'Failed to update preset.'
+          )
+        )
       }
     } finally {
       if (mountedRef.current) {
@@ -136,11 +164,28 @@ export function SparsePresetSettingsSection({
       setConfirmingDeleteId(preset.id)
       return
     }
-    if (draft?.presetId === preset.id) {
-      setDraft(null)
+    setDeletingPresetId(preset.id)
+    setOperationError(null)
+    try {
+      // Why: SSH-backed settings can fail after confirmation; keep local edit
+      // state intact until persistence actually reports success.
+      await removeSparsePreset({ repoId, presetId: preset.id })
+      if (mountedRef.current) {
+        if (draft?.presetId === preset.id) {
+          setDraft(null)
+        }
+        setConfirmingDeleteId(null)
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        setOperationError(getSparsePresetOperationErrorMessage(error, 'Failed to delete preset.'))
+        setConfirmingDeleteId(preset.id)
+      }
+    } finally {
+      if (mountedRef.current) {
+        setDeletingPresetId(null)
+      }
     }
-    setConfirmingDeleteId(null)
-    await removeSparsePreset({ repoId, presetId: preset.id })
   }
 
   const renderDraftEditor = (): React.JSX.Element | null => {
@@ -260,11 +305,20 @@ export function SparsePresetSettingsSection({
         </Button>
       </div>
 
+      {visibleError ? (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          {visibleError}
+        </div>
+      ) : null}
+
       {renderDraftEditor()}
 
       {presets === undefined ? (
         <div className="rounded-xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
-          Loading sparse presets...
+          {loadError ? 'Sparse presets could not be loaded.' : 'Loading sparse presets...'}
         </div>
       ) : sortedPresets.length === 0 && !draft ? (
         <div className="rounded-xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
@@ -276,6 +330,7 @@ export function SparsePresetSettingsSection({
             // Why: users can already have locally persisted presets from older
             // builds or hand-edited state; a bad timestamp must not blank Settings.
             const updatedLabel = formatSparsePresetUpdatedAt(preset.updatedAt)
+            const isDeleting = deletingPresetId === preset.id
 
             return (
               <div
@@ -307,7 +362,7 @@ export function SparsePresetSettingsSection({
                       size="icon-sm"
                       aria-label={`Edit ${preset.name}`}
                       onClick={() => startEditPreset(preset)}
-                      disabled={submitting}
+                      disabled={submitting || deletingPresetId !== null}
                     >
                       <Pencil className="size-3.5" />
                     </Button>
@@ -318,14 +373,22 @@ export function SparsePresetSettingsSection({
                       aria-label={`Delete ${preset.name}`}
                       onClick={() => void handleDeletePreset(preset)}
                       onBlur={() => setConfirmingDeleteId(null)}
-                      disabled={submitting}
+                      disabled={submitting || (deletingPresetId !== null && !isDeleting)}
                       className={cn(
-                        'w-[5.75rem] px-2 text-xs',
+                        'w-[6.5rem] px-2 text-xs',
                         confirmingDeleteId !== preset.id && 'text-muted-foreground'
                       )}
                     >
-                      <Trash2 className="size-3.5" />
-                      {confirmingDeleteId === preset.id ? 'Confirm' : 'Delete'}
+                      {isDeleting ? (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-3.5" />
+                      )}
+                      {isDeleting
+                        ? 'Deleting'
+                        : confirmingDeleteId === preset.id
+                          ? 'Confirm'
+                          : 'Delete'}
                     </Button>
                   </div>
                 </div>

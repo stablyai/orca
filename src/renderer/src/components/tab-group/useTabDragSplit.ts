@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines -- Why: the drag-split hook co-locates drop-zone
  * resolution, same-group reordering, and cross-group handoff so state
  * transitions stay readable in one place. */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   closestCenter,
   pointerWithin,
@@ -204,6 +204,7 @@ export function useTabDragSplit({
   onDragOver: (event: DragOverEvent) => void
   onDragStart: (event: DragStartEvent) => void
   sensors: ReturnType<typeof useSensors>
+  setDragRootNode: (node: HTMLDivElement | null) => void
 } {
   const reorderUnifiedTabs = useAppStore((state) => state.reorderUnifiedTabs)
   const dropUnifiedTab = useAppStore((state) => state.dropUnifiedTab)
@@ -235,7 +236,17 @@ export function useTabDragSplit({
     releaseWebviewDragPassthroughRef.current = acquireWebviewsDragPassthrough()
   }, [releaseWebviewDragPassthrough])
 
-  useEffect(() => () => releaseWebviewDragPassthrough(), [releaseWebviewDragPassthrough])
+  const setDragRootNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      if (node) {
+        return
+      }
+      // Why: this root owns the dnd-kit gesture that temporarily puts browser
+      // webviews in pointer passthrough, so root teardown must release it.
+      releaseWebviewDragPassthrough()
+    },
+    [releaseWebviewDragPassthrough]
+  )
 
   const clearDragState = useCallback(() => {
     releaseWebviewDragPassthrough()
@@ -465,6 +476,7 @@ export function useTabDragSplit({
     onDragMove,
     onDragOver,
     onDragStart,
-    sensors
+    sensors,
+    setDragRootNode
   }
 }

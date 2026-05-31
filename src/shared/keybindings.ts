@@ -31,6 +31,7 @@ export type KeybindingActionId =
   | 'app.forceReload'
   | 'file.exportPdf'
   | 'workspace.create'
+  | 'workspace.delete'
   | 'voice.dictation'
   | 'view.tasks'
   | 'sidebar.left.toggle'
@@ -228,6 +229,26 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'create', 'new workspace'],
     defaultBindings: platformBindings(['Mod+N', 'Mod+Shift+N'])
+  },
+  {
+    id: 'workspace.delete',
+    title: 'Delete Workspace',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'workspace',
+      'current workspace',
+      'worktree',
+      'delete',
+      'remove',
+      'trash'
+    ],
+    // Why: ship the command now without claiming a default chord; user
+    // overrides still win automatically when a future default is assigned.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
   },
   {
     id: 'voice.dictation',

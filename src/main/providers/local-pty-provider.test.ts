@@ -429,6 +429,43 @@ describe('LocalPtyProvider', () => {
         expect.objectContaining({ cwd: expect.any(String) })
       )
     })
+
+    it('resolves the Git Bash default shell and preserves the requested cwd', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      const originalProgramFiles = process.env.ProgramFiles
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      process.env.ProgramFiles = 'C:\\Program Files'
+      provider.configure({ getWindowsShell: () => 'git-bash' })
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\Users\\jin\\repo'
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+        if (originalProgramFiles === undefined) {
+          delete process.env.ProgramFiles
+        } else {
+          process.env.ProgramFiles = originalProgramFiles
+        }
+      }
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'C:\\Program Files\\Git\\bin\\bash.exe',
+        ['--login', '-i'],
+        expect.objectContaining({
+          cwd: 'C:\\Users\\jin\\repo',
+          env: expect.objectContaining({
+            CHERE_INVOKING: '1',
+            PYTHONUTF8: '1'
+          })
+        })
+      )
+    })
   })
 
   describe('write', () => {

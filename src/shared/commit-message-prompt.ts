@@ -25,7 +25,7 @@ export function buildCommitPrompt(diff: string, customSuffix: string): string {
   if (!trimmedSuffix) {
     return base
   }
-  return `${base}\n\nAdditional instructions from user:\n${trimmedSuffix}`
+  return `${base}\n\nAdditional user prompt:\n${trimmedSuffix}`
 }
 
 export const STAGED_DIFF_BYTE_BUDGET = 200_000

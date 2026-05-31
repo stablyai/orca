@@ -192,10 +192,14 @@ class BrowserSessionRegistry {
       if (pendingEntries.length === 0) {
         return
       }
-      const knownPartitions = new Set([
-        ORCA_BROWSER_PARTITION,
-        ...meta.profiles.map((p) => p.partition)
-      ])
+      // Why: replay writes to partition-derived file paths, so corrupted
+      // metadata must pass the same validation as the webview allowlist.
+      const knownPartitions = new Set([ORCA_BROWSER_PARTITION])
+      for (const profile of meta.profiles) {
+        if (BrowserSessionRegistry.isValidPersistedProfile(profile)) {
+          knownPartitions.add(profile.partition)
+        }
+      }
       const remainingEntries = { ...meta.pendingCookieImports }
 
       for (const [partition, stagedPath] of pendingEntries) {
@@ -426,17 +430,24 @@ class BrowserSessionRegistry {
   // registering anything.
   private static readonly PARTITION_RE = /^persist:orca-browser-session-[\da-f-]{36}$/
 
+  private static isValidPersistedProfile(profile: unknown): profile is BrowserSessionProfile {
+    if (!profile || typeof profile !== 'object') {
+      return false
+    }
+    const candidate = profile as Partial<BrowserSessionProfile>
+    return (
+      candidate.id !== 'default' &&
+      candidate.scope !== 'default' &&
+      typeof candidate.id === 'string' &&
+      typeof candidate.partition === 'string' &&
+      typeof candidate.label === 'string' &&
+      BrowserSessionRegistry.PARTITION_RE.test(candidate.partition)
+    )
+  }
+
   hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
     for (const profile of profiles) {
-      if (profile.id === 'default' || profile.scope === 'default') {
-        continue
-      }
-      if (
-        typeof profile.id !== 'string' ||
-        typeof profile.partition !== 'string' ||
-        typeof profile.label !== 'string' ||
-        !BrowserSessionRegistry.PARTITION_RE.test(profile.partition)
-      ) {
+      if (!BrowserSessionRegistry.isValidPersistedProfile(profile)) {
         continue
       }
       this.profiles.set(profile.id, profile)

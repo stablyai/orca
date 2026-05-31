@@ -1020,14 +1020,16 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
  * Stage a file.
  */
 export async function stageFile(worktreePath: string, filePath: string): Promise<void> {
-  await gitExecFileAsync(['add', '--', filePath], { cwd: worktreePath })
+  await gitExecFileAsync(['add', '--', literalPathspec(filePath)], { cwd: worktreePath })
 }
 
 /**
  * Unstage a file.
  */
 export async function unstageFile(worktreePath: string, filePath: string): Promise<void> {
-  await gitExecFileAsync(['restore', '--staged', '--', filePath], { cwd: worktreePath })
+  await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath)], {
+    cwd: worktreePath
+  })
 }
 
 export async function getStagedCommitContext(
@@ -1246,7 +1248,7 @@ export async function bulkStageFiles(worktreePath: string, filePaths: string[]):
   }
   for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-    await gitExecFileAsync(['add', '--', ...chunk], { cwd: worktreePath })
+    await gitExecFileAsync(['add', '--', ...chunk.map(literalPathspec)], { cwd: worktreePath })
   }
 }
 
@@ -1259,6 +1261,8 @@ export async function bulkUnstageFiles(worktreePath: string, filePaths: string[]
   }
   for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-    await gitExecFileAsync(['restore', '--staged', '--', ...chunk], { cwd: worktreePath })
+    await gitExecFileAsync(['restore', '--staged', '--', ...chunk.map(literalPathspec)], {
+      cwd: worktreePath
+    })
   }
 }

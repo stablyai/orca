@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Worktree } from '../../../shared/types'
+import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { getConnectionId } from '@/lib/connection-context'
 import { listRuntimeFiles } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
@@ -17,7 +18,7 @@ export function cleanRuntimeFileListError(error: unknown): string {
 }
 
 export function isNestedWorktreePath(parentPath: string, childPath: string): boolean {
-  const windowsPath = /^[a-zA-Z]:[\\/]/.test(parentPath) || parentPath.startsWith('\\\\')
+  const windowsPath = isWindowsAbsolutePathLike(parentPath)
   const parent = parentPath.replace(/[\\/]+$/, '').replace(/\\/g, '/')
   const child = childPath.replace(/\\/g, '/')
   // Why: Windows paths are case-insensitive and can arrive with mixed slash

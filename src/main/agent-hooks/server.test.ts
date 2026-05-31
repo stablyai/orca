@@ -16,6 +16,7 @@ import { join } from 'path'
 import { AgentHookServer, agentHookServer, _internals } from './server'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
+  AGENT_STATUS_STALE_AFTER_MS,
   parseAgentStatusPayload
 } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
@@ -1784,6 +1785,65 @@ describe('AgentHookServer listener replay', () => {
       server.setListener(listener)
 
       expect(listener).not.toHaveBeenCalled()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('ignores local nested Claude Stop while a parent Codex hook status is active', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const listener = vi.fn()
+      server.setListener(listener)
+      const postHook = async (
+        source: 'codex' | 'claude',
+        payload: Record<string, unknown>
+      ): Promise<void> => {
+        const response = await fetch(
+          `http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/${source}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            },
+            body: JSON.stringify(buildBody(payload))
+          }
+        )
+        expect(response.status).toBe(204)
+      }
+
+      await postHook('codex', {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'parent codex'
+      })
+      await postHook('claude', {
+        hook_event_name: 'Stop',
+        last_assistant_message: 'child finished'
+      })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'working',
+          prompt: 'parent codex',
+          agentType: 'codex'
+        })
+      ])
+      const snapshot = server.getStatusSnapshot()[0]
+      expect(snapshot.lastAssistantMessage).toBeUndefined()
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'parent codex',
+            agentType: 'codex'
+          })
+        })
+      )
     } finally {
       server.stop()
     }
@@ -5623,6 +5683,211 @@ describe('AgentHookServer ingestRemote', () => {
         payload
       })
     )
+  })
+
+  it('preserves active pane identity when a nested remote hook reports another agent', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: { state: 'working', prompt: 'parent codex', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      vi.setSystemTime(1_100)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: {
+            state: 'working',
+            prompt: 'nested claude',
+            agentType: 'claude',
+            toolName: 'Read',
+            toolInput: '00-review-context.md'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'working',
+          prompt: 'nested claude',
+          agentType: 'codex',
+          toolName: 'Read',
+          toolInput: '00-review-context.md',
+          receivedAt: 1_100
+        })
+      ])
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            prompt: 'nested claude',
+            agentType: 'codex'
+          })
+        })
+      )
+      expect(trackMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores nested remote done while the parent pane agent is still active', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: { state: 'working', prompt: 'parent codex', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      vi.setSystemTime(1_100)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hasExplicitPrompt: true,
+          payload: {
+            state: 'done',
+            prompt: 'nested claude',
+            agentType: 'claude',
+            toolName: 'Read',
+            toolInput: '00-review-context.md',
+            lastAssistantMessage: 'child finished'
+          }
+        },
+        'conn-1'
+      )
+
+      const snapshot = server.getStatusSnapshot()
+      expect(snapshot).toHaveLength(1)
+      expect(snapshot[0]).toMatchObject({
+        paneKey: PANE,
+        state: 'working',
+        prompt: 'parent codex',
+        agentType: 'codex',
+        receivedAt: 1_000,
+        stateStartedAt: 1_000
+      })
+      expect(snapshot[0].toolName).toBeUndefined()
+      expect(snapshot[0].toolInput).toBeUndefined()
+      expect(snapshot[0].lastAssistantMessage).toBeUndefined()
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'parent codex',
+            agentType: 'codex'
+          })
+        })
+      )
+      expect(trackMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('allows remote pane identity to change after the prior turn is done', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'done', prompt: 'parent codex', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      vi.setSystemTime(1_100)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'real claude turn', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'real claude turn',
+          agentType: 'claude',
+          receivedAt: 1_100
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('allows stale active remote pane identity to change', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'old codex turn', agentType: 'codex' }
+        },
+        'conn-1'
+      )
+
+      vi.setSystemTime(1_000 + AGENT_STATUS_STALE_AFTER_MS + 1)
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'new claude turn', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'new claude turn',
+          agentType: 'claude',
+          receivedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('lets remote Claude permission clear when matching approved tool execution starts', () => {

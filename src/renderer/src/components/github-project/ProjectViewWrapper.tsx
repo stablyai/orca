@@ -48,6 +48,11 @@ import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 import { filterProjectTableRowsByOpenRepos } from './project-row-filtering'
+import {
+  getNextVisibleProjectTableCache,
+  getVisibleProjectTable,
+  type CachedVisibleProjectTable
+} from './project-visible-table-cache'
 
 type Props = Record<string, never>
 
@@ -308,27 +313,23 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     () => (table && slugIndexReady ? filterProjectTableRowsByOpenRepos(table, lookupSlug) : null),
     [table, slugIndexReady, lookupSlug]
   )
-  const [lastFilteredTable, setLastFilteredTable] = useState<{
-    cacheKey: string
-    table: GitHubProjectTable
-  } | null>(null)
-
-  useEffect(() => {
-    if (!currentCacheKey || !table) {
-      setLastFilteredTable(null)
-      return
-    }
-    if (slugIndexReady && filteredTable) {
-      setLastFilteredTable({ cacheKey: currentCacheKey, table: filteredTable })
-    }
-  }, [currentCacheKey, table, slugIndexReady, filteredTable])
-
-  const visibleTable =
-    slugIndexReady || !currentCacheKey
-      ? filteredTable
-      : lastFilteredTable?.cacheKey === currentCacheKey
-        ? lastFilteredTable.table
-        : null
+  const lastFilteredTableRef = useRef<CachedVisibleProjectTable | null>(null)
+  // Why: this cache only prevents a blank table while the repo slug index
+  // rebuilds; a ref preserves the previous render value without scheduling
+  // a second render after every filtered-table change.
+  lastFilteredTableRef.current = getNextVisibleProjectTableCache({
+    currentCacheKey,
+    sourceTable: table,
+    slugIndexReady,
+    filteredTable,
+    previous: lastFilteredTableRef.current
+  })
+  const visibleTable = getVisibleProjectTable({
+    currentCacheKey,
+    slugIndexReady,
+    filteredTable,
+    cachedTable: lastFilteredTableRef.current
+  })
 
   // Parent-dropped toast, once per table.
   useEffect(() => {

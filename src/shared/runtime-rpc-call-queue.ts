@@ -77,24 +77,25 @@ export class RuntimeRpcCallQueuePool {
       }
       // Why: runtime streams and worktree actions share transport capacity with
       // per-card status refreshes, so decorative calls must not stampede it.
-      void call
-        .run()
-        .then(call.resolve, call.reject)
-        .finally(() => {
-          queue.active = Math.max(0, queue.active - 1)
-          if (call.background) {
-            queue.backgroundActive = Math.max(0, queue.backgroundActive - 1)
-          }
-          if (
-            queue.active === 0 &&
-            queue.foreground.length === 0 &&
-            queue.background.length === 0
-          ) {
-            this.queues.delete(selector)
-            return
-          }
-          this.pump(selector, queue)
-        })
+      let runPromise: Promise<unknown>
+      try {
+        runPromise = call.run()
+      } catch (error) {
+        // Why: callers rely on queued work starting immediately, but sync
+        // validation errors must still flow through the cleanup path.
+        runPromise = Promise.reject(error)
+      }
+      void runPromise.then(call.resolve, call.reject).finally(() => {
+        queue.active = Math.max(0, queue.active - 1)
+        if (call.background) {
+          queue.backgroundActive = Math.max(0, queue.backgroundActive - 1)
+        }
+        if (queue.active === 0 && queue.foreground.length === 0 && queue.background.length === 0) {
+          this.queues.delete(selector)
+          return
+        }
+        this.pump(selector, queue)
+      })
     }
   }
 }

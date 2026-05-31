@@ -72,6 +72,9 @@ import {
   getVisibleDeletableWorkspaceIds,
   getWorkspaceSpaceGitStatusRefreshCandidates,
   isWorkspaceSpaceRowReadyToDelete,
+  pruneWorkspaceSpaceSelectedIds,
+  resolveWorkspaceSpaceInspectedWorktreeId,
+  resolveWorkspaceSpaceTreemapZoomWorktreeId,
   sortWorkspaceSpaceRows,
   type WorkspaceSpaceSortDirection,
   type WorkspaceSpaceSortKey
@@ -1245,6 +1248,27 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     [onlyDeletable, query, sortDirection, sortKey, sourceRows]
   )
 
+  const nextInspectedWorktreeId = resolveWorkspaceSpaceInspectedWorktreeId(
+    sourceRows,
+    inspectedWorktreeId
+  )
+  const nextSelectedIds = pruneWorkspaceSpaceSelectedIds(sourceRows, selectedIds)
+  const nextTreemapZoomWorktreeId = resolveWorkspaceSpaceTreemapZoomWorktreeId(
+    sourceRows,
+    treemapZoomWorktreeId
+  )
+  // Why: these ids are local UI state derived from the latest scan rows. Repair
+  // them before commit so stale selections cannot flash after a scan changes.
+  if (inspectedWorktreeId !== nextInspectedWorktreeId) {
+    setInspectedWorktreeId(nextInspectedWorktreeId)
+  }
+  if (nextSelectedIds !== selectedIds) {
+    setSelectedIds(nextSelectedIds)
+  }
+  if (treemapZoomWorktreeId !== nextTreemapZoomWorktreeId) {
+    setTreemapZoomWorktreeId(nextTreemapZoomWorktreeId)
+  }
+
   useEffect(() => {
     const candidates = getWorkspaceSpaceGitStatusRefreshCandidates(sourceRows)
     if (candidates.length === 0) {
@@ -1272,16 +1296,16 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   }, [refreshWorkspaceGitStatus, sourceRows])
 
   const inspectedWorktree =
-    rows.find((row) => row.worktreeId === inspectedWorktreeId) ??
+    rows.find((row) => row.worktreeId === nextInspectedWorktreeId) ??
     rows.find((row) => row.status === 'ok') ??
     null
   const zoomedWorktree =
-    sourceRows.find((row) => row.worktreeId === treemapZoomWorktreeId && row.status === 'ok') ??
+    sourceRows.find((row) => row.worktreeId === nextTreemapZoomWorktreeId && row.status === 'ok') ??
     null
   const maxSize = getLargestWorkspaceSpaceRowSize(rows)
   const selectedDeletableIds = useMemo(
-    () => getSelectedDeletableWorkspaceIds(rows, selectedIds, isWorktreeUnavailableForDelete),
-    [isWorktreeUnavailableForDelete, rows, selectedIds]
+    () => getSelectedDeletableWorkspaceIds(rows, nextSelectedIds, isWorktreeUnavailableForDelete),
+    [isWorktreeUnavailableForDelete, nextSelectedIds, rows]
   )
   const selectedDeletableIdSet = useMemo(
     () => new Set(selectedDeletableIds),
@@ -1292,8 +1316,8 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     [isWorktreeUnavailableForDelete, rows]
   )
   const allVisibleSelected =
-    visibleDeletableIds.length > 0 && visibleDeletableIds.every((id) => selectedIds.has(id))
-  const someVisibleSelected = visibleDeletableIds.some((id) => selectedIds.has(id))
+    visibleDeletableIds.length > 0 && visibleDeletableIds.every((id) => nextSelectedIds.has(id))
+  const someVisibleSelected = visibleDeletableIds.some((id) => nextSelectedIds.has(id))
   const visibleSelectionState = allVisibleSelected ? true : someVisibleSelected ? 'mixed' : false
   const isInitialScan = isScanning && !analysis
   const hasRows = sourceRows.length > 0
@@ -1306,34 +1330,6 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
         .reduce((sum, row) => sum + row.reclaimableBytes, 0),
     [rows, selectedDeletableIdSet]
   )
-
-  useEffect(() => {
-    if (!analysis) {
-      setInspectedWorktreeId(null)
-      return
-    }
-    setInspectedWorktreeId((current) =>
-      current && analysis.worktrees.some((worktree) => worktree.worktreeId === current)
-        ? current
-        : (analysis.worktrees.find((worktree) => worktree.status === 'ok')?.worktreeId ?? null)
-    )
-  }, [analysis])
-
-  useEffect(() => {
-    setSelectedIds((current) => {
-      const valid = new Set(sourceRows.map((row) => row.worktreeId))
-      const next = new Set([...current].filter((id) => valid.has(id)))
-      return next.size === current.size ? current : next
-    })
-  }, [sourceRows])
-
-  useEffect(() => {
-    setTreemapZoomWorktreeId((current) =>
-      current && sourceRows.some((row) => row.worktreeId === current && row.status === 'ok')
-        ? current
-        : null
-    )
-  }, [sourceRows])
 
   const toggleSort = (key: WorkspaceSpaceSortKey): void => {
     if (sortKey === key) {
@@ -1692,7 +1688,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
                     key={worktree.worktreeId}
                     worktree={worktree}
                     maxSize={maxSize}
-                    selected={selectedIds.has(worktree.worktreeId)}
+                    selected={nextSelectedIds.has(worktree.worktreeId)}
                     inspected={inspectedWorktree?.worktreeId === worktree.worktreeId}
                     decisionDetails={
                       decisionDetailsByWorktreeId.get(worktree.worktreeId) ??

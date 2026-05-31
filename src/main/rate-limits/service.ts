@@ -42,8 +42,8 @@ const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual ref
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
 
-// Why: the internal state only tracks claude and codex. The inactiveClaudeAccounts
-// array is derived from the cache on demand in getState() and pushToRenderer().
+// Why: inactive account arrays are derived from provider-specific caches on
+// demand in getState() and pushToRenderer().
 type InternalRateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
@@ -153,21 +153,28 @@ export class RateLimitService {
     const refreshOnResume = (): void => {
       void this.refreshIfWindowActive()
     }
-    mainWindow.on('focus', refreshOnResume)
-    mainWindow.on('show', refreshOnResume)
-    mainWindow.on('restore', refreshOnResume)
-    this.detachWindowListeners = () => {
+    // Why: attach() can replace windows; the previous closed listener also
+    // captures this service and must be removed with the focus listeners.
+    const detachWindowListeners = (): void => {
       mainWindow.removeListener('focus', refreshOnResume)
       mainWindow.removeListener('show', refreshOnResume)
       mainWindow.removeListener('restore', refreshOnResume)
+      mainWindow.removeListener('closed', onClosed)
     }
-    mainWindow.on('closed', () => {
-      this.detachWindowListeners?.()
-      this.detachWindowListeners = null
+    const onClosed = (): void => {
+      detachWindowListeners()
+      if (this.detachWindowListeners === detachWindowListeners) {
+        this.detachWindowListeners = null
+      }
       if (this.mainWindow === mainWindow) {
         this.mainWindow = null
       }
-    })
+    }
+    mainWindow.on('focus', refreshOnResume)
+    mainWindow.on('show', refreshOnResume)
+    mainWindow.on('restore', refreshOnResume)
+    mainWindow.on('closed', onClosed)
+    this.detachWindowListeners = detachWindowListeners
   }
 
   start(): void {
@@ -1017,7 +1024,7 @@ export class RateLimitService {
     for (const [accountId, limits] of cache) {
       result.push({
         accountId,
-        claude: limits,
+        rateLimits: limits,
         updatedAt: limits.updatedAt,
         isFetching: fetching.has(accountId)
       })
@@ -1028,7 +1035,7 @@ export class RateLimitService {
       if (!cache.has(accountId)) {
         result.push({
           accountId,
-          claude: null,
+          rateLimits: null,
           updatedAt: 0,
           isFetching: true
         })

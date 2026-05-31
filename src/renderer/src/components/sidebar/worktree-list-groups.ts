@@ -2,6 +2,7 @@
 import { CircleX, FolderTree, List, Pin } from 'lucide-react'
 import type React from 'react'
 import type {
+  DetectedWorktree,
   Repo,
   ProjectGroup,
   Worktree,
@@ -63,7 +64,21 @@ export type WorktreeRow = {
   lineageGroupKey?: string
   lineageCollapsed?: boolean
 }
-export type Row = GroupHeaderRow | WorktreeRow
+
+export type ImportedWorktreesCardCandidate = {
+  repo: Repo
+  hiddenWorktrees: DetectedWorktree[]
+}
+
+export type ImportedWorktreesCardRow = {
+  type: 'imported-worktrees-card'
+  key: string
+  repo: Repo
+  hiddenWorktrees: DetectedWorktree[]
+  placement: 'repo-group' | 'pinned-fallback'
+}
+
+export type Row = GroupHeaderRow | WorktreeRow | ImportedWorktreesCardRow
 
 export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 
@@ -209,9 +224,9 @@ export function getPRGroupKey(
 function emitPinnedGroup(
   worktrees: Worktree[],
   repoMap: Map<string, Repo>,
-  lineageById: Record<string, WorktreeLineage>,
-  worktreeMap: Map<string, Worktree>,
   collapsedGroups: Set<string>,
+  visibleUnpinnedRepoIds: ReadonlySet<string>,
+  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>,
   result: Row[]
 ): Set<string> {
   const pinned = worktrees.filter((w) => w.isPinned)
@@ -228,12 +243,34 @@ function emitPinnedGroup(
     icon: PINNED_GROUP_META.icon
   })
   if (!collapsedGroups.has(PINNED_GROUP_KEY)) {
-    appendWorktreeRows(result, pinned, repoMap, lineageById, worktreeMap, {
-      nestLineage: false,
-      collapsedGroups
-    })
+    const lastPinnedIndexByRepoId = new Map<string, number>()
+    pinned.forEach((worktree, index) => lastPinnedIndexByRepoId.set(worktree.repoId, index))
+    for (const [index, worktree] of pinned.entries()) {
+      result.push(buildWorktreeRow(worktree, repoMap, 0, [], false, 0, false))
+      const candidate = importedWorktreesByRepo.get(worktree.repoId)
+      if (
+        candidate &&
+        !visibleUnpinnedRepoIds.has(worktree.repoId) &&
+        lastPinnedIndexByRepoId.get(worktree.repoId) === index
+      ) {
+        result.push(buildImportedWorktreesCardRow(candidate, 'pinned-fallback'))
+      }
+    }
   }
   return new Set(pinned.map((w) => w.id))
+}
+
+function buildImportedWorktreesCardRow(
+  candidate: ImportedWorktreesCardCandidate,
+  placement: ImportedWorktreesCardRow['placement']
+): ImportedWorktreesCardRow {
+  return {
+    type: 'imported-worktrees-card',
+    key: `imported-worktrees-card:${placement}:${candidate.repo.id}`,
+    repo: candidate.repo,
+    hiddenWorktrees: candidate.hiddenWorktrees,
+    placement
+  }
 }
 
 function buildWorktreeRow(
@@ -344,6 +381,16 @@ function appendWorktreeRows(
   }
 }
 
+function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
+  const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
+  if (mainWorktrees.length === 0) {
+    return worktrees
+  }
+  // Why: project groups are scanned by repo; keep the repo's canonical
+  // workspace anchored even when dynamic sorts rank a child workspace first.
+  return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
+}
+
 /**
  * Build the flat row list consumed by the virtualizer.
  * Extracted here to keep WorktreeList.tsx under the line-count lint limit.
@@ -364,16 +411,23 @@ export function buildRows(
   nestLineage = false,
   settings?: AppState['settings'],
   projectGroups: readonly ProjectGroup[] = [],
-  placeholderRepoIds: ReadonlySet<string> = new Set()
+  placeholderRepoIds: ReadonlySet<string> = new Set(),
+  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map()
 ): Row[] {
   const result: Row[] = []
 
+  const visibleUnpinnedRepoIds = new Set(
+    worktrees.filter((worktree) => !worktree.isPinned).map((worktree) => worktree.repoId)
+  )
+  const visiblePinnedRepoIds = new Set(
+    worktrees.filter((worktree) => worktree.isPinned).map((worktree) => worktree.repoId)
+  )
   const pinnedIds = emitPinnedGroup(
     worktrees,
     repoMap,
-    lineageById,
-    worktreeMap,
     collapsedGroups,
+    visibleUnpinnedRepoIds,
+    importedWorktreesByRepo,
     result
   )
   const unpinned = pinnedIds.size > 0 ? worktrees.filter((w) => !pinnedIds.has(w.id)) : worktrees
@@ -430,6 +484,18 @@ export function buildRows(
         // Why: nested repo imports can persist repos before their worktree rows
         // are available, but filters must not resurrect hidden repo headers.
         grouped.set(key, { label: repo?.displayName ?? 'Unknown', items: [], repo })
+      }
+    }
+  }
+  if (groupBy === 'repo') {
+    for (const [repoId, candidate] of importedWorktreesByRepo) {
+      const key = `repo:${repoId}`
+      if (!grouped.has(key) && !visiblePinnedRepoIds.has(repoId)) {
+        grouped.set(key, {
+          label: candidate.repo.displayName,
+          items: [],
+          repo: candidate.repo
+        })
       }
     }
   }
@@ -531,7 +597,14 @@ export function buildRows(
 
       result.push(header)
       if (!isCollapsed) {
-        appendWorktreeRows(result, group.items, repoMap, lineageById, worktreeMap, {
+        if (groupBy === 'repo' && repo) {
+          const candidate = importedWorktreesByRepo.get(repo.id)
+          if (candidate) {
+            result.push(buildImportedWorktreesCardRow(candidate, 'repo-group'))
+          }
+        }
+        const items = groupBy === 'repo' ? orderMainWorktreeFirst(group.items) : group.items
+        appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
           nestLineage,
           collapsedGroups
         })
