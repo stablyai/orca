@@ -12,6 +12,7 @@ import { normalizeAbsolutePathForComparison } from '@/components/right-sidebar/f
 // a short TTL so a genuinely external edit that lands after the window still
 // gets picked up.
 const SELF_WRITE_TTL_MS = 750
+const SELF_WRITE_MAX_STAMPS = 256
 
 export type RecentSelfWrite = {
   content: string | null
@@ -23,11 +24,36 @@ type SelfWriteStamp = RecentSelfWrite & {
 
 const stamps = new Map<string, SelfWriteStamp>()
 
+function pruneExpiredSelfWrites(now = Date.now()): void {
+  for (const [key, stamp] of stamps) {
+    if (now > stamp.expiresAt) {
+      stamps.delete(key)
+    }
+  }
+}
+
+function enforceSelfWriteStampLimit(): void {
+  while (stamps.size > SELF_WRITE_MAX_STAMPS) {
+    const oldest = stamps.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    stamps.delete(oldest)
+  }
+}
+
 export function recordSelfWrite(absolutePath: string, content?: string): void {
-  stamps.set(normalizeAbsolutePathForComparison(absolutePath), {
+  const now = Date.now()
+  pruneExpiredSelfWrites(now)
+  const key = normalizeAbsolutePathForComparison(absolutePath)
+  // Why: a missing watcher echo should not leave stale path/content stamps in
+  // memory for the whole renderer session.
+  stamps.delete(key)
+  stamps.set(key, {
     content: content ?? null,
-    expiresAt: Date.now() + SELF_WRITE_TTL_MS
+    expiresAt: now + SELF_WRITE_TTL_MS
   })
+  enforceSelfWriteStampLimit()
 }
 
 export function clearSelfWrite(absolutePath: string): void {
@@ -53,4 +79,8 @@ export function hasRecentSelfWrite(absolutePath: string): boolean {
 
 export function __clearSelfWriteRegistryForTests(): void {
   stamps.clear()
+}
+
+export function __getSelfWriteRegistrySizeForTests(): number {
+  return stamps.size
 }
