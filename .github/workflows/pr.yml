@@ -14,18 +14,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 zsh
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
@@ -86,8 +86,19 @@ jobs:
       - name: Rebuild better-sqlite3 for Node
         run: pnpm rebuild better-sqlite3
 
+      # Why: install intentionally blocks Electron's package postinstall, but
+      # some unit tests import `electron` under Node and require path.txt.
+      - name: Install Electron package binary for tests
+        run: node config/scripts/install-electron-package-binary.mjs
+
       - name: Test
         run: pnpm test
 
-      - name: Build
-        run: pnpm build
+      - name: Build unpacked app
+        run: pnpm build:unpack
+
+      # Why: the packaged CLI runs outside Electron's asar integration, so
+      # bare runtime imports must be present in the package itself. Run from a
+      # temp copy so Node cannot mask missing package deps with repo node_modules.
+      - name: Smoke packaged CLI
+        run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked

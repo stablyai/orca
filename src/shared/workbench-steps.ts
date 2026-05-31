@@ -19,22 +19,20 @@ export const WORKBENCH_STEPS: readonly WorkbenchStep[] = [
     id: 'terminal',
     name: 'Terminal',
     subtitle: 'Terminal',
-    description:
-      'Bring your terminal setup into Orca, then split panes to keep servers, tests, logs, and agents running side by side.'
+    description: 'Keep your agents, tests, and dev logs visible at once.'
   },
   {
     id: 'editor',
     name: 'Editor',
     subtitle: 'Editor',
-    description:
-      'A rich Notion-style markdown editor with slash commands, inline blocks, and autosave.'
+    description: 'Use our Notion-style markdown editor to write notes without leaving Orca.'
   },
   {
     id: 'browser',
     name: 'Browser',
     subtitle: 'Browser',
     description:
-      "Run your app in Orca's browser, send selected UI elements to agents, and let agents navigate, click, and verify pages."
+      "Run your app in Orca's browser, send selected UI elements to agents, and let your agents interact with your webpage."
   }
 ] as const
 

@@ -4,21 +4,41 @@ boundary. Splitting by line count would scatter tightly coupled repo behavior. *
 import type { BrowserWindow } from 'electron'
 import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
+import { z } from 'zod'
 import type { Store } from '../persistence'
 import type {
   BaseRefSearchResult,
   Repo,
+  ProjectGroup,
+  ProjectGroupImportResult,
+  NestedRepoScanResult,
   BaseRefDefaultResult,
   SparsePreset
 } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { normalizeRepoBadgeColor } from '../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../shared/repo-icon'
+import { normalizeRepoSourceControlAiOverrides } from '../../shared/source-control-ai'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'child_process'
 import { access, mkdir, readdir, rm } from 'fs/promises'
 import { gitExecFileAsync, gitSpawn } from '../git/runner'
-import { basename, isAbsolute, join } from 'path'
+import { isAbsolute, join, posix } from 'path'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import {
+  cleanupClaimedCloneTarget,
+  claimCloneTarget,
+  deriveValidatedClonePath,
+  getClonePathComparisonKey
+} from '../git/repo-clone-path'
+import type { ClaimedCloneTarget } from '../git/repo-clone-path'
+import { getNextProjectGroupOrder } from '../../shared/project-groups'
+import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
+import {
+  createNestedProjectGroupResolver,
+  resolveNestedRepoSelection
+} from '../project-groups/nested-repo-import'
 import {
   isGitRepo,
   getGitUsername,
@@ -30,15 +50,18 @@ import {
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
+  isForEachRefExcludeUnsupportedError,
   searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitUsername } from '../git/git-username'
 import { getActiveMultiplexer } from './ssh'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
+import { detectRepoIcon } from '../repo-icon-autodetect'
 
 // Why: `method` answers "which entry point did the user take?", not "what did
 // they add?" — so the IPC the renderer invoked IS the method. We never send
@@ -61,11 +84,224 @@ function emitRepoAdded(method: RepoMethod, alreadyExisted: boolean): void {
   track('repo_added', { method, ...getCohortAtEmit() })
 }
 
+function getRemoteRepoFolderName(remotePath: string): string {
+  const trimmed = remotePath.replace(/[\\/]+$/, '')
+  if (!trimmed) {
+    return remotePath
+  }
+  return trimmed.split(/[\\/]/).at(-1) || remotePath
+}
+
+type ActiveCloneMetadata = {
+  path: string
+  pathKey: string
+  claimedTarget: ClaimedCloneTarget
+  process: ChildProcess
+  abortRequested: boolean
+  generation: number
+  pendingAbortCleanup: Promise<void> | null
+  resolvePendingAbortCleanup: (() => void) | null
+}
+
 // Why: module-scoped so the abort handle survives window re-creation on macOS.
 // registerRepoHandlers is called again when a new BrowserWindow is created,
 // and a function-scoped variable would lose the reference to an in-flight clone.
-let activeCloneProc: ChildProcess | null = null
-let activeClonePath: string | null = null
+let activeClone: ActiveCloneMetadata | null = null
+let nextCloneGeneration = 1
+const latestCloneGenerationByPath = new Map<string, number>()
+const pendingAbortCleanupByPath = new Map<string, Promise<void>>()
+const cloneInFlightByPath = new Map<string, Promise<void>>()
+
+const ProjectGroupCreateArgs = z.object({
+  name: z.string().min(1),
+  parentPath: z.string().nullable().optional(),
+  parentGroupId: z.string().nullable().optional(),
+  createdFrom: z.enum(['manual', 'folder-scan', 'migration']).optional()
+})
+
+const ProjectGroupUpdateArgs = z.object({
+  groupId: z.string().min(1),
+  updates: z.object({
+    name: z.string().optional(),
+    isCollapsed: z.boolean().optional(),
+    tabOrder: z.number().finite().optional(),
+    color: z.string().nullable().optional()
+  })
+})
+
+const ProjectGroupSelectorArgs = z.object({
+  groupId: z.string().min(1)
+})
+
+const ProjectGroupMoveProjectArgs = z.object({
+  projectId: z.string().min(1),
+  groupId: z.string().nullable(),
+  order: z.number().finite().optional()
+})
+
+const ProjectGroupScanNestedArgs = z.object({
+  path: z.string().min(1),
+  connectionId: z.string().min(1).optional(),
+  options: z.unknown().optional()
+})
+
+const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
+  z.object({
+    parentPath: z.string().min(1),
+    groupName: z.string().min(1),
+    projectPaths: z.array(z.string()),
+    connectionId: z.string().min(1).optional(),
+    mode: z.literal('group')
+  }),
+  z.object({
+    parentPath: z.string().min(1),
+    groupName: z.string().optional().default(''),
+    projectPaths: z.array(z.string()),
+    connectionId: z.string().min(1).optional(),
+    mode: z.literal('separate')
+  })
+])
+
+function parseProjectGroupIpcArgs<T>(schema: z.ZodType<T>, value: unknown, errorCode: string): T {
+  const result = schema.safeParse(value)
+  if (result.success) {
+    return result.data
+  }
+  throw new Error(errorCode)
+}
+
+function validateNestedRepoScanRoot(path: string, connectionId?: string): void {
+  if (connectionId) {
+    return
+  }
+  if (!isAbsolute(path)) {
+    throw new Error('Repo path must be an absolute path')
+  }
+}
+
+async function cleanupOwnedCloneTarget(metadata: ActiveCloneMetadata): Promise<void> {
+  if (!metadata.claimedTarget.canCleanup || !metadata.claimedTarget.ownedDirectoryIdentity) {
+    return
+  }
+  if (latestCloneGenerationByPath.get(metadata.pathKey) !== metadata.generation) {
+    return
+  }
+  // Why: an immediate retry can attach a newer process to the same target
+  // before the aborted process closes; the old close handler must not delete it.
+  if (
+    activeClone &&
+    activeClone.process !== metadata.process &&
+    activeClone.pathKey === metadata.pathKey
+  ) {
+    return
+  }
+
+  if (latestCloneGenerationByPath.get(metadata.pathKey) !== metadata.generation) {
+    return
+  }
+  await cleanupClaimedCloneTarget(metadata.path, metadata.claimedTarget)
+}
+
+function markCloneAbortCleanupPending(metadata: ActiveCloneMetadata): void {
+  if (metadata.resolvePendingAbortCleanup) {
+    return
+  }
+  metadata.pendingAbortCleanup = new Promise<void>((resolve) => {
+    metadata.resolvePendingAbortCleanup = resolve
+  })
+  pendingAbortCleanupByPath.set(metadata.pathKey, metadata.pendingAbortCleanup)
+}
+
+function settleCloneAbortCleanup(metadata: ActiveCloneMetadata): void {
+  if (pendingAbortCleanupByPath.get(metadata.pathKey) === metadata.pendingAbortCleanup) {
+    pendingAbortCleanupByPath.delete(metadata.pathKey)
+  }
+  metadata.resolvePendingAbortCleanup?.()
+  metadata.pendingAbortCleanup = null
+  metadata.resolvePendingAbortCleanup = null
+}
+
+async function runWithClonePathLock<T>(clonePathKey: string, task: () => Promise<T>): Promise<T> {
+  const previous = cloneInFlightByPath.get(clonePathKey) ?? Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const tail = previous.then(
+    () => current,
+    () => current
+  )
+  cloneInFlightByPath.set(clonePathKey, tail)
+
+  try {
+    await previous
+    return await task()
+  } finally {
+    release()
+    if (cloneInFlightByPath.get(clonePathKey) === tail) {
+      cloneInFlightByPath.delete(clonePathKey)
+    }
+  }
+}
+
+function sanitizeNestedRepoImportError(context: string, error: unknown): string {
+  console.warn(`[project-groups] ${context}`, error)
+  return 'Repository could not be imported'
+}
+
+async function resolveSshProjectGroupPath(connectionId: string, path: string): Promise<string> {
+  if (path === '~' || path === '~/' || path.startsWith('~/')) {
+    const mux = getActiveMultiplexer(connectionId)
+    if (mux) {
+      try {
+        const result = (await mux.request('session.resolveHome', { path })) as {
+          resolvedPath: string
+        }
+        return result.resolvedPath
+      } catch {
+        return path
+      }
+    }
+  }
+  return path
+}
+
+async function scanNestedReposForIpc(args: {
+  path: string
+  connectionId?: string
+  options?: unknown
+}): Promise<NestedRepoScanResult> {
+  validateNestedRepoScanRoot(args.path, args.connectionId)
+  if (!args.connectionId) {
+    return scanNestedRepos({ path: args.path, options: args.options })
+  }
+  const gitProvider = getSshGitProvider(args.connectionId)
+  const fsProvider = getSshFilesystemProvider(args.connectionId)
+  if (!gitProvider || !fsProvider) {
+    throw new Error('ssh_connection_unavailable')
+  }
+  const resolvedPath = await resolveSshProjectGroupPath(args.connectionId, args.path)
+  return scanNestedRepos({
+    path: resolvedPath,
+    options: args.options,
+    filesystem: {
+      readDirectory: async (dirPath) =>
+        (await fsProvider.readDir(dirPath)).map((entry) => ({
+          name: entry.name,
+          isDirectory: entry.isDirectory
+        })),
+      joinPath: (parentPath, childName) => posix.join(parentPath, childName),
+      basename: (path) => posix.basename(path),
+      isGitRepoPath: async (path) => {
+        try {
+          return (await gitProvider.isGitRepoAsync(path)).isRepo
+        } catch {
+          return false
+        }
+      }
+    }
+  })
+}
 
 export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
   // Remove any previously registered handlers so we can re-register them
@@ -75,6 +311,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:remove')
   ipcMain.removeHandler('repos:reorder')
   ipcMain.removeHandler('repos:update')
+  ipcMain.removeHandler('projectGroups:list')
+  ipcMain.removeHandler('projectGroups:create')
+  ipcMain.removeHandler('projectGroups:update')
+  ipcMain.removeHandler('projectGroups:delete')
+  ipcMain.removeHandler('projectGroups:moveProject')
+  ipcMain.removeHandler('projectGroups:scanNested')
+  ipcMain.removeHandler('projectGroups:importNested')
   ipcMain.removeHandler('repos:pickFolder')
   ipcMain.removeHandler('repos:pickDirectory')
   ipcMain.removeHandler('repos:clone')
@@ -92,6 +335,190 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.handle('repos:list', () => {
     return store.getRepos()
   })
+
+  ipcMain.handle('projectGroups:list', () => store.getProjectGroups())
+
+  ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupCreateArgs,
+      rawArgs,
+      'invalid_project_group_create_args'
+    )
+    const group = store.createProjectGroup({
+      name: args.name,
+      parentPath: args.parentPath ?? null,
+      parentGroupId: args.parentGroupId ?? null,
+      createdFrom: args.createdFrom ?? 'manual'
+    })
+    notifyReposChanged(mainWindow)
+    return group
+  })
+
+  ipcMain.handle('projectGroups:update', (_event, rawArgs: unknown): ProjectGroup | null => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupUpdateArgs,
+      rawArgs,
+      'invalid_project_group_update_args'
+    )
+    const updated = store.updateProjectGroup(args.groupId, args.updates)
+    if (updated) {
+      notifyReposChanged(mainWindow)
+    }
+    return updated
+  })
+
+  ipcMain.handle('projectGroups:delete', (_event, rawArgs: unknown): boolean => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupSelectorArgs,
+      rawArgs,
+      'invalid_project_group_delete_args'
+    )
+    const deleted = store.deleteProjectGroup(args.groupId)
+    if (deleted) {
+      notifyReposChanged(mainWindow)
+    }
+    return deleted
+  })
+
+  ipcMain.handle('projectGroups:moveProject', (_event, rawArgs: unknown): Repo | null => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupMoveProjectArgs,
+      rawArgs,
+      'invalid_project_group_move_repo_args'
+    )
+    const moved = store.moveProjectToGroup(args.projectId, args.groupId, args.order)
+    if (moved) {
+      notifyReposChanged(mainWindow)
+    }
+    return moved
+  })
+
+  ipcMain.handle(
+    'projectGroups:scanNested',
+    async (_event, rawArgs: unknown): Promise<NestedRepoScanResult> => {
+      const args = parseProjectGroupIpcArgs(
+        ProjectGroupScanNestedArgs,
+        rawArgs,
+        'invalid_project_group_scan_nested_args'
+      )
+      return scanNestedReposForIpc(args)
+    }
+  )
+
+  ipcMain.handle(
+    'projectGroups:importNested',
+    async (_event, rawArgs: unknown): Promise<ProjectGroupImportResult> => {
+      const args = parseProjectGroupIpcArgs(
+        ProjectGroupImportNestedArgs,
+        rawArgs,
+        'invalid_project_group_import_nested_args'
+      )
+      const requestedPaths = args.projectPaths
+      const scan = await scanNestedReposForIpc({
+        path: args.parentPath,
+        connectionId: args.connectionId
+      })
+      const selection = resolveNestedRepoSelection({ scan, projectPaths: requestedPaths })
+      const groupResolver = createNestedProjectGroupResolver({
+        parentPath: scan.selectedPath,
+        groupName: args.groupName ?? '',
+        mode: args.mode,
+        createGroup: (input) => store.createProjectGroup(input)
+      })
+      const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
+        (repoPath) => ({
+          path: repoPath,
+          status: 'failed',
+          error: 'Repository was not found in the nested repo scan result'
+        })
+      )
+
+      for (const repoPath of selection.selectedPaths) {
+        try {
+          if (args.connectionId) {
+            const gitProvider = getSshGitProvider(args.connectionId)
+            if (!gitProvider || !(await gitProvider.isGitRepoAsync(repoPath)).isRepo) {
+              results.push({
+                path: repoPath,
+                status: 'failed',
+                error: 'Not a valid git repository'
+              })
+              continue
+            }
+          } else if (!isGitRepo(repoPath)) {
+            results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
+            continue
+          }
+          const existing = store
+            .getRepos()
+            .find(
+              (repo) =>
+                (repo.connectionId ?? null) === (args.connectionId ?? null) &&
+                normalizeRuntimePathForComparison(repo.path) ===
+                  normalizeRuntimePathForComparison(repoPath)
+            )
+          const group = groupResolver.getGroupForRepo(repoPath)
+          if (existing) {
+            if (group) {
+              store.moveProjectToGroup(existing.id, group.id)
+            }
+            results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
+            continue
+          }
+          const repo: Repo = {
+            id: randomUUID(),
+            path: repoPath,
+            displayName: getRepoName(repoPath),
+            badgeColor: DEFAULT_REPO_BADGE_COLOR,
+            addedAt: Date.now(),
+            kind: 'git',
+            ...(args.connectionId ? { connectionId: args.connectionId } : {}),
+            externalWorktreeVisibility: 'hide',
+            externalWorktreeVisibilityLegacy: false,
+            ...(group
+              ? {
+                  projectGroupId: group.id,
+                  projectGroupOrder: getNextProjectGroupOrder(store.getRepos(), group.id)
+                }
+              : {})
+          }
+          store.addRepo(repo)
+          if (args.connectionId) {
+            getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
+              rootPath: repoPath
+            })
+          }
+          results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
+          emitRepoAdded('folder_picker', false)
+        } catch (error) {
+          results.push({
+            path: repoPath,
+            status: 'failed',
+            error: sanitizeNestedRepoImportError('Failed to import nested repository', error)
+          })
+        }
+      }
+
+      const importedCount = results.filter((entry) => entry.status === 'imported').length
+      const alreadyKnownCount = results.filter((entry) => entry.status === 'already-known').length
+      const failedCount = results.filter((entry) => entry.status === 'failed').length
+      if (importedCount + alreadyKnownCount === 0) {
+        for (const group of groupResolver.getCreatedGroups().reverse()) {
+          store.deleteProjectGroup(group.id)
+        }
+      }
+      invalidateAuthorizedRootsCache()
+      notifyReposChanged(mainWindow)
+      const rootGroup = groupResolver.getRootGroup()
+      return {
+        ...(rootGroup && importedCount + alreadyKnownCount > 0 ? { group: rootGroup } : {}),
+        projects: results,
+        importedCount,
+        alreadyKnownCount,
+        failedCount
+      }
+    }
+  )
 
   ipcMain.handle(
     'repos:add',
@@ -111,11 +538,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { repo: existing }
       }
 
+      const repoIcon = await detectRepoIcon({ repoPath: args.path, kind: repoKind })
       const repo: Repo = {
         id: randomUUID(),
         path: args.path,
         displayName: getRepoName(args.path),
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        ...(repoIcon ? { repoIcon } : {}),
         addedAt: Date.now(),
         kind: repoKind,
         ...(repoKind === 'git'
@@ -180,9 +609,6 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { repo: existing }
       }
 
-      const pathSegments = resolvedPath.replace(/\/+$/, '').split('/')
-      let folderName = pathSegments.at(-1) || resolvedPath
-
       if (args.kind !== 'folder') {
         // Why: when kind is not explicitly 'folder', verify the remote path is
         // a git repo. Return an error on failure so the renderer can show the "Open as
@@ -206,6 +632,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         }
       }
 
+      const folderName = getRemoteRepoFolderName(resolvedPath)
+
       // When folderName is the home directory basename (e.g. 'ubuntu'),
       // use SSH target label for a more descriptive name
       let displayName = args.displayName || folderName
@@ -216,11 +644,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         }
       }
 
+      const repoIcon = await detectRepoIcon({
+        repoPath: resolvedPath,
+        kind: repoKind,
+        connectionId: args.connectionId
+      })
       const repo: Repo = {
         id: randomUUID(),
         path: resolvedPath,
         displayName,
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        ...(repoIcon ? { repoIcon } : {}),
         addedAt: Date.now(),
         kind: repoKind,
         connectionId: args.connectionId,
@@ -421,11 +855,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { repo: raceWinner }
       }
 
+      const repoIcon = await detectRepoIcon({ repoPath: targetPath, kind: repoKind })
       const repo: Repo = {
         id: randomUUID(),
         path: targetPath,
         displayName: name,
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        ...(repoIcon ? { repoIcon } : {}),
         addedAt: Date.now(),
         kind: repoKind,
         ...(repoKind === 'git'
@@ -461,7 +897,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   )
 
   ipcMain.handle('repos:remove', async (_event, args: { repoId: string }) => {
-    store.removeRepo(args.repoId)
+    store.removeProject(args.repoId)
     invalidateAuthorizedRootsCache()
     notifyReposChanged(mainWindow)
   })
@@ -480,11 +916,15 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'repoIcon'
             | 'hookSettings'
             | 'worktreeBaseRef'
+            | 'worktreeBasePath'
             | 'kind'
             | 'symlinkPaths'
             | 'issueSourcePreference'
             | 'externalWorktreeVisibility'
             | 'externalWorktreeVisibilityPromptDismissedAt'
+            | 'projectGroupId'
+            | 'projectGroupOrder'
+            | 'sourceControlAi'
           >
         >
       }
@@ -517,12 +957,28 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           delete updates.symlinkPaths
         }
       }
+      if ('worktreeBasePath' in updates && updates.worktreeBasePath !== undefined) {
+        const v = updates.worktreeBasePath as unknown
+        if (typeof v !== 'string') {
+          delete updates.worktreeBasePath
+        } else {
+          updates.worktreeBasePath = v.trim() || undefined
+        }
+      }
       if ('repoIcon' in updates) {
         const repoIcon = sanitizeRepoIcon(updates.repoIcon)
         if (repoIcon === undefined) {
           delete updates.repoIcon
         } else {
           updates.repoIcon = repoIcon
+        }
+      }
+      if ('badgeColor' in updates) {
+        const badgeColor = normalizeRepoBadgeColor(updates.badgeColor)
+        if (!badgeColor) {
+          delete updates.badgeColor
+        } else {
+          updates.badgeColor = badgeColor
         }
       }
       if (
@@ -541,8 +997,21 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       ) {
         delete updates.externalWorktreeVisibilityPromptDismissedAt
       }
+      if ('sourceControlAi' in updates && updates.sourceControlAi !== undefined) {
+        const normalizedSourceControlAi = normalizeRepoSourceControlAiOverrides(
+          updates.sourceControlAi
+        )
+        if (normalizedSourceControlAi === undefined) {
+          delete updates.sourceControlAi
+        } else {
+          updates.sourceControlAi = normalizedSourceControlAi
+        }
+      }
       const updated = store.updateRepo(args.repoId, updates)
       if (updated) {
+        if ('worktreeBasePath' in updates) {
+          invalidateAuthorizedRootsCache()
+        }
         notifyReposChanged(mainWindow)
       }
       return updated
@@ -622,19 +1091,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   ipcMain.handle('repos:cloneAbort', async () => {
-    if (activeCloneProc) {
-      const pathToClean = activeClonePath
-      activeCloneProc.kill()
-      activeCloneProc = null
-      activeClonePath = null
-      // Why: git clone creates the target directory before it finishes.
-      // Without cleanup, retrying the same URL/destination fails with
-      // "destination path already exists and is not an empty directory".
-      if (pathToClean) {
-        await rm(pathToClean, { recursive: true, force: true }).catch(() => {
-          // Best-effort cleanup — don't fail the abort if removal fails
-        })
-      }
+    if (activeClone) {
+      const clone = activeClone
+      clone.abortRequested = true
+      markCloneAbortCleanupPending(clone)
+      clone.process.kill()
+      activeClone = null
     }
   })
 
@@ -645,112 +1107,183 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       // the repo folder name from the URL (e.g. "orca" from .../orca.git).
       // This matches the default git clone behavior where the last path segment
       // of the URL becomes the directory name.
-      const repoName = basename(args.url.replace(/\.git\/?$/, ''))
-      if (!repoName) {
-        throw new Error('Could not determine repository name from URL')
-      }
-      // Why: gitSpawn uses args.destination as cwd, so it must exist before
-      // spawn — fresh installs may have a defaulted parent dir that does not
-      // exist yet (e.g. ~/orca). recursive: true is a no-op when present.
-      await mkdir(args.destination, { recursive: true })
-      const clonePath = join(args.destination, repoName)
+      const clonePath = deriveValidatedClonePath(args)
+      const clonePathKey = getClonePathComparisonKey(clonePath)
+      return runWithClonePathLock(clonePathKey, async () => {
+        await pendingAbortCleanupByPath.get(clonePathKey)
+        const existingAfterPendingClone = store
+          .getRepos()
+          .find((r) => getClonePathComparisonKey(r.path) === clonePathKey)
+        if (existingAfterPendingClone && !isFolderRepo(existingAfterPendingClone)) {
+          emitRepoAdded('clone_url', true)
+          return existingAfterPendingClone
+        }
+        // Why: gitSpawn uses args.destination as cwd, so it must exist before
+        // spawn — fresh installs may have a defaulted parent dir that does not
+        // exist yet (e.g. ~/orca). recursive: true is a no-op when present.
+        await mkdir(args.destination, { recursive: true })
+        const claimedTarget = await claimCloneTarget(clonePath)
 
-      // Why: use spawn instead of execFile so there is no maxBuffer limit.
-      // git clone writes progress to stderr which can exceed Node's default
-      // 1 MB buffer on large or submodule-heavy repos. We only keep the tail
-      // of stderr for error reporting and discard stdout entirely.
-      // Why: use --progress to force git to emit progress even when stderr
-      // is not a TTY. Without it, git suppresses progress output when piped.
-      await new Promise<void>((resolve, reject) => {
-        // Why: clone destination may be a WSL path (e.g. user picks a WSL
-        // directory). Use the parent destination as the cwd so the runner
-        // detects WSL and routes through wsl.exe.
-        // Why: use the '--' separator to isolate the URL argument and prevent
-        // malicious URLs from being interpreted as git flags (command injection).
-        const proc = gitSpawn(['clone', '--progress', '--', args.url, clonePath], {
-          cwd: args.destination,
-          stdio: ['ignore', 'ignore', 'pipe']
-        })
-        activeCloneProc = proc
-        activeClonePath = clonePath
+        // Why: use spawn instead of execFile so there is no maxBuffer limit.
+        // git clone writes progress to stderr which can exceed Node's default
+        // 1 MB buffer on large or submodule-heavy repos. We only keep the tail
+        // of stderr for error reporting and discard stdout entirely.
+        // Why: use --progress to force git to emit progress even when stderr
+        // is not a TTY. Without it, git suppresses progress output when piped.
+        const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
+        await new Promise<void>((resolve, reject) => {
+          // Why: clone destination may be a WSL path (e.g. user picks a WSL
+          // directory). Use the parent destination as the cwd so the runner
+          // detects WSL and routes through wsl.exe.
+          // Why: use the '--' separator to isolate the URL argument and prevent
+          // malicious URLs from being interpreted as git flags (command injection).
+          let proc: ReturnType<typeof gitSpawn>
+          try {
+            proc = gitSpawn(['clone', '--progress', '--', args.url, clonePath], {
+              cwd: args.destination,
+              stdio: ['ignore', 'ignore', 'pipe']
+            })
+          } catch (err) {
+            void cleanupClaimedCloneTarget(clonePath, claimedTarget).finally(() => {
+              const message = err instanceof Error ? err.message : String(err)
+              reject(new Error(`Clone failed: ${message}`))
+            })
+            return
+          }
+          const generation = nextCloneGeneration++
+          latestCloneGenerationByPath.set(clonePathKey, generation)
+          const metadata: ActiveCloneMetadata = {
+            path: clonePath,
+            pathKey: clonePathKey,
+            claimedTarget,
+            process: proc,
+            abortRequested: false,
+            generation,
+            pendingAbortCleanup: null,
+            resolvePendingAbortCleanup: null
+          }
+          cloneMetadataRef.current = metadata
+          activeClone = metadata
 
-        let stderrTail = ''
-        proc.stderr!.on('data', (chunk: Buffer) => {
-          const text = chunk.toString()
-          stderrTail = (stderrTail + text).slice(-4096)
+          let stderrTail = ''
+          let settled = false
+          proc.stderr!.on('data', (chunk: Buffer) => {
+            const text = chunk.toString()
+            stderrTail = (stderrTail + text).slice(-4096)
 
-          // Why: git progress lines use \r to overwrite in-place. Split on
-          // both \r and \n to find the latest progress fragment, then extract
-          // the phase name and percentage for the renderer.
-          const lines = text.split(/[\r\n]+/)
-          for (const line of lines) {
-            const match = line.match(/^([\w\s]+):\s+(\d+)%/)
-            if (match && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('repos:clone-progress', {
-                phase: match[1].trim(),
-                percent: parseInt(match[2], 10)
-              })
+            // Why: git progress lines use \r to overwrite in-place. Split on
+            // both \r and \n to find the latest progress fragment, then extract
+            // the phase name and percentage for the renderer.
+            const lines = text.split(/[\r\n]+/)
+            for (const line of lines) {
+              const match = line.match(/^([\w\s]+):\s+(\d+)%/)
+              if (match && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('repos:clone-progress', {
+                  phase: match[1].trim(),
+                  percent: parseInt(match[2], 10)
+                })
+              }
+            }
+          })
+
+          const finishClone = async (
+            code: number | null,
+            signal: NodeJS.Signals | null,
+            err?: Error
+          ) => {
+            if (settled) {
+              return
+            }
+            settled = true
+            // Why: only clear the ref if it still points to this process.
+            // A quick abort-and-retry can reassign activeClone to a new
+            // spawn before this handler fires, and nulling it would make the
+            // new clone unabortable.
+            if (activeClone?.process === proc) {
+              activeClone = null
+            }
+
+            const cloneSucceeded = !err && code === 0 && !signal
+            if (!cloneSucceeded) {
+              // Why: only the process that created this target may remove it,
+              // and only after git reports the clone did not complete.
+              await cleanupOwnedCloneTarget(metadata)
+            }
+            if (metadata.abortRequested && !cloneSucceeded) {
+              settleCloneAbortCleanup(metadata)
+            }
+            if (latestCloneGenerationByPath.get(metadata.pathKey) === metadata.generation) {
+              latestCloneGenerationByPath.delete(metadata.pathKey)
+            }
+
+            if (err) {
+              reject(new Error(`Clone failed: ${err.message}`))
+            } else if (signal === 'SIGTERM') {
+              reject(new Error('Clone aborted'))
+            } else if (code === 0) {
+              resolve()
+            } else {
+              const lastLine = stderrTail.trim().split('\n').pop() ?? 'unknown error'
+              reject(new Error(`Clone failed: ${lastLine}`))
             }
           }
+
+          proc.on('error', (err) => {
+            void finishClone(null, null, err)
+          })
+
+          proc.on('close', (code, signal) => {
+            void finishClone(code, signal)
+          })
         })
 
-        proc.on('error', (err) => reject(new Error(`Clone failed: ${err.message}`)))
-
-        proc.on('close', (code, signal) => {
-          // Why: only clear the ref if it still points to this process.
-          // A quick abort-and-retry can reassign activeCloneProc to a new
-          // spawn before this handler fires, and nulling it would make the
-          // new clone unabortable.
-          if (activeCloneProc === proc) {
-            activeCloneProc = null
-            activeClonePath = null
+        try {
+          // Why: check after clone (not before) because the path didn't exist
+          // before cloning. But if the user somehow had a folder repo at this path
+          // that git clone succeeded into (empty dir), reuse that entry and upgrade
+          // its kind to 'git' instead of creating a duplicate.
+          const existing = store
+            .getRepos()
+            .find((r) => getClonePathComparisonKey(r.path) === clonePathKey)
+          if (existing) {
+            if (isFolderRepo(existing)) {
+              const updated = store.updateRepo(existing.id, { kind: 'git' })
+              if (updated) {
+                notifyReposChanged(mainWindow)
+                // Why: folder→git upgrade is a real new git repo provisioning event.
+                emitRepoAdded('clone_url', false)
+                return updated
+              }
+            }
+            emitRepoAdded('clone_url', true)
+            return existing
           }
-          if (signal === 'SIGTERM') {
-            reject(new Error('Clone aborted'))
-          } else if (code === 0) {
-            resolve()
-          } else {
-            const lastLine = stderrTail.trim().split('\n').pop() ?? 'unknown error'
-            reject(new Error(`Clone failed: ${lastLine}`))
-          }
-        })
-      })
 
-      // Why: check after clone (not before) because the path didn't exist
-      // before cloning. But if the user somehow had a folder repo at this path
-      // that git clone succeeded into (empty dir), reuse that entry and upgrade
-      // its kind to 'git' instead of creating a duplicate.
-      const existing = store.getRepos().find((r) => r.path === clonePath)
-      if (existing) {
-        if (isFolderRepo(existing)) {
-          const updated = store.updateRepo(existing.id, { kind: 'git' })
-          if (updated) {
-            notifyReposChanged(mainWindow)
-            // Why: folder→git upgrade is a real new git repo provisioning event.
-            emitRepoAdded('clone_url', false)
-            return updated
+          const repoIcon = await detectRepoIcon({ repoPath: clonePath, kind: 'git' })
+          const repo: Repo = {
+            id: randomUUID(),
+            path: clonePath,
+            displayName: getRepoName(clonePath),
+            badgeColor: DEFAULT_REPO_BADGE_COLOR,
+            ...(repoIcon ? { repoIcon } : {}),
+            addedAt: Date.now(),
+            kind: 'git',
+            externalWorktreeVisibility: 'hide',
+            externalWorktreeVisibilityLegacy: false
+          }
+
+          store.addRepo(repo)
+          invalidateAuthorizedRootsCache()
+          notifyReposChanged(mainWindow)
+          emitRepoAdded('clone_url', false)
+          return repo
+        } finally {
+          const metadata = cloneMetadataRef.current
+          if (metadata?.abortRequested) {
+            settleCloneAbortCleanup(metadata)
           }
         }
-        emitRepoAdded('clone_url', true)
-        return existing
-      }
-
-      const repo: Repo = {
-        id: randomUUID(),
-        path: clonePath,
-        displayName: getRepoName(clonePath),
-        badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        addedAt: Date.now(),
-        kind: 'git',
-        externalWorktreeVisibility: 'hide',
-        externalWorktreeVisibilityLegacy: false
-      }
-
-      store.addRepo(repo)
-      invalidateAuthorizedRootsCache()
-      notifyReposChanged(mainWindow)
-      emitRepoAdded('clone_url', false)
-      return repo
+      })
     }
   )
 
@@ -872,6 +1405,9 @@ async function searchBaseRefDetailsForRepo(
     return []
   }
   const limit = args.limit ?? 25
+  if (!Number.isInteger(limit) || limit <= 0) {
+    return []
+  }
   // Why: remote repos need the relay to list branches on the remote host.
   if (repo.connectionId) {
     const provider = getSshGitProvider(repo.connectionId)
@@ -880,20 +1416,25 @@ async function searchBaseRefDetailsForRepo(
     }
     // Why: mirror the local path's sanitization (normalizeRefSearchQuery
     // in ../git/repo.ts) — strip glob metacharacters to prevent glob
-    // injection via the SSH branch, and short-circuit empty queries so
-    // we don't leak every ref. Without this the SSH path diverges from
-    // the local path's behavior.
+    // injection via the SSH branch while preserving empty-query branch lists.
     const normalizedQuery = normalizeRefSearchQuery(args.query)
-    if (!normalizedQuery) {
-      return []
-    }
     try {
       // Why: argv (including the two-remote-glob rationale) lives in
       // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
-      const [result, remotesResult] = await Promise.all([
-        provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path),
-        provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      ])
+      const remotesPromise = provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
+      let result: { stdout: string }
+      try {
+        result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery, limit), repo.path)
+      } catch (err) {
+        if (!isForEachRefExcludeUnsupportedError(err)) {
+          throw err
+        }
+        result = await provider.exec(
+          buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
+          repo.path
+        )
+      }
+      const remotesResult = await remotesPromise
       // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
       // to the shared helper so the SSH and local paths cannot diverge.
       // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +

@@ -94,4 +94,19 @@ describe('skill discovery', () => {
 
     expect(result.skills).toEqual([])
   })
+
+  it('enforces depth limits for valid child directories whose names start with dot-dot', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const deepSkill = join(home, '.agents', 'skills', '..deep', 'a', 'b', 'c', 'd', 'too-deep')
+    await mkdir(deepSkill, { recursive: true })
+    await writeFile(join(deepSkill, 'SKILL.md'), '# Too Deep\n\nShould not be discovered.')
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd')
+    })
+
+    expect(result.skills.map((skill) => skill.name)).not.toContain('Too Deep')
+  })
 })

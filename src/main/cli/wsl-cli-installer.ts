@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: WSL CLI status/install/remove share one state machine;
    splitting the installer would separate conflict checks from the operations they guard. */
 import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { getDefaultWslDistro } from '../wsl'
 import { CliInstaller } from './cli-installer'
@@ -18,9 +17,11 @@ import {
   quoteShell
 } from './wsl-cli-scripts'
 
-const execFileAsync = promisify(execFile)
 const MANAGED_MARKER = getWslLauncherMarker()
 const BRIDGE_MANAGED_MARKER = getWslBridgeMarker()
+const WSL_COMMAND_NAME = 'orca-ide'
+const LEGACY_WSL_COMMAND_NAME = 'orca'
+const WSL_COMMAND_TIMEOUT_MS = 10_000
 
 type WslCliInstallerOptions = {
   platform?: NodeJS.Platform
@@ -137,6 +138,9 @@ export class WslCliInstaller {
         `mkdir -p ${quoteShell(getPosixDirname(getBridgePathFromCommandPath(status.commandPath)))}`,
         `command_tmp=${quoteShell(`${status.commandPath}.tmp`)}.$$`,
         `bridge_path=${quoteShell(getBridgePathFromCommandPath(status.commandPath))}`,
+        `legacy_command_path=${quoteShell(
+          `${getPosixDirname(status.commandPath)}/${LEGACY_WSL_COMMAND_NAME}`
+        )}`,
         'bridge_tmp="${bridge_path}.tmp.$$"',
         'cleanup() { rm -f "$command_tmp" "$bridge_tmp"; }',
         'trap cleanup EXIT',
@@ -158,6 +162,9 @@ export class WslCliInstaller {
           getBridgePathFromCommandPath(status.commandPath),
           BRIDGE_MANAGED_MARKER
         ),
+        // Why: the command was renamed to avoid GNOME Orca; remove only the
+        // old Orca-managed WSL wrapper so unmanaged `orca` commands survive.
+        `if [ -f "$legacy_command_path" ] && grep -Fq ${quoteShell(MANAGED_MARKER)} "$legacy_command_path"; then rm -f "$legacy_command_path"; fi`,
         `mv -f "$bridge_tmp" ${quoteShell(getBridgePathFromCommandPath(status.commandPath))}`,
         `mv -f "$command_tmp" ${quoteShell(status.commandPath)}`,
         'trap - EXIT'
@@ -240,7 +247,8 @@ export class WslCliInstaller {
     }
 
     const pathDirectory = `${home}/.local/bin`
-    const commandPath = `${pathDirectory}/orca`
+    // Why: matches the Linux CLI rename to `orca-ide` (avoids GNOME Orca conflict).
+    const commandPath = `${pathDirectory}/${WSL_COMMAND_NAME}`
     const pathConfigured =
       (
         await this.run(
@@ -296,9 +304,9 @@ export class WslCliInstaller {
   }): CliInstallStatus {
     return {
       platform: 'linux',
-      commandName: 'orca',
+      commandName: WSL_COMMAND_NAME,
       commandPath: args.commandPath,
-      pathDirectory: args.commandPath.replace(/\/orca$/, ''),
+      pathDirectory: getPosixDirname(args.commandPath),
       pathConfigured: args.pathConfigured,
       launcherPath: args.launcherPath,
       installMethod: 'wrapper',
@@ -308,7 +316,7 @@ export class WslCliInstaller {
       unsupportedReason: null,
       detail:
         args.state === 'installed' && !args.pathConfigured
-          ? `${args.commandPath} is registered, but ${args.commandPath.replace(/\/orca$/, '')} is not on PATH in ${args.distro}.`
+          ? `${args.commandPath} is registered, but ${getPosixDirname(args.commandPath)} is not on PATH in ${args.distro}.`
           : args.detail
     }
   }
@@ -319,7 +327,7 @@ export class WslCliInstaller {
   ): CliInstallStatus {
     return {
       platform: 'linux',
-      commandName: 'orca',
+      commandName: WSL_COMMAND_NAME,
       commandPath: null,
       pathDirectory: null,
       pathConfigured: false,
@@ -339,15 +347,46 @@ export class WslCliInstaller {
 }
 
 async function runWslCommand(distro: string, command: string): Promise<string> {
-  const { stdout } = (await execFileAsync(
-    'wsl.exe',
-    ['-d', distro, '--', 'bash', '-lc', buildEncodedWslBashCommand(command)],
-    {
-      encoding: 'utf8',
-      timeout: 10000
+  return new Promise((resolve, reject) => {
+    let child: ReturnType<typeof execFile> | null = null
+    let settled = false
+
+    const finish = (error: Error | null, stdout = ''): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(stdout)
     }
-  )) as { stdout: string }
-  return stdout
+
+    // Why: WSL CLI status/install/remove backs Settings UI; a wedged wsl.exe
+    // process must not leave the command registration flow pending forever.
+    const timeout = setTimeout(() => {
+      child?.kill()
+      finish(new Error(`WSL command timed out after ${WSL_COMMAND_TIMEOUT_MS}ms.`))
+    }, WSL_COMMAND_TIMEOUT_MS)
+
+    try {
+      child = execFile(
+        'wsl.exe',
+        ['-d', distro, '--', 'bash', '-lc', buildEncodedWslBashCommand(command)],
+        {
+          encoding: 'utf8',
+          timeout: WSL_COMMAND_TIMEOUT_MS
+        },
+        (error, stdout) => {
+          finish(error ?? null, stdout)
+        }
+      )
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error(String(error)))
+    }
+  })
 }
 
 function buildEncodedWslBashCommand(command: string): string {
@@ -360,5 +399,6 @@ function buildEncodedWslBashCommand(command: string): string {
 export const _internals = {
   buildEncodedWslBashCommand,
   buildWslBridgeScript,
-  buildWslLauncher
+  buildWslLauncher,
+  getBridgePathFromCommandPath
 }

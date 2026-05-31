@@ -6,10 +6,15 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-let eventHandlers: Map<string, (...args: unknown[]) => void>
+let eventHandlers: Map<string, Set<(...args: unknown[]) => void>>
 let connectBehavior: 'ready' | 'error' = 'ready'
 let connectErrorMessage = ''
+let destroyErrorMessage = ''
 let connectSequence: ('ready' | Error)[] = []
+let execBehavior: 'callback' | 'pending' = 'callback'
+let pendingExecCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
+let sftpBehavior: 'callback' | 'pending' = 'callback'
+let pendingSftpCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
 
 type MockSshClient = {
   setNoDelay: ReturnType<typeof vi.fn>
@@ -18,6 +23,12 @@ type MockSshClient = {
   lastConnectConfig?: unknown
 }
 let clientInstances: MockSshClient[] = []
+
+function emitSshEvent(event: string, ...args: unknown[]): void {
+  for (const handler of eventHandlers?.get(event) ?? []) {
+    handler(...args)
+  }
+}
 
 vi.mock('ssh2', () => {
   class MockBaseAgent {}
@@ -33,34 +44,62 @@ vi.mock('ssh2', () => {
       clientInstances.push(this)
     }
     on(event: string, handler: (...args: unknown[]) => void) {
-      eventHandlers?.set(event, handler)
+      const handlers = eventHandlers?.get(event) ?? new Set<(...args: unknown[]) => void>()
+      handlers.add(handler)
+      eventHandlers?.set(event, handlers)
+    }
+    off(event: string, handler: (...args: unknown[]) => void) {
+      const handlers = eventHandlers?.get(event)
+      handlers?.delete(handler)
+      if (handlers?.size === 0) {
+        eventHandlers.delete(event)
+      }
     }
     connect(config?: unknown) {
       this.lastConnectConfig = config
       setTimeout(() => {
         const next = connectSequence.shift()
         if (next instanceof Error) {
-          eventHandlers?.get('error')?.(next)
+          emitSshEvent('error', next)
           return
         }
         if (next === 'ready') {
-          eventHandlers?.get('ready')?.()
+          emitSshEvent('ready')
           return
         }
         if (connectBehavior === 'error') {
-          eventHandlers?.get('error')?.(new Error(connectErrorMessage))
+          emitSshEvent('error', new Error(connectErrorMessage))
         } else {
-          eventHandlers?.get('ready')?.()
+          emitSshEvent('ready')
         }
       }, 0)
     }
     end() {}
-    destroy() {}
+    destroy() {
+      if (!destroyErrorMessage) {
+        return
+      }
+      if (eventHandlers?.has('error')) {
+        emitSshEvent('error', new Error(destroyErrorMessage))
+        return
+      }
+      throw new Error(destroyErrorMessage)
+    }
     exec(cmd: string, cb: (err: Error | undefined, channel: unknown) => void) {
       this.lastExecCommand = cmd
-      cb(undefined, {})
+      if (execBehavior === 'pending') {
+        pendingExecCallback = cb
+        return
+      }
+      cb(undefined, { close: vi.fn() })
     }
-    sftp() {}
+    sftp(cb: (err: Error | undefined, channel: unknown) => void) {
+      if (sftpBehavior === 'pending') {
+        pendingSftpCallback = cb
+        return
+      }
+      cb(undefined, { end: vi.fn() })
+    }
   }
   return {
     BaseAgent: MockBaseAgent,
@@ -146,7 +185,12 @@ describe('SshConnection', () => {
     eventHandlers = new Map()
     connectBehavior = 'ready'
     connectErrorMessage = ''
+    destroyErrorMessage = ''
     connectSequence = []
+    execBehavior = 'callback'
+    pendingExecCallback = null
+    sftpBehavior = 'callback'
+    pendingSftpCallback = null
     clientInstances = []
     spawnSystemSshCommandMock.mockReset()
     spawnSystemSshCommandMock.mockImplementation(() => createSystemCommandChannel())
@@ -176,6 +220,16 @@ describe('SshConnection', () => {
     expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
   })
 
+  it('removes startup listeners after ssh2 connect succeeds', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+
+    await conn.connect()
+
+    expect(eventHandlers.has('ready')).toBe(false)
+    // The remaining error listener is the steady-state disconnect handler.
+    expect(eventHandlers.has('error')).toBe(true)
+  })
+
   it('enables TCP_NODELAY on the new ssh2 client after a reconnect cycle', async () => {
     // Why: guards the "Nagle is re-enabled because someone refactored only
     // the initial connect path" regression class. attemptConnect bumps
@@ -201,6 +255,23 @@ describe('SshConnection', () => {
     expect(clientInstances[1].setNoDelay).toHaveBeenCalledWith(true)
   })
 
+  it('forces a fresh SSH connection for an explicit reconnect', async () => {
+    const states: string[] = []
+    const conn = new SshConnection(
+      createTarget(),
+      createCallbacks({
+        onStateChange: vi.fn((_id, state) => states.push(state.status))
+      })
+    )
+    await conn.connect()
+
+    await conn.reconnect()
+
+    expect(clientInstances).toHaveLength(2)
+    expect(states).toEqual(['connecting', 'connected', 'reconnecting', 'connecting', 'connected'])
+    expect(conn.getState().status).toBe('connected')
+  })
+
   it('transitions through connecting → connected states', async () => {
     const states: string[] = []
     const callbacks = createCallbacks({
@@ -222,6 +293,18 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget(), callbacks)
 
     await expect(conn.connect()).rejects.toThrow('Connection refused')
+    expect(conn.getState().status).toBe('error')
+  })
+
+  it('guards late ssh2 errors emitted while destroying a failed startup client', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'Connection lost before handshake'
+    destroyErrorMessage = 'Connection lost before handshake'
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget(), callbacks)
+
+    await expect(conn.connect()).rejects.toThrow('Connection lost before handshake')
+
     expect(conn.getState().status).toBe('error')
   })
 
@@ -479,6 +562,94 @@ describe('SshConnection', () => {
     )
   })
 
+  it('times out when ssh2 never opens an exec channel', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    execBehavior = 'pending'
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .exec('printf ready')
+        .then(() => 'opened')
+        .catch((error: Error) => error.message)
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toBe('SSH exec channel timed out')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('closes a late exec callback after the channel-open timeout settles', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    execBehavior = 'pending'
+    const lateChannel = { close: vi.fn() }
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .exec('printf ready')
+        .then(() => 'opened')
+        .catch((error: Error) => error.message)
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      pendingExecCallback?.(undefined, lateChannel)
+
+      await expect(outcomePromise).resolves.toBe('SSH exec channel timed out')
+      expect(lateChannel.close).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('times out when ssh2 never opens an SFTP channel', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .sftp()
+        .then(() => 'opened')
+        .catch((error: Error) => error.message)
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toBe('SSH SFTP channel timed out')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ends a late SFTP callback after the channel-open timeout settles', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const lateSftp = { end: vi.fn() }
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .sftp()
+        .then(() => 'opened')
+        .catch((error: Error) => error.message)
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      pendingSftpCallback?.(undefined, lateSftp)
+
+      await expect(outcomePromise).resolves.toBe('SSH SFTP channel timed out')
+      expect(lateSftp.end).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce({
       hostname: 'example.com',
@@ -499,6 +670,41 @@ describe('SshConnection', () => {
       expect.objectContaining({ configHost: 'fdpass-host' }),
       'printf ORCA-SYSTEM-SSH-OK'
     )
+  })
+
+  it('removes system SSH probe listeners after timeout', async () => {
+    vi.useFakeTimers()
+    const channel = new EventEmitter() as ReturnType<typeof createSystemCommandChannel>
+    channel.stdin = { end: vi.fn(), write: vi.fn() }
+    channel.stderr = new EventEmitter()
+    channel.close = vi.fn()
+    spawnSystemSshCommandMock.mockReturnValueOnce(channel)
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce({
+      hostname: 'example.com',
+      port: 22,
+      identityFile: [],
+      forwardAgent: false,
+      identitiesOnly: false,
+      proxyUseFdpass: true
+    })
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    try {
+      const connect = expect(conn.connect()).rejects.toThrow('System SSH connection timed out')
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      await connect
+      expect(channel.close).toHaveBeenCalled()
+      expect(channel.listenerCount('data')).toBe(0)
+      expect(channel.listenerCount('error')).toBe(1)
+      expect(channel.listenerCount('close')).toBe(1)
+      expect(channel.stderr.listenerCount('data')).toBe(0)
+      expect(
+        (conn as unknown as { systemCommandChannels: Set<unknown> }).systemCommandChannels.size
+      ).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

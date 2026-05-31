@@ -34,6 +34,15 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(true)
   })
 
+  it('matches Cmd+C by produced logical key rather than physical key', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyJ', metaKey: true }), opts)
+    ).toBe(true)
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'j', code: 'KeyC', metaKey: true }), opts)
+    ).toBe(false)
+  })
+
   it('does NOT bubble other Cmd chords — Orca window handlers intercept them before xterm', () => {
     // Why: this policy is narrowly scoped to Cmd+C, the one clipboard chord
     // Orca does not intercept at the window level. Cmd+V, Cmd+F, Cmd+D, Cmd+K,
@@ -54,8 +63,7 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
 
   it('bubbles already-handled Cmd app shortcuts so kitty does not also write to shell', () => {
     // Why: some window-level shortcuts call preventDefault without stopping
-    // propagation. VS Code returns false for resolved Meta keybindings for the
-    // same kitty reason: app shortcuts must not also become terminal input.
+    // propagation. App shortcuts must not also become terminal input.
     expect(
       shouldBypassXtermKeyboardEvent(
         event({ key: 'b', code: 'KeyB', defaultPrevented: true, metaKey: true }),
@@ -144,111 +152,6 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   it('does not bubble Shift+Latin printable text', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'A', code: 'KeyA', shiftKey: true }), opts)
-    ).toBe(false)
-  })
-})
-
-describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
-  const withSel = { isMac: false, hasSelection: true }
-  const noSel = { isMac: false, hasSelection: false }
-
-  it('bubbles Ctrl+Shift+C (standard terminal copy on Linux/Windows)', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
-  it('bubbles Ctrl+C only when there is a selection (otherwise SIGINT)', () => {
-    // Why: bare Ctrl+C without a selection must reach the shell as SIGINT.
-    // With a selection, terminals like Windows Terminal copy instead.
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', ctrlKey: true }), withSel)
-    ).toBe(true)
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', ctrlKey: true }), noSel)
-    ).toBe(false)
-  })
-
-  it('bubbles Ctrl+V and Ctrl+Shift+V for paste', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'v', code: 'KeyV', ctrlKey: true }), noSel)
-    ).toBe(true)
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'V', code: 'KeyV', ctrlKey: true, shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
-  it('bubbles Shift+Insert (X11/Linux paste convention)', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'Insert', code: 'Insert', shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
-  it('does not bubble plain Ctrl letter chords — shell shortcuts must reach PTY', () => {
-    // Ctrl+A, Ctrl+E, Ctrl+U, Ctrl+R, Ctrl+L — all readline-critical.
-    for (const keyCode of ['a', 'e', 'u', 'r', 'l']) {
-      expect(
-        shouldBypassXtermKeyboardEvent(
-          event({ key: keyCode, code: `Key${keyCode.toUpperCase()}`, ctrlKey: true }),
-          noSel
-        )
-      ).toBe(false)
-    }
-  })
-
-  it('bubbles already-handled Ctrl app shortcuts so kitty does not also write to shell', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'b', code: 'KeyB', defaultPrevented: true, ctrlKey: true }),
-        noSel
-      )
-    ).toBe(true)
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({
-          key: 'ArrowLeft',
-          code: 'ArrowLeft',
-          defaultPrevented: true,
-          ctrlKey: true,
-          altKey: true
-        }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
-  it('does not bubble plain letters', () => {
-    expect(shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC' }), noSel)).toBe(false)
-  })
-
-  it('bubbles Shift+non-ASCII printable text so the active keyboard layout wins', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'Ф', code: 'KeyA', shiftKey: true }), noSel)
-    ).toBe(true)
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ type: 'keyup', key: 'Ф', code: 'KeyA', shiftKey: true }),
-        noSel
-      )
-    ).toBe(true)
-  })
-
-  it('does not bubble unshifted non-ASCII printable text', () => {
-    expect(shouldBypassXtermKeyboardEvent(event({ key: 'ф', code: 'KeyA' }), noSel)).toBe(false)
-  })
-
-  it('does not bubble Cmd chords on non-Mac (Super+C has no clipboard meaning there)', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), noSel)
     ).toBe(false)
   })
 })

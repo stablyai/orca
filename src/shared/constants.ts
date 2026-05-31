@@ -7,15 +7,20 @@ import type {
   PersistedState,
   PersistedUIState,
   RepoHookSettings,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  AgentActivityDisplayMode
 } from './types'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import type { VoiceSettings } from './speech-types'
-import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
+import {
+  WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT,
+  cloneDefaultWorkspaceStatuses
+} from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
+import { getDefaultSourceControlAiSettings } from './source-control-ai'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -27,6 +32,11 @@ export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
 export const DEFAULT_SHOW_SLEEPING_WORKSPACES = true
 export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
+export const DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE: AgentActivityDisplayMode = 'compact'
+
+export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
+  return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
+}
 
 // Why: the onboarding wizard's last step index. Centralized so backfill,
 // clamps, and UI step references all agree on the same upper bound.
@@ -147,12 +157,19 @@ export function getDefaultOnboardingState(): OnboardingState {
   }
 }
 
+function getDefaultWorkspaceDir(homeDir: string): string {
+  const separator = homeDir.includes('\\') ? '\\' : '/'
+  const trimmedHomeDir = homeDir.replace(/[\\/]+$/, '')
+  return [trimmedHomeDir, 'orca', 'workspaces'].join(separator)
+}
+
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
-    workspaceDir: `${homedir}/orca/workspaces`,
+    workspaceDir: getDefaultWorkspaceDir(homedir),
     nestWorkspaces: true,
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
+    autoRenameBranchFromWork: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     enableGitHubAttribution: false,
@@ -195,6 +212,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // and Ctrl+right-click still opens the context menu when paste is enabled.
     terminalRightClickToPaste: true,
     terminalWindowsShell: 'powershell.exe',
+    terminalWindowsWslDistro: null,
+    localAccountRuntime: 'host',
+    localAccountWslDistro: null,
     // Why: Windows users expect "PowerShell" to mean modern PowerShell when it
     // is installed, with a safe fallback to the inbox Windows PowerShell.
     terminalWindowsPowerShellImplementation: 'auto',
@@ -210,6 +230,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalAllowOsc52Clipboard: false,
     setupScriptLaunchMode: 'new-tab',
     terminalScrollbackBytes: 10_000_000,
+    httpProxyUrl: '',
+    httpProxyBypassRules: '',
     openLinksInApp: true,
     openInApplications: [],
     rightSidebarOpenByDefault: true,
@@ -235,10 +257,12 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     promptCacheTtlMs: 300_000,
     codexManagedAccounts: [],
     activeCodexManagedAccountId: null,
+    activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} },
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
+    disabledTuiAgents: [],
     skipDeleteWorktreeConfirm: false,
     skipDeleteAutomationConfirm: false,
     defaultTaskViewPreset: 'all',
@@ -251,6 +275,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     agentStatusHooksEnabled: true,
+    tabAutoGenerateTitle: false,
     keepComputerAwakeWhileAgentsRun: false,
     // Why: 'auto' runs a layout-aware probe at boot (see
     // src/renderer/src/lib/keyboard-layout/*) that picks 'true' for US and
@@ -260,6 +285,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // the box (issue #903) while US users keep Option-as-Alt readline chords.
     terminalMacOptionAsAlt: 'auto',
     terminalMacOptionAsAltMigrated: false,
+    terminalJISYenToBackslash: false,
     experimentalMobile: false,
     // Why: indefinite hold by default — the desktop "Restore" banner is the
     // explicit return-to-desktop-size action, no wall-clock guess.
@@ -270,7 +296,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalPet: false,
     experimentalActivity: false,
     experimentalActivityDefaultedOffForAllUsers: true,
+    experimentalTerminalAttention: false,
+    experimentalCompactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
+    experimentalUnifiedNewTabLauncher: false,
     // Why: local desktop remains the default server until the user explicitly
     // selects a saved runtime environment.
     activeRuntimeEnvironmentId: null,
@@ -299,6 +328,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       customPrompt: '',
       customAgentCommand: ''
     },
+    sourceControlAi: getDefaultSourceControlAiSettings(),
     voice: getDefaultVoiceSettings()
   }
 }
@@ -330,6 +360,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
   return {
     schemaVersion: SCHEMA_VERSION,
     repos: [],
+    projectGroups: [],
     sparsePresetsByRepo: {},
     worktreeMeta: {},
     worktreeLineageById: {},
@@ -361,14 +392,16 @@ export function getDefaultUIState(): PersistedUIState {
     hideSleepingWorkspaces: DEFAULT_HIDE_SLEEPING_WORKSPACES,
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
     hideDefaultBranchWorkspace: false,
+    showDotfilesByWorktree: {},
     filterRepoIds: [],
     collapsedGroups: [],
     uiZoomLevel: 0,
     editorFontZoomLevel: 0,
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+    agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
-    workspaceBoardCompact: false,
+    workspaceBoardColumnLayout: WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT,
     workspaceBoardColumnWidth: 308,
     _workspaceStatusesDefaultOrderMigrated: true,
     _workspaceStatusesDefaultWorkflowMigrated: true,
@@ -381,7 +414,8 @@ export function getDefaultUIState(): PersistedUIState {
     setupScriptPromptDismissedRepoIds: [],
     acknowledgedAgentsByPaneKey: {},
     workspaceCleanup: { dismissals: {} },
-    featureTipsSeenIds: []
+    featureTipsSeenIds: [],
+    featureInteractions: {}
   }
 }
 
@@ -398,6 +432,7 @@ export function getDefaultWorkspaceSession(): WorkspaceSessionState {
     activeBrowserTabIdByWorktree: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
-    browserUrlHistory: []
+    browserUrlHistory: [],
+    defaultTerminalTabsAppliedByWorktreeId: {}
   }
 }

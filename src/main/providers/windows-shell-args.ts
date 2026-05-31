@@ -1,4 +1,5 @@
 import { win32 as pathWin32 } from 'path'
+import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {
   encodePowerShellCommand,
@@ -27,6 +28,7 @@ export type WindowsShellLaunchArgs = {
 
 export type WindowsShellWslContext = {
   distro: string
+  treatPosixCwdAsWsl?: boolean
 }
 
 function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
@@ -82,6 +84,14 @@ export function resolveWindowsShellLaunchArgs(
     }
   }
 
+  if (isWindowsGitBashShellPath(shellPath)) {
+    return {
+      shellArgs: ['--login', '-i'],
+      effectiveCwd: cwd,
+      validationCwd: cwd
+    }
+  }
+
   if (shellBasename === 'wsl.exe') {
     const wslInfo = parseWslPath(cwd)
     if (wslInfo) {
@@ -91,7 +101,7 @@ export function resolveWindowsShellLaunchArgs(
         validationCwd: cwd
       }
     }
-    if (wslContext && cwd.startsWith('/')) {
+    if (wslContext?.treatPosixCwdAsWsl && cwd.startsWith('/')) {
       return {
         shellArgs: buildWslShellArgs(cwd, wslContext.distro),
         effectiveCwd: defaultCwd,
@@ -101,7 +111,7 @@ export function resolveWindowsShellLaunchArgs(
     const driveMatch = cwd.replace(/\\/g, '/').match(/^([A-Za-z]):\/?(.*)$/)
     const linuxCwd = driveMatch ? toLinuxPath(cwd) : '/mnt/c'
     return {
-      shellArgs: buildWslShellArgs(linuxCwd),
+      shellArgs: buildWslShellArgs(linuxCwd, wslContext?.distro),
       effectiveCwd: defaultCwd,
       validationCwd: cwd
     }

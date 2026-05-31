@@ -9,6 +9,7 @@ import {
   keybindingFromInput,
   keybindingFromInputForAction,
   keybindingMatchesAction,
+  keybindingMatchesInput,
   normalizeKeybinding,
   normalizeKeybindingListForAction,
   normalizeKeybindingList
@@ -81,6 +82,34 @@ describe('keybindings', () => {
     expect(formatKeybindingList([], 'win32')).toBe('Unassigned')
   })
 
+  it('preserves explicit numpad shortcut tokens', () => {
+    const numpadAdd = {
+      key: '+',
+      code: 'NumpadAdd',
+      control: false,
+      meta: true,
+      alt: false,
+      shift: false
+    }
+
+    expect(keybindingFromInput(numpadAdd, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+NumpadAdd'
+    })
+    expect(keybindingMatchesAction('zoom.in', numpadAdd, 'darwin')).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'zoom.out',
+        {
+          ...numpadAdd,
+          key: '-',
+          code: 'NumpadSubtract'
+        },
+        'darwin'
+      )
+    ).toBe(true)
+  })
+
   it('defines a default shortcut for opening markdown notes', () => {
     expect(getEffectiveKeybindingsForAction('tab.openMarkdown', 'darwin')).toEqual(['Mod+Shift+O'])
     expect(formatKeybindingList(['Mod+Shift+O'], 'darwin')).toBe('⌘⇧O')
@@ -142,6 +171,25 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it('keeps workspace delete unassigned until users customize it', () => {
+    const binding = {
+      key: 'Backspace',
+      code: 'Backspace',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: true
+    }
+
+    expect(getEffectiveKeybindingsForAction('workspace.delete', 'linux')).toEqual([])
+    expect(keybindingMatchesAction('workspace.delete', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('workspace.delete', binding, 'linux', {
+        'workspace.delete': ['Mod+Shift+Backspace']
+      })
+    ).toBe(true)
+  })
+
   it('reports customized renderer conflicts with native menu accelerators', () => {
     expect(findKeybindingConflicts('darwin')).toEqual([])
 
@@ -194,6 +242,15 @@ describe('keybindings', () => {
   })
 
   it('keeps terminal-allowed app shortcuts active in terminal-first mode', () => {
+    const deleteBinding = {
+      key: 'Backspace',
+      code: 'Backspace',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: true
+    }
+
     expect(
       keybindingMatchesAction(
         'floatingTerminal.toggle',
@@ -209,6 +266,15 @@ describe('keybindings', () => {
         { key: 'Tab', code: 'Tab', control: true, meta: false, alt: false, shift: false },
         'linux',
         undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'workspace.delete',
+        deleteBinding,
+        'linux',
+        { 'workspace.delete': ['Mod+Shift+Backspace'] },
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toBe(true)
@@ -258,6 +324,107 @@ describe('keybindings', () => {
         'linux'
       )
     ).toBe(true)
+  })
+
+  it('matches file explorer undo and redo by produced logical key', () => {
+    expect(getEffectiveKeybindingsForAction('fileExplorer.undo', 'darwin')).toEqual(['Mod+Z'])
+    expect(getEffectiveKeybindingsForAction('fileExplorer.redo', 'darwin')).toEqual(['Mod+Shift+Z'])
+    expect(getEffectiveKeybindingsForAction('fileExplorer.redo', 'linux')).toEqual([
+      'Mod+Shift+Z',
+      'Ctrl+Y'
+    ])
+
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.undo',
+        { key: 'z', code: 'Semicolon', control: false, meta: true, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.undo',
+        { key: ';', code: 'KeyZ', control: false, meta: true, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.redo',
+        { key: 'Z', code: 'Semicolon', control: false, meta: true, alt: false, shift: true },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.redo',
+        { key: 'y', code: 'KeyF', control: true, meta: false, alt: false, shift: false },
+        'linux'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.redo',
+        { key: 'f', code: 'KeyY', control: true, meta: false, alt: false, shift: false },
+        'linux'
+      )
+    ).toBe(false)
+  })
+
+  it('matches non-QWERTY shortcuts by the produced logical key', () => {
+    const dvorakPhysicalW = {
+      key: ',',
+      code: 'KeyW',
+      control: false,
+      meta: true,
+      alt: false,
+      shift: false
+    }
+    const dvorakPhysicalComma = {
+      key: 'w',
+      code: 'Comma',
+      control: false,
+      meta: true,
+      alt: false,
+      shift: false
+    }
+
+    expect(keybindingMatchesAction('app.settings', dvorakPhysicalW, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('tab.close', dvorakPhysicalW, 'darwin')).toBe(false)
+    expect(keybindingMatchesAction('tab.close', dvorakPhysicalComma, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('app.settings', dvorakPhysicalComma, 'darwin')).toBe(false)
+    expect(keybindingFromInput(dvorakPhysicalW, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+Comma'
+    })
+    expect(keybindingFromInput(dvorakPhysicalComma, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+W'
+    })
+  })
+
+  it('uses shifted punctuation aliases only while Shift is pressed', () => {
+    const shiftedComma = {
+      key: '<',
+      code: 'Comma',
+      control: false,
+      meta: true,
+      alt: false,
+      shift: true
+    }
+
+    expect(keybindingMatchesInput('Mod+Shift+Comma', shiftedComma, 'darwin')).toBe(true)
+    expect(keybindingFromInput(shiftedComma, 'darwin')).toEqual({
+      ok: true,
+      value: 'Mod+Shift+Comma'
+    })
+    expect(
+      keybindingMatchesInput(
+        'Mod+Comma',
+        { ...shiftedComma, code: 'IntlBackslash', shift: false },
+        'darwin'
+      )
+    ).toBe(false)
   })
 
   it('matches logical bracket shortcuts on JIS keyboards without changing code fallback', () => {

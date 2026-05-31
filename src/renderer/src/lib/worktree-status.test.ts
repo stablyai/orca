@@ -108,10 +108,38 @@ describe('resolveWorktreeStatus', () => {
     expect(status).toBe('done')
   })
 
-  it('treats paired web host terminal mirrors as active while their stream handle is pending', () => {
+  it('treats pending paired web host terminal mirrors as inactive without a live pty', () => {
     const status = resolveWorktreeStatus({
       tabs: [{ id: 'web-terminal-host-tab-1', title: 'Terminal 1' }],
       browserTabs: [],
+      ptyIdsByTabId: {},
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('inactive')
+  })
+
+  it('treats ready paired web host terminal mirrors as active once they have a live pty', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'web-terminal-host-tab-1', title: 'Terminal 1' }],
+      browserTabs: [],
+      ptyIdsByTabId: { 'web-terminal-host-tab-1': ['pty-1'] },
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('active')
+  })
+
+  it('keeps browser-only paired workspaces active without terminal liveness', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'web-terminal-host-tab-1', title: 'Terminal 1' }],
+      browserTabs: [{ id: 'browser-1' }],
       ptyIdsByTabId: {},
       hasPermission: false,
       hasLiveWorking: false,

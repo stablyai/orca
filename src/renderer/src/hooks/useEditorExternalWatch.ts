@@ -78,7 +78,13 @@ type WatchedTargetsSnapshot = {
 
 export type EditorExternalWatchTargetState = Pick<
   AppState,
-  'openFiles' | 'worktreesByRepo' | 'repos' | 'activeWorktreeId' | 'settings'
+  | 'openFiles'
+  | 'worktreesByRepo'
+  | 'repos'
+  | 'activeWorktreeId'
+  | 'settings'
+  | 'rightSidebarOpen'
+  | 'rightSidebarTab'
 >
 
 let cachedOpenFiles: AppState['openFiles'] | null = null
@@ -86,6 +92,8 @@ let cachedWorktreesByRepo: AppState['worktreesByRepo'] | null = null
 let cachedRepos: AppState['repos'] | null = null
 let cachedActiveWorktreeId: string | null = null
 let cachedRuntimeEnvironmentId: string | undefined
+let cachedRightSidebarOpen: boolean | null = null
+let cachedRightSidebarTab: AppState['rightSidebarTab'] | null = null
 let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], targetsKey: '' }
 
 export function getWatchedTargetKey(target: WatchedTarget): string {
@@ -104,7 +112,9 @@ export function getEditorExternalWatchTargets(
     cachedWorktreesByRepo === state.worktreesByRepo &&
     cachedRepos === state.repos &&
     cachedActiveWorktreeId === state.activeWorktreeId &&
-    cachedRuntimeEnvironmentId === runtimeEnvironmentId
+    cachedRuntimeEnvironmentId === runtimeEnvironmentId &&
+    cachedRightSidebarOpen === state.rightSidebarOpen &&
+    cachedRightSidebarTab === state.rightSidebarTab
   ) {
     return cachedWatchedTargetsSnapshot
   }
@@ -116,7 +126,10 @@ export function getEditorExternalWatchTargets(
   for (const f of state.openFiles) {
     ids.add(f.worktreeId)
   }
-  if (state.activeWorktreeId) {
+  if (state.activeWorktreeId && state.rightSidebarOpen && state.rightSidebarTab === 'explorer') {
+    // Why: the right sidebar stays mounted while hidden; do not create a
+    // worktree-level watcher just because the user clicked a workspace.
+    // macOS can surface privacy prompts for those passive filesystem probes.
     ids.add(state.activeWorktreeId)
   }
 
@@ -144,6 +157,8 @@ export function getEditorExternalWatchTargets(
   cachedRepos = state.repos
   cachedActiveWorktreeId = state.activeWorktreeId
   cachedRuntimeEnvironmentId = runtimeEnvironmentId
+  cachedRightSidebarOpen = state.rightSidebarOpen
+  cachedRightSidebarTab = state.rightSidebarTab
 
   if (targetsKey === cachedWatchedTargetsSnapshot.targetsKey) {
     return cachedWatchedTargetsSnapshot

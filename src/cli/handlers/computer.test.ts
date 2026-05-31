@@ -1,5 +1,4 @@
 /* eslint-disable max-lines -- Why: computer CLI coverage shares one mocked runtime setup across command contracts. */
-import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -71,7 +70,7 @@ describe('orca computer CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
     expect(callMock).toHaveBeenNthCalledWith(2, 'computer.listApps', {
-      worktree: `path:${path.resolve('/tmp/repo')}`
+      worktree: 'id:repo::/tmp/repo'
     })
   })
 
@@ -142,7 +141,7 @@ describe('orca computer CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'computer.getAppState', {
       app: 'Finder',
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       noScreenshot: true,
       restoreWindow: true
     })
@@ -176,7 +175,7 @@ describe('orca computer CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'computer.listWindows', {
       app: 'Finder',
-      worktree: `path:${path.resolve('/tmp/repo')}`
+      worktree: 'id:repo::/tmp/repo'
     })
     const output = vi.mocked(console.log).mock.calls[0][0]
     expect(output).toContain('[0] id:42 "Recents"')
@@ -213,6 +212,32 @@ describe('orca computer CLI handlers', () => {
     })
   })
 
+  it('prints session and window context in action follow-up commands', async () => {
+    queueFixtures(callMock, okFixture('req_click', sampleSnapshot()))
+
+    await main(
+      [
+        'computer',
+        'click',
+        '--session',
+        'manual',
+        '--app',
+        'Finder',
+        '--element-index',
+        '3',
+        '--window-index',
+        '1',
+        '--restore-window'
+      ],
+      '/tmp/repo/src'
+    )
+
+    const output = vi.mocked(console.log).mock.calls[0][0]
+    expect(output).toContain(
+      'Use `orca computer get-app-state --app com.apple.finder --session manual --window-index 1 --restore-window`'
+    )
+  })
+
   it('maps action command flags to RPC payloads', async () => {
     queueFixtures(
       callMock,
@@ -241,7 +266,7 @@ describe('orca computer CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'computer.drag', {
       app: 'Finder',
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       fromElementIndex: undefined,
       toElementIndex: undefined,
       fromX: 1,

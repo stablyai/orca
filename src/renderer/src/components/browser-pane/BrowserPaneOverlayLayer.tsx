@@ -4,6 +4,7 @@ import { useAppStore } from '../../store'
 import type { BrowserTab as BrowserTabState, Tab, TabGroup } from '../../../../shared/types'
 import BrowserPane from './BrowserPane'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
+import { useBrowserAutomationVisibilityForAny } from './browser-automation-visibility'
 
 // Why: Electron `<webview>` destroys its guest contents whenever its DOM
 // parent changes. Rendering one BrowserPane per tab at the worktree level
@@ -52,6 +53,12 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   onFocusOwningGroup
 }: BrowserOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
+  const automationVisible = useBrowserAutomationVisibilityForAny(
+    browserTab.pageIds && browserTab.pageIds.length > 0
+      ? browserTab.pageIds
+      : [browserTab.activePageId ?? browserTab.id]
+  )
+  const isPaintable = isActive || automationVisible
   // Why: each overlay pins itself to the owning TabGroupPanel's body via CSS
   // anchor positioning. `anchor()` resolves top/left relative to the viewport,
   // and the overlay's own `position: absolute` inside a positioned ancestor
@@ -74,8 +81,9 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
             left: `anchor(${anchorName} left)`,
             width: `anchor-size(${anchorName} width)`,
             height: `anchor-size(${anchorName} height)`,
-            display: isActive ? 'flex' : 'none',
-            pointerEvents: isActive ? 'auto' : 'none'
+            display: isPaintable ? 'flex' : 'none',
+            pointerEvents: isActive ? 'auto' : 'none',
+            opacity: isActive ? 1 : 0
           }
         : {
             position: 'absolute',
@@ -86,7 +94,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
             display: 'none',
             pointerEvents: 'none'
           },
-    [anchorName, isActive]
+    [anchorName, isActive, isPaintable]
   )
   const handleFocus = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {

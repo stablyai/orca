@@ -3,6 +3,7 @@ import { RefreshCw, Terminal } from 'lucide-react'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 
@@ -53,12 +54,7 @@ export function AgentSkillSetupPanel({
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(Boolean(preInstallNotice))
-
-  useEffect(() => {
-    if (installed) {
-      setTerminalOpen(false)
-    }
-  }, [installed])
+  const mountedRef = useMountedRef()
 
   useEffect(() => {
     if (!preInstallNotice) {
@@ -94,50 +90,53 @@ export function AgentSkillSetupPanel({
     }
     try {
       const status = await window.api.cli.getInstallStatus()
-      setPreInstallNoticeVisible(!isOrcaCliAvailableOnPath(status))
+      if (mountedRef.current) {
+        setPreInstallNoticeVisible(!isOrcaCliAvailableOnPath(status))
+      }
     } catch {
-      setPreInstallNoticeVisible(true)
+      if (mountedRef.current) {
+        setPreInstallNoticeVisible(true)
+      }
     }
   }
-  const actionRow =
-    !installed || showRecheckWhenInstalled ? (
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {!installed ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void (async () => {
-                try {
-                  await onBeforeOpenTerminal?.()
-                  await refreshPreInstallNotice()
-                } finally {
-                  setTerminalOpen(true)
-                }
-              })()
-            }}
-            disabled={terminalOpen || installDisabled}
-          >
-            <Terminal className="size-3.5" />
-            Install
-          </Button>
-        ) : null}
-        {!installed || showRecheckWhenInstalled ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => void onRecheck()}
-            disabled={loading}
-          >
-            <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
-            Re-check
-          </Button>
-        ) : null}
-      </div>
-    ) : null
+  const actionRow = (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          void (async () => {
+            try {
+              await onBeforeOpenTerminal?.()
+              await refreshPreInstallNotice()
+            } finally {
+              if (mountedRef.current) {
+                setTerminalOpen(true)
+              }
+            }
+          })()
+        }}
+        disabled={terminalOpen || installDisabled}
+      >
+        <Terminal className="size-3.5" />
+        Install
+      </Button>
+      {!installed || showRecheckWhenInstalled ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => void onRecheck()}
+          disabled={loading}
+        >
+          <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
+          Re-check
+        </Button>
+      ) : null}
+    </div>
+  )
 
   return (
     <div
@@ -180,7 +179,7 @@ export function AgentSkillSetupPanel({
           ) : null}
         </div>
       </div>
-      {!installed && terminalOpen ? (
+      {terminalOpen ? (
         <div className={cn(variant === 'card' ? 'px-5 pb-5' : 'mt-2')}>
           <OnboardingInlineCommandTerminal
             worktreeId={terminalWorktreeId}

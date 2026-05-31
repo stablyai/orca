@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { SFTPWrapper } from 'ssh2'
 
 import {
@@ -162,6 +162,27 @@ describe('installer-utils-remote', () => {
     await expect(readHooksJsonRemote(sftp, '/home/u/.claude/settings.json')).rejects.toMatchObject({
       code: 3
     })
+  })
+
+  it('times out remote reads that never call back', async () => {
+    vi.useFakeTimers()
+    try {
+      const sftp = {
+        readFile: vi.fn()
+      } as unknown as SFTPWrapper
+      const pending = readHooksJsonRemote(sftp, '/home/u/.claude/settings.json')
+      let rejection: unknown = null
+      pending.catch((error) => {
+        rejection = error
+      })
+
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      expect(rejection).toBeInstanceOf(Error)
+      await expect(pending).rejects.toThrow('Timed out waiting for SFTP readFile')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('atomically writes settings.json via tmp + rename', async () => {

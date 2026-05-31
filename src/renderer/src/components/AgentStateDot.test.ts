@@ -8,6 +8,14 @@ function renderMarkup(state: AgentDotState): string {
 }
 
 describe('AgentStateDot', () => {
+  it('renders working as a yellow spinner', () => {
+    const markup = renderMarkup('working')
+
+    expect(markup).toContain('border-yellow-500')
+    expect(markup).toContain('border-t-transparent')
+    expect(markup).toContain('animate-spin')
+  })
+
   it('renders done as an emerald check icon', () => {
     const markup = renderMarkup('done')
 

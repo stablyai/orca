@@ -1,5 +1,9 @@
+/* eslint-disable max-lines -- Why: the supported-agent catalog, icon glyphs,
+   and fallback icon renderer must stay in one place so agent option labels and
+   status-surface icons do not drift. */
 import React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
+import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
 
 export type AgentCatalogEntry = {
@@ -7,20 +11,29 @@ export type AgentCatalogEntry = {
   label: string
   /** Default CLI binary name used for PATH detection. */
   cmd: string
+  /** Direct or bundled image URL for agents whose project identity is not represented by a favicon service. */
+  iconUrl?: string
   /** Domain for Google's favicon service — used for agents without an SVG icon. */
   faviconDomain?: string
   /** Homepage/install docs URL, sourced from the README agent badge list. */
   homepageUrl: string
 }
 
-// Full catalog of supported agents — ordered by priority for auto-default selection.
-// homepageUrl matches the href used in the README agent badge list.
 export const AGENT_CATALOG: AgentCatalogEntry[] = [
   {
     id: 'claude',
     label: 'Claude',
     cmd: 'claude',
     homepageUrl: 'https://docs.anthropic.com/claude/docs/claude-code'
+  },
+  {
+    id: 'openclaude',
+    label: 'OpenClaude',
+    cmd: 'openclaude',
+    // Why: OpenClaude's published favicon has a padded 500px canvas; Orca
+    // uses a cropped derivative of that official asset so 12px tab icons stay legible.
+    iconUrl: openClaudeLogoUrl,
+    homepageUrl: 'https://openclaude.gitlawb.com/'
   },
   {
     id: 'codex',
@@ -148,6 +161,17 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     homepageUrl: 'https://www.codebuff.com/docs/help/quick-start'
   },
   {
+    id: 'command-code',
+    label: 'Command Code',
+    // Why: `npm i -g command-code` installs both `command-code` and the
+    // shorter alias `cmd`. Show the full name in the settings hint so it
+    // matches TUI_AGENT_CONFIG['command-code'].detectCmd and avoids any
+    // suggestion that Orca is looking for Windows' built-in `cmd.exe`.
+    cmd: 'command-code',
+    faviconDomain: 'commandcode.ai',
+    homepageUrl: 'https://commandcode.ai/docs/quickstart'
+  },
+  {
     id: 'continue',
     label: 'Continue',
     cmd: 'continue',
@@ -212,6 +236,10 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   }
 ]
 
+export function getAgentLabel(agent: TuiAgent): string {
+  return AGENT_CATALOG.find((entry) => entry.id === agent)?.label ?? agent
+}
+
 function PiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   // SVG sourced from pi.dev/favicon.svg — the π shape rendered in currentColor.
   // Why: className="text-current" opts out of shadcn's Select rule that forces
@@ -230,6 +258,31 @@ function PiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
         d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z"
       />
       <path fill="currentColor" d="M517.36 400 H634.72 V634.72 H517.36 Z" />
+    </svg>
+  )
+}
+
+function OmpIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  const gradientId = `${React.useId().replace(/:/g, '')}-omp-gradient`
+
+  // SVG sourced from omp.sh's homepage mark. Why: omp.sh/favicon.svg includes
+  // a dark square background, while the homepage mark is transparent.
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="oklch(0.7 0.24 340)" />
+          <stop offset=".5" stopColor="oklch(0.62 0.21 295)" />
+          <stop offset="1" stopColor="oklch(0.81 0.14 200)" />
+        </linearGradient>
+      </defs>
+      <path fill={`url(#${gradientId})`} d="M10 14h44v9H43v33h-9V23h-9v22h-9V23H10z" />
     </svg>
   )
 }
@@ -357,6 +410,9 @@ export function AgentIcon({
   if (agent === 'pi') {
     return <PiIcon size={size} />
   }
+  if (agent === 'omp') {
+    return <OmpIcon size={size} />
+  }
   if (agent === 'aider') {
     return <AiderIcon size={size} />
   }
@@ -367,6 +423,17 @@ export function AgentIcon({
     return <CopilotIcon size={size} />
   }
   const catalogEntry = AGENT_CATALOG.find((a) => a.id === agent)
+  if (catalogEntry?.iconUrl) {
+    return (
+      <img
+        src={catalogEntry.iconUrl}
+        width={size}
+        height={size}
+        alt=""
+        style={{ borderRadius: 2 }}
+      />
+    )
+  }
   if (catalogEntry?.faviconDomain) {
     // Why: agents without a published SVG icon use their site favicon via
     // Google's favicon service — same source the README uses for the agent badge list.

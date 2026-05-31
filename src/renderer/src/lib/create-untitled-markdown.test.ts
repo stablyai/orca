@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createUntitledMarkdownFile } from './create-untitled-markdown'
+import {
+  createUntitledMarkdownFile,
+  createUntitledMarkdownFileWithTemplateSelection
+} from './create-untitled-markdown'
+import { subscribeMarkdownTemplatePicker } from './markdown-template-picker-request'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -92,6 +96,101 @@ describe('createUntitledMarkdownFile', () => {
       filePath: '/repo/untitled.md',
       connectionId: 'conn-1'
     })
+  })
+
+  it('writes selected template content with placeholders after creating the untitled file', async () => {
+    const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
+    const createFile = vi.fn().mockResolvedValueOnce(undefined)
+    const readFile = vi.fn().mockResolvedValueOnce({
+      content: '# {{ title }}\n{{date}}\n{{filename}}\n',
+      isBinary: false
+    })
+    const writeFile = vi.fn().mockResolvedValueOnce(undefined)
+
+    vi.stubGlobal('window', {
+      api: {
+        shell: { pathExists: vi.fn() },
+        fs: { createFile, readFile, stat, writeFile }
+      }
+    })
+
+    await expect(
+      createUntitledMarkdownFile('/repo', 'wt-1', undefined, undefined, {
+        now: new Date(2026, 4, 29, 7, 5),
+        template: {
+          id: '.orca/templates/daily.md',
+          name: 'Daily',
+          filePath: '/repo/.orca/templates/daily.md',
+          relativePath: '.orca/templates/daily.md',
+          templateRelativePath: 'daily.md',
+          basename: 'daily.md'
+        }
+      })
+    ).resolves.toMatchObject({
+      filePath: '/repo/untitled.md',
+      relativePath: 'untitled.md',
+      deleteUntouchedOnClose: false
+    })
+
+    expect(readFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/repo/.orca/templates/daily.md' })
+    )
+    expect(createFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/repo/untitled.md' })
+    )
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/repo/untitled.md',
+        content: '# Untitled\n2026-05-29\nuntitled.md\n'
+      })
+    )
+  })
+
+  it('discovers templates before creating a new markdown file and applies the selected template', async () => {
+    const readDir = vi.fn().mockResolvedValueOnce([
+      { name: 'daily.md', isDirectory: false, isSymlink: false },
+      { name: 'draft.txt', isDirectory: false, isSymlink: false }
+    ])
+    const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
+    const createFile = vi.fn().mockResolvedValueOnce(undefined)
+    const readFile = vi.fn().mockResolvedValueOnce({
+      content: '# {{title}}\n',
+      isBinary: false
+    })
+    const writeFile = vi.fn().mockResolvedValueOnce(undefined)
+    const unsubscribe = subscribeMarkdownTemplatePicker((request) => {
+      const template = request.templates[0]
+      if (!template) {
+        throw new Error('Expected a discovered template')
+      }
+      request.resolve({ type: 'template', template })
+    })
+
+    vi.stubGlobal('window', {
+      api: {
+        shell: { pathExists: vi.fn() },
+        fs: { createFile, readDir, readFile, stat, writeFile }
+      }
+    })
+
+    try {
+      await expect(
+        createUntitledMarkdownFileWithTemplateSelection('/repo', 'wt-1')
+      ).resolves.toMatchObject({
+        filePath: '/repo/untitled.md',
+        relativePath: 'untitled.md',
+        deleteUntouchedOnClose: false
+      })
+    } finally {
+      unsubscribe()
+    }
+
+    expect(readDir).toHaveBeenCalledWith(
+      expect.objectContaining({ dirPath: '/repo/.orca/templates' })
+    )
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/repo/untitled.md', content: '# Untitled\n' })
+    )
   })
 
   it('creates untitled files through the selected runtime environment', async () => {

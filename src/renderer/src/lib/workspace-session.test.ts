@@ -105,6 +105,16 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.activeWorktreeIdsOnShutdown).toEqual(['wt-1'])
   })
 
+  it('persists the default-tab idempotency marker when present', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        defaultTerminalTabsAppliedByWorktreeId: { 'wt-1': true }
+      })
+    )
+
+    expect(payload.defaultTerminalTabsAppliedByWorktreeId).toEqual({ 'wt-1': true })
+  })
+
   it('persists floating terminal tabs for daemon reattach after restart', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({

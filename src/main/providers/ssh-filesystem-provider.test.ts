@@ -3,6 +3,7 @@ SFTP binary writes, watch fan-out, and provider lifecycle tests together so
 transport parity regressions are visible in one suite. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshFilesystemProvider } from './ssh-filesystem-provider'
+import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -116,6 +117,7 @@ describe('SshFilesystemProvider', () => {
       const written: Buffer[] = []
       const writeStream = {
         on: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
+        off: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
         end: vi.fn((buffer: Buffer) => {
           written.push(buffer)
           const closeHandler = writeStream.on.mock.calls.find(([event]) => event === 'close')?.[1]
@@ -140,6 +142,7 @@ describe('SshFilesystemProvider', () => {
     it('can append decoded chunks through SFTP', async () => {
       const writeStream = {
         on: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
+        off: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
         end: vi.fn((_buffer: Buffer) => {
           const closeHandler = writeStream.on.mock.calls.find(([event]) => event === 'close')?.[1]
           closeHandler?.()
@@ -177,6 +180,41 @@ describe('SshFilesystemProvider', () => {
       const result = await provider.stat('/home/user/file.txt')
       expect(mux.request).toHaveBeenCalledWith('fs.stat', { filePath: '/home/user/file.txt' })
       expect(result).toEqual(statResult)
+    })
+  })
+
+  describe('lstat', () => {
+    it('sends fs.lstat request', async () => {
+      const statResult = { size: 12, type: 'symlink', mtime: 1234567890 }
+      mux.request.mockResolvedValue(statResult)
+
+      const result = await provider.lstat('/home/user/link.txt')
+      expect(mux.request).toHaveBeenCalledWith('fs.lstat', { filePath: '/home/user/link.txt' })
+      expect(result).toEqual(statResult)
+    })
+
+    it('falls back to SFTP lstat when connected to an older relay', async () => {
+      mux.request.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
+      const sftp = {
+        lstat: vi.fn((_path: string, callback: (err: Error | undefined, stats: unknown) => void) =>
+          callback(undefined, {
+            size: 12,
+            mtime: 1234567,
+            isDirectory: () => false,
+            isSymbolicLink: () => true
+          })
+        ),
+        end: vi.fn()
+      }
+      provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+
+      await expect(provider.lstat('/home/user/link.txt')).resolves.toEqual({
+        size: 12,
+        type: 'symlink',
+        mtime: 1234567000
+      })
+      expect(sftp.lstat).toHaveBeenCalledWith('/home/user/link.txt', expect.any(Function))
+      expect(sftp.end).toHaveBeenCalled()
     })
   })
 
@@ -219,6 +257,29 @@ describe('SshFilesystemProvider', () => {
   it('rename sends fs.rename request', async () => {
     await provider.rename('/home/old.txt', '/home/new.txt')
     expect(mux.request).toHaveBeenCalledWith('fs.rename', {
+      oldPath: '/home/old.txt',
+      newPath: '/home/new.txt'
+    })
+  })
+
+  it('renameNoClobber sends fs.renameNoClobber request', async () => {
+    await provider.renameNoClobber('/home/old.txt', '/home/new.txt')
+    expect(mux.request).toHaveBeenCalledWith('fs.renameNoClobber', {
+      oldPath: '/home/old.txt',
+      newPath: '/home/new.txt'
+    })
+  })
+
+  it('renameNoClobber fails closed when the relay lacks safe rename support', async () => {
+    mux.request.mockRejectedValueOnce(
+      Object.assign(new Error('Method not found'), { code: JsonRpcErrorCode.MethodNotFound })
+    )
+
+    await expect(provider.renameNoClobber('/home/old.txt', '/home/new.txt')).rejects.toThrow(
+      'Remote safe rename is unavailable'
+    )
+    expect(mux.request).toHaveBeenCalledTimes(1)
+    expect(mux.request).toHaveBeenCalledWith('fs.renameNoClobber', {
       oldPath: '/home/old.txt',
       newPath: '/home/new.txt'
     })
@@ -408,6 +469,43 @@ describe('SshFilesystemProvider', () => {
       unsub()
 
       expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+    })
+
+    it('sends fs.unwatch for active roots when disposed', async () => {
+      const callback = vi.fn()
+      await provider.watch('/home/user/project', callback)
+
+      provider.dispose()
+
+      expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('fs.changed', {
+        events: [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]
+      })
+      expect(callback).not.toHaveBeenCalled()
+    })
+
+    it('unwatches when disposed while fs.watch setup is still resolving', async () => {
+      let resolveWatch: () => void = () => {}
+      mux.request.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveWatch = resolve
+          })
+      )
+      const callback = vi.fn()
+      const pendingWatch = provider.watch('/home/user/project', callback)
+
+      provider.dispose()
+      resolveWatch()
+
+      await expect(pendingWatch).rejects.toThrow('SSH filesystem provider disposed')
+      expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('fs.changed', {
+        events: [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]
+      })
+      expect(callback).not.toHaveBeenCalled()
     })
 
     it('does not send fs.unwatch while other roots are watched', async () => {

@@ -21,15 +21,13 @@ export const AGENTS_STEPS: readonly AgentsStep[] = [
     id: 'statuses',
     name: 'Visibility',
     subtitle: 'Agent Visibility',
-    description:
-      'Track every running agent across your workspaces, including who is working, waiting, or needs you.'
+    description: 'Know which agents are working, waiting, live, or blocked.'
   },
   {
     id: 'orchestration',
     name: 'Orchestration',
     subtitle: 'Orchestration',
-    description:
-      'Enable agents to manage and coordinate Orca workspaces so larger tasks can move to completion.'
+    description: 'Enable agents to manage and coordinate Orca workspaces to execute larger tasks.'
   },
   {
     id: 'usage',

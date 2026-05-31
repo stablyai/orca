@@ -31,11 +31,11 @@ jobs:
         os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
       - if: runner.os == 'Linux'
@@ -60,11 +60,11 @@ jobs:
     env:
       ORCA_COMPUTER_E2E: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
       - run: pnpm install --frozen-lockfile
@@ -80,11 +80,11 @@ jobs:
       ORCA_COMPUTER_E2E: '1'
       ACCESSIBILITY_ENABLED: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
       - run: sudo apt-get update && sudo apt-get install -y build-essential python3 python3-gi gir1.2-atspi-2.0 gedit at-spi2-core xvfb xclip xdotool
@@ -105,11 +105,11 @@ jobs:
     env:
       ORCA_COMPUTER_E2E: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
       - run: pnpm install --frozen-lockfile

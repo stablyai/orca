@@ -1,6 +1,5 @@
 import { homedir } from 'os'
 import { join } from 'path'
-import { ORCA_CLAUDE_AGENT_STATUS_SETTINGS_FILE } from '../../shared/claude-settings'
 import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
@@ -10,9 +9,27 @@ import {
   type HooksConfig
 } from '../agent-hooks/installer-utils'
 
+export type ClaudeCompatibleHookSettings = {
+  configDirName: '.claude' | '.openclaude'
+  scriptBaseName: 'claude-hook' | 'openclaude-hook'
+}
+
+export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
+  configDirName: '.claude',
+  scriptBaseName: 'claude-hook'
+}
+
+export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
+  configDirName: '.openclaude',
+  scriptBaseName: 'openclaude-hook'
+}
+
 export const CLAUDE_EVENTS = [
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
+  // Why: OpenClaude skips normal Stop hooks after API/model errors and emits
+  // StopFailure instead; without this hook Orca leaves the turn spinning.
+  { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
   // Why: PreToolUse gives the dashboard a live readout of the in-flight tool
   // (name + input preview) before it completes.
   {
@@ -33,28 +50,26 @@ export const CLAUDE_EVENTS = [
   }
 ] as const
 
-export function getLegacyConfigPath(): string {
-  return join(homedir(), '.claude', 'settings.json')
+export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
+  return join(homedir(), settings.configDirName, 'settings.json')
 }
 
-export function getScopedSettingsPath(): string {
-  return join(homedir(), '.orca', 'agent-hooks', ORCA_CLAUDE_AGENT_STATUS_SETTINGS_FILE)
+export function getManagedScriptFileName(settings = CLAUDE_HOOK_SETTINGS): string {
+  return process.platform === 'win32'
+    ? `${settings.scriptBaseName}.cmd`
+    : getPosixManagedScriptFileName(settings)
 }
 
-export function getManagedScriptFileName(): string {
-  return process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
+export function getPosixManagedScriptFileName(settings = CLAUDE_HOOK_SETTINGS): string {
+  return `${settings.scriptBaseName}.sh`
 }
 
-export function getManagedScriptPath(): string {
-  return getSharedManagedScriptPath(getManagedScriptFileName())
+export function getManagedScriptPath(settings = CLAUDE_HOOK_SETTINGS): string {
+  return getSharedManagedScriptPath(getManagedScriptFileName(settings))
 }
 
-export function getRemoteScopedSettingsPath(remoteHome: string): string {
-  return `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${ORCA_CLAUDE_AGENT_STATUS_SETTINGS_FILE}`
-}
-
-export function getRemoteLegacyConfigPath(remoteHome: string): string {
-  return `${remoteHome.replace(/\/$/, '')}/.claude/settings.json`
+export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_SETTINGS): string {
+  return `${remoteHome.replace(/\/$/, '')}/${settings.configDirName}/settings.json`
 }
 
 export function getManagedCommand(scriptPath: string): string {

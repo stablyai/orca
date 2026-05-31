@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { TelemetryConsentState } from '../../../../shared/telemetry-consent-types'
 import { Label } from '../ui/label'
@@ -48,6 +49,7 @@ export function computeBlockedReason(consent: TelemetryConsentState | null): Blo
 export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
   const [consent, setConsent] = useState<TelemetryConsentState | null>(null)
   const [inFlight, setInFlight] = useState(false)
+  const mountedRef = useMountedRef()
   const fetchSettings = useAppStore((s) => s.fetchSettings)
 
   useEffect(() => {
@@ -74,7 +76,9 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
       await telemetrySetOptIn(!toggleChecked)
       await fetchSettings()
     } finally {
-      setInFlight(false)
+      if (mountedRef.current) {
+        setInFlight(false)
+      }
     }
   }
 

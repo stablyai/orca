@@ -110,7 +110,12 @@ export default function TeamMultiCombobox({
           <ChevronsUpDown className="size-3.5 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+      <PopoverContent
+        align="start"
+        // Why: team filter triggers can collapse in narrow toolbars; the menu
+        // needs room for names and keys while still fitting small viewports.
+        className="w-[min(320px,calc(100vw-1rem))] min-w-[var(--radix-popover-trigger-width)] p-0"
+      >
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
@@ -159,8 +164,8 @@ export default function TeamMultiCombobox({
                     )}
                   />
                   <div className="min-w-0 flex-1">
-                    <span className="inline-flex items-center gap-1.5 text-xs">
-                      <span>{team.name}</span>
+                    <span className="inline-flex max-w-full items-center gap-1.5 text-xs">
+                      <span className="min-w-0 truncate">{team.name}</span>
                       <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                         {team.key}
                       </span>

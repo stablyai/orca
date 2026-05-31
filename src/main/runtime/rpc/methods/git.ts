@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this table is the runtime git RPC contract; splitting it would make method coverage harder to audit. */
 import { defineMethod, type RpcMethod } from '../core'
 import type { GlobalSettings } from '../../../../shared/types'
 import {
@@ -52,6 +53,16 @@ export const GIT_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.getRuntimeGitConflictOperation(params.worktree)
   }),
   defineMethod({
+    name: 'git.abortMerge',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.abortRuntimeGitMerge(params.worktree)
+  }),
+  defineMethod({
+    name: 'git.abortRebase',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
+  }),
+  defineMethod({
     name: 'git.diff',
     params: GitDiff,
     handler: async (params, { runtime }) =>
@@ -97,6 +108,14 @@ export const GIT_METHODS: RpcMethod[] = [
       params.pushTarget === undefined
         ? runtime.pullRuntimeGit(params.worktree)
         : runtime.pullRuntimeGit(params.worktree, params.pushTarget)
+  }),
+  defineMethod({
+    name: 'git.fastForward',
+    params: GitTargetedRemote,
+    handler: async (params, { runtime }) =>
+      params.pushTarget === undefined
+        ? runtime.fastForwardRuntimeGit(params.worktree)
+        : runtime.fastForwardRuntimeGit(params.worktree, params.pushTarget)
   }),
   defineMethod({
     name: 'git.rebaseFromBase',
@@ -149,6 +168,7 @@ export const GIT_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => {
       if (
         params.commitMessageAi === undefined &&
+        params.sourceControlAi === undefined &&
         params.agentCmdOverrides === undefined &&
         params.enableGitHubAttribution === undefined &&
         params.commitMessageDiscoveryHostKey === undefined
@@ -158,6 +178,9 @@ export const GIT_METHODS: RpcMethod[] = [
       return runtime.generateRuntimeCommitMessage(params.worktree, {
         ...(params.commitMessageAi !== undefined
           ? { commitMessageAi: params.commitMessageAi as GlobalSettings['commitMessageAi'] }
+          : {}),
+        ...(params.sourceControlAi !== undefined
+          ? { sourceControlAi: params.sourceControlAi as GlobalSettings['sourceControlAi'] }
           : {}),
         ...(params.agentCmdOverrides !== undefined
           ? {
@@ -205,6 +228,7 @@ export const GIT_METHODS: RpcMethod[] = [
       }
       if (
         params.commitMessageAi === undefined &&
+        params.sourceControlAi === undefined &&
         params.agentCmdOverrides === undefined &&
         params.enableGitHubAttribution === undefined &&
         params.commitMessageDiscoveryHostKey === undefined
@@ -214,6 +238,9 @@ export const GIT_METHODS: RpcMethod[] = [
       return runtime.generateRuntimePullRequestFields(params.worktree, input, {
         ...(params.commitMessageAi !== undefined
           ? { commitMessageAi: params.commitMessageAi as GlobalSettings['commitMessageAi'] }
+          : {}),
+        ...(params.sourceControlAi !== undefined
+          ? { sourceControlAi: params.sourceControlAi as GlobalSettings['sourceControlAi'] }
           : {}),
         ...(params.agentCmdOverrides !== undefined
           ? {

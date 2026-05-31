@@ -1,13 +1,20 @@
 /* oxlint-disable max-lines -- Why: pid validation shares process-identity
 helpers with kill escalation so the SIGKILL safety checks stay co-located. */
 import { execFileSync } from 'child_process'
-import { existsSync, readFileSync, unlinkSync } from 'fs'
+import { existsSync, readFileSync, statSync, unlinkSync } from 'fs'
 import { connect, type Socket } from 'net'
 import { encodeNdjson } from './ndjson'
 import { getDaemonPidPath } from './daemon-spawner'
-import { PROTOCOL_VERSION, type HelloMessage, type HelloResponse } from './types'
+import {
+  PROTOCOL_VERSION,
+  type HelloMessage,
+  type HelloResponse,
+  type SystemResolverHealth,
+  type SystemResolverHealthResult
+} from './types'
 
 const HEALTH_CHECK_TIMEOUT_MS = 3_000
+const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
 const KILL_WAIT_MS = 3_000
 const KILL_POLL_MS = 100
 const START_TIME_TOLERANCE_MS = 1_500
@@ -25,19 +32,33 @@ function canConnectSocket(socketPath: string): Promise<boolean> {
       return
     }
     const sock = connect({ path: socketPath })
+    let settled = false
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      sock.off('connect', onConnect)
+      sock.off('error', onError)
+    }
+    const settle = (result: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      resolve(result)
+    }
+    const onConnect = (): void => {
+      settle(true)
+      sock.destroy()
+    }
+    const onError = (): void => {
+      settle(false)
+    }
     const timer = setTimeout(() => {
+      settle(false)
       sock.destroy()
-      resolve(false)
     }, 500)
-    sock.on('connect', () => {
-      clearTimeout(timer)
-      sock.destroy()
-      resolve(true)
-    })
-    sock.on('error', () => {
-      clearTimeout(timer)
-      resolve(false)
-    })
+    sock.on('connect', onConnect)
+    sock.on('error', onError)
   })
 }
 
@@ -64,14 +85,17 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
       }
       settled = true
       clearTimeout(timer)
+      removeSocketListeners()
       sock?.destroy()
       resolve(result)
     }
-    const timer = setTimeout(() => settle(false), HEALTH_CHECK_TIMEOUT_MS)
-
-    sock = connect({ path: socketPath })
-    sock.on('error', () => settle(false))
-    sock.on('connect', () => {
+    const removeSocketListeners = (): void => {
+      sock?.off('error', onError)
+      sock?.off('connect', onConnect)
+      sock?.off('data', onData)
+    }
+    const onError = (): void => settle(false)
+    const onConnect = (): void => {
       const hello: HelloMessage = {
         type: 'hello',
         version: PROTOCOL_VERSION,
@@ -80,10 +104,8 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
         role: 'control'
       }
       sock?.write(encodeNdjson(hello))
-    })
-
-    let buffer = ''
-    sock.on('data', (chunk: Buffer) => {
+    }
+    const onData = (chunk: Buffer): void => {
       if (settled) {
         return
       }
@@ -121,7 +143,127 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
           return
         }
       }
-    })
+    }
+    const timer = setTimeout(() => settle(false), HEALTH_CHECK_TIMEOUT_MS)
+
+    sock = connect({ path: socketPath })
+    sock.on('error', onError)
+    sock.on('connect', onConnect)
+
+    let buffer = ''
+    sock.on('data', onData)
+  })
+}
+
+function isSystemResolverHealth(value: unknown): value is SystemResolverHealth {
+  return value === 'healthy' || value === 'unhealthy' || value === 'unknown'
+}
+
+export function getMacDaemonSystemResolverHealth(
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion = PROTOCOL_VERSION
+): Promise<SystemResolverHealth> {
+  if (process.platform !== 'darwin') {
+    return Promise.resolve('unknown')
+  }
+
+  return new Promise((resolve) => {
+    if (!existsSync(socketPath)) {
+      resolve('unknown')
+      return
+    }
+
+    let token: string
+    try {
+      token = readFileSync(tokenPath, 'utf8').trim()
+    } catch {
+      resolve('unknown')
+      return
+    }
+
+    let settled = false
+    let sock: Socket | null = null
+    const settle = (result: SystemResolverHealth): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      removeSocketListeners()
+      sock?.destroy()
+      resolve(result)
+    }
+    const removeSocketListeners = (): void => {
+      sock?.off('error', onError)
+      sock?.off('connect', onConnect)
+      sock?.off('data', onData)
+    }
+    const onError = (): void => settle('unknown')
+    const onConnect = (): void => {
+      const hello: HelloMessage = {
+        type: 'hello',
+        version: protocolVersion,
+        token,
+        clientId: 'resolver-health-check',
+        role: 'control'
+      }
+      sock?.write(encodeNdjson(hello))
+    }
+    const onData = (chunk: Buffer): void => {
+      if (settled) {
+        return
+      }
+      buffer += chunk.toString()
+      for (;;) {
+        const newlineIdx = buffer.indexOf('\n')
+        if (newlineIdx === -1) {
+          break
+        }
+        const line = buffer.slice(0, newlineIdx)
+        buffer = buffer.slice(newlineIdx + 1)
+        if (!line) {
+          continue
+        }
+
+        let message: Record<string, unknown>
+        try {
+          message = JSON.parse(line) as Record<string, unknown>
+        } catch {
+          settle('unknown')
+          return
+        }
+
+        if (message.type === 'hello') {
+          if (!(message as HelloResponse).ok) {
+            settle('unknown')
+            return
+          }
+          // Why: the daemon must report health from inside its own process;
+          // external launchctl bsexec probes can misclassify healthy PTYs.
+          sock?.write(encodeNdjson({ id: 'resolver-health-1', type: 'systemResolverHealth' }))
+          continue
+        }
+
+        if (message.id === 'resolver-health-1') {
+          if (!message.ok || typeof message.payload !== 'object' || message.payload === null) {
+            settle('unknown')
+            return
+          }
+          const payload = message.payload as Partial<SystemResolverHealthResult>
+          settle(isSystemResolverHealth(payload.health) ? payload.health : 'unknown')
+          return
+        }
+      }
+    }
+    const timer = setTimeout(() => settle('unknown'), RESOLVER_HEALTH_CHECK_TIMEOUT_MS)
+
+    sock = connect({ path: socketPath })
+    sock.on('error', onError)
+    sock.on('connect', onConnect)
+
+    let buffer = ''
+    sock.on('data', onData)
   })
 }
 
@@ -354,6 +496,38 @@ export function getDaemonLaunchIdentity(
     return 'unknown'
   }
   return commandLine.includes(expectedEntryPath) ? 'match' : 'mismatch'
+}
+
+export function isDaemonOlderThanPathMtime(
+  runtimeDir: string,
+  socketPath: string,
+  tokenPath: string,
+  path: string,
+  protocolVersion = PROTOCOL_VERSION
+): boolean {
+  let parsedPid: ParsedDaemonPid | null
+  try {
+    parsedPid = parseDaemonPidFile(
+      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    )
+  } catch {
+    return false
+  }
+
+  if (!parsedPid || !isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs)) {
+    return false
+  }
+
+  const startedAtMs = parsedPid.startedAtMs ?? getProcessStartedAtMs(parsedPid.pid)
+  if (startedAtMs === null) {
+    return false
+  }
+
+  try {
+    return startedAtMs + START_TIME_TOLERANCE_MS < statSync(path).mtimeMs
+  } catch {
+    return false
+  }
 }
 
 export async function killStaleDaemon(

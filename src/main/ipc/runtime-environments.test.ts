@@ -10,6 +10,8 @@ import * as environmentStore from '../../shared/runtime-environment-store'
 const {
   handleMock,
   onMock,
+  removeHandlerMock,
+  removeAllListenersMock,
   getPathMock,
   sendRemoteRuntimeRequestMock,
   subscribeRemoteRuntimeRequestMock,
@@ -18,6 +20,8 @@ const {
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   onMock: vi.fn(),
+  removeHandlerMock: vi.fn(),
+  removeAllListenersMock: vi.fn(),
   getPathMock: vi.fn(),
   sendRemoteRuntimeRequestMock: vi.fn(),
   subscribeRemoteRuntimeRequestMock: vi.fn(),
@@ -27,7 +31,12 @@ const {
 
 vi.mock('electron', () => ({
   app: { getPath: getPathMock },
-  ipcMain: { handle: handleMock, on: onMock }
+  ipcMain: {
+    handle: handleMock,
+    on: onMock,
+    removeHandler: removeHandlerMock,
+    removeAllListeners: removeAllListenersMock
+  }
 }))
 
 vi.mock('../../shared/remote-runtime-client', () => ({
@@ -68,6 +77,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     getPathMock.mockReturnValue(userDataPath)
     handleMock.mockReset()
     onMock.mockReset()
+    removeHandlerMock.mockReset()
+    removeAllListenersMock.mockReset()
     sendRemoteRuntimeRequestMock.mockReset()
     subscribeRemoteRuntimeRequestMock.mockReset()
     sendRemoteRuntimeConnectionRequestMock.mockReset()
@@ -94,6 +105,22 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(onMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:subscriptionBinary'
     ])
+  })
+
+  it('clears stale IPC registrations before registering runtime environment handlers', () => {
+    registerRuntimeEnvironmentHandlers()
+
+    expect(removeHandlerMock.mock.calls.map((call) => call[0])).toEqual([
+      'runtimeEnvironments:list',
+      'runtimeEnvironments:addFromPairingCode',
+      'runtimeEnvironments:resolve',
+      'runtimeEnvironments:remove',
+      'runtimeEnvironments:getStatus',
+      'runtimeEnvironments:call',
+      'runtimeEnvironments:subscribe',
+      'runtimeEnvironments:unsubscribe'
+    ])
+    expect(removeAllListenersMock).toHaveBeenCalledWith('runtimeEnvironments:subscriptionBinary')
   })
 
   it('stores, resolves, lists, and removes environments under Electron userData', async () => {
@@ -419,6 +446,70 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(close).toHaveBeenCalled()
     expect(destroyedListenerRemoved).toHaveBeenCalledWith('destroyed', expect.any(Function))
     markUsedSpy.mockRestore()
+  })
+
+  it('closes streaming subscriptions when their saved runtime is removed', async () => {
+    registerRuntimeEnvironmentHandlers()
+    const close = vi.fn()
+    const sendBinary = vi.fn()
+    subscribeRemoteRuntimeRequestMock.mockResolvedValue({
+      requestId: 'stream-remove',
+      close,
+      sendBinary
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const destroyedListenerRemoved = vi.fn()
+    const subscribe = handler<
+      {
+        selector: string
+        method: string
+        params?: unknown
+        subscriptionId?: string
+      },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const result = await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: vi.fn(),
+          once: vi.fn(),
+          removeListener: destroyedListenerRemoved
+        }
+      },
+      {
+        selector: 'desk',
+        method: 'terminal.subscribe',
+        params: { terminal: 't1' },
+        subscriptionId: 'removed-env-sub'
+      }
+    )
+
+    const remove = handler<{ selector: string }, { removed: { id: string; name: string } }>(
+      'runtimeEnvironments:remove'
+    )
+    expect(remove(null, { selector: added.environment.id })).toMatchObject({
+      removed: { id: added.environment.id, name: 'desk' }
+    })
+
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(destroyedListenerRemoved).toHaveBeenCalledWith('destroyed', expect.any(Function))
+
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    expect(
+      await unsubscribe({ sender: { id: 1 } }, { subscriptionId: result.subscriptionId })
+    ).toEqual({
+      unsubscribed: false
+    })
   })
 
   it('rejects cross-window streaming subscription control', async () => {

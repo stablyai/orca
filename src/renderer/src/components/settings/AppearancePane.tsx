@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: AppearancePane keeps theme, typography, zoom, and status-bar
+   visibility settings together so the searchable settings rows share one filtered surface. */
 import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Separator } from '../ui/separator'
@@ -27,6 +29,9 @@ import {
   TYPOGRAPHY_ENTRIES,
   ZOOM_ENTRIES
 } from './appearance-search'
+import { TERMINAL_APPEARANCE_SEARCH_ENTRIES } from './terminal-search'
+import { TerminalAppearanceSection } from './TerminalAppearanceSection'
+import type { UseGhosttyImportReturn } from './useGhosttyImport'
 export { APPEARANCE_PANE_SEARCH_ENTRIES }
 
 type AppearancePaneProps = {
@@ -34,6 +39,9 @@ type AppearancePaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
   fontSuggestions: string[]
+  terminalFontSuggestions: string[]
+  systemPrefersDark: boolean
+  ghostty: UseGhosttyImportReturn
 }
 
 function ShortcutHintList({ combos }: { combos: string[][] }): React.JSX.Element {
@@ -59,13 +67,17 @@ export function AppearancePane({
   settings,
   updateSettings,
   applyTheme,
-  fontSuggestions
+  fontSuggestions,
+  terminalFontSuggestions,
+  systemPrefersDark,
+  ghostty
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const zoomInKeyCombos = useShortcutKeyCombos('zoom.in')
   const zoomOutKeyCombos = useShortcutKeyCombos('zoom.out')
   const statusBarItems = useAppStore((state) => state.statusBarItems)
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(STATUS_BAR_TOGGLES)
 
   const visibleSections = [
@@ -146,6 +158,16 @@ export function AppearancePane({
         ) : null}
       </section>
     ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_APPEARANCE_SEARCH_ENTRIES) ? (
+      <TerminalAppearanceSection
+        key="terminal-appearance"
+        settings={settings}
+        updateSettings={updateSettings}
+        systemPrefersDark={systemPrefersDark}
+        terminalFontSuggestions={terminalFontSuggestions}
+        ghostty={ghostty}
+      />
+    ) : null,
     matchesSettingsSearch(searchQuery, LAYOUT_ENTRIES) ? (
       <section key="layout" className="space-y-3">
         <SettingsSubsectionHeader title="File Explorer" />
@@ -214,7 +236,23 @@ export function AppearancePane({
                   label={toggle.title}
                   description={toggle.toggleDescription}
                   checked={enabled}
-                  onChange={() => toggleStatusBarItem(toggle.id)}
+                  onChange={() => {
+                    if (toggle.id === 'resource-usage') {
+                      recordFeatureInteraction('resource-manager')
+                    } else if (toggle.id === 'ports') {
+                      recordFeatureInteraction('ports')
+                    } else if (toggle.id === 'ssh') {
+                      recordFeatureInteraction('ssh')
+                    } else if (
+                      toggle.id === 'claude' ||
+                      toggle.id === 'codex' ||
+                      toggle.id === 'gemini' ||
+                      toggle.id === 'opencode-go'
+                    ) {
+                      recordFeatureInteraction('usage-tracking')
+                    }
+                    toggleStatusBarItem(toggle.id)
+                  }}
                   ariaLabel={toggle.title}
                 />
               </SearchableSetting>

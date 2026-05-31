@@ -92,6 +92,33 @@ describe('ensureHooksConfirmed', () => {
     await expect(promise).resolves.toBe('run')
   })
 
+  it('includes default tab commands in the setup trust prompt', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        scripts: { setup: 'pnpm install' },
+        defaultTabs: [
+          { title: 'Server', command: 'pnpm dev' },
+          { title: 'Notes' },
+          { command: 'codex' }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'setup')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    const expectedContent =
+      'pnpm install\n\n# defaultTabs[1] Server\npnpm dev\n\n# defaultTabs[3]\ncodex'
+    expect(pending[0].data.scriptContent).toBe(expectedContent)
+    expect(pending[0].data.contentHash).toBe(await hashOrcaHookScript(expectedContent))
+
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
+  })
+
   it('returns run without inspecting hooks when the repo is always trusted', async () => {
     const { state, pending } = createTestState()
     state.trustedOrcaHooks['repo-1'] = {
@@ -189,6 +216,40 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
+  it('still honors local issueCommand overrides when shared inspection reports an error', async () => {
+    const { state, pending } = createTestState()
+    readIssueCommandMock.mockResolvedValue({
+      status: 'error',
+      source: 'local',
+      sharedContent: null,
+      localContent: 'user content',
+      effectiveContent: 'user content',
+      localFilePath: ''
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'issueCommand')
+
+    expect(decision).toBe('run')
+    expect(pending).toHaveLength(0)
+  })
+
+  it('fails closed when issueCommand inspection reports an error status', async () => {
+    const { state, pending } = createTestState()
+    readIssueCommandMock.mockResolvedValue({
+      status: 'error',
+      source: 'none',
+      sharedContent: null,
+      localContent: null,
+      effectiveContent: null,
+      localFilePath: ''
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'issueCommand')
+
+    expect(decision).toBe('skip')
+    expect(pending).toHaveLength(0)
+  })
+
   it('opens a modal with the computed content hash and resolves with the user decision', async () => {
     const { state, pending } = createTestState()
     hooksCheckMock.mockResolvedValue({
@@ -240,6 +301,21 @@ describe('ensureHooksConfirmed', () => {
   it('fails closed when window.api.hooks.check throws', async () => {
     const { state, pending } = createTestState()
     hooksCheckMock.mockRejectedValue(new Error('boom'))
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
+
+    expect(decision).toBe('skip')
+    expect(pending).toHaveLength(0)
+  })
+
+  it('fails closed when hook inspection reports an error status', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      status: 'error',
+      hasHooks: false,
+      hooks: null,
+      mayNeedUpdate: false
+    })
 
     const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
 

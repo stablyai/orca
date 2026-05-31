@@ -3,34 +3,51 @@ tests (addRemote, getBaseRefDefault envelope, searchBaseRefs SSH relay) so
 fixture setup and mock plumbing can be shared. Splitting by line count would
 duplicate the hoisted mocks and the `../git/repo` partial-real/partial-stub
 setup. */
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'events'
+import { existsSync } from 'fs'
+import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 
-const { handleMock, mockStore, mockGitProvider, mockMultiplexer, gitSpawnMock } = vi.hoisted(
-  () => ({
-    handleMock: vi.fn(),
-    mockStore: {
-      getRepos: vi.fn().mockReturnValue([]),
-      addRepo: vi.fn(),
-      removeRepo: vi.fn(),
-      getRepo: vi.fn(),
-      updateRepo: vi.fn(),
-      getSshTarget: vi.fn()
-    },
-    mockGitProvider: {
-      isGitRepo: vi.fn().mockReturnValue(true),
-      isGitRepoAsync: vi.fn().mockResolvedValue({ isRepo: true, rootPath: null }),
-      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
-    },
-    mockMultiplexer: {
-      request: vi.fn(),
-      notify: vi.fn()
-    },
-    gitSpawnMock: vi.fn()
-  })
-)
+const {
+  handleMock,
+  mockStore,
+  mockGitProvider,
+  mockFilesystemProvider,
+  mockMultiplexer,
+  gitSpawnMock
+} = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  mockStore: {
+    getRepos: vi.fn().mockReturnValue([]),
+    addRepo: vi.fn(),
+    removeProject: vi.fn(),
+    getRepo: vi.fn(),
+    updateRepo: vi.fn(),
+    getProjectGroups: vi.fn().mockReturnValue([]),
+    createProjectGroup: vi.fn(),
+    updateProjectGroup: vi.fn(),
+    deleteProjectGroup: vi.fn(),
+    moveProjectToGroup: vi.fn(),
+    getSshTarget: vi.fn()
+  },
+  mockGitProvider: {
+    isGitRepo: vi.fn().mockReturnValue(true),
+    isGitRepoAsync: vi.fn().mockResolvedValue({ isRepo: true, rootPath: null }),
+    exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+  },
+  mockFilesystemProvider: {
+    readDir: vi.fn().mockResolvedValue([])
+  },
+  mockMultiplexer: {
+    request: vi.fn(),
+    notify: vi.fn()
+  },
+  gitSpawnMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
@@ -76,6 +93,15 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   })
 }))
 
+vi.mock('../providers/ssh-filesystem-dispatch', () => ({
+  getSshFilesystemProvider: vi.fn().mockImplementation((id: string) => {
+    if (id === 'conn-1') {
+      return mockFilesystemProvider
+    }
+    return undefined
+  })
+}))
+
 vi.mock('./ssh', () => ({
   getActiveMultiplexer: vi.fn().mockImplementation((id: string) => {
     if (id === 'conn-1') {
@@ -86,6 +112,223 @@ vi.mock('./ssh', () => ({
 }))
 
 import { registerRepoHandlers } from './repos'
+
+describe('projectGroups IPC validation', () => {
+  const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+  const mockWindow = {
+    isDestroyed: () => false,
+    webContents: { send: vi.fn() }
+  }
+
+  beforeEach(() => {
+    handlers.clear()
+    handleMock.mockReset()
+    handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    })
+    mockWindow.webContents.send.mockReset()
+    mockStore.createProjectGroup.mockReset()
+    mockStore.updateProjectGroup.mockReset()
+    mockStore.deleteProjectGroup.mockReset()
+    mockStore.moveProjectToGroup.mockReset()
+    mockStore.getRepos.mockReset()
+    mockStore.getRepos.mockReturnValue([])
+    mockFilesystemProvider.readDir.mockReset()
+    mockFilesystemProvider.readDir.mockResolvedValue([])
+    mockGitProvider.isGitRepoAsync.mockReset()
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: true, rootPath: null })
+    mockMultiplexer.notify.mockReset()
+    mockMultiplexer.request.mockReset()
+
+    registerRepoHandlers(mockWindow as never, mockStore as never)
+  })
+
+  it('rejects malformed local project group create arguments before persistence', () => {
+    expect(() =>
+      handlers.get('projectGroups:create')!(null, { name: 123, createdFrom: 'unexpected' })
+    ).toThrow('invalid_project_group_create_args')
+
+    expect(mockStore.createProjectGroup).not.toHaveBeenCalled()
+  })
+
+  it('rejects malformed local project group update arguments before persistence', () => {
+    expect(() =>
+      handlers.get('projectGroups:update')!(null, {
+        groupId: 'group-1',
+        updates: { isCollapsed: 'yes' }
+      })
+    ).toThrow('invalid_project_group_update_args')
+
+    expect(mockStore.updateProjectGroup).not.toHaveBeenCalled()
+  })
+
+  it('scans nested repositories over a connected SSH filesystem', async () => {
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === '/srv/platform/api',
+      rootPath: null
+    }))
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
+    )
+
+    const result = await handlers.get('projectGroups:scanNested')!(null, {
+      path: '/srv/platform',
+      connectionId: 'conn-1'
+    })
+
+    expect(result).toMatchObject({
+      selectedPath: '/srv/platform',
+      selectedPathKind: 'non_git_folder',
+      repos: [{ path: '/srv/platform/api', displayName: 'api' }]
+    })
+  })
+
+  it('rejects local nested scans with relative paths', async () => {
+    await expect(
+      handlers.get('projectGroups:scanNested')!(null, {
+        path: 'relative/project'
+      })
+    ).rejects.toThrow('Repo path must be an absolute path')
+  })
+
+  it('imports nested SSH repositories with connection-scoped repo entries', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === '/srv/platform/api',
+      rootPath: null
+    }))
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
+    )
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform',
+      groupName: 'Platform',
+      projectPaths: ['/srv/platform/api'],
+      connectionId: 'conn-1',
+      mode: 'group'
+    })
+
+    expect(result).toMatchObject({ importedCount: 1, failedCount: 0 })
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/srv/platform/api',
+        connectionId: 'conn-1',
+        projectGroupId: group.id
+      })
+    )
+    expect(mockMultiplexer.notify).toHaveBeenCalledWith('session.registerRoot', {
+      rootPath: '/srv/platform/api'
+    })
+  })
+
+  it('imports a small selection from a large nested SSH scan', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const repoPaths = Array.from(
+      { length: 87 },
+      (_, index) => `/srv/platform/service-${String(index + 1).padStart(2, '0')}`
+    )
+    const selectedPaths = [repoPaths[2], repoPaths[41], repoPaths[86]]
+    mockStore.addRepo.mockClear()
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: repoPaths.includes(path),
+      rootPath: null
+    }))
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform'
+        ? repoPaths.map((repoPath) => ({
+            name: repoPath.split('/').at(-1) ?? repoPath,
+            isDirectory: true,
+            isSymlink: false
+          }))
+        : []
+    )
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform',
+      groupName: 'Platform',
+      projectPaths: selectedPaths,
+      connectionId: 'conn-1',
+      mode: 'group'
+    })
+
+    expect(result).toMatchObject({
+      importedCount: 3,
+      alreadyKnownCount: 0,
+      failedCount: 0
+    })
+    expect(mockStore.addRepo).toHaveBeenCalledTimes(3)
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: selectedPaths[0], projectGroupId: group.id })
+    )
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: selectedPaths[1], projectGroupId: group.id })
+    )
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: selectedPaths[2], projectGroupId: group.id })
+    )
+  })
+
+  it('sanitizes unexpected nested import errors before returning results', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === '/srv/platform/api',
+      rootPath: null
+    }))
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
+    )
+    mockStore.addRepo.mockImplementationOnce(() => {
+      throw new Error('secret backend path /srv/platform/api')
+    })
+
+    const result = (await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform',
+      groupName: 'Platform',
+      projectPaths: ['/srv/platform/api'],
+      connectionId: 'conn-1',
+      mode: 'group'
+    })) as { projects: { error?: string }[] }
+
+    expect(result.projects[0].error).toBe('Repository could not be imported')
+  })
+})
 
 describe('repos:getGitUsername', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
@@ -171,6 +414,8 @@ describe('repos:addRemote', () => {
     mockStore.addRepo.mockReset()
     mockStore.getSshTarget.mockReset()
     mockStore.updateRepo.mockReset()
+    mockGitProvider.isGitRepoAsync.mockReset()
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: true, rootPath: null })
     mockMultiplexer.request.mockReset()
     mockMultiplexer.notify.mockReset()
     gitSpawnMock.mockReset()
@@ -304,6 +549,42 @@ describe('repos:addRemote', () => {
     expect(result).toHaveProperty('repo.path', '/home/user/project')
   })
 
+  it('uses the resolved git root basename for the default remote display name', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({
+      isRepo: true,
+      rootPath: '/home/user/project'
+    })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/home/user/project/src'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/home/user/project',
+        displayName: 'project'
+      })
+    )
+    expect(result).toHaveProperty('repo.displayName', 'project')
+  })
+
+  it('derives default remote display names from Windows path separators', async () => {
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: 'C:\\Users\\alice\\project',
+      kind: 'folder'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: 'C:\\Users\\alice\\project',
+        displayName: 'project'
+      })
+    )
+    expect(result).toHaveProperty('repo.displayName', 'project')
+  })
+
   it('notifies renderer when remote repo is added', async () => {
     await handlers.get('repos:addRemote')!(null, {
       connectionId: 'conn-1',
@@ -382,11 +663,45 @@ describe('repos:addRemote', () => {
   })
 })
 
+type MockCloneProcess = EventEmitter & {
+  stderr: EventEmitter
+  kill: ReturnType<typeof vi.fn>
+}
+
+function createMockCloneProcess(): MockCloneProcess {
+  const proc = new EventEmitter() as MockCloneProcess
+  proc.stderr = new EventEmitter()
+  proc.kill = vi.fn().mockReturnValue(true)
+  return proc
+}
+
+async function waitForAssertion(assertion: () => void): Promise<void> {
+  const deadline = Date.now() + 2_000
+  let lastError: unknown
+  while (Date.now() < deadline) {
+    try {
+      assertion()
+      return
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+  }
+  throw lastError
+}
+
 describe('repos:add + repos:clone', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mockWindow = {
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
+  }
+  const tempRoots: string[] = []
+
+  const createTempRoot = async (): Promise<string> => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-repos-clone-'))
+    tempRoots.push(root)
+    return root
   }
 
   beforeEach(() => {
@@ -401,13 +716,16 @@ describe('repos:add + repos:clone', () => {
     mockWindow.webContents.send.mockReset()
     gitSpawnMock.mockReset()
     gitSpawnMock.mockImplementation(() => {
-      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
-      proc.stderr = new EventEmitter()
+      const proc = createMockCloneProcess()
       queueMicrotask(() => proc.emit('close', 0, null))
       return proc
     })
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
+  })
+
+  afterEach(async () => {
+    await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
   })
 
   it('defaults repos:add badgeColor to DEFAULT_REPO_BADGE_COLOR for folder repos', async () => {
@@ -456,14 +774,16 @@ describe('repos:add + repos:clone', () => {
   })
 
   it('defaults repos:clone badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const destination = await createTempRoot()
+
     const result = await handlers.get('repos:clone')!(null, {
       url: 'https://example.com/orca.git',
-      destination: '/tmp'
+      destination
     })
 
     expect(mockStore.addRepo).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: '/tmp/orca',
+        path: join(destination, 'orca'),
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
         kind: 'git',
         externalWorktreeVisibility: 'hide',
@@ -475,9 +795,11 @@ describe('repos:add + repos:clone', () => {
   })
 
   it('preserves existing badgeColor when repos:clone upgrades folder->git after dedupe', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
     const existing = {
       id: 'folder-repo',
-      path: '/tmp/orca',
+      path: clonePath,
       displayName: 'orca',
       badgeColor: '#8b5cf6',
       addedAt: 1,
@@ -489,13 +811,337 @@ describe('repos:add + repos:clone', () => {
 
     const result = await handlers.get('repos:clone')!(null, {
       url: 'https://example.com/orca.git',
-      destination: '/tmp'
+      destination
     })
 
     expect(mockStore.updateRepo).toHaveBeenCalledWith(existing.id, { kind: 'git' })
     expect(result).toEqual(upgraded)
     expect(result).toHaveProperty('badgeColor', '#8b5cf6')
     expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('rejects a dot-segment URL before creating the destination or spawning git', async () => {
+    const tempRoot = await createTempRoot()
+    const destination = join(tempRoot, 'destination')
+
+    await expect(
+      handlers.get('repos:clone')!(null, {
+        url: 'file:///tmp/source/.',
+        destination
+      })
+    ).rejects.toThrow('Invalid repository name derived from URL')
+
+    expect(existsSync(destination)).toBe(false)
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a parent-segment URL before creating the destination or spawning git', async () => {
+    const tempRoot = await createTempRoot()
+    const destination = join(tempRoot, 'destination')
+
+    await expect(
+      handlers.get('repos:clone')!(null, {
+        url: 'file:///tmp/source/..',
+        destination
+      })
+    ).rejects.toThrow('Invalid repository name derived from URL')
+
+    expect(existsSync(destination)).toBe(false)
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a relative destination before creating directories or spawning git', async () => {
+    const destination = `relative-clone-destination-${Date.now()}`
+
+    await expect(
+      handlers.get('repos:clone')!(null, {
+        url: 'https://example.com/orca.git',
+        destination
+      })
+    ).rejects.toThrow('Clone destination must be an absolute path')
+
+    expect(existsSync(destination)).toBe(false)
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects URL-derived names containing Windows separators before spawning git', async () => {
+    const destination = await createTempRoot()
+
+    await expect(
+      handlers.get('repos:clone')!(null, {
+        url: 'https://example.com/team\\orca.git',
+        destination
+      })
+    ).rejects.toThrow('Invalid repository name derived from URL')
+
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts Windows local-path clone sources while validating the final segment', async () => {
+    const destination = await createTempRoot()
+
+    const result = await handlers.get('repos:clone')!(null, {
+      url: 'C:\\src\\orca.git',
+      destination
+    })
+
+    expect(gitSpawnMock).toHaveBeenCalledWith(
+      ['clone', '--progress', '--', 'C:\\src\\orca.git', join(destination, 'orca')],
+      expect.objectContaining({ cwd: destination })
+    )
+    expect(result).toHaveProperty('path', join(destination, 'orca'))
+  })
+
+  it('treats cloneAbort with no active clone as a no-op', async () => {
+    await expect(handlers.get('repos:cloneAbort')!(null, undefined)).resolves.toBeUndefined()
+  })
+
+  it('does not remove an existing target directory when aborting a pending clone', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    await mkdir(clonePath)
+    await writeFile(join(clonePath, 'user-file.txt'), 'keep me')
+    const proc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(proc)
+
+    const clonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+    proc.emit('close', null, 'SIGTERM')
+    await expect(clonePromise).rejects.toThrow('Clone aborted')
+
+    expect(existsSync(clonePath)).toBe(true)
+    expect(existsSync(join(clonePath, 'user-file.txt'))).toBe(true)
+  })
+
+  it('does not remove an existing target file when aborting a pending clone', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    await writeFile(clonePath, 'existing file')
+    const proc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(proc)
+
+    const clonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+    proc.emit('close', null, 'SIGTERM')
+    await expect(clonePromise).rejects.toThrow('Clone aborted')
+
+    expect(existsSync(clonePath)).toBe(true)
+  })
+
+  it('removes a fresh clone target only after the aborted process closes unsuccessfully', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    const proc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(proc)
+
+    const clonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+    expect(existsSync(clonePath)).toBe(true)
+
+    proc.emit('close', null, 'SIGTERM')
+    await expect(clonePromise).rejects.toThrow('Clone aborted')
+    expect(existsSync(clonePath)).toBe(false)
+  })
+
+  it('removes an owned fresh clone target when git exits unsuccessfully', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    const partialFile = join(clonePath, 'partial.txt')
+    const proc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(proc)
+
+    const clonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+    await writeFile(partialFile, 'git wrote this before failing')
+
+    proc.stderr.emit('data', Buffer.from('fatal: repository not found\n'))
+    proc.emit('close', 128, null)
+    await expect(clonePromise).rejects.toThrow('Clone failed: fatal: repository not found')
+
+    expect(existsSync(clonePath)).toBe(false)
+  })
+
+  it('removes an owned fresh clone target when git spawn emits an error', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    const partialFile = join(clonePath, 'partial.txt')
+    const proc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(proc)
+
+    const clonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+    await writeFile(partialFile, 'git wrote this before spawn failure')
+
+    proc.emit('error', new Error('spawn failed'))
+    await expect(clonePromise).rejects.toThrow('Clone failed: spawn failed')
+
+    expect(existsSync(clonePath)).toBe(false)
+  })
+
+  it('keeps a fresh clone target when abort races with a successful close', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    const proc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(proc)
+
+    const clonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+    proc.emit('close', 0, null)
+    await expect(clonePromise).resolves.toMatchObject({
+      path: clonePath,
+      kind: 'git'
+    })
+
+    expect(existsSync(clonePath)).toBe(true)
+  })
+
+  it('dedupes retry when abort races with a successful clone close', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    const repos: unknown[] = []
+    mockStore.getRepos.mockImplementation(() => repos)
+    mockStore.addRepo.mockImplementation((repo: unknown) => {
+      repos.push(repo)
+    })
+    const firstProc = createMockCloneProcess()
+    const secondProc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(firstProc).mockReturnValueOnce(secondProc)
+
+    const firstClonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+    const secondClonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(gitSpawnMock).toHaveBeenCalledTimes(1)
+
+    firstProc.emit('close', 0, null)
+    await expect(firstClonePromise).resolves.toMatchObject({ path: clonePath, kind: 'git' })
+    await expect(secondClonePromise).resolves.toMatchObject({ path: clonePath, kind: 'git' })
+
+    expect(gitSpawnMock).toHaveBeenCalledTimes(1)
+    expect(secondProc.kill).not.toHaveBeenCalled()
+  })
+
+  it('serializes concurrent clones for the same target', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    const repos: unknown[] = []
+    mockStore.getRepos.mockImplementation(() => repos)
+    mockStore.addRepo.mockImplementation((repo: unknown) => {
+      repos.push(repo)
+    })
+    const firstProc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(firstProc)
+
+    const firstClonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    const secondClonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+
+    firstProc.emit('close', 0, null)
+    await expect(firstClonePromise).resolves.toMatchObject({ path: clonePath, kind: 'git' })
+    await expect(secondClonePromise).resolves.toMatchObject({ path: clonePath, kind: 'git' })
+
+    expect(gitSpawnMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits for pending abort cleanup before retrying the same clone target', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    const partialFile = join(clonePath, 'partial.txt')
+    const firstProc = createMockCloneProcess()
+    const secondProc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(firstProc).mockReturnValueOnce(secondProc)
+
+    const firstClonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+    await writeFile(partialFile, 'first clone wrote this before abort')
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+
+    const secondClonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(gitSpawnMock).toHaveBeenCalledTimes(1)
+    expect(existsSync(partialFile)).toBe(true)
+
+    firstProc.emit('close', null, 'SIGTERM')
+    await expect(firstClonePromise).rejects.toThrow('Clone aborted')
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(2))
+    expect(existsSync(partialFile)).toBe(false)
+
+    secondProc.emit('close', 0, null)
+    await expect(secondClonePromise).resolves.toMatchObject({
+      path: clonePath,
+      kind: 'git'
+    })
+    expect(existsSync(clonePath)).toBe(true)
+  })
+
+  it('skips abort cleanup when the claimed target is replaced before close', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    const replacementFile = join(clonePath, 'replacement.txt')
+    const proc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(proc)
+
+    const clonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+    await rm(clonePath, { recursive: true, force: true })
+    await mkdir(clonePath)
+    await writeFile(replacementFile, 'new owner')
+
+    proc.emit('close', null, 'SIGTERM')
+    await expect(clonePromise).rejects.toThrow('Clone aborted')
+
+    expect(existsSync(replacementFile)).toBe(true)
   })
 })
 
@@ -722,7 +1368,17 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(mockGitProvider.exec).not.toHaveBeenCalled()
   })
 
-  it('short-circuits an empty query without calling the relay', async () => {
+  it('returns refs for an empty query so remote Branch pickers open populated', async () => {
+    const stdout = [
+      'refs/remotes/origin/main\0origin/main',
+      'refs/remotes/upstream/feature-x\0upstream/feature-x'
+    ].join('\n')
+    mockGitProvider.exec = vi.fn().mockImplementation((argv: string[]) => {
+      if (argv[0] === 'remote') {
+        return Promise.resolve({ stdout: 'origin\nupstream\n', stderr: '' })
+      }
+      return Promise.resolve({ stdout, stderr: '' })
+    })
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
       path: '/remote/repo',
@@ -735,14 +1391,47 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: ''
     })
 
-    // Why: empty-query short-circuit must happen in the handler (mirrors the
-    // local path's normalizeRefSearchQuery guard). Without it a user-typed
-    // empty query would leak every ref from the remote.
-    expect(result).toEqual([])
-    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+    expect(result).toEqual(['origin/main', 'upstream/feature-x'])
+    expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
+    const [argv] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=100')
+    expect(argv).toContain('refs/heads/**/**')
+    expect(argv).toContain('refs/heads/**/**/**')
+    expect(argv).toContain('refs/remotes/**/**')
+    expect(argv).toContain('refs/remotes/**/**/**')
   })
 
-  it('short-circuits a query containing only glob metacharacters', async () => {
+  it('sanitizes glob metacharacter-only queries into the empty-query branch list', async () => {
+    mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '***'
+    })
+
+    // Why: normalizeRefSearchQuery still strips glob metacharacters before
+    // building argv; the resulting empty query now intentionally lists refs.
+    const [argv] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=100')
+    expect(argv).toContain('refs/heads/**/**')
+    expect(argv).toContain('refs/heads/**/**/**')
+    expect(argv).toContain('refs/remotes/**/**')
+    expect(argv).toContain('refs/remotes/**/**/**')
+  })
+
+  it('rejects invalid limits before building broad relay searches', async () => {
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
       path: '/remote/repo',
@@ -752,21 +1441,60 @@ describe('repos:searchBaseRefs SSH relay', () => {
 
     const result = await handlers.get('repos:searchBaseRefs')!(null, {
       repoId: 'r1',
-      query: '***'
+      query: '',
+      limit: 0.5
     })
 
-    // Why: normalizeRefSearchQuery strips `*?[]\`, so a query made up only of
-    // glob metacharacters normalizes to '' and must be treated like an empty
-    // query (no relay call, no leaked refs). Guards against glob injection
-    // via the SSH branch.
     expect(result).toEqual([])
     expect(mockGitProvider.exec).not.toHaveBeenCalled()
   })
 
-  it('sends the widened argv (refs/remotes/*/*) so upstream branches are discoverable', async () => {
+  it('retries without --exclude for older git on SSH hosts', async () => {
+    const stdout = [
+      'refs/remotes/origin/main\0origin/main',
+      'refs/remotes/origin/HEAD\0origin/HEAD'
+    ].join('\n')
+    mockGitProvider.exec = vi.fn().mockImplementation((argv: string[]) => {
+      if (argv[0] === 'remote') {
+        return Promise.resolve({ stdout: 'origin\n', stderr: '' })
+      }
+      if (argv.includes('--exclude=refs/remotes/**/HEAD')) {
+        return Promise.reject(
+          Object.assign(new Error("unknown option `exclude'"), {
+            stderr: "error: unknown option `exclude'"
+          })
+        )
+      }
+      return Promise.resolve({ stdout, stderr: '' })
+    })
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '',
+      limit: 1
+    })
+
+    expect(result).toEqual(['origin/main'])
+    const forEachRefCalls = mockGitProvider.exec.mock.calls.filter(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )
+    expect(forEachRefCalls).toHaveLength(2)
+    expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(forEachRefCalls[1][0]).toContain('--count=104')
+  })
+
+  it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {
     // Why: this is the core issue-624 behavior — the SSH path must glob all
-    // remotes, not just origin. If this ever regresses to refs/remotes/origin/*,
-    // SSH fork users go back to being structurally blocked.
+    // remotes, not just origin. The `**` globs additionally span ref segments
+    // so slash-named branches (`user/feature`) are found by a single-word
+    // query; a single `*` would not cross `/`.
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
 
     mockStore.getRepo.mockReturnValue({
@@ -779,15 +1507,18 @@ describe('repos:searchBaseRefs SSH relay', () => {
     await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream' })
 
     expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
-    const [argv, path] = mockGitProvider.exec.mock.calls[0]
+    const [argv, path] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
     expect(path).toBe('/remote/repo')
     expect(argv[0]).toBe('for-each-ref')
-    expect(argv).toContain('refs/remotes/*upstream*/*')
-    expect(argv).toContain('refs/remotes/*/*upstream*')
-    expect(argv).toContain('refs/heads/*upstream*')
+    expect(argv).toContain('refs/heads/**/*upstream*')
+    expect(argv).toContain('refs/heads/**/*upstream*/**')
+    expect(argv).toContain('refs/remotes/**/*upstream*')
+    expect(argv).toContain('refs/remotes/**/*upstream*/**')
     // Guard against regression to the old origin-only glob.
     expect(argv).not.toContain('refs/remotes/origin/*upstream*')
-    expect(mockGitProvider.exec.mock.calls[1]).toEqual([['remote'], '/remote/repo'])
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
   })
 
   it('sends segmented argv for display-format queries like `upstream/main`', async () => {
@@ -808,7 +1539,9 @@ describe('repos:searchBaseRefs SSH relay', () => {
     await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream/main' })
 
     expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
-    const [argv] = mockGitProvider.exec.mock.calls[0]
+    const [argv] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
     expect(argv).toContain('refs/remotes/*upstream*/*main*')
     expect(argv).toContain('refs/heads/*upstream*/*main*')
     // Regression guard: the literal slash must never appear inside a
@@ -816,7 +1549,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     // which fnmatch cannot match because `*` doesn't cross `/`.
     expect(argv).not.toContain('refs/remotes/*upstream/main*/*')
     expect(argv).not.toContain('refs/remotes/*/*upstream/main*')
-    expect(mockGitProvider.exec.mock.calls[1]).toEqual([['remote'], '/remote/repo'])
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
   })
 
   it('parses NUL-delimited stdout and filters <remote>/HEAD pseudo-refs', async () => {

@@ -6,6 +6,7 @@ import type {
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
+import { ampHookService } from '../amp/hook-service'
 import {
   clearMigrationUnsupportedPtysForPaneKey,
   getMigrationUnsupportedPtySnapshot
@@ -16,9 +17,11 @@ import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { droidHookService } from '../droid/hook-service'
+import { commandCodeHookService } from '../command-code/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
+import { openClaudeHookService } from '../openclaude/hook-service'
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
@@ -32,11 +35,14 @@ export function registerAgentHookHandlers(): void {
   // register-core-handlers.ts prevents re-entry, but decoupling from that guard
   // future-proofs this file.
   ipcMain.removeHandler('agentHooks:claudeStatus')
+  ipcMain.removeHandler('agentHooks:openClaudeStatus')
   ipcMain.removeHandler('agentHooks:codexStatus')
   ipcMain.removeHandler('agentHooks:geminiStatus')
   ipcMain.removeHandler('agentHooks:antigravityStatus')
+  ipcMain.removeHandler('agentHooks:ampStatus')
   ipcMain.removeHandler('agentHooks:cursorStatus')
   ipcMain.removeHandler('agentHooks:droidStatus')
+  ipcMain.removeHandler('agentHooks:commandCodeStatus')
   ipcMain.removeHandler('agentHooks:grokStatus')
   ipcMain.removeHandler('agentHooks:copilotStatus')
   ipcMain.removeHandler('agentHooks:hermesStatus')
@@ -97,6 +103,19 @@ export function registerAgentHookHandlers(): void {
       }
     }
   })
+  ipcMain.handle('agentHooks:openClaudeStatus', (): AgentHookInstallStatus => {
+    try {
+      return openClaudeHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'openclaude',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
   ipcMain.handle('agentHooks:codexStatus', (): AgentHookInstallStatus => {
     try {
       return codexHookService.getStatus()
@@ -136,6 +155,19 @@ export function registerAgentHookHandlers(): void {
       }
     }
   })
+  ipcMain.handle('agentHooks:ampStatus', (): AgentHookInstallStatus => {
+    try {
+      return ampHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'amp',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
   ipcMain.handle('agentHooks:cursorStatus', (): AgentHookInstallStatus => {
     try {
       return cursorHookService.getStatus()
@@ -155,6 +187,19 @@ export function registerAgentHookHandlers(): void {
     } catch (err) {
       return {
         agent: 'droid',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:commandCodeStatus', (): AgentHookInstallStatus => {
+    try {
+      return commandCodeHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'command-code',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

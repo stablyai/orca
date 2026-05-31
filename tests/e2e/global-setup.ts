@@ -18,6 +18,7 @@ import os from 'os'
 
 /** Temp file where the test repo path is stored for the fixture to read. */
 export const TEST_REPO_PATH_FILE = path.join(os.tmpdir(), 'orca-e2e-test-repo-path.txt')
+const ELECTRON_E2E_BUILD_TIMEOUT_MS = 300_000
 
 export default function globalSetup(): void {
   const root = process.cwd()
@@ -34,7 +35,9 @@ export default function globalSetup(): void {
     execSync('npx electron-vite build --mode e2e', {
       cwd: root,
       stdio: 'inherit',
-      timeout: 120_000
+      // Why: Windows renderer builds can exceed 120s on local/CI hosts even
+      // when healthy; global setup should not fail before specs can run.
+      timeout: ELECTRON_E2E_BUILD_TIMEOUT_MS
     })
     console.log('[e2e] Build complete.')
   }

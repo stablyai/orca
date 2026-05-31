@@ -1,10 +1,12 @@
 import type { GlobalSettings } from '../../../shared/types'
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 
 export type RuntimeClientTarget = { kind: 'local' } | { kind: 'environment'; environmentId: string }
 
+const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
 const compatibleRuntimeEnvironments = new Map<string, Promise<void>>()
 
 export class RuntimeRpcCallError extends Error {
@@ -44,21 +46,32 @@ export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  options: { timeoutMs?: number } = {}
+  options: { timeoutMs?: number; suppressFeatureInteraction?: boolean } = {}
 ): Promise<TResult> {
   if (target.kind === 'environment' && method !== 'status.get') {
     await ensureRuntimeEnvironmentCompatible(target.environmentId, options.timeoutMs)
   }
+  const nextParams = addFeatureInteractionSource(params, options)
   const response =
     target.kind === 'local'
-      ? await window.api.runtime.call({ method, params })
+      ? await window.api.runtime.call({ method, params: nextParams })
       : await window.api.runtimeEnvironments.call({
           selector: target.environmentId,
           method,
-          params,
+          params: nextParams,
           timeoutMs: options.timeoutMs
         })
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+}
+
+function addFeatureInteractionSource(
+  params: unknown,
+  options: { suppressFeatureInteraction?: boolean }
+): unknown {
+  if (!options.suppressFeatureInteraction) {
+    return params
+  }
+  return withBrowserPaneUiRuntimeRpcSource(params)
 }
 
 async function ensureRuntimeEnvironmentCompatible(
@@ -67,6 +80,8 @@ async function ensureRuntimeEnvironmentCompatible(
 ): Promise<void> {
   const cached = compatibleRuntimeEnvironments.get(environmentId)
   if (cached) {
+    compatibleRuntimeEnvironments.delete(environmentId)
+    compatibleRuntimeEnvironments.set(environmentId, cached)
     await cached
     return
   }
@@ -81,12 +96,31 @@ async function ensureRuntimeEnvironmentCompatible(
     )
     assertRuntimeStatusCompatible(status)
   })()
-  compatibleRuntimeEnvironments.set(environmentId, check)
+  rememberRuntimeEnvironmentCompatibility(environmentId, check)
   try {
     await check
   } catch (error) {
-    compatibleRuntimeEnvironments.delete(environmentId)
+    if (compatibleRuntimeEnvironments.get(environmentId) === check) {
+      compatibleRuntimeEnvironments.delete(environmentId)
+    }
     throw error
+  }
+}
+
+function rememberRuntimeEnvironmentCompatibility(
+  environmentId: string,
+  check: Promise<void>
+): void {
+  // Why: saved/removed remote runtimes can churn through unique ids in long
+  // renderer sessions; successful compatibility promises should not grow forever.
+  compatibleRuntimeEnvironments.delete(environmentId)
+  compatibleRuntimeEnvironments.set(environmentId, check)
+  while (compatibleRuntimeEnvironments.size > RUNTIME_COMPATIBILITY_CACHE_MAX) {
+    const oldest = compatibleRuntimeEnvironments.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    compatibleRuntimeEnvironments.delete(oldest)
   }
 }
 

@@ -129,6 +129,22 @@ describe('check-styled-scrollbars', () => {
     expect(reports).toHaveLength(0)
   })
 
+  it('reports inline vertical overflow when the scrollbar class is conditional or short-circuited', () => {
+    for (const classNameExpression of [
+      "enabled && 'scrollbar-sleek'",
+      "enabled ? 'scrollbar-sleek' : undefined",
+      "enabled || 'scrollbar-sleek'",
+      "enabled ?? 'scrollbar-sleek'"
+    ]) {
+      const reports = reportUnstyledScrollbars(
+        'Example.tsx',
+        `export function Example({ enabled }) { return <div className={${classNameExpression}} style={{ overflowY: 'auto' }} /> }`
+      )
+
+      expect(reports, classNameExpression).toHaveLength(1)
+    }
+  })
+
   it('reports logical inline style spreads without an Orca scrollbar class', () => {
     const reports = reportUnstyledScrollbars(
       'Example.tsx',
@@ -154,6 +170,15 @@ describe('check-styled-scrollbars', () => {
     )
 
     expect(reports).toHaveLength(0)
+  })
+
+  it('uses later spread className props over earlier explicit className props', () => {
+    const reports = reportUnstyledScrollbars(
+      'Example.tsx',
+      "export function Example() { return <div className=\"scrollbar-sleek\" {...{ className: 'overflow-y-auto' }} /> }"
+    )
+
+    expect(reports).toHaveLength(1)
   })
 
   it('supports variant helper className config', () => {

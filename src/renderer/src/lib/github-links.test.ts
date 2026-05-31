@@ -1,9 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildGitHubRepoUrl,
   normalizeGitHubLinkQuery,
   parseGitHubIssueOrPRLink,
   parseGitHubIssueOrPRNumber
 } from './github-links'
+
+describe('buildGitHubRepoUrl', () => {
+  it('builds a GitHub repository URL from an owner/repo slug', () => {
+    expect(buildGitHubRepoUrl({ owner: 'stablyai', repo: 'orca' })).toBe(
+      'https://github.com/stablyai/orca'
+    )
+  })
+
+  it('encodes path segments', () => {
+    expect(buildGitHubRepoUrl({ owner: 'stably ai', repo: 'orca/tools' })).toBe(
+      'https://github.com/stably%20ai/orca%2Ftools'
+    )
+  })
+})
 
 describe('parseGitHubIssueOrPRNumber', () => {
   it('parses plain issue numbers and GitHub pull request URLs', () => {

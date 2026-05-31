@@ -2,7 +2,7 @@
 co-locate shared layout and keyboard interaction logic, which keeps the settings
 panel wiring simple even though the file exceeds the default line limit. */
 import type React from 'react'
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ScrollArea } from '../ui/scroll-area'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -124,6 +124,7 @@ type SettingsSegmentedControlProps<T extends string | number> = {
   options: readonly SegmentedOption<T>[]
   ariaLabel?: string
   size?: 'sm' | 'md'
+  equalWidth?: boolean
 }
 
 /** Canonical segmented control for theme/ligatures/cursor/shell/etc. */
@@ -132,13 +133,17 @@ export function SettingsSegmentedControl<T extends string | number>({
   onChange,
   options,
   ariaLabel,
-  size = 'md'
+  size = 'md',
+  equalWidth = false
 }: SettingsSegmentedControlProps<T>): React.JSX.Element {
   return (
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-flex items-center rounded-md border border-border bg-background/50 p-0.5"
+      className={cn(
+        'inline-flex items-center rounded-md border border-border bg-background/50 p-0.5',
+        equalWidth && 'w-full'
+      )}
     >
       {options.map((opt) => {
         const active = opt.value === value
@@ -156,8 +161,9 @@ export function SettingsSegmentedControl<T extends string | number>({
               }
             }}
             className={cn(
-              'rounded-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              'rounded-sm text-center outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
               size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm',
+              equalWidth && 'flex-1',
               active
                 ? 'bg-accent font-medium text-accent-foreground'
                 : opt.disabled
@@ -259,6 +265,11 @@ type FontAutocompleteProps = {
   suggestions: string[]
   onChange: (value: string) => void
   placeholder?: string
+  /** Fires with whichever option the user is currently highlighting in the
+   *  dropdown (via mouse hover or keyboard arrow), or null when nothing is
+   *  highlighted / the dropdown is closed. Lets a consumer show a live
+   *  preview of the font without committing the selection. */
+  onPreviewFontFamily?: (font: string | null) => void
 }
 
 export function ThemePicker({
@@ -435,7 +446,8 @@ export function FontAutocomplete({
   value,
   suggestions,
   onChange,
-  placeholder = 'SF Mono'
+  placeholder = 'SF Mono',
+  onPreviewFontFamily
 }: FontAutocompleteProps): React.JSX.Element {
   const [query, setQuery] = useState(value)
   const [prevValue, setPrevValue] = useState(value)
@@ -443,8 +455,19 @@ export function FontAutocomplete({
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
-  const optionRefs = useRef(new Map<string, HTMLButtonElement>())
+  const previewFontFamilyRef = useRef(onPreviewFontFamily)
   const listboxId = useId()
+
+  previewFontFamilyRef.current = onPreviewFontFamily
+
+  const setRootNode = useCallback((element: HTMLDivElement | null): void => {
+    rootRef.current = element
+    if (!element) {
+      // Why: settings search can unmount this control while a hover preview is
+      // active; the consumer must not keep rendering that transient font.
+      previewFontFamilyRef.current?.(null)
+    }
+  }, [])
 
   if (value !== prevValue) {
     setPrevValue(value)
@@ -499,18 +522,19 @@ export function FontAutocomplete({
     }
   }
 
+  // Why: notify the consumer of the currently-highlighted font so it can
+  // render a live preview. Closing the dropdown or moving past all options
+  // clears the preview back to the committed value.
   useEffect(() => {
+    if (!onPreviewFontFamily) {
+      return
+    }
     if (!open || highlightedIndex < 0) {
+      onPreviewFontFamily(null)
       return
     }
-
-    const highlightedFont = filteredSuggestions[highlightedIndex]
-    if (!highlightedFont) {
-      return
-    }
-
-    optionRefs.current.get(highlightedFont)?.scrollIntoView({ block: 'nearest' })
-  }, [filteredSuggestions, highlightedIndex, open])
+    onPreviewFontFamily(filteredSuggestions[highlightedIndex] ?? null)
+  }, [filteredSuggestions, highlightedIndex, onPreviewFontFamily, open])
 
   const commitValue = (nextValue: string): void => {
     setQuery(nextValue)
@@ -523,7 +547,7 @@ export function FontAutocomplete({
   }
 
   return (
-    <div ref={rootRef} className="relative max-w-sm">
+    <div ref={setRootNode} className="relative max-w-sm">
       <div className="relative">
         <Input
           ref={inputRef}
@@ -634,11 +658,9 @@ export function FontAutocomplete({
                     role="option"
                     aria-selected={index === highlightedIndex}
                     ref={(element) => {
-                      if (element) {
-                        optionRefs.current.set(font, element)
-                        return
+                      if (element && index === highlightedIndex) {
+                        element.scrollIntoView({ block: 'nearest' })
                       }
-                      optionRefs.current.delete(font)
                     }}
                     onMouseDown={(e) => e.preventDefault()}
                     onMouseEnter={() => setHighlightedIndex(index)}

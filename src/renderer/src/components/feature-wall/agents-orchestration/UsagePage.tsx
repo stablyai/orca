@@ -77,7 +77,6 @@ function Popover(props: {
   const { expanded, targeted, swapped, pulseKey } = props
   const sessionPctText = swapped ? '100% left' : '4% left'
   const sessionResetText = swapped ? 'Resets in 5h' : 'Resets in 47m'
-  const activeEmail = swapped ? 'eng@acme.com' : 'me@personal.dev'
   const sessionFillWidth = swapped ? '100%' : '4%'
   const weeklyFillWidth = '62%'
 
@@ -129,7 +128,7 @@ function Popover(props: {
       <div className="h-px bg-border" />
       <div className="text-[11px] font-semibold">Codex Account</div>
       <div className="flex items-center justify-between text-[11px]">
-        <span className="truncate">{activeEmail}</span>
+        <AccountNameSkeleton widthClassName={swapped ? 'w-24' : 'w-28'} />
         <span
           className={cn(
             'inline-flex items-center justify-center text-muted-foreground transition-transform duration-[240ms] ease-[cubic-bezier(.2,.8,.2,1)]',
@@ -160,14 +159,14 @@ function Popover(props: {
           </div>
           <div className="flex flex-col gap-0.5 rounded-lg border border-border bg-foreground/[0.025] p-[3px]">
             <SwitchAccount
-              email="eng@acme.com"
+              accountWidthClassName="w-24"
               tag="Team"
               fillPct={100}
               metaText="100%"
               highlighted={targeted}
             />
             <SwitchAccount
-              email="side-project@gmail.com"
+              accountWidthClassName="w-32"
               tag={null}
               fillPct={78}
               metaText="78%"
@@ -181,6 +180,12 @@ function Popover(props: {
         aria-hidden
       />
     </div>
+  )
+}
+
+function AccountNameSkeleton(props: { widthClassName: string }): JSX.Element {
+  return (
+    <span className={cn('block h-2.5 rounded-full bg-foreground/[0.14]', props.widthClassName)} />
   )
 }
 
@@ -212,7 +217,7 @@ function UsageBar(props: {
 }
 
 function SwitchAccount(props: {
-  email: string
+  accountWidthClassName: string
   tag: string | null
   fillPct: number
   metaText: string
@@ -226,7 +231,7 @@ function SwitchAccount(props: {
       )}
     >
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate">{props.email}</span>
+        <AccountNameSkeleton widthClassName={props.accountWidthClassName} />
         {props.tag ? (
           <span className="shrink-0 rounded-full bg-foreground/[0.06] px-1.5 py-px text-[9.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             {props.tag}

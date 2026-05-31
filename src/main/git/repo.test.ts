@@ -5,6 +5,7 @@ import { tmpdir } from 'os'
 import path from 'path'
 
 import {
+  buildSearchBaseRefsArgv,
   getDefaultBaseRef,
   getBranchConflictKind,
   getRemoteCount,
@@ -45,6 +46,33 @@ function createRemoteRef(mainDir: string, shortName: string, sha: string): void 
 function getHeadSha(dir: string): string {
   return git(dir, ['rev-parse', 'HEAD']).trim()
 }
+
+describe('buildSearchBaseRefsArgv', () => {
+  it('caps broad local ref searches before parsing results', () => {
+    const argv = buildSearchBaseRefsArgv('feature', 25)
+
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=100')
+    expect(argv).toContain('refs/heads/**/*feature*')
+    expect(argv).toContain('refs/remotes/**/*feature*/**')
+  })
+
+  it('keeps segmented display-format searches bounded', () => {
+    const argv = buildSearchBaseRefsArgv('upstream/main', 10)
+
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=40')
+    expect(argv).toContain('refs/remotes/*upstream*/*main*')
+    expect(argv).toContain('refs/heads/*upstream*/*main*')
+  })
+
+  it('adds fallback headroom when remote HEAD cannot be excluded by git', () => {
+    const argv = buildSearchBaseRefsArgv('feature', 25, { excludeRemoteHead: false })
+
+    expect(argv).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=200')
+  })
+})
 
 describe('searchBaseRefs (widened glob)', () => {
   let tmpDir: string
@@ -109,6 +137,43 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(results).toContain('local-only')
   })
 
+  // Why: a single-word query must match a term in ANY segment of a slashed
+  // branch name (`user/feature`), not just the leaf. fnmatch `*` does not
+  // cross `/`, so the glob must use `**` to span ref segments.
+  it('finds a local slashed branch when the query lands in a deep segment', async () => {
+    git(tmpDir, ['branch', 'feature/login'])
+
+    const results = await searchBaseRefs(tmpDir, 'login')
+
+    expect(results).toContain('feature/login')
+  })
+
+  it('finds a local slashed branch when the query lands in an ancestor segment', async () => {
+    git(tmpDir, ['branch', 'feature/login'])
+
+    const results = await searchBaseRefs(tmpDir, 'feature')
+
+    expect(results).toContain('feature/login')
+  })
+
+  it('finds a remote slashed branch when the query lands in a deep segment', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/feature/login', sha)
+
+    const results = await searchBaseRefs(tmpDir, 'login')
+
+    expect(results).toContain('origin/feature/login')
+  })
+
+  it('finds a remote slashed branch when the query lands in an ancestor segment', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/feature/login', sha)
+
+    const results = await searchBaseRefs(tmpDir, 'feature')
+
+    expect(results).toContain('origin/feature/login')
+  })
+
   it('returns the local branch name for a remote ref with slashes', async () => {
     const sha = getHeadSha(tmpDir)
     git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
@@ -151,6 +216,16 @@ describe('searchBaseRefs (widened glob)', () => {
     createRemoteRef(tmpDir, 'origin/feature/something', sha)
     createRemoteRef(tmpDir, 'upstream/feature/something', sha)
 
+    expect(
+      await getBranchConflictKind(tmpDir, 'feature/something', 'origin/feature/something')
+    ).toBe('remote')
+  })
+
+  it('reports remote conflicts when the remote name contains a slash', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'foo/bar', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, 'foo/bar/feature/something', sha)
+
     const result = await getBranchConflictKind(
       tmpDir,
       'feature/something',
@@ -181,10 +256,32 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(results).toEqual([])
   })
 
-  it('returns [] without error for an empty query', async () => {
+  it('returns recent refs for an empty query so branch pickers can open populated', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'upstream/main', sha)
+    createRemoteRef(tmpDir, 'upstream/feature-x', sha)
+
     const results = await searchBaseRefs(tmpDir, '')
 
-    expect(results).toEqual([])
+    expect(results).toEqual(['main', 'upstream/feature-x', 'upstream/main'])
+  })
+
+  it('caps broad ref-search argv before git output is captured', () => {
+    const argv = buildSearchBaseRefsArgv('', 12)
+
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=48')
+  })
+
+  it('does not hard-cap large explicit ref-search limits below the request size', () => {
+    const argv = buildSearchBaseRefsArgv('', 600)
+
+    expect(argv).toContain('--count=2400')
+  })
+
+  it('returns [] for invalid search limits instead of running an uncapped search', async () => {
+    await expect(searchBaseRefs(tmpDir, '', 0.5)).resolves.toEqual([])
+    await expect(searchBaseRefs(tmpDir, '', Number.NaN)).resolves.toEqual([])
   })
 
   // Why: the picker displays results as `<remote>/<branch>` and labels

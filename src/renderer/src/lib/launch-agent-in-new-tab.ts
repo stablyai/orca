@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
+  type AgentDraftLaunchPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -10,8 +11,11 @@ import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
+
+const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -28,6 +32,9 @@ export type LaunchAgentInNewTabArgs = {
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar
    *  quick-launch entry point so existing callers stay unchanged. */
   launchSource?: LaunchSource
+  /** Shell platform that will execute the startup command. Defaults to the
+   * renderer OS; SSH and WSL worktrees run a Linux shell even from Windows. */
+  launchPlatform?: NodeJS.Platform
   /** Called after the prompt is actually delivered to the agent input path. */
   onPromptDelivered?: () => void
 }
@@ -37,6 +44,40 @@ export type LaunchAgentInNewTabResult = {
   startupPlan: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
 } | null
+
+function seedCommandCodeSubmittedPromptStatus(tabId: string, prompt: string): void {
+  const state = useAppStore.getState()
+  const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
+  if (!leafId) {
+    return
+  }
+  try {
+    state.setAgentStatus(makePaneKey(tabId, leafId), {
+      state: 'working',
+      prompt,
+      agentType: 'command-code'
+    })
+  } catch {
+    // Best-effort UI seed. Real hooks still own refinement/completion.
+  }
+}
+
+function canUseInlineDraftLaunchPlan(
+  plan: AgentDraftLaunchPlan,
+  platform: NodeJS.Platform
+): boolean {
+  if (platform !== 'win32') {
+    return true
+  }
+  const envChars = Object.entries(plan.env ?? {}).reduce(
+    (total, [key, value]) => total + key.length + value.length,
+    0
+  )
+  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
+  // generated drafts should use the existing post-ready paste path instead of
+  // failing the PTY spawn before the agent starts.
+  return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
+}
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -68,15 +109,14 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     prompt,
     promptDelivery = 'auto-submit',
     launchSource,
+    launchPlatform = CLIENT_PLATFORM,
     onPromptDelivered
   } = args
   const store = useAppStore.getState()
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const useOrcaAgentStatusHooks = store.settings?.agentStatusHooksEnabled !== false
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
-
   // Why: argv/flag agents fold the prompt into the launch command and
   // auto-submit — keeping behavior consistent with the composer/tab-bar `+`
   // mental model, where the prompt is "the first turn the user sent".
@@ -95,9 +135,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: '',
       cmdOverrides,
-      platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: true,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks
+      platform: launchPlatform,
+      allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
     submitPastedPrompt = true
@@ -107,10 +146,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       draft: trimmedPrompt,
       cmdOverrides,
-      platform: CLIENT_PLATFORM,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks
+      platform: launchPlatform
     })
-    if (draftLaunchPlan) {
+    if (draftLaunchPlan && canUseInlineDraftLaunchPlan(draftLaunchPlan, launchPlatform)) {
       startupPlan = {
         agent: draftLaunchPlan.agent,
         launchCommand: draftLaunchPlan.launchCommand,
@@ -123,9 +161,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         agent,
         prompt: '',
         cmdOverrides,
-        platform: CLIENT_PLATFORM,
-        allowEmptyPromptLaunch: true,
-        useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks
+        platform: launchPlatform,
+        allowEmptyPromptLaunch: true
       })
       pasteDraftAfterLaunch = trimmedPrompt
     }
@@ -134,9 +171,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: '',
       cmdOverrides,
-      platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: true,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks
+      platform: launchPlatform,
+      allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
   } else {
@@ -144,9 +180,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
-      platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: !hasPrompt,
-      useOrcaClaudeAgentStatusSettings: useOrcaAgentStatusHooks
+      platform: launchPlatform,
+      allowEmptyPromptLaunch: !hasPrompt
     })
   }
 
@@ -164,17 +199,22 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // pty-transport → pty:spawn IPC → main, where main fires `agent_started`
   // only after the spawn succeeds. `request_kind: 'new'` because
   // quick-launch always opens a fresh session.
-  const tab = store.createTab(worktreeId, groupId)
+  //
+  // Why: stamp the launched agent on the tab so the tab bar shows the provider
+  // icon immediately, before the agent's first hook event arrives.
+  const tab = store.createTab(worktreeId, groupId, undefined, { launchAgent: agent })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    ...(agent === 'command-code' && hasPrompt && promptDelivery === 'auto-submit'
+      ? { initialAgentStatus: { agent, prompt: trimmedPrompt } }
+      : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: launchSource ?? 'tab_bar_quick_launch',
       request_kind: 'new'
     }
   })
-
   // Why: schedule the bracketed-paste-after-ready follow-up immediately after
   // the startup command is queued. Fire-and-forget so callers keep their
   // synchronous `{ tabId, startupPlan }` signature. The helper short-circuits
@@ -219,6 +259,11 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       }
     }).then((delivered) => {
       if (delivered) {
+        if (agent === 'command-code' && submitPastedPrompt) {
+          // Why: Command Code has no prompt-submit hook; when Orca submits a
+          // generated prompt after readiness, seed working at delivery time.
+          seedCommandCodeSubmittedPromptStatus(tabId, pasteDraftAfterLaunch)
+        }
         onPromptDelivered?.()
       }
     })

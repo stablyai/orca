@@ -1,6 +1,7 @@
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type CommitMessageAgentEnvironmentResolvers = {
   prepareForCodexLaunch?: () => string | null
@@ -74,6 +75,11 @@ export async function prepareLocalCommitMessageAgentEnv(
   try {
     if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
       const codexHomePath = resolvers.prepareForCodexLaunch()
+      if (codexHomePath && parseWslUncPath(codexHomePath)) {
+        // Why: this local generation path spawns the host Codex binary. A WSL
+        // managed home is only valid when the process is routed through wsl.exe.
+        return { ok: true }
+      }
       return {
         ok: true,
         env: codexHomePath ? { ...cloneProcessEnv(), CODEX_HOME: codexHomePath } : undefined

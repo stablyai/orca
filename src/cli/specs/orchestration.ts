@@ -136,8 +136,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'reset'],
-    summary: 'Reset orchestration state',
-    usage: 'orca orchestration reset [--all] [--tasks] [--messages] [--json]',
+    summary: 'Reset orchestration state (one scope; bare command resets all)',
+    usage: 'orca orchestration reset [--all | --tasks | --messages] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'all', 'tasks', 'messages']
   }
 ]

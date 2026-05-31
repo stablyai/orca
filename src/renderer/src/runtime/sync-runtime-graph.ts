@@ -8,6 +8,7 @@ import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/termina
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
+import { getSystemPrefersDark, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import type { AppState } from '@/store/types'
 import type {
@@ -16,6 +17,7 @@ import type {
   RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionSnapshotTab,
+  RuntimeMobileTerminalTheme,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncWindowGraph
 } from '../../../shared/runtime-types'
@@ -25,8 +27,10 @@ import type {
   TabGroup,
   TabGroupLayoutNode,
   TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode
+  TerminalPaneLayoutNode,
+  TerminalTab
 } from '../../../shared/types'
+import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import {
   getActiveTabNavOrder,
   getGroupVisibleTabOrder,
@@ -182,6 +186,9 @@ export type RuntimeMobileSessionSyncKey = {
   activeBrowserTabIdByWorktree: AppState['activeBrowserTabIdByWorktree']
   agentStatusEpoch: number
   agentStatusProjection: string
+  generatedTabTitlesEnabled: boolean
+  systemPrefersDark: boolean | null
+  terminalThemeProjection: string
   // Why: these projections still need value-level inspection because the
   // underlying references churn even when the mobile-relevant shape is
   // unchanged (`tabsByWorktree` reallocates on every OSC title frame).
@@ -194,9 +201,17 @@ export type RuntimeMobileSessionSyncKey = {
 
 export function canSkipRuntimeMobileSessionSyncKeyBuild(
   state: AppState,
-  previousState: AppState
+  previousState: AppState,
+  systemPrefersDark?: boolean,
+  previousSystemPrefersDark: boolean | null | undefined = systemPrefersDark
 ): boolean {
+  const terminalThemeSystemPrefersDark = getTerminalThemeSystemPrefersDark(state, systemPrefersDark)
+  const previousTerminalThemeSystemPrefersDark = getTerminalThemeSystemPrefersDark(
+    previousState,
+    previousSystemPrefersDark
+  )
   return (
+    terminalThemeSystemPrefersDark === previousTerminalThemeSystemPrefersDark &&
     state.tabsByWorktree === previousState.tabsByWorktree &&
     state.groupsByWorktree === previousState.groupsByWorktree &&
     state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
@@ -210,6 +225,7 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
     state.openFiles === previousState.openFiles &&
     state.editorDrafts === previousState.editorDrafts &&
+    state.settings === previousState.settings &&
     state.activeTabId === previousState.activeTabId &&
     state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
     state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId &&
@@ -218,12 +234,21 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
   )
 }
 
+function getTerminalThemeSystemPrefersDark(
+  state: Pick<AppState, 'settings'>,
+  systemPrefersDark: boolean | null | undefined
+): boolean | null {
+  return state.settings?.theme === 'system' ? (systemPrefersDark ?? null) : null
+}
+
 export function getRuntimeMobileSessionSyncKey(
   state: AppState,
   previousState?: AppState,
-  previousKey?: RuntimeMobileSessionSyncKey
+  previousKey?: RuntimeMobileSessionSyncKey,
+  systemPrefersDark = getSystemPrefersDark()
 ): RuntimeMobileSessionSyncKey {
   const canReusePrevious = previousState !== undefined && previousKey !== undefined
+  const terminalThemeSystemPrefersDark = getTerminalThemeSystemPrefersDark(state, systemPrefersDark)
   const browserTabsByWorktree = getBrowserTabsByWorktree(state)
   const browserPagesByWorkspace = getBrowserPagesByWorkspace(state)
   const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY
@@ -258,6 +283,14 @@ export function getRuntimeMobileSessionSyncKey(
       canReusePrevious && agentStatusByPaneKey === previousAgentStatusByPaneKey
         ? previousKey.agentStatusProjection
         : buildRuntimeMobileAgentStatusProjection(agentStatusByPaneKey),
+    generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
+    systemPrefersDark: terminalThemeSystemPrefersDark,
+    terminalThemeProjection:
+      canReusePrevious &&
+      state.settings === previousState.settings &&
+      previousKey.systemPrefersDark === terminalThemeSystemPrefersDark
+        ? previousKey.terminalThemeProjection
+        : JSON.stringify(resolveMobileTerminalTheme(state, systemPrefersDark) ?? null),
     // Why: background agent title ticks can change runtimePaneTitlesByTabId
     // many times per second while the user types elsewhere. Reuse unchanged
     // projections so those ticks do not rescan all tabs, files, and drafts.
@@ -313,7 +346,9 @@ function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktr
               tabs.map((tab) => ({
                 id: tab.id,
                 title: tab.title,
-                customTitle: tab.customTitle
+                generatedTitle: tab.generatedTitle,
+                customTitle: tab.customTitle,
+                launchAgent: tab.launchAgent
               }))
             )
           }
@@ -329,6 +364,14 @@ function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktr
   return cachedTabsProjection.projection
 }
 
+function resolveRuntimeTerminalTitle(
+  tab: Pick<TerminalTab, 'customTitle' | 'generatedTitle' | 'title'>,
+  generatedTitlesEnabled: boolean,
+  liveTitle = tab.title
+): string {
+  return resolveTerminalTabTitle({ ...tab, title: liveTitle }, generatedTitlesEnabled, liveTitle)
+}
+
 function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles']): string {
   return JSON.stringify(
     openFiles.map((file) => ({
@@ -341,6 +384,7 @@ function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles'])
       diffSource: file.diffSource,
       isDirty: file.isDirty,
       isUntitled: file.isUntitled,
+      deleteUntouchedOnClose: file.deleteUntouchedOnClose,
       markdownPreviewSourceFileId: file.markdownPreviewSourceFileId
     }))
   )
@@ -435,6 +479,9 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.activeBrowserTabIdByWorktree === b.activeBrowserTabIdByWorktree &&
     a.agentStatusEpoch === b.agentStatusEpoch &&
     a.agentStatusProjection === b.agentStatusProjection &&
+    a.generatedTabTitlesEnabled === b.generatedTabTitlesEnabled &&
+    a.systemPrefersDark === b.systemPrefersDark &&
+    a.terminalThemeProjection === b.terminalThemeProjection &&
     a.tabsProjection === b.tabsProjection &&
     a.openFilesProjection === b.openFilesProjection &&
     a.browserProjection === b.browserProjection &&
@@ -451,6 +498,7 @@ async function syncRuntimeGraph(): Promise<void> {
   // Injecting the getter from App keeps the runtime graph path out of the
   // store construction cycle and avoids test-time partial initialization.
   const state = getStoreState()
+  const systemPrefersDark = getSystemPrefersDark()
   // Why: sync can run after high-churn terminal/title mutations. Build lookup
   // maps once per sync instead of flattening every worktree's tabs for each
   // registered terminal.
@@ -459,10 +507,11 @@ async function syncRuntimeGraph(): Promise<void> {
       .flat()
       .map((tab) => [tab.id, tab])
   )
+  const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const graph: RuntimeSyncWindowGraph = {
     tabs: [],
     leaves: [],
-    mobileSessionTabs: buildMobileSessionTabSnapshots(state)
+    mobileSessionTabs: buildMobileSessionTabSnapshots(state, systemPrefersDark)
   }
 
   for (const [tabId, registeredTab] of registeredTabs) {
@@ -483,7 +532,7 @@ async function syncRuntimeGraph(): Promise<void> {
     graph.tabs.push({
       tabId,
       worktreeId: registeredTab.worktreeId,
-      title: tab.customTitle ?? tab.title,
+      title: resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled),
       activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
       layout: serializePaneTree(root)
     })
@@ -511,7 +560,11 @@ async function syncRuntimeGraph(): Promise<void> {
         paneRuntimeId: pane.id,
         ptyId,
         paneTitle: paneTitles[pane.id] ?? null,
-        title: state.runtimePaneTitlesByTabId[tabId]?.[pane.id] ?? tab.customTitle ?? tab.title
+        title: resolveRuntimeTerminalTitle(
+          tab,
+          generatedTitlesEnabled,
+          state.runtimePaneTitlesByTabId[tabId]?.[pane.id] ?? tab.title
+        )
       })
     }
   }
@@ -524,7 +577,8 @@ async function syncRuntimeGraph(): Promise<void> {
 }
 
 export function buildMobileSessionTabSnapshots(
-  state: AppState
+  state: AppState,
+  systemPrefersDark = getSystemPrefersDark()
 ): RuntimeMobileSessionTabsSnapshot[] {
   // Why: mobile publication can run on high-frequency background agent title
   // ticks. Cache open-file indexes and draft hashes by immutable store-slice
@@ -571,7 +625,15 @@ export function buildMobileSessionTabSnapshots(
         if (isWebOnlyMirroredTerminalTab(state, terminal)) {
           continue
         }
-        tabs.push(...buildMobileTerminalSurfaceTabs(state, terminal, worktreeId, item.tabId))
+        tabs.push(
+          ...buildMobileTerminalSurfaceTabs(
+            state,
+            terminal,
+            worktreeId,
+            systemPrefersDark,
+            item.tabId
+          )
+        )
       } else if (item.type === 'editor') {
         const file = openFileIndexes.byWorktreeAndId.get(worktreeId)?.get(item.id)
         if (!file) {
@@ -769,13 +831,18 @@ function buildMobileSessionGroupProjection(
       continue
     }
     const tabOrder = visibleOrder.map((item) => item.tabId ?? item.id)
-    order.push(...visibleOrder)
+    const tabOrderSet = new Set(tabOrder)
+    // Why: persisted split groups can contain very large tab orders; append
+    // iteratively so mobile sync does not hit V8's argument-list limit.
+    for (const item of visibleOrder) {
+      order.push(item)
+    }
     tabGroups.push({
       id: group.id,
       activeTabId:
-        group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null,
+        group.activeTabId && tabOrderSet.has(group.activeTabId) ? group.activeTabId : null,
       tabOrder,
-      recentTabIds: group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId)) ?? []
+      recentTabIds: group.recentTabIds?.filter((tabId) => tabOrderSet.has(tabId)) ?? []
     })
   }
 
@@ -805,6 +872,58 @@ function getEditorDraftVersionByFileId(
 
 function mobileTerminalSurfaceId(parentTabId: string, leafId: string): string {
   return `${parentTabId}::${leafId}`
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  let clean = hex.replace('#', '')
+  if (clean.length === 3) {
+    clean = clean
+      .split('')
+      .map((c) => c + c)
+      .join('')
+  }
+  const r = parseInt(clean.slice(0, 2), 16)
+  const g = parseInt(clean.slice(2, 4), 16)
+  const b = parseInt(clean.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function isHexColor(value: string | undefined): value is string {
+  return typeof value === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)
+}
+
+function resolveMobileTerminalTheme(
+  state: AppState,
+  systemPrefersDark: boolean
+): RuntimeMobileTerminalTheme | undefined {
+  const settings = state.settings
+  if (!settings) {
+    return undefined
+  }
+  const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
+  const resolvedTheme = appearance.theme
+    ? { ...appearance.theme, ...settings.terminalColorOverrides }
+    : undefined
+  if (!resolvedTheme) {
+    return undefined
+  }
+  if (settings.terminalBackgroundOpacity !== undefined && isHexColor(resolvedTheme.background)) {
+    resolvedTheme.background = hexToRgba(
+      resolvedTheme.background,
+      settings.terminalBackgroundOpacity
+    )
+  }
+  if (settings.terminalCursorOpacity !== undefined && isHexColor(resolvedTheme.cursor)) {
+    resolvedTheme.cursor = hexToRgba(resolvedTheme.cursor, settings.terminalCursorOpacity)
+  }
+
+  const theme: Record<string, string> = {}
+  for (const [key, value] of Object.entries(resolvedTheme)) {
+    if (typeof value === 'string') {
+      theme[key] = value
+    }
+  }
+  return { mode: appearance.mode, theme: theme as RuntimeMobileTerminalTheme['theme'] }
 }
 
 function fallbackLayoutForLeafIds(leafIds: readonly string[]): TerminalPaneLayoutNode | null {
@@ -847,6 +966,7 @@ function buildMobileTerminalSurfaceTabs(
   state: AppState,
   terminal: NonNullable<AppState['tabsByWorktree'][string]>[number],
   worktreeId: string,
+  systemPrefersDark: boolean,
   unifiedTabId?: string
 ): RuntimeMobileSessionSnapshotTab[] {
   const registered = registeredTabs.get(terminal.id)
@@ -865,11 +985,13 @@ function buildMobileTerminalSurfaceTabs(
       ? (manager?.getLeafId(liveActivePaneId) ?? null)
       : (state.terminalLayoutsByTabId[terminal.id]?.activeLeafId ?? leafIds[0] ?? null)
   const paneTitles = state.runtimePaneTitlesByTabId[terminal.id] ?? {}
+  const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const savedLayout = state.terminalLayoutsByTabId[terminal.id]
   const sanitizedSavedLayout = savedLayout
     ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminal)
     : undefined
   const savedPtyIdsByLeafId = sanitizedSavedLayout?.ptyIdsByLeafId ?? {}
+  const terminalTheme = resolveMobileTerminalTheme(state, systemPrefersDark)
   const container = registered?.getContainer()
   const firstChild = container?.firstElementChild
   const liveLayoutRoot = serializePaneTree(
@@ -902,11 +1024,17 @@ function buildMobileTerminalSurfaceTabs(
     return {
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
-      title: paneTitle ?? terminal.customTitle ?? terminal.title ?? 'Terminal',
+      title: resolveRuntimeTerminalTitle(
+        terminal,
+        generatedTitlesEnabled,
+        paneTitle ?? terminal.title ?? 'Terminal'
+      ),
       parentTabId: terminal.id,
       leafId,
       ptyId,
+      ...(terminalTheme ? { terminalTheme } : {}),
       ...(agentStatus ? { agentStatus } : {}),
+      ...(terminal.launchAgent ? { launchAgent: terminal.launchAgent } : {}),
       parentLayout,
       isActive: isDesktopTabActive && leafId === activeLeafId
     }

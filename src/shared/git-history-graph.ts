@@ -1,13 +1,17 @@
 import type { GitHistoryGraphColorId, GitHistoryItem, GitHistoryItemRef } from './git-history'
 import {
+  GIT_HISTORY_INCOMING_CHANGES_ID,
+  GIT_HISTORY_OUTGOING_CHANGES_ID,
+  addIncomingOutgoingChangesHistoryItems
+} from './git-history-boundary-rows'
+import {
   GIT_HISTORY_BASE_REF_COLOR,
   GIT_HISTORY_LANE_COLORS,
   GIT_HISTORY_REF_COLOR,
   GIT_HISTORY_REMOTE_REF_COLOR
 } from './git-history'
 
-export const GIT_HISTORY_INCOMING_CHANGES_ID = 'git-history-incoming-changes'
-export const GIT_HISTORY_OUTGOING_CHANGES_ID = 'git-history-outgoing-changes'
+export { GIT_HISTORY_INCOMING_CHANGES_ID, GIT_HISTORY_OUTGOING_CHANGES_ID }
 
 export type GitHistoryGraphNode = {
   id: string
@@ -85,105 +89,6 @@ export function compareGitHistoryRefs(
   }
 
   return order(ref1) - order(ref2)
-}
-
-function addIncomingOutgoingChangesHistoryItems(
-  viewModels: GitHistoryItemViewModel[],
-  currentRef?: GitHistoryItemRef,
-  remoteRef?: GitHistoryItemRef,
-  addIncomingChanges?: boolean,
-  addOutgoingChanges?: boolean,
-  mergeBase?: string
-): void {
-  if (currentRef?.revision === remoteRef?.revision || !mergeBase) {
-    return
-  }
-
-  if (addIncomingChanges && remoteRef && remoteRef.revision !== mergeBase) {
-    const beforeHistoryItemIndex = findLastIndex(viewModels, (viewModel) =>
-      viewModel.outputSwimlanes.some((node) => node.id === mergeBase)
-    )
-    const afterHistoryItemIndex = viewModels.findIndex(
-      (viewModel) => viewModel.historyItem.id === mergeBase
-    )
-
-    if (beforeHistoryItemIndex !== -1 && afterHistoryItemIndex !== -1) {
-      const before = viewModels[beforeHistoryItemIndex] as GitHistoryItemViewModel
-      const incomingChangeMerged =
-        before.historyItem.parentIds.length === 2 &&
-        before.historyItem.parentIds.includes(mergeBase)
-
-      if (!incomingChangeMerged) {
-        viewModels[beforeHistoryItemIndex] = {
-          ...before,
-          inputSwimlanes: before.inputSwimlanes.map((node) =>
-            node.id === mergeBase && node.color === GIT_HISTORY_REMOTE_REF_COLOR
-              ? { ...node, id: GIT_HISTORY_INCOMING_CHANGES_ID }
-              : node
-          ),
-          outputSwimlanes: before.outputSwimlanes.map((node) =>
-            node.id === mergeBase && node.color === GIT_HISTORY_REMOTE_REF_COLOR
-              ? { ...node, id: GIT_HISTORY_INCOMING_CHANGES_ID }
-              : node
-          )
-        }
-
-        const displayIdLength = viewModels[0]?.historyItem.displayId?.length ?? 0
-        const incomingChangesHistoryItem: GitHistoryItem = {
-          id: GIT_HISTORY_INCOMING_CHANGES_ID,
-          displayId: '0'.repeat(displayIdLength),
-          parentIds: [mergeBase],
-          author: remoteRef.name,
-          subject: 'Incoming Changes',
-          message: ''
-        }
-
-        viewModels.splice(afterHistoryItemIndex, 0, {
-          historyItem: incomingChangesHistoryItem,
-          kind: 'incoming-changes',
-          inputSwimlanes: viewModels[beforeHistoryItemIndex]!.outputSwimlanes.map(cloneNode),
-          outputSwimlanes: viewModels[afterHistoryItemIndex]!.inputSwimlanes.map(cloneNode)
-        })
-      }
-    }
-  }
-
-  if (addOutgoingChanges && currentRef?.revision && currentRef.revision !== mergeBase) {
-    const currentRefIndex = viewModels.findIndex(
-      (viewModel) => viewModel.kind === 'HEAD' && viewModel.historyItem.id === currentRef.revision
-    )
-    if (currentRefIndex === -1) {
-      return
-    }
-
-    const displayIdLength = viewModels[0]?.historyItem.displayId?.length ?? 0
-    const outgoingChangesHistoryItem: GitHistoryItem = {
-      id: GIT_HISTORY_OUTGOING_CHANGES_ID,
-      displayId: '0'.repeat(displayIdLength),
-      parentIds: [currentRef.revision],
-      author: currentRef.name,
-      subject: 'Outgoing Changes',
-      message: ''
-    }
-
-    const inputSwimlanes = viewModels[currentRefIndex]!.inputSwimlanes.map(cloneNode)
-    const outputSwimlanes = inputSwimlanes.concat({
-      id: currentRef.revision,
-      color: GIT_HISTORY_REF_COLOR
-    })
-
-    viewModels.splice(currentRefIndex, 0, {
-      historyItem: outgoingChangesHistoryItem,
-      kind: 'outgoing-changes',
-      inputSwimlanes,
-      outputSwimlanes
-    })
-
-    viewModels[currentRefIndex + 1]!.inputSwimlanes.push({
-      id: currentRef.revision,
-      color: GIT_HISTORY_REF_COLOR
-    })
-  }
 }
 
 export function buildGitHistoryViewModels(

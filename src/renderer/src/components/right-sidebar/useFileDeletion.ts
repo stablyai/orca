@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useRef } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
@@ -30,14 +29,14 @@ type UseFileDeletionParams = {
   }[]
   closeFile: (fileId: string) => void
   refreshDir: (dirPath: string) => Promise<void>
-  selectedPath: string | null
-  setSelectedPath: Dispatch<SetStateAction<string | null>>
+  setSelectedPaths: (paths: Set<string>) => void
   isWindows: boolean
 }
 
 type UseFileDeletionResult = {
   deleteShortcutLabel: string
   requestDelete: (node: TreeNode) => void
+  requestDeleteAll: (nodes: TreeNode[]) => void
 }
 
 export function useFileDeletion({
@@ -45,8 +44,7 @@ export function useFileDeletion({
   openFiles,
   closeFile,
   refreshDir,
-  selectedPath,
-  setSelectedPath,
+  setSelectedPaths,
   isWindows
 }: UseFileDeletionParams): UseFileDeletionResult {
   const confirm = useConfirmationDialog()
@@ -56,9 +54,9 @@ export function useFileDeletion({
   const inFlightRef = useRef<Set<string>>(new Set())
 
   const runDelete = useCallback(
-    async (node: TreeNode) => {
+    async (node: TreeNode): Promise<boolean> => {
       if (inFlightRef.current.has(node.path)) {
-        return
+        return false
       }
       inFlightRef.current.add(node.path)
 
@@ -92,7 +90,7 @@ export function useFileDeletion({
         })
         if (!confirmed) {
           inFlightRef.current.delete(node.path)
-          return
+          return false
         }
       }
 
@@ -176,9 +174,6 @@ export function useFileDeletion({
           })
         }
 
-        if (selectedPath && isPathEqualOrDescendant(selectedPath, node.path)) {
-          setSelectedPath(null)
-        }
         // Why: use targeted refreshDir instead of refreshTree so only the parent
         // directory is reloaded, preserving scroll position and avoiding redundant
         // full-tree reloads (the watcher will also trigger a targeted refresh).
@@ -194,41 +189,88 @@ export function useFileDeletion({
           const destination = isWindows ? 'Recycle Bin' : 'Trash'
           toast.success(`'${node.name}' moved to ${destination}`)
         }
+        return true
       } catch (error) {
         const action = isRemote ? 'delete' : isWindows ? 'move to Recycle Bin' : 'move to Trash'
         toast.error(error instanceof Error ? error.message : `Failed to ${action} '${node.name}'.`)
+        return false
       } finally {
         inFlightRef.current.delete(node.path)
       }
     },
-    [
-      activeWorktreeId,
-      closeFile,
-      confirm,
-      isWindows,
-      openFiles,
-      refreshDir,
-      selectedPath,
-      setSelectedPath
-    ]
+    [activeWorktreeId, closeFile, confirm, isWindows, openFiles, refreshDir]
   )
 
   const requestDelete = useCallback(
     (node: TreeNode) => {
-      setSelectedPath(node.path)
+      setSelectedPaths(new Set([node.path]))
       // Why: local deletes skip confirmation because they're reversible
       // (OS-level Trash + in-app undo). Remote deletes are permanent, so
       // runDelete prompts for confirmation internally before calling `rm`.
-      void runDelete(node)
+      void runDelete(node).then((deleted) => {
+        if (deleted) {
+          setSelectedPaths(new Set())
+        }
+      })
     },
-    [runDelete, setSelectedPath]
+    [runDelete, setSelectedPaths]
+  )
+
+  const requestDeleteAll = useCallback(
+    (nodes: TreeNode[]) => {
+      if (nodes.length === 0) {
+        return
+      }
+      if (nodes.length === 1) {
+        requestDelete(nodes[0])
+        return
+      }
+      // Why: skip descendants of other selected directories — deleting a parent
+      // already removes the child, and issuing both requests races on the
+      // now-missing path and produces spurious errors.
+      const roots = nodes.filter(
+        (n) =>
+          !nodes.some(
+            (other) =>
+              other !== n && other.isDirectory && isPathEqualOrDescendant(n.path, other.path)
+          )
+      )
+      // Why: process sequentially in the caller's tree order so each delete
+      // fully settles before the next begins — this avoids concurrent writes
+      // to the same parent directory and makes failure toasts deterministic.
+      // Selection is cleared once after the entire batch settles rather than
+      // per-node, so no concurrent completion can restore a partial stale set.
+      void (async () => {
+        const deletedRoots: TreeNode[] = []
+        for (const node of roots) {
+          if (await runDelete(node)) {
+            deletedRoots.push(node)
+          }
+        }
+        if (deletedRoots.length === 0) {
+          return
+        }
+        setSelectedPaths(
+          new Set(
+            nodes
+              .filter(
+                (node) =>
+                  !deletedRoots.some((deleted) => isPathEqualOrDescendant(node.path, deleted.path))
+              )
+              .map((node) => node.path)
+          )
+        )
+      })()
+    },
+    [runDelete, requestDelete, setSelectedPaths]
   )
 
   return useMemo(
     () => ({
       deleteShortcutLabel,
-      requestDelete
+      requestDelete,
+      requestDeleteAll
     }),
-    [deleteShortcutLabel, requestDelete]
+    [deleteShortcutLabel, requestDelete, requestDeleteAll]
   )
 }

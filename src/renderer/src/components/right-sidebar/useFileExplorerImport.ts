@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
@@ -11,7 +10,7 @@ type UseFileExplorerImportParams = {
   activeWorktreeId: string | null
   refreshDir: (dirPath: string) => Promise<void>
   clearNativeDragState: () => void
-  setSelectedPath: Dispatch<SetStateAction<string | null>>
+  setSelectedPath: (path: string | null) => void
 }
 
 /**

@@ -2,7 +2,7 @@
    spawn failure handling, and output normalization; keeping them together
    prevents those paths from drifting. */
 import { exec, spawn, type ChildProcess } from 'child_process'
-import type { GlobalSettings, TuiAgent } from '../../shared/types'
+import type { GlobalSettings, Repo, TuiAgent } from '../../shared/types'
 import {
   buildCommitMessagePrompt,
   splitGeneratedCommitMessage,
@@ -20,11 +20,12 @@ import {
   extractAgentErrorMessage
 } from '../../shared/commit-message-prompt'
 import {
-  CUSTOM_AGENT_ID,
+  buildBranchNamePrompt,
+  sanitizeBranchSlug,
+  type BranchNameWorkContext
+} from '../../shared/branch-name-from-work'
+import {
   getCommitMessageAgentSpec,
-  getCommitMessageModel,
-  isCustomAgentId,
-  resolveCommitMessageAgentChoice,
   type CommitMessageAgentCapability,
   type CommitMessageModelCapability
 } from '../../shared/commit-message-agent-spec'
@@ -34,6 +35,11 @@ import {
   type CommitMessagePlan
 } from '../../shared/commit-message-plan'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
+import {
+  resolveSourceControlAiForOperation,
+  type ResolvedSourceControlAiGenerationParams
+} from '../../shared/source-control-ai'
+import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
 import { resolveCliCommand } from '../codex-cli/command'
 import {
   getSpawnArgsForWindows,
@@ -45,14 +51,7 @@ import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnost
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
 
-export type GenerateCommitMessageParams = {
-  agentId: TuiAgent | 'custom'
-  model: string
-  thinkingLevel?: string
-  customPrompt?: string
-  customAgentCommand?: string
-  agentCommandOverride?: string
-}
+export type GenerateCommitMessageParams = ResolvedSourceControlAiGenerationParams
 
 export type GenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
@@ -85,6 +84,8 @@ export type RemoteCommitMessageExecResult = {
   spawnError?: string
 }
 
+export type TextGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
+
 export type CommitMessageGenerationTarget =
   | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv }
   | {
@@ -93,7 +94,8 @@ export type CommitMessageGenerationTarget =
       execute: (
         plan: CommitMessagePlan,
         cwd: string,
-        timeoutMs: number
+        timeoutMs: number,
+        operation: TextGenerationOperation
       ) => Promise<RemoteCommitMessageExecResult>
       missingBinaryLocation: string
     }
@@ -112,82 +114,26 @@ export function trimGeneratedCommitMessage(message: string): string {
 
 export function resolveCommitMessageSettings(
   settings: GlobalSettings,
-  discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY
+  discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
+  operation: SourceControlAiOperation = 'commitMessage',
+  repo?: Pick<Repo, 'sourceControlAi'> | null
 ): ResolveCommitMessageSettingsResult {
-  const config = settings.commitMessageAi
-  if (!config?.enabled) {
-    return { ok: false, error: 'Enable AI commit messages in Settings -> Git.' }
-  }
+  const resolved = resolveSourceControlAiForOperation({
+    settings,
+    repo,
+    operation,
+    discoveryHostKey
+  })
+  return resolved.ok ? { ok: true, params: resolved.value.params } : resolved
+}
 
-  const agentChoice = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
-  if (!agentChoice) {
-    return {
-      ok: false,
-      error:
-        `Default agent "${settings.defaultTuiAgent}" does not support AI commit messages. ` +
-        'Choose Claude or Codex in Settings -> Git -> AI Commit Messages.'
-    }
-  }
-
-  if (isCustomAgentId(agentChoice)) {
-    const customAgentCommand = config.customAgentCommand.trim()
-    if (!customAgentCommand) {
-      return {
-        ok: false,
-        error: 'Custom command is empty. Add one in Settings -> Git -> AI Commit Messages.'
-      }
-    }
-    return {
-      ok: true,
-      params: {
-        agentId: CUSTOM_AGENT_ID,
-        model: '',
-        customPrompt: config.customPrompt,
-        customAgentCommand
-      }
-    }
-  }
-
-  const agentId = agentChoice
-  const spec = getCommitMessageAgentSpec(agentId)
-  if (!spec) {
-    return { ok: false, error: `Agent "${agentId}" does not support AI commit messages.` }
-  }
-
-  const hostSelectedModels = config.selectedModelByAgentByHost?.[discoveryHostKey]
-  const legacySelectedModels =
-    discoveryHostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY ? config.selectedModelByAgent : undefined
-  const persistedModelId =
-    hostSelectedModels?.[agentId] ?? legacySelectedModels?.[agentId] ?? spec.defaultModelId
-  const discoveredModels =
-    config.discoveredModelsByAgentByHost?.[discoveryHostKey]?.[agentId] ??
-    (discoveryHostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
-      ? (config.discoveredModelsByAgent?.[agentId] ?? [])
-      : [])
-  const model =
-    spec.models.find((candidate) => candidate.id === persistedModelId) ??
-    discoveredModels.find((candidate) => candidate.id === persistedModelId) ??
-    getCommitMessageModel(agentId, spec.defaultModelId)
-  if (!model) {
-    return { ok: false, error: `No model is available for ${spec.label}.` }
-  }
-
-  const persistedThinking = config.selectedThinkingByModel[model.id]
-  const thinkingLevel = model.thinkingLevels?.some((level) => level.id === persistedThinking)
-    ? persistedThinking
-    : model.defaultThinkingLevel
-
-  const agentCommandOverride = settings.agentCmdOverrides?.[agentId]?.trim()
-  return {
-    ok: true,
-    params: {
-      agentId,
-      model: model.id,
-      thinkingLevel,
-      customPrompt: config.customPrompt,
-      ...(agentCommandOverride ? { agentCommandOverride } : {})
-    }
-  }
+export function resolveTextGenerationParams(
+  settings: GlobalSettings,
+  discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
+  operation: SourceControlAiOperation = 'commitMessage',
+  repo?: Pick<Repo, 'sourceControlAi'> | null
+): ResolveCommitMessageSettingsResult {
+  return resolveCommitMessageSettings(settings, discoveryHostKey, operation, repo)
 }
 
 function sanitizeAgentFailureDetail(detail: string | null): string | null {
@@ -347,14 +293,21 @@ export async function discoverCommitMessageModelsLocal(
     let stderr = ''
     let outputLimitExceeded = false
     let settled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let detachChildListeners = (): void => {}
     const finish = (result: DiscoverCommitMessageModelsResult): void => {
       if (settled) {
         return
       }
       settled = true
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      detachChildListeners()
       resolve(result)
     }
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       killProcessTree(child)
       finish({
         success: false,
@@ -366,15 +319,15 @@ export async function discoverCommitMessageModelsLocal(
       if (stdout.length + stderr.length + chunk.byteLength > MAX_AGENT_OUTPUT_BYTES) {
         outputLimitExceeded = true
         killProcessTree(child)
+        finish({ success: false, error: `${spec.label} returned too much model data.` })
         return
       }
       append(chunk.toString('utf-8'))
     }
 
-    child.stdout?.on('data', (chunk: Buffer) => onData(chunk, (text) => (stdout += text)))
-    child.stderr?.on('data', (chunk: Buffer) => onData(chunk, (text) => (stderr += text)))
-    child.on('error', (error) => {
-      clearTimeout(timer)
+    const onStdoutData = (chunk: Buffer): void => onData(chunk, (text) => (stdout += text))
+    const onStderrData = (chunk: Buffer): void => onData(chunk, (text) => (stderr += text))
+    const onError = (error: Error): void => {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         finish({
           success: false,
@@ -386,9 +339,8 @@ export async function discoverCommitMessageModelsLocal(
         success: false,
         error: `${spec.label} model discovery failed to start. Check the agent CLI configuration and try again.`
       })
-    })
-    child.on('close', (code) => {
-      clearTimeout(timer)
+    }
+    const onClose = (code: number | null): void => {
       if (outputLimitExceeded) {
         finish({ success: false, error: `${spec.label} returned too much model data.` })
         return
@@ -398,7 +350,18 @@ export async function discoverCommitMessageModelsLocal(
         return
       }
       finish(finalizeModelDiscoveryOutput(spec, stdout, stderr, code))
-    })
+    }
+
+    child.stdout?.on('data', onStdoutData)
+    child.stderr?.on('data', onStderrData)
+    child.on('error', onError)
+    child.on('close', onClose)
+    detachChildListeners = () => {
+      child.stdout?.off?.('data', onStdoutData)
+      child.stderr?.off?.('data', onStderrData)
+      child.off?.('error', onError)
+      child.off?.('close', onClose)
+    }
   })
 }
 
@@ -485,13 +448,11 @@ function killProcessTree(child: ChildProcess): void {
   }
 }
 
-type LocalGenerationOperation = 'commit-message' | 'pull-request-fields'
-
 // Keying by operation plus `local:${cwd}` keeps local cancellation independent
 // from SSH worktrees and from other generation features in the same worktree.
 const cancelTokensByLane = new Map<string, () => void>()
 
-function localLaneKey(operation: LocalGenerationOperation, cwd: string): string {
+function localLaneKey(operation: TextGenerationOperation, cwd: string): string {
   return `${operation}:local:${cwd}`
 }
 
@@ -504,7 +465,7 @@ async function runLocalPlan(
   cwd: string,
   env: NodeJS.ProcessEnv | undefined,
   emptyResultName = 'message',
-  operation: LocalGenerationOperation = 'commit-message'
+  operation: TextGenerationOperation = 'commit-message'
 ): Promise<InternalTextGenerationResult> {
   const { binary, args, stdinPayload, label } = plan
   return new Promise((resolve) => {
@@ -547,11 +508,18 @@ async function runLocalPlan(
     let canceledByUser = false
     const laneKey = localLaneKey(operation, cwd)
     let cancelToken: (() => void) | null = null
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let detachChildListeners = (): void => {}
     const finalize = (result: InternalTextGenerationResult): void => {
       if (settled) {
         return
       }
       settled = true
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      detachChildListeners()
       if (cancelToken && cancelTokensByLane.get(laneKey) === cancelToken) {
         cancelTokensByLane.delete(laneKey)
       }
@@ -561,10 +529,13 @@ async function runLocalPlan(
     cancelToken = () => {
       canceledByUser = true
       killProcessTree(child)
+      // Why: cancellation is a user-visible UI command; do not wait for a
+      // wedged agent CLI to emit `close` before the request leaves loading.
+      finalize({ success: false, error: 'Generation canceled.', canceled: true })
     }
     cancelTokensByLane.set(laneKey, cancelToken)
 
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       killProcessTree(child)
       finalize({
         success: false,
@@ -572,7 +543,7 @@ async function runLocalPlan(
       })
     }, GENERATION_TIMEOUT_MS)
 
-    child.stdout?.on('data', (chunk: Buffer) => {
+    const onStdoutData = (chunk: Buffer): void => {
       stdoutBytes += chunk.byteLength
       if (stdoutBytes > MAX_AGENT_OUTPUT_BYTES) {
         outputLimitExceeded = true
@@ -580,8 +551,8 @@ async function runLocalPlan(
         return
       }
       stdout += chunk.toString('utf-8')
-    })
-    child.stderr?.on('data', (chunk: Buffer) => {
+    }
+    const onStderrData = (chunk: Buffer): void => {
       stderrBytes += chunk.byteLength
       if (stderrBytes > MAX_AGENT_OUTPUT_BYTES) {
         outputLimitExceeded = true
@@ -589,9 +560,8 @@ async function runLocalPlan(
         return
       }
       stderr += chunk.toString('utf-8')
-    })
-    child.on('error', (error) => {
-      clearTimeout(timer)
+    }
+    const onError = (error: Error): void => {
       const code = (error as NodeJS.ErrnoException).code
       if (code === 'ENOENT') {
         finalize({
@@ -605,9 +575,8 @@ async function runLocalPlan(
         success: false,
         error: `${label} failed to start. Check the agent command in Settings and try again.`
       })
-    })
-    child.on('close', (code) => {
-      clearTimeout(timer)
+    }
+    const onClose = (code: number | null): void => {
       if (canceledByUser) {
         finalize({ success: false, error: 'Generation canceled.', canceled: true })
         return
@@ -617,7 +586,17 @@ async function runLocalPlan(
         return
       }
       finalizeFromAgentOutput({ code, stdout, stderr, label, emptyResultName, finalize })
-    })
+    }
+    child.stdout?.on('data', onStdoutData)
+    child.stderr?.on('data', onStderrData)
+    child.on('error', onError)
+    child.on('close', onClose)
+    detachChildListeners = () => {
+      child.stdout?.off?.('data', onStdoutData)
+      child.stderr?.off?.('data', onStderrData)
+      child.off?.('error', onError)
+      child.off?.('close', onClose)
+    }
 
     child.stdin?.end(stdinPayload ?? undefined)
   })
@@ -678,12 +657,13 @@ function finalizeFromAgentOutput(args: {
 async function runRemotePlan(
   plan: CommitMessagePlan,
   target: Extract<CommitMessageGenerationTarget, { kind: 'remote' }>,
-  emptyResultName = 'message'
+  emptyResultName = 'message',
+  operation: TextGenerationOperation = 'commit-message'
 ): Promise<InternalTextGenerationResult> {
   const { binary, label } = plan
   let result: RemoteCommitMessageExecResult
   try {
-    result = await target.execute(plan, target.cwd, GENERATION_TIMEOUT_MS)
+    result = await target.execute(plan, target.cwd, GENERATION_TIMEOUT_MS, operation)
   } catch (error) {
     console.error('[commit-message] Remote generator request failed:', error)
     return {
@@ -766,8 +746,8 @@ export async function generateCommitMessageFromContext(
 
   const internalResult =
     target.kind === 'remote'
-      ? await runRemotePlan(planned.plan, target, 'details')
-      : await runLocalPlan(planned.plan, target.cwd, target.env, 'details')
+      ? await runRemotePlan(planned.plan, target)
+      : await runLocalPlan(planned.plan, target.cwd, target.env)
   return formatCommitMessageGenerationResult(internalResult)
 }
 
@@ -818,7 +798,41 @@ export async function generatePullRequestFieldsFromContext(
 
   const internalResult =
     target.kind === 'remote'
-      ? await runRemotePlan(planned.plan, target)
+      ? await runRemotePlan(planned.plan, target, 'details', 'pull-request-fields')
       : await runLocalPlan(planned.plan, target.cwd, target.env, 'details', 'pull-request-fields')
   return formatPullRequestFieldsGenerationResult(internalResult, context)
+}
+
+export type GenerateBranchNameResult =
+  | { success: true; slug: string; agentLabel?: string }
+  | { success: false; error: string; canceled?: boolean }
+
+/**
+ * Generate a short kebab-case branch name from the work the agent is starting.
+ * Reuses the commit-message generation plan + spawn machinery; only the prompt
+ * and the post-processing (slug sanitization) differ.
+ */
+export async function generateBranchNameFromContext(
+  context: BranchNameWorkContext,
+  params: GenerateCommitMessageParams,
+  target: CommitMessageGenerationTarget
+): Promise<GenerateBranchNameResult> {
+  const prompt = buildBranchNamePrompt(context, params.customPrompt ?? '')
+  const planned = planCommitMessageGeneration(params, prompt)
+  if (!planned.ok) {
+    return { success: false, error: planned.error }
+  }
+
+  const internalResult =
+    target.kind === 'remote'
+      ? await runRemotePlan(planned.plan, target, 'branch name', 'branch-name')
+      : await runLocalPlan(planned.plan, target.cwd, target.env, 'branch name', 'branch-name')
+  if (!internalResult.success) {
+    return internalResult
+  }
+  const slug = sanitizeBranchSlug(internalResult.rawOutput)
+  if (!slug) {
+    return { success: false, error: 'Generated branch name was empty after sanitization.' }
+  }
+  return { success: true, slug, agentLabel: internalResult.agentLabel }
 }

@@ -1,7 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { PathSource, ShellHydrationFailureReason, TuiAgent } from '../../../../shared/types'
-import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
+import {
+  getLocalAgentPreflightContext,
+  localPreflightContextKey
+} from '@/lib/local-preflight-context'
 
 export type DetectedAgentsSlice = {
   detectedAgentIds: TuiAgent[] | null
@@ -37,6 +40,10 @@ let refreshPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
 let detectedContextKey: string | null = null
 const remoteDetectPromises = new Map<string, Promise<TuiAgent[]>>()
 
+export function _getRemoteDetectPromiseCountForTest(): number {
+  return remoteDetectPromises.size
+}
+
 export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedAgentsSlice> = (
   set,
   get
@@ -48,7 +55,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
   pathFailureReason: null,
 
   ensureDetectedAgents: () => {
-    const context = getLocalPreflightContext(get())
+    const context = getLocalAgentPreflightContext(get())
     const contextKey = localPreflightContextKey(context)
     const existing = get().detectedAgentIds
     if (existing && detectedContextKey === contextKey) {
@@ -85,7 +92,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
   },
 
   refreshDetectedAgents: () => {
-    const context = getLocalPreflightContext(get())
+    const context = getLocalAgentPreflightContext(get())
     const contextKey = localPreflightContextKey(context)
     if (refreshPromise?.key === contextKey) {
       return refreshPromise.promise
@@ -157,11 +164,18 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       })
       .catch(() => {
         // Why: allow retry on next call (SSH may reconnect). Do not cache failure.
-        remoteDetectPromises.delete(connectionId)
         set((s) => ({
           isDetectingRemoteAgents: { ...s.isDetectingRemoteAgents, [connectionId]: false }
         }))
         return [] as TuiAgent[]
+      })
+      .finally(() => {
+        // Why: this map is only for in-flight dedupe. Successful results live
+        // in remoteDetectedAgentIds, so keeping resolved promises duplicates
+        // one entry per SSH connection for the rest of the renderer session.
+        if (remoteDetectPromises.get(connectionId) === pending) {
+          remoteDetectPromises.delete(connectionId)
+        }
       })
 
     remoteDetectPromises.set(connectionId, pending)

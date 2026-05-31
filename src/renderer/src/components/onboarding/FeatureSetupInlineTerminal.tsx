@@ -58,6 +58,9 @@ export function FeatureSetupInlineTerminal({
       title="Skill setup"
       ariaLabel="Skill setup command"
       description="Press Enter to run the command and confirm npx if asked. You can also set this up later in Settings."
+      terminalHeightPx={180}
+      terminalTopMarginPx={16}
+      autoScrollIntoView={false}
       onOpened={trackTerminalOpened}
       onInteracted={trackTerminalInteraction}
     />

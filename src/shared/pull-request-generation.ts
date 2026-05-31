@@ -29,7 +29,7 @@ function limitSection(value: string, maxChars: number): string {
 
 export function buildPullRequestFieldsPrompt(
   context: PullRequestDraftContext,
-  customInstructions: string
+  customPrompt: string
 ): string {
   const base = [
     'You are generating pull request details.',
@@ -62,15 +62,23 @@ export function buildPullRequestFieldsPrompt(
     '```'
   ].join('\n')
 
-  const trimmedInstructions = customInstructions.trim()
-  if (!trimmedInstructions) {
-    return base
+  const trimmedPrompt = customPrompt.trim()
+  if (!trimmedPrompt) {
+    return [
+      base,
+      '',
+      'Final output requirement:',
+      'Return compact JSON only with keys base, title, body, and draft. No prose or code fences.'
+    ].join('\n')
   }
   return [
     base,
     '',
-    'Additional instructions from user:',
-    limitSection(trimmedInstructions, 4_000)
+    'Additional user prompt:',
+    limitSection(trimmedPrompt, 4_000),
+    '',
+    'Final output requirement:',
+    'Return compact JSON only with keys base, title, body, and draft. No prose or code fences.'
   ].join('\n')
 }
 

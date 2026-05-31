@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import React, { createContext, useCallback, useContext, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -36,16 +36,14 @@ export function ConfirmationDialogProvider({
   const nextIdRef = useRef(0)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
   const activeRequest = queue[0] ?? null
-  const [renderedRequest, setRenderedRequest] = useState<ConfirmationDialogRequest | null>(null)
   const activeRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
-  const displayedRequest = activeRequest ?? renderedRequest
-
-  useEffect(() => {
-    activeRequestRef.current = activeRequest
-    if (activeRequest) {
-      setRenderedRequest(activeRequest)
-    }
-  }, [activeRequest])
+  const lastDisplayedRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
+  activeRequestRef.current = activeRequest
+  if (activeRequest) {
+    lastDisplayedRequestRef.current = activeRequest
+  }
+  // Why: Radix keeps dialog content mounted while closing; keep labels stable without a post-render Effect.
+  const displayedRequest = activeRequest ?? lastDisplayedRequestRef.current
 
   const confirm = useCallback<ConfirmationDialogContextValue>((options) => {
     return new Promise((resolve) => {

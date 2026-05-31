@@ -12,6 +12,10 @@ export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
   addDiffComment: (input: Omit<DiffComment, 'id' | 'createdAt'>) => Promise<DiffComment | null>
   updateDiffComment: (worktreeId: string, commentId: string, body: string) => Promise<boolean>
+  clearDeliveredDiffComments: (
+    worktreeId: string,
+    comments: readonly DiffCommentDeliverySnapshot[]
+  ) => Promise<boolean>
   markDiffCommentsSent: (
     worktreeId: string,
     commentIds: readonly string[],
@@ -21,6 +25,11 @@ export type DiffCommentsSlice = {
   clearDiffComments: (worktreeId: string) => Promise<boolean>
   clearDiffCommentsForFile: (worktreeId: string, filePath: string) => Promise<boolean>
 }
+
+export type DiffCommentDeliverySnapshot = Pick<
+  DiffComment,
+  'body' | 'filePath' | 'id' | 'lineNumber' | 'selectedText' | 'source' | 'startLine'
+>
 
 function generateId(): string {
   return createBrowserUuid()
@@ -59,6 +68,21 @@ function normalizeDiffComment(comment: DiffComment): DiffComment {
     ...(sentAt !== undefined ? { sentAt } : {}),
     ...(sentAt === undefined ? { sentAt: undefined } : {})
   }
+}
+
+function deliverySnapshotMatches(
+  comment: DiffComment,
+  snapshot: DiffCommentDeliverySnapshot
+): boolean {
+  return (
+    comment.id === snapshot.id &&
+    comment.body === snapshot.body &&
+    comment.filePath === snapshot.filePath &&
+    comment.lineNumber === snapshot.lineNumber &&
+    comment.startLine === snapshot.startLine &&
+    comment.selectedText === snapshot.selectedText &&
+    comment.source === snapshot.source
+  )
 }
 
 // Why: return a stable reference when no comments exist so selectors don't
@@ -256,6 +280,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       // latest store snapshot at dequeue time, so it will reflect any newer
       // mutation that landed after this one was enqueued.
       await enqueuePersist(input.worktreeId, get)
+      get().recordFeatureInteraction?.('review-notes')
       return comment
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
@@ -324,6 +349,35 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
   },
 
+  clearDeliveredDiffComments: async (worktreeId, comments) => {
+    if (comments.length === 0) {
+      return true
+    }
+    const snapshotsById = new Map(comments.map((comment) => [comment.id, comment]))
+    const result = mutateComments(set, worktreeId, (existing) => {
+      const next = existing.filter((comment) => {
+        const snapshot = snapshotsById.get(comment.id)
+        // Why: delivery is async. If the user edits a note before the prompt
+        // is accepted by the agent, the old snapshot was sent but the current
+        // note is a fresh pending note and must stay visible.
+        return !snapshot || !deliverySnapshotMatches(comment, snapshot)
+      })
+      return next.length === existing.length ? null : next
+    })
+    if (!result) {
+      return true
+    }
+    try {
+      await enqueuePersist(worktreeId, get)
+      get().recordFeatureInteraction?.('review-notes')
+      return true
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
+      rollback(set, worktreeId, result.previous, result.next)
+      return false
+    }
+  },
+
   markDiffCommentsSent: async (worktreeId, commentIds, sentAt = Date.now()) => {
     if (commentIds.length === 0) {
       return true
@@ -345,6 +399,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
     try {
       await enqueuePersist(worktreeId, get)
+      get().recordFeatureInteraction?.('review-notes')
       return true
     } catch (err) {
       console.error('Failed to persist diff comments:', err)

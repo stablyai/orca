@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowDown, ArrowUp, LayoutList, Plus, Rows3, Settings, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Plus, Settings, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -11,14 +11,17 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { WorkspaceStatusDefinition } from '../../../../shared/types'
+import type {
+  WorkspaceBoardColumnLayout,
+  WorkspaceStatusDefinition
+} from '../../../../shared/types'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import WorkspaceStatusAppearancePopover from './WorkspaceStatusAppearancePopover'
 
 type WorkspaceKanbanSettingsMenuProps = {
-  compact: boolean
+  columnLayout: WorkspaceBoardColumnLayout
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  onCompactChange: (compact: boolean) => void
+  onColumnLayoutChange: (layout: WorkspaceBoardColumnLayout) => void
   onRenameStatus: (statusId: string, label: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
@@ -28,9 +31,9 @@ type WorkspaceKanbanSettingsMenuProps = {
 }
 
 export default function WorkspaceKanbanSettingsMenu({
-  compact,
+  columnLayout,
   workspaceStatuses,
-  onCompactChange,
+  onColumnLayoutChange,
   onRenameStatus,
   onChangeStatusColor,
   onChangeStatusIcon,
@@ -72,35 +75,32 @@ export default function WorkspaceKanbanSettingsMenu({
           }
         }}
       >
-        <DropdownMenuLabel>Card density</DropdownMenuLabel>
-        <div className="px-2 pb-2">
+        <DropdownMenuLabel>Column layout</DropdownMenuLabel>
+        <div className="px-2 pt-0.5 pb-2">
           <ToggleGroup
             type="single"
-            value={compact ? 'compact' : 'detailed'}
+            value={columnLayout}
             onValueChange={(value) => {
-              if (value) {
-                onCompactChange(value === 'compact')
+              if (value === 'full' || value === 'fit') {
+                onColumnLayoutChange(value)
               }
             }}
             variant="outline"
             size="sm"
             className="h-7 w-full justify-stretch"
+            aria-label="Workspace board column layout"
           >
             <ToggleGroupItem
-              value="detailed"
-              className="h-7 grow basis-0 gap-1.5 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
-              aria-label="Detailed workspace cards"
+              value="full"
+              className="h-7 grow basis-0 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
             >
-              <LayoutList className="size-3.5" />
-              Detailed
+              Full width
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="compact"
-              className="h-7 grow basis-0 gap-1.5 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
-              aria-label="Compact workspace cards"
+              value="fit"
+              className="h-7 grow basis-0 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
             >
-              <Rows3 className="size-3.5" />
-              Compact
+              Fit panel
             </ToggleGroupItem>
           </ToggleGroup>
         </div>

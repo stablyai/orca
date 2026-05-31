@@ -44,9 +44,22 @@ export const HIDDEN_DIR_BLOCKLIST: ReadonlySet<string> = new Set([
   '.gvfs'
 ])
 
+// `.local` itself can contain user-authored files; only the generated desktop
+// runtime subtree is part of the home-root failure blocklist.
+const HIDDEN_PATH_BLOCKLIST: readonly string[] = ['.local/share']
+
 // Kept separate from HIDDEN_DIR_BLOCKLIST because node_modules is not a
 // dotfile dir, but it must still be pruned from every traversal.
 const NON_DOTTED_PRUNE = 'node_modules'
+
+function containsBlockedRelPath(path: string, blockedPath: string): boolean {
+  return (
+    path === blockedPath ||
+    path.startsWith(`${blockedPath}/`) ||
+    path.endsWith(`/${blockedPath}`) ||
+    path.includes(`/${blockedPath}/`)
+  )
+}
 
 /**
  * Returns true if `relPath` (a `/`-separated, root-relative path) does not
@@ -59,6 +72,11 @@ const NON_DOTTED_PRUNE = 'node_modules'
  * files.
  */
 export function shouldIncludeQuickOpenPath(path: string): boolean {
+  for (const blockedPath of HIDDEN_PATH_BLOCKLIST) {
+    if (containsBlockedRelPath(path, blockedPath)) {
+      return false
+    }
+  }
   let start = 0
   const len = path.length
   while (start < len) {
@@ -132,7 +150,7 @@ export function buildExcludePathPrefixes(rootPath: string, excludePaths?: unknow
       : // Fall back to path-flavor relative so we do not accidentally use the
         // local OS's semantics on remote paths.
         flavor.relative(trimmedRoot, raw).replace(/\\/g, '/')
-    if (!rel || rel.startsWith('..') || rel.startsWith('/')) {
+    if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
       continue
     }
     // Strip any trailing slash so boundary checks are unambiguous.
@@ -189,6 +207,11 @@ function escapeGlobPath(relPath: string): string {
   return relPath.split('/').map(escapeGlob).join('/')
 }
 
+function isParentRelativePath(relPath: string): boolean {
+  // Why: `..name` is a valid child path; only `..` and `../...` escape.
+  return relPath === '..' || relPath.startsWith('../')
+}
+
 // ─── rg traversal-pruning globs ──────────────────────────────────────
 
 /**
@@ -203,6 +226,9 @@ export function buildHiddenDirExcludeGlobs(): string[] {
   const out: string[] = []
   for (const name of names) {
     out.push('--glob', `!**/${escapeGlob(name)}`)
+  }
+  for (const blockedPath of HIDDEN_PATH_BLOCKLIST) {
+    out.push('--glob', `!**/${escapeGlobPath(blockedPath)}`)
   }
   return out
 }
@@ -305,7 +331,7 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
     } else if (rel === '.') {
       return null
     }
-    if (!rel || rel.startsWith('/') || rel.startsWith('..')) {
+    if (!rel || rel.startsWith('/') || isParentRelativePath(rel)) {
       return null
     }
     return rel
@@ -316,7 +342,11 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
   // into single-slash POSIX-looking paths that no rg output can match.
   const normalizedRoot = `${outputMode.rootPath.replace(/\\/g, '/').replace(/\/+$/, '')}/`
   if (normalized.startsWith(normalizedRoot)) {
-    return normalized.substring(normalizedRoot.length)
+    const rel = normalized.substring(normalizedRoot.length)
+    if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
+      return null
+    }
+    return rel
   }
   return null
 }
@@ -347,7 +377,9 @@ export function buildGitLsFilesArgsForQuickOpen(
   }
   const trailingPathspecs = excludeSpecs.length > 0 ? ['--', '.', ...excludeSpecs] : []
 
-  const primary = ['--cached', '--others', '--exclude-standard', ...trailingPathspecs]
-  const ignoredPass = ['--others', '--ignored', '--exclude-standard', ...trailingPathspecs]
+  // Why: newline output C-quotes tabs/newlines, which makes Quick Open return
+  // fake paths when rg is unavailable. NUL output preserves real Git paths.
+  const primary = ['-z', '--cached', '--others', '--exclude-standard', ...trailingPathspecs]
+  const ignoredPass = ['-z', '--others', '--ignored', '--exclude-standard', ...trailingPathspecs]
   return { primary, ignoredPass }
 }

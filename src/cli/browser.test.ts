@@ -1,5 +1,4 @@
 /* eslint-disable max-lines -- Why: this file groups every CLI browser-command test (page targeting, profiles, waits, viewport) so test-fixture imports and the runtime-client mock stay shared in one place. */
-import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -90,7 +89,7 @@ describe('orca cli browser page targeting', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
     expect(callMock).toHaveBeenNthCalledWith(2, 'browser.snapshot', {
       page: 'page-1',
-      worktree: `path:${path.resolve('/tmp/repo/feature')}`
+      worktree: 'id:repo::/tmp/repo/feature'
     })
   })
 
@@ -124,7 +123,7 @@ describe('orca cli browser page targeting', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'browser.tabSwitch', {
       index: undefined,
       page: 'page-2',
-      worktree: `path:${path.resolve('/tmp/repo/feature')}`
+      worktree: 'id:repo::/tmp/repo/feature'
     })
   })
 
@@ -515,6 +514,81 @@ describe('orca cli browser tab profiles', () => {
 
     expect(callMock).toHaveBeenCalledWith('browser.profileDelete', { profileId: 'default' })
     expect(logSpy).toHaveBeenCalledWith('Profile default was not deleted')
+  })
+})
+
+describe('orca cli browser cookies', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+    process.exitCode = undefined
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('passes a finite non-negative cookie expiry through as a number', async () => {
+    queueFixtures(callMock, okFixture('req_cookie', { success: true }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'cookie',
+        'set',
+        '--name',
+        'sid',
+        '--value',
+        'x',
+        '--expires',
+        '0',
+        '--worktree',
+        'all',
+        '--json'
+      ],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('browser.cookie.set', {
+      name: 'sid',
+      value: 'x',
+      expires: 0,
+      worktree: undefined
+    })
+  })
+
+  it.each(['not-a-number', 'Infinity', '-1'])(
+    'rejects invalid cookie expiry value %s before RPC dispatch',
+    async (expires) => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const priorExitCode = process.exitCode
+
+      await main(
+        ['cookie', 'set', '--name', 'sid', '--value', 'x', '--expires', expires],
+        '/tmp/not-an-orca-worktree'
+      )
+
+      expect(callMock).not.toHaveBeenCalled()
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain(`Invalid --expires value: ${expires}`)
+      expect(process.exitCode).toBe(1)
+
+      process.exitCode = priorExitCode
+    }
+  )
+
+  it('rejects --expires without a value before RPC dispatch', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['cookie', 'set', '--name', 'sid', '--value', 'x', '--expires'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain('Missing value for --expires.')
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 })
 

@@ -14,7 +14,7 @@
 
 <p align="center">
   <strong>面向 100x 构建者的 AI 编排器。</strong><br/>
-  跨仓库并排运行 Claude Code、Codex、Grok、Antigravity 或 OpenCode — 每个都在自己的 worktree 中运行，并在一个地方统一跟踪。<br/>
+  跨仓库并排运行 Claude Code、OpenClaude、Codex、Grok、Antigravity 或 OpenCode — 每个都在自己的 worktree 中运行，并在一个地方统一跟踪。<br/>
   支持 <strong>macOS、Windows 和 Linux</strong>。
 </p>
 
@@ -32,12 +32,13 @@ Orca 支持任何 CLI 智能体（_不仅限于以下列表_）。
 
 <p>
   <a href="https://docs.anthropic.com/claude/docs/claude-code"><kbd><img src="../assets/claude-logo.svg" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
+  <a href="https://openclaude.gitlawb.com/"><kbd><img src="../../resources/openclaude-logo.png" width="16" valign="middle" /> OpenClaude</kbd></a> &nbsp;
   <a href="https://github.com/openai/codex"><kbd><img src="https://www.google.com/s2/favicons?domain=openai.com&sz=64" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
   <a href="https://x.ai/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=x.ai&sz=64" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
   <a href="https://github.com/google-gemini/gemini-cli"><kbd><img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=64" width="16" valign="middle" /> Gemini</kbd></a> &nbsp;
   <a href="https://antigravity.google/docs/cli-overview"><kbd><img src="https://www.google.com/s2/favicons?domain=antigravity.google&sz=64" width="16" valign="middle" /> Antigravity</kbd></a> &nbsp;
   <a href="https://pi.dev"><kbd><img src="https://pi.dev/favicon.svg" width="16" valign="middle" /> Pi</kbd></a> &nbsp;
-  <a href="https://omp.sh"><kbd><img src="https://omp.sh/favicon.svg" width="16" valign="middle" /> OMP</kbd></a> &nbsp;
+  <a href="https://omp.sh"><kbd><img src="https://omp.sh/favicon.svg" width="16" valign="middle" /> oh-my-pi</kbd></a> &nbsp;
   <a href="https://hermes-agent.nousresearch.com/docs/"><kbd><img src="https://www.google.com/s2/favicons?domain=nousresearch.com&sz=64" width="16" valign="middle" /> Hermes Agent</kbd></a> &nbsp;
   <a href="https://opencode.ai/docs/cli/"><kbd><img src="https://www.google.com/s2/favicons?domain=opencode.ai&sz=64" width="16" valign="middle" /> OpenCode</kbd></a> &nbsp;
   <a href="https://block.github.io/goose/docs/quickstart/"><kbd><img src="https://www.google.com/s2/favicons?domain=goose-docs.ai&sz=64" width="16" valign="middle" /> Goose</kbd></a> &nbsp;
@@ -47,6 +48,7 @@ Orca 支持任何 CLI 智能体（_不仅限于以下列表_）。
   <a href="https://github.com/charmbracelet/crush"><kbd><img src="https://www.google.com/s2/favicons?domain=charm.sh&sz=64" width="16" valign="middle" /> Charm</kbd></a> &nbsp;
   <a href="https://docs.cline.bot/cline-cli/overview"><kbd><img src="https://www.google.com/s2/favicons?domain=cline.bot&sz=64" width="16" valign="middle" /> Cline</kbd></a> &nbsp;
   <a href="https://www.codebuff.com/docs/help/quick-start"><kbd><img src="https://www.google.com/s2/favicons?domain=codebuff.com&sz=64" width="16" valign="middle" /> Codebuff</kbd></a> &nbsp;
+  <a href="https://commandcode.ai/docs/quickstart"><kbd><img src="https://www.google.com/s2/favicons?domain=commandcode.ai&sz=64" width="16" valign="middle" /> Command Code</kbd></a> &nbsp;
   <a href="https://docs.continue.dev/guides/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=continue.dev&sz=64" width="16" valign="middle" /> Continue</kbd></a> &nbsp;
   <a href="https://cursor.com/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=cursor.com&sz=64" width="16" valign="middle" /> Cursor</kbd></a> &nbsp;
   <a href="https://docs.factory.ai/cli/getting-started/quickstart"><kbd><img src="../assets/droid-logo.svg" width="16" valign="middle" /> Droid</kbd></a> &nbsp;
@@ -63,7 +65,7 @@ Orca 支持任何 CLI 智能体（_不仅限于以下列表_）。
 
 ## 特性
 
-- **无需登录** — 直接使用你自己的 Claude Code、Codex、Grok 或 Antigravity 订阅。
+- **无需登录** — 直接使用你自己的 Claude Code、OpenClaude、Codex、Grok 或 Antigravity 订阅。
 - **原生 worktree 工作流** — 每个功能都有自己的 worktree。无需 stash，也不用来回切分支。立即创建，快速切换。
 - **多智能体终端** — 在标签页和面板中并排运行多个 AI 智能体。一眼就能看到哪些正在活跃。
 - **内置源码管理** — 查看 AI 生成的 diff，快速编辑，并且无需离开 Orca 就能提交。

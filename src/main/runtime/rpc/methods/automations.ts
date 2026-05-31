@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedules'
+import {
+  MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
+  normalizeAutomationPrecheckTimeoutSeconds
+} from '../../../../shared/automation-precheck'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { defineMethod, type RpcMethod } from '../core'
 import {
@@ -21,6 +25,18 @@ const AutomationSchedule = requiredString('Missing trigger').refine(isValidAutom
   message: 'Invalid automation trigger'
 })
 
+const AutomationPrecheck = z
+  .object({
+    command: requiredString('Missing precheck command'),
+    timeoutSeconds: OptionalPositiveInt.transform((value) =>
+      normalizeAutomationPrecheckTimeoutSeconds(value)
+    ).refine((value) => value <= MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS, {
+      message: 'Precheck timeout is too large'
+    })
+  })
+  .nullable()
+  .optional()
+
 const OptionalNullablePlainString = z
   .unknown()
   .transform((value) => (value === null || typeof value === 'string' ? value : undefined))
@@ -38,6 +54,7 @@ const AutomationRuns = z.object({
 const AutomationCreate = z.object({
   name: requiredString('Missing automation name'),
   prompt: requiredString('Missing automation prompt'),
+  precheck: AutomationPrecheck,
   agentId: TuiAgent,
   repo: OptionalString,
   workspace: OptionalString,
@@ -54,6 +71,7 @@ const AutomationCreate = z.object({
 const AutomationUpdateFields = z.object({
   name: OptionalString,
   prompt: OptionalString,
+  precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
   repo: OptionalString,
   workspace: OptionalString,

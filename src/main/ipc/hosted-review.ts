@@ -119,7 +119,8 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
         head: args.head,
         title: args.title,
         body: args.body,
-        draft: args.draft
+        draft: args.draft,
+        useTemplate: args.useTemplate
       },
       repo.connectionId ?? null
     )

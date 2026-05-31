@@ -2,7 +2,7 @@
 // containing Author / Label / Reviewer / Assignee sections, mirroring GitHub's
 // own collapsed Filters dropdown so the toolbar stays uncluttered when nothing
 // is set. Active filters surface as inline removable pills next to the button.
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -118,11 +118,10 @@ export default function PRFilterDropdowns({
 
   const reviewerActive = parsed.reviewRequested ?? parsed.reviewedBy ?? null
   const reviewerKind: 'requested' | 'reviewed-by' = parsed.reviewedBy ? 'reviewed-by' : 'requested'
-  const [reviewerMode, setReviewerMode] = useState<'requested' | 'reviewed-by'>(reviewerKind)
-  // Why: keep mode in sync if the user types qualifier syntax directly.
-  useEffect(() => {
-    setReviewerMode(reviewerKind)
-  }, [reviewerKind])
+  const [reviewerModeOverride, setReviewerModeOverride] = useState<
+    'requested' | 'reviewed-by' | null
+  >(null)
+  const reviewerMode = reviewerModeOverride ?? reviewerKind
 
   // Why: treat anything other than the implicit "open" default as an active
   // status filter so the user can see (and clear) it via the inline pill.
@@ -192,7 +191,14 @@ export default function PRFilterDropdowns({
               kind={kind}
               reviewerActive={reviewerActive}
               reviewerKind={reviewerKind}
-              onPick={(s) => setOpenSection(s)}
+              onPick={(s) => {
+                // Why: each reviewer menu visit should start from the parsed
+                // query unless the user toggles mode during this visit.
+                if (s === 'reviewer') {
+                  setReviewerModeOverride(null)
+                }
+                setOpenSection(s)
+              }}
               onClearAll={
                 activeCount > 0
                   ? () => {
@@ -204,6 +210,7 @@ export default function PRFilterDropdowns({
                         state: 'open',
                         draft: false
                       })
+                      setReviewerModeOverride(null)
                       setPopoverOpen(false)
                     }
                   : null
@@ -222,7 +229,7 @@ export default function PRFilterDropdowns({
               usersLoading={hasPrimarySlug && assigneesState.loading}
               usersError={hasPrimarySlug ? assigneesState.error : null}
               reviewerMode={reviewerMode}
-              setReviewerMode={setReviewerMode}
+              setReviewerMode={setReviewerModeOverride}
               onBack={() => setOpenSection(null)}
               onSelect={handleSelect}
             />

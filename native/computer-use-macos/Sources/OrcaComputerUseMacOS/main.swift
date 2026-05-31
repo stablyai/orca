@@ -135,6 +135,26 @@ struct Snapshot {
     let elements: [Int: ElementRecord]
     let truncated: Bool
     let maxDepthReached: Bool
+
+    func withoutScreenshotPayload() -> Snapshot {
+        Snapshot(
+            id: id,
+            app: app,
+            windowTitle: windowTitle,
+            windowBounds: windowBounds,
+            windowId: windowId,
+            windowLayer: windowLayer,
+            treeText: treeText,
+            focusedElementId: focusedElementId,
+            screenshot: nil,
+            screenshotStatus: .skipped,
+            screenshotScale: CGSize(width: 1, height: 1),
+            screenshotEngine: nil,
+            elements: elements,
+            truncated: truncated,
+            maxDepthReached: maxDepthReached
+        )
+    }
 }
 
 struct ScreenshotPayload {
@@ -157,7 +177,6 @@ enum ScreenshotStatus {
 
 final class Provider {
     private var snapshots: [String: Snapshot] = [:]
-    private var hasPromptedForAccessibility = false
 
     func handle(method: String, params: [String: JSONValue]) throws -> Any {
         switch method {
@@ -196,7 +215,7 @@ final class Provider {
         var action = try runAction()
         do {
             return try renderActionResult(action: action, snapshot: observe(params: params))
-        } catch let error as ProviderError where (error.code == "window_not_found" || error.code == "window_stale") && (requestedWindowId(params) != nil || requestedWindowIndex(params) != nil) {
+        } catch let error as ProviderError where (error.code == "window_not_found" || error.code == "window_stale") && hasRequestedWindowSelector(params) {
             var fallbackParams = params
             fallbackParams.removeValue(forKey: "windowId")
             fallbackParams.removeValue(forKey: "windowIndex")
@@ -209,6 +228,8 @@ final class Provider {
 
     private func observe(params: [String: JSONValue]) throws -> Snapshot {
         let query = try requiredString(params, "app")
+        let windowId = try requestedWindowId(params)
+        let windowIndex = try requestedWindowIndex(params)
         let app = try resolveApp(query)
         if params["restoreWindow"]?.bool == true {
             recoverWindow(app)
@@ -216,31 +237,34 @@ final class Provider {
         let snapshot = try buildSnapshot(
             app: app,
             includeScreenshot: params["noScreenshot"]?.bool != true,
-            windowId: requestedWindowId(params),
-            windowIndex: requestedWindowIndex(params),
+            windowId: windowId,
+            windowIndex: windowIndex,
             restoreWindow: params["restoreWindow"]?.bool == true
         )
         let keys = [query, app.name, app.bundleId ?? ""].filter { !$0.isEmpty }.map { $0.lowercased() }
         let namespace = snapshotNamespace(params)
+        // Why: cached snapshots only validate element identity for follow-up
+        // actions; retaining MB-scale screenshot base64 in the long-lived agent grows memory.
+        let cachedSnapshot = snapshot.withoutScreenshotPayload()
         for key in keys {
             if !isExplicitSnapshotNamespace(namespace) {
-                snapshots[key] = snapshot
-                snapshots[snapshotWindowKey(key, snapshot.windowId)] = snapshot
-                if let windowIndex = requestedWindowIndex(params) {
-                    snapshots[snapshotWindowIndexKey(key, windowIndex)] = snapshot
+                snapshots[key] = cachedSnapshot
+                snapshots[snapshotWindowKey(key, snapshot.windowId)] = cachedSnapshot
+                if let windowIndex {
+                    snapshots[snapshotWindowIndexKey(key, windowIndex)] = cachedSnapshot
                 }
             }
-            snapshots[namespacedSnapshotKey(namespace, key)] = snapshot
-            snapshots[namespacedSnapshotKey(namespace, snapshotWindowKey(key, snapshot.windowId))] = snapshot
-            if let windowIndex = requestedWindowIndex(params) {
-                snapshots[namespacedSnapshotKey(namespace, snapshotWindowIndexKey(key, windowIndex))] = snapshot
+            snapshots[namespacedSnapshotKey(namespace, key)] = cachedSnapshot
+            snapshots[namespacedSnapshotKey(namespace, snapshotWindowKey(key, snapshot.windowId))] = cachedSnapshot
+            if let windowIndex {
+                snapshots[namespacedSnapshotKey(namespace, snapshotWindowIndexKey(key, windowIndex))] = cachedSnapshot
             }
         }
         return snapshot
     }
 
     private func currentSnapshot(params: [String: JSONValue]) throws -> Snapshot {
-        let cached = cachedSnapshot(params: params)
+        let cached = try cachedSnapshot(params: params)
         // Why: cached AX frames can be stale after a window move or resize, and
         // stale geometry can turn an intended action into a misclick.
         let snapshot = try observe(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
@@ -256,15 +280,15 @@ final class Provider {
         return snapshot
     }
 
-    private func cachedSnapshot(params: [String: JSONValue]) -> Snapshot? {
+    private func cachedSnapshot(params: [String: JSONValue]) throws -> Snapshot? {
         guard let query = params["app"]?.string, !query.isEmpty else { return nil }
         let namespace = snapshotNamespace(params)
-        if let targetWindowId = requestedWindowId(params) {
+        if let targetWindowId = try requestedWindowId(params) {
             let windowKey = snapshotWindowKey(query.lowercased(), targetWindowId)
             return snapshots[namespacedSnapshotKey(namespace, windowKey)] ??
                 (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[windowKey])
         }
-        if let targetWindowIndex = requestedWindowIndex(params) {
+        if let targetWindowIndex = try requestedWindowIndex(params) {
             let windowKey = snapshotWindowIndexKey(query.lowercased(), targetWindowIndex)
             return snapshots[namespacedSnapshotKey(namespace, windowKey)] ??
                 (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[windowKey])
@@ -275,16 +299,15 @@ final class Provider {
     }
 
     private func validateRequestedElements(cached: Snapshot?, current: Snapshot, params: [String: JSONValue]) throws {
-        let requestedKeys = ["elementIndex", "fromElementIndex", "toElementIndex"].filter {
-            params[$0]?.number != nil
+        let requestedIndexes = try ["elementIndex", "fromElementIndex", "toElementIndex"].compactMap { key -> Int? in
+            guard params[key]?.number != nil else { return nil }
+            return try optionalInteger(params, key)
         }
-        guard !requestedKeys.isEmpty else { return }
+        guard !requestedIndexes.isEmpty else { return }
         guard let cached else {
             throw ProviderError.coded("element_not_found", "element indexes require a fresh get-app-state snapshot for this app/window")
         }
-        for key in requestedKeys {
-            guard let value = params[key]?.number else { continue }
-            let index = Int(value)
+        for index in requestedIndexes {
             guard let expected = cached.elements[index], let actual = current.elements[index] else {
                 throw ProviderError.coded("element_not_found", "element \(index) is stale; run get-app-state again and use a fresh element index")
             }
@@ -298,14 +321,6 @@ final class Provider {
         guard WindowCapture.candidates(pid: snapshot.app.pid).contains(where: { $0.windowId == snapshot.windowId }) else {
             throw ProviderError.coded("window_stale", "window \(Int(snapshot.windowId)) is no longer available; run get-app-state again to refresh the target window")
         }
-    }
-
-    private func promptForAccessibilityOnce() {
-        guard !hasPromptedForAccessibility else {
-            return
-        }
-        hasPromptedForAccessibility = true
-        _ = promptForAccessibility()
     }
 
     private func listApps() -> [AppDescriptor] {
@@ -466,8 +481,12 @@ final class Provider {
         restoreWindow: Bool
     ) throws -> Snapshot {
         guard accessibilityTrusted() else {
-            promptForAccessibilityOnce()
-            throw ProviderError.coded("permission_denied", "Accessibility permission is required for Orca Computer Use.")
+            // Why: agents retry failed observations. Only the explicit setup flow
+            // should open macOS privacy prompts/settings; runtime calls stay quiet.
+            throw ProviderError.coded(
+                "permission_denied",
+                "Accessibility permission is required for Orca Computer Use. Run `orca computer permissions` or open Settings > Computer Use, grant Accessibility to Orca Computer Use, then retry."
+            )
         }
         let appElement = AXUIElementCreateApplication(app.pid)
         enableManualAccessibilityIfNeeded(appElement, app: app)
@@ -479,7 +498,14 @@ final class Provider {
             allowRecovery: restoreWindow
         )
         let focusedTitle = stringAttribute(focused, kAXTitleAttribute as String) ?? app.name
-        guard let capture = WindowCapture.resolve(candidates: windowCandidates, titleHint: focusedTitle, windowId: windowId, windowIndex: windowIndex) else {
+        let canCaptureScreenshot = includeScreenshot && screenCaptureTrusted()
+        guard let capture = WindowCapture.resolve(
+            candidates: windowCandidates,
+            titleHint: focusedTitle,
+            windowId: windowId,
+            windowIndex: windowIndex,
+            captureImage: canCaptureScreenshot
+        ) else {
             throw ProviderError.coded("window_not_found", "app '\(app.name)' has no on-screen window")
         }
         guard let window = matchingWindow(appElement: appElement, capture: capture, focused: focused, explicitTarget: windowId != nil || windowIndex != nil) else {
@@ -491,7 +517,7 @@ final class Provider {
         let screenshot = includeScreenshot ? capture.screenshotPayload() : nil
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {
             .captured
-        } else if includeScreenshot && !screenCaptureTrusted() {
+        } else if includeScreenshot && !canCaptureScreenshot {
             .failed("Screen Recording permission is required for Orca Computer Use; grant permission or pass --no-screenshot to inspect accessibility state only.")
         } else if includeScreenshot {
             .failed("window screenshot capture returned no image; retry with --no-screenshot if accessibility state is sufficient.")
@@ -577,9 +603,9 @@ final class Provider {
     private func click(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentSnapshot(params: params)
         let button = params["mouseButton"]?.string ?? "left"
-        let count = Int(params["clickCount"]?.number ?? 1)
-        if let elementIndex = params["elementIndex"]?.number {
-            let record = try element(snapshot, Int(elementIndex))
+        let count = try optionalInteger(params, "clickCount") ?? 1
+        if let elementIndex = try optionalInteger(params, "elementIndex") {
+            let record = try element(snapshot, elementIndex)
             if count <= 1, let actionName = try performClickAction(record: record, mouseButton: button) {
                 return actionMetadata(path: "accessibility", actionName: actionName)
             }
@@ -618,7 +644,7 @@ final class Provider {
 
     private func performSecondaryAction(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentSnapshot(params: params)
-        let record = try element(snapshot, Int(try requiredNumber(params, "elementIndex")))
+        let record = try element(snapshot, try requiredInteger(params, "elementIndex"))
         let requested = try requiredString(params, "action")
         let action = record.actions.first { SnapshotRenderHeuristics.prettyAction($0).caseInsensitiveCompare(requested) == .orderedSame || $0.caseInsensitiveCompare(requested) == .orderedSame }
         guard let action else {
@@ -632,7 +658,7 @@ final class Provider {
 
     private func setValue(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentSnapshot(params: params)
-        let record = try element(snapshot, Int(try requiredNumber(params, "elementIndex")))
+        let record = try element(snapshot, try requiredInteger(params, "elementIndex"))
         guard isSettable(record.element, kAXValueAttribute as String) else {
             throw ProviderError.coded("value_not_settable", "element \(record.index) is not settable")
         }
@@ -691,11 +717,12 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let direction = try requiredString(params, "direction")
         let pages = params["pages"]?.number ?? 1
-        if let elementIndex = params["elementIndex"]?.number {
-            let record = try element(snapshot, Int(elementIndex))
+        if let elementIndex = try optionalInteger(params, "elementIndex") {
+            let record = try element(snapshot, elementIndex)
             let action = "AXScroll\(direction.capitalized)ByPage"
-            if pages.rounded() == pages, record.actions.contains(action) {
-                for _ in 0..<max(1, Int(pages)) {
+            if pages.rounded() == pages, let pageCount = boundedInteger(pages, as: Int.self),
+               record.actions.contains(action) {
+                for _ in 0..<max(1, pageCount) {
                     _ = performAction(record.element, action)
                 }
                 return actionMetadata(path: "accessibility", actionName: action)
@@ -715,9 +742,10 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let start: CGPoint
         let end: CGPoint
-        if let fromIndex = params["fromElementIndex"]?.number, let toIndex = params["toElementIndex"]?.number {
-            let from = try element(snapshot, Int(fromIndex))
-            let to = try element(snapshot, Int(toIndex))
+        if let fromIndex = try optionalInteger(params, "fromElementIndex"),
+           let toIndex = try optionalInteger(params, "toElementIndex") {
+            let from = try element(snapshot, fromIndex)
+            let to = try element(snapshot, toIndex)
             guard let fromPoint = center(from.localFrame, in: snapshot.windowBounds),
                   let toPoint = center(to.localFrame, in: snapshot.windowBounds)
             else {
@@ -780,6 +808,21 @@ private func requiredNumber(_ params: [String: JSONValue], _ key: String) throws
     return value
 }
 
+private func requiredInteger(_ params: [String: JSONValue], _ key: String) throws -> Int {
+    guard let value = boundedInteger(try requiredNumber(params, key), as: Int.self) else {
+        throw ProviderError.coded("invalid_argument", "\(key) is out of range")
+    }
+    return value
+}
+
+private func optionalInteger(_ params: [String: JSONValue], _ key: String) throws -> Int? {
+    guard let raw = params[key]?.number else { return nil }
+    guard let value = boundedInteger(raw, as: Int.self) else {
+        throw ProviderError.coded("invalid_argument", "\(key) is out of range")
+    }
+    return value
+}
+
 private func parsePid(_ query: String) -> pid_t? {
     guard query.hasPrefix("pid:") else { return nil }
     guard let pid = Int32(query.dropFirst(4)), pid > 0 else { return nil }
@@ -797,11 +840,6 @@ private func pidIsLive(_ pid: pid_t) -> Bool {
 
 private func accessibilityTrusted() -> Bool {
     AXIsProcessTrusted()
-}
-
-private func promptForAccessibility() -> Bool {
-    let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-    return AXIsProcessTrustedWithOptions(options)
 }
 
 private func screenCaptureTrusted() -> Bool {
@@ -949,9 +987,16 @@ private func openBundle(_ bundleId: String) {
     process.waitUntilExit()
 }
 
-private func requestedWindowId(_ params: [String: JSONValue]) -> CGWindowID? {
-    guard let value = params["windowId"]?.number, value >= 0 else { return nil }
-    return CGWindowID(UInt32(value))
+private func hasRequestedWindowSelector(_ params: [String: JSONValue]) -> Bool {
+    params["windowId"] != nil || params["windowIndex"] != nil
+}
+
+private func requestedWindowId(_ params: [String: JSONValue]) throws -> CGWindowID? {
+    guard let raw = params["windowId"] else { return nil }
+    guard let value = raw.number, value >= 0, let id = boundedInteger(value, as: UInt32.self) else {
+        throw ProviderError.coded("invalid_argument", "windowId is out of range")
+    }
+    return CGWindowID(id)
 }
 
 private func snapshotWindowKey(_ query: String, _ windowId: CGWindowID) -> String {
@@ -980,9 +1025,12 @@ private func isExplicitSnapshotNamespace(_ namespace: String) -> Bool {
     namespace != "default"
 }
 
-private func requestedWindowIndex(_ params: [String: JSONValue]) -> Int? {
-    guard let value = params["windowIndex"]?.number, value >= 0 else { return nil }
-    return Int(value)
+private func requestedWindowIndex(_ params: [String: JSONValue]) throws -> Int? {
+    guard let raw = params["windowIndex"] else { return nil }
+    guard let value = raw.number, value >= 0, let index = boundedInteger(value, as: Int.self) else {
+        throw ProviderError.coded("invalid_argument", "windowIndex is out of range")
+    }
+    return index
 }
 
 private func usableWindow(_ element: AXUIElement) -> Bool {
@@ -1600,19 +1648,37 @@ private struct WindowCapture {
     let title: String?
     let image: CapturedImage?
 
-    static func resolve(pid: pid_t, titleHint: String?, windowId: CGWindowID?, windowIndex: Int?) -> WindowCapture? {
-        resolve(candidates: candidates(pid: pid), titleHint: titleHint, windowId: windowId, windowIndex: windowIndex)
+    static func resolve(
+        pid: pid_t,
+        titleHint: String?,
+        windowId: CGWindowID?,
+        windowIndex: Int?,
+        captureImage: Bool
+    ) -> WindowCapture? {
+        resolve(
+            candidates: candidates(pid: pid),
+            titleHint: titleHint,
+            windowId: windowId,
+            windowIndex: windowIndex,
+            captureImage: captureImage
+        )
     }
 
-    static func resolve(candidates: [WindowCandidate], titleHint: String?, windowId: CGWindowID?, windowIndex: Int?) -> WindowCapture? {
+    static func resolve(
+        candidates: [WindowCandidate],
+        titleHint: String?,
+        windowId: CGWindowID?,
+        windowIndex: Int?,
+        captureImage: Bool
+    ) -> WindowCapture? {
         if let windowId {
             guard let candidate = candidates.first(where: { $0.windowId == windowId }) else { return nil }
-            return WindowCapture(candidate: candidate)
+            return WindowCapture(candidate: candidate, captureImage: captureImage)
         }
         if let windowIndex {
             let visibleWindows = candidates.filter { $0.layer == 0 }
             guard visibleWindows.indices.contains(windowIndex) else { return nil }
-            return WindowCapture(candidate: visibleWindows[windowIndex])
+            return WindowCapture(candidate: visibleWindows[windowIndex], captureImage: captureImage)
         }
         guard let best = candidates.sorted(by: { lhs, rhs in
             if let titleHint, lhs.title == titleHint, rhs.title != titleHint { return true }
@@ -1621,15 +1687,21 @@ private struct WindowCapture {
         }).first else {
             return nil
         }
-        return WindowCapture(candidate: best)
+        return WindowCapture(candidate: best, captureImage: captureImage)
     }
 
-    private init(candidate: WindowCandidate) {
+    private init(candidate: WindowCandidate, captureImage: Bool) {
         self.windowId = candidate.windowId
         self.layer = candidate.layer
         self.bounds = candidate.bounds
         self.title = candidate.title
-        self.image = Self.captureImage(windowId: candidate.windowId, bounds: candidate.bounds)
+        // Why: probing image APIs before TCC preflight can raise Screen
+        // Recording prompts, even for --no-screenshot calls.
+        if captureImage {
+            self.image = Self.captureImage(windowId: candidate.windowId, bounds: candidate.bounds)
+        } else {
+            self.image = nil
+        }
     }
 
     static func candidates(pid: pid_t) -> [WindowCandidate] {
@@ -1788,7 +1860,9 @@ private enum Input {
     }
 
     static func scroll(pid: pid_t, at point: CGPoint, direction: String, pages: Double) throws {
-        let delta = Int32(max(1, (12 * pages).rounded()))
+        guard let delta = boundedInteger(max(1, (12 * pages).rounded()), as: Int32.self) else {
+            throw ProviderError.coded("invalid_argument", "pages is out of range")
+        }
         let wheel1: Int32 = direction == "up" ? delta : direction == "down" ? -delta : 0
         let wheel2: Int32 = direction == "left" ? delta : direction == "right" ? -delta : 0
         guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: wheel1, wheel2: wheel2, wheel3: 0) else {

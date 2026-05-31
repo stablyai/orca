@@ -249,6 +249,166 @@ describe('browserManager', () => {
     restore()
   })
 
+  it('acquires renderer automation visibility without changing active browser state', async () => {
+    const rendererExecuteJavaScriptMock = vi
+      .fn()
+      .mockResolvedValueOnce('lease-1')
+      .mockResolvedValueOnce(true)
+    const guest = {
+      id: 1707,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = {
+      id: rendererWebContentsId,
+      isDestroyed: vi.fn(() => false),
+      executeJavaScript: rendererExecuteJavaScriptMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return renderer
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'page-automation',
+      workspaceId: 'workspace-1',
+      worktreeId: 'wt-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const restore = await browserManager.acquireAutomationVisibility(guest.id)
+    const acquireScript = rendererExecuteJavaScriptMock.mock.calls[0]?.[0]
+    expect(acquireScript).toContain('__orcaBrowserAutomationVisibility')
+    expect(acquireScript).toContain('bridge.acquire("page-automation")')
+    expect(acquireScript).not.toContain('setActiveBrowserTab')
+    expect(acquireScript).not.toContain('setActiveTabType')
+
+    restore()
+
+    const releaseScript = rendererExecuteJavaScriptMock.mock.calls[1]?.[0]
+    expect(releaseScript).toContain('bridge.release("lease-1")')
+  })
+
+  it('returns a no-op automation visibility restore when renderer acquire hangs', async () => {
+    vi.useFakeTimers()
+
+    const rendererExecuteJavaScriptMock = vi.fn().mockReturnValueOnce(new Promise(() => {}))
+    const guest = {
+      id: 1708,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = {
+      id: rendererWebContentsId,
+      isDestroyed: vi.fn(() => false),
+      executeJavaScript: rendererExecuteJavaScriptMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return renderer
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'page-hung-acquire',
+      workspaceId: 'workspace-1',
+      worktreeId: 'wt-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const restorePromise = browserManager.acquireAutomationVisibility(guest.id)
+    await vi.advanceTimersByTimeAsync(2_000)
+    const restore = await restorePromise
+
+    restore()
+
+    expect(rendererExecuteJavaScriptMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases a delayed automation visibility token after acquire timeout', async () => {
+    vi.useFakeTimers()
+
+    let resolveAcquire: (token: string) => void = () => {}
+    const acquirePromise = new Promise<string>((resolve) => {
+      resolveAcquire = resolve
+    })
+    const rendererExecuteJavaScriptMock = vi
+      .fn()
+      .mockReturnValueOnce(acquirePromise)
+      .mockResolvedValueOnce(true)
+    const guest = {
+      id: 1709,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = {
+      id: rendererWebContentsId,
+      isDestroyed: vi.fn(() => false),
+      executeJavaScript: rendererExecuteJavaScriptMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return renderer
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'page-delayed-acquire',
+      workspaceId: 'workspace-1',
+      worktreeId: 'wt-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const restorePromise = browserManager.acquireAutomationVisibility(guest.id)
+    await vi.advanceTimersByTimeAsync(2_000)
+    const restore = await restorePromise
+
+    restore()
+    expect(rendererExecuteJavaScriptMock).toHaveBeenCalledTimes(1)
+
+    resolveAcquire('late-lease-1')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(rendererExecuteJavaScriptMock).toHaveBeenCalledTimes(2)
+    const releaseScript = rendererExecuteJavaScriptMock.mock.calls[1]?.[0]
+    expect(releaseScript).toContain('bridge.release("late-lease-1")')
+  })
+
   it('restores the previously focused browser workspace after screenshot prep changes tabs', async () => {
     const rendererExecuteJavaScriptMock = vi
       .fn()
@@ -657,6 +817,91 @@ describe('browserManager', () => {
     expect(guestSetWindowOpenHandlerMock).toHaveBeenCalledTimes(1)
     expect(guestOnMock.mock.calls.filter(([event]) => event === 'will-navigate')).toHaveLength(1)
     expect(guestOnMock.mock.calls.filter(([event]) => event === 'will-redirect')).toHaveLength(1)
+  })
+
+  it('cleans attached guest policy state when a guest is destroyed before registration', () => {
+    const guest = {
+      id: 304,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const destroyedHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'destroyed'
+    )?.[1] as (() => void) | undefined
+    expect(destroyedHandler).toBeTypeOf('function')
+
+    destroyedHandler?.()
+    browserManager.registerGuest({
+      browserPageId: 'browser-destroyed-before-register',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    expect(browserManager.getGuestWebContentsId('browser-destroyed-before-register')).toBeNull()
+  })
+
+  it('fully unregisters stale guests discovered during authorization', () => {
+    const guest = {
+      id: 305,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-stale',
+      workspaceId: 'workspace-stale',
+      worktreeId: 'worktree-stale',
+      sessionProfileId: 'profile-stale',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const internals = browserManager as unknown as {
+      rendererWebContentsIdByTabId: Map<string, number>
+      workspaceIdByPageId: Map<string, string>
+      sessionProfileIdByPageId: Map<string, string | null>
+      worktreeIdByTabId: Map<string, string>
+      contextMenuCleanupByTabId: Map<string, () => void>
+      grabShortcutCleanupByTabId: Map<string, () => void>
+      shortcutForwardingCleanupByTabId: Map<string, () => void>
+    }
+    expect(internals.rendererWebContentsIdByTabId.has('browser-stale')).toBe(true)
+    expect(internals.workspaceIdByPageId.has('browser-stale')).toBe(true)
+    expect(internals.sessionProfileIdByPageId.has('browser-stale')).toBe(true)
+    expect(internals.worktreeIdByTabId.has('browser-stale')).toBe(true)
+    expect(internals.contextMenuCleanupByTabId.has('browser-stale')).toBe(true)
+    expect(internals.grabShortcutCleanupByTabId.has('browser-stale')).toBe(true)
+    expect(internals.shortcutForwardingCleanupByTabId.has('browser-stale')).toBe(true)
+
+    webContentsFromIdMock.mockReturnValue(null)
+
+    expect(browserManager.getAuthorizedGuest('browser-stale', rendererWebContentsId)).toBeNull()
+
+    expect(browserManager.getGuestWebContentsId('browser-stale')).toBeNull()
+    expect(internals.rendererWebContentsIdByTabId.has('browser-stale')).toBe(false)
+    expect(internals.workspaceIdByPageId.has('browser-stale')).toBe(false)
+    expect(internals.sessionProfileIdByPageId.has('browser-stale')).toBe(false)
+    expect(internals.worktreeIdByTabId.has('browser-stale')).toBe(false)
+    expect(internals.contextMenuCleanupByTabId.has('browser-stale')).toBe(false)
+    expect(internals.grabShortcutCleanupByTabId.has('browser-stale')).toBe(false)
+    expect(internals.shortcutForwardingCleanupByTabId.has('browser-stale')).toBe(false)
+    expect(guestOffMock).toHaveBeenCalled()
   })
 
   it('replays a queued main-frame load failure after the guest registers', () => {

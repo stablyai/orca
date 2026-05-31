@@ -44,13 +44,16 @@ import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
-import { PluginOverlayManager } from './plugin-overlay'
+import { PluginOverlayManager, getRelayPiStatusExtensionPath } from './plugin-overlay'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-relay'
-import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import {
+  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
+} from '../shared/ssh-types'
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
@@ -423,6 +426,23 @@ async function main(): Promise<void> {
     })
   })
 
+  function configureRelayGraceTime(params: Record<string, unknown>): { graceTimeMs: number } {
+    const seconds = Number(params.graceTimeSeconds)
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      // Why: the host sends 0 before system sleep so live remote PTYs survive
+      // longer than the ordinary disconnect grace window.
+      ptyHandler.setGraceTimeMs(Math.floor(seconds) * 1000)
+    }
+    return { graceTimeMs: ptyHandler.configuredGraceTimeMs }
+  }
+
+  dispatcher.onNotification(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, (params) => {
+    configureRelayGraceTime(params)
+  })
+  dispatcher.onRequest(SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD, async (params) =>
+    configureRelayGraceTime(params)
+  )
+
   // ── Agent-hook server ─────────────────────────────────────────────
   // Why: hosts a loopback HTTP receiver inside the relay process so agent
   // CLIs running in remote PTYs can post hook events without leaving the
@@ -500,23 +520,38 @@ async function main(): Promise<void> {
       // only signal - disk-presence guessing silently shadows the other
       // agent's extensions when both `~/.pi/agent` and `~/.omp/agent` exist.
       const kind = detectPiAgentKindFromCommand(ctx.command)
-      const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, kind)
-      const dir = pluginOverlay.materializePi(overlayId, sourceDir, kind)
-      if (dir) {
-        env.PI_CODING_AGENT_DIR = dir
-        // Why: shadow var is agent-scoped so the remote shell-ready wrappers
-        // can OR-restore either kind without cross-contamination. PI_CODING_AGENT_DIR
-        // is the binary-facing var both Pi and OMP read; OMP's changelog
-        // documents the OMP_CODING_AGENT_DIR -> PI_CODING_AGENT_DIR rename.
-        if (kind === 'omp') {
-          env.ORCA_OMP_CODING_AGENT_DIR = dir
-          if (sourceDir) {
-            env.ORCA_OMP_SOURCE_AGENT_DIR = sourceDir
-          }
-        } else {
+      const hasLaunchCommand = typeof ctx.command === 'string' && ctx.command.trim().length > 0
+      const shouldPrepareOmpShadow = kind === 'omp' || !hasLaunchCommand
+      if (kind === 'pi') {
+        const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'pi')
+        const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'pi')
+        if (dir) {
+          env.PI_CODING_AGENT_DIR = dir
+          // Why: shadow var is agent-scoped so remote shell-ready wrappers can
+          // restore Pi by default while the `omp` wrapper switches on demand.
           env.ORCA_PI_CODING_AGENT_DIR = dir
           if (sourceDir) {
             env.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
+          }
+        }
+      }
+      if (shouldPrepareOmpShadow) {
+        // Why: in a bare shell, PI_CODING_AGENT_DIR is historically Pi's
+        // default. Do not mirror it into OMP; use OMP's own default unless an
+        // OMP-scoped source shadow is already present from a nested Orca shell.
+        const sourceDir =
+          kind === 'omp'
+            ? resolvePiSourceAgentDir(ctx.env, ctx.shell, 'omp')
+            : ctx.env.ORCA_OMP_SOURCE_AGENT_DIR
+        const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'omp')
+        if (dir) {
+          if (kind === 'omp') {
+            env.PI_CODING_AGENT_DIR = dir
+          }
+          env.ORCA_OMP_CODING_AGENT_DIR = dir
+          env.ORCA_OMP_STATUS_EXTENSION = getRelayPiStatusExtensionPath(dir)
+          if (sourceDir) {
+            env.ORCA_OMP_SOURCE_AGENT_DIR = sourceDir
           }
         }
       }
@@ -559,16 +594,20 @@ async function main(): Promise<void> {
   dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource
+    const omp = params.ompExtensionSource
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
+    assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
-      piExtensionSource: typeof pi === 'string' ? pi : undefined
+      piExtensionSource: typeof pi === 'string' ? pi : undefined,
+      ompExtensionSource: typeof omp === 'string' ? omp : undefined
     })
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
-        pi: pluginOverlay.hasPiSource()
+        pi: pluginOverlay.hasPiSource('pi'),
+        omp: pluginOverlay.hasPiSource('omp')
       }
     }
   })

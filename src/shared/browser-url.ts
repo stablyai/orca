@@ -1,15 +1,16 @@
 import { ORCA_BROWSER_BLANK_URL } from './constants'
 
 const LOCAL_ADDRESS_PATTERN =
-  /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:\/.*)?$/i
+  /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i
 
 // Why: bare words like "react hooks" should trigger a search, but inputs that
 // look like domain names ("example.com", "foo.bar/path") should navigate directly.
 // A single-word input containing a dot with a valid TLD-like suffix is treated as
 // a URL attempt, not a search query.
 const LOOKS_LIKE_URL_PATTERN = /^[^\s]+\.[a-z]{2,}(\/.*)?$/i
-const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/][^\s]*$/
-const UNIX_ABSOLUTE_PATH_PATTERN = /^\/[^\s]*$/
+const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/].*$/
+const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\s\\/]+[\\/][^\\/]+(?:[\\/].*)?$/
+const UNIX_ABSOLUTE_PATH_PATTERN = /^\/.*$/
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing' | 'kagi'
 
@@ -146,6 +147,12 @@ function absolutePathToFileUrl(filePath: string): string {
     : `file:///${segments.join('/')}`
 }
 
+function windowsUncPathToFileUrl(filePath: string): string {
+  const normalizedPath = filePath.replaceAll('\\', '/').replace(/^\/+/, '')
+  const [host, ...pathSegments] = normalizedPath.split('/')
+  return `file://${host}/${pathSegments.map(encodeURIComponent).join('/')}`
+}
+
 export function normalizeBrowserNavigationUrl(
   rawUrl: string,
   searchEngine?: SearchEngine | null,
@@ -162,6 +169,10 @@ export function normalizeBrowserNavigationUrl(
     } catch {
       return null
     }
+  }
+
+  if (WINDOWS_UNC_PATH_PATTERN.test(trimmed)) {
+    return windowsUncPathToFileUrl(trimmed)
   }
 
   if (UNIX_ABSOLUTE_PATH_PATTERN.test(trimmed) || WINDOWS_ABSOLUTE_PATH_PATTERN.test(trimmed)) {

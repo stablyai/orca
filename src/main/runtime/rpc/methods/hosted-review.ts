@@ -38,7 +38,8 @@ const HostedReviewCreate = z.object({
   head: z.string().optional(),
   title: requiredString('Missing title'),
   body: z.string().optional(),
-  draft: z.boolean().optional()
+  draft: z.boolean().optional(),
+  useTemplate: z.boolean().optional()
 })
 
 export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
@@ -96,7 +97,8 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         head: params.head,
         title: params.title,
         body: params.body,
-        draft: params.draft
+        draft: params.draft,
+        useTemplate: params.useTemplate
       })
   })
 ]

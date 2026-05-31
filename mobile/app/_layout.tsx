@@ -10,6 +10,7 @@ import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
 import { getNotificationNavigationPath } from '../src/notifications/notification-routing'
 import { loadHosts } from '../src/transport/host-store'
+import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -30,39 +31,23 @@ Notifications.setNotificationHandler({
   })
 })
 
-// Why: extract the path+payload that follows the orca://pair anchor so we
-// can route it to the confirm screen. Accept either a hash payload
-// (`orca://pair#<base64>`, the QR / shared form) or a query param
-// (`orca://pair?code=<...>`, future-proof for share sheets that strip
-// fragments).
-function extractPairCode(url: string): string | null {
-  if (!url.startsWith('orca://pair')) return null
-  const hashIndex = url.indexOf('#')
-  if (hashIndex !== -1) {
-    return url.slice(hashIndex + 1) || null
-  }
-  const queryIndex = url.indexOf('?')
-  if (queryIndex !== -1) {
-    const params = new URLSearchParams(url.slice(queryIndex + 1))
-    return params.get('code')
-  }
-  return null
-}
-
 export default function RootLayout() {
   const router = useRouter()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
 
-  // Why: route `orca://pair#<code>` deep links to the confirm screen so
+  // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
   // paste, AirDrop, Messages, or `xcrun simctl openurl`. getInitialURL
   // covers cold-start (link tapped while app was closed); the listener
   // covers warm-start (link tapped while app is in memory).
   useEffect(() => {
     function handleUrl(url: string) {
-      const code = extractPairCode(url)
+      const code = extractPairingCodeFromUrl(url)
       if (code) {
-        router.push({ pathname: '/pair-confirm', params: { code } })
+        // Why: Android camera launches can leave Expo Router's unmatched
+        // `orca://pair` route underneath this screen; replacing keeps cancel
+        // and edge-back from revealing the router error page.
+        router.replace({ pathname: '/pair-confirm', params: { code } })
       }
     }
 
@@ -169,6 +154,7 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
+          <Stack.Screen name="pair" options={{ headerShown: false }} />
           <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />

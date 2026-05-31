@@ -44,6 +44,7 @@ export function CreateFromPicker({
   const repo = repoMap.get(repoId)
   const [open, setOpen] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
+  const focusFrameRef = React.useRef<number | null>(null)
   const [defaultBaseRef, setDefaultBaseRef] = React.useState<string | null>(null)
   const [query, setQuery] = React.useState('')
   const [searchResults, setSearchResults] = React.useState<string[]>([])
@@ -69,13 +70,40 @@ export function CreateFromPicker({
     return Array.from(options).sort((left, right) => left.localeCompare(right))
   }, [effectiveDefault, searchResults, worktrees])
 
-  React.useEffect(() => {
-    if (!open) {
-      return
+  const cancelFocusFrame = React.useCallback((): void => {
+    if (focusFrameRef.current !== null) {
+      cancelAnimationFrame(focusFrameRef.current)
+      focusFrameRef.current = null
     }
-    const frame = requestAnimationFrame(() => inputRef.current?.focus())
-    return () => cancelAnimationFrame(frame)
-  }, [open])
+  }, [])
+
+  const setInputNode = React.useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
+
+  const focusSearchInput = React.useCallback(() => {
+    cancelFocusFrame()
+    focusFrameRef.current = requestAnimationFrame(() => {
+      focusFrameRef.current = null
+      inputRef.current?.focus()
+    })
+  }, [cancelFocusFrame])
+
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen)
+      if (!nextOpen) {
+        cancelFocusFrame()
+      }
+    },
+    [cancelFocusFrame]
+  )
 
   React.useEffect(() => {
     if (!repoId) {
@@ -98,12 +126,6 @@ export function CreateFromPicker({
       stale = true
     }
   }, [activeRuntimeEnvironmentId, repoId])
-
-  React.useEffect(() => {
-    setQuery('')
-    setSearchResults([])
-    setIsSearching(false)
-  }, [repoId])
 
   React.useEffect(() => {
     const trimmedQuery = query.trim()
@@ -142,7 +164,7 @@ export function CreateFromPicker({
 
   return (
     <div className="space-y-2">
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
             type="button"
@@ -161,11 +183,14 @@ export function CreateFromPicker({
         <PopoverContent
           align="start"
           className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
-          onOpenAutoFocus={(event) => event.preventDefault()}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            focusSearchInput()
+          }}
         >
           <Command>
             <CommandInput
-              ref={inputRef}
+              ref={setInputNode}
               value={query}
               onValueChange={setQuery}
               placeholder="Search repo branches..."

@@ -18,6 +18,17 @@ import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
 import { FEATURE_WALL_EXIT_ACTIONS, FEATURE_WALL_TOUR_DEPTH_STEPS } from './feature-wall-tour-depth'
 import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
+import { appStarSourceSchema } from './gh-star-source'
+import {
+  NESTED_REPO_COUNT_BUCKETS,
+  NESTED_REPO_IMPORT_ACTIONS,
+  NESTED_REPO_IMPORT_OUTCOMES,
+  NESTED_REPO_SCAN_RESULTS,
+  NESTED_REPO_TELEMETRY_MAX_REPO_COUNT,
+  NESTED_REPO_TELEMETRY_RUNTIME_KINDS,
+  NESTED_REPO_TELEMETRY_SURFACES,
+  bucketNestedRepoTelemetryCount
+} from './nested-repo-telemetry'
 
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
 import { ONBOARDING_FINAL_STEP } from './constants'
@@ -39,6 +50,7 @@ import type {
 // should map to concrete values; see `tuiAgentToAgentKind`.
 export const AGENT_KIND_VALUES = [
   'claude-code',
+  'openclaude',
   'codex',
   'autohand',
   'opencode',
@@ -55,6 +67,7 @@ export const AGENT_KIND_VALUES = [
   'aug',
   'cline',
   'codebuff',
+  'command-code',
   'continue',
   'cursor',
   'droid',
@@ -139,6 +152,7 @@ export type { WorkspaceSource }
 export const launchSourceSchema = z.enum([
   'command_palette',
   'sidebar',
+  'quick_command',
   'tab_bar_quick_launch',
   'task_page',
   'new_workspace_composer',
@@ -149,6 +163,7 @@ export const launchSourceSchema = z.enum([
   'notes_send',
   'conflict_resolution',
   'source_control_recovery',
+  'terminal_context_menu',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>
@@ -226,7 +241,9 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalMobile',
   'experimentalPet',
   'experimentalActivity',
+  'experimentalTerminalAttention',
   'experimentalWorktreeSymlinks',
+  'experimentalUnifiedNewTabLauncher',
   'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
@@ -253,6 +270,13 @@ const repoAddedSchema = z
   .object({ method: repoMethodSchema, nth_repo_added: nthRepoAddedSchema })
   .strict()
 
+const appStarredOrcaSchema = z
+  .object({
+    source: appStarSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+
 const workspaceCreatedSchema = z
   .object({
     source: workspaceSourceSchema,
@@ -262,6 +286,14 @@ const workspaceCreatedSchema = z
   .strict()
 
 const agentStartedSchema = z
+  .object({
+    agent_kind: agentKindSchema,
+    launch_source: launchSourceSchema,
+    request_kind: requestKindSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const agentPromptSentSchema = z
   .object({
     agent_kind: agentKindSchema,
     launch_source: launchSourceSchema,
@@ -292,6 +324,27 @@ const settingsChangedSchema = z
 
 const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
+
+const orcaCliFeatureTipSourceSchema = z.enum(['app_open', 'manual'])
+const orcaCliFeatureTipShownSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const orcaCliFeatureTipSetupClickedSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const orcaCliFeatureTipSetupResultSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    result: z.enum(['installed', 'needs_attention', 'dev_preview', 'failed']),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
 
 const featureWallOpenedSchema = z
   .object({
@@ -408,30 +461,79 @@ function validateSetupScriptPromptProvider(
     ctx.addIssue({
       code: 'custom',
       path: ['provider'],
-      message: 'provider is required when setup import is available'
+      message: 'provider is required when a setup candidate is available'
     })
   }
   if (props.mode === 'configure_needed' && props.provider !== undefined) {
     ctx.addIssue({
       code: 'custom',
       path: ['provider'],
-      message: 'provider is only valid when setup import is available'
+      message: 'provider is only valid when a setup candidate is available'
     })
   }
 }
-// Why: setup-import telemetry is for a retention cohort, not debugging a
+// Why: setup-candidate telemetry is for a retention cohort, not debugging a
 // user's repo, so it carries only closed enums and count buckets.
 const setupScriptPromptShownSchema = z
   .object(setupScriptPromptContextSchema)
   .strict()
   .superRefine(validateSetupScriptPromptProvider)
+const setupScriptDetectedSaveActions = [
+  'save_detected_setup_clicked',
+  'save_detected_setup_completed',
+  'save_detected_setup_failed'
+] as const
+
+function isSetupScriptDetectedSaveAction(action: unknown): boolean {
+  return setupScriptDetectedSaveActions.includes(action as never)
+}
+
+function validateSetupScriptPromptAction(
+  props: SetupScriptPromptContextTelemetry & {
+    action?: string
+    edited_before_save?: boolean
+  },
+  ctx: z.RefinementCtx
+): void {
+  validateSetupScriptPromptProvider(props, ctx)
+  const isDetectedSave = isSetupScriptDetectedSaveAction(props.action)
+  if (isDetectedSave && props.provider !== 'package-manager') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['provider'],
+      message: 'detected setup save actions require the package-manager provider'
+    })
+  }
+  if (isDetectedSave && props.edited_before_save === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['edited_before_save'],
+      message: 'edited_before_save is required for detected setup save actions'
+    })
+  }
+  if (!isDetectedSave && props.edited_before_save !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['edited_before_save'],
+      message: 'edited_before_save is only valid for detected setup save actions'
+    })
+  }
+}
+
 const setupScriptPromptActionSchema = z
   .object({
     ...setupScriptPromptContextSchema,
-    action: z.enum(['import_completed', 'import_failed', 'configure_clicked', 'dismissed'])
+    action: z.enum([
+      'import_completed',
+      'import_failed',
+      'configure_clicked',
+      'dismissed',
+      ...setupScriptDetectedSaveActions
+    ]),
+    edited_before_save: z.boolean().optional()
   })
   .strict()
-  .superRefine(validateSetupScriptPromptProvider)
+  .superRefine(validateSetupScriptPromptAction)
 
 // Managed-hook installer per-agent label. Distinct from `AGENT_KIND_VALUES`:
 // hook installation only targets the agents in `AGENT_HOOK_TARGETS` and the
@@ -579,11 +681,107 @@ void _onboardingChecklistItemSyncCheck
 // `'cohort' in schema.shape`, so there is no parallel hand-maintained list.
 const cohortSchema = z.enum(['fresh_install', 'upgrade_backfill']).optional()
 
+const nestedRepoTelemetrySurfaceSchema = z.enum(NESTED_REPO_TELEMETRY_SURFACES)
+const nestedRepoTelemetryRuntimeKindSchema = z.enum(NESTED_REPO_TELEMETRY_RUNTIME_KINDS)
+const nestedRepoCountSchema = z.number().int().min(0).max(NESTED_REPO_TELEMETRY_MAX_REPO_COUNT)
+const nestedRepoCountBucketSchema = z.enum(NESTED_REPO_COUNT_BUCKETS)
+const nestedRepoScanResultSchema = z.enum(NESTED_REPO_SCAN_RESULTS)
+const nestedRepoImportActionSchema = z.enum(NESTED_REPO_IMPORT_ACTIONS)
+const nestedRepoImportOutcomeSchema = z.enum(NESTED_REPO_IMPORT_OUTCOMES)
+const nestedRepoScanPathKindSchema = z.enum(['git_repo', 'non_git_folder'])
+const nestedRepoImportModeSchema = z.enum(['group', 'separate'])
+const nestedRepoAttemptIdSchema = z.string().uuid()
+
+function validateNestedRepoCountBucket(
+  props: Record<string, unknown>,
+  countKey: string,
+  bucketKey: string,
+  ctx: z.RefinementCtx
+): void {
+  const count = props[countKey]
+  const bucket = props[bucketKey]
+  if (typeof count !== 'number' || typeof bucket !== 'string') {
+    return
+  }
+  if (bucketNestedRepoTelemetryCount(count) !== bucket) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [bucketKey],
+      message: `${bucketKey} must match ${countKey}`
+    })
+  }
+}
+
+function validateNestedRepoCountBuckets(
+  props: Record<string, unknown>,
+  ctx: z.RefinementCtx
+): void {
+  validateNestedRepoCountBucket(props, 'found_count', 'found_count_bucket', ctx)
+  validateNestedRepoCountBucket(props, 'selected_count', 'selected_count_bucket', ctx)
+  validateNestedRepoCountBucket(props, 'imported_count', 'imported_count_bucket', ctx)
+  validateNestedRepoCountBucket(props, 'already_known_count', 'already_known_count_bucket', ctx)
+  validateNestedRepoCountBucket(props, 'failed_count', 'failed_count_bucket', ctx)
+}
+
+const nestedRepoTelemetryBaseSchema = {
+  // Why: high-cardinality by design, but random and non-persistent. It lets
+  // dashboards count scan -> action -> result attempts without path-derived IDs.
+  attempt_id: nestedRepoAttemptIdSchema,
+  surface: nestedRepoTelemetrySurfaceSchema,
+  runtime_kind: nestedRepoTelemetryRuntimeKindSchema,
+  nth_repo_added: nthRepoAddedSchema
+} as const
+
+const addRepoNestedScanResultSchema = z
+  .object({
+    ...nestedRepoTelemetryBaseSchema,
+    result: nestedRepoScanResultSchema,
+    selected_path_kind: nestedRepoScanPathKindSchema.optional(),
+    found_count: nestedRepoCountSchema,
+    found_count_bucket: nestedRepoCountBucketSchema,
+    truncated: z.boolean(),
+    timed_out: z.boolean()
+  })
+  .strict()
+  .superRefine(validateNestedRepoCountBuckets)
+
+const addRepoNestedImportActionSchema = z
+  .object({
+    ...nestedRepoTelemetryBaseSchema,
+    action: nestedRepoImportActionSchema,
+    found_count: nestedRepoCountSchema,
+    found_count_bucket: nestedRepoCountBucketSchema,
+    selected_count: nestedRepoCountSchema,
+    selected_count_bucket: nestedRepoCountBucketSchema,
+    all_selected: z.boolean()
+  })
+  .strict()
+  .superRefine(validateNestedRepoCountBuckets)
+
+const addRepoNestedImportResultSchema = z
+  .object({
+    ...nestedRepoTelemetryBaseSchema,
+    mode: nestedRepoImportModeSchema,
+    outcome: nestedRepoImportOutcomeSchema,
+    found_count: nestedRepoCountSchema,
+    found_count_bucket: nestedRepoCountBucketSchema,
+    selected_count: nestedRepoCountSchema,
+    selected_count_bucket: nestedRepoCountBucketSchema,
+    imported_count: nestedRepoCountSchema,
+    imported_count_bucket: nestedRepoCountBucketSchema,
+    already_known_count: nestedRepoCountSchema,
+    already_known_count_bucket: nestedRepoCountBucketSchema,
+    failed_count: nestedRepoCountSchema,
+    failed_count_bucket: nestedRepoCountBucketSchema,
+    all_selected: z.boolean()
+  })
+  .strict()
+  .superRefine(validateNestedRepoCountBuckets)
+
 // `'button' | 'keyboard'` records whether the user advanced via a footer
-// button click or via Cmd/Ctrl+Enter. Skip and dismiss don't have a keyboard
-// path today (the field will only ever be `'button'` for those events) but
-// the uniform shape lets a future keyboard skip arrive without a schema
-// migration.
+// button click, Cmd/Ctrl+Enter, or an equivalent keyboard exit like Escape.
+// The uniform shape lets keyboard skip/dismiss paths arrive without a
+// schema migration.
 const advancedViaSchema = z.enum(['button', 'keyboard']).optional()
 
 const onboardingStartedSchema = z
@@ -896,16 +1094,21 @@ const onboardingFeatureSetupTerminalInteractedSchema = z
 // which cannot be unmixed after the fact.
 export const eventSchemas = {
   app_opened: appOpenedSchema,
+  app_starred_orca: appStarredOrcaSchema,
 
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
   add_repo_existing_workspaces_detected: addRepoExistingWorkspacesDetectedSchema,
+  add_repo_nested_scan_result: addRepoNestedScanResultSchema,
+  add_repo_nested_import_action: addRepoNestedImportActionSchema,
+  add_repo_nested_import_result: addRepoNestedImportResultSchema,
   workspace_created: workspaceCreatedSchema,
   workspace_create_failed: workspaceCreateFailedSchema,
   setup_script_prompt_shown: setupScriptPromptShownSchema,
   setup_script_prompt_action: setupScriptPromptActionSchema,
 
   agent_started: agentStartedSchema,
+  agent_prompt_sent: agentPromptSentSchema,
   agent_error: agentErrorSchema,
   agent_hook_install_failed: agentHookInstallFailedSchema,
   agent_hook_unattributed: agentHookUnattributedSchema,
@@ -914,6 +1117,10 @@ export const eventSchemas = {
 
   telemetry_opted_in: telemetryOptedInSchema,
   telemetry_opted_out: telemetryOptedOutSchema,
+
+  orca_cli_feature_tip_shown: orcaCliFeatureTipShownSchema,
+  orca_cli_feature_tip_setup_clicked: orcaCliFeatureTipSetupClickedSchema,
+  orca_cli_feature_tip_setup_result: orcaCliFeatureTipSetupResultSchema,
 
   feature_wall_opened: featureWallOpenedSchema,
   feature_wall_closed: featureWallClosedSchema,
@@ -985,15 +1192,23 @@ export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_
 // injection set against silent schema drift.
 type _CohortExtendedRoster =
   | 'app_opened'
+  | 'app_starred_orca'
   | 'repo_added'
   | 'add_repo_setup_step_action'
   | 'add_repo_existing_workspaces_detected'
+  | 'add_repo_nested_scan_result'
+  | 'add_repo_nested_import_action'
+  | 'add_repo_nested_import_result'
   | 'workspace_created'
   | 'workspace_create_failed'
   | 'setup_script_prompt_shown'
   | 'setup_script_prompt_action'
   | 'agent_started'
+  | 'agent_prompt_sent'
   | 'agent_error'
+  | 'orca_cli_feature_tip_shown'
+  | 'orca_cli_feature_tip_setup_clicked'
+  | 'orca_cli_feature_tip_setup_result'
 // Why: `z.object({}).strict()` infers a string index signature, which would
 // make every key appear present. Ignore index-signature-only keys here so
 // strict empty event payloads do not get pulled into keyed telemetry rosters.

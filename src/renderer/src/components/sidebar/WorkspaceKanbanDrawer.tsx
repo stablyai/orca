@@ -31,7 +31,11 @@ import {
   type WorktreeDragGroup
 } from './worktree-manual-order'
 import type { WorkspaceStatus, WorktreeMeta } from '../../../../shared/types'
-import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
+import {
+  WORKSPACE_BOARD_COLUMN_GAP,
+  fitWorkspaceBoardColumnWidth,
+  makeWorkspaceStatusId
+} from '../../../../shared/workspace-statuses'
 
 type WorkspaceKanbanDrawerProps = {
   open: boolean
@@ -53,8 +57,8 @@ export default function WorkspaceKanbanDrawer({
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const setWorkspaceStatuses = useAppStore((s) => s.setWorkspaceStatuses)
-  const workspaceBoardCompact = useAppStore((s) => s.workspaceBoardCompact)
-  const setWorkspaceBoardCompact = useAppStore((s) => s.setWorkspaceBoardCompact)
+  const workspaceBoardColumnLayout = useAppStore((s) => s.workspaceBoardColumnLayout)
+  const setWorkspaceBoardColumnLayout = useAppStore((s) => s.setWorkspaceBoardColumnLayout)
   const workspaceBoardColumnWidth = useAppStore((s) => s.workspaceBoardColumnWidth)
   const setWorkspaceBoardColumnWidth = useAppStore((s) => s.setWorkspaceBoardColumnWidth)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -66,6 +70,7 @@ export default function WorkspaceKanbanDrawer({
   const areaSelectionOverlayRef = useRef<HTMLDivElement>(null)
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
+  const [laneScrollerWidth, setLaneScrollerWidth] = useState(0)
   const { canCreateWorktree, createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
   const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees,
@@ -114,12 +119,40 @@ export default function WorkspaceKanbanDrawer({
   })
   const { columnWidth, isResizingColumn, onColumnResizeStart, onColumnResizeKeyDown } =
     useWorkspaceKanbanColumnResize(workspaceBoardColumnWidth, setWorkspaceBoardColumnWidth)
+  const laneScrollerResizeRef = useRef<ResizeObserver | null>(null)
+  const attachLaneScroller = useCallback((node: HTMLDivElement | null) => {
+    laneScrollerRef.current = node
+    laneScrollerResizeRef.current?.disconnect()
+    laneScrollerResizeRef.current = null
+    if (!node) {
+      return
+    }
+    setLaneScrollerWidth(node.clientWidth)
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(() => setLaneScrollerWidth(node.clientWidth))
+    observer.observe(node)
+    laneScrollerResizeRef.current = observer
+  }, [])
+  const renderColumnWidth = useMemo(
+    () =>
+      workspaceBoardColumnLayout === 'fit'
+        ? fitWorkspaceBoardColumnWidth({
+            containerWidth: laneScrollerWidth,
+            columnCount: workspaceStatuses.length,
+            capWidth: columnWidth
+          })
+        : columnWidth,
+    [columnWidth, laneScrollerWidth, workspaceBoardColumnLayout, workspaceStatuses.length]
+  )
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
       const current = worktreeById.get(worktreeId)
       if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
         return
       }
+      useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
       void updateWorktreeMeta(worktreeId, { workspaceStatus: status })
     },
     [updateWorktreeMeta, workspaceStatuses, worktreeById]
@@ -211,6 +244,7 @@ export default function WorkspaceKanbanDrawer({
       if (writeManualOrder && order.changed) {
         setSortBy('manual')
       }
+      useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
       void updateWorktreesMeta(updates)
     },
     [
@@ -244,6 +278,7 @@ export default function WorkspaceKanbanDrawer({
         updates.set(worktreeId, { isPinned: true })
       }
       if (updates.size > 0) {
+        useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
         void updateWorktreesMeta(updates)
       }
     },
@@ -327,6 +362,21 @@ export default function WorkspaceKanbanDrawer({
   const handleWorktreeActivate = useCallback(() => {
     onOpenChange(false)
   }, [onOpenChange])
+  const handleHeaderClose = useCallback(() => {
+    // Why: generic Radix close requests stay ignored so sidebar drag/outside
+    // dismiss rules remain explicit; the header X is a board-owned close path.
+    onOpenChange(false)
+  }, [onOpenChange])
+  const handleSheetOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      // Why: Radix treats any outside pointer release as a dismiss request.
+      // The board has custom right-side/sidebar rules, so only those paths close it.
+      if (nextOpen) {
+        onOpenChange(true)
+      }
+    },
+    [onOpenChange]
+  )
 
   const handleRenameStatus = useCallback(
     (statusId: string, label: string) => {
@@ -339,6 +389,7 @@ export default function WorkspaceKanbanDrawer({
           status.id === statusId ? { ...status, label: trimmed } : status
         )
       )
+      useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
     },
     [setWorkspaceStatuses, workspaceStatuses]
   )
@@ -348,6 +399,7 @@ export default function WorkspaceKanbanDrawer({
       setWorkspaceStatuses(
         workspaceStatuses.map((status) => (status.id === statusId ? { ...status, color } : status))
       )
+      useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
     },
     [setWorkspaceStatuses, workspaceStatuses]
   )
@@ -357,6 +409,7 @@ export default function WorkspaceKanbanDrawer({
       setWorkspaceStatuses(
         workspaceStatuses.map((status) => (status.id === statusId ? { ...status, icon } : status))
       )
+      useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
     },
     [setWorkspaceStatuses, workspaceStatuses]
   )
@@ -372,6 +425,7 @@ export default function WorkspaceKanbanDrawer({
       const [moved] = next.splice(index, 1)
       next.splice(nextIndex, 0, moved)
       setWorkspaceStatuses(next)
+      useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
     },
     [setWorkspaceStatuses, workspaceStatuses]
   )
@@ -382,6 +436,7 @@ export default function WorkspaceKanbanDrawer({
       ...workspaceStatuses,
       { id: makeWorkspaceStatusId(label, workspaceStatuses), label }
     ])
+    useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
   }, [setWorkspaceStatuses, workspaceStatuses])
 
   const handleRemoveStatus = useCallback(
@@ -396,6 +451,7 @@ export default function WorkspaceKanbanDrawer({
       const next = workspaceStatuses.filter((status) => status.id !== statusId)
       const fallbackStatus = next[Math.min(index, next.length - 1)]?.id ?? next[0]!.id
       setWorkspaceStatuses(next)
+      useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
       for (const worktree of allWorktrees) {
         if (getWorkspaceStatus(worktree, workspaceStatuses) === statusId) {
           void updateWorktreeMeta(worktree.id, { workspaceStatus: fallbackStatus })
@@ -447,9 +503,22 @@ export default function WorkspaceKanbanDrawer({
   const drawerLeftCss = sidebarOpen
     ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
     : '0px'
+  const fitPanelBoardWidthCss = `min(calc(100vw - ${drawerLeftCss}), 1294px)`
+  // Why: full-width mode keeps user-sized columns and expands the companion
+  // board over adjacent panes; fit mode preserves the older fixed panel.
+  const boardContentWidth =
+    workspaceStatuses.length * columnWidth +
+    Math.max(0, workspaceStatuses.length - 1) * WORKSPACE_BOARD_COLUMN_GAP +
+    24
+  const fullBoardWidthCss = `min(calc(100vw - ${drawerLeftCss}), ${Math.max(
+    boardContentWidth,
+    1294
+  )}px)`
+  const boardWidthCss =
+    workspaceBoardColumnLayout === 'fit' ? fitPanelBoardWidthCss : fullBoardWidthCss
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+    <Sheet open={open} onOpenChange={handleSheetOpenChange} modal={false}>
       <SheetContent
         side="left"
         showCloseButton={false}
@@ -462,14 +531,36 @@ export default function WorkspaceKanbanDrawer({
             left: drawerLeftCss,
             top: 36,
             height: 'calc(100% - 36px)',
-            width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`
+            width: boardWidthCss
           } as React.CSSProperties
         }
-        data-workspace-board-compact={workspaceBoardCompact ? 'true' : 'false'}
         onOpenAutoFocus={(event) => {
           // Why: Radix focuses the first toolbar button on open, which opens
           // its tooltip without hover and makes the drawer feel noisy.
           event.preventDefault()
+        }}
+        onPointerDownOutside={(event) => {
+          const originalEvent = event.detail.originalEvent
+          const target = originalEvent.target
+          if (preserveOpenForMenu) {
+            event.preventDefault()
+            return
+          }
+          if (isWorkspaceBoardKeepOpenTarget(target)) {
+            event.preventDefault()
+            return
+          }
+          const liveDrawerLeft =
+            boardRef.current
+              ?.closest<HTMLElement>('[data-slot="sheet-content"]')
+              ?.getBoundingClientRect().left ?? drawerLeft
+          const pointerX =
+            'clientX' in originalEvent && typeof originalEvent.clientX === 'number'
+              ? originalEvent.clientX
+              : null
+          if (pointerX !== null && pointerX < liveDrawerLeft) {
+            event.preventDefault()
+          }
         }}
         onInteractOutside={(event) => {
           const originalEvent = event.detail.originalEvent
@@ -488,7 +579,11 @@ export default function WorkspaceKanbanDrawer({
             boardRef.current
               ?.closest<HTMLElement>('[data-slot="sheet-content"]')
               ?.getBoundingClientRect().left ?? drawerLeft
-          if (originalEvent instanceof PointerEvent && originalEvent.clientX < liveDrawerLeft) {
+          const pointerX =
+            'clientX' in originalEvent && typeof originalEvent.clientX === 'number'
+              ? originalEvent.clientX
+              : null
+          if (pointerX !== null && pointerX < liveDrawerLeft) {
             // Why: keep the workspace sidebar interactive while the companion board stays open.
             event.preventDefault()
           }
@@ -496,9 +591,12 @@ export default function WorkspaceKanbanDrawer({
       >
         <WorkspaceKanbanDrawerHeader
           selectedCount={selectedWorktrees.length}
-          compact={workspaceBoardCompact}
+          columnLayout={workspaceBoardColumnLayout}
           workspaceStatuses={workspaceStatuses}
-          onCompactChange={setWorkspaceBoardCompact}
+          onColumnLayoutChange={(layout) => {
+            useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
+            setWorkspaceBoardColumnLayout(layout)
+          }}
           onRenameStatus={handleRenameStatus}
           onChangeStatusColor={handleChangeStatusColor}
           onChangeStatusIcon={handleChangeStatusIcon}
@@ -506,6 +604,7 @@ export default function WorkspaceKanbanDrawer({
           onRemoveStatus={handleRemoveStatus}
           onAddStatus={handleAddStatus}
           onFilterMenuOpenChange={onMenuOpenChange}
+          onClose={handleHeaderClose}
         />
         <div
           ref={boardRef}
@@ -521,7 +620,7 @@ export default function WorkspaceKanbanDrawer({
             onDragLeave={handlePinDragLeave}
           />
           <div
-            ref={laneScrollerRef}
+            ref={attachLaneScroller}
             className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden scrollbar-sleek"
           >
             <WorkspaceKanbanLaneGrid
@@ -529,8 +628,8 @@ export default function WorkspaceKanbanDrawer({
               worktreesByStatus={worktreesByStatus}
               repoMap={repoMap}
               activeWorktreeId={activeWorktreeId}
-              compact={workspaceBoardCompact}
               columnWidth={columnWidth}
+              renderColumnWidth={renderColumnWidth}
               isResizingColumn={isResizingColumn}
               dragOverStatus={dragOverStatus}
               canCreateWorktree={canCreateWorktree}

@@ -273,6 +273,43 @@ describe('registerFilesystemMutationHandlers', () => {
     expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
   })
 
+  it('routes rename through the SSH no-clobber filesystem provider when a connection is present', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    registerSshFilesystemProvider('ssh-1', { renameNoClobber } as never)
+
+    try {
+      await handlers.get('fs:rename')!(null, {
+        oldPath: '/home/me/repo/old.ts',
+        newPath: '/home/me/repo/new.ts',
+        connectionId: 'ssh-1'
+      })
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+
+    expect(renameNoClobber).toHaveBeenCalledWith('/home/me/repo/old.ts', '/home/me/repo/new.ts')
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('propagates SSH no-clobber rename failures', async () => {
+    const renameNoClobber = vi.fn().mockRejectedValue(new Error('destination exists'))
+    registerSshFilesystemProvider('ssh-1', { renameNoClobber } as never)
+
+    try {
+      await expect(
+        handlers.get('fs:rename')!(null, {
+          oldPath: '/home/me/repo/old.ts',
+          newPath: '/home/me/repo/new.ts',
+          connectionId: 'ssh-1'
+        })
+      ).rejects.toThrow('destination exists')
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
   // ── fs:copy ────────────────────────────────────────────────────
 
   it('copies a file without overwriting an existing destination', async () => {

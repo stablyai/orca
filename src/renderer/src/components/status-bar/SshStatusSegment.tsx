@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
 import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
@@ -47,7 +48,7 @@ function overallDotColor(status: 'connected' | 'partial' | 'disconnected' | 'con
       return 'bg-yellow-500'
     case 'connecting':
       return 'bg-yellow-500'
-    default:
+    case 'disconnected':
       return 'bg-muted-foreground/40'
   }
 }
@@ -60,7 +61,7 @@ function overallLabel(status: 'connected' | 'partial' | 'disconnected' | 'connec
       return 'Partial'
     case 'connecting':
       return 'Connecting…'
-    default:
+    case 'disconnected':
       return 'Disconnected'
   }
 }
@@ -79,7 +80,8 @@ function syncStatusLabel(status: RemoteWorkspaceSyncStatus | undefined): string 
       return 'Sync error'
     case 'offline':
       return 'Sync unavailable'
-    default:
+    case 'idle':
+    case undefined:
       return 'Sync idle'
   }
 }
@@ -96,7 +98,8 @@ function syncStatusTone(status: RemoteWorkspaceSyncStatus | undefined): string {
       return 'text-yellow-500'
     case 'synced':
       return 'text-emerald-500'
-    default:
+    case 'idle':
+    case undefined:
       return 'text-muted-foreground'
   }
 }
@@ -113,28 +116,36 @@ function TargetRow({
   syncStatus: RemoteWorkspaceSyncStatus | undefined
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
+  const mountedRef = useMountedRef()
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const handleConnect = useCallback(async () => {
     setBusy(true)
     try {
       await window.api.ssh.connect({ targetId })
+      recordFeatureInteraction('ssh')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Connection failed')
     } finally {
-      setBusy(false)
+      if (mountedRef.current) {
+        setBusy(false)
+      }
     }
-  }, [targetId])
+  }, [mountedRef, recordFeatureInteraction, targetId])
 
   const handleDisconnect = useCallback(async () => {
     setBusy(true)
     try {
       await window.api.ssh.disconnect({ targetId })
+      recordFeatureInteraction('ssh')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Disconnect failed')
     } finally {
-      setBusy(false)
+      if (mountedRef.current) {
+        setBusy(false)
+      }
     }
-  }, [targetId])
+  }, [mountedRef, recordFeatureInteraction, targetId])
 
   return (
     <div className="flex items-center gap-2.5 px-2 py-1.5">
@@ -193,6 +204,7 @@ export function SshStatusSegment({
   )
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const targets = Array.from(sshTargetLabels.entries()).map(([id, label]) => {
     const state = sshConnectionStates.get(id)
@@ -221,7 +233,13 @@ export function SshStatusSegment({
     : null
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) {
+          recordFeatureInteraction('ssh')
+        }
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -273,7 +291,12 @@ export function SshStatusSegment({
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-[220px]">
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="w-[min(20rem,calc(100vw-1rem))]"
+      >
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           SSH Connections
         </div>
@@ -289,6 +312,7 @@ export function SshStatusSegment({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
+            recordFeatureInteraction('ssh')
             openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
             setActiveView('settings')
           }}

@@ -2,8 +2,8 @@
   "expo": {
     "name": "Orca",
     "slug": "orca-mobile",
-    "version": "0.0.9",
-    "orientation": "portrait",
+    "version": "0.0.10",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "orca",
@@ -14,7 +14,7 @@
       "backgroundColor": "#111111"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.stably.orca.mobile",
       "buildNumber": "1",
       "infoPlist": {
@@ -69,7 +69,7 @@
         "expo-camera",
         {
           "cameraPermission": "Allow Orca to use the camera for QR code scanning.",
-          "microphonePermission": false,
+          "microphonePermission": "Allow Orca to use your microphone for voice dictation sent to your paired desktop for transcription.",
           "recordAudioAndroid": false
         }
       ],

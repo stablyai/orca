@@ -654,10 +654,16 @@ function DateCell({
   // Why: a date <input> fires onChange on every digit/spinner adjustment.
   // Committing on each fires a GraphQL mutation per keystroke. Buffer the
   // edit locally and commit on blur or Enter — same UX as TextCell.
-  const [draft, setDraft] = React.useState(value ?? '')
-  React.useEffect(() => {
-    setDraft(value ?? '')
-  }, [value])
+  const sourceValue = value ?? ''
+  const [draftState, setDraftState] = React.useState(() => ({
+    sourceValue,
+    draft: sourceValue
+  }))
+  if (draftState.sourceValue !== sourceValue) {
+    setDraftState({ sourceValue, draft: sourceValue })
+  }
+  const draft = draftState.sourceValue === sourceValue ? draftState.draft : sourceValue
+  const setDraft = (nextDraft: string): void => setDraftState({ sourceValue, draft: nextDraft })
   if (!editable) {
     return <span className="text-xs">{value}</span>
   }
@@ -667,7 +673,7 @@ function DateCell({
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
-        if (draft !== (value ?? '')) {
+        if (draft !== sourceValue) {
           onCommit(draft)
         }
       }}
@@ -677,7 +683,7 @@ function DateCell({
           ;(e.target as HTMLInputElement).blur()
         } else if (e.key === 'Escape') {
           e.preventDefault()
-          setDraft(value ?? '')
+          setDraft(sourceValue)
           ;(e.target as HTMLInputElement).blur()
         }
       }}

@@ -5,6 +5,7 @@ surface is broad. */
 import type {
   ClassifiedError,
   GitHubAssignableUser,
+  GitHubCreateIssueFields,
   GitHubCommentResult,
   GitHubIssueUpdate,
   IssueInfo,
@@ -12,6 +13,7 @@ import type {
   PRComment
 } from '../../shared/types'
 import { mapIssueInfo } from './mappers'
+import type { OwnerRepo } from './gh-utils'
 // prettier-ignore
 import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError, ghRepoExecOptions, githubRepoContext } from './gh-utils'
 
@@ -150,7 +152,8 @@ export async function createIssue(
   title: string,
   body: string,
   preference?: IssueSourcePreference,
-  connectionId?: string | null
+  connectionId?: string | null,
+  fields?: GitHubCreateIssueFields
 ): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> {
   const trimmedTitle = title.trim()
   if (!trimmedTitle) {
@@ -164,19 +167,24 @@ export async function createIssue(
   }
   await acquire()
   try {
-    const { stdout } = await ghExecFileAsync(
-      [
-        'api',
-        '-X',
-        'POST',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
-        '--raw-field',
-        `title=${trimmedTitle}`,
-        '--raw-field',
-        `body=${body}`
-      ],
-      ghOptions
-    )
+    const args = [
+      'api',
+      '-X',
+      'POST',
+      `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
+      '--raw-field',
+      `title=${trimmedTitle}`,
+      '--raw-field',
+      `body=${body}`
+    ]
+    for (const label of fields?.labels ?? []) {
+      args.push('--raw-field', `labels[]=${label}`)
+    }
+    for (const assignee of fields?.assignees ?? []) {
+      args.push('--raw-field', `assignees[]=${assignee}`)
+    }
+
+    const { stdout } = await ghExecFileAsync(args, ghOptions)
     const data = JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
     if (typeof data.number !== 'number') {
       return { ok: false, error: 'Unexpected response from GitHub' }
@@ -323,11 +331,12 @@ export async function addIssueComment(
   repoPath: string,
   issueNumber: number,
   body: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  ownerRepoOverride?: OwnerRepo | null
 ): Promise<GitHubCommentResult> {
   const context = githubRepoContext(repoPath, connectionId)
   const ghOptions = ghRepoExecOptions(context)
-  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId)
+  const ownerRepo = ownerRepoOverride ?? (await getIssueOwnerRepo(repoPath, connectionId))
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -351,8 +360,11 @@ export async function addIssueComment(
       created_at?: string
       html_url?: string
     }
+    if (typeof data.id !== 'number' || !Number.isSafeInteger(data.id) || data.id < 1) {
+      return { ok: false, error: 'Unexpected response from GitHub' }
+    }
     const comment: PRComment = {
-      id: data.id ?? Date.now(),
+      id: data.id,
       author: data.user?.login ?? 'You',
       authorAvatarUrl: data.user?.avatar_url ?? '',
       body: data.body ?? body,

@@ -25,6 +25,7 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  FolderKanban,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
@@ -34,6 +35,7 @@ import {
   MessageSquarePlus,
   PanelLeftOpen,
   Pencil,
+  Plus,
   RefreshCw,
   Send,
   UndoDot,
@@ -45,6 +47,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import {
   Accordion,
@@ -59,12 +62,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 import { setWithLRU } from '@/lib/scroll-cache'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
 import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
 import {
@@ -79,6 +84,14 @@ import {
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
+import {
+  createGitHubChecksTabState,
+  resolveGitHubChecksTabState,
+  toggleGitHubChecksTabExpandedKey,
+  updateGitHubChecksTabDetails,
+  updateGitHubChecksTabLocalChecks,
+  type CheckDetailsLoadState
+} from '@/components/github-checks-tab-state'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
@@ -97,7 +110,15 @@ import {
   PR_COMMENT_RESOLVED_CONTAINER_CLASS,
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
+import {
+  createCommentCodeContextExpansionState,
+  resolveCommentCodeContextExpansionState,
+  updateCommentCodeContextExpansionState,
+  type CommentCodeContextLineUpdate
+} from '@/components/comment-code-context-state'
+import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
 import { useAppStore } from '@/store'
+import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
@@ -105,9 +126,19 @@ import {
   getGitHubPRReviewerRows,
   normalizeGitHubReviewerLogins
 } from '@/components/github-pr-reviewer-display'
+import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import {
+  GITHUB_PR_MERGE_METHOD_LABELS,
+  resolveGitHubPRMergeMethods
+} from '../../../shared/github-pr-merge-methods'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { getConnectionId } from '@/lib/connection-context'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import {
+  findGithubPrWorkspaceAttachment,
+  getGithubPrWorkspaceAttachmentLabel
+} from '@/lib/github-work-item-workspace-attachment'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -120,13 +151,12 @@ import type {
   GitHubWorkItemDetails,
   GitHubAssignableUser,
   GitHubReaction,
+  GitHubPRMergeMethod,
   GitBranchChangeEntry,
   GitDiffResult,
   PRCheckDetail,
-  PRCheckRunDetails,
   PRComment,
-  TuiAgent,
-  Worktree
+  TuiAgent
 } from '../../../shared/types'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
@@ -358,31 +388,6 @@ function getStateTone(item: GitHubWorkItem): string {
   return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
 }
 
-function getPRMergeTooltip(item: GitHubWorkItem): string {
-  if (item.state === 'merged') {
-    return 'This pull request is already merged'
-  }
-  if (item.state === 'closed') {
-    return 'This pull request is closed'
-  }
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge status is unavailable for this PR'
-  }
-  if (item.mergeable === 'CONFLICTING') {
-    return 'GitHub reports merge conflicts'
-  }
-  if (item.mergeStateStatus === 'BEHIND') {
-    return 'Update the branch before merging'
-  }
-  if (item.mergeStateStatus === 'BLOCKED') {
-    return 'GitHub reports this pull request is blocked'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'GitHub says this PR can merge'
-  }
-  return 'GitHub has not reported a final merge status'
-}
-
 function WorkItemStateBadge({
   item,
   className
@@ -486,18 +491,62 @@ function PRReviewersPanel({
   const [reviewerInput, setReviewerInput] = useState('')
   const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
   const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
-  const [activeReviewerIndex, setActiveReviewerIndex] = useState(0)
+  const [activeReviewerCursor, setActiveReviewerCursor] = useState({ resetKey: '', index: 0 })
   const [submitting, setSubmitting] = useState(false)
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
   )
+  const [reviewRequestsSource, setReviewRequestsSource] = useState(() => ({
+    itemId: item.id,
+    repoId: item.repoId,
+    reviewRequests: item.reviewRequests
+  }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const settings = useAppStore((s) => s.settings)
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
+  const reviewerInputFocusFrameRef = useRef<number | null>(null)
+  const reviewerPanelMountedRef = useRef(true)
+
+  const cancelReviewerInputFocusFrame = useCallback((): void => {
+    if (reviewerInputFocusFrameRef.current !== null) {
+      cancelAnimationFrame(reviewerInputFocusFrameRef.current)
+      reviewerInputFocusFrameRef.current = null
+    }
+  }, [])
+
+  const scheduleReviewerInputFocus = useCallback((): void => {
+    if (!reviewerPanelMountedRef.current) {
+      return
+    }
+    cancelReviewerInputFocusFrame()
+    reviewerInputFocusFrameRef.current = requestAnimationFrame(() => {
+      reviewerInputFocusFrameRef.current = null
+      reviewerInputRef.current?.focus()
+    })
+  }, [cancelReviewerInputFocusFrame])
 
   useEffect(() => {
+    reviewerPanelMountedRef.current = true
+    return () => {
+      reviewerPanelMountedRef.current = false
+      cancelReviewerInputFocusFrame()
+    }
+  }, [cancelReviewerInputFocusFrame])
+
+  // Why: reviewer edits are optimistic, but item switches/refetches must clear
+  // stale local requests before paint; a passive Effect leaves one stale render.
+  if (
+    reviewRequestsSource.itemId !== item.id ||
+    reviewRequestsSource.repoId !== item.repoId ||
+    reviewRequestsSource.reviewRequests !== item.reviewRequests
+  ) {
+    setReviewRequestsSource({
+      itemId: item.id,
+      repoId: item.repoId,
+      reviewRequests: item.reviewRequests
+    })
     setLocalReviewRequests(item.reviewRequests ?? [])
-  }, [item.id, item.reviewRequests])
+  }
 
   const reviewerSeedUsers = useMemo<GitHubAssignableUser[]>(() => {
     const byLogin = new Map<string, GitHubAssignableUser>()
@@ -607,9 +656,24 @@ function PRReviewersPanel({
     [everyoneElseReviewerRows, suggestedReviewerRows]
   )
 
-  useEffect(() => {
-    setActiveReviewerIndex(0)
-  }, [reviewerQuery, actionableReviewerRows.length])
+  const reviewerCursorResetKey = `${reviewerQuery}\u0000${actionableReviewerRows.length}`
+  if (activeReviewerCursor.resetKey !== reviewerCursorResetKey) {
+    setActiveReviewerCursor({ resetKey: reviewerCursorResetKey, index: 0 })
+  }
+  const activeReviewerIndex =
+    activeReviewerCursor.resetKey === reviewerCursorResetKey ? activeReviewerCursor.index : 0
+  const setActiveReviewerIndex = useCallback(
+    (nextIndex: number | ((current: number) => number)): void => {
+      setActiveReviewerCursor((current) => {
+        const currentIndex = current.resetKey === reviewerCursorResetKey ? current.index : 0
+        return {
+          resetKey: reviewerCursorResetKey,
+          index: typeof nextIndex === 'function' ? nextIndex(currentIndex) : nextIndex
+        }
+      })
+    },
+    [reviewerCursorResetKey]
+  )
 
   const hasReviewerMetadata =
     item.reviewDecision !== undefined ||
@@ -675,6 +739,9 @@ function PRReviewersPanel({
               prNumber: item.number,
               reviewers: logins
             })
+      if (!reviewerPanelMountedRef.current) {
+        return
+      }
       if (!result.ok) {
         toast.error(result.error ?? 'Failed to request reviewer')
         return
@@ -690,9 +757,13 @@ function PRReviewersPanel({
       setReviewerInput('')
       toast.success(logins.length === 1 ? 'Reviewer requested' : 'Reviewers requested')
     } catch {
-      toast.error('Failed to request reviewer')
+      if (reviewerPanelMountedRef.current) {
+        toast.error('Failed to request reviewer')
+      }
     } finally {
-      setSubmitting(false)
+      if (reviewerPanelMountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
@@ -728,6 +799,9 @@ function PRReviewersPanel({
               prNumber: item.number,
               reviewers: logins
             })
+      if (!reviewerPanelMountedRef.current) {
+        return
+      }
       if (!result.ok) {
         toast.error(result.error ?? 'Failed to remove reviewer')
         return
@@ -742,9 +816,13 @@ function PRReviewersPanel({
       setReviewerInput('')
       toast.success(logins.length === 1 ? 'Reviewer removed' : 'Reviewers removed')
     } catch {
-      toast.error('Failed to remove reviewer')
+      if (reviewerPanelMountedRef.current) {
+        toast.error('Failed to remove reviewer')
+      }
     } finally {
-      setSubmitting(false)
+      if (reviewerPanelMountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
@@ -752,7 +830,7 @@ function PRReviewersPanel({
     await (selectedReviewerLogins.has(reviewer.login.toLowerCase())
       ? handleRemoveReviewers([reviewer.login])
       : handleRequestReview([reviewer.login]))
-    requestAnimationFrame(() => reviewerInputRef.current?.focus())
+    scheduleReviewerInputFocus()
   }
 
   const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
@@ -761,7 +839,7 @@ function PRReviewersPanel({
     }
     setOpen(nextOpen)
     if (nextOpen) {
-      requestAnimationFrame(() => reviewerInputRef.current?.focus())
+      scheduleReviewerInputFocus()
       return
     }
     setReviewerInput('')
@@ -1504,7 +1582,9 @@ function mapPRFileStatus(status: GitHubPRFile['status']): GitBranchChangeEntry['
       return 'renamed'
     case 'copied':
       return 'copied'
-    default:
+    case 'changed':
+    case 'modified':
+    case 'unchanged':
       return 'modified'
   }
 }
@@ -2192,8 +2272,9 @@ function CommentCodeContext({
 }): React.JSX.Element | null {
   const [contents, setContents] = useState<GitHubPRFileContents | null>(null)
   const [error, setError] = useState(false)
-  const [contextBefore, setContextBefore] = useState(0)
-  const [contextAfter, setContextAfter] = useState(0)
+  const [contextExpansionState, setContextExpansionState] = useState(() =>
+    createCommentCodeContextExpansionState(comment.id)
+  )
   const file = useMemo(
     () => files.find((candidate) => candidate.path === comment.path),
     [comment.path, files]
@@ -2224,10 +2305,37 @@ function CommentCodeContext({
     }
   }, [baseSha, file, headSha, line, prNumber, repoId, repoPath])
 
-  useEffect(() => {
-    setContextBefore(0)
-    setContextAfter(0)
-  }, [comment.id])
+  const resolvedContextExpansionState = resolveCommentCodeContextExpansionState(
+    contextExpansionState,
+    comment.id
+  )
+  if (resolvedContextExpansionState !== contextExpansionState) {
+    // Why: comment rows can be reused when a PR refreshes; reset before paint
+    // so expanded context from the previous comment is never shown on the next.
+    setContextExpansionState(resolvedContextExpansionState)
+  }
+  const contextBefore = resolvedContextExpansionState.contextBefore
+  const contextAfter = resolvedContextExpansionState.contextAfter
+  const setContextBefore = useCallback(
+    (contextBeforeUpdate: CommentCodeContextLineUpdate) => {
+      setContextExpansionState((current) =>
+        updateCommentCodeContextExpansionState(current, comment.id, {
+          contextBefore: contextBeforeUpdate
+        })
+      )
+    },
+    [comment.id]
+  )
+  const setContextAfter = useCallback(
+    (contextAfterUpdate: CommentCodeContextLineUpdate) => {
+      setContextExpansionState((current) =>
+        updateCommentCodeContextExpansionState(current, comment.id, {
+          contextAfter: contextAfterUpdate
+        })
+      )
+    },
+    [comment.id]
+  )
 
   if (!comment.path || !line || !file || file.isBinary || error) {
     return null
@@ -2463,6 +2571,7 @@ function ConversationTab({
   const [bodyEditing, setBodyEditing] = useState(false)
   const [bodySaving, setBodySaving] = useState(false)
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const bodyTextareaFocusFrameRef = useRef<number | null>(null)
   const repoAssignees = useRepoAssignees(repoPath, item.repoId)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = useMemo(
@@ -2470,6 +2579,7 @@ function ConversationTab({
     [commentFilter, comments]
   )
   const visibleCommentGroups = useMemo(() => groupPRComments(visibleComments), [visibleComments])
+  const resolvedReplyingTo = resolveCommentReplyTarget(replyingTo, visibleComments)
   const mentionOptions = useMemo(
     () =>
       buildMentionOptions({
@@ -2481,11 +2591,18 @@ function ConversationTab({
     [comments, detailsParticipants, item, repoAssignees.data]
   )
 
-  useEffect(() => {
-    if (replyingTo !== null && !visibleComments.some((comment) => comment.id === replyingTo)) {
-      setReplyingTo(null)
+  const cancelBodyTextareaFocusFrame = useCallback((): void => {
+    if (bodyTextareaFocusFrameRef.current !== null) {
+      cancelAnimationFrame(bodyTextareaFocusFrameRef.current)
+      bodyTextareaFocusFrameRef.current = null
     }
-  }, [replyingTo, visibleComments])
+  }, [])
+
+  if (resolvedReplyingTo !== replyingTo) {
+    // Why: comment filters/refetches can hide the active reply target; clear it
+    // before paint so a stale composer does not flash for the wrong comment set.
+    setReplyingTo(resolvedReplyingTo)
+  }
 
   useEffect(() => {
     if (!bodyEditing) {
@@ -2494,10 +2611,17 @@ function ConversationTab({
   }, [body, bodyEditing, item.id])
 
   useEffect(() => {
-    if (bodyEditing) {
-      requestAnimationFrame(() => bodyTextareaRef.current?.focus())
+    if (!bodyEditing) {
+      cancelBodyTextareaFocusFrame()
+      return cancelBodyTextareaFocusFrame
     }
-  }, [bodyEditing])
+    cancelBodyTextareaFocusFrame()
+    bodyTextareaFocusFrameRef.current = requestAnimationFrame(() => {
+      bodyTextareaFocusFrameRef.current = null
+      bodyTextareaRef.current?.focus()
+    })
+    return cancelBodyTextareaFocusFrame
+  }, [bodyEditing, cancelBodyTextareaFocusFrame])
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const markdownGitHubRepo = useMemo(
@@ -2696,7 +2820,7 @@ function ConversationTab({
           className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
         />
         <CommentReactions reactions={comment.reactions} />
-        {replyingTo === comment.id && (
+        {resolvedReplyingTo === comment.id && (
           <CommentReplyForm
             className="mt-3"
             placeholder={
@@ -2836,7 +2960,7 @@ function ConversationTab({
                     setBodyEditing(false)
                     return
                   }
-                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                  if (isScreenSubmitShortcut(event)) {
                     event.preventDefault()
                     void handleSaveBody()
                   }
@@ -2952,14 +3076,11 @@ function PRActionsPanel({
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const confirm = useConfirmationDialog()
   const actionItem = { ...item, state: localState }
+  const mergePresentation = presentGitHubPRMergeState(actionItem)
+  const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
   const canMutateState = localState !== 'merged' && (!!repoPath || !!projectOrigin)
   const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
-  const mergeDisabled =
-    !repoPath ||
-    mergePending ||
-    localState === 'closed' ||
-    localState === 'merged' ||
-    item.mergeable === 'CONFLICTING'
+  const mergeDisabled = !repoPath || mergePending || !mergePresentation.directMergeAvailable
 
   const patchProjectRowIfNeeded = useCallback(
     (state: GitHubWorkItem['state']) => {
@@ -3018,12 +3139,11 @@ function PRActionsPanel({
     }
   }
 
-  const handleMerge = async (method: 'merge' | 'squash' | 'rebase'): Promise<void> => {
+  const handleMerge = async (method: GitHubPRMergeMethod): Promise<void> => {
     if (!repoPath || mergeDisabled) {
       return
     }
-    const label =
-      method === 'squash' ? 'Squash and merge' : method === 'rebase' ? 'Rebase and merge' : 'Merge'
+    const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
     const confirmed = await confirm({
       title: `${label} PR #${item.number}?`,
       description: 'This will update the pull request on GitHub.',
@@ -3038,7 +3158,8 @@ function PRActionsPanel({
         repoPath,
         repoId: repoId ?? undefined,
         prNumber: item.number,
-        method
+        method,
+        prRepo: item.prRepo ?? null
       })
       if (!result.ok) {
         toast.error(result.error)
@@ -3049,6 +3170,33 @@ function PRActionsPanel({
       onMutated()
     } catch {
       toast.error('Failed to merge pull request')
+    } finally {
+      setMergePending(false)
+    }
+  }
+
+  const handleAutoMerge = async (): Promise<void> => {
+    if (!repoPath || !mergePresentation.autoMergeAction) {
+      return
+    }
+    const enabled = mergePresentation.autoMergeAction.kind === 'enable'
+    setMergePending(true)
+    try {
+      const result = await window.api.gh.setPRAutoMerge({
+        repoPath,
+        repoId: repoId ?? undefined,
+        prNumber: item.number,
+        enabled,
+        prRepo: item.prRepo ?? null
+      })
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(enabled ? 'Auto-merge enabled' : 'Auto-merge disabled')
+      onMutated()
+    } catch {
+      toast.error(enabled ? 'Failed to enable auto-merge' : 'Failed to disable auto-merge')
     } finally {
       setMergePending(false)
     }
@@ -3082,28 +3230,39 @@ function PRActionsPanel({
                   ) : (
                     <GitMerge className="size-3.5" />
                   )}
-                  Merge
+                  {mergePresentation.autoMergeAction?.label ??
+                    (mergePresentation.directMergeAvailable
+                      ? mergeMethods.defaultLabel
+                      : mergePresentation.label)}
                   <ChevronDown className="size-3 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {!repoPath ? 'Merge requires a registered local repo' : getPRMergeTooltip(actionItem)}
+              {!repoPath ? 'Merge requires a registered local repo' : mergePresentation.tooltip}
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="start" className="w-52">
-            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('squash')}>
-              <GitMerge className="size-4" />
-              Squash and merge
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('merge')}>
-              <GitMerge className="size-4" />
-              Create merge commit
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('rebase')}>
-              <GitMerge className="size-4" />
-              Rebase and merge
-            </DropdownMenuItem>
+            {mergePresentation.autoMergeAction && (
+              <DropdownMenuItem
+                disabled={!repoPath || mergePending}
+                onSelect={() => void handleAutoMerge()}
+              >
+                <GitMerge className="size-4" />
+                {mergePresentation.autoMergeAction.label}
+              </DropdownMenuItem>
+            )}
+            {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
+            {mergeMethods.methods.map(({ method, label }) => (
+              <DropdownMenuItem
+                key={method}
+                disabled={mergeDisabled}
+                onSelect={() => void handleMerge(method)}
+              >
+                <GitMerge className="size-4" />
+                {label}
+              </DropdownMenuItem>
+            ))}
             <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
               <ExternalLink className="size-4" />
               Open GitHub merge box
@@ -3179,6 +3338,7 @@ function CommentReplyForm({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useMountedRef()
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -3192,13 +3352,18 @@ function CommentReplyForm({
     setSubmitting(true)
     try {
       const ok = await onSubmit(trimmed)
+      if (!mountedRef.current) {
+        return
+      }
       if (ok) {
         setBody('')
       }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
-  }, [body, onSubmit, submitting])
+  }, [body, mountedRef, onSubmit, submitting])
 
   return (
     <div className={cn('rounded-md border border-border/50 bg-background/60 p-2', className)}>
@@ -3212,7 +3377,7 @@ function CommentReplyForm({
             onCancel()
             return
           }
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          if (isScreenSubmitShortcut(e)) {
             e.preventDefault()
             void submit()
           }
@@ -3355,33 +3520,16 @@ function buildFixBrokenChecksPrompt(item: GitHubWorkItem, checks: PRCheckDetail[
   ].join('\n')
 }
 
-function findWorkspaceAttachedToPR(
-  worktrees: Worktree[],
-  repoId: string,
-  prNumber: number
-): Worktree | null {
-  return (
-    worktrees.find(
-      (worktree) =>
-        worktree.repoId === repoId && worktree.linkedPR === prNumber && !worktree.isArchived
-    ) ?? null
-  )
-}
-
 function pickDefaultAgent(
   defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detectedAgents: TuiAgent[]
+  detectedAgents: TuiAgent[],
+  disabledAgents?: TuiAgent[]
 ): TuiAgent | null {
-  if (defaultAgent && defaultAgent !== 'blank' && detectedAgents.includes(defaultAgent)) {
+  const enabledAgents = filterEnabledTuiAgents(detectedAgents, disabledAgents)
+  if (defaultAgent && defaultAgent !== 'blank' && enabledAgents.includes(defaultAgent)) {
     return defaultAgent
   }
-  return AGENT_CATALOG.find((entry) => detectedAgents.includes(entry.id))?.id ?? null
-}
-
-type CheckDetailsLoadState = {
-  loading: boolean
-  details: PRCheckRunDetails | null
-  error: string | null
+  return AGENT_CATALOG.find((entry) => enabledAgents.includes(entry.id))?.id ?? null
 }
 
 function getCheckDetailsKey(check: PRCheckDetail): string {
@@ -3423,14 +3571,18 @@ function ChecksTab({
   variant?: 'compact' | 'page'
   onChecksUpdated: (checks: PRCheckDetail[]) => void
 }): React.JSX.Element {
-  const [localChecks, setLocalChecks] = useState<PRCheckDetail[] | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [fixingChecks, setFixingChecks] = useState(false)
-  const [expandedCheckKey, setExpandedCheckKey] = useState<string | null>(null)
-  const [detailsByCheckKey, setDetailsByCheckKey] = useState<Record<string, CheckDetailsLoadState>>(
-    {}
-  )
+  const [checksState, setChecksState] = useState(() => createGitHubChecksTabState(checks))
+  const mountedRef = useMountedRef()
+  const resolvedChecksState = resolveGitHubChecksTabState(checksState, checks)
+  if (resolvedChecksState !== checksState) {
+    // Why: parent check refreshes replace the source list; clear local refresh
+    // and inline detail state before stale rows/details can paint.
+    setChecksState(resolvedChecksState)
+  }
+  const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
   const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
   const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const sorted = [...list].sort(
@@ -3459,12 +3611,6 @@ function ChecksTab({
           : 'text-muted-foreground'
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
-  useEffect(() => {
-    setLocalChecks(null)
-    setExpandedCheckKey(null)
-    setDetailsByCheckKey({})
-  }, [checks])
-
   const handleRefresh = useCallback(async (): Promise<PRCheckDetail[] | null> => {
     if (!repoPath) {
       toast.error('Unable to refresh checks without a repository path.')
@@ -3479,7 +3625,7 @@ function ChecksTab({
         headSha,
         noCache: true
       })) as PRCheckDetail[]
-      setLocalChecks(nextChecks)
+      setChecksState((current) => updateGitHubChecksTabLocalChecks(current, nextChecks))
       onChecksUpdated(nextChecks)
       return nextChecks
     } catch (err) {
@@ -3533,7 +3679,7 @@ function ChecksTab({
     try {
       const prompt = buildFixBrokenChecksPrompt(item, list)
       const store = useAppStore.getState()
-      const attachedWorkspace = findWorkspaceAttachedToPR(
+      const attachedWorkspace = findGithubPrWorkspaceAttachment(
         store.allWorktrees(),
         targetRepoId,
         item.number
@@ -3568,9 +3714,13 @@ function ChecksTab({
         typeof connectionId === 'string'
           ? await activeStore.ensureRemoteDetectedAgents(connectionId)
           : await activeStore.ensureDetectedAgents()
-      const agent = pickDefaultAgent(activeStore.settings?.defaultTuiAgent, detectedAgents)
+      const agent = pickDefaultAgent(
+        activeStore.settings?.defaultTuiAgent,
+        detectedAgents,
+        activeStore.settings?.disabledTuiAgents
+      )
       if (!agent) {
-        toast.error('No AI agents detected. Configure a default agent in Settings.')
+        toast.error('No enabled AI agents. Configure agents in Settings.')
         return
       }
 
@@ -3595,7 +3745,7 @@ function ChecksTab({
   const handleToggleCheckDetails = useCallback(
     (check: PRCheckDetail): void => {
       const key = getCheckDetailsKey(check)
-      setExpandedCheckKey((current) => (current === key ? null : key))
+      setChecksState((current) => toggleGitHubChecksTabExpandedKey(current, key))
       if (
         !repoPath ||
         detailsByCheckKey[key] ||
@@ -3603,10 +3753,9 @@ function ChecksTab({
       ) {
         return
       }
-      setDetailsByCheckKey((current) => ({
-        ...current,
-        [key]: { loading: true, details: null, error: null }
-      }))
+      setChecksState((current) =>
+        updateGitHubChecksTabDetails(current, key, { loading: true, details: null, error: null })
+      )
       void window.api.gh
         .prCheckDetails({
           repoPath,
@@ -3618,27 +3767,31 @@ function ChecksTab({
           prRepo
         })
         .then((details) => {
-          setDetailsByCheckKey((current) => ({
-            ...current,
-            [key]: {
+          if (!mountedRef.current) {
+            return
+          }
+          setChecksState((current) =>
+            updateGitHubChecksTabDetails(current, key, {
               loading: false,
               details,
               error: details ? null : 'No inline details are available for this check.'
-            }
-          }))
+            })
+          )
         })
         .catch((err) => {
-          setDetailsByCheckKey((current) => ({
-            ...current,
-            [key]: {
+          if (!mountedRef.current) {
+            return
+          }
+          setChecksState((current) =>
+            updateGitHubChecksTabDetails(current, key, {
               loading: false,
               details: null,
               error: err instanceof Error ? err.message : 'Failed to load check details.'
-            }
-          }))
+            })
+          )
         })
     },
-    [detailsByCheckKey, prRepo, repoId, repoPath]
+    [detailsByCheckKey, mountedRef, prRepo, repoId, repoPath]
   )
 
   const refreshAction = (
@@ -4396,7 +4549,8 @@ function GHEditSection({
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
   const [localAssignees, setLocalAssignees] = useState<string[]>(assignees)
-  const hasEditedAssigneesRef = useRef(false)
+  const editedAssigneesItemKeyRef = useRef<string | null>(null)
+  const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const { isPending, run } = useImmediateMutation()
@@ -4437,16 +4591,11 @@ function GHEditSection({
   // resolves with real data — but skip if the user already made an
   // optimistic edit so we don't clobber in-flight changes.
   useEffect(() => {
-    if (hasEditedAssigneesRef.current) {
+    if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
       return
     }
     setLocalAssignees(assignees)
-  }, [item.id, assignees])
-
-  // Reset the dirty flag when we switch to a different item.
-  useEffect(() => {
-    hasEditedAssigneesRef.current = false
-  }, [item.id])
+  }, [assigneesItemKey, assignees])
 
   const handleStateChange = useCallback(
     (newState: 'open' | 'closed') => {
@@ -4577,7 +4726,9 @@ function GHEditSection({
         ? prevAssignees.filter((l) => l !== login)
         : [...prevAssignees, login]
 
-      hasEditedAssigneesRef.current = true
+      // Why: the optimistic guard is scoped to this repo item so switching
+      // items does not suppress the next item's assignee sync.
+      editedAssigneesItemKeyRef.current = assigneesItemKey
       if (isAssigned) {
         run('assignees', {
           mutate: () =>
@@ -4629,6 +4780,7 @@ function GHEditSection({
     [
       item.number,
       item.repoId,
+      assigneesItemKey,
       repoPath,
       projectOrigin,
       localAssignees,
@@ -4848,6 +5000,7 @@ function GHCommentComposer({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useMountedRef()
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
@@ -4872,6 +5025,9 @@ function GHCommentComposer({
         body: trimmed,
         type: itemType
       })
+      if (!mountedRef.current) {
+        return
+      }
       if (result.ok) {
         setBody('')
         requestAnimationFrame(autoGrow)
@@ -4882,15 +5038,19 @@ function GHCommentComposer({
         toast.error(result.error ?? 'Failed to add comment')
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
-  }, [autoGrow, body, repoPath, repoId, issueNumber, itemType, onCommentAdded])
+  }, [autoGrow, body, mountedRef, repoPath, repoId, issueNumber, itemType, onCommentAdded])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      if (isScreenSubmitShortcut(e)) {
         e.preventDefault()
         handleSubmit()
       }
@@ -4955,6 +5115,17 @@ export default function PullRequestPage({
   const workItemLabels = workItem?.labels
   const workItemType = workItem?.type
   const effectiveRepoId = repoId ?? workItem?.repoId ?? null
+  const allWorktrees = useAllWorktrees()
+  const attachedWorkspace = useMemo(
+    () =>
+      workItem?.type === 'pr'
+        ? findGithubPrWorkspaceAttachment(allWorktrees, effectiveRepoId, workItem.number)
+        : null,
+    [allWorktrees, effectiveRepoId, workItem]
+  )
+  const attachedWorkspaceLabel = attachedWorkspace
+    ? getGithubPrWorkspaceAttachmentLabel(attachedWorkspace)
+    : null
 
   // Why: the cache key has to include the issue source preference so a user
   // toggling between origin/upstream for the same issue number doesn't read
@@ -4995,6 +5166,39 @@ export default function PullRequestPage({
     setTab(nextTab)
   }, [workItemId, workItemType, initialTab])
 
+  const handleUseWorkItem = useCallback((): void => {
+    if (!workItem) {
+      return
+    }
+    const targetRepoId = effectiveRepoId
+    onUse(
+      targetRepoId && targetRepoId !== workItem.repoId
+        ? { ...workItem, repoId: targetRepoId }
+        : workItem
+    )
+  }, [effectiveRepoId, onUse, workItem])
+
+  const handleOpenOrUsePR = useCallback((): void => {
+    if (!workItem) {
+      return
+    }
+    const targetRepoId = effectiveRepoId
+    const currentAttached = findGithubPrWorkspaceAttachment(
+      useAppStore.getState().allWorktrees(),
+      targetRepoId,
+      workItem.number
+    )
+    if (!currentAttached) {
+      handleUseWorkItem()
+      return
+    }
+
+    const result = activateAndRevealWorktree(currentAttached.id)
+    if (result === false) {
+      toast.error('Unable to open the workspace attached to this pull request.')
+    }
+  }, [effectiveRepoId, handleUseWorkItem, workItem])
+
   // Why: track comments added optimistically before the detail fetch resolves
   // so they can be merged into the fetch result instead of being overwritten.
   const optimisticCommentsRef = useRef<PRComment[]>([])
@@ -5015,7 +5219,9 @@ export default function PullRequestPage({
     }
     let cancelled = false
     let count = 0
+    let frameId: number | null = null
     const tick = (): void => {
+      frameId = null
       if (cancelled) {
         return
       }
@@ -5023,12 +5229,15 @@ export default function PullRequestPage({
         document.body.style.pointerEvents = ''
       }
       if (count++ < 5) {
-        requestAnimationFrame(tick)
+        frameId = requestAnimationFrame(tick)
       }
     }
     tick()
     return () => {
       cancelled = true
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+      }
     }
   }, [workItem])
 
@@ -5221,18 +5430,33 @@ export default function PullRequestPage({
   const files = details?.files ?? []
   const checks = details?.checks ?? []
   const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
-
-  useEffect(() => {
-    setLinkCopied(false)
-  }, [workItemId])
-
-  useEffect(() => {
-    if (!linkCopied) {
+  // Why: clipboard IPC can resolve after the page unmounts; skip copied-state
+  // feedback instead of starting its reset timer on a stale surface.
+  const linkCopyMountedRef = useRef(false)
+  const linkCopiedResetTimerRef = useRef<number | null>(null)
+  const clearLinkCopiedResetTimer = useCallback((): void => {
+    if (linkCopiedResetTimerRef.current === null) {
       return
     }
-    const handle = window.setTimeout(() => setLinkCopied(false), 1500)
-    return () => window.clearTimeout(handle)
-  }, [linkCopied])
+    window.clearTimeout(linkCopiedResetTimerRef.current)
+    linkCopiedResetTimerRef.current = null
+  }, [])
+  const setLinkCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      linkCopyMountedRef.current = node !== null
+      if (node === null) {
+        // Why: the copied-state timer belongs to the copy control surface;
+        // clear it when that surface detaches without a passive cleanup Effect.
+        clearLinkCopiedResetTimer()
+      }
+    },
+    [clearLinkCopiedResetTimer]
+  )
+
+  useEffect(() => {
+    clearLinkCopiedResetTimer()
+    setLinkCopied(false)
+  }, [clearLinkCopiedResetTimer, workItemId])
 
   const handleCopyWorkItemLink = useCallback(async (): Promise<void> => {
     if (!workItem) {
@@ -5242,12 +5466,20 @@ export default function PullRequestPage({
       // Why: Electron's clipboard IPC is reliable even when browser clipboard
       // APIs lose focus/activation inside nested overlay surfaces.
       await window.api.ui.writeClipboardText(workItem.url)
+      if (!linkCopyMountedRef.current) {
+        return
+      }
+      clearLinkCopiedResetTimer()
       setLinkCopied(true)
+      linkCopiedResetTimerRef.current = window.setTimeout(() => {
+        linkCopiedResetTimerRef.current = null
+        setLinkCopied(false)
+      }, 1500)
       toast.success('GitHub link copied')
     } catch {
       toast.error('Failed to copy GitHub link')
     }
-  }, [workItem])
+  }, [clearLinkCopiedResetTimer, workItem])
 
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
@@ -5367,6 +5599,7 @@ export default function PullRequestPage({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  ref={setLinkCopyButtonRef}
                   type="button"
                   variant="ghost"
                   size="icon-sm"
@@ -5413,16 +5646,41 @@ export default function PullRequestPage({
           <div className="flex shrink-0 items-center gap-2">
             {/* Why: Orca's signature affordance — keep this primary so it stands out
                 against GitHub's familiar surface. */}
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => onUse(workItem)}
-              className="gap-1.5 whitespace-nowrap"
-              aria-label="Start workspace from PR"
-            >
-              Start workspace from PR
-              <ArrowRight className="size-3.5" />
-            </Button>
+            <DropdownMenu modal={false}>
+              <ButtonGroup>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleOpenOrUsePR}
+                  className="gap-1.5 whitespace-nowrap font-semibold"
+                  aria-label={
+                    attachedWorkspace
+                      ? 'Resume workspace attached to PR'
+                      : 'Start workspace from PR'
+                  }
+                >
+                  {attachedWorkspace ? 'Resume workspace' : 'Start workspace from PR'}
+                  <ArrowRight className="size-3.5" />
+                </Button>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" size="icon-sm" aria-label="More PR workspace actions">
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </ButtonGroup>
+              <DropdownMenuContent align="end">
+                {attachedWorkspace ? (
+                  <DropdownMenuItem onSelect={handleUseWorkItem}>
+                    <Plus className="size-4" />
+                    Start new workspace
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
+                  <ExternalLink className="size-4" />
+                  Open on GitHub
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
@@ -5457,6 +5715,12 @@ export default function PullRequestPage({
               · updated {formatRelativeTime(workItem.updatedAt)}
             </span>
           </span>
+          {attachedWorkspaceLabel ? (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <FolderKanban className="size-3.5 shrink-0" />
+              <span className="truncate">{attachedWorkspaceLabel}</span>
+            </span>
+          ) : null}
         </div>
       </div>
 

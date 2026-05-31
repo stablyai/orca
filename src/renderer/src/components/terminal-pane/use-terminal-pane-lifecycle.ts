@@ -9,9 +9,11 @@ import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
-  handleOscLink
+  installFilePathLinkClickFallback
 } from './terminal-link-handlers'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
+import { handleOscLink } from './terminal-osc-link-routing'
+import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import type {
   GlobalSettings,
   SetupSplitDirection,
@@ -23,6 +25,7 @@ import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
   normalizeTerminalLayoutSnapshot,
+  RESET_KITTY_KEYBOARD_PROTOCOL,
   replayTerminalLayout,
   restoreScrollbackBuffers
 } from './layout-serialization'
@@ -33,9 +36,17 @@ import {
   installMode2031Handlers,
   mode2031SequenceFor
 } from './terminal-appearance'
-import { parseOsc52 } from './osc52-clipboard'
+import { handleOsc52ClipboardRequest } from './osc52-clipboard'
+import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
-import { shouldBypassXtermKeyboardEvent } from './xterm-bypass-policy'
+import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
+import {
+  shouldBypassXtermKeyboardEvent,
+  shouldHandleTerminalInterruptKeyboardEvent,
+  shouldSuppressTerminalInterruptKeyup,
+  shouldSuppressTerminalModifierKeyboardEvent,
+  TERMINAL_INTERRUPT_INPUT
+} from './xterm-bypass-policy'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
@@ -61,6 +72,11 @@ import {
 } from '@/constants/terminal'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 
+function extractUncHost(value: string | undefined): string | null {
+  const match = /^(?:\\\\|\/\/)([^\\/]+)/.exec(value ?? '')
+  return match?.[1] || null
+}
+
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
@@ -84,6 +100,7 @@ type UseTerminalPaneLifecycleDeps = {
    *  issue-automation command with the linked issue number interpolated. */
   issueCommandSplit?: { command: string; env?: Record<string, string> } | null
   isActive: boolean
+  isVisible: boolean
   systemPrefersDark: boolean
   settings: GlobalSettings | null | undefined
   settingsRef: React.RefObject<GlobalSettings | null | undefined>
@@ -120,8 +137,10 @@ type UseTerminalPaneLifecycleDeps = {
   updateTabPtyId: (tabId: string, ptyId: string) => void
   markWorktreeUnread: (worktreeId: string) => void
   markTerminalTabUnread: (tabId: string) => void
+  markTerminalPaneUnread: (paneKey: string) => void
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
+  clearTerminalPaneUnread: (paneKey: string) => void
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
     terminalTitle?: string
@@ -176,6 +195,20 @@ type SplitWithStartupDeps = {
   startup?: SplitStartupPayload | null
 }
 
+function resolveTerminalHomePathFromEnv(env: Record<string, string> | undefined): string | null {
+  const home = env?.HOME?.trim()
+  if (home) {
+    return home
+  }
+  const userProfile = env?.USERPROFILE?.trim()
+  if (userProfile) {
+    return userProfile
+  }
+  const homeDrive = env?.HOMEDRIVE?.trim()
+  const homePath = env?.HOMEPATH?.trim()
+  return homeDrive && homePath ? `${homeDrive}${homePath}` : null
+}
+
 /** Scopes `deps.startup` to a single call of `splitPane()`, clearing it in `finally` so later splits do not replay the payload. */
 export function splitPaneWithOneShotStartup<TPane>(
   deps: SplitWithStartupDeps,
@@ -223,6 +256,7 @@ export function useTerminalPaneLifecycle({
   setupSplit,
   issueCommandSplit,
   isActive,
+  isVisible,
   systemPrefersDark,
   settings,
   settingsRef,
@@ -251,8 +285,10 @@ export function useTerminalPaneLifecycle({
   updateTabPtyId,
   markWorktreeUnread,
   markTerminalTabUnread,
+  markTerminalPaneUnread,
   clearWorktreeUnread,
   clearTerminalTabUnread,
+  clearTerminalPaneUnread,
   dispatchNotification,
   setCacheTimerStartedAt,
   syncPanePtyLayoutBinding,
@@ -269,6 +305,8 @@ export function useTerminalPaneLifecycle({
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
+  const fileLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
+  const httpLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
   // Why: read settingsRef at fire time so toggling "copy on select" takes
   // effect without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -336,6 +374,8 @@ export function useTerminalPaneLifecycle({
     const paneTransports = paneTransportsRef.current
     const panePtyBindings = panePtyBindingsRef.current
     const linkDisposables = linkProviderDisposablesRef.current
+    const fileLinkClickFallbackDisposables = fileLinkClickFallbackDisposablesRef.current
+    const httpLinkClickFallbackDisposables = httpLinkClickFallbackDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
     const selectionCaptureTimers = selectionCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
@@ -347,11 +387,16 @@ export function useTerminalPaneLifecycle({
       cwd ??
       ''
     const startupCwd = cwd ?? worktreePath
+    const terminalHomePath = resolveTerminalHomePathFromEnv(startup?.env)
+    // Why: existence probes can cross SSH/runtime boundaries. This cache is
+    // lifecycle-scoped, so external mutations and the initial 'active' runtime
+    // fallback can temporarily leave stale entries.
     const pathExistsCache = new Map<string, boolean>()
     const linkDeps: LinkHandlerDeps = {
       worktreeId,
       worktreePath,
       startupCwd,
+      terminalHomePath,
       managerRef,
       linkProviderDisposablesRef,
       pathExistsCache,
@@ -417,8 +462,10 @@ export function useTerminalPaneLifecycle({
       updateTabPtyId,
       markWorktreeUnread,
       markTerminalTabUnread,
+      markTerminalPaneUnread,
       clearWorktreeUnread,
       clearTerminalTabUnread,
+      clearTerminalPaneUnread,
       dispatchNotification,
       setCacheTimerStartedAt,
       syncPanePtyLayoutBinding,
@@ -435,6 +482,7 @@ export function useTerminalPaneLifecycle({
 
     const fileOpenLinkHint = getTerminalFileOpenHint()
     const urlOpenLinkHint = getTerminalUrlOpenHint()
+    const osc7UncHost = extractUncHost(cwd)
 
     let releaseWebviewDragPassthrough: (() => void) | null = null
 
@@ -462,22 +510,13 @@ export function useTerminalPaneLifecycle({
         // both the enabled and disabled paths so xterm doesn't fall
         // through to any other OSC 52 handler and so our intentional drop
         // in the disabled path is explicit.
-        const osc52Disposable = pane.terminal.parser.registerOscHandler(52, (data) => {
-          if (!settingsRef.current?.terminalAllowOsc52Clipboard) {
-            return true
-          }
-          const parsed = parseOsc52(data)
-          if (parsed.kind !== 'write') {
-            // Queries and malformed payloads are intentionally dropped —
-            // answering a query would leak the user's clipboard to any
-            // process writing to the PTY.
-            return true
-          }
-          void window.api.ui.writeClipboardText(parsed.text).catch(() => {
-            /* ignore clipboard write failures */
+        const osc52Disposable = pane.terminal.parser.registerOscHandler(52, (data) =>
+          handleOsc52ClipboardRequest(data, {
+            allowClipboardWrite: settingsRef.current?.terminalAllowOsc52Clipboard === true,
+            writeClipboardText: window.api.ui.writeClipboardText,
+            onBlockedWrite: showOsc52ClipboardBlockedToast
           })
-          return true
-        })
+        )
         osc52DisposablesRef.current.set(pane.id, osc52Disposable)
 
         // OSC 7 — shell-reported current working directory. Drives split-pane
@@ -497,10 +536,10 @@ export function useTerminalPaneLifecycle({
         // consumer registers on code 7, registration order decides who sees
         // each sequence.
         const osc7Disposable = pane.terminal.parser.registerOscHandler(7, (data) => {
-          const cwd = parseOsc7(data)
-          if (cwd) {
+          const parsedCwd = parseOsc7(data, { uncHost: osc7UncHost })
+          if (parsedCwd) {
             const confirmed = !isPaneReplaying(replayingPanesRef, pane.id)
-            paneCwdRef.current.set(pane.id, { cwd, confirmed })
+            paneCwdRef.current.set(pane.id, { cwd: parsedCwd, confirmed })
           }
           return true
         })
@@ -515,10 +554,54 @@ export function useTerminalPaneLifecycle({
         // matching keyups so kitty release sequences do not leak after a
         // bypassed press. Returning false here short-circuits xterm before the
         // encoder runs, letting the browser and Electron paths fire normally.
-        // See xterm-bypass-policy.ts for the rule derivation (Ghostty/VS Code).
+        // See xterm-bypass-policy.ts for the rule derivation.
+        let pendingTerminalInterruptKeyup = false
         pane.terminal.attachCustomKeyEventHandler((e) => {
+          const isMac = navigator.userAgent.includes('Mac')
+          if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
+            pendingTerminalInterruptKeyup = false
+            return false
+          }
+          if (
+            shouldHandleTerminalInterruptKeyboardEvent(e, {
+              isMac,
+              hasSelection: pane.terminal.hasSelection()
+            })
+          ) {
+            if (e.type === 'keydown') {
+              // Why: xterm's kitty encoder can turn plain Ctrl+C into CSI-u;
+              // ETX must stay transport-agnostic through the existing onData path.
+              pendingTerminalInterruptKeyup = true
+              pane.terminal.input(TERMINAL_INTERRUPT_INPUT)
+              // Why: CLIs such as Codex can die on SIGINT before restoring
+              // xterm's renderer-side Kitty flags, leaving the shell corrupted.
+              pane.terminal.write(RESET_KITTY_KEYBOARD_PROTOCOL)
+            } else {
+              pendingTerminalInterruptKeyup = false
+            }
+            return false
+          }
+          if (shouldSuppressTerminalModifierKeyboardEvent(e)) {
+            // Why: stale Kitty keyboard reporting can encode standalone
+            // modifier presses before Ctrl+C reaches the interrupt handler.
+            return false
+          }
+
+          const jisYenInput = resolveTerminalJisYenInput(e, {
+            enabled: settingsRef.current?.terminalJISYenToBackslash === true,
+            isMac
+          })
+          if (jisYenInput) {
+            if (jisYenInput.type === 'input') {
+              // Why: this is a translated character, not a terminal shortcut.
+              // Keep it on xterm's onData path so PTY input guards still run.
+              pane.terminal.input(jisYenInput.data)
+            }
+            return false
+          }
+
           return !shouldBypassXtermKeyboardEvent(e, {
-            isMac: navigator.userAgent.includes('Mac'),
+            isMac,
             hasSelection: pane.terminal.hasSelection()
           })
         })
@@ -527,6 +610,17 @@ export function useTerminalPaneLifecycle({
           createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, fileOpenLinkHint)
         )
         linkProviderDisposablesRef.current.set(pane.id, linkProviderDisposable)
+        const fileLinkClickFallbackDisposable = installFilePathLinkClickFallback(
+          pane.id,
+          pane.terminal,
+          linkDeps
+        )
+        fileLinkClickFallbackDisposablesRef.current.set(pane.id, fileLinkClickFallbackDisposable)
+        const httpLinkClickFallbackDisposable = installHttpLinkClickFallback(
+          pane.terminal,
+          linkDeps
+        )
+        httpLinkClickFallbackDisposables.set(pane.id, httpLinkClickFallbackDisposable)
         // Why: skip empty selections so clicking to deselect doesn't clobber
         // whatever the user last copied elsewhere.
         const selectionDisposable = pane.terminal.onSelectionChange(() => {
@@ -653,6 +747,17 @@ export function useTerminalPaneLifecycle({
           linkProviderDisposable.dispose()
           linkProviderDisposablesRef.current.delete(paneId)
         }
+        const fileLinkClickFallbackDisposable =
+          fileLinkClickFallbackDisposablesRef.current.get(paneId)
+        if (fileLinkClickFallbackDisposable) {
+          fileLinkClickFallbackDisposable.dispose()
+          fileLinkClickFallbackDisposablesRef.current.delete(paneId)
+        }
+        const httpLinkClickFallbackDisposable = httpLinkClickFallbackDisposables.get(paneId)
+        if (httpLinkClickFallbackDisposable) {
+          httpLinkClickFallbackDisposable.dispose()
+          httpLinkClickFallbackDisposables.delete(paneId)
+        }
         const selectionDisposable = selectionDisposablesRef.current.get(paneId)
         if (selectionDisposable) {
           selectionDisposable.dispose()
@@ -696,6 +801,18 @@ export function useTerminalPaneLifecycle({
           panePtyBinding.dispose()
           panePtyBindings.delete(paneId)
         }
+        // Why: closing a pane is user-initiated teardown of this row — drop
+        // (not remove) so any retained `done` snapshot for this pane is also
+        // cleared and a same-frame live→gone transition cannot re-snapshot
+        // it via the retention sync. This is pane-keyed state, so it must
+        // clear even if the PTY transport was already removed.
+        const leafId = closedPane?.leafId
+        if (leafId) {
+          const paneKey = makePaneKey(tabId, leafId)
+          useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
+          clearTerminalPaneUnread(paneKey)
+          useAppStore.getState().dropAgentStatus(paneKey)
+        }
         if (transport) {
           const ptyId = suppressIntentionalPaneCloseExit(
             transport,
@@ -707,16 +824,6 @@ export function useTerminalPaneLifecycle({
             // so the last-surviving pane is not mistaken for an exited tab.
             syncPanePtyLayoutBinding(paneId, null)
             clearTabPtyId(tabId, ptyId)
-          }
-          // Why: closing a pane is user-initiated teardown of this row — drop
-          // (not remove) so any retained `done` snapshot for this pane is also
-          // cleared and a same-frame live→gone transition cannot re-snapshot
-          // it via the retention sync.
-          const leafId = closedPane?.leafId
-          if (leafId) {
-            const paneKey = makePaneKey(tabId, leafId)
-            useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
-            useAppStore.getState().dropAgentStatus(paneKey)
           }
           transport.destroy?.()
           paneTransportsRef.current.delete(paneId)
@@ -1059,6 +1166,14 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       linkDisposables.clear()
+      for (const disposable of fileLinkClickFallbackDisposables.values()) {
+        disposable.dispose()
+      }
+      fileLinkClickFallbackDisposables.clear()
+      for (const disposable of httpLinkClickFallbackDisposables.values()) {
+        disposable.dispose()
+      }
+      httpLinkClickFallbackDisposables.clear()
       for (const disposable of selectionDisposables.values()) {
         disposable.dispose()
       }
@@ -1112,6 +1227,19 @@ export function useTerminalPaneLifecycle({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, cwd])
+
+  useEffect(() => {
+    isVisibleRef.current = isVisible
+    for (const panePtyBinding of panePtyBindingsRef.current.values()) {
+      const bindingWithVisibility = panePtyBinding as IDisposable & {
+        syncRendererOutputVisibility?: () => void
+        syncProcessTracking?: () => void
+      }
+      bindingWithVisibility.syncRendererOutputVisibility?.()
+      bindingWithVisibility.syncProcessTracking?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility flips must notify existing PTY bindings even though the ref object identity is stable.
+  }, [isVisible, isVisibleRef, panePtyBindingsRef])
 
   useEffect(() => {
     const manager = managerRef.current

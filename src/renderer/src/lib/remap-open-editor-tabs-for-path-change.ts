@@ -160,6 +160,12 @@ export function remapOpenEditorTabsForPathChange({
     const draft = state.editorDrafts[file.id]
     const wasDirty = file.isDirty
 
+    // Why: renameRuntimePath already moved the file. Clear the untitled marker
+    // before closeFile so its cleanup path does not try to delete the old path.
+    if (file.isUntitled) {
+      useAppStore.getState().clearUntitled(file.id)
+    }
+
     // Why: preview tabs use synthetic ids (`markdown-preview::...`) instead of
     // filePath, so close the real tab id before reopening at the new path.
     state.closeFile(file.id)

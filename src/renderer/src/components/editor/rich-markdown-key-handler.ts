@@ -16,7 +16,8 @@ import {
 import {
   collapseEmptyListContinuationParagraph,
   commitEmptyOrderedListMarkerAsText,
-  convertEmptyNestedOrderedItemToContinuation
+  convertEmptyNestedOrderedItemToContinuation,
+  exitTrailingEmptyOrderedListItem
 } from './rich-markdown-list-continuation'
 
 export type KeyHandlerContext = {
@@ -138,6 +139,10 @@ export function createRichMarkdownKeyHandler(
         commitEmptyOrderedListMarkerAsText(ed)
       ) {
         ctx.typedEmptyOrderedListMarkerRef.current = false
+        event.preventDefault()
+        return true
+      }
+      if (ed && !isComposingMarkdownInput(event, ed) && exitTrailingEmptyOrderedListItem(ed)) {
         event.preventDefault()
         return true
       }

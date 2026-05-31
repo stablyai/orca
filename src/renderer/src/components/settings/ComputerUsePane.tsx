@@ -25,6 +25,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
@@ -59,7 +60,7 @@ function statusLabel(status: ComputerUsePermissionStatus | undefined): string {
     case 'unsupported':
       return 'macOS only'
     case 'not-granted':
-    default:
+    case undefined:
       return 'Not enabled'
   }
 }
@@ -80,6 +81,7 @@ export function ComputerUsePane(): React.JSX.Element {
   // Why: reset changes OS permission state, so older status probes must not overwrite it.
   const resettingRef = useRef(false)
   const permissionOperationSequence = useRef(0)
+  const mountedRef = useRef(true)
   const [helperUnavailableReason, setHelperUnavailableReason] = useState<string | null>(null)
   const {
     installed: computerUseSkillDetected,
@@ -119,6 +121,14 @@ export function ComputerUsePane(): React.JSX.Element {
             PERMISSIONS.length - grantedCount === 1 ? '' : 's'
           } required before agents can operate app windows.`
 
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      permissionOperationSequence.current += 1
+    }
+  }, [])
+
   const refresh = useCallback(async (): Promise<void> => {
     if (resettingRef.current) {
       return
@@ -131,18 +141,21 @@ export function ComputerUsePane(): React.JSX.Element {
       if (operationId !== permissionOperationSequence.current) {
         return
       }
+      if (!mountedRef.current) {
+        return
+      }
       setPlatform(result.platform)
       setStates(result.permissions)
       setHelperUnavailableReason(result.helperUnavailableReason)
     } catch (error) {
-      if (operationId !== permissionOperationSequence.current) {
+      if (operationId !== permissionOperationSequence.current || !mountedRef.current) {
         return
       }
       toast.error(
         error instanceof Error ? error.message : 'Could not load Computer Use permissions'
       )
     } finally {
-      if (operationId === permissionOperationSequence.current) {
+      if (operationId === permissionOperationSequence.current && mountedRef.current) {
         setLoading(false)
       }
     }
@@ -163,9 +176,13 @@ export function ComputerUsePane(): React.JSX.Element {
   }, [refresh])
 
   const openPermission = async (id: ComputerUsePermissionId): Promise<void> => {
+    useAppStore.getState().recordFeatureInteraction('computer-use-setup')
     setPendingId(id)
     try {
       const result = await window.api.computerUsePermissions.openSetup({ id })
+      if (!mountedRef.current) {
+        return
+      }
       if (result.launchedHelper) {
         toast.message('Opened macOS Privacy & Security')
       } else {
@@ -176,11 +193,15 @@ export function ComputerUsePane(): React.JSX.Element {
         )
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : 'Could not open Computer Use permissions'
-      )
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error ? error.message : 'Could not open Computer Use permissions'
+        )
+      }
     } finally {
-      setPendingId(null)
+      if (mountedRef.current) {
+        setPendingId(null)
+      }
     }
   }
 
@@ -197,19 +218,22 @@ export function ComputerUsePane(): React.JSX.Element {
       if (operationId !== permissionOperationSequence.current) {
         return
       }
+      if (!mountedRef.current) {
+        return
+      }
       setPlatform(result.platform)
       setStates(result.permissions)
       setHelperUnavailableReason(result.helperUnavailableReason)
       toast.message('Reset Computer Use access')
     } catch (error) {
-      if (operationId !== permissionOperationSequence.current) {
+      if (operationId !== permissionOperationSequence.current || !mountedRef.current) {
         return
       }
       toast.error(
         error instanceof Error ? error.message : 'Could not reset Computer Use permissions'
       )
     } finally {
-      if (operationId === permissionOperationSequence.current) {
+      if (operationId === permissionOperationSequence.current && mountedRef.current) {
         resettingRef.current = false
         setResetting(false)
         setLoading(false)
@@ -324,6 +348,7 @@ export function ComputerUsePane(): React.JSX.Element {
         icon={<MonitorCog className="size-5" />}
         preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
         onBeforeOpenTerminal={async () => {
+          useAppStore.getState().recordFeatureInteraction('computer-use-setup')
           await ensureOrcaCliAvailableForAgentSkillTerminal()
         }}
         onRecheck={refreshComputerUseSkill}

@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FsHandler } from './fs-handler'
 import { RelayContext } from './context'
 import type { RelayDispatcher } from './dispatcher'
+import { STREAM_CHUNK_SIZE } from './protocol'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import { mkdtempSync, writeFileSync } from 'fs'
@@ -130,6 +131,50 @@ describe('FsHandler readFileStream', () => {
     const { chunks, end, err } = collectStream(dispatcher)
     expect(err).toBeNull()
     expect(end).toEqual({ streamId: meta.streamId })
+    const reassembled = Buffer.concat(chunks.map((c) => Buffer.from(c.data, 'base64')))
+    expect(reassembled.equals(content)).toBe(true)
+  })
+
+  it('fills protocol chunks when fs.read returns short before EOF', async () => {
+    const filePath = path.join(tmpDir, 'short-read.png')
+    const content = Buffer.alloc(STREAM_CHUNK_SIZE + 17, 0x42)
+    writeFileSync(filePath, content)
+
+    const sampleHandle = await fs.open(filePath, 'r')
+    const fileHandlePrototype = Object.getPrototypeOf(sampleHandle) as {
+      read: typeof sampleHandle.read
+    }
+    await sampleHandle.close()
+
+    type PositionedRead = (
+      this: typeof sampleHandle,
+      buffer: Buffer,
+      offset: number | null,
+      length: number | null,
+      position: number | null
+    ) => Promise<{ bytesRead: number; buffer: Buffer }>
+    const originalRead = fileHandlePrototype.read as unknown as PositionedRead
+    const readSpy = vi.spyOn(fileHandlePrototype, 'read').mockImplementation(async function (
+      this: typeof sampleHandle,
+      buffer: Buffer,
+      offset: number | null = 0,
+      length: number | null = buffer.byteLength,
+      position: number | null = null
+    ) {
+      const readLength = position === 0 && length !== null ? Math.min(length, 5) : length
+      return originalRead.call(this, buffer, offset, readLength, position)
+    } as typeof sampleHandle.read)
+    try {
+      await dispatcher.callRequest('fs.readFileStream', { filePath }, { isStale: () => false })
+      await waitFor(() => collectStream(dispatcher).end !== null)
+    } finally {
+      readSpy.mockRestore()
+    }
+
+    const { chunks, end, err } = collectStream(dispatcher)
+    expect(err).toBeNull()
+    expect(end).not.toBeNull()
+    expect(chunks.map((c) => Buffer.from(c.data, 'base64').length)).toEqual([STREAM_CHUNK_SIZE, 17])
     const reassembled = Buffer.concat(chunks.map((c) => Buffer.from(c.data, 'base64')))
     expect(reassembled.equals(content)).toBe(true)
   })

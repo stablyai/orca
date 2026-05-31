@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { existsSync, readFileSync } from 'node:fs'
 import { release } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,7 +12,7 @@ const scriptPath = fileURLToPath(import.meta.url)
 const projectDir = resolve(dirname(scriptPath), '../..')
 const runtime = readRuntimeArg()
 
-const NATIVE_MODULES = ['better-sqlite3', 'node-pty']
+const NATIVE_MODULES = ['node-pty']
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
@@ -49,7 +50,7 @@ function readRuntimeArg() {
 }
 
 function ensureNodeRuntime() {
-  const initial = runCurrentProcessCheck()
+  const initial = runNodeCheck()
   if (initial.ok) {
     return
   }
@@ -61,7 +62,7 @@ function ensureNodeRuntime() {
   printCheckError(initial)
   runPnpm(['rebuild', ...failedModules])
 
-  const final = runCurrentProcessCheck()
+  const final = runNodeCheck()
   if (!final.ok) {
     console.error(
       `[native-runtime] Native modules still do not load for ${formatRuntimeLabel('node')}.`
@@ -93,23 +94,25 @@ function ensureElectronRuntime() {
   }
 }
 
-function runCurrentProcessCheck() {
-  const failures = collectNativeModuleFailures()
-  if (failures.length === 0) {
-    return { ok: true, failures }
-  }
-  return { ok: false, failures }
+function runNodeCheck() {
+  // Why: a failed native addon load can poison the current process, so the
+  // post-rebuild verification must happen in a fresh Node process.
+  const result = spawnSync(process.execPath, [scriptPath, CHILD_CHECK_FLAG], {
+    cwd: projectDir,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+
+  return parseChildCheckResult(result)
 }
 
 function runElectronCheck() {
-  let electronExecutable
-  try {
-    electronExecutable = require('electron')
-  } catch (error) {
-    return { ok: false, error }
+  const electronExecutable = resolveInstalledElectronExecutable()
+  if (!electronExecutable.ok) {
+    return { ok: false, error: electronExecutable.error }
   }
 
-  const result = spawnSync(electronExecutable, [scriptPath, CHILD_CHECK_FLAG], {
+  const result = spawnSync(electronExecutable.path, [scriptPath, CHILD_CHECK_FLAG], {
     cwd: projectDir,
     env: {
       ...process.env,
@@ -119,13 +122,88 @@ function runElectronCheck() {
     stdio: ['ignore', 'pipe', 'pipe']
   })
 
+  return parseChildCheckResult(result)
+}
+
+function resolveInstalledElectronExecutable() {
+  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+  try {
+    const electronVersion = JSON.parse(
+      readFileSync(resolve(electronPackageDir, 'package.json'), 'utf8')
+    ).version
+    const platformPath = getElectronPlatformPath()
+    const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
+      .trim()
+      .replace(/^v/, '')
+    if (installedVersion !== electronVersion) {
+      return {
+        ok: false,
+        error: new Error(
+          `Electron package binary version ${installedVersion} does not match ${electronVersion}.`
+        )
+      }
+    }
+    const installedPlatformPath = readFileSync(resolve(electronPackageDir, 'path.txt'), 'utf8')
+    if (installedPlatformPath !== platformPath) {
+      return {
+        ok: false,
+        error: new Error(
+          `Electron package path.txt points at ${installedPlatformPath}, expected ${platformPath}.`
+        )
+      }
+    }
+    const electronPath = process.env.ELECTRON_OVERRIDE_DIST_PATH
+      ? resolve(process.env.ELECTRON_OVERRIDE_DIST_PATH, platformPath)
+      : resolve(electronPackageDir, 'dist', platformPath)
+    if (!existsSync(electronPath)) {
+      return { ok: false, error: new Error(`Electron executable is missing at ${electronPath}.`) }
+    }
+    return { ok: true, path: electronPath }
+  } catch (error) {
+    return { ok: false, error }
+  }
+}
+
+function getElectronPlatformPath() {
+  const targetPlatform =
+    process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || process.platform
+  switch (targetPlatform) {
+    case 'mas':
+    case 'darwin':
+      return 'Electron.app/Contents/MacOS/Electron'
+    case 'freebsd':
+    case 'openbsd':
+    case 'linux':
+      return 'electron'
+    case 'win32':
+      return 'electron.exe'
+    default:
+      throw new Error(`Electron builds are not available on platform: ${targetPlatform}`)
+  }
+}
+
+function parseChildCheckResult(result) {
+  const failures = parseCheckFailures(result.stderr)
+
   return {
     ok: result.status === 0,
     status: result.status,
     stdout: result.stdout,
     stderr: result.stderr,
-    error: result.error
+    error: result.error,
+    failures
   }
+}
+
+function parseCheckFailures(stderr) {
+  const failures = []
+  for (const line of (stderr ?? '').split(/\r?\n/)) {
+    const match = /^([^:]+):\s*(.*)$/.exec(line)
+    if (match && NATIVE_MODULES.includes(match[1])) {
+      failures.push({ moduleName: match[1], message: match[2] })
+    }
+  }
+  return failures
 }
 
 function collectNativeModuleFailures() {
@@ -141,15 +219,6 @@ function collectNativeModuleFailures() {
 }
 
 function loadNativeModule(moduleName) {
-  if (moduleName === 'better-sqlite3') {
-    const Database = require(moduleName)
-    // Why: better-sqlite3 defers loading its .node binding until Database is
-    // constructed, so a plain require() misses Node ABI mismatches.
-    const db = new Database(':memory:')
-    db.close()
-    return
-  }
-
   if (moduleName === 'node-pty') {
     loadNodePtyNativeModule()
     return

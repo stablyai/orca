@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getTerminalPaneSearchEntries } from './terminal-search'
+import { APPEARANCE_PANE_SEARCH_ENTRIES } from './appearance-search'
 
 describe('getTerminalPaneSearchEntries', () => {
   it('includes the Windows right-click setting on Windows', () => {
@@ -32,6 +33,16 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(entries.some((entry) => entry.title === 'Option as Alt')).toBe(false)
   })
 
+  it('includes the JIS Yen mapping setting only on macOS', () => {
+    const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+    const entriesLinux = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+
+    expect(entriesMac.some((entry) => entry.title === 'JIS Yen (¥) to Backslash (\\)')).toBe(true)
+    expect(entriesLinux.some((entry) => entry.title === 'JIS Yen (¥) to Backslash (\\)')).toBe(
+      false
+    )
+  })
+
   it('includes the Manage Sessions entry on all platforms', () => {
     const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
@@ -41,12 +52,33 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(entriesLinux.some((entry) => entry.title === 'Manage Sessions')).toBe(true)
   })
 
-  it('includes the Ghostty import setting on all platforms', () => {
+  it('includes the OSC 52 clipboard setting on all platforms', () => {
     const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
     const entriesLinux = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
-    expect(entriesWindows.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
-    expect(entriesMac.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
-    expect(entriesLinux.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
+    expect(
+      entriesWindows.some((entry) => entry.title === 'Allow TUI Clipboard Writes (OSC 52)')
+    ).toBe(true)
+    expect(entriesMac.some((entry) => entry.title === 'Allow TUI Clipboard Writes (OSC 52)')).toBe(
+      true
+    )
+    expect(
+      entriesLinux.some((entry) => entry.title === 'Allow TUI Clipboard Writes (OSC 52)')
+    ).toBe(true)
+  })
+
+  it('keeps terminal appearance settings in the Appearance search index', () => {
+    const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+    const entriesLinux = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+
+    expect(entriesWindows.some((entry) => entry.title === 'Import from Ghostty')).toBe(false)
+    expect(entriesMac.some((entry) => entry.title === 'Font Size')).toBe(false)
+    expect(entriesLinux.some((entry) => entry.title === 'Dark Theme')).toBe(false)
+    expect(
+      APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Import from Ghostty')
+    ).toBe(true)
+    expect(APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Font Size')).toBe(true)
+    expect(APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Dark Theme')).toBe(true)
   })
 })

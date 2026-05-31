@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
 
@@ -37,12 +37,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential python3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
@@ -65,7 +65,7 @@ jobs:
         run: npx electron-vite build --mode e2e
 
       - name: Upload E2E build output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-build-out
           path: out/
@@ -94,7 +94,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
 
@@ -111,12 +111,12 @@ jobs:
         run: sudo apt-get install -y xvfb
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
@@ -136,7 +136,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download E2E build output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: e2e-build-out
           path: out/
@@ -156,7 +156,7 @@ jobs:
       # re-running locally.
       - name: Upload Playwright traces
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-traces-${{ matrix.shard_name }}
           path: test-results/

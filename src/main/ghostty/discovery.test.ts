@@ -16,7 +16,7 @@ vi.mock('fs/promises', () => ({
   stat: statMock
 }))
 
-import { findGhosttyConfigPath, getGhosttyConfigPaths } from './discovery'
+import { findGhosttyConfigPath, findGhosttyConfigPaths, getGhosttyConfigPaths } from './discovery'
 
 function enoent(): Error {
   return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
@@ -48,10 +48,10 @@ describe('getGhosttyConfigPaths', () => {
 
     const paths = getGhosttyConfigPaths()
     expect(paths).toEqual([
-      '/Users/alice/.config/ghostty/config',
       '/Users/alice/.config/ghostty/config.ghostty',
-      '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config',
-      '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config.ghostty'
+      '/Users/alice/.config/ghostty/config',
+      '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config.ghostty',
+      '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
     ])
   })
 
@@ -62,10 +62,10 @@ describe('getGhosttyConfigPaths', () => {
 
     const paths = getGhosttyConfigPaths()
     expect(paths).toEqual([
-      '/custom/xdg/ghostty/config',
       '/custom/xdg/ghostty/config.ghostty',
-      '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config',
-      '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config.ghostty'
+      '/custom/xdg/ghostty/config',
+      '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config.ghostty',
+      '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
     ])
   })
 
@@ -76,8 +76,8 @@ describe('getGhosttyConfigPaths', () => {
 
     const paths = getGhosttyConfigPaths()
     expect(paths).toEqual([
-      '/home/bob/.config/ghostty/config',
-      '/home/bob/.config/ghostty/config.ghostty'
+      '/home/bob/.config/ghostty/config.ghostty',
+      '/home/bob/.config/ghostty/config'
     ])
   })
 
@@ -88,8 +88,8 @@ describe('getGhosttyConfigPaths', () => {
 
     const paths = getGhosttyConfigPaths()
     expect(paths).toEqual([
-      '/custom/config/ghostty/config',
-      '/custom/config/ghostty/config.ghostty'
+      '/custom/config/ghostty/config.ghostty',
+      '/custom/config/ghostty/config'
     ])
   })
 
@@ -100,8 +100,8 @@ describe('getGhosttyConfigPaths', () => {
 
     const paths = getGhosttyConfigPaths()
     expect(paths).toEqual([
-      path.win32.join('C:\\Users\\Charlie\\AppData\\Roaming', 'ghostty', 'config'),
-      path.win32.join('C:\\Users\\Charlie\\AppData\\Roaming', 'ghostty', 'config.ghostty')
+      path.win32.join('C:\\Users\\Charlie\\AppData\\Roaming', 'ghostty', 'config.ghostty'),
+      path.win32.join('C:\\Users\\Charlie\\AppData\\Roaming', 'ghostty', 'config')
     ])
   })
 
@@ -179,7 +179,7 @@ describe('findGhosttyConfigPath', () => {
     expect(result).toBe('/Users/alice/.config/ghostty/config.ghostty')
   })
 
-  it('prefers config over config.ghostty when both exist in the same directory', async () => {
+  it('returns all existing config files in Ghostty load order', async () => {
     homedirMock.mockReturnValue('/Users/alice')
     platformMock.mockReturnValue('darwin')
     delete process.env.XDG_CONFIG_HOME
@@ -194,8 +194,11 @@ describe('findGhosttyConfigPath', () => {
       throw enoent()
     })
 
-    const result = await findGhosttyConfigPath()
-    expect(result).toBe('/Users/alice/.config/ghostty/config')
+    const result = await findGhosttyConfigPaths()
+    expect(result).toEqual([
+      '/Users/alice/.config/ghostty/config.ghostty',
+      '/Users/alice/.config/ghostty/config'
+    ])
   })
 
   it('returns null when no config exists on macOS', async () => {

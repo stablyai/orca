@@ -23,6 +23,7 @@ import {
   GENERAL_CLI_SEARCH_ENTRIES,
   GENERAL_EDITOR_SEARCH_ENTRIES,
   GENERAL_NAVIGATION_SEARCH_ENTRIES,
+  GENERAL_NETWORK_SEARCH_ENTRIES,
   GENERAL_PANE_SEARCH_ENTRIES,
   GENERAL_SUPPORT_SEARCH_ENTRIES,
   GENERAL_UPDATE_SEARCH_ENTRIES,
@@ -38,6 +39,8 @@ import {
   SettingsSwitch,
   SettingsSwitchRow
 } from './SettingsFormControls'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../../../shared/network-proxy'
 
 function createOpenInApplication(): OpenInApplication {
   return {
@@ -75,6 +78,65 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
 
 export { GENERAL_PANE_SEARCH_ENTRIES }
 
+export type AutoSaveDelayDraftState = {
+  sourceDelayMs: number
+  draft: string
+}
+
+export function createAutoSaveDelayDraftState(
+  editorAutoSaveDelayMs: number
+): AutoSaveDelayDraftState {
+  return {
+    sourceDelayMs: editorAutoSaveDelayMs,
+    draft: String(editorAutoSaveDelayMs)
+  }
+}
+
+function resolveAutoSaveDelayDraftState(
+  state: AutoSaveDelayDraftState,
+  editorAutoSaveDelayMs: number
+): AutoSaveDelayDraftState {
+  return state.sourceDelayMs === editorAutoSaveDelayMs
+    ? state
+    : createAutoSaveDelayDraftState(editorAutoSaveDelayMs)
+}
+
+export function updateAutoSaveDelayDraftState(
+  state: AutoSaveDelayDraftState,
+  editorAutoSaveDelayMs: number,
+  draft: string
+): AutoSaveDelayDraftState {
+  return {
+    // Why: settings persistence is async, so a committed draft must stay tied
+    // to the current source until the persisted value reloads.
+    ...resolveAutoSaveDelayDraftState(state, editorAutoSaveDelayMs),
+    draft
+  }
+}
+
+type OpenInApplicationsDraftState = {
+  sourceApplications: OpenInApplication[] | undefined
+  draft: OpenInApplication[]
+}
+
+function createOpenInApplicationsDraftState(
+  openInApplications: OpenInApplication[] | undefined
+): OpenInApplicationsDraftState {
+  return {
+    sourceApplications: openInApplications,
+    draft: openInApplications ?? []
+  }
+}
+
+function resolveOpenInApplicationsDraftState(
+  state: OpenInApplicationsDraftState,
+  openInApplications: OpenInApplication[] | undefined
+): OpenInApplicationsDraftState {
+  return state.sourceApplications === openInApplications
+    ? state
+    : createOpenInApplicationsDraftState(openInApplications)
+}
+
 type GeneralPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
@@ -83,6 +145,7 @@ type GeneralPaneProps = {
 export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const updateStatus = useAppStore((s) => s.updateStatus)
+  const mountedRef = useMountedRef()
   // Why: the 'error' variant of UpdateStatus does not carry a `version` field.
   // The main process emits `{ state: 'error' }` for both check failures (no
   // version known yet) and download/install failures (version was known from
@@ -108,11 +171,16 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
     updateVersionRef.current = null
   }
   const [appVersion, setAppVersion] = useState<string | null>(null)
-  const [autoSaveDelayDraft, setAutoSaveDelayDraft] = useState(
-    String(settings.editorAutoSaveDelayMs)
+  const [autoSaveDelayDraftState, setAutoSaveDelayDraftState] = useState(() =>
+    createAutoSaveDelayDraftState(settings.editorAutoSaveDelayMs)
   )
-  const [openInApplicationsDraft, setOpenInApplicationsDraft] = useState<OpenInApplication[]>(
-    settings.openInApplications ?? []
+  const [httpProxyUrlDraft, setHttpProxyUrlDraft] = useState(settings.httpProxyUrl ?? '')
+  const [httpProxyUrlError, setHttpProxyUrlError] = useState<string | null>(null)
+  const [httpProxyBypassRulesDraft, setHttpProxyBypassRulesDraft] = useState(
+    settings.httpProxyBypassRules ?? ''
+  )
+  const [openInApplicationsDraftState, setOpenInApplicationsDraftState] = useState(() =>
+    createOpenInApplicationsDraftState(settings.openInApplications)
   )
   // Why: the star state is derived from gh, not from settings, so it does not
   // live in the global settings store. 'hidden' covers the gh-unavailable and
@@ -128,7 +196,15 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   >('loading')
 
   useEffect(() => {
-    window.api.updater.getVersion().then(setAppVersion)
+    let cancelled = false
+    void window.api.updater.getVersion().then((version) => {
+      if (!cancelled) {
+        setAppVersion(version)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -153,24 +229,62 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
       return
     }
     setStarState('starring')
-    const ok = await window.api.gh.starOrca()
+    const ok = await window.api.gh.starOrca('settings')
     if (!ok) {
-      setStarState('error')
+      if (mountedRef.current) {
+        setStarState('error')
+      }
       return
     }
-    setStarState('starred')
+    if (mountedRef.current) {
+      setStarState('starred')
+    }
     // Why: clicking star anywhere should also permanently mute the
     // threshold-based nag so the user isn't re-prompted via the popup.
     await window.api.starNag.complete()
   }
 
-  useEffect(() => {
-    setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
-  }, [settings.editorAutoSaveDelayMs])
+  const resolvedAutoSaveDelayDraftState = resolveAutoSaveDelayDraftState(
+    autoSaveDelayDraftState,
+    settings.editorAutoSaveDelayMs
+  )
+  if (resolvedAutoSaveDelayDraftState !== autoSaveDelayDraftState) {
+    // Why: Settings can be updated outside this pane; reconcile drafts before
+    // paint so the visible input never lags behind the persisted value.
+    setAutoSaveDelayDraftState(resolvedAutoSaveDelayDraftState)
+  }
+  const autoSaveDelayDraft = resolvedAutoSaveDelayDraftState.draft
+  const updateAutoSaveDelayDraft = (draft: string): void => {
+    setAutoSaveDelayDraftState((current) =>
+      updateAutoSaveDelayDraftState(current, settings.editorAutoSaveDelayMs, draft)
+    )
+  }
+
+  const resolvedOpenInApplicationsDraftState = resolveOpenInApplicationsDraftState(
+    openInApplicationsDraftState,
+    settings.openInApplications
+  )
+  if (resolvedOpenInApplicationsDraftState !== openInApplicationsDraftState) {
+    // Why: the Open In rows are a local draft, but Settings can reload them
+    // externally; sync before paint instead of after an Effect pass.
+    setOpenInApplicationsDraftState(resolvedOpenInApplicationsDraftState)
+  }
+  const openInApplicationsDraft = resolvedOpenInApplicationsDraftState.draft
+  const updateOpenInApplicationsDraft = (draft: OpenInApplication[]): void => {
+    setOpenInApplicationsDraftState((current) => ({
+      ...resolveOpenInApplicationsDraftState(current, settings.openInApplications),
+      draft
+    }))
+  }
 
   useEffect(() => {
-    setOpenInApplicationsDraft(settings.openInApplications ?? [])
-  }, [settings.openInApplications])
+    setHttpProxyUrlDraft(settings.httpProxyUrl ?? '')
+    setHttpProxyUrlError(null)
+  }, [settings.httpProxyUrl])
+
+  useEffect(() => {
+    setHttpProxyBypassRulesDraft(settings.httpProxyBypassRules ?? '')
+  }, [settings.httpProxyBypassRules])
 
   const commitOpenInApplications = (applications: OpenInApplication[]): void => {
     if (!shouldCommitOpenInApplicationsDraft(applications)) {
@@ -180,7 +294,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   }
 
   const applyOpenInApplicationsDraft = (applications: OpenInApplication[]): void => {
-    setOpenInApplicationsDraft(applications)
+    updateOpenInApplicationsDraft(applications)
     commitOpenInApplications(applications)
   }
 
@@ -194,13 +308,13 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   const commitAutoSaveDelay = (): void => {
     const trimmed = autoSaveDelayDraft.trim()
     if (trimmed === '') {
-      setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
+      setAutoSaveDelayDraftState(createAutoSaveDelayDraftState(settings.editorAutoSaveDelayMs))
       return
     }
 
     const value = Number(trimmed)
     if (!Number.isFinite(value)) {
-      setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
+      setAutoSaveDelayDraftState(createAutoSaveDelayDraftState(settings.editorAutoSaveDelayMs))
       return
     }
 
@@ -210,7 +324,30 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
       MAX_EDITOR_AUTO_SAVE_DELAY_MS
     )
     updateSettings({ editorAutoSaveDelayMs: next })
-    setAutoSaveDelayDraft(String(next))
+    setAutoSaveDelayDraftState((current) =>
+      updateAutoSaveDelayDraftState(current, settings.editorAutoSaveDelayMs, String(next))
+    )
+  }
+
+  const commitHttpProxyUrl = (): void => {
+    const normalized = normalizeProxyUrl(httpProxyUrlDraft)
+    if (!normalized.ok) {
+      setHttpProxyUrlError(normalized.message)
+      return
+    }
+    setHttpProxyUrlError(null)
+    setHttpProxyUrlDraft(normalized.value)
+    if (normalized.value !== (settings.httpProxyUrl ?? '')) {
+      updateSettings({ httpProxyUrl: normalized.value })
+    }
+  }
+
+  const commitHttpProxyBypassRules = (): void => {
+    const normalized = normalizeProxyBypassRules(httpProxyBypassRulesDraft)
+    setHttpProxyBypassRulesDraft(normalized)
+    if (normalized !== (settings.httpProxyBypassRules ?? '')) {
+      updateSettings({ httpProxyBypassRules: normalized })
+    }
   }
 
   const handleRestartToUpdate = (): void => {
@@ -377,7 +514,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                   onChange={(event) => {
                     const next = [...openInApplicationsDraft]
                     next[index] = { ...app, label: event.target.value }
-                    setOpenInApplicationsDraft(next)
+                    updateOpenInApplicationsDraft(next)
                   }}
                   onBlur={() => commitOpenInApplications(openInApplicationsDraft)}
                   onKeyDown={(event) => {
@@ -392,7 +529,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                   onChange={(event) => {
                     const next = [...openInApplicationsDraft]
                     next[index] = { ...app, command: event.target.value }
-                    setOpenInApplicationsDraft(next)
+                    updateOpenInApplicationsDraft(next)
                   }}
                   onBlur={() => commitOpenInApplications(openInApplicationsDraft)}
                   onKeyDown={(event) => {
@@ -406,7 +543,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                   size="sm"
                   onClick={() => {
                     const next = openInApplicationsDraft.filter((entry) => entry.id !== app.id)
-                    setOpenInApplicationsDraft(next)
+                    updateOpenInApplicationsDraft(next)
                     commitOpenInApplications(next)
                   }}
                 >
@@ -419,12 +556,95 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             variant="outline"
             size="sm"
             onClick={() =>
-              setOpenInApplicationsDraft([...openInApplicationsDraft, createOpenInApplication()])
+              updateOpenInApplicationsDraft([...openInApplicationsDraft, createOpenInApplication()])
             }
             disabled={openInApplicationsDraft.length >= OPEN_IN_APPLICATIONS_MAX}
           >
             Add Custom Launcher
           </Button>
+        </SearchableSetting>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, GENERAL_NETWORK_SEARCH_ENTRIES) ? (
+      <section key="network" className="space-y-4">
+        <SettingsSubsectionHeader
+          title="Network"
+          description="Configure app-level network routing."
+        />
+
+        <SearchableSetting
+          title="HTTP Proxy"
+          description="Proxy URL for Orca network requests and local terminal children."
+          keywords={['proxy', 'http_proxy', 'https_proxy', 'network', 'dock', 'launchpad']}
+          className="space-y-3"
+        >
+          <div className="space-y-1">
+            <Label htmlFor="settings-http-proxy-url">HTTP Proxy</Label>
+            <p className="text-xs text-muted-foreground">
+              Leave empty to use system proxy settings and inherited proxy environment variables.
+            </p>
+          </div>
+          <Input
+            id="settings-http-proxy-url"
+            value={httpProxyUrlDraft}
+            onChange={(e) => {
+              setHttpProxyUrlDraft(e.target.value)
+              if (httpProxyUrlError) {
+                setHttpProxyUrlError(null)
+              }
+            }}
+            onBlur={commitHttpProxyUrl}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur()
+              }
+            }}
+            placeholder="http://proxy.example.com:8080"
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
+            aria-invalid={httpProxyUrlError ? true : undefined}
+            className="font-mono text-xs"
+          />
+          {httpProxyUrlError ? (
+            <p className="text-xs text-destructive">{httpProxyUrlError}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Supports http, https, socks, socks4, and socks5 URLs.
+            </p>
+          )}
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Proxy Bypass Rules"
+          description="Hosts that should bypass the configured HTTP proxy."
+          keywords={['proxy', 'bypass', 'no_proxy', 'localhost', 'network']}
+          className="space-y-3"
+        >
+          <div className="space-y-1">
+            <Label htmlFor="settings-http-proxy-bypass-rules">Proxy Bypass Rules</Label>
+            <p className="text-xs text-muted-foreground">
+              Optional. Separate hosts with commas, semicolons, or new lines.
+            </p>
+          </div>
+          <Input
+            id="settings-http-proxy-bypass-rules"
+            value={httpProxyBypassRulesDraft}
+            onChange={(e) => setHttpProxyBypassRulesDraft(e.target.value)}
+            onBlur={commitHttpProxyBypassRules}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur()
+              }
+            }}
+            placeholder="localhost, 127.0.0.1, *.internal"
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
+            className="font-mono text-xs"
+          />
         </SearchableSetting>
       </section>
     ) : null,
@@ -468,7 +688,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
               max={MAX_EDITOR_AUTO_SAVE_DELAY_MS}
               step={250}
               value={autoSaveDelayDraft}
-              onChange={(e) => setAutoSaveDelayDraft(e.target.value)}
+              onChange={(e) => updateAutoSaveDelayDraft(e.target.value)}
               onBlur={commitAutoSaveDelay}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {

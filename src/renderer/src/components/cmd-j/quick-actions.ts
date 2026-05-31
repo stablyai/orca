@@ -1,7 +1,10 @@
-import { FileText, FolderPlus, Globe, Play, SquareTerminal } from 'lucide-react'
+import { FileText, FolderPlus, Globe, Play, SquareTerminal, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CmdJQuickActionAvailability, CmdJQuickActionContext } from './quick-action-context'
-import { getWorkspaceScopedActionAvailability } from './quick-action-context'
+import {
+  getCurrentWorkspaceActionAvailability,
+  getWorkspaceScopedActionAvailability
+} from './quick-action-context'
 
 export type CmdJQuickActionRunResult =
   | { status: 'ok' }
@@ -23,6 +26,12 @@ export type CmdJQuickAction = {
 
 function workspaceActionAvailability(ctx: CmdJQuickActionContext): CmdJQuickActionAvailability {
   return getWorkspaceScopedActionAvailability(ctx)
+}
+
+function currentWorkspaceActionAvailability(
+  ctx: CmdJQuickActionContext
+): CmdJQuickActionAvailability {
+  return getCurrentWorkspaceActionAvailability(ctx)
 }
 
 async function runWorkspaceAction(
@@ -84,6 +93,30 @@ export const CMD_J_QUICK_ACTIONS: readonly CmdJQuickAction[] = [
     isAvailable: () => ({ available: true }),
     run: async (ctx) => {
       ctx.openCreateWorkspace()
+      return { status: 'ok' }
+    }
+  },
+  {
+    id: 'delete-workspace',
+    kind: 'action',
+    title: 'Delete Workspace',
+    description: 'Delete the current workspace.',
+    icon: Trash2,
+    verbKeywords: [
+      'delete workspace',
+      'delete current workspace',
+      'delete worktree',
+      'remove workspace',
+      'remove worktree',
+      'trash workspace'
+    ],
+    isAvailable: currentWorkspaceActionAvailability,
+    run: async (ctx) => {
+      const availability = currentWorkspaceActionAvailability(ctx)
+      if (!availability.available) {
+        return { status: 'unavailable', reason: availability.reason }
+      }
+      ctx.deleteActiveWorkspace()
       return { status: 'ok' }
     }
   },

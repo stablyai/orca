@@ -54,6 +54,9 @@ export function OrchestrationPane(): React.JSX.Element {
   const toggleOrchestration = (value: boolean): void => {
     setOrchestrationEnabled(value)
     localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, value ? '1' : '0')
+    if (value) {
+      useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
+    }
     notifyOrchestrationSetupStateChanged()
   }
 
@@ -106,6 +109,7 @@ export function OrchestrationPane(): React.JSX.Element {
           icon={<Workflow className="size-5" />}
           preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
           onBeforeOpenTerminal={async () => {
+            useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
             await ensureOrcaCliAvailableForAgentSkillTerminal()
           }}
           onRecheck={refreshOrchestrationSkill}

@@ -3,6 +3,7 @@
    per-partition permission/download policies. Splitting further would scatter the
    security boundary across modules. */
 import { app, session } from 'electron'
+import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import {
   copyFileSync,
@@ -191,10 +192,14 @@ class BrowserSessionRegistry {
       if (pendingEntries.length === 0) {
         return
       }
-      const knownPartitions = new Set([
-        ORCA_BROWSER_PARTITION,
-        ...meta.profiles.map((p) => p.partition)
-      ])
+      // Why: replay writes to partition-derived file paths, so corrupted
+      // metadata must pass the same validation as the webview allowlist.
+      const knownPartitions = new Set([ORCA_BROWSER_PARTITION])
+      for (const profile of meta.profiles) {
+        if (BrowserSessionRegistry.isValidPersistedProfile(profile)) {
+          knownPartitions.add(profile.partition)
+        }
+      }
       const remainingEntries = { ...meta.pendingCookieImports }
 
       for (const [partition, stagedPath] of pendingEntries) {
@@ -374,6 +379,7 @@ class BrowserSessionRegistry {
     // lingering after the user deletes an imported or isolated session profile.
     try {
       const sess = session.fromPartition(profile.partition)
+      this.clearSessionPolicies(profile.partition, sess)
       await sess.clearStorageData()
       await sess.clearCache()
     } catch {
@@ -424,17 +430,24 @@ class BrowserSessionRegistry {
   // registering anything.
   private static readonly PARTITION_RE = /^persist:orca-browser-session-[\da-f-]{36}$/
 
+  private static isValidPersistedProfile(profile: unknown): profile is BrowserSessionProfile {
+    if (!profile || typeof profile !== 'object') {
+      return false
+    }
+    const candidate = profile as Partial<BrowserSessionProfile>
+    return (
+      candidate.id !== 'default' &&
+      candidate.scope !== 'default' &&
+      typeof candidate.id === 'string' &&
+      typeof candidate.partition === 'string' &&
+      typeof candidate.label === 'string' &&
+      BrowserSessionRegistry.PARTITION_RE.test(candidate.partition)
+    )
+  }
+
   hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
     for (const profile of profiles) {
-      if (profile.id === 'default' || profile.scope === 'default') {
-        continue
-      }
-      if (
-        typeof profile.id !== 'string' ||
-        typeof profile.partition !== 'string' ||
-        typeof profile.label !== 'string' ||
-        !BrowserSessionRegistry.PARTITION_RE.test(profile.partition)
-      ) {
+      if (!BrowserSessionRegistry.isValidPersistedProfile(profile)) {
         continue
       }
       this.profiles.set(profile.id, profile)
@@ -449,6 +462,13 @@ class BrowserSessionRegistry {
   // session partitions would silently allow permissions and downloads that the
   // shared partition correctly denies.
   private readonly configuredPartitions = new Set<string>()
+  private readonly handleWillDownload = (
+    _event: Electron.Event,
+    item: Electron.DownloadItem,
+    webContents: Electron.WebContents
+  ): void => {
+    browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
+  }
 
   private setupSessionPolicies(partition: string): void {
     if (this.configuredPartitions.has(partition)) {
@@ -518,9 +538,19 @@ class BrowserSessionRegistry {
     sess.setDisplayMediaRequestHandler((_request, callback) => {
       callback({ video: undefined, audio: undefined })
     })
-    sess.on('will-download', (_event, item, webContents) => {
-      browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
-    })
+    sess.removeListener('will-download', this.handleWillDownload)
+    sess.on('will-download', this.handleWillDownload)
+  }
+
+  private clearSessionPolicies(partition: string, sess: Session): void {
+    // Why: isolated/imported browser partitions can be deleted while the
+    // Electron Session object survives; clear policy callbacks and listener
+    // bookkeeping so removed profiles do not leave retained closures behind.
+    this.configuredPartitions.delete(partition)
+    sess.removeListener('will-download', this.handleWillDownload)
+    sess.setPermissionRequestHandler(null)
+    sess.setPermissionCheckHandler(null)
+    sess.setDisplayMediaRequestHandler(null)
   }
 }
 

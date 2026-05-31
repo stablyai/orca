@@ -7,6 +7,7 @@ import {
   runtimeMobileSessionSyncKeysEqual
 } from './sync-runtime-graph'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
@@ -123,6 +124,68 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     expect(runtimeMobileSessionSyncKeysEqual(getRuntimeMobileSessionSyncKey(base), reordered)).toBe(
       false
     )
+  })
+
+  it('changes when generated terminal title metadata changes', () => {
+    const shared = makeSharedOverrides()
+    const base = makeState({
+      ...shared,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Codex working', customTitle: null, ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree']
+    })
+    const before = getRuntimeMobileSessionSyncKey(base)
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...base,
+        tabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'term-1',
+              title: 'Codex working',
+              generatedTitle: 'Fix remote tabs',
+              customTitle: null,
+              ptyId: 'pty-1'
+            }
+          ]
+        } as unknown as AppState['tabsByWorktree']
+      }),
+      base,
+      before
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
+  it('changes when generated terminal titles are toggled', () => {
+    const shared = makeSharedOverrides()
+    const tabsByWorktree = {
+      'wt-1': [
+        {
+          id: 'term-1',
+          title: 'Codex working',
+          generatedTitle: 'Fix remote tabs',
+          customTitle: null,
+          ptyId: 'pty-1'
+        }
+      ]
+    } as unknown as AppState['tabsByWorktree']
+    const base = makeState({
+      ...shared,
+      tabsByWorktree,
+      settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: false }
+    })
+    const before = getRuntimeMobileSessionSyncKey(base)
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...base,
+        settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true }
+      }),
+      base,
+      before
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
   })
 
   it('changes when terminal split-pane layout changes', () => {
@@ -263,6 +326,29 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
   })
 
+  it('changes when a terminal tab launch agent changes', () => {
+    const sharedOverrides = makeSharedOverrides()
+
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        tabsByWorktree: {
+          'wt-1': [{ id: 'term-1', title: 'Terminal 1', customTitle: null }]
+        } as unknown as AppState['tabsByWorktree']
+      })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        tabsByWorktree: {
+          'wt-1': [{ id: 'term-1', title: 'Terminal 1', customTitle: null, launchAgent: 'codex' }]
+        } as unknown as AppState['tabsByWorktree']
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
   it('changes when explicit agent status epoch changes', () => {
     const sharedOverrides = makeSharedOverrides()
     const before = getRuntimeMobileSessionSyncKey(
@@ -388,6 +474,45 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     const after = makeState(sharedOverrides)
 
     expect(canSkipRuntimeMobileSessionSyncKeyBuild(after, before)).toBe(true)
+  })
+
+  it('changes and does not skip when terminal theme settings change', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const beforeSettings = {
+      ...getDefaultSettings('/tmp'),
+      theme: 'dark' as const,
+      terminalColorOverrides: { foreground: '#eeeeee' }
+    }
+    const afterSettings = {
+      ...beforeSettings,
+      terminalColorOverrides: { foreground: '#111111' }
+    }
+    const before = makeState({ ...sharedOverrides, settings: beforeSettings })
+    const beforeKey = getRuntimeMobileSessionSyncKey(before)
+    const after = makeState({ ...sharedOverrides, settings: afterSettings })
+    const afterKey = getRuntimeMobileSessionSyncKey(after, before, beforeKey)
+
+    expect(canSkipRuntimeMobileSessionSyncKeyBuild(after, before)).toBe(false)
+    expect(runtimeMobileSessionSyncKeysEqual(beforeKey, afterKey)).toBe(false)
+  })
+
+  it('changes and does not skip when system terminal appearance changes', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      theme: 'system' as const,
+      terminalUseSeparateLightTheme: true
+    }
+    const before = makeState({ ...sharedOverrides, settings })
+    const beforeKey = getRuntimeMobileSessionSyncKey(before, undefined, undefined, false)
+    const after = makeState({ ...sharedOverrides, settings })
+    const afterKey = getRuntimeMobileSessionSyncKey(after, before, beforeKey, true)
+
+    expect(canSkipRuntimeMobileSessionSyncKeyBuild(after, before, true, false)).toBe(false)
+    expect(beforeKey.systemPrefersDark).toBe(false)
+    expect(afterKey.systemPrefersDark).toBe(true)
+    expect(afterKey.terminalThemeProjection).not.toBe(beforeKey.terminalThemeProjection)
+    expect(runtimeMobileSessionSyncKeysEqual(beforeKey, afterKey)).toBe(false)
   })
 })
 
@@ -544,6 +669,127 @@ describe('buildMobileSessionTabSnapshots', () => {
           agentType: 'codex',
           paneKey
         }
+      }
+    ])
+  })
+
+  it('publishes generated terminal titles to mobile snapshots only when enabled', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const base = makeState({
+      settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: false },
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'term-1',
+            title: 'Codex working',
+            generatedTitle: 'Fix remote tabs',
+            customTitle: null,
+            ptyId: 'pty-1'
+          }
+        ]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId']
+    })
+
+    expect(buildMobileSessionTabSnapshots(base)[0]?.tabs[0]).toMatchObject({
+      type: 'terminal',
+      title: 'Codex working'
+    })
+    expect(
+      buildMobileSessionTabSnapshots({
+        ...base,
+        settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true }
+      })[0]?.tabs[0]
+    ).toMatchObject({
+      type: 'terminal',
+      title: 'Fix remote tabs'
+    })
+  })
+
+  it('publishes the desktop-resolved terminal theme for mobile terminal tabs', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        theme: 'light',
+        terminalUseSeparateLightTheme: true,
+        terminalColorOverrides: {
+          background: '#f8f8f8',
+          foreground: '#101010',
+          cursor: '#202020'
+        },
+        terminalBackgroundOpacity: 0.8,
+        terminalCursorOpacity: 0.5
+      },
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Terminal', customTitle: null, ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId']
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs).toMatchObject([
+      {
+        type: 'terminal',
+        terminalTheme: {
+          mode: 'light',
+          theme: {
+            background: 'rgba(248, 248, 248, 0.8)',
+            foreground: '#101010',
+            cursor: 'rgba(32, 32, 32, 0.5)'
+          }
+        }
+      }
+    ])
+  })
+
+  it('uses the explicit system appearance for mobile terminal theme snapshots', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        theme: 'system',
+        terminalUseSeparateLightTheme: true
+      },
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Terminal', customTitle: null, ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId']
+    })
+
+    expect(buildMobileSessionTabSnapshots(state, false)[0]?.tabs).toMatchObject([
+      {
+        type: 'terminal',
+        terminalTheme: { mode: 'light' }
+      }
+    ])
+    expect(buildMobileSessionTabSnapshots(state, true)[0]?.tabs).toMatchObject([
+      {
+        type: 'terminal',
+        terminalTheme: { mode: 'dark' }
       }
     ])
   })

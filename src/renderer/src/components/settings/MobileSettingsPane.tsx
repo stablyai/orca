@@ -11,7 +11,8 @@ import {
 export { MOBILE_SETTINGS_PANE_SEARCH_ENTRIES }
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'
-const ORCA_ANDROID_RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.9'
+const ORCA_ANDROID_APK_URL =
+  'https://github.com/stablyai/orca/releases/download/mobile-v0.0.10/app-release.apk'
 
 type MobileSettingsPaneProps = {
   settings: GlobalSettings
@@ -52,12 +53,11 @@ export function MobileSettingsPane({
                 <button
                   type="button"
                   // Why: Android is moving to Google Play soon, but until then
-                  // link directly to the current mobile release tag instead of
-                  // the noisy desktop-dominated releases index.
-                  onClick={() => void window.api.shell.openUrl(ORCA_ANDROID_RELEASE_URL)}
+                  // link directly to the pinned APK asset for the current mobile release.
+                  onClick={() => void window.api.shell.openUrl(ORCA_ANDROID_APK_URL)}
                   className="cursor-pointer underline underline-offset-2 hover:text-foreground"
                 >
-                  GitHub Releases page
+                  GitHub Releases
                 </button>
                 .
               </p>
@@ -66,11 +66,15 @@ export function MobileSettingsPane({
               type="button"
               role="switch"
               aria-checked={settings.experimentalMobile}
-              onClick={() =>
+              onClick={() => {
+                const nextEnabled = !settings.experimentalMobile
+                if (nextEnabled) {
+                  useAppStore.getState().recordFeatureInteraction('mobile-pairing')
+                }
                 updateSettings({
-                  experimentalMobile: !settings.experimentalMobile
+                  experimentalMobile: nextEnabled
                 })
-              }
+              }}
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
                 settings.experimentalMobile ? 'bg-foreground' : 'bg-muted-foreground/30'
               }`}

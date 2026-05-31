@@ -155,6 +155,22 @@
   animation: pane-focus-rim-flash 1.5s ease-out forwards;
 }
 
+.pane[data-terminal-attention] .xterm-container {
+  box-shadow: none;
+}
+
+.pane[data-terminal-attention] .xterm-container::after {
+  content: '';
+  position: absolute;
+  inset: 0 4px 4px 0;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--terminal-pane-locate) 64%, transparent),
+    inset 0 0 0 3px color-mix(in srgb, var(--terminal-pane-locate) 18%, transparent);
+}
+
 @keyframes pane-focus-rim-flash {
   0% {
     opacity: 1;

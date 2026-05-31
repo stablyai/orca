@@ -94,6 +94,14 @@ describe('CdpWsProxy', () => {
     expect(proxy.getPort()).toBeGreaterThan(0)
   })
 
+  it('does not retain an extra startup server error listener after binding', () => {
+    const server = (
+      proxy as unknown as { httpServer: { listenerCount: (event: string) => number } }
+    ).httpServer
+
+    expect(server.listenerCount('error')).toBeLessThanOrEqual(1)
+  })
+
   it('attaches debugger on start', () => {
     expect(mock.webContents.debugger.attach).toHaveBeenCalledWith('1.3')
   })
@@ -320,6 +328,28 @@ describe('CdpWsProxy', () => {
         resolve()
       }
     })
+  })
+
+  it('detaches client websocket listeners after client close', async () => {
+    const client = await connect()
+    const serverClient = (proxy as unknown as { client: WebSocket | null }).client
+    expect(serverClient).toBeTruthy()
+    const offSpy = vi.spyOn(serverClient!, 'off')
+
+    client.close()
+
+    const start = Date.now()
+    while (
+      (proxy as unknown as { client: WebSocket | null }).client &&
+      Date.now() - start < 2_000
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+
+    expect((proxy as unknown as { client: WebSocket | null }).client).toBeNull()
+    const removedEvents = offSpy.mock.calls.map(([event]) => event)
+    expect(removedEvents).toEqual(expect.arrayContaining(['message', 'close']))
+    offSpy.mockRestore()
   })
 
   it('rejects inflight requests on stop', async () => {

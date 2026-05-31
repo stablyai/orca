@@ -1,7 +1,8 @@
-import { useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { useRef, useCallback, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react'
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { WebView } from 'react-native-webview'
 import type { WebViewMessageEvent } from 'react-native-webview'
+import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
@@ -20,6 +21,8 @@ export type TerminalKeyboardAvoidanceMetrics = {
   altScreen: boolean
 }
 
+export type MobileTerminalTheme = RuntimeMobileTerminalTheme
+
 export type TerminalSelectionEvents = {
   onSelectionMode?: (active: boolean) => void
   onSelectionCopy?: (text: string) => void
@@ -28,6 +31,7 @@ export type TerminalSelectionEvents = {
   onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
   onTerminalInput?: (bytes: string) => void
+  onTerminalTap?: () => void
 }
 
 export type TerminalWebViewHandle = {
@@ -48,18 +52,55 @@ export type TerminalWebViewHandle = {
 
 type Props = {
   style?: StyleProp<ViewStyle>
+  terminalTheme?: MobileTerminalTheme
   onWebReady?: () => void
 } & TerminalSelectionEvents
 
 type TerminalMessage =
   | { type: 'write'; id?: number; data: string }
-  | { type: 'init'; id?: number; cols: number; rows: number; initialData?: string }
+  | {
+      type: 'init'
+      id?: number
+      cols: number
+      rows: number
+      initialData?: string
+      terminalTheme?: MobileTerminalTheme
+    }
   | { type: 'resize'; id?: number; cols: number; rows: number }
   | { type: 'clear'; id?: number }
   | { type: 'measure'; id?: number; containerHeight?: number }
   | { type: 'reset-zoom'; id?: number }
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }
+  | { type: 'set-theme'; id?: number; terminalTheme?: MobileTerminalTheme }
+
+const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000
+const MAX_PENDING_WEB_WRITE_MESSAGES = 4096
+
+const DEFAULT_TERMINAL_THEME: MobileTerminalTheme['theme'] = {
+  background: colors.terminalBg,
+  foreground: '#c0caf5',
+  cursor: '#c0caf5',
+  cursorAccent: colors.terminalBg,
+  selectionBackground: '#33467c',
+  selectionForeground: '#c0caf5',
+  black: '#15161e',
+  red: '#f7768e',
+  green: '#9ece6a',
+  yellow: '#e0af68',
+  blue: '#7aa2f7',
+  magenta: '#bb9af7',
+  cyan: '#7dcfff',
+  white: '#a9b1d6',
+  brightBlack: '#414868',
+  brightRed: '#f7768e',
+  brightGreen: '#9ece6a',
+  brightYellow: '#e0af68',
+  brightBlue: '#7aa2f7',
+  brightMagenta: '#bb9af7',
+  brightCyan: '#7dcfff',
+  brightWhite: '#c0caf5'
+}
 
 // Why: TUI apps (Claude Code / Ink) emit escape codes with absolute cursor
 // positioning designed for the desktop's terminal dimensions (~150+ cols).
@@ -95,6 +136,46 @@ const XTERM_HTML = `<!DOCTYPE html>
     display: inline-block;
   }
   .xterm { -webkit-user-select: none; user-select: none; }
+  .xterm .xterm-viewport {
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none;
+  }
+  .xterm .xterm-viewport::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+  }
+  .xterm .xterm-scrollable-element > .xterm-scrollbar,
+  .xterm .xterm-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  #scroll-indicator {
+    position: fixed;
+    top: 4px;
+    right: 3px;
+    bottom: 4px;
+    width: 3px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms linear;
+    z-index: 7;
+  }
+  #scroll-indicator.visible { opacity: 0.72; }
+  #scroll-thumb {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 3px;
+    min-height: 24px;
+    border-radius: 999px;
+    background: ${colors.textSecondary};
+    will-change: transform, height;
+  }
   /* Why: selection overlay sits in unscaled viewport coords, above the
      transformed surface, so handle hit areas and Copy menu positions
      don't depend on getTotalScale() for their on-screen size. */
@@ -171,6 +252,7 @@ const XTERM_HTML = `<!DOCTYPE html>
 <div id="terminal-container">
   <div id="terminal-surface"></div>
 </div>
+<div id="scroll-indicator"><div id="scroll-thumb"></div></div>
 <div id="selection-overlay">
   <div id="sel-handle-start" class="sel-handle start"></div>
   <div id="sel-handle-end" class="sel-handle end"></div>
@@ -187,16 +269,26 @@ const XTERM_HTML = `<!DOCTYPE html>
   var C1_CSI = String.fromCharCode(155);
   var PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096;
   var term = null;
+  var scrollIndicator = document.getElementById('scroll-indicator');
+  var scrollThumb = document.getElementById('scroll-thumb');
+  var scrollIndicatorHideTimer = null;
   var writeQueue = [];
+  var writeQueueHead = 0;
   var writesDraining = false;
   var afterDrainCallbacks = [];
+  var termObserverDisposables = [];
   var ready = false;
   var currentScale = 1;
   var userScale = 1;
   var panX = 0;
   var panY = 0;
+  var smoothScrollOffsetY = 0;
+  var pendingNormalScrollDeltaY = 0;
+  var normalScrollFrameId = null;
   var initRows = 24;
   var terminalGeneration = 0;
+  var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
+  var terminalTheme = defaultTheme;
   var activeAltScreenSnapshot = false;
   var trackedMouseTrackingMode = 'none';
   var sgrMouseMode = false;
@@ -253,7 +345,55 @@ const XTERM_HTML = `<!DOCTYPE html>
 
   function updateTransform() {
     surface.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + getTotalScale() + ')';
+    updateScrollIndicator(false);
     if (selMode === 'select') repositionOverlay();
+  }
+
+  function updateScrollIndicator(reveal) {
+    if (!scrollIndicator || !scrollThumb || !term || !term.buffer || !term.buffer.active) return;
+    var buffer = term.buffer.active;
+    var maxViewportY = buffer.baseY || 0;
+    if (maxViewportY <= 0 || shouldRouteScrollToTerminalInput()) {
+      scrollIndicator.classList.remove('visible');
+      return;
+    }
+    var trackHeight = Math.max(0, window.innerHeight - 8);
+    var totalRows = maxViewportY + (term.rows || 0);
+    if (trackHeight <= 0 || totalRows <= 0) return;
+    var thumbHeight = Math.max(24, trackHeight * (term.rows || 0) / totalRows);
+    var maxTop = Math.max(0, trackHeight - thumbHeight);
+    var top = maxViewportY > 0 ? (buffer.viewportY / maxViewportY) * maxTop : 0;
+    scrollThumb.style.height = thumbHeight + 'px';
+    scrollThumb.style.transform = 'translateY(' + top + 'px)';
+    if (!reveal) return;
+    scrollIndicator.classList.add('visible');
+    if (scrollIndicatorHideTimer) clearTimeout(scrollIndicatorHideTimer);
+    scrollIndicatorHideTimer = setTimeout(function() {
+      scrollIndicator.classList.remove('visible');
+      scrollIndicatorHideTimer = null;
+    }, 550);
+  }
+
+  function normalizeTerminalTheme(input) {
+    var source = input && typeof input === 'object' && input.theme && typeof input.theme === 'object'
+      ? input.theme
+      : null;
+    if (!source) return defaultTheme;
+    var next = {};
+    var keys = Object.keys(defaultTheme);
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      if (typeof source[key] === 'string') next[key] = source[key];
+    }
+    return Object.assign({}, defaultTheme, next);
+  }
+
+  function applyTerminalTheme(input) {
+    terminalTheme = normalizeTerminalTheme(input);
+    var background = terminalTheme.background || '${colors.terminalBg}';
+    document.documentElement.style.background = background;
+    document.body.style.background = background;
+    if (term) term.options.theme = terminalTheme;
   }
 
   function getCellHeight() {
@@ -376,6 +516,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     userScale = 1;
     panX = 0;
     panY = 0;
+    smoothScrollOffsetY = 0;
     updateTransform();
     adjustRowsForViewport();
 
@@ -453,6 +594,39 @@ const XTERM_HTML = `<!DOCTYPE html>
     }
   }
 
+  function resetWriteQueue() {
+    writeQueue = [];
+    writeQueueHead = 0;
+  }
+
+  function enqueueWrite(data) {
+    writeQueue.push(data);
+  }
+
+  function nextQueuedWrite() {
+    if (writeQueueHead >= writeQueue.length) {
+      resetWriteQueue();
+      return undefined;
+    }
+    var next = writeQueue[writeQueueHead];
+    writeQueueHead++;
+    // Why: high-throughput terminals can enqueue faster than xterm parses;
+    // compact consumed slots so drain work stays O(1) without retaining old chunks.
+    if (writeQueueHead > 128 && writeQueueHead * 2 > writeQueue.length) {
+      writeQueue = writeQueue.slice(writeQueueHead);
+      writeQueueHead = 0;
+    }
+    return next;
+  }
+
+  function disposeTermObservers() {
+    var disposables = termObserverDisposables;
+    termObserverDisposables = [];
+    for (var i = 0; i < disposables.length; i++) {
+      try { disposables[i] && disposables[i].dispose && disposables[i].dispose(); } catch (e) {}
+    }
+  }
+
   function extractMouseModeScanTail(input) {
     var start = Math.max(input.lastIndexOf(ESC), input.lastIndexOf(C1_CSI));
     if (start === -1) return '';
@@ -472,7 +646,7 @@ const XTERM_HTML = `<!DOCTYPE html>
 
   function pumpWrites(gen) {
     if (!ready || !term || writesDraining || gen !== terminalGeneration) return;
-    var next = writeQueue.shift();
+    var next = nextQueuedWrite();
     if (typeof next !== 'string') {
       var callbacks = afterDrainCallbacks;
       afterDrainCallbacks = [];
@@ -494,15 +668,16 @@ const XTERM_HTML = `<!DOCTYPE html>
     pumpWrites(terminalGeneration);
   }
 
-  function init(cols, rows, initialData) {
+  function init(cols, rows, initialData, nextTheme) {
     terminalGeneration++;
     var gen = terminalGeneration;
     ready = false;
-    writeQueue = [];
+    resetWriteQueue();
     writesDraining = false;
     afterDrainCallbacks = [];
     initRows = rows || 24;
     firstDataPending = true;
+    smoothScrollOffsetY = 0;
     mouseModeScanTail = '';
     trackedMouseTrackingMode = 'none';
     sgrMouseMode = false;
@@ -522,6 +697,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     var oldTerm = term;
     var oldSurface = surface;
     var nextSurface = null;
+    disposeTermObservers();
     if (oldTerm) {
       nextSurface = document.createElement('div');
       nextSurface.id = 'terminal-surface';
@@ -535,32 +711,11 @@ const XTERM_HTML = `<!DOCTYPE html>
       oldSurface.removeAttribute('id');
     }
 
+    applyTerminalTheme(nextTheme);
     term = new Terminal({
       cols: cols || 80,
       rows: rows || 24,
-      theme: {
-        background: '${colors.terminalBg}',
-        foreground: '#c0caf5',
-        cursor: '#c0caf5',
-        cursorAccent: '${colors.terminalBg}',
-        selectionBackground: '#33467c',
-        black: '#15161e',
-        red: '#f7768e',
-        green: '#9ece6a',
-        yellow: '#e0af68',
-        blue: '#7aa2f7',
-        magenta: '#bb9af7',
-        cyan: '#7dcfff',
-        white: '#a9b1d6',
-        brightBlack: '#414868',
-        brightRed: '#f7768e',
-        brightGreen: '#9ece6a',
-        brightYellow: '#e0af68',
-        brightBlue: '#7aa2f7',
-        brightMagenta: '#bb9af7',
-        brightCyan: '#7dcfff',
-        brightWhite: '#c0caf5'
-      },
+      theme: terminalTheme,
       fontFamily: '"Menlo", "Consolas", "DejaVu Sans Mono", monospace',
       fontSize: 13,
       scrollback: 5000,
@@ -573,7 +728,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     });
     term.open(surface);
     if (typeof replayData === 'string' && replayData.length > 0) {
-      writeQueue.push(replayData);
+      enqueueWrite(replayData);
     }
 
     // Why: reset eviction tracking + attach observers for the new term.
@@ -602,7 +757,7 @@ const XTERM_HTML = `<!DOCTYPE html>
 
   function write(data) {
     updateMouseModeFromData(data);
-    writeQueue.push(data);
+    enqueueWrite(data);
     pumpWrites(terminalGeneration);
     // Why: first live data chunk after init may widen the buffer past
     // what the post-replay applyFitScale measured. Re-fit once after this
@@ -693,14 +848,14 @@ const XTERM_HTML = `<!DOCTYPE html>
       if (handledMessageIds.length > 256) handledMessageIds.shift();
     }
     if (msg.type === 'init') {
-      init(msg.cols, msg.rows, msg.initialData);
+      init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme);
     } else if (msg.type === 'resize') {
       resize(msg.cols, msg.rows);
     } else if (msg.type === 'write') {
       write(msg.data);
     } else if (msg.type === 'clear') {
       terminalGeneration++;
-      writeQueue = [];
+      resetWriteQueue();
       afterDrainCallbacks = [];
       writesDraining = false;
       mouseModeScanTail = '';
@@ -718,6 +873,8 @@ const XTERM_HTML = `<!DOCTYPE html>
       measureFitDimensions(msg.containerHeight);
     } else if (msg.type === 'reset-zoom') {
       applyFitScale('reset-zoom-msg');
+    } else if (msg.type === 'set-theme') {
+      applyTerminalTheme(msg.terminalTheme);
     } else if (msg.type === 'cancel-select') {
       if (selMode === 'select') cancelSelect();
     } else if (msg.type === 'do-select-all') {
@@ -764,6 +921,8 @@ const XTERM_HTML = `<!DOCTYPE html>
   var longPressOrigin = null; // {x,y, identifier}
   var edgeScrollTimer = null;
   var edgeScrollDir = 0;
+  var edgeScrollClientX = 0;
+  var edgeScrollClientY = 0;
 
   // Eviction watchdog: linesEverWritten counts onLineFeed since last init.
   // Once buffer is full, every onLineFeed evicts the top row in xterm and
@@ -848,14 +1007,20 @@ const XTERM_HTML = `<!DOCTYPE html>
 
   function attachTermObservers() {
     if (!term) return;
-    try { term.onLineFeed(logFeedAndEvict); } catch (e) {}
+    disposeTermObservers();
+    try { termObserverDisposables.push(term.onLineFeed(logFeedAndEvict)); } catch (e) {}
+    try {
+      termObserverDisposables.push(term.onScroll(function() { updateScrollIndicator(false); }));
+    } catch (e) {}
     // Why: emit modes on every parsed write so RN's mirror stays current
     // without round-trip; covers \\x1b[?2004h/l and alt-screen toggles.
     try {
-      term.onWriteParsed && term.onWriteParsed(function() {
-        emitModesIfChanged();
-        emitKeyboardAvoidanceMetrics();
-      });
+      if (term.onWriteParsed) {
+        termObserverDisposables.push(term.onWriteParsed(function() {
+          emitModesIfChanged();
+          emitKeyboardAvoidanceMetrics();
+        }));
+      }
     } catch (e) {}
     // Initial emit once buffer settles.
     afterWritesDrained(function() {
@@ -955,11 +1120,15 @@ const XTERM_HTML = `<!DOCTYPE html>
     if (!cell) return '';
     var eventCode = lines < 0 ? 64 : 65;
     if (sgrMousePixelsMode) {
+      if (!isSafeSgrMouseCoordinate(cell.x) || !isSafeSgrMouseCoordinate(cell.y)) return '';
       return ESC + '[<' + eventCode + ';' + cell.x + ';' + cell.y + 'M';
     }
     if (sgrMouseMode) {
       // Why: xterm increments zero-based mouse cells before encoding reports.
-      return ESC + '[<' + eventCode + ';' + (cell.col + 1) + ';' + (cell.row + 1) + 'M';
+      var sgrCol = cell.col + 1;
+      var sgrRow = cell.row + 1;
+      if (!isSafeSgrMouseCoordinate(sgrCol) || !isSafeSgrMouseCoordinate(sgrRow)) return '';
+      return ESC + '[<' + eventCode + ';' + sgrCol + ';' + sgrRow + 'M';
     }
     // Why: xterm increments zero-based mouse cells before encoding reports.
     var button = eventCode + 32;
@@ -971,8 +1140,53 @@ const XTERM_HTML = `<!DOCTYPE html>
     return ESC + '[M' + String.fromCharCode(button) + String.fromCharCode(col) + String.fromCharCode(row);
   }
 
+  function isSafeSgrMouseCoordinate(value) {
+    return Number.isInteger(value) && value >= 0 && value <= 9999;
+  }
+
+  function buildMouseClickInput(clientX, clientY) {
+    var mouseTrackingMode = getMouseTrackingMode();
+    if (!isClickMouseTrackingMode(mouseTrackingMode)) return '';
+    var cell = viewportToMouseReportCell(clientX, clientY);
+    if (!cell) return '';
+    if (sgrMousePixelsMode) {
+      // Why: xterm 1016 keeps SGR syntax but reports raw zero-based pixel positions.
+      var pixelX = cell.x;
+      var pixelY = cell.y;
+      if (!isSafeSgrMouseCoordinate(pixelX) || !isSafeSgrMouseCoordinate(pixelY)) return '';
+      var pixelPress = ESC + '[<0;' + pixelX + ';' + pixelY + 'M';
+      if (mouseTrackingMode === 'x10') return pixelPress;
+      return pixelPress + ESC + '[<0;' + pixelX + ';' + pixelY + 'm';
+    }
+    if (sgrMouseMode) {
+      // Why: xterm increments zero-based mouse cells before encoding reports.
+      var sgrCol = cell.col + 1;
+      var sgrRow = cell.row + 1;
+      if (!isSafeSgrMouseCoordinate(sgrCol) || !isSafeSgrMouseCoordinate(sgrRow)) return '';
+      var sgrPress = ESC + '[<0;' + sgrCol + ';' + sgrRow + 'M';
+      if (mouseTrackingMode === 'x10') return sgrPress;
+      return sgrPress + ESC + '[<0;' + sgrCol + ';' + sgrRow + 'm';
+    }
+    // Why: non-SGR click coordinates use printable ASCII bytes on the mobile
+    // bridge; unsafe wide-terminal cells must not turn into corrupted input.
+    var col = cell.col + 1 + 32;
+    var row = cell.row + 1 + 32;
+    if (col > 126 || row > 126) return '';
+    var press = ESC + '[M' + String.fromCharCode(32) + String.fromCharCode(col) + String.fromCharCode(row);
+    if (mouseTrackingMode === 'x10') return press;
+    return press + ESC + '[M' + String.fromCharCode(35) + String.fromCharCode(col) + String.fromCharCode(row);
+  }
+
+  function isClickMouseTrackingMode(mode) {
+    return mode !== 'none';
+  }
+
   function isWheelMouseTrackingMode(mode) {
     return mode !== 'none' && mode !== 'x10';
+  }
+
+  function shouldRouteScrollToTerminalInput() {
+    return isWheelMouseTrackingMode(getMouseTrackingMode()) || isAlternateBufferActive();
   }
 
   function buildMouseWheelScrollInput(lines, clientX, clientY) {
@@ -1022,6 +1236,83 @@ const XTERM_HTML = `<!DOCTYPE html>
       return;
     }
     term.scrollLines(lines);
+  }
+
+  function clampNormalScrollLines(lines) {
+    if (!term || !term.buffer || !term.buffer.active || lines === 0) return 0;
+    var buffer = term.buffer.active;
+    if (lines > 0) {
+      return Math.min(lines, Math.max(0, buffer.baseY - buffer.viewportY));
+    }
+    return Math.max(lines, -buffer.viewportY);
+  }
+
+  function canScrollNormalBufferDelta(deltaY) {
+    if (!term || !term.buffer || !term.buffer.active || deltaY === 0) return false;
+    var buffer = term.buffer.active;
+    if (deltaY > 0) return buffer.viewportY < buffer.baseY;
+    return buffer.viewportY > 0;
+  }
+
+  function applyNormalBufferScrollDelta(deltaY) {
+    if (!term || deltaY === 0) return false;
+    var effectiveCellH = getCellHeight() * getTotalScale();
+    if (effectiveCellH <= 0) return false;
+    if (!canScrollNormalBufferDelta(deltaY)) {
+      resetSmoothScrollOffset();
+      return false;
+    }
+    smoothScrollOffsetY -= deltaY;
+    var lines = Math.trunc(-smoothScrollOffsetY / effectiveCellH);
+    if (lines !== 0) {
+      var applied = clampNormalScrollLines(lines);
+      if (applied !== 0) {
+        term.scrollLines(applied);
+        // Why: xterm's renderer is row-based. Buffer touch pixels and only
+        // commit whole rows so TUI canvas layers do not shimmer between
+        // fractional transforms and xterm repaints.
+        smoothScrollOffsetY += applied * effectiveCellH;
+      }
+      if (applied !== lines) smoothScrollOffsetY = 0;
+    }
+    var limit = effectiveCellH - 1;
+    if (smoothScrollOffsetY > limit) smoothScrollOffsetY = limit;
+    if (smoothScrollOffsetY < -limit) smoothScrollOffsetY = -limit;
+    updateScrollIndicator(true);
+    return true;
+  }
+
+  function enqueueNormalBufferScrollDelta(deltaY) {
+    if (!term || deltaY === 0) return false;
+    if (!canScrollNormalBufferDelta(deltaY)) {
+      resetSmoothScrollOffset();
+      return false;
+    }
+    pendingNormalScrollDeltaY += deltaY;
+    if (normalScrollFrameId !== null) return true;
+    // Why: dense terminal rows are expensive to repaint. Coalesce touchmove
+    // deltas into one xterm row-scroll per frame instead of repainting from
+    // the input event stream.
+    normalScrollFrameId = requestAnimationFrame(function() {
+      normalScrollFrameId = null;
+      var delta = pendingNormalScrollDeltaY;
+      pendingNormalScrollDeltaY = 0;
+      if (!applyNormalBufferScrollDelta(delta)) {
+        resetSmoothScrollOffset();
+      }
+    });
+    return true;
+  }
+
+  function resetSmoothScrollOffset() {
+    pendingNormalScrollDeltaY = 0;
+    if (normalScrollFrameId !== null) {
+      cancelAnimationFrame(normalScrollFrameId);
+      normalScrollFrameId = null;
+    }
+    if (smoothScrollOffsetY === 0) return;
+    smoothScrollOffsetY = 0;
+    updateScrollIndicator(false);
   }
 
   function cellToViewportPx(col, absRow) {
@@ -1170,10 +1461,30 @@ const XTERM_HTML = `<!DOCTYPE html>
     selMenu.style.left = clampedLeft + 'px';
   }
 
+  function syncSelectionHandleToViewportPoint(handle, clientX, clientY) {
+    var c = viewportToCell(clientX, clientY);
+    if (!c || !sel) return false;
+    if (handle === 'start') sel.anchor = c;
+    else sel.focus = c;
+    applyXtermSelection();
+    return true;
+  }
+
+  function syncEdgeScrollSelectionEndpoint() {
+    if (!sel || !sel.activeHandle) return false;
+    // Why: WebView may not emit new touchmove events while a handle is held
+    // at the edge; resample the stored finger point after each viewport scroll.
+    return syncSelectionHandleToViewportPoint(
+      sel.activeHandle,
+      edgeScrollClientX,
+      edgeScrollClientY
+    );
+  }
+
   function startEdgeScroll(dir) {
     if (edgeScrollDir === dir) return;
-    edgeScrollDir = dir;
     stopEdgeScroll();
+    edgeScrollDir = dir;
     edgeScrollTimer = setInterval(function() {
       if (!term || edgeScrollDir === 0) return;
       var beforeY = term.buffer.active.viewportY;
@@ -1184,6 +1495,7 @@ const XTERM_HTML = `<!DOCTYPE html>
         stopEdgeScroll();
         return;
       }
+      syncEdgeScrollSelectionEndpoint();
       repositionOverlay();
     }, EDGE_SCROLL_INTERVAL);
   }
@@ -1197,11 +1509,9 @@ const XTERM_HTML = `<!DOCTYPE html>
   }
 
   function handleDragMove(handle, clientX, clientY) {
-    var c = viewportToCell(clientX, clientY);
-    if (!c || !sel) return;
-    if (handle === 'start') sel.anchor = c;
-    else sel.focus = c;
-    applyXtermSelection();
+    edgeScrollClientX = clientX;
+    edgeScrollClientY = clientY;
+    if (!syncSelectionHandleToViewportPoint(handle, clientX, clientY)) return;
     repositionOverlay();
     if (clientY < EDGE_SCROLL_PX) startEdgeScroll(-1);
     else if (clientY > window.innerHeight - EDGE_SCROLL_PX) startEdgeScroll(1);
@@ -1339,6 +1649,14 @@ const XTERM_HTML = `<!DOCTYPE html>
       return;
     }
     if (dispatch.mode === 'surface') {
+      if (e.touches.length === 0 && longPressOrigin && selMode !== 'select') {
+        var clickInput = buildMouseClickInput(longPressOrigin.x, longPressOrigin.y);
+        if (clickInput) {
+          notify({ type: 'terminal-input', bytes: clickInput });
+        } else if (!isClickMouseTrackingMode(getMouseTrackingMode())) {
+          notify({ type: 'terminal-tap' });
+        }
+      }
       clearLongPress();
       if (e.touches.length === 0) {
         dispatch.mode = 'idle';
@@ -1392,6 +1710,15 @@ const XTERM_HTML = `<!DOCTYPE html>
     pinchDist: 0, pinchScale: 0, pinchSurfX: 0, pinchSurfY: 0
   };
 
+  function updateTouchVelocity(deltaY, dt) {
+    if (dt <= 0) return;
+    var instantVelocity = deltaY / dt;
+    if (!isFinite(instantVelocity)) return;
+    // Why: touchmove cadence is uneven in WebView. Blend recent samples so
+    // momentum launch doesn't inherit a one-frame spike or stall.
+    ts.velY = ts.velY === 0 ? instantVelocity : ts.velY * 0.55 + instantVelocity * 0.45;
+  }
+
   function getDistance(a, b) {
     var dx = a.clientX - b.clientX, dy = a.clientY - b.clientY;
     return Math.sqrt(dx * dx + dy * dy);
@@ -1413,6 +1740,7 @@ const XTERM_HTML = `<!DOCTYPE html>
       }
       if (e.touches.length === 2) {
         ts.isPinching = true;
+        smoothScrollOffsetY = 0;
         ts.pinchDist = getDistance(e.touches[0], e.touches[1]);
         ts.pinchScale = userScale;
         var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
@@ -1458,20 +1786,30 @@ const XTERM_HTML = `<!DOCTYPE html>
         var dt = now - ts.lastTime;
 
         if (userScale > 1.05) {
+          smoothScrollOffsetY = 0;
           panX += x - ts.lastX;
           panY += y - ts.lastY;
           clampPan();
           updateTransform();
         } else {
           var deltaY = ts.lastY - y;
-          if (dt > 0) ts.velY = deltaY / dt;
           ts.lastTime = now;
-          var effectiveCellH = getCellHeight() * currentScale;
-          ts.accumDelta += deltaY;
-          var lines = Math.trunc(ts.accumDelta / effectiveCellH);
-          if (lines !== 0) {
-            ts.accumDelta -= lines * effectiveCellH;
-            routeScrollLines(lines, x, y);
+          if (shouldRouteScrollToTerminalInput()) {
+            updateTouchVelocity(deltaY, dt);
+            resetSmoothScrollOffset();
+            var effectiveCellH = getCellHeight() * getTotalScale();
+            ts.accumDelta += deltaY;
+            var lines = Math.trunc(ts.accumDelta / effectiveCellH);
+            if (lines !== 0) {
+              ts.accumDelta -= lines * effectiveCellH;
+              routeScrollLines(lines, x, y);
+            }
+          } else {
+            if (enqueueNormalBufferScrollDelta(deltaY)) {
+              updateTouchVelocity(deltaY, dt);
+            } else {
+              ts.velY = 0;
+            }
           }
         }
         ts.lastX = x;
@@ -1501,17 +1839,26 @@ const XTERM_HTML = `<!DOCTYPE html>
 
       if (e.touches.length === 0 && userScale <= 1.05) {
         var vel = ts.velY;
-        var FRICTION = 0.95;
-        var MIN_VEL = 0.02;
+        var FRICTION = 0.972;
+        var MIN_VEL = 0.012;
         function momentumStep() {
           vel *= FRICTION;
           if (Math.abs(vel) < MIN_VEL) { ts.momentumId = null; return; }
-          var effectiveCellH = getCellHeight() * currentScale;
-          ts.accumDelta += vel * 16;
-          var lines = Math.trunc(ts.accumDelta / effectiveCellH);
-          if (lines !== 0) {
-            ts.accumDelta -= lines * effectiveCellH;
-            routeScrollLines(lines, ts.lastX, ts.lastY);
+          var delta = vel * 16;
+          if (shouldRouteScrollToTerminalInput()) {
+            resetSmoothScrollOffset();
+            var effectiveCellH = getCellHeight() * getTotalScale();
+            ts.accumDelta += delta;
+            var lines = Math.trunc(ts.accumDelta / effectiveCellH);
+            if (lines !== 0) {
+              ts.accumDelta -= lines * effectiveCellH;
+              routeScrollLines(lines, ts.lastX, ts.lastY);
+            }
+          } else {
+            if (!applyNormalBufferScrollDelta(delta)) {
+              ts.momentumId = null;
+              return;
+            }
           }
           ts.momentumId = requestAnimationFrame(momentumStep);
         }
@@ -1561,6 +1908,7 @@ const XTERM_HTML = `<!DOCTYPE html>
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function TerminalWebView(
   {
     style,
+    terminalTheme,
     onWebReady,
     onSelectionMode,
     onSelectionCopy,
@@ -1568,14 +1916,18 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     onModesChanged,
     onKeyboardAvoidanceMetrics,
     onHaptic,
-    onTerminalInput
+    onTerminalInput,
+    onTerminalTap
   },
   ref
 ) {
   const webViewRef = useRef<WebView>(null)
   const isWebReadyRef = useRef(false)
   const pendingMessagesRef = useRef<TerminalMessage[]>([])
+  const pendingWriteBytesRef = useRef(0)
+  const pendingWriteCountRef = useRef(0)
   const messageIdRef = useRef(0)
+  const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
   const measureResolveRef = useRef<
     ((result: { cols: number; rows: number } | null) => void) | null
   >(null)
@@ -1594,20 +1946,58 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const flushPendingMessages = useCallback(() => {
     const pending = pendingMessagesRef.current
     pendingMessagesRef.current = []
+    pendingWriteBytesRef.current = 0
+    pendingWriteCountRef.current = 0
     for (const msg of pending) {
       sendToWebView(msg)
     }
   }, [sendToWebView])
 
+  const clearPendingMessages = useCallback(() => {
+    pendingMessagesRef.current = []
+    pendingWriteBytesRef.current = 0
+    pendingWriteCountRef.current = 0
+  }, [])
+
+  const queuePendingMessage = useCallback((msg: TerminalMessage) => {
+    const pending = pendingMessagesRef.current
+    pending.push(msg)
+    if (msg.type !== 'write') {
+      return
+    }
+
+    pendingWriteBytesRef.current += msg.data.length
+    pendingWriteCountRef.current += 1
+    while (
+      pendingWriteBytesRef.current > MAX_PENDING_WEB_WRITE_BYTES ||
+      pendingWriteCountRef.current > MAX_PENDING_WEB_WRITE_MESSAGES
+    ) {
+      const dropIndex = pending.findIndex((candidate) => candidate.type === 'write')
+      if (dropIndex === -1) {
+        pendingWriteBytesRef.current = 0
+        pendingWriteCountRef.current = 0
+        return
+      }
+      const [dropped] = pending.splice(dropIndex, 1)
+      if (dropped?.type === 'write') {
+        pendingWriteBytesRef.current = Math.max(
+          0,
+          pendingWriteBytesRef.current - dropped.data.length
+        )
+        pendingWriteCountRef.current = Math.max(0, pendingWriteCountRef.current - 1)
+      }
+    }
+  }, [])
+
   const postMessage = useCallback(
     (msg: TerminalMessage) => {
       if (!isWebReadyRef.current) {
-        pendingMessagesRef.current.push(msg)
+        queuePendingMessage(msg)
         return
       }
       sendToWebView(msg)
     },
-    [sendToWebView]
+    [queuePendingMessage, sendToWebView]
   )
 
   const handleMessage = useCallback(
@@ -1670,6 +2060,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       } else if (msg.type === 'terminal-input') {
         const bytes = typeof msg.bytes === 'string' ? msg.bytes : ''
         if (bytes.length > 0) onTerminalInput?.(bytes)
+      } else if (msg.type === 'terminal-tap') {
+        onTerminalTap?.()
       } else if (msg.type === 'keyboard-avoidance-metrics') {
         const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
         const rows = typeof msg.rows === 'number' ? msg.rows : 0
@@ -1702,13 +2094,21 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onModesChanged,
       onKeyboardAvoidanceMetrics,
       onHaptic,
-      onTerminalInput
+      onTerminalInput,
+      onTerminalTap
     ]
   )
 
   const handleLoadStart = useCallback(() => {
     isWebReadyRef.current = false
-  }, [])
+    // Why: messages queued for a previous WebView generation are stale after a reload;
+    // dropping them avoids replaying terminal chunks before the next init snapshot.
+    clearPendingMessages()
+  }, [clearPendingMessages])
+
+  useEffect(() => {
+    postMessage({ type: 'set-theme', terminalTheme })
+  }, [postMessage, terminalThemeKey, terminalTheme])
 
   useImperativeHandle(
     ref,
@@ -1733,7 +2133,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         readyPromiseRef.current = new Promise<void>((resolve) => {
           readyResolveRef.current = resolve
         })
-        postMessage({ type: 'init', cols, rows, initialData })
+        postMessage({ type: 'init', cols, rows, initialData, terminalTheme })
       },
       resize(cols: number, rows: number) {
         postMessage({ type: 'resize', cols, rows })
@@ -1747,15 +2147,25 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         if (!isWebReadyRef.current) return Promise.resolve(null)
         return new Promise((resolve) => {
           measureResolveRef.current?.(null)
-          measureResolveRef.current = resolve
+          let timeout: ReturnType<typeof setTimeout> | null = null
+          const finish = (result: { cols: number; rows: number } | null) => {
+            if (timeout) {
+              clearTimeout(timeout)
+              timeout = null
+            }
+            if (measureResolveRef.current === finish) {
+              measureResolveRef.current = null
+            }
+            resolve(result)
+          }
+          measureResolveRef.current = finish
           sendToWebView({ type: 'measure', containerHeight })
           // Why: if the WebView doesn't respond within 2s (e.g., xterm
           // failed to load), resolve null so the caller can disable
           // Fit to Phone rather than hanging indefinitely.
-          setTimeout(() => {
-            if (measureResolveRef.current === resolve) {
-              measureResolveRef.current = null
-              resolve(null)
+          timeout = setTimeout(() => {
+            if (measureResolveRef.current === finish) {
+              finish(null)
             }
           }, 2000)
         })
@@ -1775,10 +2185,23 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         // WebView doesn't hang the caller.
         const p = readyPromiseRef.current
         if (!p) return
-        await Promise.race([p, new Promise<void>((resolve) => setTimeout(resolve, 3000))])
+        await new Promise<void>((resolve) => {
+          let settled = false
+          const timeout = setTimeout(() => {
+            settled = true
+            resolve()
+          }, 3000)
+          void p.finally(() => {
+            if (!settled) {
+              clearTimeout(timeout)
+              settled = true
+              resolve()
+            }
+          })
+        })
       }
     }),
-    [postMessage, sendToWebView]
+    [postMessage, sendToWebView, terminalTheme]
   )
 
   return (
@@ -1788,7 +2211,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       style={[styles.webview, style]}
       originWhitelist={['*']}
       javaScriptEnabled
-      scrollEnabled={true}
+      scrollEnabled={false}
       scalesPageToFit={false}
       onLoadStart={handleLoadStart}
       onMessage={handleMessage}

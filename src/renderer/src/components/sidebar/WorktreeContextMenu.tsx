@@ -17,6 +17,7 @@ import {
   Copy,
   Bell,
   BellOff,
+  CircleX,
   Moon,
   Pencil,
   Pin,
@@ -24,13 +25,14 @@ import {
   Kanban,
   Trash2,
   Unlink,
-  Workflow
+  Workflow,
+  FolderInput,
+  FolderPlus
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -39,6 +41,7 @@ import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedSc
 import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
+import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 
 type Props = {
   worktree: Worktree
@@ -53,6 +56,8 @@ const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
+const DELETE_POSITION_RESTORE_MAX_FRAMES = 180
+const DELETE_POSITION_RESTORE_STABLE_FRAMES = 6
 
 function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
   const maybeElement = target as {
@@ -101,11 +106,11 @@ function hasSleepableWorkspaceActivity(
   return hasLiveTerminal || hasBrowser
 }
 
-function shouldRemoveFolderProjectFromContextMenu(
-  isFolder: boolean,
+function shouldRemoveProjectFromContextMenu(
+  repo: Pick<Repo, 'id'> | null | undefined,
   worktree: Pick<Worktree, 'isMainWorktree'>
 ): boolean {
-  return isFolder && worktree.isMainWorktree
+  return repo != null && worktree.isMainWorktree
 }
 
 function isContextWorktreeDeletable(
@@ -120,6 +125,18 @@ function findSidebarVirtualRowByKey(sidebar: Element, rowKey: string): HTMLEleme
     Array.from(sidebar.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]')).find(
       (element) => element.getAttribute('data-worktree-virtual-row-key') === rowKey
     ) ?? null
+  )
+}
+
+export function shouldContinueDeleteSiblingPositionRestore(args: {
+  attempts: number
+  stableFrames: number
+}): boolean {
+  // Why: slow deletes leave the target row mounted; after initial focus/remount
+  // settling, the restore loop must stop so user scrolling wins.
+  return (
+    args.attempts < DELETE_POSITION_RESTORE_MAX_FRAMES &&
+    args.stableFrames < DELETE_POSITION_RESTORE_STABLE_FRAMES
   )
 }
 
@@ -169,7 +186,12 @@ function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => void {
         stableFrames = 0
       }
       attempts += 1
-      if (attempts < 180 && (currentTarget || stableFrames < 6)) {
+      if (
+        shouldContinueDeleteSiblingPositionRestore({
+          attempts,
+          stableFrames
+        })
+      ) {
         window.requestAnimationFrame(restore)
       }
     }
@@ -188,13 +210,16 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const openModal = useAppStore((s) => s.openModal)
+  const projectGroups = useAppStore((s) => s.projectGroups)
+  const createProjectGroup = useAppStore((s) => s.createProjectGroup)
+  const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(selectedWorktrees)
+  const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
   const isDeleting = deleteState?.isDeleting ?? false
-  const isFolder = repo ? isFolderRepo(repo) : false
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
@@ -236,7 +261,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       }),
     [activeContextWorktrees, repoMap]
   )
-  const removesFolderProject = shouldRemoveFolderProjectFromContextMenu(isFolder, worktree)
+  const removesProject = shouldRemoveProjectFromContextMenu(repo, worktree)
   const sleepLabel =
     isMultiContext && sleepableWorktrees.length > 0
       ? `Sleep ${sleepableWorktrees.length} Workspace${sleepableWorktrees.length === 1 ? '' : 's'}`
@@ -280,6 +305,43 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const handleTogglePin = useCallback(() => {
     updateWorktreeMeta(worktree.id, { isPinned: !worktree.isPinned })
   }, [worktree.id, worktree.isPinned, updateWorktreeMeta])
+
+  const handleCreateGroupFromRepo = useCallback(() => {
+    if (!repo) {
+      return
+    }
+    setCreateGroupDialogOpen(true)
+  }, [repo])
+
+  const handleSubmitNewProjectGroup = useCallback(
+    async (name: string) => {
+      if (!repo) {
+        return
+      }
+      const group = await createProjectGroup(name)
+      if (group) {
+        await moveProjectToGroup(repo.id, group.id)
+      }
+    },
+    [createProjectGroup, moveProjectToGroup, repo]
+  )
+
+  const handleMoveProjectToGroup = useCallback(
+    (groupId: string) => {
+      if (!repo || repo.projectGroupId === groupId) {
+        return
+      }
+      void moveProjectToGroup(repo.id, groupId)
+    },
+    [moveProjectToGroup, repo]
+  )
+
+  const handleRemoveProjectFromGroup = useCallback(() => {
+    if (!repo) {
+      return
+    }
+    void moveProjectToGroup(repo.id, null)
+  }, [moveProjectToGroup, repo])
 
   const handleAssignWorkspaceStatus = useCallback(
     (status: string) => {
@@ -340,34 +402,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         restoreSidebarPosition()
         return
       }
-      if (removesFolderProject) {
-        // Why: folder mode reuses the worktree row UI for the root entry,
-        // but users still expect "remove" to disconnect the folder from Orca,
-        // not to delete the selected logical workspace metadata.
-        openModal('confirm-remove-folder', {
-          repoId: worktree.repoId,
-          displayName: worktree.displayName
-        })
-        restoreSidebarPosition()
-        return
-      }
-      // Why delegate to runWorktreeDelete: keeps the skip-confirm vs. modal
-      // decision tree (and its rationale) in one place shared with the memory
-      // popover's inline Delete action. Folder mode short-circuits above
-      // because the confirm-remove-folder modal is unique to this caller.
+      // Why delegate to runWorktreeDelete: keeps the delete-vs-project-removal
+      // decision tree (and its rationale) in one place shared with command
+      // surfaces and the memory popover's inline Delete action.
       runWorktreeDelete(worktree.id)
       restoreSidebarPosition()
     }, 50)
-  }, [
-    batchDeleteWorktrees,
-    isMultiContext,
-    openModal,
-    removesFolderProject,
-    setMenuOpenState,
-    worktree.displayName,
-    worktree.id,
-    worktree.repoId
-  ])
+  }, [batchDeleteWorktrees, isMultiContext, setMenuOpenState, worktree.id])
 
   const handleOpenParent = useCallback(() => {
     if (validParentWorktreeId) {
@@ -480,6 +521,40 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 )}
                 {worktree.isUnread ? 'Mark Read' : 'Mark Unread'}
               </DropdownMenuItem>
+              {repo ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={handleCreateGroupFromRepo} disabled={isDeleting}>
+                    <FolderPlus className="size-3.5" />
+                    New group from project
+                  </DropdownMenuItem>
+                  {projectGroups.length > 0 ? (
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger disabled={isDeleting}>
+                        <FolderInput className="size-3.5" />
+                        Move to group
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {projectGroups.map((group) => (
+                          <DropdownMenuItem
+                            key={group.id}
+                            disabled={repo.projectGroupId === group.id}
+                            onSelect={() => handleMoveProjectToGroup(group.id)}
+                          >
+                            <span className="max-w-48 truncate">{group.name}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  ) : null}
+                  {repo.projectGroupId ? (
+                    <DropdownMenuItem onSelect={handleRemoveProjectFromGroup} disabled={isDeleting}>
+                      <CircleX className="size-3.5" />
+                      Remove from group
+                    </DropdownMenuItem>
+                  ) : null}
+                </>
+              ) : null}
               <DropdownMenuSeparator />
               {(validParentWorktreeId || lineage) && (
                 <>
@@ -557,21 +632,21 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 : 'Close all active panels in this workspace to free up memory and CPU.'}
             </TooltipContent>
           </Tooltip>
-          {/* Why: `git worktree remove` always rejects the main worktree, so we
-             disable the item upfront. Radix forwards unknown props to the DOM
-             element, so `title` works directly without a wrapper span — this
-             preserves Radix's flat roving-tabindex keyboard navigation. */}
+          {/* Why: primary checkout rows remove the project from Orca instead of
+             invoking git worktree deletion. Radix forwards unknown props to the
+             DOM element, so `title` works directly without a wrapper span —
+             this preserves Radix's flat roving-tabindex keyboard navigation. */}
           <DropdownMenuItem
             variant="destructive"
             onSelect={handleDelete}
             disabled={
               deletingContext ||
-              (!isMultiContext && !isFolder && worktree.isMainWorktree) ||
+              (!isMultiContext && worktree.isMainWorktree && !removesProject) ||
               (isMultiContext && batchDeleteWorktrees.length === 0)
             }
             title={
-              !isMultiContext && !isFolder && worktree.isMainWorktree
-                ? 'The main worktree cannot be deleted'
+              !isMultiContext && worktree.isMainWorktree && !removesProject
+                ? 'The project could not be found'
                 : undefined
             }
           >
@@ -580,12 +655,21 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               ? 'Deleting…'
               : isMultiContext
                 ? deleteLabel
-                : removesFolderProject
-                  ? 'Remove Folder from Orca'
+                : removesProject
+                  ? 'Remove Project from Orca'
                   : 'Delete'}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <ProjectGroupNameDialog
+        open={createGroupDialogOpen}
+        title="New Project Group"
+        description="Create a group and move this project into it."
+        initialName={repo ? `${repo.displayName} group` : ''}
+        confirmLabel="Create"
+        onOpenChange={setCreateGroupDialogOpen}
+        onSubmit={handleSubmitNewProjectGroup}
+      />
     </div>
   )
 })
@@ -597,7 +681,7 @@ export {
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
   hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
-  shouldRemoveFolderProjectFromContextMenu,
+  shouldRemoveProjectFromContextMenu,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldIgnoreNestedWorktreeContextMenuScope

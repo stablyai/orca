@@ -7,6 +7,20 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
 import type { SubprocessHandle } from './session'
+import type { GetSnapshotResult, TerminalSnapshot } from './types'
+import type * as DaemonHealthModule from './daemon-health'
+
+const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
+  getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
+}))
+
+vi.mock('./daemon-health', async (importOriginal) => {
+  const actual = await importOriginal<typeof DaemonHealthModule>()
+  return {
+    ...actual,
+    getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock
+  }
+})
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-adapter-test-'))
@@ -20,6 +34,7 @@ function createMockSubprocess(): SubprocessHandle & {
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 66666,
+    getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
@@ -38,6 +53,27 @@ function createMockSubprocess(): SubprocessHandle & {
     _simulateExit(code: number) {
       onExitCb?.(code)
     }
+  }
+}
+
+function createTestSnapshot(label: string): TerminalSnapshot {
+  return {
+    snapshotAnsi: label,
+    scrollbackAnsi: '',
+    rehydrateSequences: '',
+    cwd: null,
+    modes: {
+      bracketedPaste: false,
+      mouseTracking: false,
+      mouseTrackingMode: 'none',
+      sgrMouseMode: false,
+      sgrMousePixelsMode: false,
+      applicationCursor: false,
+      alternateScreen: false
+    },
+    cols: 80,
+    rows: 24,
+    scrollbackLines: 0
   }
 }
 
@@ -85,6 +121,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
     lastSpawnOpts = null
+    getMacDaemonSystemResolverHealthMock.mockReset()
+    getMacDaemonSystemResolverHealthMock.mockResolvedValue('unknown')
   })
 
   afterEach(async () => {
@@ -523,6 +561,57 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
+    it('limits concurrent checkpoint snapshot and disk work', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const releaseSnapshotRequests: (() => void)[] = []
+      const requestedSessionIds: string[] = []
+      let inFlight = 0
+      let maxInFlight = 0
+      const request = vi.fn(
+        async (_type: string, payload: { sessionId: string }): Promise<GetSnapshotResult> => {
+          requestedSessionIds.push(payload.sessionId)
+          inFlight++
+          maxInFlight = Math.max(maxInFlight, inFlight)
+          await new Promise<void>((resolve) => {
+            releaseSnapshotRequests.push(() => {
+              inFlight--
+              resolve()
+            })
+          })
+          return { snapshot: createTestSnapshot(payload.sessionId) }
+        }
+      )
+      const checkpoint = vi.fn(async () => {})
+      const dispose = vi.fn(async () => {})
+      const disconnect = vi.fn()
+      const internals = historyAdapter as unknown as {
+        client: { request: typeof request; disconnect: typeof disconnect }
+        historyManager: { checkpoint: typeof checkpoint; dispose: typeof dispose }
+        checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
+      }
+      internals.client = { request, disconnect }
+      internals.historyManager = { checkpoint, dispose }
+
+      const checkpointing = internals.checkpointSessions(['a', 'b', 'c', 'd', 'e', 'f'])
+      await waitFor(() => requestedSessionIds.length === 4)
+
+      expect(maxInFlight).toBe(4)
+      expect(requestedSessionIds).toEqual(['a', 'b', 'c', 'd'])
+
+      for (const release of releaseSnapshotRequests.splice(0)) {
+        release()
+      }
+      await waitFor(() => requestedSessionIds.length === 6)
+
+      expect(maxInFlight).toBe(4)
+
+      for (const release of releaseSnapshotRequests.splice(0)) {
+        release()
+      }
+      await expect(checkpointing).resolves.toEqual(new Set(['a', 'b', 'c', 'd', 'e', 'f']))
+      expect(checkpoint).toHaveBeenCalledTimes(6)
+    })
+
     it('does not schedule a checkpoint timer until a session is dirty', async () => {
       const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
       const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
@@ -684,6 +773,65 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(third.coldRestore).toBeUndefined()
     })
 
+    it('drops sticky cold restore data on explicit shutdown', async () => {
+      const sessionId = 'sticky-cache-shutdown-test'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const internals = historyAdapter as unknown as {
+        coldRestoreCache: Map<string, { scrollback: string; cwd: string }>
+      }
+
+      await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(internals.coldRestoreCache.has(sessionId)).toBe(true)
+
+      await historyAdapter.shutdown(sessionId, { immediate: true })
+
+      expect(internals.coldRestoreCache.has(sessionId)).toBe(false)
+    })
+
+    it('drops sticky cold restore data on natural exit', async () => {
+      const sessionId = 'sticky-cache-exit-test'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const internals = historyAdapter as unknown as {
+        coldRestoreCache: Map<string, { scrollback: string; cwd: string }>
+      }
+
+      await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(internals.coldRestoreCache.has(sessionId)).toBe(true)
+
+      lastSubprocess._simulateExit(0)
+      await waitFor(() => !internals.coldRestoreCache.has(sessionId))
+    })
+
     it('opens session for checkpointing after cold restore', async () => {
       const sessionId = 'post-restore-data'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
@@ -835,6 +983,101 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       respawnAdapter.dispose()
       await respawnServer?.shutdown()
+    })
+
+    it('preserves an unhealthy macOS resolver daemon when it owns live sessions', async () => {
+      const respawnFn = vi.fn()
+      const exits: { id: string; code: number }[] = []
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      respawnAdapter.onExit((payload) => exits.push(payload))
+      const existing = await respawnAdapter.spawn({ cols: 80, rows: 24 })
+      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
+
+      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
+      expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith(
+        socketPath,
+        tokenPath,
+        respawnAdapter.protocolVersion
+      )
+      expect(respawnFn).not.toHaveBeenCalled()
+      expect(exits).toEqual([])
+      expect(next.id).toBeDefined()
+      expect(next.id).not.toBe(existing.id)
+
+      respawnAdapter.dispose()
+    })
+
+    it('preserves an unhealthy macOS resolver daemon when live sessions have not been reconciled locally', async () => {
+      const respawnFn = vi.fn()
+      const background = await adapter.spawn({ cols: 80, rows: 24 })
+      const backgroundSubprocess = lastSubprocess
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
+
+      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
+      expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith(
+        socketPath,
+        tokenPath,
+        respawnAdapter.protocolVersion
+      )
+      expect(respawnFn).not.toHaveBeenCalled()
+      expect(next.id).toBeDefined()
+      expect(next.id).not.toBe(background.id)
+      expect(backgroundSubprocess.forceKill).not.toHaveBeenCalled()
+
+      respawnAdapter.dispose()
+    })
+
+    it('replaces an unhealthy macOS resolver daemon before creating a fresh session when no sessions are active', async () => {
+      let respawnServer: DaemonServer | undefined
+      const respawnFn = vi.fn(async () => {
+        await server.shutdown()
+        rmSync(socketPath, { force: true })
+        respawnServer = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => createMockSubprocess()
+        })
+        await respawnServer.start()
+      })
+      const exits: { id: string; code: number }[] = []
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      respawnAdapter.onExit((payload) => exits.push(payload))
+      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
+
+      const replacement = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+
+      expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith(
+        socketPath,
+        tokenPath,
+        respawnAdapter.protocolVersion
+      )
+      expect(respawnFn).toHaveBeenCalledOnce()
+      expect(exits).toEqual([])
+      expect(replacement.id).toBeDefined()
+
+      respawnAdapter.dispose()
+      await respawnServer?.shutdown()
+    })
+
+    it('does not resolver-health restart attach-style spawns', async () => {
+      const respawnFn = vi.fn()
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      getMacDaemonSystemResolverHealthMock.mockResolvedValueOnce('unhealthy')
+
+      const result = await respawnAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'caller-owned-session'
+      })
+
+      expect(result.id).toBe('caller-owned-session')
+      expect(getMacDaemonSystemResolverHealthMock).not.toHaveBeenCalled()
+      expect(respawnFn).not.toHaveBeenCalled()
+
+      respawnAdapter.dispose()
     })
 
     it('propagates respawn failure to the caller', async () => {

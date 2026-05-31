@@ -11,9 +11,15 @@ type PasteTerminal = BracketedPasteTerminal & {
   paste: (text: string) => void
 }
 
+type PasteTerminalTextOptions = {
+  forceBracketedPaste?: boolean
+}
+
 const interruptedBracketedPasteTerminals = new WeakSet<object>()
 const bracketedPasteModeOutputTail = new WeakMap<object, string>()
 const ESCAPE = '\u001b'
+const BRACKETED_PASTE_START = `${ESCAPE}[200~`
+const BRACKETED_PASTE_END = `${ESCAPE}[201~`
 const BRACKETED_PASTE_MODE_SEQUENCE_RE = /^\[\?(?:\d+;)*2004(?:;\d+)*[hl]/
 const BRACKETED_PASTE_MODE_TAIL_MAX = 128
 const LINE_BREAK_RE = /[\r\n]/
@@ -26,6 +32,22 @@ function hasBracketedPasteModeSequence(data: string): boolean {
     }
   }
   return false
+}
+
+function sanitizeBracketedPasteText(text: string): string {
+  return text.split(ESCAPE).join('\u241b')
+}
+
+function forceBracketedPaste(terminal: PasteTerminal, text: string): void {
+  const previousIgnoreBracketedPasteMode = terminal.options.ignoreBracketedPasteMode
+  terminal.options.ignoreBracketedPasteMode = true
+  try {
+    terminal.paste(
+      `${BRACKETED_PASTE_START}${sanitizeBracketedPasteText(text)}${BRACKETED_PASTE_END}`
+    )
+  } finally {
+    terminal.options.ignoreBracketedPasteMode = previousIgnoreBracketedPasteMode
+  }
 }
 
 export function markTerminalBracketedPasteInterrupted(terminal: BracketedPasteTerminal): void {
@@ -50,7 +72,17 @@ export function observeTerminalBracketedPasteModeOutput(
   }
 }
 
-export function pasteTerminalText(terminal: PasteTerminal, text: string): void {
+export function pasteTerminalText(
+  terminal: PasteTerminal,
+  text: string,
+  options?: PasteTerminalTextOptions
+): void {
+  if (options?.forceBracketedPaste) {
+    // Why: generated image paths are paste payloads, even when they are a
+    // single line, so they must bypass stale Ctrl+C plain-text suppression.
+    forceBracketedPaste(terminal, text)
+    return
+  }
   if (!interruptedBracketedPasteTerminals.has(terminal)) {
     terminal.paste(text)
     return
@@ -71,7 +103,7 @@ export function pasteTerminalText(terminal: PasteTerminal, text: string): void {
   // process dies. Single-line paste does not need wrappers, so avoid leaking them.
   terminal.options.ignoreBracketedPasteMode = true
   try {
-    terminal.paste(text.split(ESCAPE).join('\u241b'))
+    terminal.paste(sanitizeBracketedPasteText(text))
   } finally {
     terminal.options.ignoreBracketedPasteMode = previousIgnoreBracketedPasteMode
   }

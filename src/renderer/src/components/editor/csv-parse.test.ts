@@ -83,4 +83,14 @@ describe('detectCsvDelimiter', () => {
   it('strips a leading BOM before sniffing', () => {
     expect(detectCsvDelimiter('x.csv', '\uFEFFa\tb\tc')).toBe('\t')
   })
+
+  it('ignores delimiters inside quoted fields when sniffing', () => {
+    const content = '"Doe, Jane"\tAge\n"Roe, John"\t42\n'
+
+    expect(detectCsvDelimiter('contacts.csv', content)).toBe('\t')
+    expect(parseCsv(content, detectCsvDelimiter('contacts.csv', content)).rows).toEqual([
+      ['Doe, Jane', 'Age'],
+      ['Roe, John', '42']
+    ])
+  })
 })

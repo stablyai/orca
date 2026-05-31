@@ -228,6 +228,65 @@ describe('attributeCodexUsageEvent', () => {
     expect(attributed?.worktreeId).toBe('repo-2::/workspace/repo/app2')
   })
 
+  it('attributes cwd paths under dotdot-prefixed child directories to the worktree', async () => {
+    const attributed = await attributeCodexUsageEvent(
+      {
+        sessionId: 'session-1',
+        timestamp: '2026-04-09T10:00:00.000Z',
+        cwd: '/workspace/repo/..fixtures/session',
+        model: 'gpt-5.2-codex',
+        hasInferredPricing: false,
+        inputTokens: 100,
+        cachedInputTokens: 10,
+        outputTokens: 25,
+        reasoningOutputTokens: 10,
+        totalTokens: 125
+      },
+      [
+        {
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          path: '/workspace/repo',
+          displayName: 'Repo',
+          canonicalPath: '/workspace/repo'
+        }
+      ]
+    )
+
+    expect(attributed?.projectKey).toBe('worktree:repo-1::/workspace/repo')
+    expect(attributed?.projectLabel).toBe('Repo')
+    expect(attributed?.worktreeId).toBe('repo-1::/workspace/repo')
+  })
+
+  it('does not attribute true parent-directory escapes to the worktree', async () => {
+    const attributed = await attributeCodexUsageEvent(
+      {
+        sessionId: 'session-1',
+        timestamp: '2026-04-09T10:00:00.000Z',
+        cwd: '/workspace/repo/../other/session',
+        model: 'gpt-5.2-codex',
+        hasInferredPricing: false,
+        inputTokens: 100,
+        cachedInputTokens: 10,
+        outputTokens: 25,
+        reasoningOutputTokens: 10,
+        totalTokens: 125
+      },
+      [
+        {
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          path: '/workspace/repo',
+          displayName: 'Repo',
+          canonicalPath: '/workspace/repo'
+        }
+      ]
+    )
+
+    expect(attributed?.projectKey).toBe('cwd:/workspace/repo/../other/session')
+    expect(attributed?.worktreeId).toBeNull()
+  })
+
   it('does not treat different Windows drives as containing paths', async () => {
     const attributed = await attributeCodexUsageEvent(
       {

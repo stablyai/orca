@@ -9,6 +9,7 @@ export type CmdJSettingsResult = {
   description: string
   icon: LucideIcon
   sectionId: string
+  targetSectionId?: string
   order: number
   configKeywords: string[]
 }
@@ -50,6 +51,7 @@ function normalizeQuery(value: string): string {
 function keywordParts(section: SettingsNavSection): string[] {
   const baseId = section.id.startsWith('repo-') ? 'repo' : section.id
   const idWords = baseId.replace(/-/g, ' ')
+  const paneLevelEntries = section.searchEntries.filter((entry) => !entry.targetSectionId)
   return [
     section.id,
     baseId,
@@ -58,8 +60,12 @@ function keywordParts(section: SettingsNavSection): string[] {
     `${section.title} settings`,
     `${idWords} settings`,
     ...(SETTINGS_ALIASES[baseId] ?? []),
-    ...section.searchEntries.map((entry) => entry.title)
+    ...paneLevelEntries.map((entry) => entry.title)
   ]
+}
+
+function targetEntryKeywordParts(entryTitle: string): string[] {
+  return [entryTitle, `${entryTitle} settings`]
 }
 
 function uniqueNormalized(values: readonly string[]): string[] {
@@ -69,16 +75,36 @@ function uniqueNormalized(values: readonly string[]): string[] {
 export function buildCmdJSettingsResults(
   sections: readonly SettingsNavSection[]
 ): CmdJSettingsResult[] {
-  return sections.map((section, order) => ({
-    id: `settings:${section.id}`,
-    kind: 'settings',
-    title: section.title,
-    description: section.description,
-    icon: section.icon,
-    sectionId: section.id,
-    order,
-    configKeywords: uniqueNormalized(keywordParts(section))
-  }))
+  return sections.flatMap((section, order) => {
+    const paneResult: CmdJSettingsResult = {
+      id: `settings:${section.id}`,
+      kind: 'settings',
+      title: section.title,
+      description: section.description,
+      icon: section.icon,
+      sectionId: section.id,
+      order,
+      configKeywords: uniqueNormalized(keywordParts(section))
+    }
+    const targetedResults = section.searchEntries
+      .filter((entry) => entry.targetSectionId)
+      .map((entry, entryIndex) => ({
+        id: `settings:${section.id}:${entry.targetSectionId}`,
+        kind: 'settings' as const,
+        title: entry.title,
+        description: entry.description ?? section.description,
+        icon: section.icon,
+        sectionId: section.id,
+        targetSectionId: entry.targetSectionId,
+        order: order + (entryIndex + 1) / 100,
+        configKeywords: uniqueNormalized([
+          ...targetEntryKeywordParts(entry.title),
+          ...(entry.cmdJKeywords ?? entry.keywords ?? [])
+        ])
+      }))
+
+    return [paneResult, ...targetedResults]
+  })
 }
 
 export function buildCmdJActionResults(actions: readonly CmdJQuickAction[]): CmdJActionResult[] {

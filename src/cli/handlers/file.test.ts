@@ -1,5 +1,4 @@
 /* eslint-disable max-lines -- Why: file CLI coverage shares one mocked runtime setup across command contracts. */
-import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -83,7 +82,7 @@ describe('orca file CLI handlers', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       relativePath: 'src/App.tsx'
     })
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened src/App.tsx.')
@@ -111,6 +110,29 @@ describe('orca file CLI handlers', () => {
       relativePath: 'src/App.tsx',
       staged: true
     })
+  })
+
+  it('reports unopened direct diffs instead of formatting them as opened', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_diff', {
+        worktree: 'wt-1',
+        relativePath: 'assets/logo.png',
+        kind: 'binary',
+        opened: false
+      })
+    )
+
+    await main(['file', 'diff', '--path', 'assets/logo.png', '--worktree', 'id:wt-1'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'assets/logo.png',
+      staged: false
+    })
+    expect(vi.mocked(console.log).mock.calls[0][0]).toBe(
+      'Did not open diff for assets/logo.png: binary file.'
+    )
   })
 
   it('rejects --worktree without a value before cwd inference or RPC calls', async () => {
@@ -160,24 +182,56 @@ describe('orca file CLI handlers', () => {
     await main(['file', 'open-changed'], '/tmp/repo/src')
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'git.status', {
-      worktree: `path:${path.resolve('/tmp/repo')}`
+      worktree: 'id:repo::/tmp/repo'
     })
     expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       relativePath: 'src/App.tsx',
       staged: false
     })
     expect(callMock).toHaveBeenNthCalledWith(4, 'files.openDiff', {
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       relativePath: 'package.json',
       staged: true
     })
     expect(callMock).toHaveBeenNthCalledWith(5, 'files.openDiff', {
-      worktree: `path:${path.resolve('/tmp/repo')}`,
+      worktree: 'id:repo::/tmp/repo',
       relativePath: 'docs/new.md',
       staged: false
     })
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened 3 changed file targets.')
+  })
+
+  it('places unopened changed-file diffs in skipped instead of opened', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_status', {
+        entries: [{ path: 'assets/logo.png', status: 'modified', area: 'unstaged' }],
+        conflictOperation: 'unknown'
+      }),
+      okFixture('req_diff', {
+        worktree: 'wt-1',
+        relativePath: 'assets/logo.png',
+        kind: 'binary',
+        opened: false
+      })
+    )
+
+    await main(['file', 'open-changed', '--worktree', 'id:wt-1', '--json'], '/tmp/elsewhere')
+
+    const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
+    expect(output.result.opened).toEqual([])
+    expect(output.result.skipped).toEqual([
+      {
+        path: 'assets/logo.png',
+        mode: 'diff',
+        staged: false,
+        opened: false,
+        kind: 'binary',
+        skipped: true,
+        reason: 'binary file'
+      }
+    ])
   })
 
   it('skips unresolved conflict entries in diff mode without opening a normal diff', async () => {

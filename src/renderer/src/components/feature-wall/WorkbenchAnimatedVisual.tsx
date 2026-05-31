@@ -2,6 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
 
 // Why: the right-click menu needs the same icons as the real Orca menu so the
@@ -126,6 +127,8 @@ const RESPONSE_WIDTHS = [72, 88, 64, 78] as const
 
 export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
   const { reducedMotion } = props
+  const splitRightShortcutLabel = useShortcutLabel('terminal.splitRight')
+  const splitDownShortcutLabel = useShortcutLabel('terminal.splitDown')
   const panelRef = useRef<HTMLDivElement | null>(null)
   const leftPaneRef = useRef<HTMLDivElement | null>(null)
   const splitRowRef = useRef<HTMLDivElement | null>(null)
@@ -355,9 +358,11 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
         <span className="size-2.5 rounded-full bg-emerald-400/70" />
       </div>
 
+      {/* Why: onboarding previews can flip theme without remounting this visual;
+          token-backed terminal chrome follows explicit and system theme changes. */}
       <div
         className={cn(
-          'grid bg-[#fafafa] font-mono text-[11px] transition-[grid-template-columns] duration-[600ms] ease-[cubic-bezier(.2,.8,.2,1)]',
+          'grid bg-[var(--editor-surface)] font-mono text-[11px] transition-[grid-template-columns] duration-[600ms] ease-[cubic-bezier(.2,.8,.2,1)]',
           splitOpen ? 'grid-cols-[1fr_1fr]' : 'grid-cols-[1fr_0fr]'
         )}
         style={{ minHeight: 230 }}
@@ -386,12 +391,14 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
             <PwName> {running.desc}</PwName>
           </TermLine>
 
-          {/* Right-click context menu — light card, skeleton bars for the
+          {/* Right-click context menu — theme card, skeleton bars for the
               other items, real labels only for the two split actions. */}
           <ContextMenu
             shown={menuShown}
             splitRowActive={splitRowActive}
             splitRowRef={splitRowRef}
+            splitRightShortcutLabel={splitRightShortcutLabel}
+            splitDownShortcutLabel={splitDownShortcutLabel}
           />
         </div>
 
@@ -435,8 +442,8 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
       {/* Standalone keyboard hint stays inside the visual so the tour copy can
           remain a single subheader line. */}
       <div className="border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
-        Same pane: <kbd className={KBD_CLASS}>⌘D</kbd> splits right ·{' '}
-        <kbd className={KBD_CLASS}>⌘⇧D</kbd> splits down
+        Same pane: <kbd className={KBD_CLASS}>{splitRightShortcutLabel}</kbd> splits right ·{' '}
+        <kbd className={KBD_CLASS}>{splitDownShortcutLabel}</kbd> splits down
       </div>
     </div>
   )
@@ -494,6 +501,8 @@ function ContextMenu(props: {
   shown: boolean
   splitRowActive: boolean
   splitRowRef: React.RefObject<HTMLDivElement | null>
+  splitRightShortcutLabel: string
+  splitDownShortcutLabel: string
 }): JSX.Element {
   return (
     <div
@@ -519,14 +528,18 @@ function ContextMenu(props: {
           <SplitRightIcon />
         </span>
         <span className="whitespace-nowrap leading-none">Split Terminal Right</span>
-        <span className="font-mono text-[11px] text-muted-foreground">⌘D</span>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          {props.splitRightShortcutLabel}
+        </span>
       </div>
       <div className="grid h-[22px] grid-cols-[18px_1fr_auto] items-center gap-2 rounded-[5px] px-1.5 py-1 pl-1.5">
         <span className="inline-flex items-center justify-center text-muted-foreground">
           <SplitDownIcon />
         </span>
         <span className="whitespace-nowrap leading-none">Split Terminal Down</span>
-        <span className="font-mono text-[11px] text-muted-foreground">⌘⇧D</span>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          {props.splitDownShortcutLabel}
+        </span>
       </div>
       <CtxSeparator />
       <CtxSkeleton width={64} />
@@ -581,8 +594,8 @@ function RightPaneScrollback(props: { lines: readonly RightLine[] }): JSX.Elemen
           <TermLine key={i}>
             {line.withGlyph ? <span className="mr-1.5 text-amber-600">●</span> : null}
             <span
-              className="inline-block h-[7px] rounded-[3px] align-[1px]"
-              style={{ width: `${line.widthPct}%`, background: 'rgba(24,24,27,0.18)' }}
+              className="inline-block h-[7px] rounded-[3px] bg-foreground/[0.18] align-[1px]"
+              style={{ width: `${line.widthPct}%` }}
             />
           </TermLine>
         )

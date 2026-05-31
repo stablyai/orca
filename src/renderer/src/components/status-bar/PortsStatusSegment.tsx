@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: PortsStatusSegment keeps port scanning, grouping, row actions,
+   and status-bar interaction tracking together so the popover state stays coherent. */
 import React, { useCallback, useMemo, useState } from 'react'
 import {
   Plug,
@@ -98,6 +100,7 @@ function PortRow({
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
   const openInOrcaBrowser = shouldOpenWorkspacePortInOrcaBrowser(settings)
@@ -107,6 +110,7 @@ function PortRow({
   const handleOpen = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
+      recordFeatureInteraction('ports')
       void openWorkspacePortInBrowser({
         port,
         activeWorktreeId,
@@ -125,6 +129,7 @@ function PortRow({
       createBrowserTab,
       openInOrcaBrowser,
       port,
+      recordFeatureInteraction,
       runtimeTarget,
       setRemoteBrowserPageHandle
     ]
@@ -133,11 +138,12 @@ function PortRow({
   const handleCopy = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
+      recordFeatureInteraction('ports')
       const address = addressForPort(port)
       void window.api.ui.writeClipboardText(address)
       toast.success(`Copied ${address}`)
     },
-    [port]
+    [port, recordFeatureInteraction]
   )
 
   const handleStop = useCallback(
@@ -146,6 +152,7 @@ function PortRow({
       if (!canStopWorkspacePort(port)) {
         return
       }
+      recordFeatureInteraction('ports')
       const run = async (): Promise<void> => {
         const result = await killWorkspacePortForTarget(runtimeTarget, {
           repoId: port.owner.repoId,
@@ -170,7 +177,13 @@ function PortRow({
       }
       void run()
     },
-    [port, runtimeTarget, setWorkspacePortScan, setWorkspacePortScanRefreshing]
+    [
+      port,
+      recordFeatureInteraction,
+      runtimeTarget,
+      setWorkspacePortScan,
+      setWorkspacePortScanRefreshing
+    ]
   )
 
   return (
@@ -262,6 +275,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [open, setOpen] = useState(false)
   const [externalOpen, setExternalOpen] = useState(false)
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
@@ -277,6 +291,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
       if (!nextOpen) {
         return
       }
+      recordFeatureInteraction('ports')
       // Why: the 30s background poll is intentionally quiet; opening the
       // popover should still collapse that stale window without flashing icons.
       void scanWorkspacePortsForTarget(runtimeTarget)
@@ -296,7 +311,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           })
         })
     },
-    [runtimeTarget, scanKey, setWorkspacePortScan]
+    [recordFeatureInteraction, runtimeTarget, scanKey, setWorkspacePortScan]
   )
 
   return (
@@ -379,7 +394,10 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
                   type="button"
                   className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border/40 bg-popover px-3 py-2 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                   aria-expanded={externalOpen}
-                  onClick={() => setExternalOpen((value) => !value)}
+                  onClick={() => {
+                    recordFeatureInteraction('ports')
+                    setExternalOpen((value) => !value)
+                  }}
                 >
                   {externalOpen ? (
                     <ChevronDown className="size-3" />

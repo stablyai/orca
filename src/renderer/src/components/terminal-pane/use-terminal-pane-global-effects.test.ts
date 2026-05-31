@@ -1,5 +1,7 @@
+/* eslint-disable max-lines -- Why: these hook tests share a mocked React lifecycle harness with global event cases. */
 import type * as ReactModule from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 
 const mocks = vi.hoisted(() => ({
@@ -9,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   flushTerminalOutput: vi.fn(),
   getTerminalOutputEpoch: vi.fn(() => 0),
   handleTerminalFileDrop: vi.fn(),
+  requestTerminalBacklogRecovery: vi.fn(),
   restoreScrollState: vi.fn(),
   restoreScrollStateAfterLayout: vi.fn()
 }))
@@ -52,7 +55,8 @@ vi.mock('./pane-helpers', () => ({
 }))
 
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
-  flushTerminalOutput: mocks.flushTerminalOutput
+  flushTerminalOutput: mocks.flushTerminalOutput,
+  requestTerminalBacklogRecovery: mocks.requestTerminalBacklogRecovery
 }))
 
 vi.mock('@/lib/pane-manager/pane-scroll', () => ({
@@ -80,6 +84,7 @@ function useMountForFileDrop(
     cwd?: string
     isActive?: boolean
     isVisible?: boolean
+    isSyncFitEnabled?: boolean
     paneCount?: number
   } = {}
 ): {
@@ -114,6 +119,7 @@ function useMountForFileDrop(
     cwd: options.cwd,
     isActive: options.isActive ?? true,
     isVisible: options.isVisible ?? true,
+    isSyncFitEnabled: options.isSyncFitEnabled ?? options.isVisible ?? true,
     paneCount: options.paneCount ?? 0,
     managerRef: { current: manager as never },
     containerRef: { current: null },
@@ -165,6 +171,9 @@ describe('useTerminalPaneGlobalEffects', () => {
     mocks.flushTerminalOutput.mockImplementation((terminal: { name: string }) => {
       order.push(`flush:${terminal.name}`)
     })
+    mocks.requestTerminalBacklogRecovery.mockImplementation((terminal: { name: string }) => {
+      order.push(`recover:${terminal.name}`)
+    })
     mocks.captureScrollState.mockImplementation((terminal: { name: string }) => {
       order.push(`capture:${terminal.name}`)
       return { terminalName: terminal.name }
@@ -182,6 +191,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       worktreeId: 'wt-1',
       isActive: true,
       isVisible: true,
+      isSyncFitEnabled: true,
       paneCount: 2,
       managerRef: { current: manager as never },
       containerRef: { current: null },
@@ -194,13 +204,21 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(order).toEqual([
       'capture:terminal-a',
       'capture:terminal-b',
+      'recover:terminal-a',
       'flush:terminal-a',
+      'recover:terminal-b',
       'flush:terminal-b',
       'resume',
       'fit-focus',
       'restore:terminal-a',
       'restore:terminal-b'
     ])
+    expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
+      maxChars: 256 * 1024
+    })
+    expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(2, terminalB, {
+      maxChars: 256 * 1024
+    })
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(isActiveRef.current).toBe(true)
     expect(isVisibleRef.current).toBe(true)
@@ -231,6 +249,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       isActiveRef: { current: false },
       isVisibleRef: { current: false },
       paneCount: 1,
+      isSyncFitEnabled: true,
       toggleExpandPane: vi.fn()
     }
 
@@ -316,5 +335,75 @@ describe('useTerminalPaneGlobalEffects', () => {
     onFileDrop({ paths: ['/tmp/image.png'], target: 'terminal' })
 
     expect(mocks.handleTerminalFileDrop).not.toHaveBeenCalled()
+  })
+
+  it('skips global sync-fit registration for hidden non-measurable terminal panes', () => {
+    const manager = {
+      getPanes: vi.fn(() => []),
+      resumeRendering: vi.fn(),
+      suspendRendering: vi.fn(),
+      fitAllPanes: vi.fn(),
+      getActivePane: vi.fn(() => null)
+    }
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: false,
+      isVisible: false,
+      isSyncFitEnabled: false,
+      paneCount: 0,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+
+    const syncFitListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([eventName]) => eventName === SYNC_FIT_PANES_EVENT)
+
+    expect(syncFitListener).toBeUndefined()
+  })
+
+  it('registers global sync-fit for measurable hidden startup panes', () => {
+    const manager = {
+      getPanes: vi.fn(() => []),
+      resumeRendering: vi.fn(),
+      suspendRendering: vi.fn(),
+      fitAllPanes: vi.fn(),
+      getActivePane: vi.fn(() => null)
+    }
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: false,
+      isVisible: false,
+      isSyncFitEnabled: true,
+      paneCount: 0,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+
+    const syncFitListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([eventName]) => eventName === SYNC_FIT_PANES_EVENT)
+
+    expect(syncFitListener).toBeDefined()
+    const listener = syncFitListener?.[1]
+    if (typeof listener !== 'function') {
+      throw new Error('expected sync-fit listener')
+    }
+    listener(new Event(SYNC_FIT_PANES_EVENT))
+    expect(manager.fitAllPanes).toHaveBeenCalledTimes(1)
   })
 })

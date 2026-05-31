@@ -85,6 +85,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   },
   'computer click': async ({ flags, client, cwd, json }) => {
     const target = await getComputerCommandTarget(flags, cwd, client)
+    const observeFlags = getComputerActionObserveFlags(flags)
     const result = await client.call<ComputerActionResult>('computer.click', {
       ...target,
       elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
@@ -92,22 +93,28 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
       y: getOptionalNumberFlag(flags, 'y'),
       clickCount: getOptionalPositiveIntegerFlag(flags, 'click-count'),
       mouseButton: getOptionalStringFlag(flags, 'mouse-button'),
-      ...getComputerActionObserveFlags(flags)
+      ...observeFlags
     })
-    printResult(result, json, (value) => formatComputerAction('click', value))
+    printResult(result, json, (value) =>
+      formatComputerAction('click', value, { ...target, ...observeFlags })
+    )
   },
   'computer perform-secondary-action': async ({ flags, client, cwd, json }) => {
     const target = await getComputerCommandTarget(flags, cwd, client)
+    const observeFlags = getComputerActionObserveFlags(flags)
     const result = await client.call<ComputerActionResult>('computer.performSecondaryAction', {
       ...target,
       elementIndex: getRequiredNonNegativeIntegerFlag(flags, 'element-index'),
       action: getRequiredStringFlag(flags, 'action'),
-      ...getComputerActionObserveFlags(flags)
+      ...observeFlags
     })
-    printResult(result, json, (value) => formatComputerAction('perform-secondary-action', value))
+    printResult(result, json, (value) =>
+      formatComputerAction('perform-secondary-action', value, { ...target, ...observeFlags })
+    )
   },
   'computer scroll': async ({ flags, client, cwd, json }) => {
     const target = await getComputerCommandTarget(flags, cwd, client)
+    const observeFlags = getComputerActionObserveFlags(flags)
     const result = await client.call<ComputerActionResult>('computer.scroll', {
       ...target,
       elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
@@ -115,12 +122,15 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
       y: getOptionalNumberFlag(flags, 'y'),
       direction: getRequiredStringFlag(flags, 'direction'),
       pages: getOptionalPositiveNumberFlag(flags, 'pages'),
-      ...getComputerActionObserveFlags(flags)
+      ...observeFlags
     })
-    printResult(result, json, (value) => formatComputerAction('scroll', value))
+    printResult(result, json, (value) =>
+      formatComputerAction('scroll', value, { ...target, ...observeFlags })
+    )
   },
   'computer drag': async ({ flags, client, cwd, json }) => {
     const target = await getComputerCommandTarget(flags, cwd, client)
+    const observeFlags = getComputerActionObserveFlags(flags)
     const result = await client.call<ComputerActionResult>('computer.drag', {
       ...target,
       fromElementIndex: getOptionalNonNegativeIntegerFlag(flags, 'from-element-index'),
@@ -129,55 +139,72 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
       fromY: getOptionalNumberFlag(flags, 'from-y'),
       toX: getOptionalNumberFlag(flags, 'to-x'),
       toY: getOptionalNumberFlag(flags, 'to-y'),
-      ...getComputerActionObserveFlags(flags)
+      ...observeFlags
     })
-    printResult(result, json, (value) => formatComputerAction('drag', value))
+    printResult(result, json, (value) =>
+      formatComputerAction('drag', value, { ...target, ...observeFlags })
+    )
   },
   'computer type-text': async ({ flags, client, cwd, json }) => {
     const target = await getComputerCommandTarget(flags, cwd, client)
+    const observeFlags = getComputerActionObserveFlags(flags)
     const result = await client.call<ComputerActionResult>('computer.typeText', {
       ...target,
       text: await getTextPayload(flags, 'text'),
-      ...getComputerActionObserveFlags(flags)
+      ...observeFlags
     })
-    printResult(result, json, (value) => formatComputerAction('type-text', value))
+    printResult(result, json, (value) =>
+      formatComputerAction('type-text', value, { ...target, ...observeFlags })
+    )
   },
   'computer press-key': async ({ flags, client, cwd, json }) => {
     const target = await getComputerCommandTarget(flags, cwd, client)
+    const observeFlags = getComputerActionObserveFlags(flags)
     const result = await client.call<ComputerActionResult>('computer.pressKey', {
       ...target,
       key: getRequiredStringFlag(flags, 'key'),
-      ...getComputerActionObserveFlags(flags)
+      ...observeFlags
     })
-    printResult(result, json, (value) => formatComputerAction('press-key', value))
+    printResult(result, json, (value) =>
+      formatComputerAction('press-key', value, { ...target, ...observeFlags })
+    )
   },
   'computer hotkey': async ({ flags, client, cwd, json }) => {
     const target = await getComputerCommandTarget(flags, cwd, client)
+    const observeFlags = getComputerActionObserveFlags(flags)
     const result = await client.call<ComputerActionResult>('computer.hotkey', {
       ...target,
       key: getRequiredStringFlag(flags, 'key'),
-      ...getComputerActionObserveFlags(flags)
+      ...observeFlags
     })
-    printResult(result, json, (value) => formatComputerAction('hotkey', value))
+    printResult(result, json, (value) =>
+      formatComputerAction('hotkey', value, { ...target, ...observeFlags })
+    )
   },
   'computer paste-text': async ({ flags, client, cwd, json }) => {
     const target = await getComputerCommandTarget(flags, cwd, client)
+    const observeFlags = getComputerActionObserveFlags(flags)
     const result = await client.call<ComputerActionResult>('computer.pasteText', {
       ...target,
       text: await getTextPayload(flags, 'text'),
-      ...getComputerActionObserveFlags(flags)
+      ...observeFlags
     })
-    printResult(result, json, (value) => formatComputerAction('paste-text', value))
+    printResult(result, json, (value) =>
+      formatComputerAction('paste-text', value, { ...target, ...observeFlags })
+    )
   },
   'computer set-value': async ({ flags, client, cwd, json }) => {
     const target = await getComputerCommandTarget(flags, cwd, client)
+    const observeFlags = getComputerActionObserveFlags(flags)
     const result = await client.call<ComputerActionResult>('computer.setValue', {
       ...target,
       elementIndex: getRequiredNonNegativeIntegerFlag(flags, 'element-index'),
       value: await getTextPayload(flags, 'value'),
-      ...getComputerActionObserveFlags(flags)
+      ...observeFlags
     })
-    printResult(result, json, (value) => formatComputerAction('set-value', value))
+    printResult(result, json, (value) =>
+      formatComputerAction('set-value', value, { ...target, ...observeFlags })
+    )
   }
 }
 
@@ -255,24 +282,12 @@ function getComputerActionObserveFlags(flags: Map<string, string | boolean>): {
   windowId?: number
   windowIndex?: number
 } {
-  const observeFlags: {
-    noScreenshot?: boolean
-    restoreWindow?: boolean
-    windowId?: number
-    windowIndex?: number
-  } = {
-    noScreenshot: flags.has('no-screenshot') ? true : undefined
-  }
-  if (flags.has('restore-window')) {
-    observeFlags.restoreWindow = true
-  }
   const windowId = getOptionalNumberFlag(flags, 'window-id')
-  if (windowId !== undefined) {
-    observeFlags.windowId = windowId
-  }
   const windowIndex = getOptionalNonNegativeIntegerFlag(flags, 'window-index')
-  if (windowIndex !== undefined) {
-    observeFlags.windowIndex = windowIndex
+  return {
+    noScreenshot: flags.has('no-screenshot') ? true : undefined,
+    ...(flags.has('restore-window') ? { restoreWindow: true } : {}),
+    ...(windowId !== undefined ? { windowId } : {}),
+    ...(windowIndex !== undefined ? { windowIndex } : {})
   }
-  return observeFlags
 }

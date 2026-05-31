@@ -212,6 +212,65 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     ])
   })
 
+  it('clears remote Claude permission when approved PostToolUse matches the preceding tool use id', async () => {
+    const { port, token } = hookServer.getCoordinates()
+    const postClaude = async (payload: Record<string, unknown>): Promise<Response> =>
+      fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: `tab-7:${LEAF_7}`,
+          tabId: 'tab-7',
+          worktreeId: 'wt-7',
+          env: 'remote',
+          version: '1',
+          payload
+        })
+      })
+
+    await expect(
+      postClaude({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf /tmp/orca-2824-permission-target' },
+        tool_use_id: 'toolu-approved-remote-post'
+      })
+    ).resolves.toMatchObject({ status: 204 })
+    await expect(
+      postClaude({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf /tmp/orca-2824-permission-target' }
+      })
+    ).resolves.toMatchObject({ status: 204 })
+    await expect(
+      postClaude({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf /tmp/orca-2824-permission-target' },
+        tool_use_id: 'toolu-approved-remote-post'
+      })
+    ).resolves.toMatchObject({ status: 204 })
+
+    const start = Date.now()
+    while (orcaServer.getStatusSnapshot()[0]?.state !== 'working' && Date.now() - start < 1500) {
+      await new Promise((r) => setImmediate(r))
+    }
+    expect(orcaServer.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: `tab-7:${LEAF_7}`,
+        connectionId: 'conn-test',
+        state: 'working',
+        agentType: 'claude',
+        toolName: 'Bash',
+        toolInput: 'rm -rf /tmp/orca-2824-permission-target'
+      })
+    ])
+  })
+
   it('replays the cached last-status on agent_hook.requestReplay', async () => {
     // Why: register the listener BEFORE the initial POST so live notifications
     // are observed. setListener on a non-empty cache replays cached entries

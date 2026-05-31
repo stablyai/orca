@@ -150,6 +150,22 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('launches Command Code by its unambiguous binary with a positional prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'command-code',
+        prompt: 'Fix the issue',
+        cmdOverrides: {},
+        platform: 'win32'
+      })
+    ).toEqual({
+      agent: 'command-code',
+      launchCommand: "command-code --trust 'Fix the issue'",
+      expectedProcess: 'command-code',
+      followupPrompt: null
+    })
+  })
+
   it('returns null when there is no prompt to inject', () => {
     expect(
       buildAgentStartupPlan({
@@ -251,12 +267,31 @@ describe('buildAgentDraftLaunchPlan', () => {
       expectedProcess: 'claude'
     })
   })
+
+  it('uses OpenClaude native prefill support for draft launches', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'openclaude',
+        draft: 'review this',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'openclaude',
+      launchCommand: "openclaude --prefill 'review this'",
+      expectedProcess: 'openclaude'
+    })
+  })
 })
 
 describe('isShellProcess', () => {
   it('treats common shells as non-agent foreground processes', () => {
     expect(isShellProcess('bash')).toBe(true)
     expect(isShellProcess('pwsh.exe')).toBe(true)
+    expect(isShellProcess('/bin/zsh')).toBe(true)
+    expect(isShellProcess('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')).toBe(
+      true
+    )
     expect(isShellProcess('')).toBe(true)
   })
 

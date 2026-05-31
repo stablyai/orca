@@ -78,6 +78,25 @@ describe('PluginOverlayManager', () => {
     expect(existsSync(file)).toBe(true)
   })
 
+  it('uses the kind-specific Pi-compatible extension source when available', () => {
+    manager.setSources({
+      piExtensionSource: '// pi extension',
+      ompExtensionSource: '// omp extension'
+    })
+
+    const piDir = manager.materializePi('tab-kind-pi:0', undefined, 'pi')
+    const ompDir = manager.materializePi('tab-kind-omp:0', undefined, 'omp')
+
+    expect(piDir).not.toBeNull()
+    expect(ompDir).not.toBeNull()
+    expect(readFileSync(join(piDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toBe(
+      '// pi extension'
+    )
+    expect(readFileSync(join(ompDir!, 'extensions', 'orca-agent-status.ts'), 'utf8')).toBe(
+      '// omp extension'
+    )
+  })
+
   it('mirrors the remote default Pi agent dir before adding Orca status extension', () => {
     const piAgentDir = join(homeDir, '.pi', 'agent')
     mkdirSync(join(piAgentDir, 'skills', 'my-skill'), { recursive: true })
@@ -85,6 +104,17 @@ describe('PluginOverlayManager', () => {
     writeFileSync(join(piAgentDir, 'auth.json'), 'secret token')
     writeFileSync(join(piAgentDir, 'skills', 'my-skill', 'SKILL.md'), 'critical user skill')
     writeFileSync(join(piAgentDir, 'extensions', 'user-ext', 'ext.ts'), 'user extension')
+    writeFileSync(
+      join(piAgentDir, 'settings.json'),
+      JSON.stringify({
+        defaultProvider: 'amazon-bedrock',
+        hideThinkingBlock: false,
+        terminal: {
+          showImages: false,
+          clearOnShrink: false
+        }
+      })
+    )
 
     manager.setSources({ piExtensionSource: '// pi extension' })
     const dir = manager.materializePi('tab-pi:0')
@@ -101,6 +131,22 @@ describe('PluginOverlayManager', () => {
       'orca-agent-status.ts',
       'user-ext'
     ])
+    expect(JSON.parse(readFileSync(join(dir!, 'settings.json'), 'utf8'))).toEqual({
+      defaultProvider: 'amazon-bedrock',
+      hideThinkingBlock: true,
+      terminal: {
+        showImages: false,
+        clearOnShrink: true
+      }
+    })
+    expect(JSON.parse(readFileSync(join(piAgentDir, 'settings.json'), 'utf8'))).toEqual({
+      defaultProvider: 'amazon-bedrock',
+      hideThinkingBlock: false,
+      terminal: {
+        showImages: false,
+        clearOnShrink: false
+      }
+    })
   })
 
   it('mirrors a preexisting remote Pi agent dir instead of the default', () => {
@@ -189,6 +235,10 @@ describe('PluginOverlayManager', () => {
       expect(existsSync(join(dir!, 'auth.json'))).toBe(false)
       const overlayExtensions = readdirSync(join(dir!, 'extensions')).sort()
       expect(overlayExtensions).toEqual(['orca-agent-status.ts'])
+      expect(JSON.parse(readFileSync(join(dir!, 'settings.json'), 'utf8'))).toEqual({
+        hideThinkingBlock: true,
+        terminal: { clearOnShrink: true }
+      })
     })
   })
 
@@ -201,7 +251,8 @@ describe('PluginOverlayManager', () => {
   it('clearOverlay removes opencode + every Pi-kind overlay root for an id', () => {
     manager.setSources({
       opencodePluginSource: 'opencode',
-      piExtensionSource: 'pi'
+      piExtensionSource: 'pi',
+      ompExtensionSource: 'omp'
     })
     const opencodeDir = manager.materializeOpenCode('tab-3:0')!
     const piDir = manager.materializePi('tab-3:0', undefined, 'pi')!

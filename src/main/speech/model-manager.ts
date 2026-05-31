@@ -22,19 +22,26 @@ type DownloadHandle = {
 
 type ProgressCallback = (modelId: string, progress: number) => void
 
+const DOWNLOAD_IDLE_TIMEOUT_MS = 120_000
+
 export class ModelManager {
   private modelsDir: string
   private activeDownloads = new Map<string, DownloadHandle>()
   private modelStates = new Map<string, SpeechModelState>()
-  private progressCallback: ProgressCallback | null = null
+  private progressCallbacks = new Set<ProgressCallback>()
 
   constructor(customModelsDir?: string) {
     this.modelsDir = customModelsDir || join(app.getPath('userData'), 'speech-models')
     mkdirSync(this.modelsDir, { recursive: true })
   }
 
-  setProgressCallback(cb: ProgressCallback): void {
-    this.progressCallback = cb
+  setProgressCallback(cb: ProgressCallback): () => void {
+    // Why: concurrent settings windows can observe the same download; a
+    // returned unsubscribe prevents one window from replacing another.
+    this.progressCallbacks.add(cb)
+    return () => {
+      this.progressCallbacks.delete(cb)
+    }
   }
 
   getModelsDir(): string {
@@ -113,10 +120,14 @@ export class ModelManager {
 
     const archivePath = join(this.modelsDir, `${modelId}.tar.bz2`)
     let aborted = false
+    const abortController = new AbortController()
 
     const handle: DownloadHandle = {
       abort: () => {
         aborted = true
+        // Why: a stalled HTTPS request may never deliver another data chunk;
+        // cancellation must tear down the request immediately.
+        abortController.abort()
       }
     }
     this.activeDownloads.set(modelId, handle)
@@ -127,7 +138,8 @@ export class ModelManager {
         archivePath,
         manifest.sizeBytes,
         modelId,
-        () => aborted
+        () => aborted,
+        abortController.signal
       )
 
       if (aborted) {
@@ -172,6 +184,11 @@ export class ModelManager {
         this.updateState(modelId, 'error', undefined, String(err))
       }
       this.cleanup(modelId, archivePath)
+      if (!aborted) {
+        // Why: the settings UI awaits this promise to show download failures;
+        // cancellation stays quiet, but real failures must reach the caller.
+        throw err
+      }
     } finally {
       this.activeDownloads.delete(modelId)
       try {
@@ -214,7 +231,10 @@ export class ModelManager {
     this.modelStates.set(modelId, state)
     // Why: notify the renderer on every state change (not just download
     // progress) so the UI updates for extracting/ready/error transitions.
-    this.progressCallback?.(modelId, progress ?? (status === 'extracting' ? 0.95 : -1))
+    const progressValue = progress ?? (status === 'extracting' ? 0.95 : -1)
+    for (const callback of this.progressCallbacks) {
+      callback(modelId, progressValue)
+    }
   }
 
   private downloadFile(
@@ -223,9 +243,15 @@ export class ModelManager {
     expectedSize: number,
     modelId: string,
     isAborted: () => boolean,
+    signal?: AbortSignal,
     redirectCount = 0
   ): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new Error('Aborted'))
+        return
+      }
+
       let parsedUrl: URL
       try {
         parsedUrl = new URL(url)
@@ -239,7 +265,44 @@ export class ModelManager {
         return
       }
 
-      const request = httpsGet(parsedUrl, (response: IncomingMessage) => {
+      let settled = false
+      let request: ReturnType<typeof httpsGet> | null = null
+      const cleanupRequestListeners = (): void => {
+        const activeRequest = request
+        if (!activeRequest) {
+          return
+        }
+        activeRequest.off('error', onRequestError)
+        activeRequest.off('timeout', onRequestTimeout)
+        request = null
+      }
+      const resolveOnce = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanupRequestListeners()
+        resolve()
+      }
+      const rejectOnce = (error: Error): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanupRequestListeners()
+        reject(error)
+      }
+      const onRequestError = (error: Error): void => rejectOnce(error)
+      const onRequestTimeout = (): void => {
+        const activeRequest = request
+        rejectOnce(
+          new Error(
+            `Model download timed out after ${DOWNLOAD_IDLE_TIMEOUT_MS / 1000} seconds without network activity`
+          )
+        )
+        activeRequest?.destroy()
+      }
+      const onResponse = (response: IncomingMessage): void => {
         if (
           response.statusCode === 301 ||
           response.statusCode === 302 ||
@@ -250,12 +313,12 @@ export class ModelManager {
           const redirectUrl = response.headers.location
           if (!redirectUrl) {
             response.resume()
-            reject(new Error('Redirect without location'))
+            rejectOnce(new Error('Redirect without location'))
             return
           }
           if (redirectCount >= 5) {
             response.resume()
-            reject(new Error('Too many redirects'))
+            rejectOnce(new Error('Too many redirects'))
             return
           }
           let resolvedRedirect: URL
@@ -263,12 +326,12 @@ export class ModelManager {
             resolvedRedirect = new URL(redirectUrl, parsedUrl)
           } catch {
             response.resume()
-            reject(new Error('Invalid redirect URL'))
+            rejectOnce(new Error('Invalid redirect URL'))
             return
           }
           if (resolvedRedirect.protocol !== 'https:') {
             response.resume()
-            reject(new Error('Model download redirect must use HTTPS'))
+            rejectOnce(new Error('Model download redirect must use HTTPS'))
             return
           }
           response.resume()
@@ -278,16 +341,17 @@ export class ModelManager {
             expectedSize,
             modelId,
             isAborted,
+            signal,
             redirectCount + 1
           )
-            .then(resolve)
-            .catch(reject)
+            .then(resolveOnce)
+            .catch(rejectOnce)
           return
         }
 
         if (response.statusCode !== 200) {
           response.resume()
-          reject(new Error(`HTTP ${response.statusCode}`))
+          rejectOnce(new Error(`HTTP ${response.statusCode}`))
           return
         }
 
@@ -296,29 +360,46 @@ export class ModelManager {
 
         const fileStream = createWriteStream(dest)
 
-        response.on('data', (chunk: Buffer) => {
+        const cleanupResponseProgressListener = (): void => {
+          response.off('data', onResponseData)
+        }
+        const onResponseData = (chunk: Buffer): void => {
           if (isAborted()) {
+            request?.destroy(new Error('Aborted'))
             response.destroy()
-            fileStream.close()
+            fileStream.destroy()
             return
           }
           downloaded += chunk.length
           const progress = Math.min(0.9, downloaded / totalSize)
           this.updateState(modelId, 'downloading', progress)
-        })
+        }
 
+        response.on('data', onResponseData)
         pipeline(response, fileStream)
           .then(() => {
+            cleanupResponseProgressListener()
             if (isAborted()) {
-              reject(new Error('Aborted'))
+              rejectOnce(new Error('Aborted'))
             } else {
-              resolve()
+              resolveOnce()
             }
           })
-          .catch(reject)
-      })
+          .catch((error: Error) => {
+            cleanupResponseProgressListener()
+            rejectOnce(error)
+          })
+      }
 
-      request.on('error', reject)
+      request = signal
+        ? httpsGet(parsedUrl, { signal }, onResponse)
+        : httpsGet(parsedUrl, onResponse)
+
+      // Why: cancellation only helps after the user presses cancel; a peer
+      // that accepts the socket and goes silent must not leave the model stuck
+      // in "downloading" forever.
+      request.setTimeout(DOWNLOAD_IDLE_TIMEOUT_MS, onRequestTimeout)
+      request.on('error', onRequestError)
     })
   }
 
@@ -326,19 +407,49 @@ export class ModelManager {
     return new Promise((resolve, reject) => {
       const hash = createHash('sha256')
       const stream = createReadStream(archivePath)
+      let settled = false
 
-      stream.on('data', (chunk) => hash.update(chunk))
-      stream.on('error', reject)
-      stream.on('end', () => {
+      const cleanup = (): void => {
+        stream.off('data', onData)
+        stream.off('error', onError)
+        stream.off('end', onEnd)
+      }
+      const settleResolve = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        resolve()
+      }
+      const settleReject = (error: Error): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(error)
+      }
+      const onData = (chunk: Buffer): void => {
+        hash.update(chunk)
+      }
+      const onError = (error: Error): void => {
+        settleReject(error)
+      }
+      const onEnd = (): void => {
         const actualSha256 = hash.digest('hex')
         if (actualSha256 !== expectedSha256.toLowerCase()) {
           // Why: these archives feed native model parsers; filename checks do
           // not protect against compromised or redirected release assets.
-          reject(new Error('Downloaded model archive failed integrity verification'))
+          settleReject(new Error('Downloaded model archive failed integrity verification'))
           return
         }
-        resolve()
-      })
+        settleResolve()
+      }
+
+      stream.on('data', onData)
+      stream.on('error', onError)
+      stream.on('end', onEnd)
     })
   }
 
@@ -367,36 +478,66 @@ export class ModelManager {
       )
 
       let stderr = ''
-      child.stderr?.on('data', (chunk: Buffer) => {
-        stderr += chunk.toString()
-      })
-
-      const timeout = setTimeout(() => {
-        child.kill('SIGKILL')
-        reject(new Error('Extraction timed out after 10 minutes'))
-      }, 600_000)
-      const abortPoll = setInterval(() => {
-        if (isAborted()) {
-          child.kill('SIGKILL')
-          reject(new Error('Aborted'))
+      let settled = false
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      let abortPoll: ReturnType<typeof setInterval> | null = null
+      const cleanup = (): void => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
         }
-      }, 250)
-
-      child.on('close', (code) => {
-        clearTimeout(timeout)
-        clearInterval(abortPoll)
+        if (abortPoll) {
+          clearInterval(abortPoll)
+          abortPoll = null
+        }
+        child.stderr?.off('data', onStderrData)
+        child.off('close', onClose)
+        child.off('error', onError)
+      }
+      const fail = (error: Error, killChild = false): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        if (killChild) {
+          child.kill('SIGKILL')
+        }
+        reject(error)
+      }
+      const onStderrData = (chunk: Buffer): void => {
+        stderr += chunk.toString()
+      }
+      const onClose = (code: number | null): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
         if (code === 0) {
           resolve()
         } else {
           reject(new Error(`tar exited with code ${code}: ${stderr.slice(0, 500)}`))
         }
-      })
+      }
+      const onError = (err: Error): void => {
+        fail(err)
+      }
 
-      child.on('error', (err) => {
-        clearTimeout(timeout)
-        clearInterval(abortPoll)
-        reject(err)
-      })
+      child.stderr?.on('data', onStderrData)
+      timeout = setTimeout(() => {
+        fail(new Error('Extraction timed out after 10 minutes'), true)
+      }, 600_000)
+      abortPoll = setInterval(() => {
+        if (isAborted()) {
+          // Why: if the extraction child wedges and never emits close/error,
+          // the abort poller must still clear itself when we reject.
+          fail(new Error('Aborted'), true)
+        }
+      }, 250)
+
+      child.on('close', onClose)
+      child.on('error', onError)
     })
   }
 

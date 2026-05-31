@@ -2,6 +2,7 @@
 global setup across namespaces so browser API installation stays realistic. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreloadApi } from '../../../preload/api-types'
+import type { FeatureInteractionState } from '../../../shared/feature-interactions'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
 class MemoryStorage implements Storage {
@@ -93,6 +94,36 @@ function writeStoredRuntimeEnvironment(storage: Storage): void {
   )
 }
 
+function installClipboardImageBase64(contentBase64: string): void {
+  vi.stubGlobal(
+    'FileReader',
+    class {
+      result: string | ArrayBuffer | null = null
+      error: DOMException | null = null
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+
+      readAsDataURL(blob: Blob): void {
+        this.result = `data:${blob.type};base64,${contentBase64}`
+        this.onload?.()
+      }
+    }
+  )
+  vi.stubGlobal('navigator', {
+    userAgent: 'Linux',
+    hardwareConcurrency: 8,
+    clipboard: {
+      readText: vi.fn().mockResolvedValue(''),
+      read: vi.fn().mockResolvedValue([
+        {
+          types: ['image/png'],
+          getType: vi.fn().mockResolvedValue(new Blob(['ignored'], { type: 'image/png' }))
+        }
+      ])
+    }
+  })
+}
+
 describe('web keybindings preload API', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -177,6 +208,297 @@ describe('web UI preload API', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it('saves browser clipboard images through bounded upload chunks', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'clipboard.startImageUpload') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { uploadId: 'upload-1' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'clipboard.appendImageUploadChunk') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { receivedBase64Length: runtimeCalls.length },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: 'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png',
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS, installWebPreloadApi } =
+      await import('./web-preload-api')
+    const contentBase64 = `${'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)}AAAA`
+    installClipboardImageBase64(contentBase64)
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.ui.saveClipboardImageAsTempFile({ connectionId: 'ssh-1' })
+    ).resolves.toBe('C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png')
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'clipboard.startImageUpload',
+        params: {
+          expectedBase64Length: contentBase64.length,
+          connectionId: 'ssh-1'
+        }
+      },
+      {
+        method: 'clipboard.appendImageUploadChunk',
+        params: {
+          uploadId: 'upload-1',
+          offset: 0,
+          contentBase64: 'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)
+        }
+      },
+      {
+        method: 'clipboard.appendImageUploadChunk',
+        params: {
+          uploadId: 'upload-1',
+          offset: CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
+          contentBase64: 'AAAA'
+        }
+      },
+      {
+        method: 'clipboard.commitImageUpload',
+        params: { uploadId: 'upload-1' }
+      }
+    ])
+  })
+
+  it('falls back to one-shot clipboard save for small payloads when the host lacks upload RPCs', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'clipboard.startImageUpload') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: false,
+              error: { code: 'method_not_found', message: 'Unknown method' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: '/tmp/orca-paste-image.png',
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    installClipboardImageBase64(Buffer.from('png-bytes').toString('base64'))
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.ui.saveClipboardImageAsTempFile({ connectionId: null })
+    ).resolves.toBe('/tmp/orca-paste-image.png')
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'clipboard.startImageUpload',
+        params: {
+          expectedBase64Length: Buffer.from('png-bytes').toString('base64').length,
+          connectionId: null
+        }
+      },
+      {
+        method: 'clipboard.saveImageAsTempFile',
+        params: {
+          contentBase64: Buffer.from('png-bytes').toString('base64'),
+          connectionId: null
+        }
+      }
+    ])
+  })
+
+  it('does not send large one-shot fallback frames when upload RPCs are missing', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: false,
+            error: { code: 'method_not_found', message: 'Unknown method' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS, installWebPreloadApi } =
+      await import('./web-preload-api')
+    installClipboardImageBase64('A'.repeat(CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS + 4))
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
+      'Unknown method'
+    )
+    expect(runtimeCalls).toHaveLength(1)
+    expect(runtimeCalls[0]?.method).toBe('clipboard.startImageUpload')
+  })
+
+  it('aborts best-effort when append fails', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'clipboard.startImageUpload') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { uploadId: 'upload-1' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'clipboard.appendImageUploadChunk') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: false,
+              error: { code: 'runtime_error', message: 'bad chunk' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { aborted: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    installClipboardImageBase64('AAAA')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow('bad chunk')
+    expect(runtimeCalls.map((call) => call.method)).toEqual([
+      'clipboard.startImageUpload',
+      'clipboard.appendImageUploadChunk',
+      'clipboard.abortImageUpload'
+    ])
+  })
+
+  it('aborts best-effort when commit fails', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'clipboard.startImageUpload') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { uploadId: 'upload-1' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'clipboard.commitImageUpload') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: false,
+              error: { code: 'runtime_error', message: 'save failed' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { aborted: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    installClipboardImageBase64('AAAA')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
+      'save failed'
+    )
+    expect(runtimeCalls.map((call) => call.method)).toEqual([
+      'clipboard.startImageUpload',
+      'clipboard.appendImageUploadChunk',
+      'clipboard.commitImageUpload',
+      'clipboard.abortImageUpload'
+    ])
+  })
+
+  it('rejects oversized converted clipboard images before starting an upload', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: null,
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    installClipboardImageBase64('A'.repeat(24 * 1024 * 1024 + 4))
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
+      'Clipboard image is too large'
+    )
+    expect(runtimeCalls).toEqual([])
   })
 
   it('migrates missing right sidebar visibility from the effective web legacy default', async () => {
@@ -194,6 +516,125 @@ describe('web UI preload API', () => {
     const ui = await api.ui.get()
 
     expect(ui.rightSidebarOpen).toBe(true)
+  })
+
+  it('keeps newer feature interaction counts when runtime responses resolve out of order', async () => {
+    const pending: ((response: RuntimeRpcResponse<unknown>) => void)[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return new Promise((resolve) => {
+            pending.push((response) =>
+              resolve({
+                ...response,
+                id: method,
+                _meta: { runtimeId: 'runtime-1' }
+              })
+            )
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const first = globals.window.api.ui.recordFeatureInteraction('tasks')
+    const second = globals.window.api.ui.recordFeatureInteraction('tasks')
+
+    pending[1]({
+      id: 'second',
+      ok: true,
+      result: {
+        ui: {
+          featureInteractions: {
+            tasks: { firstInteractedAt: 100, interactionCount: 2 }
+          }
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await second
+    pending[0]({
+      id: 'first',
+      ok: true,
+      result: {
+        ui: {
+          featureInteractions: {
+            tasks: { firstInteractedAt: 100, interactionCount: 1 }
+          }
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await first
+
+    const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
+      featureInteractions?: FeatureInteractionState
+    }
+    expect(stored.featureInteractions?.tasks).toEqual({
+      firstInteractedAt: 100,
+      interactionCount: 2
+    })
+  })
+
+  it('keeps newer local feature interactions when ui.get returns stale host state', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {
+              ui: {
+                featureInteractions: {
+                  tasks: { firstInteractedAt: 100, interactionCount: 1 },
+                  ports: { firstInteractedAt: 300, interactionCount: 1 }
+                }
+              }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({
+        featureInteractions: {
+          tasks: { firstInteractedAt: 50, interactionCount: 3 }
+        }
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const ui = await globals.window.api.ui.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
+      featureInteractions?: FeatureInteractionState
+    }
+
+    expect(ui.featureInteractions?.tasks).toEqual({
+      firstInteractedAt: 50,
+      interactionCount: 3
+    })
+    expect(stored.featureInteractions?.tasks).toEqual({
+      firstInteractedAt: 50,
+      interactionCount: 3
+    })
+    expect(stored.featureInteractions?.ports).toEqual({
+      firstInteractedAt: 300,
+      interactionCount: 1
+    })
   })
 })
 
@@ -333,6 +774,7 @@ describe('web GitHub preload API', () => {
         'requestPRReviewers',
         'resolveProjectRef',
         'resolveReviewThread',
+        'setPRAutoMerge',
         'setPRFileViewed',
         'starOrca',
         'updateIssue',
@@ -474,9 +916,15 @@ describe('web GitHub preload API', () => {
       },
       {
         key: 'listWorkItems',
-        args: { repoPath, limit: 20, query: 'is:pr', before: 'cursor' },
+        args: { repoPath, limit: 20, query: 'is:pr', before: 'cursor', noCache: true },
         expectedMethod: 'github.listWorkItems',
-        expectedParams: withRepo({ repoPath, limit: 20, query: 'is:pr', before: 'cursor' })
+        expectedParams: withRepo({
+          repoPath,
+          limit: 20,
+          query: 'is:pr',
+          before: 'cursor',
+          noCache: true
+        })
       },
       {
         key: 'prChecks',
@@ -531,6 +979,12 @@ describe('web GitHub preload API', () => {
         args: { repoPath, prNumber: 7, method: 'squash' },
         expectedMethod: 'github.mergePR',
         expectedParams: withRepo({ repoPath, prNumber: 7, method: 'squash' })
+      },
+      {
+        key: 'setPRAutoMerge',
+        args: { repoPath, prNumber: 7, enabled: true },
+        expectedMethod: 'github.setPRAutoMerge',
+        expectedParams: withRepo({ repoPath, prNumber: 7, enabled: true })
       },
       {
         key: 'updatePRState',
@@ -806,6 +1260,18 @@ describe('web GitLab preload API', () => {
       expectedParams: unknown
     }[] = [
       {
+        key: 'diagnoseAuth',
+        invoke: (gl) => gl.diagnoseAuth(),
+        expectedMethod: 'gitlab.diagnoseAuth',
+        expectedParams: undefined
+      },
+      {
+        key: 'rateLimit',
+        invoke: (gl) => gl.rateLimit({ force: true, host: 'gitlab.example.com' }),
+        expectedMethod: 'gitlab.rateLimit',
+        expectedParams: { force: true, host: 'gitlab.example.com' }
+      },
+      {
         key: 'listMRs',
         invoke: (gl) => gl.listMRs({ repoPath, state: 'opened', page: 1, perPage: 50 }),
         expectedMethod: 'gitlab.listMRs',
@@ -842,6 +1308,12 @@ describe('web GitLab preload API', () => {
         expectedParams: { repoPath, repo: repoPath, number: 7, body: 'Fixed' }
       },
       {
+        key: 'listLabels',
+        invoke: (gl) => gl.listLabels({ repoPath }),
+        expectedMethod: 'gitlab.listLabels',
+        expectedParams: { repoPath, repo: repoPath }
+      },
+      {
         key: 'todos',
         invoke: (gl) => gl.todos({ repoPath }),
         expectedMethod: 'gitlab.todos',
@@ -872,10 +1344,82 @@ describe('web GitLab preload API', () => {
         expectedParams: { repoPath, repo: repoPath, iid: 8, method: 'squash' }
       },
       {
+        key: 'updateMR',
+        invoke: (gl) => gl.updateMR({ repoPath, iid: 8, updates: { title: 'New title' } }),
+        expectedMethod: 'gitlab.updateMR',
+        expectedParams: { repoPath, repo: repoPath, iid: 8, updates: { title: 'New title' } }
+      },
+      {
+        key: 'updateMRReviewers',
+        invoke: (gl) => gl.updateMRReviewers({ repoPath, iid: 8, reviewerIds: [1, 2] }),
+        expectedMethod: 'gitlab.updateMRReviewers',
+        expectedParams: { repoPath, repo: repoPath, iid: 8, reviewerIds: [1, 2] }
+      },
+      {
         key: 'addMRComment',
         invoke: (gl) => gl.addMRComment({ repoPath, iid: 8, body: 'Ship it' }),
         expectedMethod: 'gitlab.addMRComment',
         expectedParams: { repoPath, repo: repoPath, iid: 8, body: 'Ship it' }
+      },
+      {
+        key: 'addMRInlineComment',
+        invoke: (gl) =>
+          gl.addMRInlineComment({
+            repoPath,
+            iid: 8,
+            input: {
+              body: 'Please fix',
+              path: 'src/app.ts',
+              line: 12,
+              baseSha: 'base',
+              startSha: 'start',
+              headSha: 'head'
+            }
+          }),
+        expectedMethod: 'gitlab.addMRInlineComment',
+        expectedParams: {
+          repoPath,
+          repo: repoPath,
+          iid: 8,
+          input: {
+            body: 'Please fix',
+            path: 'src/app.ts',
+            line: 12,
+            baseSha: 'base',
+            startSha: 'start',
+            headSha: 'head'
+          }
+        }
+      },
+      {
+        key: 'resolveMRDiscussion',
+        invoke: (gl) =>
+          gl.resolveMRDiscussion({
+            repoPath,
+            iid: 8,
+            discussionId: 'discussion-1',
+            resolved: true
+          }),
+        expectedMethod: 'gitlab.resolveMRDiscussion',
+        expectedParams: {
+          repoPath,
+          repo: repoPath,
+          iid: 8,
+          discussionId: 'discussion-1',
+          resolved: true
+        }
+      },
+      {
+        key: 'jobTrace',
+        invoke: (gl) => gl.jobTrace({ repoPath, jobId: 99 }),
+        expectedMethod: 'gitlab.jobTrace',
+        expectedParams: { repoPath, repo: repoPath, jobId: 99 }
+      },
+      {
+        key: 'retryJob',
+        invoke: (gl) => gl.retryJob({ repoPath, jobId: 99 }),
+        expectedMethod: 'gitlab.retryJob',
+        expectedParams: { repoPath, repo: repoPath, jobId: 99 }
       },
       {
         key: 'workItemByPath',

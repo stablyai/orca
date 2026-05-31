@@ -1,10 +1,6 @@
-/**
- * Step views for AddRepoDialog: Clone, Remote, and Setup.
- *
- * Why extracted: keeps AddRepoDialog.tsx under the 400-line oxlint limit
- * by moving the presentational JSX for each wizard step into separate components
- * while the parent retains all state and handlers.
- */
+/* eslint-disable max-lines -- Why: AddRepoDialog step views are already split from the parent,
+   and keeping clone/remote/setup step props together avoids a larger wizard refactor in this
+   leak fix. */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Folder, FolderOpen, Settings } from 'lucide-react'
@@ -14,18 +10,28 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RemoteFileBrowser } from './RemoteFileBrowser'
 import { SshTargetRow } from './SshTargetRow'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { Repo } from '../../../../shared/types'
+import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
+import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-repo-telemetry'
 
 // ── Remote project hook ─────────────────────────────────────────────
 
 export function useRemoteRepo(
-  fetchWorktrees: (repoId: string) => Promise<void>,
-  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'setup') => void,
+  fetchWorktrees: (repoId: string) => Promise<unknown>,
+  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup') => void,
   setAddedRepo: (repo: Repo | null) => void,
   closeModal: () => void,
-  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void
+  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void,
+  scanNestedRepos?: (path: string, connectionId?: string) => Promise<NestedRepoScanResult | null>,
+  showNestedRepoReview?: (
+    scan: NestedRepoScanResult,
+    selectedPath: string,
+    connectionId: string,
+    attemptId: string
+  ) => void,
+  onNestedScanResult?: (scan: NestedRepoScanResult | null, attemptId: string) => void
 ) {
   const [sshTargets, setSshTargets] = useState<(SshTarget & { state?: SshConnectionState })[]>([])
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
@@ -33,6 +39,7 @@ export function useRemoteRepo(
   const [remoteError, setRemoteError] = useState<string | null>(null)
   const [isAddingRemote, setIsAddingRemote] = useState(false)
   const remoteGenRef = useRef(0)
+  const mountedRef = useMountedRef()
 
   const resetRemoteState = useCallback(() => {
     remoteGenRef.current++
@@ -101,12 +108,23 @@ export function useRemoteRepo(
       return
     }
 
+    const trimmedRemotePath = remotePath.trim()
     setIsAddingRemote(true)
     setRemoteError(null)
     try {
+      const attemptId = createNestedRepoTelemetryAttemptId()
+      const scan = await scanNestedRepos?.(trimmedRemotePath, selectedTargetId)
+      if (!mountedRef.current) {
+        return
+      }
+      onNestedScanResult?.(scan ?? null, attemptId)
+      if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+        showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId, attemptId)
+        return
+      }
       const result = await window.api.repos.addRemote({
         connectionId: selectedTargetId,
-        remotePath: remotePath.trim()
+        remotePath: trimmedRemotePath
       })
       if ('error' in result) {
         throw new Error(result.error)
@@ -126,10 +144,16 @@ export function useRemoteRepo(
         useAppStore.setState({ repos: updated })
       }
 
+      if (!mountedRef.current) {
+        return
+      }
       toast.success('Remote project added', { description: repo.displayName })
       setAddedRepo(repo)
       setExistingWorkspaceSource?.('ssh_remote_path')
       await fetchWorktrees(repo.id)
+      if (!mountedRef.current) {
+        return
+      }
       setStep('setup')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -139,19 +163,27 @@ export function useRemoteRepo(
         // silently adding as a folder.
         closeModal()
         useAppStore.getState().openModal('confirm-non-git-folder', {
-          folderPath: remotePath.trim(),
+          folderPath: trimmedRemotePath,
           connectionId: selectedTargetId
         })
         return
       }
-      setRemoteError(message)
+      if (mountedRef.current) {
+        setRemoteError(message)
+      }
     } finally {
-      setIsAddingRemote(false)
+      if (mountedRef.current) {
+        setIsAddingRemote(false)
+      }
     }
   }, [
     selectedTargetId,
     remotePath,
+    scanNestedRepos,
+    showNestedRepoReview,
+    onNestedScanResult,
     fetchWorktrees,
+    mountedRef,
     setStep,
     setAddedRepo,
     closeModal,

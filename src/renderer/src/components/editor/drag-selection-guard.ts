@@ -77,6 +77,7 @@ export const DragSelectionGuard = Extension.create({
           const doc = editorView.dom.ownerDocument
 
           const originalOnSelectionChange: () => void = observer.onSelectionChange
+          let mouseUpFrameId: number | null = null
 
           // Remove the listener registered by ProseMirror's DOMObserver constructor
           doc.removeEventListener('selectionchange', originalOnSelectionChange)
@@ -110,7 +111,11 @@ export const DragSelectionGuard = Extension.create({
               return
             }
             suppressedDuringDrag = false
-            requestAnimationFrame(() => {
+            if (mouseUpFrameId !== null) {
+              cancelAnimationFrame(mouseUpFrameId)
+            }
+            mouseUpFrameId = requestAnimationFrame(() => {
+              mouseUpFrameId = null
               // Why: if the plugin was destroyed between mouseup and this
               // rAF callback, viewRef is null — bail out to avoid a
               // TypeError on viewRef.domSelectionRange().
@@ -172,6 +177,10 @@ export const DragSelectionGuard = Extension.create({
 
           return {
             destroy() {
+              if (mouseUpFrameId !== null) {
+                cancelAnimationFrame(mouseUpFrameId)
+                mouseUpFrameId = null
+              }
               doc.removeEventListener('mouseup', handleMouseUp)
               doc.removeEventListener('selectionchange', patchedOnSelectionChange)
               observer.onSelectionChange = originalOnSelectionChange

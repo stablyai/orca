@@ -61,13 +61,33 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('shows a repo with the CLI-compatible response shape', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      showRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/projects/orca',
+        kind: 'git'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('repo.show', { repo: 'repo-1' }))
+
+    expect(runtime.showRepo).toHaveBeenCalledWith('repo-1')
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', path: '/srv/projects/orca' } }
+    })
+  })
+
   it('lists sparse checkout presets for a repo', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       listSparsePresets: vi.fn().mockResolvedValue([
         {
           id: 'preset-1',
-          repoId: 'repo-1',
+          projectId: 'repo-1',
           name: 'Frontend',
           directories: ['src/renderer'],
           createdAt: 1,
@@ -93,7 +113,7 @@ describe('repo RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       saveSparsePreset: vi.fn().mockResolvedValue({
         id: 'preset-1',
-        repoId: 'repo-1',
+        projectId: 'repo-1',
         name: 'Frontend',
         directories: ['src/renderer'],
         createdAt: 1,
@@ -203,6 +223,101 @@ describe('repo RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: { repo: { id: 'repo-1', issueSourcePreference: 'origin' } }
+    })
+  })
+
+  it('routes project group mutations to the runtime server', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listProjectGroups: vi.fn().mockReturnValue([group]),
+      createProjectGroup: vi.fn().mockResolvedValue(group),
+      updateProjectGroup: vi.fn().mockResolvedValue({ ...group, name: 'Core' }),
+      deleteProjectGroup: vi.fn().mockResolvedValue({ deleted: true }),
+      moveProjectToGroup: vi.fn().mockResolvedValue({ id: 'repo-1', projectGroupId: group.id })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    await dispatcher.dispatch(makeRequest('projectGroup.list'))
+    await dispatcher.dispatch(
+      makeRequest('projectGroup.create', {
+        name: 'Platform',
+        parentPath: '/srv/platform',
+        createdFrom: 'folder-scan'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('projectGroup.update', {
+        groupId: group.id,
+        updates: { name: 'Core', isCollapsed: true }
+      })
+    )
+    await dispatcher.dispatch(makeRequest('projectGroup.delete', { groupId: group.id }))
+    const moveResponse = await dispatcher.dispatch(
+      makeRequest('projectGroup.moveProject', {
+        repo: 'repo-1',
+        groupId: group.id,
+        order: 2
+      })
+    )
+
+    expect(runtime.listProjectGroups).toHaveBeenCalled()
+    expect(runtime.createProjectGroup).toHaveBeenCalledWith({
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      createdFrom: 'folder-scan'
+    })
+    expect(runtime.updateProjectGroup).toHaveBeenCalledWith(group.id, {
+      name: 'Core',
+      isCollapsed: true
+    })
+    expect(runtime.deleteProjectGroup).toHaveBeenCalledWith(group.id)
+    expect(runtime.moveProjectToGroup).toHaveBeenCalledWith('repo-1', group.id, 2)
+    expect(moveResponse).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', projectGroupId: group.id } }
+    })
+  })
+
+  it('allows separate nested-repo imports without a group name', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      importNestedRepos: vi.fn().mockResolvedValue({
+        repos: [{ path: '/srv/platform/api', projectId: 'repo-1', status: 'imported' }],
+        importedCount: 1,
+        alreadyKnownCount: 0,
+        failedCount: 0
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('projectGroup.importNested', {
+        parentPath: '/srv/platform',
+        projectPaths: ['/srv/platform/api'],
+        mode: 'separate'
+      })
+    )
+
+    expect(runtime.importNestedRepos).toHaveBeenCalledWith({
+      parentPath: '/srv/platform',
+      groupName: '',
+      projectPaths: ['/srv/platform/api'],
+      mode: 'separate'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { importedCount: 1, failedCount: 0 }
     })
   })
 })

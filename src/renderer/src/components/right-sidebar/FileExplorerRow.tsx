@@ -1,5 +1,6 @@
-/* eslint-disable max-lines -- File Explorer rows own dense context-menu and drag/drop interactions. */
-import React, { useCallback, useEffect, useRef } from 'react'
+/* eslint-disable max-lines -- Why: the row owns dense file-tree rendering plus its context menu, drag target, and inline-input sibling contract. */
+import React, { useCallback, useRef } from 'react'
+import { basename } from '@/lib/path'
 import {
   ChevronRight,
   CircleSlash,
@@ -14,6 +15,7 @@ import {
   FolderPlus,
   Globe,
   ListCollapse,
+  Link,
   Loader2,
   Pencil,
   Search,
@@ -34,7 +36,11 @@ import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { openFileInBrowserTab } from '@/lib/file-preview'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import {
+  encodeWorkspaceFilePaths,
+  WORKSPACE_FILE_PATH_MIME,
+  WORKSPACE_FILE_PATHS_MIME
+} from '@/lib/workspace-file-drag'
 import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
 import type { TreeNode } from './file-explorer-types'
@@ -90,44 +96,84 @@ export function InlineInputRow({
   // has a chance to type. During the grace window we re-focus on blur instead
   // of auto-submitting, which would dismiss the empty input.
   const focusSettled = useRef(false)
+  const focusFrame = useRef<number | null>(null)
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const refocusFrame = useRef<number | null>(null)
+  const inlineInputKey = [
+    inlineInput.type,
+    inlineInput.parentPath,
+    inlineInput.depth,
+    inlineInput.existingPath ?? '',
+    inlineInput.existingName ?? ''
+  ].join('\0')
 
-  useEffect(() => {
-    submitted.current = false
-    focusSettled.current = false
+  const cancelRefocusFrame = useCallback((): void => {
+    if (refocusFrame.current !== null) {
+      cancelAnimationFrame(refocusFrame.current)
+      refocusFrame.current = null
+    }
+  }, [])
 
-    // Schedule focus after any pending focus-restore from menu close
-    const raf = requestAnimationFrame(() => {
-      const el = inputRef.current
+  const scheduleInputRefocus = useCallback((): void => {
+    cancelRefocusFrame()
+    refocusFrame.current = requestAnimationFrame(() => {
+      refocusFrame.current = null
+      inputRef.current?.focus()
+    })
+  }, [cancelRefocusFrame])
+
+  const clearInlineInputTimers = useCallback(() => {
+    if (focusFrame.current !== null) {
+      cancelAnimationFrame(focusFrame.current)
+      focusFrame.current = null
+    }
+    cancelRefocusFrame()
+    if (blurTimeout.current) {
+      clearTimeout(blurTimeout.current)
+      blurTimeout.current = null
+    }
+    if (settleTimer.current) {
+      clearTimeout(settleTimer.current)
+      settleTimer.current = null
+    }
+  }, [cancelRefocusFrame])
+
+  const setInputRef = useCallback(
+    (el: HTMLInputElement | null): void => {
+      inputRef.current = el
+      clearInlineInputTimers()
       if (!el) {
         return
       }
-      el.focus()
-      if (inlineInput.type === 'rename' && inlineInput.existingName) {
-        const dotIndex = inlineInput.existingName.lastIndexOf('.')
-        if (dotIndex > 0) {
-          el.setSelectionRange(0, dotIndex)
-        } else {
-          el.select()
+
+      submitted.current = false
+      focusSettled.current = false
+
+      // Schedule focus after any pending focus-restore from menu close
+      focusFrame.current = requestAnimationFrame(() => {
+        focusFrame.current = null
+        if (inputRef.current !== el) {
+          return
         }
-      }
-      // Allow enough time for the menu close focus management to finish
-      // before treating blur events as intentional user actions.
-      settleTimer.current = setTimeout(() => {
-        settleTimer.current = null
-        focusSettled.current = true
-      }, 200)
-    })
-    return () => {
-      cancelAnimationFrame(raf)
-      if (blurTimeout.current) {
-        clearTimeout(blurTimeout.current)
-      }
-      if (settleTimer.current) {
-        clearTimeout(settleTimer.current)
-      }
-    }
-  }, [inlineInput])
+        el.focus()
+        if (inlineInput.type === 'rename' && inlineInput.existingName) {
+          const dotIndex = inlineInput.existingName.lastIndexOf('.')
+          if (dotIndex > 0) {
+            el.setSelectionRange(0, dotIndex)
+          } else {
+            el.select()
+          }
+        }
+        // Allow enough time for the menu close focus management to finish
+        // before treating blur events as intentional user actions.
+        settleTimer.current = setTimeout(() => {
+          settleTimer.current = null
+          focusSettled.current = true
+        }, 200)
+      })
+    },
+    [clearInlineInputTimers, inlineInput.existingName, inlineInput.type]
+  )
 
   const clearBlurTimeout = useCallback(() => {
     if (blurTimeout.current) {
@@ -160,7 +206,8 @@ export function InlineInputRow({
         <File className="size-3 shrink-0 text-muted-foreground" />
       )}
       <input
-        ref={inputRef}
+        key={inlineInputKey}
+        ref={setInputRef}
         className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
         defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
         onKeyDown={(e) => {
@@ -184,14 +231,14 @@ export function InlineInputRow({
             (e.relatedTarget.closest('[data-slot="context-menu-trigger"]') ||
               e.relatedTarget.closest('[data-slot="dropdown-menu-trigger"]'))
           ) {
-            requestAnimationFrame(() => inputRef.current?.focus())
+            scheduleInputRefocus()
             return
           }
           // During the grace period after mount, menu close focus management
           // may shift focus away (often relatedTarget is null). Re-focus
           // instead of dismissing the still-empty input.
           if (!focusSettled.current) {
-            requestAnimationFrame(() => inputRef.current?.focus())
+            scheduleInputRefocus()
             return
           }
           const value = e.currentTarget.value
@@ -213,6 +260,7 @@ type FileExplorerRowProps = {
   isLoading: boolean
   isSelected: boolean
   isFlashing: boolean
+  selectedPaths: Set<string>
   nodeStatus: GitFileStatus | null
   statusColor: string | null
   isIgnored: boolean
@@ -227,6 +275,8 @@ type FileExplorerRowProps = {
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
+  onAddFolderAsProject: () => void
+  canAddAsProject: boolean
   onRequestDelete: () => void
   onCollapseFolderSubtree: () => void
   onFindInFolder: () => void
@@ -252,6 +302,7 @@ export function FileExplorerRow({
   isLoading,
   isSelected,
   isFlashing,
+  selectedPaths,
   nodeStatus,
   statusColor,
   isIgnored,
@@ -266,6 +317,8 @@ export function FileExplorerRow({
   onStartNew,
   onStartRename,
   onDuplicate,
+  onAddFolderAsProject,
+  canAddAsProject,
   onRequestDelete,
   onCollapseFolderSubtree,
   onFindInFolder,
@@ -283,17 +336,18 @@ export function FileExplorerRow({
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
-  const { handleDragOver, handleDragEnter, handleDragLeave, handleDrop } = useFileExplorerRowDrag({
-    rowDropDir,
-    isDirectory: node.isDirectory,
-    nodePath: node.path,
-    isExpanded,
-    onDragTargetChange,
-    onDragExpandDir,
-    onNativeDragTargetChange,
-    onNativeDragExpandDir,
-    onMoveDrop
-  })
+  const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
+    useFileExplorerRowDrag({
+      rowDropDir,
+      isDirectory: node.isDirectory,
+      nodePath: node.path,
+      isExpanded,
+      onDragTargetChange,
+      onDragExpandDir,
+      onNativeDragTargetChange,
+      onNativeDragExpandDir,
+      onMoveDrop
+    })
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return
@@ -314,20 +368,71 @@ export function FileExplorerRow({
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
           style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+          ref={setRowDragNode}
           data-native-file-drop-dir={rowDropDir}
           draggable
           onDragStart={(event) => {
+            const paths =
+              selectedPaths.has(node.path) && selectedPaths.size > 1
+                ? [...selectedPaths]
+                : [node.path]
             event.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, node.path)
-            // Allow both file explorer moving and copying to terminal
+            if (paths.length > 1) {
+              event.dataTransfer.setData(WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths(paths))
+            }
             event.dataTransfer.effectAllowed = 'copyMove'
             onDragSourceChange(node.path)
+
+            if (paths.length > 1) {
+              const MAX_SHOWN = 5
+              const btn = event.currentTarget
+              const rowW = btn.getBoundingClientRect().width
+
+              // Why: drag images are detached DOM nodes, so inline the same
+              // file glyph the real row renders.
+              const FILE_ICON =
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><polyline points="14 2 14 8 20 8"/></svg>'
+
+              const makeRow = (label: string, faded = false): HTMLDivElement => {
+                const row = document.createElement('div')
+                row.style.cssText = `display:flex;align-items:center;gap:4px;height:26px;padding:4px 8px;width:${rowW}px;box-sizing:border-box;font-size:12px;border-radius:2px;background:var(--accent);color:var(--accent-foreground);${faded ? 'opacity:0.6;' : ''}`
+                const spacer = document.createElement('span')
+                spacer.style.cssText = 'width:12px;height:12px;flex-shrink:0;'
+                row.appendChild(spacer)
+                const icon = document.createElement('span')
+                icon.style.cssText =
+                  'width:12px;height:12px;flex-shrink:0;display:flex;align-items:center;color:var(--muted-foreground);'
+                icon.innerHTML = FILE_ICON
+                row.appendChild(icon)
+                const name = document.createElement('span')
+                name.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+                name.textContent = label
+                row.appendChild(name)
+                return row
+              }
+
+              const ghost = document.createElement('div')
+              ghost.style.cssText =
+                'position:fixed;top:-9999px;left:-9999px;pointer-events:none;display:flex;flex-direction:column;gap:1px;'
+
+              for (const p of paths.slice(0, MAX_SHOWN)) {
+                ghost.appendChild(makeRow(basename(p)))
+              }
+              if (paths.length > MAX_SHOWN) {
+                ghost.appendChild(makeRow(`+${paths.length - MAX_SHOWN} more`, true))
+              }
+
+              document.body.appendChild(ghost)
+              event.dataTransfer.setDragImage(ghost, 12, 12)
+              setTimeout(() => document.body.removeChild(ghost), 0)
+            }
           }}
           onDragEnd={() => onDragSourceChange(null)}
           onDragOver={handleDragOver}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={onClick}
+          onClick={(e) => onClick(e)}
           onDoubleClick={onDoubleClick}
           onContextMenu={onContextMenuSelect}
         >
@@ -350,7 +455,11 @@ export function FileExplorerRow({
           ) : (
             <>
               <span className="size-3 shrink-0" />
-              <FileIcon className="size-3 shrink-0 text-muted-foreground" />
+              {node.isSymlink ? (
+                <Link className="size-3 shrink-0 text-muted-foreground" />
+              ) : (
+                <FileIcon className="size-3 shrink-0 text-muted-foreground" />
+              )}
             </>
           )}
           <span
@@ -425,6 +534,12 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />
             Duplicate
+          </ContextMenuItem>
+        )}
+        {canAddAsProject && (
+          <ContextMenuItem onSelect={onAddFolderAsProject}>
+            <FolderPlus />
+            Add as Project...
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && (

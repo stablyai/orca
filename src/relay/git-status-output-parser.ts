@@ -74,11 +74,10 @@ export function parseStatusOutput(stdout: string): {
 
       if (line.startsWith('2 ')) {
         // Why: porcelain v2 type-2 format is `2 XY sub mH mI mW hH hI Xscore path\torigPath`.
-        // The new path is the last space-delimited token before the tab; origPath follows the tab.
+        // The new path starts after 9 fixed fields and can contain spaces; origPath follows the tab.
         const tabParts = line.split('\t')
-        const spaceParts = tabParts[0].split(' ')
-        const filePath = spaceParts.at(-1)!
-        const oldPath = tabParts[1]
+        const filePath = tabParts[0].split(' ').slice(9).join(' ')
+        const oldPath = tabParts.slice(1).join('\t')
         if (indexStatus !== '.') {
           entries.push({
             path: filePath,

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 
@@ -50,17 +50,39 @@ function compareVersionDesc(left: string, right: string): number {
   return right.localeCompare(left)
 }
 
-function findFirstExecutable(directories: string[], executableNames: string[]): string | null {
+function findFirstExecutable(
+  platform: NodeJS.Platform,
+  directories: string[],
+  executableNames: string[]
+): string | null {
   for (const directory of directories) {
     for (const executableName of executableNames) {
       const candidate = join(directory, executableName)
-      if (existsSync(candidate)) {
+      if (isRunnableCommand(platform, candidate)) {
         return candidate
       }
     }
   }
 
   return null
+}
+
+function isRunnableCommand(platform: NodeJS.Platform, candidate: string): boolean {
+  try {
+    const stats = statSync(candidate)
+    if (!stats.isFile()) {
+      return false
+    }
+    if (platform === 'win32') {
+      return true
+    }
+    // Why: GUI fallback probing should skip placeholders/directories so spawn
+    // can continue to a runnable CLI instead of failing later with EACCES/EISDIR.
+    accessSync(candidate, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function getVersionManagerDirectories(
@@ -91,7 +113,7 @@ function getVersionManagerDirectories(
       .sort(compareVersionDesc)
       .map((entry) => join(nvmVersionsDir, entry, 'bin'))
 
-    const firstNvmMatch = findFirstExecutable(nvmVersionDirectories, executableNames)
+    const firstNvmMatch = findFirstExecutable(platform, nvmVersionDirectories, executableNames)
     if (firstNvmMatch) {
       directories.unshift(dirname(firstNvmMatch))
     }
@@ -131,13 +153,14 @@ export function resolveCliCommand(
   const platform = options.platform ?? process.platform
   const executableNames = getExecutableNames(platform, commandName)
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
-  const pathCandidate = findFirstExecutable(splitPath(pathEnv), executableNames)
+  const pathCandidate = findFirstExecutable(platform, splitPath(pathEnv), executableNames)
   if (pathCandidate) {
     return pathCandidate
   }
 
   const homePath = options.homePath ?? homedir()
   const versionManagerCandidate = findFirstExecutable(
+    platform,
     getVersionManagerDirectories(platform, homePath, executableNames),
     executableNames
   )

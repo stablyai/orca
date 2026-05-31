@@ -228,21 +228,59 @@ export async function assertLoadedThirdEmptyOrderedListItem(page: Page): Promise
 async function selectionIsInsideThirdEmptyOrderedListItem(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const editor = document.querySelector('.rich-markdown-editor')
-    const thirdItem = editor?.querySelectorAll('ol > li')[2]
-    const selection = window.getSelection()
-    const anchorNode = selection?.anchorNode ?? null
-    if (!thirdItem || !anchorNode || !selection?.isCollapsed) {
+    const thirdItem = editor?.querySelectorAll('ol > li')[2] as
+      | (Element & {
+          pmViewDesc?: {
+            node?: { type?: { name?: string } }
+          }
+        })
+      | undefined
+    const paragraph = thirdItem?.querySelector('p') as
+      | (Element & {
+          pmViewDesc?: {
+            posAtStart?: number
+            posAtEnd?: number
+          }
+        })
+      | null
+    const tiptapEditor = (
+      editor as
+        | (Element & {
+            editor?: {
+              state?: {
+                selection?: {
+                  empty?: boolean
+                  from?: number
+                  to?: number
+                }
+              }
+            }
+          })
+        | null
+    )?.editor
+    const selection = tiptapEditor?.state?.selection
+    const selectionFrom = selection?.from
+    const selectionTo = selection?.to
+    const paragraphStart = paragraph?.pmViewDesc?.posAtStart
+    const paragraphEnd = paragraph?.pmViewDesc?.posAtEnd
+
+    if (
+      !thirdItem ||
+      !paragraph ||
+      !selection?.empty ||
+      typeof selectionFrom !== 'number' ||
+      typeof selectionTo !== 'number' ||
+      typeof paragraphStart !== 'number' ||
+      typeof paragraphEnd !== 'number'
+    ) {
       return false
     }
 
-    const prosemirrorNodeName = (
-      thirdItem as Element & { pmViewDesc?: { node?: { type?: { name?: string } } } }
-    ).pmViewDesc?.node?.type?.name
-    const anchorElement =
-      anchorNode.nodeType === Node.ELEMENT_NODE ? anchorNode : anchorNode.parentElement
     return (
-      prosemirrorNodeName === 'listItem' &&
-      Boolean(anchorElement && thirdItem.contains(anchorElement))
+      thirdItem.pmViewDesc?.node?.type?.name === 'listItem' &&
+      thirdItem.textContent?.trim() === '' &&
+      selectionFrom >= paragraphStart &&
+      selectionTo <= paragraphEnd
     )
   })
 }
@@ -253,23 +291,33 @@ export async function placeCaretInLoadedThirdEmptyItem(page: Page): Promise<void
 
   if (!(await selectionIsInsideThirdEmptyOrderedListItem(page))) {
     await page.evaluate(() => {
-      const editor = document.querySelector<HTMLElement>('.rich-markdown-editor')
+      const editor = document.querySelector('.rich-markdown-editor') as
+        | (Element & {
+            editor?: {
+              commands?: {
+                focus?: () => boolean
+                setTextSelection?: (position: number) => boolean
+              }
+            }
+          })
+        | null
       const thirdItem = editor?.querySelectorAll('ol > li')[2]
-      const paragraph = thirdItem?.querySelector('p')
-      if (!editor || !paragraph) {
+      const paragraph = thirdItem?.querySelector('p') as
+        | (Element & {
+            pmViewDesc?: {
+              posAtStart?: number
+            }
+          })
+        | null
+      const selectionPosition = paragraph?.pmViewDesc?.posAtStart
+      if (!editor?.editor?.commands || typeof selectionPosition !== 'number') {
         throw new Error('Cannot place caret in the loaded empty ordered-list item')
       }
 
-      // Why: headless Electron can click an empty paragraph without producing a
-      // stable caret; force the same collapsed DOM selection before pressing Enter.
-      const range = document.createRange()
-      range.setStart(paragraph, 0)
-      range.collapse(true)
-      const selection = window.getSelection()
-      selection?.removeAllRanges()
-      selection?.addRange(range)
-      editor.focus()
-      document.dispatchEvent(new Event('selectionchange'))
+      // Why: headless Electron can click an empty paragraph without committing
+      // ProseMirror's state selection before Enter; set the same caret explicitly.
+      editor.editor.commands.setTextSelection?.(selectionPosition)
+      editor.editor.commands.focus?.()
     })
   }
 

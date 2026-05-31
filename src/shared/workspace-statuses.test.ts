@@ -5,7 +5,9 @@ import {
   WORKSPACE_BOARD_COLUMN_WIDTH_MIN,
   clampWorkspaceBoardColumnWidth,
   cloneDefaultWorkspaceStatuses,
+  fitWorkspaceBoardColumnWidth,
   normalizePersistedWorkspaceStatuses,
+  normalizeWorkspaceBoardColumnLayout,
   normalizeWorkspaceStatuses
 } from './workspace-statuses'
 
@@ -248,5 +250,35 @@ describe('workspace status visuals', () => {
     expect(clampWorkspaceBoardColumnWidth(100)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MIN)
     expect(clampWorkspaceBoardColumnWidth(321.6)).toBe(322)
     expect(clampWorkspaceBoardColumnWidth(900)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MAX)
+  })
+
+  it('defaults workspace board column layout to full width', () => {
+    expect(normalizeWorkspaceBoardColumnLayout(undefined)).toBe('full')
+    expect(normalizeWorkspaceBoardColumnLayout('fit')).toBe('fit')
+    expect(normalizeWorkspaceBoardColumnLayout('compact')).toBe('full')
+  })
+
+  it('fits workspace board columns inside the visible panel without exceeding saved width', () => {
+    expect(
+      fitWorkspaceBoardColumnWidth({
+        containerWidth: 960,
+        columnCount: 4,
+        capWidth: 308
+      })
+    ).toBe(231)
+    expect(
+      fitWorkspaceBoardColumnWidth({
+        containerWidth: 1600,
+        columnCount: 4,
+        capWidth: 308
+      })
+    ).toBe(308)
+    expect(
+      fitWorkspaceBoardColumnWidth({
+        containerWidth: 100,
+        columnCount: 4,
+        capWidth: 308
+      })
+    ).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MIN)
   })
 })

@@ -17,6 +17,21 @@ function renderDotClassNames(status: Status): string[] {
 }
 
 describe('StatusIndicator', () => {
+  it('renders working as a yellow spinner', () => {
+    const classNames = renderDotClassNames('working')
+
+    expect(classNames).toContain('border-yellow-500')
+    expect(classNames).toContain('border-t-transparent')
+    expect(classNames).toContain('animate-spin')
+  })
+
+  it('renders permission as an amber attention dot', () => {
+    const classNames = renderDotClassNames('permission')
+
+    expect(classNames).toContain('bg-amber-500')
+    expect(classNames).not.toContain('bg-red-500')
+  })
+
   it('renders active as full emerald dot', () => {
     const classNames = renderDotClassNames('active')
 

@@ -92,10 +92,16 @@ export function OpenCodeUsagePane(): React.JSX.Element {
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
   const setOpenCodeUsageScope = useAppStore((state) => state.setOpenCodeUsageScope)
   const setOpenCodeUsageRange = useAppStore((state) => state.setOpenCodeUsageRange)
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useEffect(() => {
     void fetchOpenCodeUsage()
   }, [fetchOpenCodeUsage])
+
+  const handleSetEnabled = (enabled: boolean): void => {
+    recordFeatureInteraction('usage-tracking')
+    void setOpenCodeUsageEnabled(enabled)
+  }
 
   if (!scanState?.enabled) {
     return (
@@ -112,7 +118,7 @@ export function OpenCodeUsagePane(): React.JSX.Element {
             role="switch"
             aria-checked={false}
             aria-label="Enable OpenCode usage analytics"
-            onClick={() => void setOpenCodeUsageEnabled(true)}
+            onClick={() => handleSetEnabled(true)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-muted-foreground/30 transition-colors"
           >
             <span className="pointer-events-none block size-3.5 translate-x-0.5 rounded-full bg-background shadow-sm transition-transform" />
@@ -209,7 +215,7 @@ export function OpenCodeUsagePane(): React.JSX.Element {
             role="switch"
             aria-checked={true}
             aria-label="Enable OpenCode usage analytics"
-            onClick={() => void setOpenCodeUsageEnabled(false)}
+            onClick={() => handleSetEnabled(false)}
             className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-foreground transition-colors"
           >
             <span className="pointer-events-none block size-3.5 translate-x-4 rounded-full bg-background shadow-sm transition-transform" />

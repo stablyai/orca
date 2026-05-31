@@ -6,9 +6,12 @@ import type {
   BrowserSessionProfile,
   BrowserSessionProfileSource,
   GitWorktreeInfo,
+  RemoveWorktreeResult,
   Repo,
   TabGroupLayoutNode,
+  TerminalColorOverrides,
   TerminalLayoutSnapshot,
+  TuiAgent,
   Worktree,
   WorktreeLineage,
   WorktreeLineageWarning
@@ -45,6 +48,7 @@ export type RuntimeStatus = {
   runtimeProtocolVersion?: number
   minCompatibleRuntimeClientVersion?: number
   capabilities?: RuntimeCapability[]
+  hostPlatform?: NodeJS.Platform
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for mobile builds
   // that still read these names; new desktop/CLI code uses the fields above.
   protocolVersion?: number
@@ -104,9 +108,16 @@ export type RuntimeMobileSessionTerminalTab = {
   parentTabId: string
   leafId: string
   ptyId?: string | null
+  terminalTheme?: RuntimeMobileTerminalTheme
   agentStatus?: AgentStatusEntry | null
+  launchAgent?: TuiAgent
   parentLayout?: TerminalLayoutSnapshot
   isActive: boolean
+}
+
+export type RuntimeMobileTerminalTheme = {
+  mode: 'dark' | 'light'
+  theme: TerminalColorOverrides
 }
 
 export type RuntimeMobileSessionMarkdownTab = {
@@ -405,6 +416,11 @@ export type RuntimeWorktreeCreateResult = {
   worktree: RuntimeWorktreeRecord
   lineage: WorktreeLineage | null
   warnings: WorktreeLineageWarning[]
+  warning?: string
+}
+
+export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {
+  removed: boolean
   warning?: string
 }
 

@@ -62,15 +62,16 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
+      latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
     steps:
       - name: Checkout ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
 
@@ -251,11 +252,24 @@ jobs:
           }
 
           highest_rc_for_base() {
-            local base="$1"
-            git tag --list "v${base}-rc.*" \
-                | sed -E "s/^v${base//./\\.}-rc\.//" \
-                | sort -n \
-                | tail -n 1 || true
+            node config/scripts/release-rc-history.mjs "$1"
+          }
+
+          tag_matches_current_ref() {
+            local tag="$1"
+            local tag_commit
+            local head_commit
+            if ! tag_commit="$(git rev-parse "${tag}^{}" 2>/dev/null)"; then
+              return 1
+            fi
+            head_commit="$(git rev-parse HEAD)"
+            if [[ "$tag_commit" == "$head_commit" ]]; then
+              return 0
+            fi
+
+            local tag_parent
+            tag_parent="$(git rev-parse "${tag_commit}^" 2>/dev/null)" || return 1
+            [[ "$tag_parent" == "$head_commit" ]]
           }
 
           release_draft_state() {
@@ -279,6 +293,10 @@ jobs:
             release_state="$(release_draft_state "$tag")"
             case "$release_state" in
               missing|true)
+                if ! tag_matches_current_ref "$tag"; then
+                  echo "::warning::Tag $tag already exists but was cut from a different release ref ($reason) - cutting the next version instead of reusing stale artifacts."
+                  return 1
+                fi
                 echo "::warning::Tag $tag already exists but has no published release ($reason) - recovering by re-dispatching the release build against the existing tag."
                 echo "recovered_tag=$tag" >>"$GITHUB_OUTPUT"
                 echo "recovered=true" >>"$GITHUB_OUTPUT"
@@ -316,10 +334,11 @@ jobs:
               else
                 existing_rc_tag="v${base}-rc.${highest_rc}"
                 # Why: a failed or GitHub-stuck run can leave the highest RC
-                # tag attached to a draft/missing release. Resume that tag so
-                # retries finish the intended release instead of piling up
-                # vX.Y.Z-rc.N+1 drafts.
-                recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
+                # tag attached to a draft/missing release. Resume only when it
+                # was cut from this ref; stale attempts advance to rc.N+1.
+                if git rev-parse "$existing_rc_tag" >/dev/null 2>&1; then
+                  recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
+                fi
                 new="${base}-rc.$((highest_rc + 1))"
               fi
               ;;
@@ -362,7 +381,7 @@ jobs:
           # over a shipped version) and needs human attention.
           if git rev-parse "v$new" >/dev/null 2>&1; then
             recover_unpublished_tag "v$new" "tag collision" || {
-              echo "::error::Tag v$new already exists and has a published release. Refusing to re-cut over a shipped version." >&2
+              echo "::error::Tag v$new already exists and cannot be recovered for this ref. Refusing to re-cut over an existing version." >&2
               exit 1
             }
           fi
@@ -388,7 +407,14 @@ jobs:
           if [[ "$EVENT_NAME" == "schedule" ]]; then
             commit_message="$commit_message [rc-slot:$SLOT]"
           fi
-          git commit -m "$commit_message"
+          if git diff --cached --quiet; then
+            # Why: a failed cut can push the version bump to main before the
+            # release is published. Re-cutting then needs a fresh taggable
+            # release commit even though package.json is already at VERSION.
+            git commit --allow-empty -m "$commit_message"
+          else
+            git commit -m "$commit_message"
+          fi
           git tag -a "v$VERSION" -m "v$VERSION"
           echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
@@ -417,7 +443,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
@@ -461,19 +487,19 @@ jobs:
         include:
           - os: macos-15
             platform: mac
-            release_command: ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
             eb_cache_path: |
               ~/Library/Caches/electron
               ~/Library/Caches/electron-builder
           - os: windows-latest
             platform: win
-            release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
+            release_command: 'node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always'
             eb_cache_path: |
               ~\AppData\Local\electron\Cache
               ~\AppData\Local\electron-builder\Cache
           - os: ubuntu-latest
             platform: linux
-            release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux --publish always
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux --publish always
             eb_cache_path: |
               ~/.cache/electron
               ~/.cache/electron-builder
@@ -485,18 +511,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
           cache: pnpm
@@ -519,7 +545,7 @@ jobs:
       # Cache the Electron binary + electron-builder tool downloads (notarytool,
       # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.
       - name: Cache electron-builder downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ matrix.eb_cache_path }}
           key: electron-builder-${{ matrix.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -531,7 +557,7 @@ jobs:
       # occasionally returns 504s that fail the whole release. Retry on
       # failure so transient network errors don't require a manual re-run.
       - name: Install dependencies
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -541,9 +567,11 @@ jobs:
       # Why: `pnpm build:release` verifies the Linux computer-use provider by
       # importing AT-SPI bindings, which are runtime package deps but are not
       # present on stock GitHub Ubuntu release runners.
+      # Why: `rpm` is needed by electron-builder's fpm backend to produce the
+      # .rpm artifact. Stock Ubuntu runners do not ship it.
       - name: Install Linux computer-use provider dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool
+        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool rpm
 
       - name: Verify macOS signing environment
         if: matrix.platform == 'mac'
@@ -622,7 +650,7 @@ jobs:
       # don't require a manual re-run.
       - name: Publish release artifacts (macOS)
         if: matrix.platform == 'mac'
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 45
           max_attempts: 3
@@ -638,7 +666,7 @@ jobs:
 
       - name: Publish release artifacts
         if: matrix.platform != 'mac'
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 30
           max_attempts: 3
@@ -698,10 +726,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
 
@@ -757,11 +785,22 @@ jobs:
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
 
+  homebrew-bump-published-rc-draft:
+    needs:
+      - cut
+    # Why: publish-complete-draft-releases can expose a recovered RC without
+    # running the build/publish jobs; still advance the RC cask to that tag.
+    if: ${{ needs.cut.outputs.latest_published_rc_tag != '' }}
+    uses: ./.github/workflows/homebrew-bump.yml
+    with:
+      tag: ${{ needs.cut.outputs.latest_published_rc_tag }}
+    secrets: inherit
+
   homebrew-bump:
     needs:
       - cut
       - publish-release
-    if: ${{ !contains(needs.cut.outputs.tag, '-rc.') }}
+    if: ${{ needs.cut.outputs.tag != '' && startsWith(needs.cut.outputs.tag, 'v') }}
     uses: ./.github/workflows/homebrew-bump.yml
     with:
       tag: ${{ needs.cut.outputs.tag }}

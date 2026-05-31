@@ -17,6 +17,8 @@ export function buildSetupScriptPromptTelemetry({
   hasSharedHooks: boolean
 }): SetupScriptPromptTelemetry {
   const base = {
+    // Why: the UI now treats package-manager suggestions as detected setup,
+    // but the analytics wire value is stable for historical funnels.
     mode: candidate ? 'import_available' : 'configure_needed',
     file_count_bucket: bucketSetupScriptCount(candidate?.files.length ?? 0),
     unsupported_field_count_bucket: bucketSetupScriptCount(
@@ -31,15 +33,18 @@ export function buildSetupScriptPromptTelemetry({
 export function buildSetupScriptPromptActionTelemetry({
   action,
   candidate,
-  hasSharedHooks
+  hasSharedHooks,
+  editedBeforeSave
 }: {
   action: SetupScriptPromptAction
   candidate: SetupScriptImportCandidate | null
   hasSharedHooks: boolean
+  editedBeforeSave?: boolean
 }): SetupScriptPromptActionTelemetry {
   return {
     ...buildSetupScriptPromptTelemetry({ candidate, hasSharedHooks }),
-    action
+    action,
+    ...(editedBeforeSave !== undefined ? { edited_before_save: editedBeforeSave } : {})
   }
 }
 

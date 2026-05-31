@@ -13,6 +13,15 @@ const WINDOWS_PATH_REGISTRY_KEYS = [
   ['HKCU\\Environment', 'Path']
 ] as const
 
+const PERSISTED_WINDOWS_PATH_CACHE_TTL_MS = 30_000
+
+let persistedWindowsPathCache:
+  | {
+      readAt: number
+      segments: string[]
+    }
+  | undefined
+
 function parseRegistryPathValue(output: string, valueName: string): string | null {
   const valuePattern = new RegExp(`^\\s*${valueName}\\s+REG_\\w+\\s+(.*)$`, 'i')
   for (const line of output.split(/\r?\n/)) {
@@ -49,6 +58,19 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
     return []
   }
 
+  const useProductionCache =
+    options.execFileSync === undefined &&
+    options.env === undefined &&
+    options.platform === undefined
+  const now = Date.now()
+  if (
+    useProductionCache &&
+    persistedWindowsPathCache &&
+    now - persistedWindowsPathCache.readAt < PERSISTED_WINDOWS_PATH_CACHE_TTL_MS
+  ) {
+    return [...persistedWindowsPathCache.segments]
+  }
+
   const run = options.execFileSync ?? execFileSync
   const env = options.env ?? process.env
   const pathDelimiter = getPathDelimiter(platform)
@@ -67,12 +89,26 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
         )
       }
     } catch {
-      // Why: stripped or remote-like Windows contexts can block registry reads;
-      // the already-inherited PATH remains the fallback in those cases.
+      // Registry access can fail in stripped test containers or remote-like
+      // Windows contexts. Existing PATH remains the fallback in those cases.
+    }
+  }
+
+  if (useProductionCache) {
+    // Why: local PTY spawn is a hot path on Windows, and each uncached read
+    // runs two synchronous `reg.exe query` subprocesses. A short TTL keeps
+    // terminal bursts cheap while still picking up newly installed CLIs soon.
+    persistedWindowsPathCache = {
+      readAt: now,
+      segments: [...segments]
     }
   }
 
   return segments
+}
+
+export function __resetPersistedWindowsPathCacheForTests(): void {
+  persistedWindowsPathCache = undefined
 }
 
 export function mergePersistedWindowsPath(
@@ -104,6 +140,7 @@ export function mergePersistedWindowsPath(
   }
 
   // Why: Windows broadcasts PATH changes to future processes, but a running
-  // Electron app keeps its old environment. Append additions without reordering.
+  // Electron app keeps its old environment. Append the persisted additions so
+  // newly installed CLIs resolve without unexpectedly reordering existing PATH.
   env[pathKey] = [...currentSegments, ...missing].join(pathDelimiter)
 }

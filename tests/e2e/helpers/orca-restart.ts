@@ -20,6 +20,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import os from 'os'
 import path from 'path'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
+import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 
 type LaunchedOrca = {
@@ -73,7 +74,7 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
 
   const launch = async (): Promise<LaunchedOrca> => {
     const app = await electron.launch({
-      args: [mainPath],
+      args: getOrcaElectronLaunchArgs(mainPath, headful),
       env: launchEnv(userDataDir, headful)
     })
     const page = await app.firstWindow({ timeout: 120_000 })

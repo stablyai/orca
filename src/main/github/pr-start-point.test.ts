@@ -141,8 +141,13 @@ describe('resolveGitHubPrStartPoint', () => {
     })
   })
 
-  it('returns a tracking ref and push target when same-repo branch fetch succeeds', async () => {
-    const gitExec = vi.fn(async () => ({ stdout: '', stderr: '' }))
+  it('returns the verified head SHA, branch override, and push target when same-repo branch fetch succeeds', async () => {
+    const gitExec = vi.fn(async (args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'abc123\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
 
     const result = await resolveGitHubPrStartPoint({
       repoPath: '/repo-root',
@@ -159,7 +164,9 @@ describe('resolveGitHubPrStartPoint', () => {
     ])
     expect(gitExec).toHaveBeenCalledWith(['rev-parse', '--verify', 'origin/feature/add-feature'])
     expect(result).toEqual({
-      baseBranch: 'origin/feature/add-feature',
+      baseBranch: 'abc123',
+      headSha: 'abc123',
+      branchNameOverride: 'feature/add-feature',
       pushTarget: { remoteName: 'origin', branchName: 'feature/add-feature' }
     })
   })

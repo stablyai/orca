@@ -16,21 +16,19 @@ export const REVIEW_STEPS: readonly ReviewStep[] = [
     id: 'notes',
     name: 'Notes',
     subtitle: 'Notes & diffs',
-    description:
-      'Review diffs, leave notes on exact changed lines, and send focused feedback back to an agent.'
+    description: 'Send focused review notes to an agent.'
   },
   {
     id: 'pr-view',
     name: 'PR checks',
     subtitle: 'PR checks & comments',
-    description: 'See PR details, CI, comments, conflicts, and merge readiness from the Checks tab.'
+    description: 'See PR status in the Checks tab.'
   },
   {
     id: 'ship',
     name: 'Ship with AI',
     subtitle: 'Ship with AI',
-    description:
-      "Use Orca's built-in AI flow to draft commit messages and pull requests from the diff, with everything editable before submission."
+    description: 'Let AI prepare commit and PR drafts for you.'
   }
 ] as const
 

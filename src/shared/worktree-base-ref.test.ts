@@ -12,6 +12,19 @@ describe('resolveWorktreeAddBaseRef', () => {
     expect(refExists).not.toHaveBeenCalled()
   })
 
+  it('leaves provider review refs unchanged', async () => {
+    const refExists = vi.fn()
+
+    await expect(resolveWorktreeAddBaseRef('refs/pull/123/head', refExists)).resolves.toBe(
+      'refs/pull/123/head'
+    )
+    await expect(
+      resolveWorktreeAddBaseRef('refs/merge-requests/456/head', refExists)
+    ).resolves.toBe('refs/merge-requests/456/head')
+
+    expect(refExists).not.toHaveBeenCalled()
+  })
+
   it('qualifies a bare local branch name', async () => {
     const refExists = vi.fn(async (ref: string) => ref === 'refs/heads/main')
 

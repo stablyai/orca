@@ -10,15 +10,13 @@ import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
+import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
+import { getZshEnvTemplate } from '../shell-templates'
 
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 const SHELL_READY_MARKER = '\\033]777;orca-shell-ready\\007'
 
 let didEnsureShellReadyWrappers = false
-
-function quotePosixSingle(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
 
 function getShellReadyWrapperRoot(): string {
   const userDataPath = process.env[ORCA_USER_DATA_PATH_ENV]
@@ -64,6 +62,10 @@ function resolveOriginalZdotdir(): string {
   )
 }
 
+function resolveOriginalZshenvSourceDir(): string {
+  return normalizeOriginalZdotdirCandidate(process.env.ZDOTDIR) || process.env.HOME || ''
+}
+
 function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
   return [
     join(root, 'zsh', '.zshenv'),
@@ -99,12 +101,13 @@ __orca_restore_attribution_path
 # Why: user startup files may set the default OpenCode config after Orca's
 # spawn env; restore the PTY-scoped overlay before the first prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-# Why: PI_CODING_AGENT_DIR is also a single-root env var users may re-export.
-# Pi and OMP each have their own Orca-owned shadow var; at most one is set
-# per PTY, so OR-restore lands the active overlay back on PI_CODING_AGENT_DIR
-# (which is what the OMP/Pi binary itself reads).
+# Why: bare shells carry both Pi and OMP shadows so a later typed OMP can
+# switch on demand. Keep Pi as the shell default unless this PTY is OMP-only.
 [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-[[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
+if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
+  export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
+fi
+${getPosixOmpShellWrapper()}
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 # Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
@@ -207,10 +210,13 @@ __orca_restore_attribution_path() {
 if [[ ! -o login ]]; then
   # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-  # Why: PI_CODING_AGENT_DIR must keep the same PTY-scoped overlay after rc files.
-  # OMP launches use ORCA_OMP_CODING_AGENT_DIR; Pi launches use the original.
+  # Why: bare shells carry both Pi and OMP shadows; keep Pi as the default and
+  # let the OMP wrapper switch to OMP only for that command.
   [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-  [[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
+  if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
+    export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
+  fi
+  ${getPosixOmpShellWrapper()}
   [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 fi
 __orca_osc133_precmd() {
@@ -244,42 +250,7 @@ function ensureShellReadyWrappers(): void {
   const zshDir = join(root, 'zsh')
   const bashDir = join(root, 'bash')
 
-  const zshEnv = `# Orca daemon zsh shell-ready wrapper
-_orca_spawn_orig_zdotdir="\${ORCA_ORIG_ZDOTDIR:-}"
-# Why: clearing ZDOTDIR lets user .zshenv use the canonical XDG idiom
-# \`export ZDOTDIR="\${ZDOTDIR:-$XDG_CONFIG_HOME/zsh}"\` to compute its
-# preferred dir; pre-setting it (even to HOME) defeats that default.
-unset ZDOTDIR
-# Why: function isolates user .zshenv \`return\` so it doesn't abort our wrapper.
-# Trade-off: top-level \`setopt LOCAL_OPTIONS\`/\`LOCAL_TRAPS\`, \`TRAPEXIT\`, and
-# bare \`local\`/\`typeset\` in user .zshenv become function-scoped; use \`typeset -g\`
-# or \`export\` to escape.
-__orca_source_user_zshenv() {
-  # Why: honor an externally-set ZDOTDIR (login manager, /etc/zshenv, parent
-  # shell) so users whose real .zshenv lives at $ZDOTDIR (not $HOME) still
-  # get PATH/aliases/exports loaded. Falls back to $HOME when no spawn-env
-  # ZDOTDIR was inherited.
-  local _orca_user_zdotdir="\${_orca_spawn_orig_zdotdir:-$HOME}"
-  [[ -f "$_orca_user_zdotdir/.zshenv" ]] && source "$_orca_user_zdotdir/.zshenv"
-}
-__orca_source_user_zshenv
-unfunction __orca_source_user_zshenv
-# Why: prefer the ZDOTDIR user .zshenv resolved (XDG case); else preserve
-# the spawn-env value (an inherited resolution from a parent Orca PTY);
-# else HOME.
-export ORCA_ORIG_ZDOTDIR="\${ZDOTDIR:-\${_orca_spawn_orig_zdotdir:-$HOME}}"
-unset _orca_spawn_orig_zdotdir
-# Why: strip trailing slashes (matches Node-side normalizer) before the
-# self-loop check, so a wrapper-shaped ZDOTDIR with one or more trailing
-# slashes still gets normalized away from .zprofile/.zshrc/.zlogin.
-while [[ "\${ORCA_ORIG_ZDOTDIR}" == */ ]]; do
-  ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR%/}"
-done
-case "\${ORCA_ORIG_ZDOTDIR}" in
-  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
-esac
-export ZDOTDIR=${quotePosixSingle(zshDir)}
-`
+  const zshEnv = getZshEnvTemplate(zshDir, 'daemon')
   const zshProfile = `# Orca daemon zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 case "\${_orca_home%/}" in
@@ -307,7 +278,10 @@ __orca_restore_attribution_path
 # Why: .zlogin is the final login startup file before the prompt is shown.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-[[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
+if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
+  export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
+fi
+${getPosixOmpShellWrapper()}
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
   __orca_prompt_mark() {
@@ -330,10 +304,25 @@ fi
     [join(bashDir, 'rcfile'), bashRc]
   ] as const
 
-  for (const [path, content] of files) {
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, content, 'utf8')
-    chmodSync(path, 0o644)
+  try {
+    for (const [path, content] of files) {
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(path, content, 'utf8')
+      chmodSync(path, 0o644)
+    }
+  } catch (error) {
+    // Why: wrapper file creation can fail due to read-only filesystems, permission
+    // issues, or disk space. Rather than crashing, log the error and continue.
+    // The shell will launch without the wrapper, which means no shell-ready marker
+    // but at least the PTY is usable.
+    const errorMessage =
+      error instanceof Error
+        ? `${error.message} (${(error as NodeJS.ErrnoException).code || 'unknown'})`
+        : String(error)
+    console.error(`[daemon/shell-ready] Failed to create wrapper files in ${root}: ${errorMessage}`)
+    console.error('[daemon/shell-ready] Shell will launch without wrapper (no shell-ready marker)')
+    // Reset the flag so next attempt will try again
+    didEnsureShellReadyWrappers = false
   }
 }
 
@@ -372,6 +361,7 @@ function getWrappedShellLaunchConfig(
       args: ['-l'],
       env: {
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
+        ORCA_ZSHENV_SOURCE_DIR: resolveOriginalZshenvSourceDir(),
         ZDOTDIR: join(root, 'zsh'),
         ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },

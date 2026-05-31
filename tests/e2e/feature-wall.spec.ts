@@ -63,7 +63,7 @@ test.describe('Feature tour modal', () => {
     await rail.getByRole('button', { name: /Browser/i }).click()
     await expect(
       orcaPage.getByText(
-        "Run your app in Orca's browser, send selected UI elements to agents, and let agents navigate, click, and verify pages."
+        "Run your app in Orca's browser, send selected UI elements to agents, and let your agents interact with your webpage."
       )
     ).toBeVisible()
     await expect(orcaPage.getByRole('heading', { name: 'Browser Use skill' })).toBeVisible()
@@ -116,11 +116,7 @@ test.describe('Feature tour modal', () => {
       .getByRole('navigation', { name: 'Workflows' })
       .getByRole('tab', { name: /Tasks/i })
       .click()
-    await expect(
-      orcaPage.getByText(
-        "See your GitHub and Linear tasks in one place, and start a workspace for each when you're ready to build."
-      )
-    ).toBeVisible()
+    await expect(orcaPage.getByText('Start work directly from GitHub or Linear.')).toBeVisible()
     await expect(orcaPage.getByText('Connect GitHub or Linear once')).toHaveCount(0)
     await expect(orcaPage.getByRole('dialog', { name: 'Get to know Orca' })).toBeVisible()
     await expect

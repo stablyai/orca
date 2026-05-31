@@ -28,6 +28,7 @@ import os from 'os'
 import path from 'path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 
 type OrcaTestFixtures = {
@@ -205,7 +206,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       mkdirSync(recordVideoDir, { recursive: true })
     }
     const app = await electron.launch({
-      args: [mainPath],
+      args: getOrcaElectronLaunchArgs(mainPath, headful),
       ...(slowMo > 0 ? { slowMo } : {}),
       ...(recordVideoDir ? { recordVideo: { dir: recordVideoDir } } : {}),
       // Why: keep NODE_ENV=development so window.__store is exposed and

@@ -38,6 +38,7 @@ import { X } from 'lucide-react'
 
 import { Button } from './ui/button'
 import { acknowledgeBanner, PRIVACY_URL, setOptIn as telemetrySetOptIn } from '../lib/telemetry'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 type FirstLaunchBannerProps = {
   onResolve: () => void
@@ -57,6 +58,7 @@ export function FirstLaunchBanner({
   // wasted IPC round-trip, but the guard also blocks a Turn-off click
   // arriving mid-flight after an acknowledge (or vice versa).
   const [inFlight, setInFlight] = useState(false)
+  const mountedRef = useMountedRef()
 
   const handleAcknowledge = async (): Promise<void> => {
     if (inFlight) {
@@ -74,13 +76,17 @@ export function FirstLaunchBanner({
     try {
       await acknowledgeBanner()
       await fetchSettings()
-      onResolve()
+      if (mountedRef.current) {
+        onResolve()
+      }
     } finally {
       // Why: if `fetchSettings` rejects (IPC error during shutdown,
       // settings file lock, etc.), `onResolve` never runs and the banner
       // stays mounted. Without resetting `inFlight`, every button stays
       // permanently disabled for the rest of the session.
-      setInFlight(false)
+      if (mountedRef.current) {
+        setInFlight(false)
+      }
     }
   }
 
@@ -97,9 +103,13 @@ export function FirstLaunchBanner({
     try {
       await telemetrySetOptIn(false)
       await fetchSettings()
-      onResolve()
+      if (mountedRef.current) {
+        onResolve()
+      }
     } finally {
-      setInFlight(false)
+      if (mountedRef.current) {
+        setInFlight(false)
+      }
     }
   }
 

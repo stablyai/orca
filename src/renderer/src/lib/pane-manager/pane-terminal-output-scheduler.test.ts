@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the scheduler tests cover one queue state machine; keeping ordering and overflow cases together makes regressions easier to audit. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 function createTerminal() {
@@ -65,7 +66,10 @@ describe('pane terminal output scheduler', () => {
       callback?.()
     })
 
-    writeTerminalOutput(terminal, '中文 PowerShell repaint\r\n', { foreground: true })
+    writeTerminalOutput(terminal, '中文 PowerShell repaint\r\n', {
+      foreground: true,
+      forceForegroundRefresh: true
+    })
 
     expect(terminal._core.refresh).toHaveBeenCalledWith(0, 23, true)
     expect(terminal.refresh).not.toHaveBeenCalled()
@@ -89,7 +93,10 @@ describe('pane terminal output scheduler', () => {
       callback?.()
     })
 
-    writeTerminalOutput(terminal, '顶部滚动中文复现\r\n', { foreground: true })
+    writeTerminalOutput(terminal, '顶部滚动中文复现\r\n', {
+      foreground: true,
+      forceForegroundRefresh: true
+    })
 
     expect(terminal._core.refresh).toHaveBeenCalledTimes(1)
     expect(scheduledFrames).toHaveLength(1)
@@ -98,6 +105,16 @@ describe('pane terminal output scheduler', () => {
 
     expect(terminal._core.refresh).toHaveBeenCalledTimes(2)
     expect(terminal._core.refresh).toHaveBeenLastCalledWith(0, 23, true)
+  })
+
+  it('skips forced viewport refresh for ordinary foreground output', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+
+    writeTerminalOutput(terminal, 'plain foreground output\r\n', { foreground: true })
+
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
+    expect(terminal.refresh).not.toHaveBeenCalled()
   })
 
   it('hides the foreground cursor until output parsing has gone quiet', async () => {
@@ -148,6 +165,29 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).toHaveBeenCalledWith('ab')
   })
 
+  it('defers throughput foreground output to the shared high-priority drain', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, 'a'.repeat(16 * 1024), {
+      foreground: true,
+      latencySensitive: false
+    })
+    writeTerminalOutput(terminal, 'b'.repeat(16 * 1024), {
+      foreground: true,
+      latencySensitive: false
+    })
+
+    expect(terminal.write).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(0)
+
+    expect(terminal.write).toHaveBeenCalledTimes(2)
+    expect(terminal.write.mock.calls.map(([data]) => data).join('')).toBe(
+      `${'a'.repeat(16 * 1024)}${'b'.repeat(16 * 1024)}`
+    )
+  })
+
   it('defers background write preparation until coalesced output drains', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
@@ -179,6 +219,23 @@ describe('pane terminal output scheduler', () => {
     expect(beforeWrite).toHaveBeenCalledTimes(1)
     expect(beforeWrite).toHaveBeenCalledWith('hidden')
     expect(terminal.write).toHaveBeenCalledWith('hidden')
+  })
+
+  it('supports bounded explicit flushes for visibility resume', async () => {
+    vi.useFakeTimers()
+    const { flushTerminalOutput, writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(16 * 1024)
+
+    for (let i = 0; i < 16; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: false })
+    }
+
+    flushTerminalOutput(terminal, { maxChars: 64 * 1024 })
+
+    expect(terminal.write).toHaveBeenCalledTimes(4)
+    vi.advanceTimersByTime(50)
+    expect(terminal.write.mock.calls.length).toBeGreaterThan(4)
   })
 
   it('limits how many background terminals begin xterm writes per drain tick', async () => {
@@ -222,6 +279,83 @@ describe('pane terminal output scheduler', () => {
     expect(terminals[0].write).toHaveBeenCalledTimes(2)
   })
 
+  it('promotes large background backlogs to high-priority drains', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(16 * 1024)
+
+    for (let i = 0; i < 64; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: false })
+    }
+
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(0)
+    expect(terminal.write).toHaveBeenCalledTimes(16)
+
+    vi.advanceTimersByTime(1)
+    expect(terminal.write).toHaveBeenCalledTimes(32)
+  })
+
+  it('caps hidden backlog memory and writes a warning instead of retaining all output', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(512 * 1024)
+
+    for (let i = 0; i < 5; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: false })
+    }
+    writeTerminalOutput(terminal, 'after-cap\r\n', { foreground: false })
+
+    vi.advanceTimersByTime(0)
+
+    const output = terminal.write.mock.calls.map(([data]) => data).join('')
+    expect(output).toContain('Orca skipped hidden terminal output')
+    expect(output).toContain('after-cap')
+    expect(output).not.toContain('x'.repeat(1024))
+  })
+
+  it('caps hidden backlog chunk count even when each chunk is tiny', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    for (let i = 0; i < 4097; i++) {
+      writeTerminalOutput(terminal, 'x', { foreground: false })
+    }
+
+    vi.advanceTimersByTime(0)
+
+    const output = terminal.write.mock.calls.map(([data]) => data).join('')
+    expect(output).toContain('Orca skipped hidden terminal output')
+    expect(output).not.toContain('x'.repeat(512))
+  })
+
+  it('requests registered recovery instead of flushing a dropped hidden backlog', async () => {
+    vi.useFakeTimers()
+    const { flushTerminalOutput, registerTerminalBacklogRecovery, writeTerminalOutput } =
+      await loadScheduler()
+    const terminal = createTerminal()
+    const requestRecovery = vi.fn(() => true)
+    const unregister = registerTerminalBacklogRecovery(terminal, requestRecovery)
+    const chunk = 'x'.repeat(512 * 1024)
+
+    try {
+      for (let i = 0; i < 5; i++) {
+        writeTerminalOutput(terminal, chunk, { foreground: false })
+      }
+
+      flushTerminalOutput(terminal)
+
+      expect(requestRecovery).toHaveBeenCalledTimes(1)
+      expect(terminal.write).not.toHaveBeenCalled()
+    } finally {
+      unregister()
+    }
+  })
+
   it('flushes queued output before foreground output on the same terminal', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
@@ -231,6 +365,47 @@ describe('pane terminal output scheduler', () => {
     writeTerminalOutput(terminal, 'new', { foreground: true })
 
     expect(terminal.write.mock.calls.map(([data]) => data)).toEqual(['old', 'new'])
+  })
+
+  it('yields instead of synchronously flushing a large hidden backlog on foreground output', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(16 * 1024)
+
+    for (let i = 0; i < 64; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: false })
+    }
+
+    writeTerminalOutput(terminal, 'visible', { foreground: true })
+
+    expect(terminal.write.mock.calls.length).toBeLessThan(64)
+    vi.advanceTimersByTime(50)
+
+    expect(terminal.write.mock.calls.length).toBeGreaterThan(0)
+  })
+
+  it('preserves byte order when foreground output is queued behind a large hidden backlog', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(16 * 1024)
+
+    for (let i = 0; i < 64; i++) {
+      writeTerminalOutput(terminal, `${String(i).padStart(2, '0')}:${chunk}`, {
+        foreground: false
+      })
+    }
+
+    writeTerminalOutput(terminal, 'visible', { foreground: true })
+    vi.runAllTimers()
+
+    const expected = `${Array.from(
+      { length: 64 },
+      (_, i) => `${String(i).padStart(2, '0')}:${chunk}`
+    ).join('')}visible`
+    expect(terminal.write.mock.calls.map(([data]) => data).join('')).toBe(expected)
+    expect(terminal.write).toHaveBeenLastCalledWith('visible', expect.any(Function))
   })
 
   it('discards queued output for disposed terminals', async () => {

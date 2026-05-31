@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/types'
+import { useMountedRef } from '../../hooks/useMountedRef'
 
 export type UseGhosttyImportReturn = {
   open: boolean
@@ -25,18 +26,25 @@ export function useGhosttyImport(
   const [loading, setLoading] = useState(false)
   const [applied, setApplied] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
+  const mountedRef = useMountedRef()
 
   async function handleClick(): Promise<void> {
     setOpen(true)
     setLoading(true)
     try {
       const result = await window.api.settings.previewGhosttyImport()
-      setPreview(result)
+      if (mountedRef.current) {
+        setPreview(result)
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      setPreview({ found: false, diff: {}, unsupportedKeys: [], error: message })
+      if (mountedRef.current) {
+        setPreview({ found: false, diff: {}, unsupportedKeys: [], error: message })
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
   }
 
@@ -61,10 +69,14 @@ export function useGhosttyImport(
       // must keep the modal in its "unapplied" state and surface the error so
       // the user doesn't see a false success.
       await updateSettings(merged)
-      setApplied(true)
+      if (mountedRef.current) {
+        setApplied(true)
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to apply settings'
-      setApplyError(message)
+      if (mountedRef.current) {
+        setApplyError(message)
+      }
     }
   }
 

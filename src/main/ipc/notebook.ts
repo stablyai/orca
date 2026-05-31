@@ -121,6 +121,7 @@ async function runPythonCandidate(
     const stderr: BoundedCapture = { text: '', bytes: 0, truncated: false }
     let settled = false
     let forceKillTimer: ReturnType<typeof setTimeout> | null = null
+    let timeout: ReturnType<typeof setTimeout> | null = null
     const child = spawn(
       candidate.command,
       [...candidate.argsPrefix, '-c', buildPythonExecutionCode(code, preamble)],
@@ -131,48 +132,66 @@ async function runPythonCandidate(
         env: process.env
       }
     )
-    const timeout = setTimeout(() => {
+    const cleanup = (options: { clearForceKillTimer: boolean }): void => {
+      if (timeout) {
+        clearTimeout(timeout)
+        timeout = null
+      }
+      if (forceKillTimer && options.clearForceKillTimer) {
+        clearTimeout(forceKillTimer)
+        forceKillTimer = null
+      }
+      child.stdout.off('data', onStdoutData)
+      child.stderr.off('data', onStderrData)
+      child.off('error', onError)
+      child.off('close', onClose)
+    }
+    const finish = (
+      result: NotebookRunResult,
+      options: { clearForceKillTimer: boolean } = { clearForceKillTimer: true }
+    ): void => {
       if (settled) {
         return
       }
       settled = true
+      cleanup(options)
+      resolve(result)
+    }
+
+    timeout = setTimeout(() => {
       forceKillTimer = terminateNotebookProcessTree(child)
-      resolve({
-        stdout: stdout.text,
-        stderr: stderr.text,
-        exitCode: null,
-        error: 'Python cell timed out.'
-      })
+      finish(
+        {
+          stdout: stdout.text,
+          stderr: stderr.text,
+          exitCode: null,
+          error: 'Python cell timed out.'
+        },
+        { clearForceKillTimer: false }
+      )
     }, PYTHON_RUN_TIMEOUT_MS)
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    const onStdoutData = (chunk: Buffer): void => {
       appendBounded(stdout, chunk)
-    })
-    child.stderr.on('data', (chunk: Buffer) => {
+    }
+    const onStderrData = (chunk: Buffer): void => {
       appendBounded(stderr, chunk)
-    })
-    child.on('error', (error) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timeout)
-      if (forceKillTimer) {
-        clearTimeout(forceKillTimer)
-      }
-      resolve({ stdout: stdout.text, stderr: stderr.text, exitCode: null, error: error.message })
-    })
-    child.on('close', (exitCode) => {
-      if (forceKillTimer) {
-        clearTimeout(forceKillTimer)
-      }
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timeout)
-      resolve({ stdout: stdout.text, stderr: stderr.text, exitCode })
-    })
+    }
+    const onError = (error: Error): void => {
+      finish({ stdout: stdout.text, stderr: stderr.text, exitCode: null, error: error.message })
+    }
+    const onClose = (exitCode: number | null): void => {
+      finish({
+        stdout: stdout.text,
+        stderr: stderr.text,
+        exitCode
+      })
+    }
+
+    child.stdout.on('data', onStdoutData)
+    child.stderr.on('data', onStderrData)
+    child.on('error', onError)
+    child.on('close', onClose)
   })
 }
 

@@ -1,7 +1,5 @@
-import { existsSync, unlinkSync } from 'fs'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import { ORCA_CLAUDE_AGENT_STATUS_SETTINGS_ENV } from '../../shared/claude-settings'
 import {
   buildWindowsAgentHookPostCommand,
   readHooksJson,
@@ -16,15 +14,29 @@ import {
 import {
   applyManagedHooks,
   CLAUDE_EVENTS,
-  getLegacyConfigPath,
+  CLAUDE_HOOK_SETTINGS,
+  getManagedScriptFileName,
+  getConfigPath,
   getManagedCommand,
   getManagedScriptPath,
-  getRemoteLegacyConfigPath,
+  getPosixManagedScriptFileName,
+  getRemoteConfigPath,
   getRemoteManagedCommand,
-  getRemoteScopedSettingsPath,
-  getScopedSettingsPath,
-  removeManagedHooks
+  removeManagedHooks,
+  type ClaudeCompatibleHookSettings
 } from './hook-settings'
+
+type ClaudeHookServiceOptions = {
+  agent: AgentHookInstallStatus['agent']
+  displayName: string
+  settings: ClaudeCompatibleHookSettings
+}
+
+const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
+  agent: 'claude',
+  displayName: 'Claude',
+  settings: CLAUDE_HOOK_SETTINGS
+}
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
@@ -76,7 +88,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
     // shell is not safe once a path contains quotes or newlines. Post the raw
     // hook payload plus metadata as form fields and let the receiver parse it.
+    // Timeout caps best-effort hook posts if the local listener stalls.
     'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude" \\',
+    '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
@@ -91,17 +105,23 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 }
 
 export class ClaudeHookService {
+  private readonly options: ClaudeHookServiceOptions
+
+  constructor(options: ClaudeHookServiceOptions = DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS) {
+    this.options = options
+  }
+
   getStatus(): AgentHookInstallStatus {
-    const configPath = getScopedSettingsPath()
-    const scriptPath = getManagedScriptPath()
+    const configPath = getConfigPath(this.options.settings)
+    const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
-        agent: 'claude',
+        agent: this.options.agent,
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: 'Could not parse Orca Claude settings file'
+        detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
 
@@ -138,85 +158,45 @@ export class ClaudeHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
-    return { agent: 'claude', state, configPath, managedHooksPresent, detail }
+    return { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
   }
 
   install(): AgentHookInstallStatus {
-    const scopedStatus = this.installScopedSettings()
-    if (scopedStatus.state === 'error') {
-      return scopedStatus
-    }
-    const legacyStatus = this.removeLegacyGlobalHooks()
-    if (legacyStatus.state === 'error') {
+    const configPath = getConfigPath(this.options.settings)
+    const scriptPath = getManagedScriptPath(this.options.settings)
+    const config = readHooksJson(configPath)
+    if (!config) {
       return {
-        ...legacyStatus,
-        managedHooksPresent: scopedStatus.managedHooksPresent,
-        detail: scopedStatus.managedHooksPresent
-          ? `Scoped Claude hooks installed, but ${legacyStatus.detail}`
-          : legacyStatus.detail
+        agent: this.options.agent,
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
-    return scopedStatus
-  }
-
-  buildPtyEnv(): Record<string, string> {
-    try {
-      const status = this.installScopedSettings()
-      if (status.state === 'error') {
-        console.warn(`[agent-hooks] Failed to prepare Claude scoped settings: ${status.detail}`)
-      }
-    } catch (error) {
-      console.warn('[agent-hooks] Failed to prepare Claude scoped settings:', error)
-    }
-    return {
-      [ORCA_CLAUDE_AGENT_STATUS_SETTINGS_ENV]: getScopedSettingsPath()
-    }
-  }
-
-  private installScopedSettings(): AgentHookInstallStatus {
-    const configPath = getScopedSettingsPath()
-    const scriptPath = getManagedScriptPath()
-    const config = readHooksJson(configPath) ?? {}
 
     const command = getManagedCommand(scriptPath)
-    const nextConfig = applyManagedHooks(config, command)
+    const nextConfig = applyManagedHooks(
+      config,
+      command,
+      getManagedScriptFileName(this.options.settings)
+    )
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
   }
 
-  private removeLegacyGlobalHooks(): AgentHookInstallStatus {
-    const configPath = getLegacyConfigPath()
-    const config = readHooksJson(configPath)
-    if (!config) {
-      return {
-        agent: 'claude',
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: 'Could not parse Claude settings.json to remove legacy global hooks'
-      }
-    }
-    const { config: nextConfig, changed } = removeManagedHooks(config)
-    if (changed) {
-      writeHooksJson(configPath, nextConfig)
-    }
-    return this.getStatus()
-  }
-
-  // Why: install Orca's scoped Claude hook settings on the remote box rather
-  // than the local Mac/Linux machine. Caller passes the user's SFTP handle
-  // from the SshConnection plus the resolved remote `$HOME` used to compute
-  // the Orca-owned settings path. POSIX-only by design — see
-  // docs/design/agent-status-over-ssh.md §3 / §6 (Windows-remote deferred).
+  // Why: install Orca's Claude hook settings on the remote box rather than the
+  // local machine. Caller passes the user's SFTP handle plus the resolved
+  // remote `$HOME`; POSIX-only by design (Windows-remote deferred).
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     // Why: remote-Windows is out of scope for v1 — we ship POSIX-shaped paths
     // and a `.sh` managed script body. The remote platform is gated by the
     // relay's capability RPC at a higher layer; we cannot detect it from
     // `process.platform` here (that's the local box).
-    const remoteConfigPath = getRemoteScopedSettingsPath(remoteHome)
-    const remoteLegacyConfigPath = getRemoteLegacyConfigPath(remoteHome)
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/claude-hook.sh`
+    const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
+    const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
     // Why: SFTP reads/writes fail far more often than local fs (network drops,
     // EACCES on remote dirs, disk full, channel closed). Wrap the entire
     // install flow in try/catch so a transient I/O failure surfaces as a
@@ -225,12 +205,21 @@ export class ClaudeHookService {
     // specifically means "file present but unparseable" — keep that branch
     // distinct so the user sees an actionable message.
     try {
-      const config = (await readHooksJsonRemote(sftp, remoteConfigPath)) ?? {}
+      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+      if (!config) {
+        return {
+          agent: this.options.agent,
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: `Could not parse remote ${this.options.displayName} settings.json`
+        }
+      }
 
       // Why: the POSIX wrapper is identical regardless of where the script
       // lands; only the path differs. Reuse the same wrapper helper.
       const command = getRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyManagedHooks(config, command, 'claude-hook.sh')
+      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
 
       // Why: write the script first, then the settings — settings.json
       // referencing a missing script body would fire `command not found` on
@@ -243,27 +232,8 @@ export class ClaudeHookService {
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
-      const legacyConfig = await readHooksJsonRemote(sftp, remoteLegacyConfigPath)
-      if (!legacyConfig) {
-        return {
-          agent: 'claude',
-          state: 'error',
-          configPath: remoteLegacyConfigPath,
-          managedHooksPresent: true,
-          detail:
-            'Scoped Claude hooks installed, but could not parse remote Claude settings.json to remove legacy global hooks'
-        }
-      }
-      const { config: nextLegacyConfig, changed } = removeManagedHooks(
-        legacyConfig,
-        'claude-hook.sh'
-      )
-      if (changed) {
-        await writeHooksJsonRemote(sftp, remoteLegacyConfigPath, nextLegacyConfig)
-      }
-
       return {
-        agent: 'claude',
+        agent: this.options.agent,
         state: 'installed',
         configPath: remoteConfigPath,
         managedHooksPresent: true,
@@ -271,7 +241,7 @@ export class ClaudeHookService {
       }
     } catch (err) {
       return {
-        agent: 'claude',
+        agent: this.options.agent,
         state: 'error',
         configPath: remoteConfigPath,
         managedHooksPresent: false,
@@ -281,13 +251,23 @@ export class ClaudeHookService {
   }
 
   remove(): AgentHookInstallStatus {
-    const scopedSettingsPath = getScopedSettingsPath()
-    if (existsSync(scopedSettingsPath)) {
-      unlinkSync(scopedSettingsPath)
+    const configPath = getConfigPath(this.options.settings)
+    const config = readHooksJson(configPath)
+    if (!config) {
+      return {
+        agent: this.options.agent,
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: `Could not parse ${this.options.displayName} settings.json`
+      }
     }
-    const legacyStatus = this.removeLegacyGlobalHooks()
-    if (legacyStatus.state === 'error') {
-      return legacyStatus
+    const { config: nextConfig, changed } = removeManagedHooks(
+      config,
+      getManagedScriptFileName(this.options.settings)
+    )
+    if (changed) {
+      writeHooksJson(configPath, nextConfig)
     }
     return this.getStatus()
   }

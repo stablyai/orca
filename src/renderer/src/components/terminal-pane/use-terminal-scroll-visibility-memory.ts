@@ -28,6 +28,8 @@ type TerminalScrollVisibilityMemory = {
   scheduleFollowOutputIfNeeded: (paneId: number) => void
 }
 
+const FOLLOW_OUTPUT_FLUSH_CHARS = 256 * 1024
+
 export function useTerminalScrollVisibilityMemory({
   managerRef,
   isVisibleRef,
@@ -38,6 +40,7 @@ export function useTerminalScrollVisibilityMemory({
   const scrollDisposablesRef = useRef<Map<number, IDisposable>>(new Map())
   const suppressScrollTrackingRef = useRef(false)
   const pendingFollowOutputPaneIdsRef = useRef<Set<number>>(new Set())
+  const followOutputFrameIdsRef = useRef<number[]>([])
 
   const captureVisibleScrollSnapshot = useCallback(
     (terminal: Terminal): VisibleScrollSnapshot => ({
@@ -107,7 +110,10 @@ export function useTerminalScrollVisibilityMemory({
         continue
       }
       const previous = visibleScrollSnapshotsRef.current.get(pane.id)
-      flushTerminalOutput(pane.terminal)
+      // Why: focus/follow can run immediately after a hidden pane becomes
+      // visible. A bounded flush is enough to observe new output without
+      // putting the whole hidden PTY backlog back on the interaction path.
+      flushTerminalOutput(pane.terminal, { maxChars: FOLLOW_OUTPUT_FLUSH_CHARS })
       const currentEpoch = getTerminalOutputEpoch(pane.terminal)
       const hasNewOutput = previous ? currentEpoch > previous.outputEpoch : currentEpoch > 0
       if (hasNewOutput) {
@@ -121,15 +127,37 @@ export function useTerminalScrollVisibilityMemory({
     return didScroll
   }, [isVisibleRef, managerRef, rememberVisibleScrollSnapshot, visibleResumeCompleteRef])
 
+  const cancelPendingFollowOutputFrames = useCallback((): void => {
+    for (const frameId of followOutputFrameIdsRef.current) {
+      cancelAnimationFrame(frameId)
+    }
+    followOutputFrameIdsRef.current = []
+  }, [])
+
   const scheduleFollowOutputIfNeeded = useCallback(
     (paneId: number): void => {
       pendingFollowOutputPaneIdsRef.current.add(paneId)
-      requestAnimationFrame(() => {
-        requestAnimationFrame(applyPendingFollowOutputRequests)
+      if (followOutputFrameIdsRef.current.length > 0) {
+        return
+      }
+      const firstFrameId = requestAnimationFrame(() => {
+        followOutputFrameIdsRef.current = followOutputFrameIdsRef.current.filter(
+          (frameId) => frameId !== firstFrameId
+        )
+        const secondFrameId = requestAnimationFrame(() => {
+          followOutputFrameIdsRef.current = followOutputFrameIdsRef.current.filter(
+            (frameId) => frameId !== secondFrameId
+          )
+          applyPendingFollowOutputRequests()
+        })
+        followOutputFrameIdsRef.current.push(secondFrameId)
       })
+      followOutputFrameIdsRef.current.push(firstFrameId)
     },
     [applyPendingFollowOutputRequests]
   )
+
+  useEffect(() => cancelPendingFollowOutputFrames, [cancelPendingFollowOutputFrames])
 
   useEffect(() => {
     const manager = managerRef.current

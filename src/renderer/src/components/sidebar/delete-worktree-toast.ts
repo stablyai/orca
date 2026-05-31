@@ -10,6 +10,14 @@ export function getDeleteWorktreeToastCopy(
   error: string
 ): DeleteWorktreeToastCopy {
   if (canForceDelete) {
+    if (error.includes('Worktree is no longer registered with Git but its directory remains.')) {
+      return {
+        title: `Failed to delete workspace ${worktreeName}`,
+        description:
+          'Git already forgot this workspace, but its directory is still on disk. Use Force Delete to remove the orphaned directory.',
+        isDestructive: false
+      }
+    }
     return {
       title: `Failed to delete workspace ${worktreeName}`,
       description: 'It has changed files. Use Force Delete to delete it anyway.',

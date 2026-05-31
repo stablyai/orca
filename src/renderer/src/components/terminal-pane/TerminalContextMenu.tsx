@@ -1,7 +1,9 @@
+import { useMemo } from 'react'
 import {
   Clipboard,
   Copy,
   Eraser,
+  GitFork,
   Maximize2,
   Minimize2,
   PanelBottomClose,
@@ -26,7 +28,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../shared/types'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
+import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { AgentIcon } from '@/lib/agent-catalog'
+import type { KeybindingOverrides } from '../../../../shared/keybindings'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -40,10 +45,12 @@ type TerminalContextMenuProps = {
   onPaste: () => void
   onSplitRight: () => void
   onSplitDown: () => void
+  keybindings: KeybindingOverrides
   canEqualizePaneSizes: boolean
   onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
+  onForkAgentSession: () => void
   repoQuickCommands: TerminalQuickCommand[]
   globalQuickCommands: TerminalQuickCommand[]
   quickCommandRepoLabel: string | null
@@ -51,6 +58,7 @@ type TerminalContextMenuProps = {
   onAddQuickCommand: () => void
   onToggleExpand: () => void
   onSetTitle: () => void
+  onCopyPaneId: () => void
 }
 
 export default function TerminalContextMenu({
@@ -65,27 +73,54 @@ export default function TerminalContextMenu({
   onPaste,
   onSplitRight,
   onSplitDown,
+  keybindings,
   canEqualizePaneSizes,
   onEqualizePaneSizes,
   onClosePane,
   onClearScreen,
+  onForkAgentSession,
   repoQuickCommands,
   globalQuickCommands,
   quickCommandRepoLabel,
   onQuickCommand,
   onAddQuickCommand,
   onToggleExpand,
-  onSetTitle
+  onSetTitle,
+  onCopyPaneId
 }: TerminalContextMenuProps): React.JSX.Element {
-  const copyShortcut = useShortcutLabel('terminal.copySelection')
-  const pasteShortcut = useShortcutLabel('terminal.paste')
-  const splitRightShortcut = useShortcutLabel('terminal.splitRight')
-  const splitDownShortcut = useShortcutLabel('terminal.splitDown')
-  const equalizeShortcut = useShortcutLabel('terminal.equalizePaneSizes')
-  const expandShortcut = useShortcutLabel('terminal.expandPane')
-  const closeShortcut = useShortcutLabel('terminal.closePane')
+  const shortcuts = useMemo(
+    () => ({
+      copy: formatShortcutLabel('terminal.copySelection', keybindings),
+      paste: formatShortcutLabel('terminal.paste', keybindings),
+      splitRight: formatShortcutLabel('terminal.splitRight', keybindings),
+      splitDown: formatShortcutLabel('terminal.splitDown', keybindings),
+      equalize: formatShortcutLabel('terminal.equalizePaneSizes', keybindings),
+      expand: formatShortcutLabel('terminal.expandPane', keybindings),
+      close: formatShortcutLabel('terminal.closePane', keybindings)
+    }),
+    [keybindings]
+  )
   const hasQuickCommands = repoQuickCommands.length > 0 || globalQuickCommands.length > 0
-  const showEqualizeShortcut = equalizeShortcut !== 'Unassigned'
+  const showEqualizeShortcut = shortcuts.equalize !== 'Unassigned'
+  const renderQuickCommandItem = (command: TerminalQuickCommand): React.JSX.Element => (
+    <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
+      {isTerminalAgentQuickCommand(command) ? (
+        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground">
+          <AgentIcon agent={command.agent} size={14} />
+        </span>
+      ) : (
+        <Play
+          className="size-3.5 shrink-0 text-muted-foreground"
+          fill="currentColor"
+          strokeWidth={0}
+        />
+      )}
+      <span className="min-w-0 flex-1 truncate">{command.label}</span>
+      {!isTerminalAgentQuickCommand(command) && !command.appendEnter ? (
+        <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
+      ) : null}
+    </DropdownMenuItem>
+  )
 
   return (
     <DropdownMenu
@@ -134,12 +169,12 @@ export default function TerminalContextMenu({
         <DropdownMenuItem onSelect={onCopy}>
           <Copy />
           Copy
-          <DropdownMenuShortcut>{copyShortcut}</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{shortcuts.copy}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onPaste}>
           <Clipboard />
           Paste
-          <DropdownMenuShortcut>{pasteShortcut}</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{shortcuts.paste}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
@@ -154,14 +189,7 @@ export default function TerminalContextMenu({
                     <DropdownMenuLabel className="truncate">
                       {quickCommandRepoLabel}
                     </DropdownMenuLabel>
-                    {repoQuickCommands.map((command) => (
-                      <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
-                        <span className="truncate">{command.label}</span>
-                        {!command.appendEnter ? (
-                          <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
-                        ) : null}
-                      </DropdownMenuItem>
-                    ))}
+                    {repoQuickCommands.map(renderQuickCommandItem)}
                   </>
                 ) : null}
                 {globalQuickCommands.length > 0 ? (
@@ -170,14 +198,7 @@ export default function TerminalContextMenu({
                     {repoQuickCommands.length > 0 ? (
                       <DropdownMenuLabel>Global</DropdownMenuLabel>
                     ) : null}
-                    {globalQuickCommands.map((command) => (
-                      <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
-                        <span className="truncate">{command.label}</span>
-                        {!command.appendEnter ? (
-                          <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
-                        ) : null}
-                      </DropdownMenuItem>
-                    ))}
+                    {globalQuickCommands.map(renderQuickCommandItem)}
                   </>
                 ) : null}
               </>
@@ -200,23 +221,27 @@ export default function TerminalContextMenu({
             </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+        <DropdownMenuItem onSelect={onForkAgentSession}>
+          <GitFork />
+          Fork Agent Session…
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSplitRight}>
           <PanelRightClose />
           Split Terminal Right
-          <DropdownMenuShortcut>{splitRightShortcut}</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{shortcuts.splitRight}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSplitDown}>
           <PanelBottomClose />
           Split Terminal Down
-          <DropdownMenuShortcut>{splitDownShortcut}</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{shortcuts.splitDown}</DropdownMenuShortcut>
         </DropdownMenuItem>
         {canEqualizePaneSizes && (
           <DropdownMenuItem onSelect={onEqualizePaneSizes}>
             <PanelsTopLeft />
             Equalize Pane Sizes
             {showEqualizeShortcut ? (
-              <DropdownMenuShortcut>{equalizeShortcut}</DropdownMenuShortcut>
+              <DropdownMenuShortcut>{shortcuts.equalize}</DropdownMenuShortcut>
             ) : null}
           </DropdownMenuItem>
         )}
@@ -224,7 +249,7 @@ export default function TerminalContextMenu({
           <DropdownMenuItem onSelect={onToggleExpand}>
             {menuPaneIsExpanded ? <Minimize2 /> : <Maximize2 />}
             {menuPaneIsExpanded ? 'Collapse Pane' : 'Expand Pane'}
-            <DropdownMenuShortcut>{expandShortcut}</DropdownMenuShortcut>
+            <DropdownMenuShortcut>{shortcuts.expand}</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
@@ -232,13 +257,17 @@ export default function TerminalContextMenu({
           <Pencil />
           Set Title…
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onCopyPaneId}>
+          <Copy />
+          Copy Pane ID
+        </DropdownMenuItem>
         {canClosePane && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
               <X />
               Close Pane
-              <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut>
+              <DropdownMenuShortcut>{shortcuts.close}</DropdownMenuShortcut>
             </DropdownMenuItem>
           </>
         )}

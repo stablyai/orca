@@ -13,7 +13,8 @@ import {
   parseCodexModels,
   parseCursorModels,
   parseLineModels,
-  parsePiModels
+  parsePiModels,
+  resolveCommitMessageAgentChoice
 } from './commit-message-agent-spec'
 
 describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
@@ -59,6 +60,12 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
 
   it('defaults the agent picker to Claude', () => {
     expect(DEFAULT_COMMIT_MESSAGE_AGENT_ID).toBe('claude')
+  })
+
+  it('treats disabled default agents as unavailable for implicit Source Control AI choices', () => {
+    expect(resolveCommitMessageAgentChoice(null, 'codex', ['codex'])).toBe('claude')
+    expect(resolveCommitMessageAgentChoice(null, null, ['claude'])).toBeNull()
+    expect(resolveCommitMessageAgentChoice('codex', null, ['codex'])).toBe('codex')
   })
 
   it('gives every model with thinking levels a valid default', () => {

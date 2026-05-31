@@ -80,7 +80,7 @@ describe('git history graph model', () => {
     expect(getGitHistoryMergeParentLaneIndex(viewModels[0]!, 'B')).toBe(1)
   })
 
-  it('inserts VS Code-style incoming and outgoing boundary rows at the merge base', () => {
+  it('inserts incoming and outgoing boundary rows at the merge base', () => {
     const currentRef = branch('feature', 'A')
     const remoteRef = remote('origin/feature', 'R')
     const viewModels = buildGitHistoryViewModels(
@@ -113,6 +113,86 @@ describe('git history graph model', () => {
       id: GIT_HISTORY_INCOMING_CHANGES_ID,
       color: GIT_HISTORY_REMOTE_REF_COLOR
     })
+  })
+
+  it('inserts an incoming boundary when HEAD-only history is behind upstream', () => {
+    const currentRef = branch('feature', 'B')
+    const remoteRef = remote('origin/feature', 'R')
+    const viewModels = buildGitHistoryViewModels(
+      [item('B', ['C'], [currentRef]), item('C', [])],
+      buildDefaultGitHistoryColorMap({ currentRef, remoteRef }),
+      currentRef,
+      remoteRef,
+      undefined,
+      true,
+      false,
+      'B'
+    )
+
+    expect(viewModels.map((viewModel) => viewModel.kind)).toEqual([
+      'incoming-changes',
+      'HEAD',
+      'node'
+    ])
+    expect(viewModels[0]!.inputSwimlanes).toContainEqual({
+      id: GIT_HISTORY_INCOMING_CHANGES_ID,
+      color: GIT_HISTORY_REMOTE_REF_COLOR
+    })
+    expect(viewModels[0]!.outputSwimlanes).toContainEqual({
+      id: 'B',
+      color: GIT_HISTORY_REMOTE_REF_COLOR
+    })
+    expect(viewModels[1]!.inputSwimlanes).toContainEqual({
+      id: 'B',
+      color: GIT_HISTORY_REMOTE_REF_COLOR
+    })
+    const incomingLaneIndex = viewModels[0]!.inputSwimlanes.findIndex(
+      (node) => node.id === GIT_HISTORY_INCOMING_CHANGES_ID
+    )
+    expect(viewModels[0]!.outputSwimlanes[incomingLaneIndex]?.color).toBe(
+      GIT_HISTORY_REMOTE_REF_COLOR
+    )
+  })
+
+  it('colors incoming boundary lanes as remote when upstream commits are omitted', () => {
+    const currentRef = branch('feature', 'A')
+    const remoteRef = remote('origin/feature', 'R')
+    const viewModels = buildGitHistoryViewModels(
+      [item('A', ['B'], [currentRef]), item('B', ['C']), item('C', [])],
+      buildDefaultGitHistoryColorMap({ currentRef, remoteRef }),
+      currentRef,
+      remoteRef,
+      undefined,
+      true,
+      true,
+      'B'
+    )
+
+    expect(viewModels.map((viewModel) => viewModel.kind)).toEqual([
+      'outgoing-changes',
+      'HEAD',
+      'incoming-changes',
+      'node',
+      'node'
+    ])
+    expect(viewModels[2]!.inputSwimlanes).toContainEqual({
+      id: GIT_HISTORY_INCOMING_CHANGES_ID,
+      color: GIT_HISTORY_REMOTE_REF_COLOR
+    })
+    expect(viewModels[2]!.outputSwimlanes).toContainEqual({
+      id: 'B',
+      color: GIT_HISTORY_REMOTE_REF_COLOR
+    })
+    expect(viewModels[3]!.inputSwimlanes).toContainEqual({
+      id: 'B',
+      color: GIT_HISTORY_REMOTE_REF_COLOR
+    })
+    const incomingLaneIndex = viewModels[2]!.inputSwimlanes.findIndex(
+      (node) => node.id === GIT_HISTORY_INCOMING_CHANGES_ID
+    )
+    expect(viewModels[2]!.outputSwimlanes[incomingLaneIndex]?.color).toBe(
+      GIT_HISTORY_REMOTE_REF_COLOR
+    )
   })
 
   it('assigns stable colors to current, remote, and base refs', () => {

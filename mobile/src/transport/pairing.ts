@@ -7,15 +7,36 @@ import { PairingOfferSchema, type PairingOffer } from './types'
 
 export function decodePairingUrl(url: string): PairingOffer | null {
   try {
-    const hashIndex = url.indexOf('#')
-    if (!url.startsWith('orca://pair') || hashIndex === -1) return null
-    return decodePairingBase64(url.slice(hashIndex + 1))
+    const code = extractPairingCodeFromUrl(url)
+    if (!code) return null
+    return decodePairingBase64(code)
   } catch {
     return null
   }
 }
 
-// Why: accept either an `orca://pair#<base64>` URL or the bare base64
+// Why: system camera apps hand us the raw custom-scheme URL. Keeping
+// extraction here makes QR scan, paste, and external deep-link flows
+// accept the same URL shapes.
+export function extractPairingCodeFromUrl(url: string): string | null {
+  if (!url.startsWith('orca://pair')) return null
+  const queryIndex = url.indexOf('?')
+  if (queryIndex !== -1) {
+    const query = url.slice(queryIndex + 1).split('#')[0] ?? ''
+    const params = new URLSearchParams(query)
+    const code = params.get('code')
+    if (code) {
+      return code
+    }
+  }
+  const hashIndex = url.indexOf('#')
+  if (hashIndex !== -1) {
+    return url.slice(hashIndex + 1) || null
+  }
+  return null
+}
+
+// Why: accept either an `orca://pair?...` URL or the bare base64
 // string so the paste-pair flow can take whichever the user actually
 // copied from desktop.
 export function parsePairingCode(input: string): PairingOffer | null {

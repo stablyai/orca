@@ -20,6 +20,7 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
+import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
@@ -40,6 +41,7 @@ type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 type NewWorkspaceComposerCardProps = {
   containerClassName?: string
   composerRef?: React.RefObject<HTMLDivElement | null>
+  onComposerNodeChange?: (node: HTMLDivElement | null) => void
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   onQuickAgentChange: (agent: TuiAgent | null) => void
@@ -204,6 +206,7 @@ function useComposerFileDragOver(): {
 export default function NewWorkspaceComposerCard({
   containerClassName,
   composerRef,
+  onComposerNodeChange,
   nameInputRef,
   quickAgent,
   onQuickAgentChange,
@@ -249,7 +252,9 @@ export default function NewWorkspaceComposerCard({
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
+  const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
   const selectedRepoName = React.useMemo(() => {
     const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
@@ -262,6 +267,31 @@ export default function NewWorkspaceComposerCard({
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
       ? 'Connect'
       : 'Reconnect'
+  const setupConfigLabel =
+    setupConfig?.kind === 'default-tabs'
+      ? 'Default tab commands'
+      : setupConfig?.kind === 'setup-and-default-tabs'
+        ? 'Setup and default tab commands'
+        : 'Setup script'
+  const setupRunLabel =
+    setupConfig?.kind === 'default-tabs'
+      ? 'Run default tab commands'
+      : setupConfig?.kind === 'setup-and-default-tabs'
+        ? 'Run setup and default tab commands'
+        : 'Run setup command'
+  const setupAskLabel =
+    setupConfig?.kind === 'default-tabs'
+      ? 'Run default tab commands now?'
+      : setupConfig?.kind === 'setup-and-default-tabs'
+        ? 'Run setup and default tab commands now?'
+        : 'Run setup now?'
+  const setupRunButtonLabel =
+    setupConfig?.kind === 'default-tabs'
+      ? 'Run commands now'
+      : setupConfig?.kind === 'setup-and-default-tabs'
+        ? 'Run commands now'
+        : 'Run setup now'
+  const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
 
   const handleSetDefaultAgent = React.useCallback(
     (next: TuiAgent | 'blank' | null) => {
@@ -270,20 +300,51 @@ export default function NewWorkspaceComposerCard({
     [updateSettings]
   )
 
+  const cancelNameInputFocusFrame = React.useCallback((): void => {
+    if (nameInputFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(nameInputFocusFrameRef.current)
+    nameInputFocusFrameRef.current = null
+  }, [])
+
+  const setComposerNode = React.useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued repo-picker focus is only valid while this composer exists.
+      if (!node) {
+        cancelNameInputFocusFrame()
+      }
+      if (composerRef) {
+        composerRef.current = node
+      }
+      onComposerNodeChange?.(node)
+    },
+    [cancelNameInputFocusFrame, composerRef, onComposerNodeChange]
+  )
+
   const focusNameInput = React.useCallback(() => {
     // Why: after the repo picker commits a choice, moving focus to the name
     // field keeps the keyboard flow progressing through the form instead of
     // trapping the user in the repo popover interaction.
-    requestAnimationFrame(() => {
+    cancelNameInputFocusFrame()
+    nameInputFocusFrameRef.current = requestAnimationFrame(() => {
+      nameInputFocusFrameRef.current = null
       nameInputRef?.current?.focus()
     })
-  }, [nameInputRef])
+  }, [cancelNameInputFocusFrame, nameInputRef])
 
-  const visibleQuickAgents = React.useMemo(
-    () =>
-      AGENT_CATALOG.filter((agent) => detectedAgentIds === null || detectedAgentIds.has(agent.id)),
-    [detectedAgentIds]
-  )
+  const visibleQuickAgents = React.useMemo(() => {
+    const enabledIds = new Set(
+      filterEnabledTuiAgents(
+        AGENT_CATALOG.map((agent) => agent.id),
+        disabledTuiAgents
+      )
+    )
+    return AGENT_CATALOG.filter(
+      (agent) =>
+        enabledIds.has(agent.id) && (detectedAgentIds === null || detectedAgentIds.has(agent.id))
+    )
+  }, [detectedAgentIds, disabledTuiAgents])
 
   const handleAddRepo = React.useCallback((): void => {
     openModal('add-repo')
@@ -291,7 +352,7 @@ export default function NewWorkspaceComposerCard({
 
   return (
     <div
-      ref={composerRef}
+      ref={setComposerNode}
       // Why: preload classifies native OS file drops by the nearest
       // `data-native-file-drop-target` marker in the composedPath. Tagging
       // the composer root makes drops anywhere on the card route to the
@@ -522,7 +583,7 @@ export default function NewWorkspaceComposerCard({
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-xs font-medium text-muted-foreground">
-                      Setup script
+                      {setupConfigLabel}
                     </label>
                     <span className="rounded-full border border-border/70 bg-muted/45 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-foreground/70">
                       {setupConfig.source === 'yaml'
@@ -564,7 +625,7 @@ export default function NewWorkspaceComposerCard({
                             }
                             className="sr-only"
                           />
-                          <span>Run setup command</span>
+                          <span>{setupRunLabel}</span>
                         </label>
                       )
                     }
@@ -573,7 +634,7 @@ export default function NewWorkspaceComposerCard({
                   {requiresExplicitSetupChoice ? (
                     <div className="space-y-2">
                       <div className="text-[11px] font-medium text-muted-foreground">
-                        Run setup now?
+                        {setupAskLabel}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
@@ -582,7 +643,7 @@ export default function NewWorkspaceComposerCard({
                           variant={setupDecision === 'run' ? 'default' : 'outline'}
                           size="sm"
                         >
-                          Run setup now
+                          {setupRunButtonLabel}
                         </Button>
                         <Button
                           type="button"
@@ -590,7 +651,7 @@ export default function NewWorkspaceComposerCard({
                           variant={setupDecision === 'skip' ? 'secondary' : 'outline'}
                           size="sm"
                         >
-                          Skip for now
+                          {setupSkipButtonLabel}
                         </Button>
                       </div>
                       {!setupDecision ? (

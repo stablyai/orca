@@ -1,4 +1,6 @@
 /* eslint-disable max-lines -- Why: this fixture keeps cross-agent hook normalization and cache behavior together so regressions in shared listener state are visible. */
+import { EventEmitter } from 'node:events'
+import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
@@ -7,9 +9,11 @@ import {
   createHookListenerState,
   getEndpointFileName,
   hasPendingAgentResultText,
+  HOOK_REQUEST_MAX_BYTES,
   isShellSafeEndpointValue,
   normalizeHookPayload,
   parseFormEncodedBody,
+  readRequestBody,
   resolveHookSource,
   writeEndpointFile,
   type HookListenerState
@@ -18,6 +22,26 @@ import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+
+type FakeIncomingMessage = EventEmitter & {
+  headers: IncomingHttpHeaders
+  destroy: ReturnType<typeof vi.fn>
+}
+
+function createReadableRequest(headers: IncomingHttpHeaders = {}): FakeIncomingMessage {
+  const req = new EventEmitter() as FakeIncomingMessage
+  req.headers = headers
+  req.destroy = vi.fn(() => req.emit('close'))
+  return req
+}
+
+function expectRequestParserListenersReleased(req: FakeIncomingMessage): void {
+  expect(req.listenerCount('data')).toBe(0)
+  expect(req.listenerCount('end')).toBe(0)
+  expect(req.listenerCount('close')).toBe(0)
+  expect(req.listenerCount('error')).toBe(1)
+  expect(() => req.emit('error', new Error('late request error'))).not.toThrow()
+}
 
 describe('shared agent-hook-listener', () => {
   let state: HookListenerState
@@ -36,12 +60,37 @@ describe('shared agent-hook-listener', () => {
     expect(decoded.worktreeId).toBe('foo')
   })
 
+  it('releases request parser listeners after reading a JSON body', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+
+    req.emit('data', Buffer.from('{"ok":true}'))
+    req.emit('end')
+
+    await expect(body).resolves.toEqual({ ok: true })
+    expectRequestParserListenersReleased(req)
+  })
+
+  it('releases request parser listeners after rejecting an oversized body', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+
+    req.emit('data', Buffer.alloc(HOOK_REQUEST_MAX_BYTES + 1))
+
+    await expect(body).rejects.toThrow('payload too large')
+    expect(req.destroy).toHaveBeenCalledTimes(1)
+    expectRequestParserListenersReleased(req)
+  })
+
   it('routes pathnames to a known source or null', () => {
     expect(resolveHookSource('/hook/claude')).toBe('claude')
     expect(resolveHookSource('/hook/cursor')).toBe('cursor')
     expect(resolveHookSource('/hook/antigravity')).toBe('antigravity')
     expect(resolveHookSource('/hook/grok')).toBe('grok')
     expect(resolveHookSource('/hook/hermes')).toBe('hermes')
+    expect(resolveHookSource('/hook/pi')).toBe('pi')
+    expect(resolveHookSource('/hook/omp')).toBe('omp')
+    expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -77,6 +126,215 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.agentType).toBe('claude')
   })
 
+  it('normalizes Gemini BeforeTool to working with tool fields', () => {
+    const event = normalizeHookPayload(
+      state,
+      'gemini',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'BeforeTool',
+          tool_name: 'read_file',
+          args: { file_path: 'src/index.ts' }
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload.state).toBe('working')
+    expect(event?.payload.agentType).toBe('gemini')
+    expect(event?.payload.toolName).toBe('read_file')
+    expect(event?.payload.toolInput).toBe('src/index.ts')
+  })
+
+  it('normalizes OMP Pi-compatible hooks with OMP attribution', () => {
+    const event = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'before_agent_start',
+          prompt: 'wire omp status'
+        }
+      },
+      'production'
+    )
+    expect(event?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'wire omp status',
+      agentType: 'omp'
+    })
+
+    const tool = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'bash',
+          tool_input: { command: 'pnpm test' }
+        }
+      },
+      'production'
+    )
+    expect(tool?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'wire omp status',
+      agentType: 'omp',
+      toolName: 'bash',
+      toolInput: 'pnpm test'
+    })
+  })
+
+  it('normalizes Command Code hooks and reads turn text from the transcript', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-transcript-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${[
+          JSON.stringify({
+            role: 'user',
+            content: [{ type: 'text', text: 'Run pwd and report it' }]
+          }),
+          JSON.stringify({
+            role: 'assistant',
+            content: [
+              { type: 'reasoning', text: 'Need to run pwd.' },
+              { type: 'text', text: 'The output is /tmp/project.' }
+            ]
+          })
+        ].join('\n')}\n`
+      )
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+      expect(tool?.payload).toMatchObject({
+        state: 'working',
+        prompt: 'Run pwd and report it',
+        agentType: 'command-code',
+        toolName: 'shell_command',
+        toolInput: 'pwd'
+      })
+      expect(tool?.hasExplicitPrompt).toBe(true)
+      expect(tool?.promptInteractionKey).toMatch(/^command-code-transcript-[a-f0-9]{12}-/)
+
+      const directPrompt = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            prompt: 'Direct command prompt'
+          }
+        },
+        'production'
+      )
+      expect(directPrompt?.hasExplicitPrompt).toBe(true)
+
+      const directPromptWithTranscript = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            prompt: 'Run pwd and report it',
+            transcript_path: transcriptPath
+          }
+        },
+        'production'
+      )
+      expect(directPromptWithTranscript?.hasExplicitPrompt).toBe(true)
+      expect(directPromptWithTranscript?.promptInteractionKey).toBe(tool?.promptInteractionKey)
+
+      const statusMessage = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PreToolUse',
+            message: 'Preparing tool call'
+          }
+        },
+        'production'
+      )
+      expect(statusMessage?.hasExplicitPrompt).toBe(false)
+
+      const done = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'Stop',
+            transcript_path: transcriptPath
+          }
+        },
+        'production'
+      )
+      expect(done?.payload).toMatchObject({
+        state: 'done',
+        prompt: 'Run pwd and report it',
+        agentType: 'command-code',
+        lastAssistantMessage: 'The output is /tmp/project.'
+      })
+      expect(done?.promptInteractionKey).toBe(tool?.promptInteractionKey)
+
+      const cachedOnly = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'Stop'
+          }
+        },
+        'production'
+      )
+      expect(cachedOnly?.payload.prompt).toBe('Run pwd and report it')
+      expect(cachedOnly?.hasExplicitPrompt).toBe(false)
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
   it('trims surrounding whitespace from extracted prompt text', () => {
     const event = normalizeHookPayload(
       state,
@@ -89,6 +347,40 @@ describe('shared agent-hook-listener', () => {
     )
     expect(event).not.toBeNull()
     expect(event!.payload.prompt).toBe('hi')
+  })
+
+  it('normalizes a Claude-compatible StopFailure to done without copying provider error text', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'say hi' }
+      },
+      'production'
+    )
+
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'StopFailure',
+          error: 'invalid_request',
+          error_details: 'model is not supported',
+          last_assistant_message: 'API Error: model is not supported'
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'say hi',
+      agentType: 'claude'
+    })
+    expect(event?.payload.lastAssistantMessage).toBeUndefined()
   })
 
   it('rejects oversized paneKey', () => {
@@ -130,6 +422,61 @@ describe('shared agent-hook-listener', () => {
     )
     expect(event).not.toBeNull()
     expect(event!.payload.prompt).toBe('')
+  })
+
+  it('bounds Amp thread-scoped caches for a long-lived pane', () => {
+    let latestPrompt = ''
+    for (let i = 0; i < 40; i++) {
+      const threadId = `thread-${i}`
+      const started = normalizeHookPayload(
+        state,
+        'amp',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hookEventName: 'agent.start',
+            threadId,
+            message: `prompt ${i}`
+          }
+        },
+        'production'
+      )
+      expect(started?.payload.state).toBe('working')
+
+      const ended = normalizeHookPayload(
+        state,
+        'amp',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hookEventName: 'agent.end',
+            threadId,
+            status: 'completed'
+          }
+        },
+        'production'
+      )
+      expect(ended?.payload.state).toBe('done')
+      latestPrompt = ended?.payload.prompt ?? ''
+    }
+
+    const scopedPrefix = `${PANE_KEY}\0amp:`
+    const promptKeys = [...state.lastPromptByPaneKey.keys()].filter((key) =>
+      key.startsWith(scopedPrefix)
+    )
+    const toolKeys = [...state.lastToolByPaneKey.keys()].filter((key) =>
+      key.startsWith(scopedPrefix)
+    )
+    const completedKeys = [...state.ampCompletedCacheKeys].filter((key) =>
+      key.startsWith(scopedPrefix)
+    )
+
+    expect(promptKeys.length).toBeLessThanOrEqual(32)
+    expect(toolKeys.length).toBeLessThanOrEqual(32)
+    expect(completedKeys.length).toBeLessThanOrEqual(32)
+    expect(state.lastPromptByPaneKey.has(`${scopedPrefix}thread-0`)).toBe(false)
+    expect(state.lastPromptByPaneKey.get(`${scopedPrefix}thread-39`)).toBe('prompt 39')
+    expect(latestPrompt).toBe('prompt 39')
   })
 
   it('normalizes Antigravity invocation and tool hooks', () => {
@@ -176,6 +523,29 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('normalizes Antigravity events even when the hook body is empty', () => {
+    const started = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        hook_event_name: 'PreInvocation',
+        payload: {}
+      },
+      'production'
+    )
+
+    // Why: Antigravity can invoke managed hooks without stdin. The wrapper
+    // posts `{}` in that case, and the event name is still enough to keep the
+    // visible status alive.
+    expect(started?.payload).toMatchObject({
+      state: 'working',
+      prompt: '',
+      agentType: 'antigravity'
+    })
+  })
+
   it('reads Antigravity user requests from the transcript', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-prompt-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
@@ -206,6 +576,7 @@ describe('shared agent-hook-listener', () => {
         prompt: 'Fix the failing test',
         agentType: 'antigravity'
       })
+      expect(started?.hasExplicitPrompt).toBe(true)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -381,7 +752,7 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('normalizes Antigravity Stop to done even when fullyIdle is false', () => {
+  it('keeps Antigravity Stop working while fullyIdle is false', () => {
     const event = normalizeHookPayload(
       state,
       'antigravity',
@@ -394,8 +765,44 @@ describe('shared agent-hook-listener', () => {
     )
 
     expect(event?.payload).toMatchObject({
-      state: 'done',
+      state: 'working',
       agentType: 'antigravity'
+    })
+  })
+
+  it('keeps Antigravity tool hooks active after a non-idle Stop for the same transcript', () => {
+    const transcriptPath = '/tmp/antigravity-non-idle-transcript.jsonl'
+    const stop = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'Stop',
+        payload: { transcriptPath, fullyIdle: false }
+      },
+      'production'
+    )
+    expect(stop?.payload.state).toBe('working')
+
+    const nextTool = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'PostToolUse',
+        payload: {
+          transcriptPath,
+          toolCall: { name: 'run_command', args: { CommandLine: 'pwd' } }
+        }
+      },
+      'production'
+    )
+
+    expect(nextTool?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'antigravity',
+      toolName: 'run_command',
+      toolInput: 'pwd'
     })
   })
 
@@ -444,6 +851,12 @@ describe('shared agent-hook-listener', () => {
           transcriptPath: '/tmp/antigravity-transcript.jsonl',
           last_assistant_message: 'done'
         }
+      })
+    ).toBe(false)
+    expect(
+      hasPendingAgentResultText('antigravity', {
+        hook_event_name: 'Stop',
+        payload: { fullyIdle: false, transcriptPath: '/tmp/antigravity-transcript.jsonl' }
       })
     ).toBe(false)
   })

@@ -27,7 +27,7 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
     id: 'workspaces',
     title: 'Workspaces',
     meta: 'Isolated work · Context kept together',
-    lede: 'Workspaces let you quickly split tasks into isolated environments, so multiple agents can work side by side without interfering with each other. Each workspace has its own branch, terminal, and agent state, keeping parallel work organized.',
+    lede: 'Orca splits each task into an isolated workspace so agents can run in parallel.',
     primaryTileId: 'tile-01',
     relatedTileIds: ['tile-10'],
     docsUrl: 'https://www.onorca.dev/docs/model/worktrees'
@@ -36,7 +36,7 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
     id: 'tasks',
     title: 'Tasks',
     meta: 'GitHub · Linear',
-    lede: "See your GitHub and Linear tasks in one place, and start a workspace for each when you're ready to build.",
+    lede: 'Start work directly from GitHub or Linear.',
     primaryTileId: 'tile-03',
     relatedTileIds: [],
     docsUrl: 'https://www.onorca.dev/docs/review/linear'
@@ -80,10 +80,6 @@ const TILE_BY_ID = new Map(
 
 export function getFeatureWallMediaTile(id: FeatureWallMediaTileId): FeatureWallMediaTile | null {
   return TILE_BY_ID.get(id) ?? null
-}
-
-export function getFeatureWallWorkflow(id: FeatureWallWorkflowId): FeatureWallWorkflow | null {
-  return FEATURE_WALL_WORKFLOWS.find((w) => w.id === id) ?? null
 }
 
 export const DEFAULT_FEATURE_WALL_WORKFLOW_ID: FeatureWallWorkflowId = 'workspaces'

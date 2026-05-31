@@ -30,6 +30,12 @@ type PendingRequest = {
   reject: (error: Error) => void
 }
 
+type ConnectWaiter = {
+  resolve: () => void
+  reject: (error: Error) => void
+  timeout: ReturnType<typeof setTimeout> | null
+}
+
 type SendRequestOptions = {
   timeoutMs?: number
 }
@@ -188,7 +194,7 @@ export function connect(
   let activeBrowserScreencastRequestId: string | null = null
   let pendingBrowserScreencastRequestId: string | null = null
   const stateListeners = new Set<(state: ConnectionState) => void>()
-  const connectWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = []
+  const connectWaiters: ConnectWaiter[] = []
 
   if (onStateChange) {
     stateListeners.add(onStateChange)
@@ -198,6 +204,16 @@ export function connect(
   // for spotting "stuck in connecting" or "stuck in reconnecting" cases
   // in the logs.
   let stateEnteredAt = Date.now()
+
+  function rejectConnectWaiters(reason: string) {
+    const error = new Error(reason)
+    for (const waiter of connectWaiters.splice(0)) {
+      if (waiter.timeout) {
+        clearTimeout(waiter.timeout)
+      }
+      waiter.reject(error)
+    }
+  }
 
   function setState(next: ConnectionState) {
     if (state === next) return
@@ -214,11 +230,16 @@ export function connect(
     })
     if (next === 'connected') {
       lastConnectedAt = Date.now()
-      for (const w of connectWaiters.splice(0)) w.resolve()
+      for (const waiter of connectWaiters.splice(0)) {
+        if (waiter.timeout) {
+          clearTimeout(waiter.timeout)
+        }
+        waiter.resolve()
+      }
     } else if (next === 'disconnected' || next === 'auth-failed') {
       const reason =
         next === 'auth-failed' ? 'Unauthorized — pairing may be revoked' : 'Connection closed'
-      for (const w of connectWaiters.splice(0)) w.reject(new Error(reason))
+      rejectConnectWaiters(reason)
     }
     for (const listener of stateListeners) {
       listener(next)
@@ -236,11 +257,31 @@ export function connect(
     }
   }
 
-  function waitForConnected(): Promise<void> {
+  function waitForConnected(timeoutMs?: number): Promise<void> {
     if (state === 'connected') return Promise.resolve()
     if (intentionallyClosed) return Promise.reject(new Error('Client closed'))
+    if (state === 'reconnecting' && reconnectAttempt >= GIVE_UP_AFTER_ATTEMPTS && !reconnectTimer) {
+      // Why: after the retry cap there is no future state transition to
+      // release callers waiting before their per-request timeout starts.
+      return Promise.reject(new Error('Connection retry limit reached'))
+    }
     return new Promise((resolve, reject) => {
-      connectWaiters.push({ resolve, reject })
+      const waiter: ConnectWaiter = { resolve, reject, timeout: null }
+      if (timeoutMs !== undefined) {
+        // Why: explicit per-request timeouts must include offline/reconnect
+        // waiting, not only the RPC after the socket becomes connected.
+        waiter.timeout = setTimeout(
+          () => {
+            const index = connectWaiters.indexOf(waiter)
+            if (index !== -1) {
+              connectWaiters.splice(index, 1)
+            }
+            reject(new Error('Timed out while connecting to the remote Orca runtime.'))
+          },
+          Math.max(0, timeoutMs)
+        )
+      }
+      connectWaiters.push(waiter)
     })
   }
 
@@ -278,6 +319,19 @@ export function connect(
 
     ws = new WebSocket(endpoint)
     const openingWs = ws
+    const ignoreStaleSocketEvent = (eventName: string): boolean => {
+      if (ws === openingWs) {
+        return false
+      }
+      // Why: React Native can deliver callbacks from a timed-out socket after
+      // reconnect has swapped in a replacement; stale events must not mutate it.
+      console.log('[net] stale ws event ignored', {
+        eventName,
+        state,
+        attempt: reconnectAttempt
+      })
+      return true
+    }
 
     // Why: React Native can leave TCP/WebSocket opens pending indefinitely on
     // flaky network handoffs. Force the existing onclose reconnect path if
@@ -302,6 +356,9 @@ export function connect(
     }, CONNECT_TIMEOUT_MS)
 
     ws.onopen = () => {
+      if (ignoreStaleSocketEvent('open')) {
+        return
+      }
       console.log('[net] ws.onopen', { attempt: reconnectAttempt })
       clearConnectTimer()
       reconnectAttempt = 0
@@ -316,13 +373,16 @@ export function connect(
         type: 'e2ee_hello',
         publicKeyB64: publicKeyToBase64(ephemeral.publicKey)
       })
-      ws?.send(hello)
+      openingWs.send(hello)
       emitLog('info', 'Sent e2ee_hello', 'Awaiting server e2ee_ready')
 
       sharedKey = deriveSharedKey(ephemeral.secretKey, serverPublicKey)
 
       handshakeTimer = setTimeout(() => {
         handshakeTimer = null
+        if (ws !== openingWs || state !== 'handshaking') {
+          return
+        }
         console.log('[net] handshake-timeout fired (e2ee_authenticated never arrived)', {
           timeoutMs: HANDSHAKE_TIMEOUT_MS
         })
@@ -331,11 +391,14 @@ export function connect(
           'Handshake timeout',
           `No e2ee_ready/e2ee_authenticated within ${HANDSHAKE_TIMEOUT_MS / 1000}s`
         )
-        ws?.close()
+        openingWs.close()
       }, HANDSHAKE_TIMEOUT_MS)
     }
 
     ws.onmessage = (event) => {
+      if (ignoreStaleSocketEvent('message')) {
+        return
+      }
       void handleSocketMessage(event.data)
     }
 
@@ -431,6 +494,9 @@ export function connect(
 
       if (raw === null) {
         const bytes = await websocketPayloadToUint8(rawData)
+        if (ws !== openingWs) {
+          return
+        }
         if (!bytes) {
           return
         }
@@ -609,6 +675,9 @@ export function connect(
     }
 
     ws.onerror = (event) => {
+      if (ignoreStaleSocketEvent('error')) {
+        return
+      }
       // Why: RN surfaces network errors here (DNS failure, TCP RST, etc).
       // onclose fires right after, but logging the error message gives us
       // the original cause that the close code alone can hide.
@@ -699,6 +768,7 @@ export function connect(
         reason: 'give-up-cap',
         endpoint: redactedEndpoint(endpoint)
       })
+      rejectConnectWaiters('Connection retry limit reached')
       return
     }
     const delay = RECONNECT_DELAYS[Math.min(reconnectAttempt, RECONNECT_DELAYS.length - 1)]!
@@ -969,7 +1039,7 @@ export function connect(
     ): Promise<RpcResponse> {
       const waitStart = Date.now()
       const wasConnected = state === 'connected'
-      await waitForConnected()
+      await waitForConnected(options?.timeoutMs)
       if (!wasConnected) {
         console.log('[net] sendRequest waited for connect', {
           method,

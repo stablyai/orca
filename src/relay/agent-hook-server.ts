@@ -292,6 +292,7 @@ export class RelayAgentHookServer {
       worktreeId: event.worktreeId,
       connectionId: null,
       hasExplicitPrompt: event.hasExplicitPrompt,
+      promptInteractionKey: event.promptInteractionKey,
       hookEventName: event.hookEventName,
       toolUseId: event.toolUseId,
       toolAgentId: event.toolAgentId,

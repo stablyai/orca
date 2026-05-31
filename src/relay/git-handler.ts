@@ -2,12 +2,16 @@
 protocol surface so local and SSH git behavior stay in one dispatch table. */
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { rm } from 'fs/promises'
 import * as path from 'path'
 import type { RelayDispatcher } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
-import { parseBranchDiff, parseBranchDiffNumstat, parseWorktreeList } from './git-handler-utils'
+import {
+  isUnsupportedWorktreeListZError,
+  parseBranchDiff,
+  parseWorktreeList
+} from './git-handler-utils'
+import { parseNumstat } from '../shared/git-uncommitted-line-stats'
 import {
   computeDiff,
   branchCompare as branchCompareOp,
@@ -15,7 +19,12 @@ import {
   validateGitExecArgs
 } from './git-handler-ops'
 import { commitCompare as commitCompareOp, commitDiffEntry } from './git-handler-commit-diff-ops'
-import { commitChangesRelay, addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
+import {
+  commitChangesRelay,
+  addWorktreeOp,
+  removeWorktreeOp,
+  worktreeIsCleanOp
+} from './git-handler-worktree-ops'
 import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
@@ -30,6 +39,10 @@ import {
 } from '../shared/git-effective-upstream'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import { buildRelayCommandEnv } from './relay-command-env'
+import {
+  removeSafeUntrackedDiscardTarget,
+  removeSafeUntrackedDiscardTargets
+} from '../shared/git-discard-path-safety'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -55,6 +68,8 @@ export class GitHandler {
     this.dispatcher.onRequest('git.unstage', (p) => this.unstage(p))
     this.dispatcher.onRequest('git.bulkStage', (p) => this.bulkStage(p))
     this.dispatcher.onRequest('git.bulkUnstage', (p) => this.bulkUnstage(p))
+    this.dispatcher.onRequest('git.abortMerge', (p) => this.abortMerge(p))
+    this.dispatcher.onRequest('git.abortRebase', (p) => this.abortRebase(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
@@ -65,12 +80,15 @@ export class GitHandler {
     this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
     this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
+    this.dispatcher.onRequest('git.fastForward', (p) => this.fastForward(p))
     this.dispatcher.onRequest('git.rebaseFromBase', (p) => this.rebaseFromBase(p))
     this.dispatcher.onRequest('git.branchDiff', (p) => this.branchDiff(p))
     this.dispatcher.onRequest('git.commitDiff', (p) => this.commitDiff(p))
     this.dispatcher.onRequest('git.listWorktrees', (p) => this.listWorktrees(p))
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
+    this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
+    this.dispatcher.onRequest('git.renameCurrentBranch', (p) => this.renameCurrentBranch(p))
     this.dispatcher.onRequest('git.exec', (p) => this.exec(p))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
   }
@@ -125,7 +143,7 @@ export class GitHandler {
     // path.join. Without validation, ../../etc/passwd traverses outside the worktree.
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
     return computeDiff(
@@ -175,6 +193,16 @@ export class GitHandler {
     }
   }
 
+  private async abortMerge(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    await this.git(['merge', '--abort'], worktreePath)
+  }
+
+  private async abortRebase(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    await this.git(['rebase', '--abort'], worktreePath)
+  }
+
   private normalizeGitPathForCompare(filePath: string): string {
     return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
   }
@@ -208,19 +236,30 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
 
-    const resolved = this.assertInWorktree(worktreePath, filePath)
+    this.assertInWorktree(worktreePath, filePath)
 
     let tracked = false
     try {
-      await this.git(['ls-files', '--error-unmatch', '--', filePath], worktreePath)
+      await this.git(
+        ['ls-files', '--error-unmatch', '--', this.literalPathspec(filePath)],
+        worktreePath
+      )
       tracked = true
     } catch {
       // untracked
     }
 
-    await (tracked
-      ? this.git(['restore', '--worktree', '--source=HEAD', '--', filePath], worktreePath)
-      : rm(resolved, { force: true, recursive: true }))
+    if (tracked) {
+      await this.git(
+        ['restore', '--worktree', '--source=HEAD', '--', this.literalPathspec(filePath)],
+        worktreePath
+      )
+      return
+    }
+
+    await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
+      this.cleanUntrackedPaths(worktreePath, [targetPath])
+    )
   }
 
   private async bulkDiscard(params: Record<string, unknown>) {
@@ -237,8 +276,17 @@ export class GitHandler {
     const trackedPathSpecs: string[] = []
     for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
       const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-      const { stdout } = await this.git(['ls-files', '-z', '--', ...chunk], worktreePath)
-      trackedPathSpecs.push(...stdout.split('\0').filter(Boolean))
+      const { stdout } = await this.git(
+        ['ls-files', '-z', '--', ...chunk.map((p) => this.literalPathspec(p))],
+        worktreePath
+      )
+      // Why: selecting a tracked directory can make `ls-files -z` return
+      // enough descendants for push(...split) to exceed the argument limit.
+      for (const trackedPathSpec of stdout.split('\0')) {
+        if (trackedPathSpec) {
+          trackedPathSpecs.push(trackedPathSpec)
+        }
+      }
     }
 
     const trackedPaths = filePaths.filter((filePath) =>
@@ -247,17 +295,44 @@ export class GitHandler {
     const untrackedPaths = filePaths.filter(
       (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
     )
-
-    for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-      const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-      await this.git(['restore', '--worktree', '--source=HEAD', '--', ...chunk], worktreePath)
-    }
-
-    await Promise.all(
-      untrackedPaths.map((filePath) =>
-        rm(path.resolve(worktreePath, filePath), { force: true, recursive: true })
-      )
+    await removeSafeUntrackedDiscardTargets(
+      worktreePath,
+      untrackedPaths,
+      (targetPaths) => this.cleanUntrackedPaths(worktreePath, targetPaths),
+      async () => {
+        for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+          const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+          await this.git(
+            [
+              'restore',
+              '--worktree',
+              '--source=HEAD',
+              '--',
+              ...chunk.map((p) => this.literalPathspec(p))
+            ],
+            worktreePath
+          )
+        }
+      }
     )
+  }
+
+  private literalPathspec(filePath: string): string {
+    // Why: source-control selections are concrete paths, not user-authored Git globs.
+    return `:(literal)${filePath}`
+  }
+
+  private async cleanUntrackedPaths(worktreePath: string, filePaths: readonly string[]) {
+    for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+      if (chunk.length > 0) {
+        // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
+        await this.git(
+          ['clean', '-ffdx', '--', ...chunk.map((p) => this.literalPathspec(p))],
+          worktreePath
+        )
+      }
+    }
   }
 
   private async conflictOperation(params: Record<string, unknown>) {
@@ -285,7 +360,7 @@ export class GitHandler {
         ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', mergeBase, headOid],
         worktreePath
       )
-      return parseBranchDiff(stdout, parseBranchDiffNumstat(numstat))
+      return parseBranchDiff(stdout, parseNumstat(numstat))
     })
   }
 
@@ -422,31 +497,45 @@ export class GitHandler {
     }
   }
 
-  private async pull(params: Record<string, unknown>) {
+  private async pullWithArgs(params: Record<string, unknown>, pullArgs: string[]) {
     const worktreePath = params.worktreePath as string
-    // Why: plain `git pull` uses the user's configured pull strategy (merge by
-    // default) so diverged branches reconcile instead of erroring out.
     try {
       if (params.pushTarget !== undefined) {
         assertGitPushTargetShape(params.pushTarget)
         const pushTarget = params.pushTarget as GitPushTarget
         await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
-        await this.git(['pull', pushTarget.remoteName, pushTarget.branchName], worktreePath)
+        await this.git(
+          ['pull', ...pullArgs, pushTarget.remoteName, pushTarget.branchName],
+          worktreePath
+        )
         return
       }
       const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
       if (upstream && !upstream.isConfiguredUpstream) {
         // Why: legacy Orca branches may still track origin/main while pushes
         // target origin/<branch>. Pull the same effective branch the UI reports.
-        await this.git(['pull', upstream.remoteName, upstream.branchName], worktreePath)
+        await this.git(
+          ['pull', ...pullArgs, upstream.remoteName, upstream.branchName],
+          worktreePath
+        )
         return
       }
-      await this.git(['pull'], worktreePath)
+      await this.git(['pull', ...pullArgs], worktreePath)
     } catch (error) {
       // Why: mirror the local gitPull normalization so SSH users see the same
       // actionable messages instead of raw git stderr.
       throw new Error(normalizeGitErrorMessage(error, 'pull'))
     }
+  }
+
+  private async pull(params: Record<string, unknown>) {
+    // Why: plain `git pull` uses the user's configured pull strategy (merge by
+    // default) so diverged branches reconcile instead of erroring out.
+    await this.pullWithArgs(params, [])
+  }
+
+  private async fastForward(params: Record<string, unknown>) {
+    await this.pullWithArgs(params, ['--ff-only'])
   }
 
   private async rebaseFromBase(params: Record<string, unknown>) {
@@ -501,6 +590,25 @@ export class GitHandler {
     return { stdout, stderr }
   }
 
+  private async renameCurrentBranch(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath
+    const newBranch = params.newBranch
+    if (typeof worktreePath !== 'string' || typeof newBranch !== 'string') {
+      throw new Error('Invalid branch rename request.')
+    }
+    if (newBranch.startsWith('-')) {
+      throw new Error('Branch name must not start with "-".')
+    }
+    try {
+      // Why: generic git.exec intentionally blocks destructive branch flags.
+      // This narrow RPC permits only the already-checked current-branch rename.
+      await this.git(['check-ref-format', '--branch', newBranch], worktreePath)
+      await this.git(['branch', '-m', newBranch], worktreePath)
+    } catch (error) {
+      throw new Error(normalizeGitErrorMessage(error))
+    }
+  }
+
   private async isGitRepo(params: Record<string, unknown>) {
     const dirPath = params.dirPath as string
     try {
@@ -513,6 +621,17 @@ export class GitHandler {
 
   private async listWorktrees(params: Record<string, unknown>) {
     const repoPath = params.repoPath as string
+    try {
+      const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath)
+      return parseWorktreeList(stdout, { nulDelimited: true })
+    } catch (error) {
+      if (!isUnsupportedWorktreeListZError(error)) {
+        return []
+      }
+    }
+
+    // Why: `-z` keeps newline-containing SSH worktree paths intact, but older
+    // Git rejects it. Fall back to the original line-block parser there.
     try {
       const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath)
       return parseWorktreeList(stdout)
@@ -527,5 +646,9 @@ export class GitHandler {
 
   private async removeWorktree(params: Record<string, unknown>) {
     return removeWorktreeOp(this.git.bind(this), params)
+  }
+
+  private async worktreeIsClean(params: Record<string, unknown>) {
+    return worktreeIsCleanOp(this.git.bind(this), params)
   }
 }

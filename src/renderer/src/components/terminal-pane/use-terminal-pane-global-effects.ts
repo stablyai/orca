@@ -10,7 +10,10 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
-import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import {
+  flushTerminalOutput,
+  requestTerminalBacklogRecovery
+} from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
@@ -19,12 +22,15 @@ import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibil
 import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 
+const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
+
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
   worktreeId: string
   cwd?: string
   isActive: boolean
   isVisible: boolean
+  isSyncFitEnabled: boolean
   paneCount: number
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -40,6 +46,7 @@ export function useTerminalPaneGlobalEffects({
   cwd,
   isActive,
   isVisible,
+  isSyncFitEnabled,
   paneCount,
   managerRef,
   containerRef,
@@ -68,7 +75,7 @@ export function useTerminalPaneGlobalEffects({
     visibleResumeCompleteRef: wasVisibleRef,
     paneCount
   })
-  useTerminalContainerFitSync({ isVisible, managerRef, containerRef })
+  useTerminalContainerFitSync({ isVisible, isSyncFitEnabled, managerRef, containerRef })
 
   useEffect(() => {
     const manager = managerRef.current
@@ -84,10 +91,13 @@ export function useTerminalPaneGlobalEffects({
       // not jump to the wrong history entry.
       const viewportPositions = captureViewportPositions(!wasVisibleRef.current)
       withSuppressedScrollTracking(() => {
-        // Why: background PTY output is throttled while a pane is not focused;
-        // flush it before fitting so newly visible terminals paint current state.
+        // Why: hidden panes can accumulate large PTY bursts while Chromium is
+        // occluded. Drain a bounded slice before fitting; the scheduler keeps
+        // ordering and continues the rest asynchronously so return-to-app does
+        // not beachball behind an entire backlog.
         for (const pane of manager.getPanes()) {
-          flushTerminalOutput(pane.terminal)
+          requestTerminalBacklogRecovery(pane.terminal)
+          flushTerminalOutput(pane.terminal, { maxChars: VISIBLE_RESUME_FLUSH_CHARS })
         }
         // Resume WebGL immediately so the terminal shows its last-known state
         // on the first painted frame. macOS context creation is ~5 ms; on

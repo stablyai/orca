@@ -57,7 +57,11 @@ vi.mock('../browser/browser-manager', () => ({
   }
 }))
 
-import { registerBrowserHandlers, setAgentBrowserBridgeRef } from './browser'
+import {
+  registerBrowserHandlers,
+  setAgentBrowserBridgeRef,
+  waitForTabRegistration
+} from './browser'
 
 describe('registerBrowserHandlers', () => {
   beforeEach(() => {
@@ -163,6 +167,56 @@ describe('registerBrowserHandlers', () => {
 
     expect(result).toBe(true)
     expect(onTabChangedMock).toHaveBeenCalledWith(4242, 'wt-browser')
+  })
+
+  it('resolves concurrent tab registration waiters for the same page', async () => {
+    vi.useFakeTimers()
+    try {
+      getGuestWebContentsIdMock.mockReturnValue(null)
+      const first = waitForTabRegistration('page-1', 1000)
+      const second = waitForTabRegistration('page-1', 1000)
+      const settled = Promise.allSettled([first, second])
+
+      registerBrowserHandlers()
+
+      const registerHandler = handleMock.mock.calls.find(
+        ([channel]) => channel === 'browser:registerGuest'
+      )?.[1] as (
+        event: { sender: Electron.WebContents },
+        args: {
+          browserPageId: string
+          workspaceId: string
+          worktreeId: string
+          webContentsId: number
+        }
+      ) => boolean
+
+      const result = registerHandler(
+        {
+          sender: {
+            id: 91,
+            isDestroyed: () => false,
+            getType: () => 'window',
+            getURL: () => 'file:///renderer/index.html'
+          } as Electron.WebContents
+        },
+        {
+          browserPageId: 'page-1',
+          workspaceId: 'workspace-1',
+          worktreeId: 'worktree-1',
+          webContentsId: 123
+        }
+      )
+
+      expect(result).toBe(true)
+      await vi.advanceTimersByTimeAsync(1001)
+      expect(await settled).toEqual([
+        { status: 'fulfilled', value: undefined },
+        { status: 'fulfilled', value: undefined }
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('validates annotation viewport bridge requests before syncing to the guest', async () => {

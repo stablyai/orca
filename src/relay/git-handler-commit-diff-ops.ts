@@ -1,5 +1,6 @@
 import { readBlobAtOid, type GitBufferExec, type GitExec } from './git-handler-ops'
-import { buildDiffResult, parseBranchDiff, parseBranchDiffNumstat } from './git-handler-utils'
+import { buildDiffResult, parseBranchDiff } from './git-handler-utils'
+import { parseNumstat } from '../shared/git-uncommitted-line-stats'
 
 const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
 
@@ -103,7 +104,7 @@ export async function commitCompare(git: GitExec, worktreePath: string, commitId
       git(diffArgs, worktreePath),
       git(numstatArgs, worktreePath)
     ])
-    const entries = parseBranchDiff(stdout, parseBranchDiffNumstat(numstat))
+    const entries = parseBranchDiff(stdout, parseNumstat(numstat))
     summary.changedFiles = entries.length
     return { summary, entries }
   } catch (error) {

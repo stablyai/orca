@@ -1,6 +1,7 @@
 import type { IDisposable, IParser, ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
+import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import {
@@ -16,14 +17,7 @@ import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { HEX_COLOR_RE } from '../../../../shared/color-validation'
 
-// Contour/Kitty "color-scheme update" protocol (DEC mode 2031 + CSI 997):
-// the terminal pushes `CSI ?997;1n` for dark and `CSI ?997;2n` for light to
-// subscribed TUIs. This helper is the single source of truth so the push
-// site in applyTerminalAppearance and the subscribe-time seed in the
-// lifecycle hook cannot drift.
-export function mode2031SequenceFor(mode: 'dark' | 'light'): string {
-  return mode === 'dark' ? '\x1b[?997;1n' : '\x1b[?997;2n'
-}
+export { mode2031SequenceFor }
 
 // Why Pick<IParser, ...> over a hand-rolled structural type: keeps the helper
 // tied to xterm's canonical signature so any upstream tightening (added
@@ -145,8 +139,48 @@ export function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
-function isHexColor(value: string): boolean {
+export function isHexColor(value: string): boolean {
   return HEX_COLOR_RE.test(value)
+}
+
+// Why: extracted from applyTerminalAppearance so the settings preview can
+// derive the same composed theme without depending on PaneManager. Keep
+// pure — no DOM, no manager, no side effects.
+export function composeActiveTerminalTheme(
+  baseTheme: ITheme | null,
+  settings: Pick<
+    GlobalSettings,
+    'terminalColorOverrides' | 'terminalBackgroundOpacity' | 'terminalCursorOpacity'
+  >
+): ITheme | null {
+  if (!baseTheme) {
+    return null
+  }
+  let theme: ITheme = { ...baseTheme }
+  // Why: merge user-imported Ghostty color overrides on top of the resolved
+  // base theme so individual colors can be tweaked without losing the rest.
+  if (settings.terminalColorOverrides) {
+    theme = { ...theme, ...settings.terminalColorOverrides }
+  }
+  // Why: Ghostty's background-opacity controls the terminal's base alpha.
+  // Convert the hex background to rgba so xterm honors it when allowTransparency
+  // is also set on the Terminal instance.
+  if (settings.terminalBackgroundOpacity !== undefined && theme.background) {
+    theme = {
+      ...theme,
+      background: hexToRgba(theme.background, settings.terminalBackgroundOpacity)
+    }
+  }
+  // Why: Ghostty's cursor-opacity applies alpha to the cursor color. Only
+  // converted when the resolved cursor is a hex value; named CSS colors are
+  // left untouched because hexToRgba expects a hex input.
+  if (settings.terminalCursorOpacity !== undefined && theme.cursor && isHexColor(theme.cursor)) {
+    theme = {
+      ...theme,
+      cursor: hexToRgba(theme.cursor, settings.terminalCursorOpacity)
+    }
+  }
+  return theme
 }
 
 export function applyTerminalAppearance(
@@ -161,29 +195,9 @@ export function applyTerminalAppearance(
 ): void {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
-  let theme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-
-  // Why: merge user-imported Ghostty color overrides on top of the resolved
-  // base theme so individual colors can be tweaked without losing the rest.
-  if (theme && settings.terminalColorOverrides) {
-    theme = { ...theme, ...settings.terminalColorOverrides }
-  }
-
-  let paneBackground = theme?.background ?? '#000000'
-
-  // Why: Ghostty's background-opacity controls the terminal's base alpha.
-  // We convert the hex background to rgba and enable xterm transparency.
-  if (settings.terminalBackgroundOpacity !== undefined && theme?.background) {
-    paneBackground = hexToRgba(theme.background, settings.terminalBackgroundOpacity)
-    theme = { ...theme, background: paneBackground }
-  }
-
-  // Why: Ghostty's cursor-opacity applies alpha to the cursor color. We only
-  // convert when the resolved cursor is a hex value; named CSS colors are
-  // left untouched because hexToRgba expects a hex input.
-  if (settings.terminalCursorOpacity !== undefined && theme?.cursor && isHexColor(theme.cursor)) {
-    theme = { ...theme, cursor: hexToRgba(theme.cursor, settings.terminalCursorOpacity) }
-  }
+  const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
+  const theme = composeActiveTerminalTheme(baseTheme, settings)
+  const paneBackground = theme?.background ?? '#000000'
 
   const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
   const ligaturesEnabled = resolveTerminalLigaturesEnabled(

@@ -2,6 +2,7 @@ import { execFile } from 'child_process'
 
 let cachedFonts: string[] | null = null
 let fontsPromise: Promise<string[]> | null = null
+const SYSTEM_FONT_LIST_TIMEOUT_MS = 15_000
 
 export async function listSystemFontFamilies(): Promise<string[]> {
   if (cachedFonts) {
@@ -96,13 +97,37 @@ $fonts.Families | ForEach-Object { $_.Name }
 
 function execFileText(command: string, args: string[], maxBuffer: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { encoding: 'utf8', maxBuffer }, (error, stdout) => {
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const child = execFile(command, args, { encoding: 'utf8', maxBuffer }, (error, stdout) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
       if (error) {
         reject(error)
         return
       }
       resolve(stdout)
     })
+    if (!settled) {
+      timer = setTimeout(() => {
+        if (settled) {
+          return
+        }
+        settled = true
+        // Why: font discovery is a startup convenience; a stuck OS font tool
+        // should fall back instead of keeping settings IPC pending forever.
+        child.kill()
+        reject(new Error(`Timed out listing system fonts with ${command}`))
+      }, SYSTEM_FONT_LIST_TIMEOUT_MS)
+      if (typeof timer === 'object' && 'unref' in timer) {
+        timer.unref()
+      }
+    }
   })
 }
 

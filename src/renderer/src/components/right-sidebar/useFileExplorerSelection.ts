@@ -15,6 +15,7 @@ type UseFileExplorerSelectionResult = {
   selectedPath: string | null
   selectedPaths: Set<string>
   setSingleSelectedPath: React.Dispatch<React.SetStateAction<string | null>>
+  setSelectedPaths: (paths: Set<string>) => void
   resetSelection: () => void
   selectRowWithModifiers: (
     node: TreeNode,
@@ -51,6 +52,17 @@ export function useFileExplorerSelection(
 
   const resetSelection = useCallback(() => {
     setSelectionState(createEmptyFileExplorerSelection())
+  }, [])
+
+  const setSelectedPaths = useCallback((paths: Set<string>) => {
+    setSelectionState((prev) => {
+      const nextActive = paths.has(prev.activePath ?? '')
+        ? prev.activePath
+        : paths.size > 0
+          ? [...paths][0]
+          : null
+      return { activePath: nextActive, anchorPath: nextActive, selectedPaths: paths }
+    })
   }, [])
 
   const selectRowWithModifiers = useCallback(
@@ -103,6 +115,7 @@ export function useFileExplorerSelection(
     selectedPath: selectionState.activePath,
     selectedPaths: selectionState.selectedPaths,
     setSingleSelectedPath,
+    setSelectedPaths,
     resetSelection,
     selectRowWithModifiers,
     preserveSelectionForContextMenu,

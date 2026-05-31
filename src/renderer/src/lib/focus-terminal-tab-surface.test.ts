@@ -11,6 +11,7 @@ describe('focusTerminalTabSurface', () => {
       callback(0)
       return 1
     })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
   }
 
   it('focuses the scoped xterm helper textarea', () => {
@@ -44,5 +45,22 @@ describe('focusTerminalTabSurface', () => {
     focusTerminalTabSurface('tab-1')
 
     expect(textarea.focus).not.toHaveBeenCalled()
+  })
+
+  it('cancels a pending focus frame when a newer focus request starts', () => {
+    const cancelAnimationFrame = vi.fn()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 9)
+    )
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
+    vi.stubGlobal('document', {
+      querySelector: vi.fn(() => null)
+    })
+
+    focusTerminalTabSurface('tab-1')
+    focusTerminalTabSurface('tab-2')
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(9)
   })
 })

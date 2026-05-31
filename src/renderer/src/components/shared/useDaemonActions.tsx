@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -39,6 +40,15 @@ export type DaemonActionsApi = {
 export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActionsApi {
   const [pending, setPending] = useState<PendingConfirm>(null)
   const [busyKind, setBusyKind] = useState<DaemonActionKind | null>(null)
+  const mountedRef = useMountedRef()
+
+  const clearPendingAction = useCallback((): void => {
+    if (!mountedRef.current) {
+      return
+    }
+    setBusyKind(null)
+    setPending(null)
+  }, [mountedRef])
 
   const runRestart = useCallback(async () => {
     setBusyKind('restart')
@@ -54,11 +64,12 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
         description: err instanceof Error ? err.message : undefined
       })
     } finally {
-      setBusyKind(null)
-      setPending(null)
-      callbacks?.onRestartSettled?.()
+      clearPendingAction()
+      if (mountedRef.current) {
+        callbacks?.onRestartSettled?.()
+      }
     }
-  }, [callbacks])
+  }, [callbacks, clearPendingAction, mountedRef])
 
   const runKillAll = useCallback(async () => {
     setBusyKind('killAll')
@@ -77,16 +88,19 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
         toast.error(`${remainingCount} session${remainingCount === 1 ? '' : 's'} refused to exit.`)
       }
     } catch (err) {
-      callbacks?.onKillAllError?.()
+      if (mountedRef.current) {
+        callbacks?.onKillAllError?.()
+      }
       toast.error('Couldn’t kill sessions.', {
         description: err instanceof Error ? err.message : undefined
       })
     } finally {
-      setBusyKind(null)
-      setPending(null)
-      callbacks?.onKillAllSettled?.()
+      clearPendingAction()
+      if (mountedRef.current) {
+        callbacks?.onKillAllSettled?.()
+      }
     }
-  }, [callbacks])
+  }, [callbacks, clearPendingAction, mountedRef])
 
   const runConfirmed = useCallback(() => {
     if (pending === 'restart') {

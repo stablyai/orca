@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: local/runtime launch tests share a mock harness. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
@@ -18,8 +19,6 @@ const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockMarkTrusted = vi.fn()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-const CLAUDE_SCOPED_SETTINGS =
-  'claude --settings "$HOME/.orca/agent-hooks/claude-agent-status-settings.json"'
 
 function expectStablePaneSpawn(): string {
   const spawnArgs = mockSpawn.mock.calls[0]?.[0]
@@ -120,11 +119,14 @@ describe('launchAgentBackgroundSession', () => {
       title: 'Nightly audit'
     })
 
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, { activate: false })
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      activate: false,
+      recordInteraction: false
+    })
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/repo/worktree',
-        command: `${CLAUDE_SCOPED_SETTINGS} 'run the automation'`,
+        command: "claude 'run the automation'",
         env: expect.objectContaining({
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1'
@@ -145,7 +147,9 @@ describe('launchAgentBackgroundSession', () => {
       })
     )
     expect(mockSetTabLayout.mock.calls.at(-1)?.[1]).not.toHaveProperty('titlesByLeafId')
-    expect(mockSetTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Nightly audit')
+    expect(mockSetTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Nightly audit', {
+      recordInteraction: false
+    })
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-1')
     expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
@@ -194,6 +198,23 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
+  it('seeds a working status for Command Code prompt launches', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'command-code',
+      worktreeId: 'wt-1',
+      prompt: 'check the status spinner'
+    })
+
+    const paneKey = expectStablePaneSpawn()
+    expect(state.setAgentStatus).toHaveBeenCalledWith(paneKey, {
+      state: 'working',
+      prompt: 'check the status spinner',
+      agentType: 'command-code'
+    })
+  })
+
   it('uses a sidecar exit watcher so completion survives terminal attachment', async () => {
     const unsubscribe = vi.fn()
     mockSubscribeToPtyExit.mockReturnValue(unsubscribe)
@@ -227,7 +248,7 @@ describe('launchAgentBackgroundSession', () => {
       })
     ).rejects.toThrow('spawn failed')
 
-    expect(mockCloseTab).toHaveBeenCalledWith('tab-1')
+    expect(mockCloseTab).toHaveBeenCalledWith('tab-1', { recordInteraction: false })
     expect(mockUpdateTabPtyId).not.toHaveBeenCalled()
   })
 
@@ -269,10 +290,7 @@ describe('launchAgentBackgroundSession', () => {
       dataSidecar('user@remote repo % ')
       vi.advanceTimersByTime(50)
 
-      expect(mockWrite).toHaveBeenCalledWith(
-        'pty-1',
-        `${CLAUDE_SCOPED_SETTINGS} 'run the automation'\r`
-      )
+      expect(mockWrite).toHaveBeenCalledWith('pty-1', "claude 'run the automation'\r")
     } finally {
       vi.useRealTimers()
     }
@@ -306,7 +324,7 @@ describe('launchAgentBackgroundSession', () => {
       method: 'terminal.create',
       params: expect.objectContaining({
         worktree: 'wt-1',
-        command: `${CLAUDE_SCOPED_SETTINGS} 'run the automation'`,
+        command: "claude 'run the automation'",
         env: expect.objectContaining({
           ORCA_PANE_KEY: `tab-1:${leafId}`,
           ORCA_TAB_ID: 'tab-1',

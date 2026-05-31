@@ -76,4 +76,27 @@ describe('registerRuntimeHandlers', () => {
       _meta: { runtimeId: 'runtime-1' }
     })
   })
+
+  it('registers project group runtime RPC methods for local desktop callers', async () => {
+    const runtime = {
+      syncWindowGraph: vi.fn(),
+      getStatus: vi.fn(),
+      getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
+      listProjectGroups: vi.fn().mockReturnValue([{ id: 'group-1', name: 'Platform' }])
+    }
+
+    registerRuntimeHandlers(runtime as never)
+
+    const callRegistration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
+    expect(callRegistration).toBeTruthy()
+
+    const handler = callRegistration![1]
+    const result = await handler({ sender: {} }, { method: 'projectGroup.list' })
+
+    expect(result).toMatchObject({
+      ok: true,
+      result: { groups: [{ id: 'group-1', name: 'Platform' }] },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+  })
 })

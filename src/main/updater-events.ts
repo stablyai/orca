@@ -20,6 +20,7 @@ type UpdaterHandlerContext = {
   clearBackgroundCheckLaunchPending: () => void
   clearAvailableUpdateContext: () => void
   consumeMissingManifestPrereleaseFallbackResult: () => { userInitiated: boolean } | null
+  getPublishingWindowLastGoodCheck: () => { lastGoodTag: string } | null
   getMissingManifestPrereleaseFallbackUserInitiated: () => boolean | null
   getCurrentStatus: () => UpdateStatus
   getKnownReleaseUrl: () => string | undefined
@@ -50,6 +51,7 @@ export function registerAutoUpdaterHandlers({
   clearBackgroundCheckLaunchPending,
   clearAvailableUpdateContext,
   consumeMissingManifestPrereleaseFallbackResult,
+  getPublishingWindowLastGoodCheck,
   getMissingManifestPrereleaseFallbackUserInitiated,
   getCurrentStatus,
   getKnownReleaseUrl,
@@ -123,13 +125,14 @@ export function registerAutoUpdaterHandlers({
     clearBackgroundCheckLaunchPending()
     // --- synchronous preamble (runs before any await) ---
     const missingManifestFallback = consumeMissingManifestPrereleaseFallbackResult()
+    const publishingWindowLastGoodCheck = getPublishingWindowLastGoodCheck()
     const wasUserInitiated = missingManifestFallback?.userInitiated ?? getUserInitiatedCheck()
     setUserInitiatedCheck(false)
 
     // Guard: don't show an update that isn't actually newer than what's running.
     if (compareVersions(info.version, app.getVersion()) <= 0) {
       clearAvailableUpdateContext()
-      if (missingManifestFallback) {
+      if (missingManifestFallback || publishingWindowLastGoodCheck) {
         // Why: a fallback manifest at the current version is still the result of
         // a transient missing primary manifest, so keep the short retry cadence.
         scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
@@ -166,10 +169,10 @@ export function registerAutoUpdaterHandlers({
       // timestamp persisted for a check that never showed a result.
       setAvailableVersion(info.version)
       setAvailableReleaseUrl(null)
-      if (missingManifestFallback) {
-        // Why: offering the previous good release is only a temporary fallback;
-        // keep probing soon so users can move to the newest tag once its
-        // platform manifest finishes publishing.
+      if (missingManifestFallback || publishingWindowLastGoodCheck) {
+        // Why: offering a previous/last-good release is only a temporary
+        // fallback; keep probing soon so users can move to the newest tag once
+        // its platform manifest finishes publishing.
         scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
       } else {
         recordCompletedUpdateCheck()
@@ -186,12 +189,14 @@ export function registerAutoUpdaterHandlers({
     clearBackgroundCheckLaunchPending()
     resetMacInstallState()
     const missingManifestFallback = consumeMissingManifestPrereleaseFallbackResult()
+    const publishingWindowLastGoodCheck = getPublishingWindowLastGoodCheck()
     const wasUserInitiated = missingManifestFallback?.userInitiated ?? getUserInitiatedCheck()
     setUserInitiatedCheck(false)
     clearAvailableUpdateContext()
-    if (missingManifestFallback) {
-      // Why: the primary/newest release manifest was missing, so fallback
-      // not-available is still a transient release-transition outcome.
+    if (missingManifestFallback || publishingWindowLastGoodCheck) {
+      // Why: the primary/newest release manifest/assets were missing, so a
+      // last-good not-available result is still a transient release-transition
+      // outcome and must not suppress the next retry for 24 hours.
       scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
     } else {
       recordCompletedUpdateCheck()

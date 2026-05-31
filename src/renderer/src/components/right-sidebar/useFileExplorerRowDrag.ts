@@ -1,5 +1,5 @@
 import React, { useCallback, useRef } from 'react'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { getWorkspaceFileDragPaths, WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 
 const DRAG_EXPAND_DELAY_MS = 500
 
@@ -16,6 +16,7 @@ type UseFileExplorerRowDragParams = {
 }
 
 type RowDragHandlers = {
+  setRowDragNode: (node: HTMLButtonElement | null) => void
   handleDragOver: (e: React.DragEvent) => void
   handleDragEnter: (e: React.DragEvent) => void
   handleDragLeave: (e: React.DragEvent) => void
@@ -51,6 +52,18 @@ export function useFileExplorerRowDrag({
       nativeExpandTimerRef.current = null
     }
   }, [])
+
+  const setRowDragNode = useCallback(
+    (node: HTMLButtonElement | null): void => {
+      // Why: delayed drag-expand timers target this row; unmounting the row
+      // makes those timers stale even if the browser skips dragleave.
+      if (node === null) {
+        clearExpandTimer()
+        clearNativeExpandTimer()
+      }
+    },
+    [clearExpandTimer, clearNativeExpandTimer]
+  )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
@@ -148,8 +161,7 @@ export function useFileExplorerRowDrag({
       clearNativeExpandTimer()
       onDragTargetChange(null)
       onNativeDragTargetChange(null)
-      const sourcePath = e.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
-      if (sourcePath) {
+      for (const sourcePath of getWorkspaceFileDragPaths(e.dataTransfer)) {
         onMoveDrop(sourcePath, rowDropDir)
       }
       // Why: native Files drops are handled by the preload-relayed IPC event,
@@ -165,5 +177,5 @@ export function useFileExplorerRowDrag({
     ]
   )
 
-  return { handleDragOver, handleDragEnter, handleDragLeave, handleDrop }
+  return { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop }
 }

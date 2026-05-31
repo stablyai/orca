@@ -41,6 +41,7 @@ describe('BrowserSessionRegistry', () => {
       setPermissionCheckHandler: vi.fn(),
       setDisplayMediaRequestHandler: vi.fn(),
       on: vi.fn(),
+      removeListener: vi.fn(),
       clearStorageData: vi.fn().mockResolvedValue(undefined),
       clearCache: vi.fn().mockResolvedValue(undefined)
     })
@@ -141,6 +142,22 @@ describe('BrowserSessionRegistry', () => {
     expect(deleted).toBe(true)
     expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(false)
     expect(browserSessionRegistry.getProfile(profile!.id)).toBeNull()
+  })
+
+  it('clears session policy callbacks when deleting a profile', async () => {
+    const profile = browserSessionRegistry.createProfile('isolated', 'Policy Delete Test')
+    expect(profile).not.toBeNull()
+    const mockSession = sessionFromPartitionMock.mock.results[0]?.value
+    const downloadHandler = mockSession.on.mock.calls.find(
+      ([eventName]) => eventName === 'will-download'
+    )?.[1]
+
+    await expect(browserSessionRegistry.deleteProfile(profile!.id)).resolves.toBe(true)
+
+    expect(mockSession.removeListener).toHaveBeenCalledWith('will-download', downloadHandler)
+    expect(mockSession.setPermissionRequestHandler).toHaveBeenLastCalledWith(null)
+    expect(mockSession.setPermissionCheckHandler).toHaveBeenLastCalledWith(null)
+    expect(mockSession.setDisplayMediaRequestHandler).toHaveBeenLastCalledWith(null)
   })
 
   it('refuses to delete the default profile', async () => {

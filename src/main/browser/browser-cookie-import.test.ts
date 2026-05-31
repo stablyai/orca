@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: cookie import tests share import-time Electron mocks plus
+   browser-specific cookie fixtures; splitting would duplicate brittle setup. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { sessionFromPartitionMock, dialogShowOpenDialogMock } = vi.hoisted(() => ({
@@ -11,10 +13,79 @@ vi.mock('electron', () => ({
   session: { fromPartition: sessionFromPartitionMock }
 }))
 
-import { importCookiesFromFile, detectInstalledBrowsers } from './browser-cookie-import'
+import {
+  buildChromiumCookieInsertParams,
+  importCookiesFromFile,
+  importCookiesFromBrowser,
+  detectInstalledBrowsers,
+  type ChromiumCookieColumnInfo,
+  type DetectedBrowser
+} from './browser-cookie-import'
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+
+const LARGE_SAFARI_COOKIE_COUNT = 150_000
+
+function buildSafariBinaryCookies(cookieCount: number): Buffer {
+  const cookies: Buffer[] = []
+  const offsets: number[] = []
+  let pageSize = 8 + cookieCount * 4
+
+  for (let index = 0; index < cookieCount; index += 1) {
+    offsets.push(pageSize)
+    const cookie = buildExpiredSafariCookie(index)
+    cookies.push(cookie)
+    pageSize += cookie.length
+  }
+
+  const page = Buffer.alloc(pageSize)
+  page.writeUInt32BE(0x00000100, 0)
+  page.writeUInt32LE(cookieCount, 4)
+  for (let index = 0; index < offsets.length; index += 1) {
+    page.writeUInt32LE(offsets[index], 8 + index * 4)
+  }
+
+  let cookieOffset = 8 + cookieCount * 4
+  for (const cookie of cookies) {
+    cookie.copy(page, cookieOffset)
+    cookieOffset += cookie.length
+  }
+
+  const file = Buffer.alloc(12 + page.length)
+  file.write('cook', 0, 'utf8')
+  file.writeUInt32BE(1, 4)
+  file.writeUInt32BE(page.length, 8)
+  page.copy(file, 12)
+  return file
+}
+
+function buildExpiredSafariCookie(index: number): Buffer {
+  const domain = `.expired-${index}.example.com`
+  const name = `sid-${index}`
+  const path = '/'
+  const value = 'expired'
+  const strings = [domain, name, path, value]
+  const headerSize = 48
+  let cursor = headerSize
+  const offsets = strings.map((text) => {
+    const offset = cursor
+    cursor += Buffer.byteLength(text) + 1
+    return offset
+  })
+
+  const cookie = Buffer.alloc(cursor)
+  cookie.writeUInt32LE(cookie.length, 0)
+  cookie.writeUInt32LE(offsets[0], 16)
+  cookie.writeUInt32LE(offsets[1], 20)
+  cookie.writeUInt32LE(offsets[2], 24)
+  cookie.writeUInt32LE(offsets[3], 28)
+  cookie.writeDoubleLE(1, 40)
+  for (let index = 0; index < strings.length; index += 1) {
+    cookie.write(strings[index], offsets[index], 'utf8')
+  }
+  return cookie
+}
 
 describe('importCookiesFromFile', () => {
   let tmpDir: string
@@ -209,6 +280,41 @@ describe('importCookiesFromFile', () => {
   })
 })
 
+describe('importCookiesFromBrowser Safari', () => {
+  let tmpDir: string
+  let cookiesSetMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'orca-safari-cookie-test-'))
+    cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    sessionFromPartitionMock.mockReset()
+    sessionFromPartitionMock.mockReturnValue({
+      cookies: { set: cookiesSetMock }
+    })
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('reports expired cookies from large Safari binary cookie pages', async () => {
+    const cookiesPath = join(tmpDir, 'Cookies.binarycookies')
+    writeFileSync(cookiesPath, buildSafariBinaryCookies(LARGE_SAFARI_COOKIE_COUNT))
+    const browser: DetectedBrowser = {
+      family: 'safari',
+      label: 'Safari',
+      cookiesPath,
+      profiles: [],
+      selectedProfile: 'Default'
+    }
+
+    const result = await importCookiesFromBrowser(browser, 'persist:test')
+
+    expect(result).toEqual({ ok: false, reason: 'All Safari cookies are expired.' })
+    expect(cookiesSetMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('detectInstalledBrowsers', () => {
   it('returns an array of detected browsers', () => {
     const browsers = detectInstalledBrowsers()
@@ -231,5 +337,61 @@ describe('detectInstalledBrowsers', () => {
     for (const browser of browsers) {
       expect(validFamilies).toContain(browser.family)
     }
+  })
+})
+
+describe('buildChromiumCookieInsertParams', () => {
+  it('fills target-only NOT NULL Chromium cookie columns instead of inserting null', () => {
+    const decryptedValue = Buffer.from('decrypted-cookie-value')
+    const columns: ChromiumCookieColumnInfo[] = [
+      { name: 'creation_utc', type: 'INTEGER', notnull: 1 },
+      { name: 'host_key', type: 'TEXT', notnull: 1 },
+      { name: 'top_frame_site_key', type: 'TEXT', notnull: 1 },
+      { name: 'name', type: 'TEXT', notnull: 1 },
+      { name: 'value', type: 'TEXT', notnull: 1 },
+      { name: 'encrypted_value', type: 'BLOB', notnull: 1 },
+      { name: 'source_port', type: 'INTEGER', notnull: 1 },
+      { name: 'last_update_utc', type: 'INTEGER', notnull: 1 },
+      { name: 'has_cross_site_ancestor', type: 'INTEGER', notnull: 1, dflt_value: '0' }
+    ]
+    const sourceRow = {
+      creation_utc: 133_000_000_000_000n,
+      host_key: '.example.com',
+      name: 'sid'
+    }
+
+    const params = buildChromiumCookieInsertParams(columns, sourceRow, decryptedValue)
+
+    expect(params).toEqual([
+      133_000_000_000_000n,
+      '.example.com',
+      '',
+      'sid',
+      decryptedValue,
+      Buffer.alloc(0),
+      -1,
+      133_000_000_000_000n,
+      0
+    ])
+  })
+
+  it('preserves null for nullable columns without defaults', () => {
+    const decryptedValue = Buffer.from('decrypted-cookie-value')
+    const columns: ChromiumCookieColumnInfo[] = [
+      { name: 'creation_utc', type: 'INTEGER', notnull: 1 },
+      { name: 'host_key', type: 'TEXT', notnull: 1 },
+      { name: 'nullable_metadata', type: 'TEXT', notnull: 0 },
+      { name: 'target_only_nullable_metadata', type: 'TEXT', notnull: 0 },
+      { name: 'last_update_utc', type: 'INTEGER', notnull: 1 }
+    ]
+    const sourceRow = {
+      creation_utc: 133_000_000_000_000n,
+      host_key: '.example.com',
+      nullable_metadata: null
+    }
+
+    const params = buildChromiumCookieInsertParams(columns, sourceRow, decryptedValue)
+
+    expect(params).toEqual([133_000_000_000_000n, '.example.com', null, null, 133_000_000_000_000n])
   })
 })

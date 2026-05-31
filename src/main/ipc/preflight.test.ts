@@ -8,6 +8,7 @@ const {
   execFileAsyncMock,
   hydrateShellPathMock,
   mergePathSegmentsMock,
+  getActiveMultiplexerMock,
   getBitbucketAuthStatusMock,
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock
@@ -17,6 +18,7 @@ const {
   execFileAsyncMock: vi.fn(),
   hydrateShellPathMock: vi.fn(),
   mergePathSegmentsMock: vi.fn(),
+  getActiveMultiplexerMock: vi.fn(),
   getBitbucketAuthStatusMock: vi.fn(),
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn()
@@ -43,6 +45,10 @@ vi.mock('../startup/hydrate-shell-path', () => ({
   mergePathSegments: mergePathSegmentsMock
 }))
 
+vi.mock('./ssh', () => ({
+  getActiveMultiplexer: getActiveMultiplexerMock
+}))
+
 vi.mock('../bitbucket/client', () => ({
   getBitbucketAuthStatus: getBitbucketAuthStatusMock
 }))
@@ -62,7 +68,7 @@ import {
   runPreflightCheck
 } from './preflight'
 
-type HandlerMap = Record<string, (_event?: unknown, args?: { force?: boolean }) => Promise<unknown>>
+type HandlerMap = Record<string, (_event?: unknown, args?: unknown) => Promise<unknown>>
 
 describe('preflight', () => {
   const originalPlatform = process.platform
@@ -88,6 +94,7 @@ describe('preflight', () => {
     execFileAsyncMock.mockReset()
     hydrateShellPathMock.mockReset()
     mergePathSegmentsMock.mockReset()
+    getActiveMultiplexerMock.mockReset()
     getBitbucketAuthStatusMock.mockReset()
     getAzureDevOpsAuthStatusMock.mockReset()
     getGiteaAuthStatusMock.mockReset()
@@ -138,10 +145,12 @@ describe('preflight', () => {
       gitea: defaultGiteaStatus
     })
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(4, 'gh', ['auth', 'status'], {
-      encoding: 'utf-8'
+      encoding: 'utf-8',
+      timeout: 5000
     })
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(5, 'glab', ['auth', 'status'], {
-      encoding: 'utf-8'
+      encoding: 'utf-8',
+      timeout: 5000
     })
   })
 
@@ -199,6 +208,47 @@ describe('preflight', () => {
     expect(status.glab).toEqual({ installed: true, authenticated: false })
   })
 
+  it('times out hung local preflight probes', async () => {
+    vi.useFakeTimers()
+    try {
+      execFileAsyncMock.mockImplementation((command, args) => {
+        if (command === 'git') {
+          return Promise.resolve({ stdout: 'git version 2.0.0\n' })
+        }
+        if (command === 'gh' && Array.isArray(args) && args[0] === '--version') {
+          return new Promise(() => {})
+        }
+        if (command === 'glab') {
+          return Promise.reject(new Error('command not found: glab'))
+        }
+        throw new Error(`unexpected command ${String(command)}`)
+      })
+
+      const statusPromise = runPreflightCheck()
+      let settled = false
+      void statusPromise.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+
+      await vi.advanceTimersByTimeAsync(5000)
+      await Promise.resolve()
+
+      expect(settled).toBe(true)
+      await expect(statusPromise).resolves.toMatchObject({
+        git: { installed: true },
+        gh: { installed: false },
+        glab: { installed: false }
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('prefers the selected WSL distro when checking gh for a WSL workspace', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -240,6 +290,48 @@ describe('preflight', () => {
       ['-d', 'Ubuntu', '--', 'bash', '-lc', "'gh' auth status"],
       { encoding: 'utf-8', timeout: 5000 }
     )
+  })
+
+  it('times out hung WSL preflight probes', async () => {
+    vi.useFakeTimers()
+    try {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: 'win32'
+      })
+      execFileAsyncMock.mockImplementation((command, args) => {
+        if (command === 'git') {
+          return Promise.resolve({ stdout: 'git version 2.0.0\n' })
+        }
+        if (command === 'gh' || command === 'glab') {
+          return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
+        }
+        if (command === 'wsl.exe' && Array.isArray(args) && args.at(-1) === "'gh' --version") {
+          return new Promise(() => {})
+        }
+        if (command === 'wsl.exe' && Array.isArray(args) && args.at(-1) === "'glab' --version") {
+          return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
+        }
+        throw new Error(`unexpected command ${String(command)}`)
+      })
+
+      const statusPromise = runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      let settled = false
+      void statusPromise.finally(() => {
+        settled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(5000)
+      await Promise.resolve()
+
+      expect(settled).toBe(true)
+      await expect(statusPromise).resolves.toMatchObject({
+        gh: { installed: false },
+        glab: { installed: false }
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('re-runs the probe when forced so updated gh auth state is visible without relaunch', async () => {
@@ -348,6 +440,9 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+      if (String(args[0]) === 'openclaude') {
+        return { stdout: '/Users/test/.local/bin/openclaude\n' }
+      }
       if (String(args[0]) === 'cursor-agent') {
         return { stdout: '/Users/test/.local/bin/cursor-agent\n' }
       }
@@ -356,7 +451,24 @@ describe('preflight', () => {
 
     registerPreflightHandlers()
 
-    await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['cursor'])
+    await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['openclaude', 'cursor'])
+  })
+
+  it('sends OpenClaude detection commands through the SSH remote preflight path', async () => {
+    const request = vi.fn().mockResolvedValue({ agents: ['openclaude'] })
+    getActiveMultiplexerMock.mockReturnValue({
+      isDisposed: () => false,
+      request
+    })
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
+    ).resolves.toEqual(['openclaude'])
+    expect(request).toHaveBeenCalledWith('preflight.detectAgents', {
+      commands: expect.arrayContaining([{ id: 'openclaude', cmd: 'openclaude' }])
+    })
   })
 
   it('detects agents from the selected WSL distro for a WSL workspace', async () => {
@@ -379,6 +491,30 @@ describe('preflight', () => {
     })
 
     await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
+  })
+
+  it('detects agents from the default WSL distro when requested', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'wsl.exe') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      const script = String(args[3])
+      if (script === "command -v 'codex'") {
+        return { stdout: '/home/test/.local/bin/codex\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents({ wslDefault: true })).resolves.toEqual(['codex'])
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['--', 'bash', '-lc', "command -v 'codex'"],
+      { encoding: 'utf-8', timeout: 5000 }
+    )
   })
 
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {

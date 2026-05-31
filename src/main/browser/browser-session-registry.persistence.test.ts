@@ -33,6 +33,7 @@ function installModuleMocks(
     setPermissionCheckHandler: vi.fn(),
     setDisplayMediaRequestHandler: vi.fn(),
     on: vi.fn(),
+    removeListener: vi.fn(),
     clearStorageData: vi.fn().mockResolvedValue(undefined),
     clearCache: vi.fn().mockResolvedValue(undefined)
   }))
@@ -241,5 +242,38 @@ describe('BrowserSessionRegistry persistence', () => {
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
     expect(written.pendingCookieImports).toEqual({ [importedPartition]: '/staged/imported' })
     expect(written.pendingCookieDbPath).toBeNull()
+  })
+
+  it('ignores pending cookie imports for invalid persisted profile partitions', async () => {
+    const invalidPartition = 'persist:../../outside'
+    const fsState = createFsState()
+    seedMeta(fsState, {
+      defaultSource: null,
+      userAgent: null,
+      userAgentByPartition: {},
+      pendingCookieDbPath: null,
+      pendingCookieImports: {
+        [invalidPartition]: '/staged/evil'
+      },
+      profiles: [
+        {
+          id: 'profile-1',
+          scope: 'imported',
+          partition: invalidPartition,
+          label: 'Invalid',
+          source: null
+        }
+      ]
+    })
+    fsState.present.add('/staged/evil')
+
+    installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.applyPendingCookieImport()
+
+    const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
+    expect(written.pendingCookieImports).toEqual({})
+    expect(fsState.present.has('/outside/Cookies')).toBe(false)
   })
 })
