@@ -17,6 +17,7 @@ import type {
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import { buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
+import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
@@ -28,10 +29,25 @@ type NonInteractiveExecQueueEntry = {
   release: () => void
 }
 
+function isJsonRpcMethodNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  return (error as { code?: unknown }).code === JsonRpcErrorCode.MethodNotFound
+}
+
+function formatStatusEntriesForCleanCheck(entries: GitStatusResult['entries']): string | undefined {
+  if (entries.length === 0) {
+    return undefined
+  }
+  return entries.map((entry) => `${entry.area} ${entry.status}: ${entry.path}`).join('\n')
+}
+
 export class SshGitProvider implements IGitProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
   private nonInteractiveExecQueues = new Map<string, NonInteractiveExecQueueEntry[]>()
+  private loggedWorktreeIsCleanFallback = false
 
   constructor(connectionId: string, mux: SshChannelMultiplexer) {
     this.connectionId = connectionId
@@ -443,9 +459,26 @@ export class SshGitProvider implements IGitProvider {
   }
 
   async worktreeIsClean(worktreePath: string): Promise<{ clean: boolean; stdout?: string }> {
-    return (await this.mux.request('git.worktreeIsClean', { worktreePath })) as {
-      clean: boolean
-      stdout?: string
+    try {
+      return (await this.mux.request('git.worktreeIsClean', { worktreePath })) as {
+        clean: boolean
+        stdout?: string
+      }
+    } catch (error) {
+      if (!isJsonRpcMethodNotFoundError(error)) {
+        throw error
+      }
+      if (!this.loggedWorktreeIsCleanFallback) {
+        this.loggedWorktreeIsCleanFallback = true
+        console.warn(
+          '[ssh-git] Relay does not implement git.worktreeIsClean; falling back to git.status clean check'
+        )
+      }
+      // Why: existing SSH relays may predate git.worktreeIsClean, but git.status
+      // is a narrow relay RPC and avoids the generic git.exec allowlist.
+      const status = await this.getStatus(worktreePath)
+      const clean = status.entries.length === 0
+      return { clean, stdout: formatStatusEntriesForCleanCheck(status.entries) }
     }
   }
 
