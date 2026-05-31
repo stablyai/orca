@@ -799,6 +799,53 @@ describe('AgentBrowserBridge', () => {
     expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
   })
 
+  it('tears down a session that finishes creating after destruction starts', async () => {
+    const commandCalls: string[][] = []
+    let releaseStaleClose: (() => void) | null = null
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        commandCalls.push(args)
+        if (args.includes('close') && !releaseStaleClose) {
+          releaseStaleClose = () => {
+            cb(null, JSON.stringify({ success: true, data: null }), '')
+          }
+          return { kill: vi.fn() }
+        }
+        cb(null, JSON.stringify({ success: true, data: null }), '')
+        return { kill: vi.fn() }
+      }
+    )
+
+    const ensurePromise = (
+      bridge as unknown as {
+        ensureSession: (
+          sessionName: string,
+          browserPageId: string,
+          webContentsId: number
+        ) => Promise<void>
+      }
+    ).ensureSession('orca-tab-tab-1', 'tab-1', 100)
+
+    await vi.waitFor(() => {
+      expect(releaseStaleClose).not.toBeNull()
+    })
+    expect(CdpWsProxyMock.instances).toHaveLength(0)
+
+    const destroyPromise = (
+      bridge as unknown as { destroySession: (name: string) => Promise<void> }
+    ).destroySession('orca-tab-tab-1')
+
+    releaseStaleClose!()
+    await ensurePromise
+    await destroyPromise
+
+    const sessions = (bridge as unknown as { sessions: Map<string, unknown> }).sessions
+    const proxy = CdpWsProxyMock.instances[0] as { stop: ReturnType<typeof vi.fn> }
+    expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
+    expect(sessions.size).toBe(0)
+    expect(proxy.stop).toHaveBeenCalledTimes(1)
+  })
+
   it('cancels the command already running when a session is destroyed', async () => {
     succeedWith({ snapshot: 'initial' })
     await bridge.snapshot()

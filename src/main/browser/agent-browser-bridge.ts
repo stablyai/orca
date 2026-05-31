@@ -1982,8 +1982,21 @@ export class AgentBrowserBridge {
       return
     }
 
+    const pendingCreation = this.pendingSessionCreation.get(sessionName)
+    if (pendingCreation) {
+      // Why: tab close can race with stale-session cleanup before sessions.set().
+      // Wait for creation to settle so a late proxy cannot survive the close.
+      try {
+        await pendingCreation
+      } catch {
+        // Creation failures are handled by the original caller; teardown still
+        // needs to reject queued work and clear any partial state below.
+      }
+    }
+
     const session = this.sessions.get(sessionName)
     if (!session) {
+      this.rejectQueuedCommandsForClosedSession(sessionName)
       return
     }
 
@@ -1992,19 +2005,7 @@ export class AgentBrowserBridge {
 
     // Why: queued commands would hang forever if we just delete the queue —
     // their promises would never resolve or reject. Drain and reject them.
-    const queue = this.commandQueues.get(sessionName)
-    this.commandQueues.delete(sessionName)
-    this.processingQueues.delete(sessionName)
-    if (queue) {
-      const err = new BrowserError(
-        'browser_tab_closed',
-        'Tab was closed while commands were queued'
-      )
-      for (const cmd of queue) {
-        cmd.reject(err)
-      }
-      queue.length = 0
-    }
+    this.rejectQueuedCommandsForClosedSession(sessionName)
 
     if (session.activeProcess) {
       // Why: queued command rejection is not enough when a daemon command is
@@ -2036,6 +2037,22 @@ export class AgentBrowserBridge {
       await destroy
     } finally {
       this.pendingSessionDestruction.delete(sessionName)
+    }
+  }
+
+  private rejectQueuedCommandsForClosedSession(sessionName: string): void {
+    const queue = this.commandQueues.get(sessionName)
+    this.commandQueues.delete(sessionName)
+    this.processingQueues.delete(sessionName)
+    if (queue) {
+      const err = new BrowserError(
+        'browser_tab_closed',
+        'Tab was closed while commands were queued'
+      )
+      for (const cmd of queue) {
+        cmd.reject(err)
+      }
+      queue.length = 0
     }
   }
 
