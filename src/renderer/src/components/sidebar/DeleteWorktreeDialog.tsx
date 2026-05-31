@@ -402,8 +402,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               <>
                 {canDeleteAllLineage ? (
                   <Button
-                    variant="outline"
-                    className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    ref={confirmButtonRef}
+                    variant="destructive"
                     onClick={handleDeleteAll}
                     disabled={isDeleting}
                   >
@@ -414,8 +414,13 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                   </Button>
                 ) : null}
                 <Button
-                  ref={confirmButtonRef}
-                  variant="destructive"
+                  ref={canDeleteAllLineage ? undefined : confirmButtonRef}
+                  variant={canDeleteAllLineage ? 'outline' : 'destructive'}
+                  className={
+                    canDeleteAllLineage
+                      ? 'border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive'
+                      : undefined
+                  }
                   onClick={() => handleDelete(false)}
                   disabled={isDeleting}
                 >
