@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events'
+import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -174,5 +175,31 @@ describe('MacOSNativeProviderClient', () => {
     )
 
     await expect(secondCall).resolves.toEqual(capabilities)
+  })
+
+  it('removes the parent-owned token file after the helper socket connects', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const call = client.capabilities()
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
+    const request = JSON.parse(socket.writes[0]!) as { id: number }
+    const socketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
+
+    expect(rmSyncMock).toHaveBeenCalledWith(join(socketDirectory, 'provider.token'), {
+      force: true
+    })
+
+    socket.emit(
+      'data',
+      `${JSON.stringify({
+        id: request.id,
+        ok: true,
+        result: { protocolVersion: 1, supports: {} }
+      })}\n`
+    )
+    await expect(call).resolves.toMatchObject({ protocolVersion: 1 })
   })
 })

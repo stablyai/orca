@@ -200,6 +200,7 @@ export class MacOSNativeProviderClient {
     provider.unref()
     try {
       const socket = await connectMacOSProviderSocket(this.socketPath, HELPER_CONNECT_TIMEOUT_MS)
+      rmSync(this.socketTokenPath, { force: true })
       socket.setEncoding('utf8')
       this.socketBuffer = ''
       const onData = (chunk: string) => this.handleSocketData(socket, chunk)
