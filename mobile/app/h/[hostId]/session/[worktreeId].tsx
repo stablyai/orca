@@ -1074,6 +1074,9 @@ export default function SessionScreen() {
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
   const subscribeSeqRef = useRef<Map<string, number>>(new Map())
+  // Why: post-RPC refresh timers capture this screen and must not survive
+  // route reuse or unmount.
+  const delayedActionTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
   // Why: server-side layout state machine emits a monotonic seq on every
   // applyLayout. Track the highest seq we've observed per handle and drop
   // any scrollback/resized event with a strictly older seq — these are
@@ -1106,6 +1109,21 @@ export default function SessionScreen() {
     setCreateWarningState(reconciledCreateWarningState)
   }
   const createWarning = reconciledCreateWarningState.visible
+
+  const clearDelayedActionTimers = useCallback(() => {
+    for (const timer of delayedActionTimersRef.current) {
+      clearTimeout(timer)
+    }
+    delayedActionTimersRef.current.clear()
+  }, [])
+
+  const scheduleDelayedAction = useCallback((fn: () => void, ms: number) => {
+    const timer = setTimeout(() => {
+      delayedActionTimersRef.current.delete(timer)
+      fn()
+    }, ms)
+    delayedActionTimersRef.current.add(timer)
+  }, [])
 
   const clearToastHideTimer = useCallback(() => {
     if (!toastHideTimerRef.current) return
@@ -1148,9 +1166,10 @@ export default function SessionScreen() {
       // so pending animation callbacks cannot clear a newer/unmounted surface.
       toastSeqRef.current += 1
       clearToastHideTimer()
+      clearDelayedActionTimers()
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
     }
-  }, [clearToastHideTimer])
+  }, [clearDelayedActionTimers, clearToastHideTimer])
 
   const dictation = useMobileDictation({
     client,
@@ -1338,7 +1357,7 @@ export default function SessionScreen() {
             // xterm's scrollWidth can still be transient when it commits.
             // Re-fire after a short delay so it runs against a settled DOM.
             // Mirrors the 'resized' handler below.
-            setTimeout(() => getTerminalRef(handle)?.resetZoom(), 200)
+            scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
             // Why: viewport measurement needs xterm to be initialized (cell
             // dimensions come from the renderer). On the first subscribe the
             // WebView hasn't loaded yet, so viewportRef is null and the server
@@ -1431,7 +1450,7 @@ export default function SessionScreen() {
                 new Map(prev).set(handle, data.displayMode as MobileDisplayMode)
               )
             }
-            setTimeout(() => getTerminalRef(handle)?.resetZoom(), 200)
+            scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
           }
         }
       )
@@ -1443,7 +1462,7 @@ export default function SessionScreen() {
       }
       subscribingHandlesRef.current.delete(handle)
     },
-    [client, getTerminalRef]
+    [client, getTerminalRef, scheduleDelayedAction]
   )
 
   // Why: toggles between phone and desktop mode via server RPC. The server
@@ -2339,7 +2358,11 @@ export default function SessionScreen() {
     setLiveInputTerminalHandles(new Set())
     setMarkdownDocs(new Map())
     setFileDocs(new Map())
-  }, [clearTerminalCache, worktreeId])
+    clearDelayedActionTimers()
+    return () => {
+      clearDelayedActionTimers()
+    }
+  }, [clearDelayedActionTimers, clearTerminalCache, worktreeId])
 
   useEffect(() => {
     if (connState !== 'connected') return
@@ -3282,7 +3305,7 @@ export default function SessionScreen() {
           activeHandleRef.current = null
           setActiveHandle(null)
         }
-        setTimeout(() => void fetchSessionTabs(), 500)
+        scheduleDelayedAction(() => void fetchSessionTabs(), 500)
       } else {
         setCreateError('Failed to create terminal')
       }
@@ -3324,7 +3347,7 @@ export default function SessionScreen() {
         if (!openResponse.ok) {
           throw new Error((openResponse as RpcFailure).error.message)
         }
-        setTimeout(() => void fetchSessionTabs(), 300)
+        scheduleDelayedAction(() => void fetchSessionTabs(), 300)
         return
       }
       throw new Error('Unable to create untitled markdown note')
@@ -3365,7 +3388,7 @@ export default function SessionScreen() {
       if (!response.ok) {
         throw new Error((response as RpcFailure).error.message)
       }
-      setTimeout(() => void fetchSessionTabs(), 300)
+      scheduleDelayedAction(() => void fetchSessionTabs(), 300)
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create browser'
@@ -3397,7 +3420,7 @@ export default function SessionScreen() {
       if (!response.ok) {
         throw new Error((response as RpcFailure).error.message)
       }
-      setTimeout(() => void fetchSessionTabs(), 250)
+      scheduleDelayedAction(() => void fetchSessionTabs(), 250)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Browser command failed'
       showToast(message, 1600)
@@ -3425,7 +3448,7 @@ export default function SessionScreen() {
           terminalsRef.current = next
           return next
         })
-        setTimeout(() => void fetchTerminals(), 300)
+        scheduleDelayedAction(() => void fetchTerminals(), 300)
       }
     } catch {
       // Rename failed — refresh will restore the server title.
@@ -3455,7 +3478,7 @@ export default function SessionScreen() {
             subscribeToTerminal(replacement.handle)
           }
         }
-        setTimeout(() => void fetchTerminals(), 300)
+        scheduleDelayedAction(() => void fetchTerminals(), 300)
       }
     } catch {
       // Close failed — keep the local tab list unchanged.
@@ -3482,7 +3505,7 @@ export default function SessionScreen() {
           activeHandleRef.current = null
           setActiveHandle(null)
         }
-        setTimeout(() => void fetchSessionTabs(), 300)
+        scheduleDelayedAction(() => void fetchSessionTabs(), 300)
       }
     } catch {
       // Close failed — keep the authoritative session snapshot visible.
