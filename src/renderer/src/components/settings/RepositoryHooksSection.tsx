@@ -649,6 +649,17 @@ export function RepositoryHooksSection({
     flushScriptDraft()
   }, [flushScriptDraft])
 
+  // Why: unmount can happen before textareas blur; the root ref preserves the
+  // pending local-command save without paying for a cleanup-only Effect.
+  const flushScriptDraftOnUnmount = useCallback(
+    (node: HTMLElement | null): void => {
+      if (node === null) {
+        flushScriptDraft()
+      }
+    },
+    [flushScriptDraft]
+  )
+
   const updateHookSettingsPolicyDraft = useCallback(
     (updates: HookSettingsPolicyDraft) => {
       persistHookSettings({ ...hookSettingsDraftRef.current, ...updates })
@@ -676,12 +687,6 @@ export function RepositoryHooksSection({
     hookSettingsDraftRef.current = next
     setHookSettingsDraft(next)
   }, [flushScriptDraft, onUpdateHookSettings, repo.id, repo.hookSettings, syncHookSettingsDraft])
-
-  useEffect(() => {
-    return () => {
-      flushScriptDraft()
-    }
-  }, [flushScriptDraft])
 
   useEffect(() => {
     let cancelled = false
@@ -772,7 +777,7 @@ export function RepositoryHooksSection({
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
 
   return (
-    <section className="space-y-6">
+    <section ref={flushScriptDraftOnUnmount} className="space-y-6">
       <div className="space-y-1">
         <h2 className="text-sm font-semibold">Worktree Hooks</h2>
         <p className="text-xs text-muted-foreground">
