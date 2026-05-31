@@ -48,12 +48,22 @@ module.exports = {
   },
   files: [
     '!**/.vscode/*',
-    '!src/*',
+    // Why: these repo-only inputs are either bundled into out/ or copied via
+    // extraResources. Shipping them in app.asar bloats the desktop bundle.
+    '!src{,/**/*}',
+    '!config{,/**/*}',
+    '!docs{,/**/*}',
+    '!mobile{,/**/*}',
+    '!native{,/**/*}',
+    '!skills{,/**/*}',
+    '!tests{,/**/*}',
+    '!Casks{,/**/*}',
+    '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md}',
+    '!out/**/*.test.js',
     '!electron.vite.config.{js,ts,mjs,cjs}',
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
     '!tsconfig.json',
-    '!config/*',
     // Why: feature-wall media is copied via extraResources so runtime can read
     // it from process.resourcesPath; exclude the source copy from app.asar.
     '!resources/onboarding/feature-wall/**'

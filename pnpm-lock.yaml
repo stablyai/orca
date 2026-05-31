@@ -19,12 +19,6 @@ importers:
 
   .:
     dependencies:
-      '@dnd-kit/core':
-        specifier: ^6.3.1
-        version: 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@dnd-kit/sortable':
-        specifier: ^10.0.0
-        version: 10.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react@19.2.5)
       '@electron-toolkit/preload':
         specifier: ^3.0.2
         version: 3.0.2(electron@42.3.0)
@@ -34,12 +28,73 @@ importers:
       '@linear/sdk':
         specifier: ^82.1.0
         version: 82.1.0(graphql@16.13.2)
-      '@monaco-editor/react':
-        specifier: ^4.7.0
-        version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@parcel/watcher':
         specifier: ^2.5.6
         version: 2.5.6
+      '@xterm/addon-serialize':
+        specifier: 0.15.0-beta.220
+        version: 0.15.0-beta.220(@xterm/xterm@6.1.0-beta.220)
+      '@xterm/headless':
+        specifier: 6.1.0-beta.220
+        version: 6.1.0-beta.220
+      agent-browser:
+        specifier: ~0.27.0
+        version: 0.27.0
+      electron-updater:
+        specifier: ^6.8.3
+        version: 6.8.3
+      node-pty:
+        specifier: ^1.1.0
+        version: 1.1.0(patch_hash=407ae07e1e0e2ff2e8b58696449c54c31e51d87535bc6aa4a7a7b0b561407282)
+      posthog-node:
+        specifier: ^5.33.3
+        version: 5.33.3
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
+      sherpa-onnx:
+        specifier: 1.12.37
+        version: 1.12.37
+      ssh2:
+        specifier: ^1.17.0
+        version: 1.17.0
+      tweetnacl:
+        specifier: ^1.0.3
+        version: 1.0.3
+      ws:
+        specifier: ^8.20.0
+        version: 8.20.0
+      yaml:
+        specifier: ^2.8.4
+        version: 2.8.4
+      zod:
+        specifier: ~4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@dnd-kit/core':
+        specifier: ^6.3.1
+        version: 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@dnd-kit/sortable':
+        specifier: ^10.0.0
+        version: 10.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react@19.2.5)
+      '@electron-toolkit/tsconfig':
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@25.6.0)
+      '@electron/rebuild':
+        specifier: ^4.0.4
+        version: 4.0.4
+      '@monaco-editor/react':
+        specifier: ^4.7.0
+        version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@playwright/test':
+        specifier: ^1.59.1
+        version: 1.59.1
+      '@stablyai/playwright-test':
+        specifier: ^2.1.14
+        version: 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
+      '@tailwindcss/vite':
+        specifier: ^4.2.4
+        version: 4.2.4(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4))
       '@tanstack/react-virtual':
         specifier: ^3.13.24
         version: 3.13.24(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -91,6 +146,30 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.22.5
         version: 3.22.5
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
+      '@types/qrcode':
+        specifier: ^1.5.6
+        version: 1.5.6
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      '@types/ssh2':
+        specifier: ^1.15.5
+        version: 1.15.5
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260421.2
+        version: 7.0.0-dev.20260421.2
+      '@vitejs/plugin-react':
+        specifier: ^5.2.0
+        version: 5.2.0(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4))
       '@xterm/addon-fit':
         specifier: 0.12.0-beta.220
         version: 0.12.0-beta.220(@xterm/xterm@6.1.0-beta.220)
@@ -100,9 +179,6 @@ importers:
       '@xterm/addon-search':
         specifier: 0.17.0-beta.220
         version: 0.17.0-beta.220(@xterm/xterm@6.1.0-beta.220)
-      '@xterm/addon-serialize':
-        specifier: 0.15.0-beta.220
-        version: 0.15.0-beta.220(@xterm/xterm@6.1.0-beta.220)
       '@xterm/addon-unicode11':
         specifier: 0.10.0-beta.220
         version: 0.10.0-beta.220(@xterm/xterm@6.1.0-beta.220)
@@ -112,15 +188,9 @@ importers:
       '@xterm/addon-webgl':
         specifier: 0.20.0-beta.219
         version: 0.20.0-beta.219(patch_hash=b7465b48cca8d596e3bf0e441f939100c95adaddef13e85df089ed0ad6f6b1ea)(@xterm/xterm@6.1.0-beta.220)
-      '@xterm/headless':
-        specifier: 6.1.0-beta.220
-        version: 6.1.0-beta.220
       '@xterm/xterm':
         specifier: 6.1.0-beta.220
         version: 6.1.0-beta.220
-      agent-browser:
-        specifier: ~0.27.0
-        version: 0.27.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -133,18 +203,30 @@ importers:
       dompurify:
         specifier: ^3.4.2
         version: 3.4.5
-      electron-updater:
-        specifier: ^6.8.3
-        version: 6.8.3
+      electron:
+        specifier: ^42.3.0
+        version: 42.3.0
+      electron-builder:
+        specifier: ^26.8.1
+        version: 26.8.1(electron-builder-squirrel-windows@26.8.1)
+      electron-vite:
+        specifier: ^5.0.0
+        version: 5.0.0(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4))
       emoji-picker-react:
         specifier: ^4.19.1
         version: 4.19.1(react@19.2.5)
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13
+      husky:
+        specifier: ^9.1.7
+        version: 9.1.7
       katex:
         specifier: ^0.16.45
         version: 0.16.45
+      lint-staged:
+        specifier: ^16.4.0
+        version: 16.4.0
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
@@ -157,24 +239,33 @@ importers:
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1
-      node-pty:
-        specifier: ^1.1.0
-        version: 1.1.0(patch_hash=407ae07e1e0e2ff2e8b58696449c54c31e51d87535bc6aa4a7a7b0b561407282)
+      oxfmt:
+        specifier: ^0.52.0
+        version: 0.52.0
+      oxlint:
+        specifier: ^1.67.0
+        version: 1.67.0(oxlint-tsgolint@0.23.0)
+      oxlint-tsgolint:
+        specifier: 0.23.0
+        version: 0.23.0
       pdfjs-dist:
         specifier: ^5.7.284
         version: 5.7.284
-      posthog-node:
-        specifier: ^5.33.3
-        version: 5.33.3
-      qrcode:
-        specifier: ^1.5.4
-        version: 1.5.4
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      react:
+        specifier: ^19.2.5
+        version: 19.2.5
       react-colorful:
         specifier: ^5.7.0
         version: 5.7.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      react-dom:
+        specifier: ^19.2.5
+        version: 19.2.5(react@19.2.5)
+      react-grab:
+        specifier: ^0.1.33
+        version: 0.1.34(react@19.2.5)
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.14)(react@19.2.5)
@@ -211,124 +302,33 @@ importers:
       shadcn:
         specifier: ^4.7.0
         version: 4.7.0(@types/node@25.6.0)(typescript@5.9.3)
-      sherpa-onnx:
-        specifier: 1.12.37
-        version: 1.12.37
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      ssh2:
-        specifier: ^1.17.0
-        version: 1.17.0
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
-      tweetnacl:
-        specifier: ^1.0.3
-        version: 1.0.3
-      unified:
-        specifier: ^11.0.5
-        version: 11.0.5
-      ws:
-        specifier: ^8.20.0
-        version: 8.20.0
-      yaml:
-        specifier: ^2.8.4
-        version: 2.8.4
-      zod:
-        specifier: ~4.4.3
-        version: 4.4.3
-      zustand:
-        specifier: ^5.0.13
-        version: 5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
-    devDependencies:
-      '@electron-toolkit/tsconfig':
-        specifier: ^2.0.0
-        version: 2.0.0(@types/node@25.6.0)
-      '@electron/rebuild':
-        specifier: ^4.0.4
-        version: 4.0.4
-      '@playwright/test':
-        specifier: ^1.59.1
-        version: 1.59.1
-      '@stablyai/playwright-test':
-        specifier: ^2.1.14
-        version: 2.1.14(@playwright/test@1.59.1)(zod@4.4.3)
-      '@tailwindcss/vite':
-        specifier: ^4.2.4
-        version: 4.2.4(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4))
-      '@types/node':
-        specifier: ^25.6.0
-        version: 25.6.0
-      '@types/qrcode':
-        specifier: ^1.5.6
-        version: 1.5.6
-      '@types/react':
-        specifier: ^19.2.14
-        version: 19.2.14
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.14)
-      '@types/ssh2':
-        specifier: ^1.15.5
-        version: 1.15.5
-      '@types/ws':
-        specifier: ^8.18.1
-        version: 8.18.1
-      '@typescript/native-preview':
-        specifier: 7.0.0-dev.20260421.2
-        version: 7.0.0-dev.20260421.2
-      '@vitejs/plugin-react':
-        specifier: ^5.2.0
-        version: 5.2.0(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4))
-      electron:
-        specifier: ^42.3.0
-        version: 42.3.0
-      electron-builder:
-        specifier: ^26.8.1
-        version: 26.8.1(electron-builder-squirrel-windows@26.8.1)
-      electron-vite:
-        specifier: ^5.0.0
-        version: 5.0.0(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4))
-      husky:
-        specifier: ^9.1.7
-        version: 9.1.7
-      lint-staged:
-        specifier: ^16.4.0
-        version: 16.4.0
-      oxfmt:
-        specifier: ^0.52.0
-        version: 0.52.0
-      oxlint:
-        specifier: ^1.67.0
-        version: 1.67.0(oxlint-tsgolint@0.23.0)
-      oxlint-tsgolint:
-        specifier: 0.23.0
-        version: 0.23.0
-      react:
-        specifier: ^19.2.5
-        version: 19.2.5
-      react-dom:
-        specifier: ^19.2.5
-        version: 19.2.5(react@19.2.5)
-      react-grab:
-        specifier: ^0.1.33
-        version: 0.1.34(react@19.2.5)
       tailwindcss:
         specifier: ^4.2.4
         version: 4.2.4
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      unified:
+        specifier: ^11.0.5
+        version: 11.0.5
       vite:
         specifier: ^7.3.2
         version: 7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4)
       vitest:
         specifier: ^4.1.5
         version: 4.1.5(@types/node@25.6.0)(msw@2.14.3(@types/node@25.6.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4))
+      zustand:
+        specifier: ^5.0.13
+        version: 5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
     optionalDependencies:
       sherpa-onnx-darwin-arm64:
         specifier: 1.12.37
@@ -2895,8 +2895,8 @@ packages:
   '@types/node@18.19.130':
     resolution: {integrity: sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg==}
 
-  '@types/node@24.12.4':
-    resolution: {integrity: sha512-GUUEShf+PBCGW2KaXwcIt3Yk+e3pkKwWKb9GSyM9WQVE+ep2jzmHdGsHzu4wgcZy5fN9FBdVzjpBQsYlpfpgLA==}
+  '@types/node@24.12.2':
+    resolution: {integrity: sha512-A1sre26ke7HDIuY/M23nd9gfB+nrmhtYyMINbjI1zHJxYteKR6qSMX56FsmjMcDb3SMcjJg5BiRRgOCC/yBD0g==}
 
   '@types/node@25.6.0':
     resolution: {integrity: sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ==}
@@ -5665,11 +5665,6 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  semver@7.8.1:
-    resolution: {integrity: sha512-rkVq3IXh+4FDGch+KwzX3aV9W3kO54GyEgpvBzSyctDA6Xtd7RJQV1xmXbeQp5v7+VzLOfVqiutSE6GICgPFvg==}
-    engines: {node: '>=10'}
-    hasBin: true
-
   send@1.2.1:
     resolution: {integrity: sha512-1gnZf7DFcoIcajTjTwjwuDjzuz4PPcY2StKPlsGAQ1+YH20IRVrBaXSWmdjowTJ6u8Rc01PoYOGHXfP1mYcZNQ==}
     engines: {node: '>= 18'}
@@ -6702,7 +6697,7 @@ snapshots:
       env-paths: 3.0.0
       graceful-fs: 4.2.11
       progress: 2.0.3
-      semver: 7.8.1
+      semver: 7.7.4
       sumchecker: 3.0.1
     optionalDependencies:
       undici: 7.26.0
@@ -8741,7 +8736,7 @@ snapshots:
     dependencies:
       undici-types: 5.26.5
 
-  '@types/node@24.12.4':
+  '@types/node@24.12.2':
     dependencies:
       undici-types: 7.16.0
 
@@ -9779,7 +9774,7 @@ snapshots:
   electron@42.3.0:
     dependencies:
       '@electron/get': 5.0.0
-      '@types/node': 24.12.4
+      '@types/node': 24.12.2
       extract-zip: 2.0.1
     transitivePeerDependencies:
       - supports-color
@@ -12098,8 +12093,6 @@ snapshots:
   semver@6.3.1: {}
 
   semver@7.7.4: {}
-
-  semver@7.8.1: {}
 
   send@1.2.1:
     dependencies:
