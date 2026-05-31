@@ -105,6 +105,7 @@ import {
   shouldRecoverRendererAfterProcessGone,
   type ExpectedTeardownScope
 } from './crash-reporting/process-gone-classification'
+import { getProcessGoneDedupeKey, processGoneDedupe } from './crash-reporting/process-gone-dedupe'
 import {
   advanceSyntheticTitleSpinnerEntries,
   type SyntheticTitleSpinnerEntry
@@ -656,8 +657,6 @@ function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
   webContents?.send('ui:openCrashReport')
 }
 
-const recentCrashKeys = new Map<string, number>()
-
 function recordProcessGoneCrash(
   source: 'renderer' | 'child',
   processType: string,
@@ -687,12 +686,10 @@ function recordProcessGoneCrash(
     })
     return
   }
-  const key = `${processType}:${reason}:${exitCode ?? 'null'}`
-  const now = Date.now()
-  if (now - (recentCrashKeys.get(key) ?? 0) < 2_000) {
+  const key = getProcessGoneDedupeKey(processType, reason, exitCode)
+  if (!processGoneDedupe.shouldRecord(key)) {
     return
   }
-  recentCrashKeys.set(key, now)
   const span = startSpan('electron.process_gone', {
     attributes: {
       'crash.source': source,
