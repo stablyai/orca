@@ -15,19 +15,28 @@ import {
 } from '../../../shared/e2ee-crypto'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
+const fakeSockets: FakeWebSocket[] = []
+
 class FakeWebSocket {
   static readonly CONNECTING = 0
   static readonly OPEN = 1
   readyState = FakeWebSocket.CONNECTING
   binaryType = 'arraybuffer'
+  onopen: (() => void) | null = null
+  onmessage: ((event: { data: unknown }) => void) | null = null
+  onclose: (() => void) | null = null
+  onerror: (() => void) | null = null
   close = vi.fn()
   send = vi.fn()
 
-  constructor(readonly _url: string) {}
+  constructor(readonly _url: string) {
+    fakeSockets.push(this)
+  }
 }
 
 describe('WebRuntimeClient', () => {
   beforeEach(() => {
+    fakeSockets.length = 0
     vi.stubGlobal('window', {
       setTimeout,
       clearTimeout,
@@ -154,6 +163,43 @@ describe('WebRuntimeClient', () => {
       await expect(callPromise).rejects.toThrow('Remote Orca runtime connection closed.')
       expect(vi.getTimerCount()).toBe(0)
     } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores messages from a stale socket after reconnect creates a replacement', async () => {
+    vi.useFakeTimers()
+    const timerWindow = window as unknown as {
+      setTimeout: typeof setTimeout
+      clearTimeout: typeof clearTimeout
+    }
+    timerWindow.setTimeout = setTimeout
+    timerWindow.clearTimeout = clearTimeout
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+
+    try {
+      const staleSocket = fakeSockets[0]!
+
+      await vi.advanceTimersByTimeAsync(12_000)
+      await vi.advanceTimersByTimeAsync(500)
+
+      const replacementSocket = fakeSockets[1]!
+      replacementSocket.readyState = FakeWebSocket.OPEN
+      replacementSocket.onopen?.()
+
+      expect(replacementSocket.send).toHaveBeenCalledTimes(1)
+
+      staleSocket.onmessage?.({ data: JSON.stringify({ type: 'e2ee_ready' }) })
+      await Promise.resolve()
+
+      expect(replacementSocket.send).toHaveBeenCalledTimes(1)
+    } finally {
+      client.close()
       vi.useRealTimers()
     }
   })

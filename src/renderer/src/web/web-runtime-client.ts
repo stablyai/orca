@@ -345,7 +345,12 @@ export class WebRuntimeClient {
     }
 
     ws.onmessage = (event) => {
-      void this.handleSocketMessage(event.data)
+      // Why: stale socket callbacks can arrive after reconnect swaps this.ws;
+      // they must not drive auth or subscription state on the replacement.
+      if (this.ws !== ws) {
+        return
+      }
+      void this.handleSocketMessage(event.data, ws)
     }
 
     ws.onclose = () => this.handleSocketClosed(ws)
@@ -356,7 +361,7 @@ export class WebRuntimeClient {
     }
   }
 
-  private async handleSocketMessage(rawData: unknown): Promise<void> {
+  private async handleSocketMessage(rawData: unknown, sourceWs?: WebSocket): Promise<void> {
     const raw = typeof rawData === 'string' ? rawData : null
     if (this.state === 'handshaking') {
       if (raw === null || !this.sharedKey) {
@@ -404,6 +409,9 @@ export class WebRuntimeClient {
 
     if (raw === null) {
       const encrypted = await websocketPayloadToUint8(rawData)
+      if (sourceWs && this.ws !== sourceWs) {
+        return
+      }
       if (!encrypted) {
         return
       }
