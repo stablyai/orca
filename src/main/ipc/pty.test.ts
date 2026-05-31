@@ -157,7 +157,7 @@ import {
   setLocalPtyProvider,
   unregisterSshPtyProvider
 } from './pty'
-import { hasLiveClaudePtys } from '../claude-accounts/live-pty-gate'
+import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
@@ -473,6 +473,15 @@ describe('registerPtyHandlers', () => {
       expect(hasLiveClaudePtys()).toBe(true)
 
       await handlers.get('pty:kill')!(null, { id: spawnResult.id })
+
+      expect(hasLiveClaudePtys()).toBe(false)
+    })
+
+    it('clears Claude live-PTY tracking from shared provider teardown', () => {
+      markClaudePtySpawned('ssh-claude-pty')
+      expect(hasLiveClaudePtys()).toBe(true)
+
+      clearProviderPtyState('ssh-claude-pty')
 
       expect(hasLiveClaudePtys()).toBe(false)
     })

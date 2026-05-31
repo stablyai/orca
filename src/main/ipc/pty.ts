@@ -767,6 +767,9 @@ export function clearProviderPtyState(id: string): void {
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
+  // Why: SSH exit and connection-teardown paths bypass pty.ts's local onExit
+  // callback but still need to release Claude account-switch guards.
+  markClaudePtyExited(id)
   ptySizes.delete(id)
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)
