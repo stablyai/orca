@@ -30,6 +30,12 @@ type PendingRequest = {
   reject: (error: Error) => void
 }
 
+type ConnectWaiter = {
+  resolve: () => void
+  reject: (error: Error) => void
+  timeout: ReturnType<typeof setTimeout> | null
+}
+
 type SendRequestOptions = {
   timeoutMs?: number
 }
@@ -188,7 +194,7 @@ export function connect(
   let activeBrowserScreencastRequestId: string | null = null
   let pendingBrowserScreencastRequestId: string | null = null
   const stateListeners = new Set<(state: ConnectionState) => void>()
-  const connectWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = []
+  const connectWaiters: ConnectWaiter[] = []
 
   if (onStateChange) {
     stateListeners.add(onStateChange)
@@ -202,6 +208,9 @@ export function connect(
   function rejectConnectWaiters(reason: string) {
     const error = new Error(reason)
     for (const waiter of connectWaiters.splice(0)) {
+      if (waiter.timeout) {
+        clearTimeout(waiter.timeout)
+      }
       waiter.reject(error)
     }
   }
@@ -221,7 +230,12 @@ export function connect(
     })
     if (next === 'connected') {
       lastConnectedAt = Date.now()
-      for (const w of connectWaiters.splice(0)) w.resolve()
+      for (const waiter of connectWaiters.splice(0)) {
+        if (waiter.timeout) {
+          clearTimeout(waiter.timeout)
+        }
+        waiter.resolve()
+      }
     } else if (next === 'disconnected' || next === 'auth-failed') {
       const reason =
         next === 'auth-failed' ? 'Unauthorized — pairing may be revoked' : 'Connection closed'
@@ -243,7 +257,7 @@ export function connect(
     }
   }
 
-  function waitForConnected(): Promise<void> {
+  function waitForConnected(timeoutMs?: number): Promise<void> {
     if (state === 'connected') return Promise.resolve()
     if (intentionallyClosed) return Promise.reject(new Error('Client closed'))
     if (state === 'reconnecting' && reconnectAttempt >= GIVE_UP_AFTER_ATTEMPTS && !reconnectTimer) {
@@ -252,7 +266,22 @@ export function connect(
       return Promise.reject(new Error('Connection retry limit reached'))
     }
     return new Promise((resolve, reject) => {
-      connectWaiters.push({ resolve, reject })
+      const waiter: ConnectWaiter = { resolve, reject, timeout: null }
+      if (timeoutMs !== undefined) {
+        // Why: explicit per-request timeouts must include offline/reconnect
+        // waiting, not only the RPC after the socket becomes connected.
+        waiter.timeout = setTimeout(
+          () => {
+            const index = connectWaiters.indexOf(waiter)
+            if (index !== -1) {
+              connectWaiters.splice(index, 1)
+            }
+            reject(new Error('Timed out while connecting to the remote Orca runtime.'))
+          },
+          Math.max(0, timeoutMs)
+        )
+      }
+      connectWaiters.push(waiter)
     })
   }
 
@@ -982,7 +1011,7 @@ export function connect(
     ): Promise<RpcResponse> {
       const waitStart = Date.now()
       const wasConnected = state === 'connected'
-      await waitForConnected()
+      await waitForConnected(options?.timeoutMs)
       if (!wasConnected) {
         console.log('[net] sendRequest waited for connect', {
           method,
