@@ -37,6 +37,25 @@ describe('parseAzureDevOpsRepoRef', () => {
     })
   })
 
+  it('strips trailing slashes after .git suffixes', () => {
+    expect(parseAzureDevOpsRepoRef('https://dev.azure.com/acme/Project/_git/repo.git/')).toEqual({
+      host: 'dev.azure.com',
+      organization: 'acme',
+      project: 'Project',
+      repository: 'repo',
+      apiBaseUrl: 'https://dev.azure.com/acme/Project',
+      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+    })
+    expect(parseAzureDevOpsRepoRef('git@ssh.dev.azure.com:v3/acme/Project/repo.git/')).toEqual({
+      host: 'dev.azure.com',
+      organization: 'acme',
+      project: 'Project',
+      repository: 'repo',
+      apiBaseUrl: 'https://dev.azure.com/acme/Project',
+      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+    })
+  })
+
   it('parses legacy visualstudio.com HTTPS remotes', () => {
     expect(parseAzureDevOpsRepoRef('https://acme.visualstudio.com/Project/_git/repo.git')).toEqual({
       host: 'acme.visualstudio.com',

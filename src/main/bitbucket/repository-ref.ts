@@ -39,7 +39,7 @@ function decodeSegment(value: string): string {
 }
 
 function parseBitbucketPath(pathname: string): BitbucketRepoRef | null {
-  const withoutSuffix = pathname.replace(/\.git$/i, '')
+  const withoutSuffix = pathname.replace(/\/+$/, '').replace(/\.git$/i, '')
   const parts = withoutSuffix
     .split('/')
     .map((part) => part.trim())

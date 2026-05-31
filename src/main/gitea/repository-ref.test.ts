@@ -40,6 +40,21 @@ describe('Gitea repository ref parsing', () => {
     })
   })
 
+  it('strips trailing slashes after .git suffixes', () => {
+    expect(parseGiteaRepoRef('https://git.example.com/team/project.git/')).toEqual({
+      host: 'git.example.com',
+      owner: 'team',
+      repo: 'project',
+      apiBaseUrl: 'https://git.example.com/api/v1',
+      webBaseUrl: 'https://git.example.com'
+    })
+    expect(parseGiteaRepoRef('git@gitea.example.test:team/project.git/')).toMatchObject({
+      host: 'gitea.example.test',
+      owner: 'team',
+      repo: 'project'
+    })
+  })
+
   it('preserves an HTTP subpath when deriving the API base URL', () => {
     expect(parseGiteaRepoRef('https://git.example.com/code/team/project.git')).toEqual({
       host: 'git.example.com',

@@ -49,7 +49,7 @@ function decodeSegment(value: string): string {
 }
 
 function parsePath(pathname: string): { owner: string; repo: string; basePath: string } | null {
-  const withoutSuffix = pathname.replace(/\.git$/i, '')
+  const withoutSuffix = pathname.replace(/\/+$/, '').replace(/\.git$/i, '')
   const parts = withoutSuffix
     .split('/')
     .map((part) => part.trim())

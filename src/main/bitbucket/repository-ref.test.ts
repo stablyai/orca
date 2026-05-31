@@ -46,6 +46,17 @@ describe('Bitbucket repository refs', () => {
     expect(parseBitbucketRepoRef('https://github.com/team/project.git')).toBeNull()
   })
 
+  it('strips trailing slashes after .git suffixes', () => {
+    expect(parseBitbucketRepoRef('https://bitbucket.org/team/project.git/')).toEqual({
+      workspace: 'team',
+      repoSlug: 'project'
+    })
+    expect(parseBitbucketRepoRef('git@bitbucket.org:team/project.git/')).toEqual({
+      workspace: 'team',
+      repoSlug: 'project'
+    })
+  })
+
   it('keeps malformed percent sequences as literal repo path text', async () => {
     expect(parseBitbucketRepoRef('git@bitbucket.org:team/project%zz.git')).toEqual({
       workspace: 'team',

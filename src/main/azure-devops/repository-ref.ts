@@ -48,6 +48,7 @@ function encodeSegment(value: string): string {
 
 function splitPath(path: string): string[] {
   return path
+    .replace(/\/+$/, '')
     .replace(/\.git$/i, '')
     .split('/')
     .map((part) => part.trim())
