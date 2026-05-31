@@ -199,7 +199,13 @@ function decodeSshUrlUsername(value: string): string | undefined {
   if (!value) {
     return undefined
   }
-  return decodeURIComponent(value)
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    // Why: malformed pasted SSH URLs should surface validation errors in the
+    // form, not throw during parsing before the user can fix the input.
+    return value
+  }
 }
 
 function parseHostAndOptionalPort(input: string): {

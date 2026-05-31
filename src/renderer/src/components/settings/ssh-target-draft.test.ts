@@ -62,6 +62,16 @@ describe('parseSshHostInput', () => {
     })
   })
 
+  it('does not throw on malformed username escapes in invalid ssh URL ports', () => {
+    expect(parseSshHostInput('ssh://bad%ZZ@example.com:99999/srv/app')).toEqual({
+      host: 'example.com',
+      username: 'bad%ZZ',
+      port: undefined,
+      invalidPort: true,
+      configHost: 'example.com'
+    })
+  })
+
   it('keeps plain OpenSSH config aliases valid without a username', () => {
     expect(parseSshHostInput('prod-box')).toEqual({
       host: 'prod-box',
