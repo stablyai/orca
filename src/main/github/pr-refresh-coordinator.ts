@@ -276,6 +276,9 @@ function scheduleVisibleFollowUp(
   windowId?: number
 ): void {
   if (!isVisibleKey(key)) {
+    // Why: manual/active refreshes can remove the queued visible retry after
+    // its owner window is gone, leaving the retry backoff without an owner.
+    errorBackoff.delete(key)
     return
   }
   if (outcome.kind === 'upstream-error') {
@@ -580,6 +583,10 @@ export function reportVisiblePRRefreshCandidates(
 
 export function _getVisiblePRRefreshWindowCountForTests(): number {
   return visibleByWindow.size
+}
+
+export function _getPRRefreshErrorBackoffCountForTests(): number {
+  return errorBackoff.size
 }
 
 export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise<PRRefreshOutcome> {

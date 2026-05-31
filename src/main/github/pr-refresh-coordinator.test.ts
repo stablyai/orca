@@ -427,6 +427,36 @@ describe('pr-refresh-coordinator', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
   })
 
+  it('clears visible retry backoff when a non-visible manual refresh steals the retry', async () => {
+    const {
+      _getPRRefreshErrorBackoffCountForTests,
+      refreshPRNow,
+      reportVisiblePRRefreshCandidates
+    } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({
+        kind: 'upstream-error',
+        errorType: 'network',
+        message: 'network down',
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success' }),
+        fetchedAt: Date.now()
+      })
+
+    const candidate = makeCandidate()
+    reportVisiblePRRefreshCandidates([candidate], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(_getPRRefreshErrorBackoffCountForTests()).toBe(1)
+
+    getAllWebContentsMock.mockReturnValue([])
+    await refreshPRNow(candidate)
+
+    expect(_getPRRefreshErrorBackoffCountForTests()).toBe(0)
+  })
+
   it('retries visible PRs with unknown mergeability before the success-check interval', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock
