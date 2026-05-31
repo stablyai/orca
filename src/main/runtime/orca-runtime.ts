@@ -8270,6 +8270,7 @@ export class OrcaRuntimeService {
     const cacheKey = `${repoPath}::${remote}`
     const cached = this.canonicalFetchKeyCache.get(cacheKey)
     if (cached !== undefined) {
+      setBoundedMapEntry(this.canonicalFetchKeyCache, cacheKey, cached, REMOTE_FETCH_CACHE_MAX)
       return cached
     }
     let resolved = cacheKey
@@ -8286,7 +8287,7 @@ export class OrcaRuntimeService {
       // Fall through to the caller-provided path. The fetch still runs from
       // repoPath; this key only controls cache sharing.
     }
-    this.canonicalFetchKeyCache.set(cacheKey, resolved)
+    setBoundedMapEntry(this.canonicalFetchKeyCache, cacheKey, resolved, REMOTE_FETCH_CACHE_MAX)
     return resolved
   }
 
@@ -8308,11 +8309,15 @@ export class OrcaRuntimeService {
   async getOrStartRemoteFetch(repoPath: string, remote: string): Promise<RemoteFetchResult> {
     const key = await this.getCanonicalFetchKey(repoPath, remote)
     const lastAt = this.fetchLastCompletedAt.get(key)
-    if (lastAt !== undefined && Date.now() - lastAt < FETCH_FRESHNESS_MS) {
-      // Why: freshness window hit — skip the fetch entirely. Do NOT reuse any
-      // in-flight promise here; the timestamp is only written on success, so
-      // hitting this branch means a previous fetch did succeed recently.
-      return { ok: true }
+    if (lastAt !== undefined) {
+      if (Date.now() - lastAt < FETCH_FRESHNESS_MS) {
+        // Why: freshness window hit — skip the fetch entirely. Do NOT reuse any
+        // in-flight promise here; the timestamp is only written on success, so
+        // hitting this branch means a previous fetch did succeed recently.
+        setBoundedMapEntry(this.fetchLastCompletedAt, key, lastAt, REMOTE_FETCH_CACHE_MAX)
+        return { ok: true }
+      }
+      this.fetchLastCompletedAt.delete(key)
     }
 
     const existing = this.fetchInflight.get(key)
@@ -8327,7 +8332,7 @@ export class OrcaRuntimeService {
         .then((): RemoteFetchResult => {
           // Why (§3.3 Lifecycle): timestamp on success ONLY. Writing on rejection
           // would make the freshness cache lie about the last known remote state.
-          this.fetchLastCompletedAt.set(key, Date.now())
+          setBoundedMapEntry(this.fetchLastCompletedAt, key, Date.now(), REMOTE_FETCH_CACHE_MAX)
           return { ok: true }
         })
         .catch((err): RemoteFetchResult => {
@@ -12773,7 +12778,22 @@ const PTY_CONTROLLER_LIST_TIMEOUT_MS = 3000
 // clicks and successive coordinator dispatches feel snappy, while still being
 // short enough that a genuinely-changed remote is observed on the next action.
 const FETCH_FRESHNESS_MS = 30_000
+const REMOTE_FETCH_CACHE_MAX = 512
 const DRIFT_PROBE_SUBJECT_LIMIT = 5
+
+function setBoundedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: number): void {
+  if (map.has(key)) {
+    map.delete(key)
+  }
+  map.set(key, value)
+  while (map.size > maxEntries) {
+    const oldest = map.keys().next()
+    if (oldest.done) {
+      return
+    }
+    map.delete(oldest.value)
+  }
+}
 
 function getExplicitWorktreeIdSelector(selector: string | undefined): string | null {
   if (!selector?.startsWith('id:')) {

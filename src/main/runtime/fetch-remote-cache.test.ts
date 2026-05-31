@@ -118,6 +118,24 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     expect(fetchCallCount()).toBe(1)
   })
 
+  it('bounds process-lifetime fetch cache maps for churned repo paths', async () => {
+    mockFetchResults(Array.from({ length: 520 }, () => ({ stdout: '', stderr: '' })))
+    const runtime = new OrcaRuntimeService(null)
+    const caches = runtime as unknown as {
+      canonicalFetchKeyCache: Map<string, string>
+      fetchLastCompletedAt: Map<string, number>
+    }
+
+    for (let i = 0; i < 520; i += 1) {
+      await runtime.fetchRemoteWithCache(`/repo/cache-${i}`, 'origin')
+    }
+
+    expect(caches.canonicalFetchKeyCache.size).toBeLessThanOrEqual(512)
+    expect(caches.fetchLastCompletedAt.size).toBeLessThanOrEqual(512)
+    expect(caches.canonicalFetchKeyCache.has('/repo/cache-0::origin')).toBe(false)
+    expect(caches.fetchLastCompletedAt.has('/repo/cache-0::origin')).toBe(false)
+  })
+
   it('resolves remote-tracking bases with longest configured remote matching', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'foo\nfoo/bar\norigin\n', stderr: '' })
     const runtime = new OrcaRuntimeService(null)
