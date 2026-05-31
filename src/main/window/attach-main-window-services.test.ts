@@ -98,6 +98,7 @@ import { attachMainWindowServices } from './attach-main-window-services'
 type MockFn = ReturnType<typeof vi.fn>
 
 type MainWindowStub = {
+  id?: number
   isDestroyed?: MockFn
   on: MockFn
   webContents: {
@@ -122,6 +123,7 @@ type RuntimeStub = {
 
 function createMainWindow(extraWebContents: { on?: MockFn; send?: MockFn } = {}): MainWindowStub {
   return {
+    id: 1,
     isDestroyed: vi.fn(() => false),
     on: vi.fn(),
     webContents: {
@@ -149,6 +151,12 @@ function createRuntime(): RuntimeStub {
     markRendererReloading: vi.fn(),
     markGraphUnavailable: vi.fn()
   }
+}
+
+function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
+  return mainWindowOnMock.mock.calls
+    .filter(([event]) => event === 'closed')
+    .map(([, handler]) => handler as () => void)
 }
 
 describe('attachMainWindowServices', () => {
@@ -275,6 +283,48 @@ describe('attachMainWindowServices', () => {
 
     expect(onBeforeRendererReload).not.toHaveBeenCalled()
     expect(mainWindow.webContents.reload).not.toHaveBeenCalled()
+  })
+
+  it('removes the app reload IPC handler when the owning window closes', () => {
+    const mainWindowOnMock = vi.fn()
+    const mainWindow = createMainWindow()
+    mainWindow.on = mainWindowOnMock
+
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    removeHandlerMock.mockClear()
+    const closedHandlers = getClosedHandlers(mainWindowOnMock)
+    expect(closedHandlers.length).toBeGreaterThan(0)
+    for (const handler of closedHandlers) {
+      handler()
+    }
+
+    expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
+  })
+
+  it('keeps a newer app reload handler when an older window closes late', () => {
+    const oldWindowOnMock = vi.fn()
+    const oldWindow = createMainWindow()
+    oldWindow.on = oldWindowOnMock
+    attachMainWindowServices(oldWindow as never, createStore(), createRuntime() as never)
+    const oldClosedHandlers = getClosedHandlers(oldWindowOnMock)
+
+    const newWindowOnMock = vi.fn()
+    const newWindow = createMainWindow()
+    newWindow.on = newWindowOnMock
+    attachMainWindowServices(newWindow as never, createStore(), createRuntime() as never)
+
+    removeHandlerMock.mockClear()
+    for (const handler of oldClosedHandlers) {
+      handler()
+    }
+
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('app:reload')
+
+    for (const handler of getClosedHandlers(newWindowOnMock)) {
+      handler()
+    }
+    expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
   })
 
   it('only allows the explicit permission allowlist', async () => {
@@ -423,9 +473,7 @@ describe('attachMainWindowServices', () => {
 
     attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
 
-    const closedHandler = mainWindowOnMock.mock.calls
-      .filter(([event]) => event === 'closed')
-      .at(-1)?.[1] as (() => void) | undefined
+    const closedHandler = getClosedHandlers(mainWindowOnMock).at(-1)
     expect(closedHandler).toBeTypeOf('function')
     closedHandler?.()
     expect(browserManagerUnregisterAllMock).toHaveBeenCalledTimes(1)
@@ -443,14 +491,55 @@ describe('attachMainWindowServices', () => {
     expect(relayHandler).toBeTypeOf('function')
     expect(removeAllListenersMock).toHaveBeenCalledWith(channel)
 
-    const closedHandlers = mainWindowOnMock.mock.calls
-      .filter(([event]) => event === 'closed')
-      .map(([, handler]) => handler as () => void)
+    const closedHandlers = getClosedHandlers(mainWindowOnMock)
     for (const handler of closedHandlers) {
       handler()
     }
 
     expect(removeListenerMock).toHaveBeenCalledWith(channel, relayHandler)
+  })
+
+  it('clears the runtime notifier when the owning window closes', () => {
+    const mainWindowOnMock = vi.fn()
+    const mainWindow = createMainWindow()
+    mainWindow.on = mainWindowOnMock
+    const runtime = createRuntime()
+
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+
+    runtime.setNotifier.mockClear()
+    for (const handler of getClosedHandlers(mainWindowOnMock)) {
+      handler()
+    }
+
+    expect(runtime.markGraphUnavailable).toHaveBeenCalledWith(1)
+    expect(runtime.setNotifier).toHaveBeenCalledWith(null)
+  })
+
+  it('keeps a newer runtime notifier when an older window closes late', () => {
+    const runtime = createRuntime()
+    const oldWindowOnMock = vi.fn()
+    const oldWindow = createMainWindow()
+    oldWindow.on = oldWindowOnMock
+    attachMainWindowServices(oldWindow as never, createStore(), runtime as never)
+    const oldClosedHandlers = getClosedHandlers(oldWindowOnMock)
+
+    const newWindowOnMock = vi.fn()
+    const newWindow = createMainWindow()
+    newWindow.on = newWindowOnMock
+    attachMainWindowServices(newWindow as never, createStore(), runtime as never)
+
+    runtime.setNotifier.mockClear()
+    for (const handler of oldClosedHandlers) {
+      handler()
+    }
+
+    expect(runtime.setNotifier).not.toHaveBeenCalledWith(null)
+
+    for (const handler of getClosedHandlers(newWindowOnMock)) {
+      handler()
+    }
+    expect(runtime.setNotifier).toHaveBeenCalledWith(null)
   })
 
   it('forwards runtime notifier events to the renderer', () => {
