@@ -9915,6 +9915,30 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('treats normal runtime deletion of an already-missing unregistered worktree as cleanup', async () => {
+    const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-remove-'))
+    const missingWorktreePath = join(parentDir, 'already-deleted')
+    const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
+    const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const notifier = { worktreesChanged: vi.fn() }
+    runtime.setNotifier(notifier as never)
+
+    try {
+      vi.mocked(listWorktrees).mockResolvedValue([])
+
+      await expect(runtime.removeManagedWorktree(worktreeId)).resolves.toEqual({})
+
+      expect(removeWorktree).not.toHaveBeenCalled()
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+      expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
+      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+      expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
+    } finally {
+      await rm(parentDir, { recursive: true, force: true })
+    }
+  })
+
   it('force-removes a legacy Orca-created runtime orphaned worktree directory after Git tracking is gone', async () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-orphan-'))
     const repoPath = join(parentDir, 'repo')

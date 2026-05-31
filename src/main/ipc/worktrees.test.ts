@@ -3967,6 +3967,29 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('treats normal deletion of an already-missing unregistered worktree as cleanup', async () => {
+    mockKnownFeatureWorktree('/workspace/real-feature')
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/already-deleted-wt'
+    })
+
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(
+      'repo-1::/workspace/already-deleted-wt'
+    )
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::/workspace/already-deleted-wt')
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(
+      'repo-1::/workspace/already-deleted-wt'
+    )
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
+  })
+
   it('force-removes a legacy Orca-created orphaned worktree directory after Git tracking is gone', async () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-ipc-orphan-'))
     const repoPath = join(parentDir, 'repo')

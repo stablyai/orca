@@ -9011,8 +9011,7 @@ export class OrcaRuntimeService {
   }
 
   private async resolveWorktreeRemovalTarget(
-    worktreeSelector: string,
-    force: boolean
+    worktreeSelector: string
   ): Promise<RuntimeWorktreeRemovalTarget> {
     try {
       const worktree = await this.resolveWorktreeSelector(worktreeSelector)
@@ -9025,7 +9024,7 @@ export class OrcaRuntimeService {
         ? { ...removalTarget, pushTarget: worktree.pushTarget }
         : removalTarget
     } catch (error) {
-      if (!force || !(error instanceof Error) || error.message !== 'selector_not_found') {
+      if (!(error instanceof Error) || error.message !== 'selector_not_found') {
         throw error
       }
       const removalTarget = parseExactWorktreeIdSelector(worktreeSelector)
@@ -9033,9 +9032,9 @@ export class OrcaRuntimeService {
       if (!removalTarget || !meta) {
         throw error
       }
-      // Why: force-delete retries can arrive after Git no longer lists the
-      // worktree. Only exact IDs with persisted Orca metadata are accepted here
-      // so branch/path selectors cannot resolve to an arbitrary missing path.
+      // Why: delete requests can arrive after Git no longer lists the worktree.
+      // Only exact IDs with persisted Orca metadata are accepted here so
+      // branch/path selectors cannot resolve to an arbitrary missing path.
       return meta.pushTarget ? { ...removalTarget, pushTarget: meta.pushTarget } : removalTarget
     }
   }
@@ -9154,7 +9153,7 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const store = this.store
-    const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector, force)
+    const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector)
     const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(removalTarget.id)
     if (inFlightRemoval) {
@@ -9268,9 +9267,9 @@ export class OrcaRuntimeService {
           this.notifier?.worktreesChanged(repo.id)
           return {}
         }
-        if (force && (await isRuntimeWorktreePathMissing(repo, removalTarget.path))) {
-          // Why: runtime clients can retry a force delete after another surface
-          // already removed the worktree. Finish Orca cleanup without touching
+        if (await isRuntimeWorktreePathMissing(repo, removalTarget.path)) {
+          // Why: a manually deleted worktree is already gone from Git and disk.
+          // Finish runtime metadata cleanup without requiring force or touching
           // any unregistered path that still exists.
           await (repo.connectionId
             ? cleanupUnusedWorktreePushTargetRemoteSsh(

@@ -1104,10 +1104,13 @@ export function registerWorktreeHandlers(
             notifyWorktreesChanged(mainWindow, repoId)
             return {}
           }
-          if (args.force && (await isAlreadyRemovedWorktreePath(repo, worktreePath))) {
-            // Why: Force-delete can be retried from stale UI after a prior delete
-            // already removed the directory and Git registration. Treat that as
-            // successful cleanup, but do not delete any unregistered existing path.
+          if (
+            (args.force || removedMeta) &&
+            (await isAlreadyRemovedWorktreePath(repo, worktreePath))
+          ) {
+            // Why: a manually deleted worktree is already gone from Git and disk.
+            // The sidebar delete action has persisted metadata proving this was
+            // an Orca-known row, so no force confirmation is needed.
             if (repo.connectionId) {
               await cleanupUnusedWorktreePushTargetRemoteSsh(
                 provider!,
