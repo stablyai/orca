@@ -152,6 +152,23 @@ export function mapGhosttyToOrca(
       return { key: 'windowBackgroundBlur', value: num > 0 }
     },
 
+    // Why: Ghostty accepts `background-blur` as either a boolean or an integer
+    // radius (an alias for background-blur-radius). Orca only has a boolean
+    // blur toggle, so any positive radius — or an explicit `true` — enables it.
+    'background-blur': (v) => {
+      if (v === 'true') {
+        return { key: 'windowBackgroundBlur', value: true }
+      }
+      if (v === 'false') {
+        return { key: 'windowBackgroundBlur', value: false }
+      }
+      const num = parseStrictInt(v)
+      if (num === null || num < 0) {
+        return null
+      }
+      return { key: 'windowBackgroundBlur', value: num > 0 }
+    },
+
     'split-divider-color': (v) => {
       if (!HEX_COLOR_RE.test(v)) {
         return null
@@ -301,15 +318,14 @@ export function mapGhosttyToOrca(
     }
 
     // Why: Orca's windowBackgroundBlur is a boolean; the numeric radius is lost.
-    // Only note the drop when blur is actually being turned on — a `0` cleanly
-    // maps to `false` and there is no radius to lose.
-    if (
-      key === 'background-blur-radius' &&
-      !Array.isArray(result) &&
-      'key' in result &&
-      result.value === true
-    ) {
-      unsupportedKeys.push('background-blur-radius (radius value not preserved)')
+    // Only note the drop when blur is actually being turned on by a radius — a
+    // `0` cleanly maps to `false`, and the boolean `background-blur = true` form
+    // carries no radius to lose.
+    const droppedBlurRadius =
+      key === 'background-blur-radius' ||
+      (key === 'background-blur' && value !== 'true' && value !== 'false')
+    if (droppedBlurRadius && !Array.isArray(result) && 'key' in result && result.value === true) {
+      unsupportedKeys.push(`${key} (radius value not preserved)`)
     }
 
     if (Array.isArray(result)) {

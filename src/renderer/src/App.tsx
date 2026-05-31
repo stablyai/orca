@@ -1075,6 +1075,19 @@ function App(): React.JSX.Element {
     )
   }, [settings?.appFontFamily])
 
+  // Why: blur makes the Electron window transparent (see createMainWindow); the
+  // `glass` class drops the opaque body so the vibrancy shows through. The two
+  // --glass-opacity* vars feed main.css's translucent surfaces from the
+  // Background Opacity setting — chrome at terminal + 0.25 (readable), middle
+  // view at the terminal opacity. Gated on blur; opacity alone leaves it opaque.
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.toggle('glass', settings?.windowBackgroundBlur ?? false)
+    const terminalOpacity = settings?.terminalBackgroundOpacity ?? 1
+    root.style.setProperty('--glass-opacity', String(Math.min(1, terminalOpacity + 0.25)))
+    root.style.setProperty('--glass-opacity-mid', String(terminalOpacity))
+  }, [settings?.windowBackgroundBlur, settings?.terminalBackgroundOpacity])
+
   // Refresh GitHub data (PR/issue status) when window regains focus
   useEffect(() => {
     const handler = (): void => {
@@ -1772,24 +1785,38 @@ function App(): React.JSX.Element {
                           <Terminal />
                         </RecoverableRenderErrorBoundary>
                       </div>
-                      <Suspense fallback={null}>
-                        <RecoverableRenderErrorBoundary
-                          boundaryId={`page.${activeView}`}
-                          surface="page"
-                          resetKey={`${activeView}:${activeWorktreeId ?? 'none'}`}
-                          title="This page hit an error."
-                          description="Retry the page or navigate to another Orca surface."
-                        >
-                          {activeView === 'settings' ? <Settings /> : null}
-                          {activeView === 'skills' ? <SkillsPage /> : null}
-                          {activeView === 'tasks' ? <TaskPage /> : null}
-                          {activeView === 'automations' ? <AutomationsPage /> : null}
-                          {activeView === 'activity' ? <ActivityPrototypePage /> : null}
-                          {activeView === 'space' ? <WorkspaceSpacePage /> : null}
-                          {activeView === 'mobile' ? <MobilePage /> : null}
-                          {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
-                        </RecoverableRenderErrorBoundary>
-                      </Suspense>
+                      {/* Why: layout-only wrapper for the non-terminal page
+                      region — no background here. Each page paints its own
+                      bg-background; adding one on the wrapper too would stack two
+                      translucent glass layers and make pages read as more opaque
+                      than the terminal/editor. Hidden (not just empty) when the
+                      terminal is active so it never covers the terminal area. */}
+                      <div
+                        className={
+                          activeView !== 'terminal' || !activeWorktreeId
+                            ? 'flex flex-1 min-w-0 min-h-0 flex-col'
+                            : 'hidden'
+                        }
+                      >
+                        <Suspense fallback={null}>
+                          <RecoverableRenderErrorBoundary
+                            boundaryId={`page.${activeView}`}
+                            surface="page"
+                            resetKey={`${activeView}:${activeWorktreeId ?? 'none'}`}
+                            title="This page hit an error."
+                            description="Retry the page or navigate to another Orca surface."
+                          >
+                            {activeView === 'settings' ? <Settings /> : null}
+                            {activeView === 'skills' ? <SkillsPage /> : null}
+                            {activeView === 'tasks' ? <TaskPage /> : null}
+                            {activeView === 'automations' ? <AutomationsPage /> : null}
+                            {activeView === 'activity' ? <ActivityPrototypePage /> : null}
+                            {activeView === 'space' ? <WorkspaceSpacePage /> : null}
+                            {activeView === 'mobile' ? <MobilePage /> : null}
+                            {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
+                          </RecoverableRenderErrorBoundary>
+                        </Suspense>
+                      </div>
                     </div>
                     {showFloatingTerminalButton ? (
                       <FloatingTerminalToggleButton

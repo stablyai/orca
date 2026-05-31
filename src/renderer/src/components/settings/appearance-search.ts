@@ -86,6 +86,28 @@ export const TYPOGRAPHY_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const GLASS_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Glass Mode',
+    description: 'Make the window translucent so the blurred desktop shows through the whole app.',
+    keywords: [
+      'glass',
+      'blur',
+      'vibrancy',
+      'acrylic',
+      'transparent',
+      'translucent',
+      'window',
+      'background'
+    ]
+  },
+  {
+    title: 'Glass Opacity',
+    description: 'How opaque the app surfaces are in Glass Mode.',
+    keywords: ['glass', 'opacity', 'transparency', 'background', 'alpha', 'blur']
+  }
+]
+
 export const LAYOUT_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Show Git-Ignored Files',
@@ -123,6 +145,7 @@ export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...THEME_ENTRIES,
   ...TYPOGRAPHY_ENTRIES,
   ...ZOOM_ENTRIES,
+  ...GLASS_ENTRIES,
   ...LAYOUT_ENTRIES,
   ...TITLEBAR_ENTRIES,
   ...STATUS_BAR_ENTRIES,

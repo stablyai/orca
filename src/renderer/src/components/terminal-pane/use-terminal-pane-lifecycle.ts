@@ -926,7 +926,17 @@ export function useTerminalPaneLifecycle({
           cursorBlink: currentSettings?.terminalCursorBlink ?? true,
           macOptionIsMeta: effectiveMacOptionAsAltRef.current === 'true',
           lineHeight: currentSettings?.terminalLineHeight ?? 1,
-          wordSeparator: currentSettings?.terminalWordSeparator
+          wordSeparator: currentSettings?.terminalWordSeparator,
+          // Why: xterm only sets up its renderer for an alpha background when
+          // allowTransparency is true at open() time. Seed it before
+          // new Terminal()/open() so a semi-transparent theme renders correctly
+          // on the first paint. Gated on blur to match the live policy in
+          // applyTerminalAppearance: transparency only applies in glass mode, so
+          // with blur off the terminal stays fully opaque on its solid theme.
+          allowTransparency:
+            currentSettings?.windowBackgroundBlur === true &&
+            currentSettings.terminalBackgroundOpacity !== undefined &&
+            currentSettings.terminalBackgroundOpacity < 1
         }
       },
       onLinkClick: (event, url) => {

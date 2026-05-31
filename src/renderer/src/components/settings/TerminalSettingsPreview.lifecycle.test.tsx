@@ -219,6 +219,18 @@ describe('TerminalSettingsPreview terminal lifecycle', () => {
     expect(terminal.dispose).toHaveBeenCalledOnce()
   })
 
+  it('stays opaque when Glass Mode (blur) is off, even at a low opacity', () => {
+    // Why: terminal transparency only applies in glass mode; with blur off the
+    // preview must show the solid theme, not a washed-out translucent one.
+    renderPreview(makeSettings({ windowBackgroundBlur: false, terminalBackgroundOpacity: 0.4 }))
+    expect(mockXterm.instances[0].options.allowTransparency).toBe(false)
+  })
+
+  it('allows transparency when Glass Mode is on and opacity < 1', () => {
+    renderPreview(makeSettings({ windowBackgroundBlur: true, terminalBackgroundOpacity: 0.4 }))
+    expect(mockXterm.instances[0].options.allowTransparency).toBe(true)
+  })
+
   it('disposes the ligatures addon before disposing the terminal', () => {
     mockLigaturesAddon.enabled = true
 

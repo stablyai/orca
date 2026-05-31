@@ -178,6 +178,25 @@ describe('mapGhosttyToOrca — background & colors', () => {
     expect(result.unsupportedKeys).toEqual(['background-blur-radius'])
   })
 
+  it('maps boolean and numeric background-blur forms to windowBackgroundBlur', () => {
+    expect(mapGhosttyToOrca({ 'background-blur': 'true' }).diff.windowBackgroundBlur).toBe(true)
+    expect(mapGhosttyToOrca({ 'background-blur': 'false' }).diff.windowBackgroundBlur).toBe(false)
+    // 0 means off — no radius to lose, so no drop note.
+    const off = mapGhosttyToOrca({ 'background-blur': '0' })
+    expect(off.diff.windowBackgroundBlur).toBe(false)
+    expect(off.unsupportedKeys).toEqual([])
+    // A positive radius enables blur; the numeric value is dropped with a note.
+    const radius = mapGhosttyToOrca({ 'background-blur': '20' })
+    expect(radius.diff.windowBackgroundBlur).toBe(true)
+    expect(radius.unsupportedKeys).toEqual(['background-blur (radius value not preserved)'])
+  })
+
+  it('rejects invalid background-blur', () => {
+    const result = mapGhosttyToOrca({ 'background-blur': 'heavy' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['background-blur'])
+  })
+
   it('maps background with hash to terminalColorOverrides.background', () => {
     const result = mapGhosttyToOrca({ background: '#111111' })
     expect(result.diff).toEqual({ terminalColorOverrides: { background: '#111111' } })

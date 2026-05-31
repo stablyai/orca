@@ -221,11 +221,22 @@ export function createMainWindow(
   // changing the setting requires a restart.
   const platformBlurOptions = blur
     ? process.platform === 'darwin'
-      ? { vibrancy: 'under-window' as const, transparent: true }
+      ? // macOS: the blur comes from an NSVisualEffectView (vibrancy). Do NOT
+        // set transparent:true here — it makes the window fully clear and
+        // suppresses the vibrancy view (the reason blur rendered as opaque).
+        // visualEffectState:'active' keeps the blur alive when unfocused.
+        { vibrancy: 'under-window' as const, visualEffectState: 'active' as const }
       : process.platform === 'win32'
         ? { backgroundMaterial: 'acrylic' as const }
         : {}
     : {}
+  // Why: macOS vibrancy / Windows acrylic require a non-opaque window. An
+  // opaque backgroundColor paints over the blur layer, and a transparent
+  // #00000000 fill is only honored alongside transparent:true (which breaks
+  // vibrancy) — so omit backgroundColor entirely for a blur surface and let the
+  // platform material show through. Linux has no native blur, so it stays
+  // opaque to avoid a clear, unblurred window.
+  const hasBlurSurface = blur && (process.platform === 'darwin' || process.platform === 'win32')
 
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? defaultBounds.width,
@@ -242,7 +253,9 @@ export function createMainWindow(
     // Window/Help menus by pressing Alt, matching native Windows/Linux
     // conventions (File Explorer, Firefox, etc.).
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    ...(hasBlurSurface
+      ? {}
+      : { backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff' }),
     // Why: on macOS 'hiddenInset' keeps the native traffic lights positioned
     // inside our custom 42px titlebar. On Windows 'hidden' removes the default
     // OS title bar (which would otherwise stack on top of our renderer titlebar
