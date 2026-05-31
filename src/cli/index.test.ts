@@ -198,6 +198,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([
+        buildWorktree('/tmp/repo', 'main'),
         buildWorktree('/tmp/repo/feature', 'feature/foo'),
         buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'duplicate-repo')
       ]),

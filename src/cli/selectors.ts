@@ -1,5 +1,9 @@
 import { isAbsolute, relative, resolve as resolvePath } from 'path'
-import type { ComputerAppQuery, RuntimeWorktreeListResult } from '../shared/runtime-types'
+import type {
+  ComputerAppQuery,
+  RuntimeWorktreeListResult,
+  RuntimeWorktreeRecord
+} from '../shared/runtime-types'
 import { isPathInsideOrEqual } from '../shared/cross-platform-path'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
@@ -57,9 +61,16 @@ export async function resolveCurrentWorktreeSelector(
   const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', {
     limit: 10_000
   })
-  const enclosingWorktree = worktrees.result.worktrees
-    .filter((worktree) => isWithinPath(resolvePath(worktree.path), currentPath))
-    .sort((left, right) => right.path.length - left.path.length)[0]
+  let enclosingWorktree: RuntimeWorktreeRecord | undefined
+  let enclosingPathLength = -1
+  for (const worktree of worktrees.result.worktrees) {
+    const worktreePath = resolvePath(worktree.path)
+    if (!isWithinPath(worktreePath, currentPath) || worktreePath.length <= enclosingPathLength) {
+      continue
+    }
+    enclosingWorktree = worktree
+    enclosingPathLength = worktreePath.length
+  }
 
   if (!enclosingWorktree) {
     throw new RuntimeClientError(
