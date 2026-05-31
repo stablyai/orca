@@ -17,12 +17,34 @@ const paneKeysRequiringFreshWorking = new Set<string>()
 let wasAgentTaskCompleteNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
 let requireFreshWorkingForNewCoordinators = !wasAgentTaskCompleteNotificationEnabled
 
+function disposeCoordinatorForPaneKey(paneKey: string): void {
+  coordinatorsByPaneKey.get(paneKey)?.coordinator.dispose()
+  coordinatorsByPaneKey.delete(paneKey)
+  paneKeysRequiringFreshWorking.delete(paneKey)
+}
+
+function pruneClosedPaneCoordinators(): void {
+  // Why: hook-completion coordinators are module-scoped and may outlive a pane
+  // unless liveness changes from close/sleep paths evict them here.
+  for (const paneKey of coordinatorsByPaneKey.keys()) {
+    if (!paneHasLivePty(paneKey)) {
+      disposeCoordinatorForPaneKey(paneKey)
+    }
+  }
+  for (const paneKey of paneKeysRequiringFreshWorking) {
+    if (!paneHasLivePty(paneKey)) {
+      paneKeysRequiringFreshWorking.delete(paneKey)
+    }
+  }
+}
+
 function isAgentTaskCompleteNotificationEnabled(): boolean {
   const notifications = useAppStore.getState().settings?.notifications
   return notifications?.enabled !== false && notifications?.agentTaskComplete !== false
 }
 
 export function syncAgentHookCompletionNotificationSettings(): boolean {
+  pruneClosedPaneCoordinators()
   const enabled = isAgentTaskCompleteNotificationEnabled()
   if (!enabled || (!wasAgentTaskCompleteNotificationEnabled && enabled)) {
     requireFreshWorkingForNewCoordinators = true
@@ -106,10 +128,8 @@ export function observeAgentHookCompletionForNotification({
   worktreeId: string
   payload: ParsedAgentStatusPayload
 }): void {
+  pruneClosedPaneCoordinators()
   if (!paneHasLivePty(paneKey)) {
-    coordinatorsByPaneKey.get(paneKey)?.coordinator.dispose()
-    coordinatorsByPaneKey.delete(paneKey)
-    paneKeysRequiringFreshWorking.delete(paneKey)
     return
   }
 
@@ -151,4 +171,8 @@ export function resetAgentHookCompletionNotificationCoordinators(): void {
   paneKeysRequiringFreshWorking.clear()
   wasAgentTaskCompleteNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
   requireFreshWorkingForNewCoordinators = !wasAgentTaskCompleteNotificationEnabled
+}
+
+export function _getAgentHookCompletionNotificationCoordinatorCountForTest(): number {
+  return coordinatorsByPaneKey.size
 }

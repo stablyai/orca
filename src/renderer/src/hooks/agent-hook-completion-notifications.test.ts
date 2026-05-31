@@ -164,4 +164,27 @@ describe('agent hook completion notifications', () => {
       })
     )
   })
+
+  it('prunes retained coordinators when pane liveness is removed from the store', async () => {
+    const {
+      _getAgentHookCompletionNotificationCoordinatorCountForTest,
+      observeAgentHookCompletionForNotification,
+      syncAgentHookCompletionNotificationSettings
+    } = await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('working')
+    })
+
+    expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(1)
+
+    mockStoreState.ptyIdsByTabId = {
+      'tab-1': []
+    }
+    syncAgentHookCompletionNotificationSettings()
+
+    expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(0)
+  })
 })
