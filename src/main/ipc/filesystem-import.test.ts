@@ -605,6 +605,113 @@ describe('fs:importExternalPaths', () => {
     ])
   })
 
+  it('skips runtime upload directories with nested symlinks during the staging traversal', async () => {
+    const sourcePath = '/tmp/dropped/project'
+    const resolvedPath = path.resolve(sourcePath)
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === resolvedPath) {
+        return {
+          size: 0,
+          ino: 1,
+          dev: 1,
+          isFile: () => false,
+          isDirectory: () => true,
+          isSymbolicLink: () => false
+        }
+      }
+      throw enoent()
+    })
+    readdirMock.mockResolvedValue([
+      {
+        name: 'link.txt',
+        isDirectory: () => false,
+        isSymbolicLink: () => true,
+        isFile: () => false
+      }
+    ])
+
+    const result = (await handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, {
+      sourcePaths: [sourcePath]
+    })) as { sources: { status: string; reason?: string }[] }
+
+    expect(result.sources[0]).toMatchObject({ status: 'skipped', reason: 'symlink' })
+    expect(readdirMock).toHaveBeenCalledOnce()
+    expect(openMock).not.toHaveBeenCalled()
+  })
+
+  it('checks runtime upload directory byte budget before reading a file that exceeds the total cap', async () => {
+    const sourcePath = '/tmp/dropped/project'
+    const resolvedPath = path.resolve(sourcePath)
+    const filePaths = ['one.bin', 'two.bin', 'three.bin', 'four.bin', 'overflow.bin'].map((name) =>
+      path.join(resolvedPath, name)
+    )
+    const mib = 1024 * 1024
+    const regularSize = 25 * mib
+    const overflowSize = 1 * mib
+    const readFileMock = vi.fn().mockResolvedValue(Buffer.from('chunk'))
+
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === resolvedPath) {
+        return {
+          size: 0,
+          ino: 1,
+          dev: 1,
+          isFile: () => false,
+          isDirectory: () => true,
+          isSymbolicLink: () => false
+        }
+      }
+      const fileIndex = filePaths.indexOf(p)
+      if (fileIndex !== -1) {
+        const size = fileIndex === filePaths.length - 1 ? overflowSize : regularSize
+        return {
+          size,
+          ino: fileIndex + 2,
+          dev: 1,
+          isFile: () => true,
+          isDirectory: () => false,
+          isSymbolicLink: () => false
+        }
+      }
+      throw enoent()
+    })
+    readdirMock.mockResolvedValue(
+      filePaths.map((filePath) => ({
+        name: path.basename(filePath),
+        isDirectory: () => false,
+        isSymbolicLink: () => false,
+        isFile: () => true
+      }))
+    )
+    openMock.mockImplementation(async (p: string) => {
+      const fileIndex = filePaths.indexOf(p)
+      if (fileIndex >= 0 && fileIndex < filePaths.length - 1) {
+        return {
+          stat: vi.fn().mockResolvedValue({
+            size: regularSize,
+            ino: fileIndex + 2,
+            dev: 1,
+            isFile: () => true
+          }),
+          readFile: readFileMock,
+          close: vi.fn().mockResolvedValue(undefined)
+        }
+      }
+      throw new Error(`unexpected open: ${p}`)
+    })
+
+    const result = (await handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, {
+      sourcePaths: [sourcePath]
+    })) as { sources: { status: string; reason?: string }[] }
+
+    expect(result.sources[0]).toMatchObject({
+      status: 'failed',
+      reason: 'Remote import is too large'
+    })
+    expect(readFileMock).toHaveBeenCalledTimes(4)
+    expect(openMock).not.toHaveBeenCalledWith(filePaths.at(-1), expect.anything())
+  })
+
   it('fails runtime upload staging when a file changes between lstat and open', async () => {
     const sourcePath = '/tmp/dropped/logo.png'
     const resolvedPath = path.resolve(sourcePath)
