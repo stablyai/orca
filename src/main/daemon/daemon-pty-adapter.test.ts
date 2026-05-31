@@ -700,6 +700,65 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(third.coldRestore).toBeUndefined()
     })
 
+    it('drops sticky cold restore data on explicit shutdown', async () => {
+      const sessionId = 'sticky-cache-shutdown-test'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const internals = historyAdapter as unknown as {
+        coldRestoreCache: Map<string, { scrollback: string; cwd: string }>
+      }
+
+      await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(internals.coldRestoreCache.has(sessionId)).toBe(true)
+
+      await historyAdapter.shutdown(sessionId, { immediate: true })
+
+      expect(internals.coldRestoreCache.has(sessionId)).toBe(false)
+    })
+
+    it('drops sticky cold restore data on natural exit', async () => {
+      const sessionId = 'sticky-cache-exit-test'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const internals = historyAdapter as unknown as {
+        coldRestoreCache: Map<string, { scrollback: string; cwd: string }>
+      }
+
+      await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(internals.coldRestoreCache.has(sessionId)).toBe(true)
+
+      lastSubprocess._simulateExit(0)
+      await waitFor(() => !internals.coldRestoreCache.has(sessionId))
+    })
+
     it('opens session for checkpointing after cold restore', async () => {
       const sessionId = 'post-restore-data'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))

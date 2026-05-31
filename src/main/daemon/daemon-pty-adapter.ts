@@ -257,6 +257,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     await this.client.request('kill', { sessionId: id })
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
+    this.coldRestoreCache.delete(id)
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     // Why: history removal is for the "user explicitly closed this terminal"
@@ -429,6 +430,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.dirtySessionVersions.clear()
     this.stopCheckpointTimer()
     for (const id of ids) {
+      this.coldRestoreCache.delete(id)
       // Why: listener throws are intentionally *not* caught — matches the
       // natural onExit fanout in setupEventRouting, so synthetic exits don't
       // diverge in error semantics from real ones. A throwing listener is a
@@ -485,6 +487,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   dispose(): void {
     this.stopCheckpointTimer()
     this.dirtySessionVersions.clear()
+    this.coldRestoreCache.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     // Why: final checkpoints are written daemon-side in TerminalHost.dispose()
@@ -519,6 +522,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // and the pending getSnapshot RPCs would be rejected.
     await this.checkpointAllSessions()
     this.dirtySessionVersions.clear()
+    this.coldRestoreCache.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     this.client.disconnect()
@@ -741,6 +745,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       } else if (event.event === 'exit') {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
+        this.coldRestoreCache.delete(event.sessionId)
         this.stopCheckpointTimerIfIdle()
         if (this.historyManager) {
           void this.historyManager
