@@ -84,6 +84,9 @@ export class SshChannelMultiplexer {
   }
 
   onNotification(handler: NotificationHandler): () => void {
+    if (this.disposed) {
+      return () => {}
+    }
     this.notificationHandlers.push(handler)
     return () => {
       const idx = this.notificationHandlers.indexOf(handler)
@@ -94,6 +97,9 @@ export class SshChannelMultiplexer {
   }
 
   onNotificationByMethod(method: string, handler: MethodNotificationHandler): () => void {
+    if (this.disposed) {
+      return () => {}
+    }
     let set = this.methodNotificationHandlers.get(method)
     if (!set) {
       set = new Set()
@@ -118,6 +124,9 @@ export class SshChannelMultiplexer {
   // and no recovery path — the SSH connection stays up so onStateChange
   // never fires the reconnect logic.
   onDispose(handler: (reason: 'shutdown' | 'connection_lost') => void): () => void {
+    if (this.disposed) {
+      return () => {}
+    }
     this.disposeHandlers.push(handler)
     return () => {
       const idx = this.disposeHandlers.indexOf(handler)
@@ -248,6 +257,9 @@ export class SshChannelMultiplexer {
     }
 
     this.unackedTimestamps.clear()
+    // Why: relay teardown can race with late provider registration; disposed
+    // muxes must not retain provider/session closures through subscribers.
+    this.notificationHandlers.length = 0
     this.methodNotificationHandlers.clear()
     this.decoder.reset()
     this.transport.close?.()
