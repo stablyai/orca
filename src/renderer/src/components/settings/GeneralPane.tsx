@@ -114,6 +114,92 @@ export function updateAutoSaveDelayDraftState(
   }
 }
 
+export type HttpProxyUrlDraftState = {
+  sourceValue: string
+  draft: string
+  error: string | null
+}
+
+export function createHttpProxyUrlDraftState(
+  httpProxyUrl: string | undefined
+): HttpProxyUrlDraftState {
+  const sourceValue = httpProxyUrl ?? ''
+  return {
+    sourceValue,
+    draft: sourceValue,
+    error: null
+  }
+}
+
+function resolveHttpProxyUrlDraftState(
+  state: HttpProxyUrlDraftState,
+  httpProxyUrl: string | undefined
+): HttpProxyUrlDraftState {
+  const sourceValue = httpProxyUrl ?? ''
+  return state.sourceValue === sourceValue ? state : createHttpProxyUrlDraftState(httpProxyUrl)
+}
+
+export function updateHttpProxyUrlDraftState(
+  state: HttpProxyUrlDraftState,
+  httpProxyUrl: string | undefined,
+  draft: string
+): HttpProxyUrlDraftState {
+  return {
+    // Why: settings persistence is async, so edits after an external settings
+    // reload must build on the latest persisted proxy source.
+    ...resolveHttpProxyUrlDraftState(state, httpProxyUrl),
+    draft,
+    error: null
+  }
+}
+
+export function setHttpProxyUrlDraftErrorState(
+  state: HttpProxyUrlDraftState,
+  httpProxyUrl: string | undefined,
+  error: string
+): HttpProxyUrlDraftState {
+  return {
+    ...resolveHttpProxyUrlDraftState(state, httpProxyUrl),
+    error
+  }
+}
+
+export type HttpProxyBypassRulesDraftState = {
+  sourceValue: string
+  draft: string
+}
+
+export function createHttpProxyBypassRulesDraftState(
+  httpProxyBypassRules: string | undefined
+): HttpProxyBypassRulesDraftState {
+  const sourceValue = httpProxyBypassRules ?? ''
+  return {
+    sourceValue,
+    draft: sourceValue
+  }
+}
+
+function resolveHttpProxyBypassRulesDraftState(
+  state: HttpProxyBypassRulesDraftState,
+  httpProxyBypassRules: string | undefined
+): HttpProxyBypassRulesDraftState {
+  const sourceValue = httpProxyBypassRules ?? ''
+  return state.sourceValue === sourceValue
+    ? state
+    : createHttpProxyBypassRulesDraftState(httpProxyBypassRules)
+}
+
+export function updateHttpProxyBypassRulesDraftState(
+  state: HttpProxyBypassRulesDraftState,
+  httpProxyBypassRules: string | undefined,
+  draft: string
+): HttpProxyBypassRulesDraftState {
+  return {
+    ...resolveHttpProxyBypassRulesDraftState(state, httpProxyBypassRules),
+    draft
+  }
+}
+
 type OpenInApplicationsDraftState = {
   sourceApplications: OpenInApplication[] | undefined
   draft: OpenInApplication[]
@@ -174,10 +260,11 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   const [autoSaveDelayDraftState, setAutoSaveDelayDraftState] = useState(() =>
     createAutoSaveDelayDraftState(settings.editorAutoSaveDelayMs)
   )
-  const [httpProxyUrlDraft, setHttpProxyUrlDraft] = useState(settings.httpProxyUrl ?? '')
-  const [httpProxyUrlError, setHttpProxyUrlError] = useState<string | null>(null)
-  const [httpProxyBypassRulesDraft, setHttpProxyBypassRulesDraft] = useState(
-    settings.httpProxyBypassRules ?? ''
+  const [httpProxyUrlDraftState, setHttpProxyUrlDraftState] = useState(() =>
+    createHttpProxyUrlDraftState(settings.httpProxyUrl)
+  )
+  const [httpProxyBypassRulesDraftState, setHttpProxyBypassRulesDraftState] = useState(() =>
+    createHttpProxyBypassRulesDraftState(settings.httpProxyBypassRules)
   )
   const [openInApplicationsDraftState, setOpenInApplicationsDraftState] = useState(() =>
     createOpenInApplicationsDraftState(settings.openInApplications)
@@ -277,14 +364,38 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
     }))
   }
 
-  useEffect(() => {
-    setHttpProxyUrlDraft(settings.httpProxyUrl ?? '')
-    setHttpProxyUrlError(null)
-  }, [settings.httpProxyUrl])
+  const resolvedHttpProxyUrlDraftState = resolveHttpProxyUrlDraftState(
+    httpProxyUrlDraftState,
+    settings.httpProxyUrl
+  )
+  if (resolvedHttpProxyUrlDraftState !== httpProxyUrlDraftState) {
+    // Why: Settings can change outside this pane; reconcile the proxy draft
+    // before paint so stale network values do not briefly appear.
+    setHttpProxyUrlDraftState(resolvedHttpProxyUrlDraftState)
+  }
+  const httpProxyUrlDraft = resolvedHttpProxyUrlDraftState.draft
+  const httpProxyUrlError = resolvedHttpProxyUrlDraftState.error
+  const updateHttpProxyUrlDraft = (draft: string): void => {
+    setHttpProxyUrlDraftState((current) =>
+      updateHttpProxyUrlDraftState(current, settings.httpProxyUrl, draft)
+    )
+  }
 
-  useEffect(() => {
-    setHttpProxyBypassRulesDraft(settings.httpProxyBypassRules ?? '')
-  }, [settings.httpProxyBypassRules])
+  const resolvedHttpProxyBypassRulesDraftState = resolveHttpProxyBypassRulesDraftState(
+    httpProxyBypassRulesDraftState,
+    settings.httpProxyBypassRules
+  )
+  if (resolvedHttpProxyBypassRulesDraftState !== httpProxyBypassRulesDraftState) {
+    // Why: Proxy bypass rules are local input state, but settings reloads can
+    // replace their source while this pane is mounted.
+    setHttpProxyBypassRulesDraftState(resolvedHttpProxyBypassRulesDraftState)
+  }
+  const httpProxyBypassRulesDraft = resolvedHttpProxyBypassRulesDraftState.draft
+  const updateHttpProxyBypassRulesDraft = (draft: string): void => {
+    setHttpProxyBypassRulesDraftState((current) =>
+      updateHttpProxyBypassRulesDraftState(current, settings.httpProxyBypassRules, draft)
+    )
+  }
 
   const commitOpenInApplications = (applications: OpenInApplication[]): void => {
     if (!shouldCommitOpenInApplicationsDraft(applications)) {
@@ -332,11 +443,14 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   const commitHttpProxyUrl = (): void => {
     const normalized = normalizeProxyUrl(httpProxyUrlDraft)
     if (!normalized.ok) {
-      setHttpProxyUrlError(normalized.message)
+      setHttpProxyUrlDraftState((current) =>
+        setHttpProxyUrlDraftErrorState(current, settings.httpProxyUrl, normalized.message)
+      )
       return
     }
-    setHttpProxyUrlError(null)
-    setHttpProxyUrlDraft(normalized.value)
+    setHttpProxyUrlDraftState((current) =>
+      updateHttpProxyUrlDraftState(current, settings.httpProxyUrl, normalized.value)
+    )
     if (normalized.value !== (settings.httpProxyUrl ?? '')) {
       updateSettings({ httpProxyUrl: normalized.value })
     }
@@ -344,7 +458,9 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
 
   const commitHttpProxyBypassRules = (): void => {
     const normalized = normalizeProxyBypassRules(httpProxyBypassRulesDraft)
-    setHttpProxyBypassRulesDraft(normalized)
+    setHttpProxyBypassRulesDraftState((current) =>
+      updateHttpProxyBypassRulesDraftState(current, settings.httpProxyBypassRules, normalized)
+    )
     if (normalized !== (settings.httpProxyBypassRules ?? '')) {
       updateSettings({ httpProxyBypassRules: normalized })
     }
@@ -588,10 +704,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             id="settings-http-proxy-url"
             value={httpProxyUrlDraft}
             onChange={(e) => {
-              setHttpProxyUrlDraft(e.target.value)
-              if (httpProxyUrlError) {
-                setHttpProxyUrlError(null)
-              }
+              updateHttpProxyUrlDraft(e.target.value)
             }}
             onBlur={commitHttpProxyUrl}
             onKeyDown={(e) => {
@@ -631,7 +744,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
           <Input
             id="settings-http-proxy-bypass-rules"
             value={httpProxyBypassRulesDraft}
-            onChange={(e) => setHttpProxyBypassRulesDraft(e.target.value)}
+            onChange={(e) => updateHttpProxyBypassRulesDraft(e.target.value)}
             onBlur={commitHttpProxyBypassRules}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
