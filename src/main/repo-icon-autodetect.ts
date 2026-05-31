@@ -8,6 +8,7 @@ import {
 import { getRepoSlug } from './github/client'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from './providers/types'
+import { iconHrefCandidates } from './repo-icon-href-candidates'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
 
 const REPO_ICON_FILE_CANDIDATES = [
@@ -79,27 +80,6 @@ function extractIconHref(source: string): string | null {
   return source.match(LINK_ICON_HTML_RE)?.[1] ?? source.match(LINK_ICON_OBJECT_RE)?.[1] ?? null
 }
 
-function normalizeIconHrefPath(href: string): string | null {
-  const trimmed = href.trim()
-  if (!trimmed || trimmed.startsWith('//') || /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed)) {
-    return null
-  }
-
-  const pathOnly = (trimmed.split(/[?#]/)[0] ?? '').replace(/^\/+/, '').replace(/\\/g, '/')
-  const parts = pathOnly.split('/').filter((part) => part && part !== '.')
-  // Why: declared icon hrefs are repo content. Never let a best-effort icon
-  // probe resolve outside the worktree through `../` path segments.
-  if (parts.length === 0 || parts.some((part) => part === '..')) {
-    return null
-  }
-  return parts.join('/')
-}
-
-function iconHrefCandidates(href: string): string[] {
-  const clean = normalizeIconHrefPath(href)
-  return clean ? [`public/${clean}`, clean] : []
-}
-
 async function readLocalPngIcon(repoPath: string, relativePath: string): Promise<RepoIcon | null> {
   const filePath = joinWorktreeRelativePath(repoPath, relativePath)
   const info = await stat(filePath)
@@ -167,7 +147,7 @@ async function detectLocalPngIcon(repoPath: string): Promise<RepoIcon | null> {
       if (!href) {
         continue
       }
-      for (const relativePath of iconHrefCandidates(href)) {
+      for (const relativePath of iconHrefCandidates(href, sourceFile)) {
         try {
           const icon = await readLocalPngIcon(repoPath, relativePath)
           if (icon) {
@@ -213,7 +193,7 @@ async function detectRemotePngIcon(
       if (!href) {
         continue
       }
-      for (const relativePath of iconHrefCandidates(href)) {
+      for (const relativePath of iconHrefCandidates(href, sourceFile)) {
         try {
           const icon = await readRemotePngIcon(repoPath, fsProvider, relativePath)
           if (icon) {
