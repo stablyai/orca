@@ -1751,6 +1751,113 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('blocks SSH worktree creation when the requested branch already exists on a remote', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'branch' && args.includes('feature/something')) {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'for-each-ref') {
+          return { stdout: 'refs/remotes/origin/feature/something\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/something^{commit}')) {
+          throw new Error('missing local branch')
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      removeWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/feature-something',
+          head: 'abc123',
+          branch: 'refs/heads/feature/something',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-ssh',
+        name: 'feature-something',
+        branchNameOverride: 'feature/something'
+      })
+    ).rejects.toThrow('Branch "feature/something" already exists on a remote.')
+
+    expect(provider.addWorktree).not.toHaveBeenCalled()
+  })
+
+  it('blocks SSH worktree creation when a slashed remote owns the requested branch', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\nfoo/bar\n', stderr: '' }
+        }
+        if (args[0] === 'for-each-ref') {
+          return { stdout: 'refs/remotes/foo/bar/feature/something\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/something^{commit}')) {
+          throw new Error('missing local branch')
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      removeWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-ssh',
+        name: 'feature-something',
+        branchNameOverride: 'feature/something'
+      })
+    ).rejects.toThrow('Branch "feature/something" already exists on a remote.')
+
+    expect(provider.addWorktree).not.toHaveBeenCalled()
+  })
+
   it('unsets SSH branch base config before removing a sparse worktree after setup failure', async () => {
     const repo = {
       id: 'repo-ssh',
