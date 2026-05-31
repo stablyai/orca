@@ -299,8 +299,15 @@ export function GitHubMarkdownComposer({
             value={imageUrl}
             onChange={(event) => setImageUrl(event.target.value)}
             onKeyDown={(event) => {
+              if (isScreenSubmitShortcut(event)) {
+                event.preventDefault()
+                event.stopPropagation()
+                insertImageUrl()
+                return
+              }
               if (event.key === 'Escape') {
                 event.preventDefault()
+                event.stopPropagation()
                 setImageInputOpen(false)
               }
             }}

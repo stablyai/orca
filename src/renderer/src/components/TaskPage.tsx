@@ -221,18 +221,6 @@ function getGitHubTaskKindPresets(kind: GitHubTaskKind): TaskQueryPreset[] {
   return kind === 'prs' ? PR_TASK_QUERY_PRESETS : ISSUE_TASK_QUERY_PRESETS
 }
 
-function getRuntimeTargetForRepoId(repoId: string | null | undefined) {
-  if (!repoId) {
-    return null
-  }
-  const state = useAppStore.getState()
-  const target = getActiveRuntimeTarget(state.settings)
-  if (target.kind !== 'environment') {
-    return null
-  }
-  return state.repos.some((repo) => repo.id === repoId) ? target : null
-}
-
 type SourceOption = {
   id: TaskSource
   label: string
@@ -2652,13 +2640,25 @@ export default function TaskPage(): React.JSX.Element {
     () => selectedRepos.find((r) => r.id === newIssueRepoId) ?? selectedRepos[0] ?? null,
     [selectedRepos, newIssueRepoId]
   )
+  const newIssueRuntimeTarget = useMemo(() => {
+    if (!newIssueTargetRepo?.id) {
+      return null
+    }
+    const target = getActiveRuntimeTarget(settings)
+    if (target.kind !== 'environment') {
+      return null
+    }
+    return repos.some((repo) => repo.id === newIssueTargetRepo.id) ? target : null
+  }, [newIssueTargetRepo?.id, repos, settings])
   const newIssueRepoLabels = useRepoLabels(
     newIssueOpen ? (newIssueTargetRepo?.path ?? null) : null,
-    newIssueOpen ? (newIssueTargetRepo?.id ?? null) : null
+    newIssueOpen ? (newIssueTargetRepo?.id ?? null) : null,
+    { runtimeEnvironmentId: newIssueOpen ? (newIssueRuntimeTarget?.environmentId ?? null) : null }
   )
   const newIssueRepoAssignees = useRepoAssignees(
     newIssueOpen ? (newIssueTargetRepo?.path ?? null) : null,
-    newIssueOpen ? (newIssueTargetRepo?.id ?? null) : null
+    newIssueOpen ? (newIssueTargetRepo?.id ?? null) : null,
+    { runtimeEnvironmentId: newIssueOpen ? (newIssueRuntimeTarget?.environmentId ?? null) : null }
   )
 
   useEffect(() => {
@@ -4068,10 +4068,9 @@ export default function TaskPage(): React.JSX.Element {
     }
     setNewIssueSubmitting(true)
     try {
-      const target = getRuntimeTargetForRepoId(newIssueTargetRepo.id)
-      const result = target
+      const result = newIssueRuntimeTarget
         ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.createIssue>>>(
-            target,
+            newIssueRuntimeTarget,
             'github.createIssue',
             {
               repo: newIssueTargetRepo.id,
@@ -4128,9 +4127,9 @@ export default function TaskPage(): React.JSX.Element {
       }
       openGitHubDetailPage(stub)
       const stubRepoId = newIssueTargetRepo.id
-      const fullIssuePromise = target
+      const fullIssuePromise = newIssueRuntimeTarget
         ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
-            target,
+            newIssueRuntimeTarget,
             'github.workItem',
             { repo: newIssueTargetRepo.id, number: result.number, type: 'issue' },
             { timeoutMs: 30_000 }
@@ -4160,6 +4159,7 @@ export default function TaskPage(): React.JSX.Element {
     newIssueBody,
     newIssueAssignees,
     newIssueLabels,
+    newIssueRuntimeTarget,
     newIssueSubmitting,
     newIssueTargetRepo,
     newIssueTitle,
