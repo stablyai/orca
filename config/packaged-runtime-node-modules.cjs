@@ -1,4 +1,4 @@
-const { existsSync, readFileSync, realpathSync } = require('node:fs')
+const { existsSync, readFileSync, readdirSync, realpathSync, rmSync } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
 
@@ -18,6 +18,14 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'yaml',
   'zod'
 ]
+
+const NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM = {
+  darwin: 'darwin-',
+  linux: 'linux-',
+  win32: 'win32-'
+}
+const TYPE_DECLARATION_ARTIFACT_RE = /\.d\.(?:c|m)?ts(?:\.map)?$/
+const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
 
 const NODE_BUILTINS = new Set([
   ...builtinModules,
@@ -150,11 +158,99 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
   }
 }
 
+function prunePackagedNodePty(resourcesDir, electronPlatformName) {
+  const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
+  if (!existsSync(nodePtyDir)) {
+    return
+  }
+
+  const allowedPrebuildPrefix = NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM[electronPlatformName]
+  if (allowedPrebuildPrefix) {
+    const prebuildsDir = join(nodePtyDir, 'prebuilds')
+    if (existsSync(prebuildsDir)) {
+      for (const entry of readdirSync(prebuildsDir, { withFileTypes: true })) {
+        if (entry.isDirectory() && !entry.name.startsWith(allowedPrebuildPrefix)) {
+          rmSync(join(prebuildsDir, entry.name), { recursive: true, force: true })
+        }
+      }
+    }
+  }
+
+  if (electronPlatformName !== 'win32') {
+    // Why: conpty is Windows-only and node-pty resolves runtime binaries from
+    // build/Release or prebuilds/<platform>-<arch>, not third_party/conpty.
+    rmSync(join(nodePtyDir, 'third_party', 'conpty'), { recursive: true, force: true })
+    rmSync(join(nodePtyDir, 'deps', 'winpty'), { recursive: true, force: true })
+  }
+}
+
+function prunePackagedRuntimeTypeDeclarations(resourcesDir) {
+  const nodeModulesDir = join(resourcesDir, 'node_modules')
+  if (!existsSync(nodeModulesDir)) {
+    return
+  }
+  pruneMatchingFiles(nodeModulesDir, (filename) => TYPE_DECLARATION_ARTIFACT_RE.test(filename))
+}
+
+function prunePackagedSherpaOnnx(resourcesDir, electronPlatformName) {
+  if (electronPlatformName !== 'darwin') {
+    return
+  }
+  const nodeModulesDir = join(resourcesDir, 'node_modules')
+  if (!existsSync(nodeModulesDir)) {
+    return
+  }
+  for (const entry of readdirSync(nodeModulesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith('sherpa-onnx-darwin-')) {
+      continue
+    }
+    const packageDir = join(nodeModulesDir, entry.name)
+    const packageEntries = readdirSync(packageDir)
+    const hasVersionedOnnxRuntime = packageEntries.some((filename) =>
+      VERSIONED_ONNXRUNTIME_DYLIB_RE.test(filename)
+    )
+    if (hasVersionedOnnxRuntime) {
+      // Why: darwin sherpa-onnx binaries link to the versioned ONNX Runtime
+      // install name; the unversioned dylib is a duplicate fallback copy.
+      rmSync(join(packageDir, 'libonnxruntime.dylib'), { force: true })
+    }
+  }
+}
+
+function prunePackagedZodSources(resourcesDir) {
+  // Why: Zod's src tree is TypeScript source only selected by the @zod/source
+  // condition; packaged runtime import/require paths resolve to built JS.
+  rmSync(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true, force: true })
+}
+
+function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName) {
+  prunePackagedNodePty(resourcesDir, electronPlatformName)
+  prunePackagedRuntimeTypeDeclarations(resourcesDir)
+  prunePackagedSherpaOnnx(resourcesDir, electronPlatformName)
+  prunePackagedZodSources(resourcesDir)
+}
+
+function pruneMatchingFiles(directory, shouldPrune) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = join(directory, entry.name)
+    if (entry.isDirectory()) {
+      pruneMatchingFiles(entryPath, shouldPrune)
+    } else if (entry.isFile() && shouldPrune(entry.name)) {
+      rmSync(entryPath, { force: true })
+    }
+  }
+}
+
 module.exports = {
   PACKAGED_RUNTIME_PACKAGE_ROOTS,
   createPackagedRuntimeNodeModuleResources,
   findAsarEntry,
   isPackagedExternalSpecifier,
   packageNameFromSpecifier,
+  prunePackagedNodePty,
+  prunePackagedRuntimeNodeModules,
+  prunePackagedSherpaOnnx,
+  prunePackagedRuntimeTypeDeclarations,
+  prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
 }

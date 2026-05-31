@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,7 +7,14 @@ import { describe, expect, it } from 'vitest'
 const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
-const { findAsarEntry, verifyPackagedMainRuntimeDeps } = require('../packaged-runtime-node-modules.cjs')
+const {
+  findAsarEntry,
+  prunePackagedNodePty,
+  prunePackagedSherpaOnnx,
+  prunePackagedRuntimeTypeDeclarations,
+  prunePackagedZodSources,
+  verifyPackagedMainRuntimeDeps
+} = require('../packaged-runtime-node-modules.cjs')
 
 describe('electron-builder config', () => {
   it('excludes repo-only source trees from app.asar', () => {
@@ -103,5 +110,91 @@ describe('electron-builder config', () => {
       '\\out\\main\\index.js'
     )
     expect(findAsarEntry(['/out/main/index.js'], 'out/main/index.js')).toBe('/out/main/index.js')
+  })
+
+  it('prunes non-target node-pty prebuilds from packaged runtime resources', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-node-pty-prune-'))
+    try {
+      const prebuildsDir = join(resourcesDir, 'node_modules', 'node-pty', 'prebuilds')
+      await mkdir(join(prebuildsDir, 'darwin-arm64'), { recursive: true })
+      await mkdir(join(prebuildsDir, 'darwin-x64'), { recursive: true })
+      await mkdir(join(prebuildsDir, 'linux-x64'), { recursive: true })
+      await mkdir(join(prebuildsDir, 'win32-x64'), { recursive: true })
+      await mkdir(join(resourcesDir, 'node_modules', 'node-pty', 'third_party', 'conpty'), {
+        recursive: true
+      })
+      await mkdir(join(resourcesDir, 'node_modules', 'node-pty', 'deps', 'winpty'), {
+        recursive: true
+      })
+
+      prunePackagedNodePty(resourcesDir, 'darwin')
+
+      await expect(readdir(prebuildsDir).then((entries) => entries.sort())).resolves.toEqual([
+        'darwin-arm64',
+        'darwin-x64'
+      ])
+      await expect(
+        readdir(join(resourcesDir, 'node_modules', 'node-pty', 'third_party'))
+      ).resolves.toEqual([])
+      await expect(readdir(join(resourcesDir, 'node_modules', 'node-pty', 'deps'))).resolves.toEqual(
+        []
+      )
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('prunes type declaration artifacts from packaged runtime node_modules', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-type-prune-'))
+    try {
+      const packageDir = join(resourcesDir, 'node_modules', 'example-package')
+      await mkdir(join(packageDir, 'dist'), { recursive: true })
+      await writeFile(join(packageDir, 'dist', 'index.cjs'), 'module.exports = {}', 'utf8')
+      await writeFile(join(packageDir, 'dist', 'index.d.ts'), 'export type Value = string', 'utf8')
+      await writeFile(join(packageDir, 'dist', 'index.d.cts'), 'export type Value = string', 'utf8')
+      await writeFile(join(packageDir, 'dist', 'index.d.mts.map'), '{}', 'utf8')
+
+      prunePackagedRuntimeTypeDeclarations(resourcesDir)
+
+      await expect(readdir(join(packageDir, 'dist'))).resolves.toEqual(['index.cjs'])
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('prunes duplicate darwin sherpa-onnx runtime dylib aliases', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-sherpa-prune-'))
+    try {
+      const packageDir = join(resourcesDir, 'node_modules', 'sherpa-onnx-darwin-arm64')
+      await mkdir(packageDir, { recursive: true })
+      await writeFile(join(packageDir, 'sherpa-onnx.node'), '', 'utf8')
+      await writeFile(join(packageDir, 'libonnxruntime.1.23.2.dylib'), '', 'utf8')
+      await writeFile(join(packageDir, 'libonnxruntime.dylib'), '', 'utf8')
+
+      prunePackagedSherpaOnnx(resourcesDir, 'darwin')
+
+      await expect(readdir(packageDir).then((entries) => entries.sort())).resolves.toEqual([
+        'libonnxruntime.1.23.2.dylib',
+        'sherpa-onnx.node'
+      ])
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('prunes zod TypeScript sources from packaged runtime resources', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-zod-prune-'))
+    try {
+      const packageDir = join(resourcesDir, 'node_modules', 'zod')
+      await mkdir(join(packageDir, 'src'), { recursive: true })
+      await writeFile(join(packageDir, 'index.cjs'), 'module.exports = {}', 'utf8')
+      await writeFile(join(packageDir, 'src', 'index.ts'), 'export const value = true', 'utf8')
+
+      prunePackagedZodSources(resourcesDir)
+
+      await expect(readdir(packageDir)).resolves.toEqual(['index.cjs'])
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
   })
 })
