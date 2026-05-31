@@ -39,6 +39,14 @@ describe('github owner/repo resolution', () => {
       owner: 'acme',
       repo: 'widgets'
     })
+    expect(parseGitHubOwnerRepo('https://alice@github.com/acme/widgets.git')).toEqual({
+      owner: 'acme',
+      repo: 'widgets'
+    })
+    expect(parseGitHubOwnerRepo('https://github.com:443/acme/widgets.git')).toEqual({
+      owner: 'acme',
+      repo: 'widgets'
+    })
     expect(parseGitHubOwnerRepo('git@github.com:stablyai/orca.git')).toEqual({
       owner: 'stablyai',
       repo: 'orca'
@@ -78,6 +86,17 @@ describe('github owner/repo resolution', () => {
     })
 
     await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'fork', repo: 'orca' })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+  })
+
+  it('resolves GitHub HTTPS origin remotes with user info and a default port', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'https://alice@github.com:443/acme/widgets.git\n'
+    })
+
+    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'acme', repo: 'widgets' })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo'
     })

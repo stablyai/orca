@@ -160,8 +160,9 @@ export function parseGitHubOwnerRepo(remoteUrl: string): OwnerRepo | null {
 }
 
 function normalizeGitHubRemoteHost(host: string): string {
+  const normalizedHost = host.toLowerCase()
   // Why: GitHub documents ssh.github.com:443 as SSH-over-HTTPS for github.com repos.
-  return host.toLowerCase() === 'ssh.github.com' ? 'github.com' : host
+  return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
 }
 
 function parseGitHubRemotePath(path: string): Pick<GitHubRemoteIdentity, 'owner' | 'repo'> | null {
@@ -179,14 +180,6 @@ function parseGitHubRemotePath(path: string): Pick<GitHubRemoteIdentity, 'owner'
 
 export function parseGitHubRemoteIdentity(remoteUrl: string): GitHubRemoteIdentity | null {
   const trimmed = remoteUrl.trim()
-  const httpsMatch = trimmed.match(/^https?:\/\/([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i)
-  if (httpsMatch) {
-    return {
-      host: normalizeGitHubRemoteHost(httpsMatch[1]),
-      owner: httpsMatch[2],
-      repo: httpsMatch[3]
-    }
-  }
   const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
   if (sshMatch) {
     return { host: normalizeGitHubRemoteHost(sshMatch[1]), owner: sshMatch[2], repo: sshMatch[3] }
@@ -194,7 +187,7 @@ export function parseGitHubRemoteIdentity(remoteUrl: string): GitHubRemoteIdenti
 
   try {
     const url = new URL(trimmed)
-    if (!['git:', 'git+ssh:', 'ssh:'].includes(url.protocol.toLowerCase())) {
+    if (!['git:', 'git+ssh:', 'http:', 'https:', 'ssh:'].includes(url.protocol.toLowerCase())) {
       return null
     }
     const path = parseGitHubRemotePath(url.pathname)
