@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines -- Why: this App-level IPC bridge intentionally keeps the renderer's main-process event contract in one place so shortcut, runtime, updater, and agent-status wiring do not drift across files. */
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 import { useAppStore } from '../store'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
@@ -78,6 +79,8 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import {
+  createFloatingWorkspaceBrowserTab,
+  createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab,
   isEmptyFloatingWorkspacePanelVisible,
   isFloatingWorkspacePanelFocused,
@@ -1428,6 +1431,10 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onNewBrowserTab(() => {
         const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          void createFloatingWorkspaceBrowserTab(store)
+          return
+        }
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
           if (isRuntimeEnvironmentActive()) {
@@ -1454,6 +1461,29 @@ export function useIpcEvents(): void {
             title: 'New Browser Tab',
             focusAddressBar: true
           })
+        }
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onNewMarkdownTab(() => {
+        const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          void createFloatingWorkspaceMarkdownTab(store).catch((err) => {
+            toast.error(
+              err instanceof Error ? err.message : 'Failed to create untitled markdown file.'
+            )
+          })
+          return
+        }
+        const worktreeId = store.activeWorktreeId
+        if (!worktreeId) {
+          return
+        }
+        const targetGroupId =
+          store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
+        if (targetGroupId) {
+          void store.openNewMarkdownInActiveWorkspace(targetGroupId)
         }
       })
     )

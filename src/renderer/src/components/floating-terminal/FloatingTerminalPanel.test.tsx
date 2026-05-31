@@ -1201,6 +1201,16 @@ describe('FloatingTerminalPanel close behavior', () => {
     )
   })
 
+  it('disables markdown annotations in floating editor tabs', async () => {
+    setFloatingEditorTabs([makeFile({ id: 'notes' })])
+
+    const element = await renderPanel(true)
+    const editorPanel = findByProp(element, 'activeFileId')
+
+    expect(editorPanel.props.markdownAnnotationsEnabled).toBe(false)
+    expect(editorPanel.props.activeFileId).toBe('notes')
+  })
+
   it('keeps the panel open when the explicit close action removes the last tab', async () => {
     const onOpenChange = vi.fn()
     setFloatingTabs([makeTab({ id: 'tab-1' })])

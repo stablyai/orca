@@ -2377,6 +2377,11 @@ const api = {
       ipcRenderer.on('ui:newBrowserTab', listener)
       return () => ipcRenderer.removeListener('ui:newBrowserTab', listener)
     },
+    onNewMarkdownTab: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:newMarkdownTab', listener)
+      return () => ipcRenderer.removeListener('ui:newMarkdownTab', listener)
+    },
     onRequestTabCreate: (
       callback: (data: {
         requestId: string

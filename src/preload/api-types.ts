@@ -1847,6 +1847,7 @@ export type PreloadApi = {
     onJumpToTabIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
+    onNewMarkdownTab: (callback: () => void) => () => void
     onRequestTabCreate: (
       callback: (data: {
         requestId: string

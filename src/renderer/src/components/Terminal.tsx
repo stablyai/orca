@@ -74,6 +74,8 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import {
+  createFloatingWorkspaceBrowserTab,
+  createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isFloatingWorkspacePanelFocused,
@@ -1182,6 +1184,10 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && matchShortcut('tab.newBrowser')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newBrowser')
+        if (floatingWorkspaceFocused) {
+          void createFloatingWorkspaceBrowserTab(useAppStore.getState())
+          return
+        }
         handleNewBrowserTab()
         return
       }
@@ -1210,6 +1216,14 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && matchShortcut('tab.newMarkdown')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newMarkdown')
+        if (floatingWorkspaceFocused) {
+          void createFloatingWorkspaceMarkdownTab(useAppStore.getState()).catch((err) => {
+            toast.error(
+              err instanceof Error ? err.message : 'Failed to create untitled markdown file.'
+            )
+          })
+          return
+        }
         void handleNewFile()
         return
       }

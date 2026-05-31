@@ -1270,6 +1270,7 @@ export function FloatingTerminalPanel({
               onNewBrowserTab={createFloatingBrowserTab}
               onNewFileTab={createFloatingMarkdownTab}
               onOpenFileTab={openFloatingMarkdownTab}
+              newTabMenuOrder="markdown-first"
               onSetCustomTitle={setTabCustomTitle}
               onSetTabColor={setTabColor}
               onTogglePaneExpand={(tabId) =>
@@ -1364,9 +1365,12 @@ export function FloatingTerminalPanel({
                   </div>
                 }
               >
+                {/* Why: floating workspace markdown is scratch/local context,
+                    not a repo review surface that should expose agent notes. */}
                 <EditorPanel
                   activeFileId={activeEditorFile.id}
                   activeViewStateId={activeEditorUnifiedId}
+                  markdownAnnotationsEnabled={false}
                 />
               </Suspense>
             </div>
@@ -1516,50 +1520,50 @@ function FloatingTerminalEmptyState({
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onNewTerminal}
         >
-          <TerminalSquare className="size-3.5 opacity-80" />
+          <TerminalSquare className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">New Terminal</span>
           <FloatingEmptyStateShortcut keys={newTerminalShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-          onClick={onNewBrowser}
-        >
-          <Globe className="size-3.5 opacity-80" />
-          <span className="truncate text-left leading-none">New Browser</span>
-          <FloatingEmptyStateShortcut keys={newBrowserShortcutKeys} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onNewMarkdown}
         >
-          <FileText className="size-3.5 opacity-80" />
+          <FileText className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">New Markdown Note</span>
           <FloatingEmptyStateShortcut keys={newMarkdownShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onOpenMarkdown}
         >
-          <FileText className="size-3.5 opacity-80" />
+          <FileText className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">Open Markdown Note</span>
           <FloatingEmptyStateShortcut keys={openMarkdownShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={onNewBrowser}
+        >
+          <Globe className="size-3.5 opacity-90" />
+          <span className="truncate text-left leading-none">New Browser</span>
+          <FloatingEmptyStateShortcut keys={newBrowserShortcutKeys} />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onClose}
         >
-          <Minus className="size-3.5 opacity-80" />
+          <Minus className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">Minimize</span>
           <FloatingEmptyStateShortcut keys={closeShortcutKeys} />
         </Button>
@@ -1575,8 +1579,8 @@ function FloatingEmptyStateShortcut({ keys }: { keys: string[] }): React.JSX.Ele
   return (
     <ShortcutKeyCombo
       keys={keys}
-      className="self-center justify-self-end opacity-75"
-      separatorClassName="mx-0 text-[9px] text-muted-foreground"
+      className="self-center justify-self-end opacity-90 [&>span]:text-foreground"
+      separatorClassName="mx-0 text-[9px] text-foreground"
     />
   )
 }

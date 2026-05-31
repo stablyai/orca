@@ -78,6 +78,7 @@ type TabBarProps = {
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
   onOpenFileTab?: () => void
+  newTabMenuOrder?: 'default' | 'markdown-first'
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
@@ -144,6 +145,7 @@ function TabBarInner({
   showAgentLaunchItems = true,
   onNewFileTab,
   onOpenFileTab,
+  newTabMenuOrder = 'default',
   onSetCustomTitle,
   onSetTabColor,
   onTogglePaneExpand,
@@ -355,6 +357,130 @@ function TabBarInner({
     }
   }
   const clearPendingNewTabMenuFocusOnUnmount = clearPendingNewTabMenuFocusOnUnmountRef.current
+
+  const defaultTerminalMenuItems =
+    shouldShowWindowsShellMenu && onNewTerminalWithShell ? (
+      // Why: previously the Windows path nested shell choices under a
+      // Radix submenu. In practice the submenu frequently failed to open
+      // on hover/click, and even when it worked the two-step expansion
+      // hid the fact that multiple shells were available. Inlining all
+      // shells as flat items — default pinned to the top with the
+      // Ctrl+T hint — matches the "no popouts, show all options at
+      // once" rec. Each entry uses a shell-specific icon (ShellIcon)
+      // so PowerShell / CMD / Git Bash / WSL are distinguishable at a glance.
+      // Labels use "CMD Prompt" instead of "Command Prompt" to keep
+      // each row narrow enough that the shortcut hint fits without
+      // wrapping.
+      (() => {
+        const allShells: {
+          label: string
+          shell: BuiltInWindowsTerminalShell
+        }[] = [
+          { label: 'PowerShell', shell: 'powershell.exe' },
+          { label: 'CMD Prompt', shell: 'cmd.exe' },
+          ...(windowsTerminalCapabilities.gitBashAvailable
+            ? ([{ label: 'Git Bash', shell: WINDOWS_GIT_BASH_SHELL }] as const)
+            : []),
+          ...(windowsTerminalCapabilities.wslAvailable
+            ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const)
+            : [])
+        ]
+        const defaultEntry = allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
+        const orderedShells = [
+          defaultEntry,
+          ...allShells.filter((s) => s.shell !== defaultEntry.shell)
+        ]
+        return orderedShells.map((entry, idx) => {
+          const isDefault = idx === 0
+          return (
+            <DropdownMenuItem
+              key={entry.shell}
+              onSelect={() => {
+                // Why: the top-level Windows shell menu models shell
+                // categories, not concrete executables. When the user
+                // picked PowerShell 7+ in advanced settings, launching the
+                // "PowerShell" menu item must preserve that implementation
+                // instead of forcing inbox powershell.exe.
+                queueNewActiveTerminalFocusAfterNewTabMenuClose()
+                onNewTerminalWithShell(
+                  resolveWindowsShellLaunchTarget(
+                    entry.shell,
+                    defaultWindowsPowerShellImplementation,
+                    windowsTerminalCapabilities.pwshAvailable
+                  )
+                )
+              }}
+              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+            >
+              <ShellIcon shell={entry.shell} size={14} />
+              <span className="flex-1">New Terminal: {entry.label}</span>
+              {isDefault ? (
+                <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
+              ) : null}
+            </DropdownMenuItem>
+          )
+        })
+      })()
+    ) : (
+      <DropdownMenuItem
+        onSelect={() => {
+          queueNewActiveTerminalFocusAfterNewTabMenuClose()
+          onNewTerminalTab()
+        }}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <TerminalSquare className="size-4 text-muted-foreground" />
+        New Terminal
+        <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+    )
+  const newBrowserMenuItem = !terminalOnly ? (
+    <DropdownMenuItem
+      onSelect={onNewBrowserTab}
+      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+    >
+      <Globe className="size-4 text-muted-foreground" />
+      New Browser Tab
+      <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
+    </DropdownMenuItem>
+  ) : null
+  const newMarkdownMenuItem =
+    !terminalOnly && onNewFileTab ? (
+      <DropdownMenuItem
+        onSelect={onNewFileTab}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <FilePlus className="size-4 text-muted-foreground" />
+        New Markdown
+        <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+    ) : null
+  const openMarkdownMenuItem =
+    !terminalOnly && onOpenFileTab ? (
+      <DropdownMenuItem
+        onSelect={onOpenFileTab}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <FileText className="size-4 text-muted-foreground" />
+        Open Markdown...
+      </DropdownMenuItem>
+    ) : null
+  const standardCreateMenuItems =
+    newTabMenuOrder === 'markdown-first' ? (
+      <>
+        {newMarkdownMenuItem}
+        {openMarkdownMenuItem}
+        {defaultTerminalMenuItems}
+        {newBrowserMenuItem}
+      </>
+    ) : (
+      <>
+        {defaultTerminalMenuItems}
+        {newBrowserMenuItem}
+        {newMarkdownMenuItem}
+        {openMarkdownMenuItem}
+      </>
+    )
 
   useEffect(() => {
     if (!newTabMenuOpen) {
@@ -687,111 +813,7 @@ function TabBarInner({
               <DropdownMenuSeparator />
             </>
           ) : null}
-          {shouldShowWindowsShellMenu && onNewTerminalWithShell ? (
-            // Why: previously the Windows path nested shell choices under a
-            // Radix submenu. In practice the submenu frequently failed to open
-            // on hover/click, and even when it worked the two-step expansion
-            // hid the fact that multiple shells were available. Inlining all
-            // shells as flat items — default pinned to the top with the
-            // Ctrl+T hint — matches the "no popouts, show all options at
-            // once" rec. Each entry uses a shell-specific icon (ShellIcon)
-            // so PowerShell / CMD / Git Bash / WSL are distinguishable at a glance.
-            // Labels use "CMD Prompt" instead of "Command Prompt" to keep
-            // each row narrow enough that the shortcut hint fits without
-            // wrapping.
-            (() => {
-              const allShells: {
-                label: string
-                shell: BuiltInWindowsTerminalShell
-              }[] = [
-                { label: 'PowerShell', shell: 'powershell.exe' },
-                { label: 'CMD Prompt', shell: 'cmd.exe' },
-                ...(windowsTerminalCapabilities.gitBashAvailable
-                  ? ([{ label: 'Git Bash', shell: WINDOWS_GIT_BASH_SHELL }] as const)
-                  : []),
-                ...(windowsTerminalCapabilities.wslAvailable
-                  ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const)
-                  : [])
-              ]
-              const defaultEntry =
-                allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
-              const orderedShells = [
-                defaultEntry,
-                ...allShells.filter((s) => s.shell !== defaultEntry.shell)
-              ]
-              return orderedShells.map((entry, idx) => {
-                const isDefault = idx === 0
-                return (
-                  <DropdownMenuItem
-                    key={entry.shell}
-                    onSelect={() => {
-                      // Why: the top-level Windows shell menu models shell
-                      // categories, not concrete executables. When the user
-                      // picked PowerShell 7+ in advanced settings, launching the
-                      // "PowerShell" menu item must preserve that implementation
-                      // instead of forcing inbox powershell.exe.
-                      queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                      onNewTerminalWithShell(
-                        resolveWindowsShellLaunchTarget(
-                          entry.shell,
-                          defaultWindowsPowerShellImplementation,
-                          windowsTerminalCapabilities.pwshAvailable
-                        )
-                      )
-                    }}
-                    className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-                  >
-                    <ShellIcon shell={entry.shell} size={14} />
-                    <span className="flex-1">New Terminal: {entry.label}</span>
-                    {isDefault ? (
-                      <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
-                    ) : null}
-                  </DropdownMenuItem>
-                )
-              })
-            })()
-          ) : (
-            <DropdownMenuItem
-              onSelect={() => {
-                queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                onNewTerminalTab()
-              }}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <TerminalSquare className="size-4 text-muted-foreground" />
-              New Terminal
-              <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          )}
-          {!terminalOnly && (
-            <DropdownMenuItem
-              onSelect={onNewBrowserTab}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <Globe className="size-4 text-muted-foreground" />
-              New Browser Tab
-              <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          )}
-          {!terminalOnly && onNewFileTab && (
-            <DropdownMenuItem
-              onSelect={onNewFileTab}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <FilePlus className="size-4 text-muted-foreground" />
-              New Markdown
-              <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          )}
-          {!terminalOnly && onOpenFileTab && (
-            <DropdownMenuItem
-              onSelect={onOpenFileTab}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <FileText className="size-4 text-muted-foreground" />
-              Open Markdown...
-            </DropdownMenuItem>
-          )}
+          {standardCreateMenuItems}
           {showAgentLaunchItems ? (
             <>
               <DropdownMenuSeparator />

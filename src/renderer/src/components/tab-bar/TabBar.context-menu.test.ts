@@ -50,6 +50,9 @@ vi.mock('lucide-react', () => ({
   FilePlus: function FilePlus() {
     return null
   },
+  FileText: function FileText() {
+    return null
+  },
   Globe: function Globe() {
     return null
   },
@@ -187,6 +190,20 @@ function findChildrenByType(node: unknown, typeName: string): ReactElementLike[]
   }
   visit(node)
   return results
+}
+
+function extractText(node: unknown): string {
+  if (node == null) {
+    return ''
+  }
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node)
+  }
+  if (Array.isArray(node)) {
+    return node.map(extractText).join('')
+  }
+  const el = node as ReactElementLike
+  return el.props && 'children' in el.props ? extractText(el.props.children) : ''
 }
 
 async function renderTabBar(props: Record<string, unknown>): Promise<unknown> {
@@ -327,6 +344,24 @@ describe('TabBar context menu wiring', () => {
     await vi.advanceTimersByTimeAsync(100)
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('new-terminal')
     expect(focusTerminalTabSurface).not.toHaveBeenCalledWith('old-terminal')
+  })
+
+  it('can put markdown actions before terminal actions in the new-tab menu', async () => {
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      onNewFileTab: () => {},
+      onOpenFileTab: () => {},
+      newTabMenuOrder: 'markdown-first'
+    })
+
+    const menuLabels = findChildrenByType(element, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(menuLabels[0]).toContain('New Markdown')
+    expect(menuLabels[1]).toBe('Open Markdown...')
+    expect(menuLabels[2]).toContain('New Terminal')
+    expect(menuLabels[3]).toContain('New Browser Tab')
   })
 
   it('cancels delayed menu focus when the tab bar root unmounts', async () => {
