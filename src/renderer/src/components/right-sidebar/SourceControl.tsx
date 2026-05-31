@@ -4155,70 +4155,72 @@ function SourceControlInner(): React.JSX.Element {
                   </span>
                 )}
               </button>
-              <DiffNotesSendMenu
-                worktreeId={activeWorktreeId}
-                groupId={activeGroupId ?? activeWorktreeId}
-                comments={diffCommentsForActive}
-                triggerClassName="size-6"
-              />
-              {diffCommentCount > 0 && (
-                <TooltipProvider delayDuration={400}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                        onClick={() => void handleCopyDiffComments()}
-                        aria-label="Copy all notes to clipboard"
-                      >
-                        {diffCommentsCopied ? (
-                          <Check className="size-3.5" />
-                        ) : (
-                          <Copy className="size-3.5" />
-                        )}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Copy all notes
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              <DropdownMenu>
-                <TooltipProvider delayDuration={400}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
+              <div className="ml-1 flex shrink-0 items-center gap-1.5">
+                <DiffNotesSendMenu
+                  worktreeId={activeWorktreeId}
+                  groupId={activeGroupId ?? activeWorktreeId}
+                  comments={diffCommentsForActive}
+                  triggerClassName="size-6"
+                />
+                {diffCommentCount > 0 && (
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
                         <button
                           type="button"
                           className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                          aria-label="More note actions"
+                          onClick={() => void handleCopyDiffComments()}
+                          aria-label="Copy all notes to clipboard"
                         >
-                          <MoreHorizontal className="size-3.5" />
+                          {diffCommentsCopied ? (
+                            <Check className="size-3.5" />
+                          ) : (
+                            <Copy className="size-3.5" />
+                          )}
                         </button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      More note actions
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <DropdownMenuContent align="end" className="min-w-[180px]">
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    disabled={diffCommentCount === 0}
-                    onSelect={() => {
-                      if (!activeWorktreeId || diffCommentCount === 0) {
-                        return
-                      }
-                      setPendingDiffCommentsClear({ kind: 'all', worktreeId: activeWorktreeId })
-                    }}
-                  >
-                    <Trash2 className="size-3.5" />
-                    Clear all notes...
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Copy all notes
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                <DropdownMenu>
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            aria-label="More note actions"
+                          >
+                            <MoreHorizontal className="size-3.5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        More note actions
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <DropdownMenuContent align="end" className="min-w-[180px]">
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      disabled={diffCommentCount === 0}
+                      onSelect={() => {
+                        if (!activeWorktreeId || diffCommentCount === 0) {
+                          return
+                        }
+                        setPendingDiffCommentsClear({ kind: 'all', worktreeId: activeWorktreeId })
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                      Clear all notes...
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
             {diffCommentsExpanded && (
               <DiffCommentsInlineList

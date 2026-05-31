@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: this suite shares a broad mocked sidebar
+   harness across compact/full mode, lineage, and image-note cases. */
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +11,7 @@ type MockAgentOptions = {
   state?: string
   startedAt?: number
   prompt?: string
+  lastAssistantMessage?: string
   stateStartedAt?: number
   orchestration?: { parentPaneKey: string }
   lineage?: {
@@ -26,6 +29,7 @@ function mockAgent({
   state = 'working',
   startedAt,
   prompt,
+  lastAssistantMessage,
   stateStartedAt = 1000,
   orchestration,
   lineage
@@ -38,6 +42,7 @@ function mockAgent({
     startedAt,
     entry: {
       prompt,
+      lastAssistantMessage,
       state,
       stateStartedAt,
       stateHistory: prompt === undefined ? undefined : [],
@@ -282,6 +287,49 @@ describe('WorktreeCardAgents', () => {
     expect(markup).not.toContain('aria-label="Expand')
   })
 
+  it('renders compact agent messages with images as inline thumbnails', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockAgents = [
+      mockAgent({
+        agentType: 'codex',
+        state: 'done',
+        startedAt: 1000,
+        prompt: 'Check screenshot',
+        lastAssistantMessage: 'Result:\n\n![Image #1](data:image/png;base64,abc123)'
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('group/compact-agent-row')
+    expect(markup).toContain('<img')
+    expect(markup).toContain('alt="Image #1"')
+    expect(markup).toContain('max-h-36')
+    expect(markup).not.toContain('data-testid="agent-row"')
+  })
+
+  it('bounds long compact agent messages that include image markdown', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockAgents = [
+      mockAgent({
+        agentType: 'codex',
+        state: 'done',
+        startedAt: 1000,
+        prompt: 'Check screenshot',
+        lastAssistantMessage: `${'Detailed result. '.repeat(400)}\n\n![Image #1](https://example.com/screenshot.png)`
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('max-h-36')
+    expect(markup).toContain('overflow-hidden')
+    expect(markup).not.toContain('<img')
+    expect(markup).toContain('href="https://example.com/screenshot.png"')
+  })
+
   it('renders a compact summary affordance for multiple flat agents', async () => {
     mockAgentActivityDisplayMode = 'compact'
     mockAgents = [
@@ -312,6 +360,8 @@ describe('WorktreeCardAgents', () => {
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
     expect(markup).toContain('aria-expanded="false"')
+    expect(markup).toContain('items-center gap-0.5')
+    expect(markup).not.toContain('-space-x-1')
     expect(markup).toContain('3 agents: 1 waiting, 1 working, 1 done')
     expect(markup).toContain('Expand 3 agents: 1 waiting, 1 working, 1 done')
     expect(markup).not.toContain('data-testid="agent-row"')
