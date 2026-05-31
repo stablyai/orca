@@ -55,6 +55,20 @@ describe('resolveMarkdownLinkTarget', () => {
     })
   })
 
+  it('extracts hash line anchors from Windows drive-letter absolute .md links', () => {
+    const r = resolveMarkdownLinkTarget(
+      'C:\\repo\\docs\\guide.md#L10',
+      'C:\\repo\\docs\\note.md',
+      'C:\\repo'
+    )
+    expect(r).toMatchObject({
+      kind: 'markdown',
+      absolutePath: 'C:/repo/docs/guide.md',
+      relativePath: 'docs/guide.md',
+      line: 10
+    })
+  })
+
   it('extracts line from #L10', () => {
     const r = resolveMarkdownLinkTarget('./guide.md#L10', SOURCE, ROOT)
     expect(r).toMatchObject({ kind: 'markdown', line: 10, column: undefined })
