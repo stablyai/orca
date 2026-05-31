@@ -1634,28 +1634,51 @@ export class CdpBridge {
 
     // Phase 1: wait for readyState=complete
     await new Promise<void>((resolve, reject) => {
+      let settled = false
+      let pollTimer: ReturnType<typeof setTimeout> | null = null
+
+      const finish = (callback: () => void): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timeout)
+        if (pollTimer) {
+          clearTimeout(pollTimer)
+          pollTimer = null
+        }
+        callback()
+      }
+
       const timeout = setTimeout(() => {
-        reject(new BrowserError('browser_timeout', 'Page load timed out.'))
+        finish(() => reject(new BrowserError('browser_timeout', 'Page load timed out.')))
       }, TIMEOUT_MS)
 
       const check = async (): Promise<void> => {
+        if (settled) {
+          return
+        }
         try {
           const { result } = (await sender('Runtime.evaluate', {
             expression: 'document.readyState',
             returnByValue: true
           })) as { result: { value: string } }
+          if (settled) {
+            return
+          }
           if (result.value === 'complete') {
-            clearTimeout(timeout)
-            resolve()
+            finish(resolve)
           } else {
-            setTimeout(check, 100)
+            pollTimer = setTimeout(() => {
+              pollTimer = null
+              void check()
+            }, 100)
           }
         } catch {
-          clearTimeout(timeout)
-          resolve()
+          finish(resolve)
         }
       }
-      check()
+      void check()
     })
 
     // Phase 2: wait for network idle

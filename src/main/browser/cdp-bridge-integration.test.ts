@@ -72,7 +72,12 @@ const SEARCH_PAGE_TREE: AXNode[] = [
 
 // ── Mock WebContents factory ──
 
-function createMockGuest(id: number, url: string, title: string) {
+function createMockGuest(
+  id: number,
+  url: string,
+  title: string,
+  options?: { readyState?: string | (() => string) }
+) {
   let currentUrl = url
   let currentTitle = title
   let currentTree = EXAMPLE_COM_TREE
@@ -111,7 +116,14 @@ function createMockGuest(id: number, url: string, title: string) {
       case 'Runtime.evaluate': {
         const expr = (params as { expression: string }).expression
         if (expr === 'document.readyState') {
-          return { result: { value: 'complete' } }
+          return {
+            result: {
+              value:
+                typeof options?.readyState === 'function'
+                  ? options.readyState()
+                  : (options?.readyState ?? 'complete')
+            }
+          }
         }
         if (expr === 'location.origin') {
           return { result: { value: new URL(currentUrl).origin } }
@@ -411,6 +423,43 @@ describe('Browser automation pipeline (integration)', () => {
     const res = await rpc('browser.goto', { url: 'https://nonexistent.invalid' })
     expect(res.ok).toBe(false)
     expect((res.error as { code: string }).code).toBe('browser_navigation_failed')
+  })
+
+  it('clears readyState polling timers when navigation times out', async () => {
+    vi.useFakeTimers()
+    try {
+      const slowGuestHarness = createMockGuest(6001, 'https://slow.example.com', 'Slow Page', {
+        readyState: 'loading'
+      })
+      webContentsFromIdMock.mockImplementation((id: number) => {
+        if (id === 6001) {
+          return slowGuestHarness.guest
+        }
+        return null
+      })
+
+      const browserManager = new BrowserManager()
+      browserManager.attachGuestPolicies(slowGuestHarness.guest as never)
+      browserManager.registerGuest({
+        browserPageId: 'slow-page',
+        webContentsId: 6001,
+        rendererWebContentsId: RENDERER_WC_ID
+      })
+      const bridge = new CdpBridge(browserManager)
+      bridge.setActiveTab(6001)
+
+      const gotoResult = bridge.goto('https://slow.example.com/still-loading').then(
+        () => null,
+        (error: unknown) => error
+      )
+
+      await vi.advanceTimersByTimeAsync(25_000)
+
+      await expect(gotoResult).resolves.toMatchObject({ code: 'browser_timeout' })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   // ── Fill ──
