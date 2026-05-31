@@ -714,8 +714,6 @@ export function ResourceUsageStatusSegment({
     popoverBodyFocusFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelPopoverBodyFocusFrame, [cancelPopoverBodyFocusFrame])
-
   const setPopoverBodyNode = useCallback(
     (node: HTMLDivElement | null): void => {
       // Why: the queued post-kill focus is only valid while the popover body exists.
