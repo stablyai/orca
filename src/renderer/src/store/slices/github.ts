@@ -968,10 +968,10 @@ function applyGitHubPRResultToCaches(args: {
  * Evict the oldest entries from a cache record when it exceeds the max size.
  * Returns a pruned copy, or the original reference if no eviction was needed.
  */
-function evictStaleEntries<T>(
-  cache: Record<string, CacheEntry<T>>,
+function evictStaleEntries<T extends { fetchedAt: number }>(
+  cache: Record<string, T>,
   maxEntries = MAX_CACHE_ENTRIES
-): Record<string, CacheEntry<T>> {
+): Record<string, T> {
   const keys = Object.keys(cache)
   if (keys.length <= maxEntries) {
     return cache
@@ -980,11 +980,19 @@ function evictStaleEntries<T>(
     .map((k) => ({ key: k, fetchedAt: cache[k].fetchedAt }))
     .sort((a, b) => b.fetchedAt - a.fetchedAt)
   const keep = new Set(sorted.slice(0, maxEntries).map((e) => e.key))
-  const pruned: Record<string, CacheEntry<T>> = {}
+  const pruned: Record<string, T> = {}
   for (const k of keep) {
     pruned[k] = cache[k]
   }
   return pruned
+}
+
+function withBoundedCacheEntry<T extends { fetchedAt: number }>(
+  cache: Record<string, T>,
+  key: string,
+  entry: T
+): Record<string, T> {
+  return evictStaleEntries({ ...cache, [key]: entry })
 }
 
 function shouldRefreshIssueDecorations(state: AppState): boolean {
@@ -1307,24 +1315,21 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             args.queryOverride
           )
           set((s) => ({
-            projectViewCache: {
-              ...s.projectViewCache,
-              [key]: { data: table, fetchedAt: Date.now() }
-            }
+            projectViewCache: withBoundedCacheEntry(s.projectViewCache, key, {
+              data: table,
+              fetchedAt: Date.now()
+            })
           }))
         } else if (maybeKnownKey) {
           // Only stamp the error onto the cache when we have a resolved key
           // (i.e. caller supplied viewId). Otherwise we have nowhere to write
           // it — the renderer classifies the error directly from the envelope.
           set((s) => ({
-            projectViewCache: {
-              ...s.projectViewCache,
-              [maybeKnownKey]: {
-                data: s.projectViewCache[maybeKnownKey]?.data ?? null,
-                fetchedAt: Date.now(),
-                error: envelope.error
-              }
-            }
+            projectViewCache: withBoundedCacheEntry(s.projectViewCache, maybeKnownKey, {
+              data: s.projectViewCache[maybeKnownKey]?.data ?? null,
+              fetchedAt: Date.now(),
+              error: envelope.error
+            })
           }))
         }
         return envelope
@@ -1772,16 +1777,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             ? { ...issuesError, source: envelope.sources.issues }
             : undefined
         set((s) => ({
-          workItemsCache: {
-            ...s.workItemsCache,
-            [key]: {
-              data: items,
-              fetchedAt: Date.now(),
-              sources: envelope.sources,
-              ...(errorForCache ? { error: errorForCache } : {}),
-              ...(envelope.issueSourceFellBack ? { issueSourceFellBack: true } : {})
-            }
-          }
+          workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
+            data: items,
+            fetchedAt: Date.now(),
+            sources: envelope.sources,
+            ...(errorForCache ? { error: errorForCache } : {}),
+            ...(envelope.issueSourceFellBack ? { issueSourceFellBack: true } : {})
+          })
         }))
         return items
       } catch (err) {
@@ -2211,10 +2213,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             })) as PRCheckDetail[])
         set((s) => {
           const nextState: Partial<AppState> = {
-            checksCache: {
-              ...s.checksCache,
-              [cacheKey]: { data: checks, fetchedAt: Date.now(), headSha }
-            }
+            checksCache: withBoundedCacheEntry(s.checksCache, cacheKey, {
+              data: checks,
+              fetchedAt: Date.now(),
+              headSha
+            })
           }
 
           const prStatusUpdate = syncPRChecksStatus(
@@ -2330,10 +2333,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               noCache: options?.force
             })) as PRComment[])
         set((s) => ({
-          commentsCache: {
-            ...s.commentsCache,
-            [cacheKey]: { data: comments, fetchedAt: Date.now() }
-          }
+          commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+            data: comments,
+            fetchedAt: Date.now()
+          })
         }))
         return comments
       } catch (err) {
@@ -2395,13 +2398,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     set((s) => {
       const entry = s.commentsCache[cacheKey]
       return {
-        commentsCache: {
-          ...s.commentsCache,
-          [cacheKey]: {
-            data: mergePRCommentIntoList(entry?.data, result.comment),
-            fetchedAt: Date.now()
-          }
-        }
+        commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+          data: mergePRCommentIntoList(entry?.data, result.comment),
+          fetchedAt: Date.now()
+        })
       }
     })
     return result
@@ -2466,13 +2466,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     set((s) => {
       const entry = s.commentsCache[cacheKey]
       return {
-        commentsCache: {
-          ...s.commentsCache,
-          [cacheKey]: {
-            data: mergePRCommentIntoList(entry?.data, comment),
-            fetchedAt: Date.now()
-          }
-        }
+        commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+          data: mergePRCommentIntoList(entry?.data, comment),
+          fetchedAt: Date.now()
+        })
       }
     })
     return { ok: true, comment }
@@ -2741,12 +2738,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   refreshAllGitHub: () => {
     // Invalidate comments cache so it refreshes on next access.
-    // Also evict old entries from prCache and issueCache to prevent unbounded
-    // growth across many repos and branches over a long-running session.
+    // Also evict old entries from retained caches to prevent unbounded growth
+    // across many repos and branches over a long-running session.
     set((s) => ({
       commentsCache: {},
       prCache: evictStaleEntries(s.prCache),
-      issueCache: evictStaleEntries(s.issueCache)
+      issueCache: evictStaleEntries(s.issueCache),
+      checksCache: evictStaleEntries(s.checksCache),
+      workItemsCache: evictStaleEntries(s.workItemsCache),
+      projectViewCache: evictStaleEntries(s.projectViewCache)
     }))
 
     // Why: prRequestGenerations tracks only live inflight fetches and is

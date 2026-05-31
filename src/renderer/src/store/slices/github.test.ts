@@ -8,6 +8,8 @@ import {
   createGitHubSlice,
   mergePRCommentIntoList,
   prChecksCacheSuffix,
+  prCommentsCacheSuffix,
+  projectViewCacheKey,
   workItemsCacheKey
 } from './github'
 import { createHostedReviewSlice } from './hosted-review'
@@ -523,6 +525,30 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     })
   })
 
+  it('bounds checks cache entries across many repo and head combinations', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const store = createTestStore()
+      mockApi.gh.prChecks.mockResolvedValue([])
+
+      for (let i = 0; i <= 500; i++) {
+        vi.setSystemTime(1_000 + i)
+        await store.getState().fetchPRChecks(`/repo/${i}`, 12, `feature/${i}`, `head-${i}`, null, {
+          force: true,
+          repoId: `repo-${i}`
+        })
+      }
+
+      const cache = store.getState().checksCache
+      expect(Object.keys(cache)).toHaveLength(500)
+      expect(cache[`repo-0::${prChecksCacheSuffix(12, null, 'head-0')}`]).toBeUndefined()
+      expect(cache[`repo-500::${prChecksCacheSuffix(12, null, 'head-500')}`]).toBeDefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not sync stale checks into a PR cache entry for a different PR repo', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
@@ -679,6 +705,30 @@ describe('createGitHubSlice.fetchPRComments', () => {
     expect(
       store.getState().commentsCache[`${repoId}::pr-comments::acme/widgets::12`]
     ).toBeUndefined()
+  })
+
+  it('bounds PR comment cache entries across many repos', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const store = createTestStore()
+      mockApi.gh.prComments.mockResolvedValue([])
+
+      for (let i = 0; i <= 500; i++) {
+        vi.setSystemTime(1_000 + i)
+        await store.getState().fetchPRComments(`/repo/${i}`, 12, {
+          force: true,
+          repoId: `repo-${i}`
+        })
+      }
+
+      const cache = store.getState().commentsCache
+      expect(Object.keys(cache)).toHaveLength(500)
+      expect(cache[`repo-0::${prCommentsCacheSuffix(12)}`]).toBeUndefined()
+      expect(cache[`repo-500::${prCommentsCacheSuffix(12)}`]).toBeDefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('preserves cached checks when the checks IPC fails', async () => {
@@ -3068,6 +3118,30 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
   })
 
+  it('bounds work-item cache entries across many repos', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const store = createTestStore()
+      mockApi.gh.listWorkItems.mockResolvedValue({
+        items: [],
+        sources: { issues: null, prs: null, upstreamCandidate: null }
+      })
+
+      for (let i = 0; i <= 500; i++) {
+        vi.setSystemTime(1_000 + i)
+        await store.getState().fetchWorkItems(`repo-${i}`, `/repo/${i}`, 24, '')
+      }
+
+      const cache = store.getState().workItemsCache
+      expect(Object.keys(cache)).toHaveLength(500)
+      expect(cache[workItemsCacheKey('repo-0', 24, '')]).toBeUndefined()
+      expect(cache[workItemsCacheKey('repo-500', 24, '')]).toBeDefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('quietly skips SSH repos without a resolved GitHub remote in cross-repo fetches', async () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -3203,6 +3277,62 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       timeoutMs: 60_000
     })
+  })
+
+  it('bounds project view table cache entries across many projects', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const store = createTestStore()
+      mockApi.gh.getProjectViewTable.mockImplementation(
+        async (args: Parameters<AppState['fetchProjectViewTable']>[0]) => ({
+          ok: true,
+          data: {
+            project: {
+              id: `project-${args.projectNumber}`,
+              owner: args.owner,
+              ownerType: args.ownerType,
+              number: args.projectNumber,
+              title: 'Roadmap',
+              url: `https://github.com/orgs/${args.owner}/projects/${args.projectNumber}`
+            },
+            selectedView: {
+              id: args.viewId ?? `view-${args.projectNumber}`,
+              number: args.projectNumber,
+              name: 'Table',
+              layout: 'TABLE_LAYOUT',
+              filter: '',
+              fields: [],
+              groupByFields: [],
+              sortByFields: []
+            },
+            rows: [],
+            totalCount: 0,
+            parentFieldDropped: false
+          }
+        })
+      )
+
+      for (let i = 0; i <= 500; i++) {
+        vi.setSystemTime(1_000 + i)
+        await store.getState().fetchProjectViewTable(
+          {
+            owner: 'acme',
+            ownerType: 'organization',
+            projectNumber: i,
+            viewId: `view-${i}`
+          },
+          { force: true }
+        )
+      }
+
+      const cache = store.getState().projectViewCache
+      expect(Object.keys(cache)).toHaveLength(500)
+      expect(projectViewCacheKey('organization', 'acme', 0, 'view-0') in cache).toBe(false)
+      expect(projectViewCacheKey('organization', 'acme', 500, 'view-500') in cache).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
