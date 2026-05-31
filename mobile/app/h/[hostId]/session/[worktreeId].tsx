@@ -1030,6 +1030,8 @@ export default function SessionScreen() {
   const [canPaste, setCanPaste] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
+  const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const toastSeqRef = useRef(0)
   // Why: WebView pushes terminal modes (bracketed-paste, alt-screen) on every
   // change so paste reads a synchronous snapshot — no round-trip required.
   const ptyModesRef = useRef<Map<string, TerminalModes>>(new Map())
@@ -1089,22 +1091,49 @@ export default function SessionScreen() {
     setCreateWarning(initialCreateWarning)
   }, [initialCreateWarning])
 
-  const showToast = useCallback((message: string, durationMs = 1200) => {
-    setToastMessage(message)
-    Animated.timing(toastOpacityRef.current, {
-      toValue: 1,
-      duration: 150,
-      useNativeDriver: true
-    }).start(() => {
-      setTimeout(() => {
-        Animated.timing(toastOpacityRef.current, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true
-        }).start(() => setToastMessage(null))
-      }, durationMs)
-    })
+  const clearToastHideTimer = useCallback(() => {
+    if (!toastHideTimerRef.current) return
+    clearTimeout(toastHideTimerRef.current)
+    toastHideTimerRef.current = null
   }, [])
+
+  const showToast = useCallback(
+    (message: string, durationMs = 1200) => {
+      const seq = toastSeqRef.current + 1
+      toastSeqRef.current = seq
+      clearToastHideTimer()
+      setToastMessage(message)
+      Animated.timing(toastOpacityRef.current, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true
+      }).start(({ finished }) => {
+        if (!finished || toastSeqRef.current !== seq) return
+        toastHideTimerRef.current = setTimeout(() => {
+          toastHideTimerRef.current = null
+          Animated.timing(toastOpacityRef.current, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true
+          }).start((result) => {
+            if (result.finished && toastSeqRef.current === seq) {
+              setToastMessage(null)
+            }
+          })
+        }, durationMs)
+      })
+    },
+    [clearToastHideTimer]
+  )
+
+  useEffect(() => {
+    return () => {
+      // Why: toast timers can outlive quick route changes; bump the sequence
+      // so pending animation callbacks cannot clear a newer/unmounted surface.
+      toastSeqRef.current += 1
+      clearToastHideTimer()
+    }
+  }, [clearToastHideTimer])
 
   const dictation = useMobileDictation({
     client,
