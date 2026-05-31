@@ -4,7 +4,7 @@ import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
 import { monaco } from '@/lib/monaco-setup'
-import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { computeDiffEditorFontSize } from '@/lib/editor-font-zoom'
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
@@ -17,6 +17,7 @@ import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-opti
 import type { DiffComment } from '../../../../shared/types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut } from './editor-shortcuts'
+import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 
 type DiffViewerProps = {
   modelKey: string
@@ -81,7 +82,7 @@ export default function DiffViewer({
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
     [allDiffComments, relativePath]
   )
-  const editorFontSize = computeEditorFontSize(
+  const diffEditorFontSize = computeDiffEditorFontSize(
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
@@ -433,11 +434,12 @@ export default function DiffViewer({
             renderSideBySide: sideBySide,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
-            fontSize: editorFontSize,
+            fontSize: diffEditorFontSize,
             fontFamily: settings?.terminalFontFamily || 'monospace',
             lineNumbers: 'on',
             automaticLayout: true,
             renderOverviewRuler: true,
+            scrollbar: diffEditorScrollbarOptions,
             padding: { top: 0 },
             find: {
               addExtraSpaceOnTop: false,

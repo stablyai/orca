@@ -409,6 +409,16 @@
   background-clip: padding-box;
 }
 
+.combined-diff-scroll-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.combined-diff-scroll-container::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 /* Hide tab-strip scrollbars to prevent drag-time scrollbar flashes */
 .terminal-tab-strip {
   -ms-overflow-style: none;
