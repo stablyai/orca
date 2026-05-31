@@ -54,6 +54,7 @@ import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { Worktree } from '../../../../shared/types'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
 import {
+  buildAutomationCronSchedule,
   buildAutomationRrule,
   formatAutomationSchedule,
   isValidAutomationCronSchedule,
@@ -136,16 +137,12 @@ function buildHermesCronSchedule(draft: AutomationDraft): string {
     return draft.customSchedule.trim()
   }
   const { hour, minute } = parseDraftTime(draft.time)
-  if (draft.preset === 'hourly') {
-    return `${minute} * * * *`
-  }
-  if (draft.preset === 'daily') {
-    return `${minute} ${hour} * * *`
-  }
-  if (draft.preset === 'weekdays') {
-    return `${minute} ${hour} * * 1-5`
-  }
-  return `${minute} ${hour} * * ${Number(draft.dayOfWeek)}`
+  return buildAutomationCronSchedule({
+    preset: draft.preset,
+    hour,
+    minute,
+    dayOfWeek: Number(draft.dayOfWeek)
+  })
 }
 
 function getAgentLabel(agentId: string): string {

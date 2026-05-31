@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildAutomationCronSchedule,
   buildAutomationRrule,
   classifyAutomationCronSchedule,
   formatAutomationSchedule,
@@ -92,6 +93,19 @@ describe('automation schedules', () => {
       new Date('2026-05-15T12:00:00').getTime()
     )
     expect(latest).toBe(new Date('2026-05-15T10:15:00').getTime())
+  })
+
+  it('builds cron schedules from simple automation presets', () => {
+    expect(buildAutomationCronSchedule({ preset: 'hourly', hour: 9, minute: 15 })).toBe(
+      '15 * * * *'
+    )
+    expect(buildAutomationCronSchedule({ preset: 'daily', hour: 9, minute: 15 })).toBe('15 9 * * *')
+    expect(buildAutomationCronSchedule({ preset: 'weekdays', hour: 9, minute: 15 })).toBe(
+      '15 9 * * 1-5'
+    )
+    expect(
+      buildAutomationCronSchedule({ preset: 'weekly', hour: 9, minute: 15, dayOfWeek: 0 })
+    ).toBe('15 9 * * 0')
   })
 
   it('formats simple cron schedules with friendly labels', () => {

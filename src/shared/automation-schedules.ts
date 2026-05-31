@@ -490,6 +490,27 @@ export function buildAutomationRrule(args: {
   return `FREQ=DAILY;BYHOUR=${hour};BYMINUTE=${minute}`
 }
 
+export function buildAutomationCronSchedule(args: {
+  preset: Exclude<AutomationSchedulePreset, 'custom'>
+  hour: number
+  minute: number
+  dayOfWeek?: number
+}): string {
+  const hour = Math.max(0, Math.min(23, Math.floor(args.hour)))
+  const minute = Math.max(0, Math.min(59, Math.floor(args.minute)))
+  if (args.preset === 'hourly') {
+    return `${minute} * * * *`
+  }
+  if (args.preset === 'weekdays') {
+    return `${minute} ${hour} * * 1-5`
+  }
+  if (args.preset === 'weekly') {
+    const day = Math.max(0, Math.min(6, Math.floor(args.dayOfWeek ?? 1)))
+    return `${minute} ${hour} * * ${day}`
+  }
+  return `${minute} ${hour} * * *`
+}
+
 export function nextAutomationOccurrenceAfter(
   rrule: string,
   dtstart: number,

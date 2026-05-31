@@ -1,7 +1,6 @@
 import React from 'react'
 import { CalendarClock, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import {
@@ -13,23 +12,25 @@ import {
 } from '@/components/ui/select'
 import type { AutomationSchedulePreset } from '../../../../shared/automations-types'
 import {
+  buildAutomationCronSchedule,
   buildAutomationRrule,
   classifyAutomationCronSchedule,
   formatAutomationSchedule,
   isValidAutomationSchedule
 } from '../../../../shared/automation-schedules'
 import type { AutomationDraft } from './AutomationEditorDialog'
+import { AutomationCustomCronPanel } from './AutomationCustomCronPanel'
 import { Field } from './automation-page-parts'
 
 const FIELD_CONTROL_CLASS = 'border-input bg-input/30 shadow-xs dark:bg-input/30'
-type SimpleSchedulePreset = Exclude<AutomationSchedulePreset, 'custom'>
 
-const SIMPLE_PRESETS = [
+export const AUTOMATION_SCHEDULE_PRESET_OPTIONS = [
   ['hourly', 'Hourly'],
   ['daily', 'Daily'],
   ['weekdays', 'Weekdays'],
-  ['weekly', 'Weekly']
-] as const
+  ['weekly', 'Weekly'],
+  ['custom', 'Custom cron']
+] as const satisfies readonly [AutomationSchedulePreset, string][]
 
 const DAY_OPTIONS = [
   ['0', 'Sunday'],
@@ -130,6 +131,34 @@ function getSimpleScheduleDraft(
   return { preset: 'weekdays', time: current.time, dayOfWeek: current.dayOfWeek || '1' }
 }
 
+function buildCustomScheduleSeed(draft: AutomationDraft): string {
+  const existing = draft.customSchedule.trim()
+  if (existing) {
+    return draft.customSchedule
+  }
+  if (draft.preset === 'custom') {
+    return ''
+  }
+  const { hour, minute } = parseTime(draft.time)
+  return buildAutomationCronSchedule({
+    preset: draft.preset,
+    hour,
+    minute,
+    dayOfWeek: Number(draft.dayOfWeek)
+  })
+}
+
+export function getSchedulePresetDraft(
+  current: AutomationDraft,
+  preset: AutomationSchedulePreset
+): Pick<AutomationDraft, 'preset' | 'customSchedule' | 'scheduleWarning'> {
+  return {
+    preset,
+    customSchedule: preset === 'custom' ? buildCustomScheduleSeed(current) : current.customSchedule,
+    scheduleWarning: null
+  }
+}
+
 export function AutomationSchedulePicker({
   draft,
   triggerClassName,
@@ -169,51 +198,23 @@ export function AutomationSchedulePicker({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[min(var(--radix-popover-trigger-width),calc(100vw-2rem))] min-w-[min(18rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] p-3"
+        className="w-[min(var(--radix-popover-trigger-width),calc(100vw-2rem))] min-w-[min(22rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] p-3"
       >
         <div className="grid gap-3">
           {draft.preset === 'custom' ? (
-            <div className="grid gap-3">
-              <Field label="Advanced schedule">
-                <Input
-                  value={draft.customSchedule}
-                  placeholder="0 9 * * 1-5"
-                  spellCheck={false}
-                  className={cn('font-mono', FIELD_CONTROL_CLASS)}
-                  aria-invalid={customScheduleInvalid}
-                  onChange={(event) =>
-                    onDraftChange((current) => ({
-                      ...current,
-                      customSchedule: event.target.value,
-                      scheduleWarning: null
-                    }))
-                  }
-                />
-                <div className="mt-1 text-[11px] text-muted-foreground">
-                  Existing advanced schedules are preserved until you choose a simple schedule.
-                </div>
-                {customScheduleInvalid ? (
-                  <div className="mt-1 text-[11px] text-destructive">
-                    Enter a valid advanced schedule before saving.
-                  </div>
-                ) : null}
-              </Field>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="justify-start"
-                onClick={() =>
-                  onDraftChange((current) => ({
-                    ...current,
-                    ...getSimpleScheduleDraft(current),
-                    scheduleWarning: null
-                  }))
-                }
-              >
-                Use simple schedule
-              </Button>
-            </div>
+            <AutomationCustomCronPanel
+              draft={draft}
+              customScheduleInvalid={customScheduleInvalid}
+              validateAdvancedSchedule={validateAdvancedSchedule}
+              onDraftChange={onDraftChange}
+              onUseSimpleSchedule={() =>
+                onDraftChange((current) => ({
+                  ...current,
+                  ...getSimpleScheduleDraft(current),
+                  scheduleWarning: null
+                }))
+              }
+            />
           ) : (
             <>
               <Field label="Cadence">
@@ -222,8 +223,7 @@ export function AutomationSchedulePicker({
                   onValueChange={(preset) =>
                     onDraftChange((current) => ({
                       ...current,
-                      preset: preset as SimpleSchedulePreset,
-                      scheduleWarning: null
+                      ...getSchedulePresetDraft(current, preset as AutomationSchedulePreset)
                     }))
                   }
                 >
@@ -231,7 +231,7 @@ export function AutomationSchedulePicker({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SIMPLE_PRESETS.map(([value, presetLabel]) => (
+                    {AUTOMATION_SCHEDULE_PRESET_OPTIONS.map(([value, presetLabel]) => (
                       <SelectItem key={value} value={value}>
                         {presetLabel}
                       </SelectItem>
