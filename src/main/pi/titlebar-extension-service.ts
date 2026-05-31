@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { basename, join } from 'path'
 import { app } from 'electron'
@@ -11,6 +11,7 @@ import {
   mirrorEntry,
   safeRemoveOverlay
 } from '../pty/overlay-mirror'
+import { mergePiOverlayUiSettings } from '../../shared/pi-overlay-ui-settings'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
 // Why: the Pi test suite imports `isSafeDescendCandidate` from this module's
@@ -22,6 +23,7 @@ export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
 const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
 const PI_AGENT_SUBDIR = 'agent'
+const PI_AGENT_SETTINGS_FILE = 'settings.json'
 
 // Why: each agent owns its own overlay tree so OMP launches never touch
 // Pi's overlay dir (and vice versa). Shadowing one inside the other would
@@ -175,6 +177,10 @@ export class PiTitlebarExtensionService {
     for (const entry of readdirSync(sourceAgentDir, { withFileTypes: true })) {
       const sourcePath = join(sourceAgentDir, entry.name)
 
+      if (entry.name === PI_AGENT_SETTINGS_FILE) {
+        continue
+      }
+
       if (entry.name === 'extensions' && entry.isDirectory()) {
         const overlayExtensionsDir = join(overlayDir, 'extensions')
         mkdirSync(overlayExtensionsDir, { recursive: true })
@@ -193,6 +199,29 @@ export class PiTitlebarExtensionService {
       // sessions, skills, prompts, themes, and any future files stored there.
       mirrorEntry(sourcePath, join(overlayDir, basename(sourcePath)))
     }
+  }
+
+  private readPiSettings(sourceAgentDir: string): unknown {
+    const settingsPath = join(sourceAgentDir, PI_AGENT_SETTINGS_FILE)
+    if (!existsSync(settingsPath)) {
+      return {}
+    }
+
+    try {
+      return JSON.parse(readFileSync(settingsPath, 'utf8'))
+    } catch {
+      return {}
+    }
+  }
+
+  private writeOverlaySettings(sourceAgentDir: string, overlayDir: string): void {
+    // Why: settings.json is a real overlay file, not a mirror, so Orca can
+    // apply UI-only safeguards without modifying the user's Pi / OMP config.
+    const settings = mergePiOverlayUiSettings(this.readPiSettings(sourceAgentDir))
+    writeFileSync(
+      join(overlayDir, PI_AGENT_SETTINGS_FILE),
+      `${JSON.stringify(settings, null, 2)}\n`
+    )
   }
 
   buildPtyEnv(
@@ -218,6 +247,7 @@ export class PiTitlebarExtensionService {
     try {
       mkdirSync(overlayDir, { recursive: true })
       this.mirrorAgentDir(sourceAgentDir, overlayDir)
+      this.writeOverlaySettings(sourceAgentDir, overlayDir)
 
       const extensionsDir = join(overlayDir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })

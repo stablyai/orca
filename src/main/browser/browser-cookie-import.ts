@@ -173,6 +173,17 @@ function resolveCookiesPath(profileDir: string): string | null {
   return null
 }
 
+function isSafeBrowserProfileDirectory(directory: string): boolean {
+  return (
+    directory.length > 0 &&
+    directory !== '.' &&
+    !directory.includes('\0') &&
+    !directory.includes('/') &&
+    !directory.includes('\\') &&
+    !directory.includes('..')
+  )
+}
+
 // Why: Chrome's Local State JSON contains profile.info_cache which maps profile
 // directory names (e.g. "Default", "Profile 1") to metadata including the
 // user-visible display name. This lets us show human-readable names in the picker.
@@ -190,6 +201,10 @@ function discoverProfiles(browserRoot: string): BrowserProfile[] {
     }
     const profiles: BrowserProfile[] = []
     for (const [dir, info] of Object.entries(infoCache)) {
+      // Why: Local State is external metadata, but profile dirs become path segments.
+      if (!isSafeBrowserProfileDirectory(dir)) {
+        continue
+      }
       const profileName = (info as { name?: string })?.name ?? dir
       profiles.push({ name: profileName, directory: dir })
     }
@@ -362,6 +377,9 @@ export function selectBrowserProfile(
   browser: DetectedBrowser,
   profileDirectory: string
 ): DetectedBrowser | null {
+  if (!isSafeBrowserProfileDirectory(profileDirectory)) {
+    return null
+  }
   if (browser.family === 'firefox') {
     const profilesRoot = firefoxProfilesRoot()
     if (!profilesRoot) {
@@ -726,7 +744,9 @@ export function getUserAgentForBrowser(
       const v = readBrowserVersion('/Applications/Comet.app')
       return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
     }
-    default:
+    case 'firefox':
+    case 'safari':
+    case 'manual':
       return null
   }
 }
@@ -1119,9 +1139,17 @@ function decodeSafariBinaryCookies(buffer: Buffer): ValidatedCookie[] {
   for (const pageSize of pageSizes) {
     const page = buffer.subarray(cursor, cursor + pageSize)
     cursor += pageSize
-    cookies.push(...decodeSafariPage(page))
+    appendSafariCookies(cookies, decodeSafariPage(page))
   }
   return cookies
+}
+
+function appendSafariCookies(target: ValidatedCookie[], cookies: readonly ValidatedCookie[]): void {
+  // Why: Safari binary cookie pages can contain generated-size cookie lists;
+  // spreading a decoded page into push can exceed JavaScript's argument limit.
+  for (const cookie of cookies) {
+    target.push(cookie)
+  }
 }
 
 function decodeSafariPage(page: Buffer): ValidatedCookie[] {

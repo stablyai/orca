@@ -48,6 +48,7 @@ function classifyGiteaStatus(status: string | null | undefined): CheckStatus {
     case 'pending':
       return 'pending'
     case 'skipped':
+    case undefined:
     default:
       return 'neutral'
   }

@@ -35,3 +35,18 @@ export function resolveComposerBranchSelection(args: {
     lastAutoName: args.localBranchName
   }
 }
+
+export function resolveComposerBranchNameOverrideForCreate(args: {
+  branchNameOverride: string | undefined
+  branchAutoName: string
+  workspaceName: string
+  preserveWorkspaceNameEdits: boolean
+}): string | undefined {
+  if (!args.branchNameOverride) {
+    return undefined
+  }
+  if (args.preserveWorkspaceNameEdits) {
+    return args.branchNameOverride
+  }
+  return args.workspaceName === args.branchAutoName ? args.branchNameOverride : undefined
+}

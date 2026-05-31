@@ -1,7 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings, Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type {
+  GitConflictOperation,
+  GlobalSettings,
+  Repo,
+  Worktree,
+  WorktreeCardProperty
+} from '../../../../shared/types'
 import type WorktreeCardComponent from './WorktreeCard'
 import type * as WorkspaceDeleteQuickAction from './workspace-delete-quick-action'
 
@@ -16,6 +22,7 @@ let ptyIdsByTabId: Record<string, string[]> = {}
 let browserTabsByWorktree: Record<string, { id: string }[]> = {}
 let settings: Partial<GlobalSettings> | null = null
 let workspaceDeleteModifierPressed = false
+let gitConflictOperationByWorktree: Record<string, GitConflictOperation> = {}
 let WorktreeCard: typeof WorktreeCardComponent
 
 vi.mock('@/store', () => ({
@@ -24,7 +31,7 @@ vi.mock('@/store', () => ({
       deleteStateByWorktreeId: {},
       fetchHostedReviewForBranch,
       fetchIssue,
-      gitConflictOperationByWorktree: {},
+      gitConflictOperationByWorktree,
       hostedReviewCache: {},
       issueCache: {},
       openModal,
@@ -128,6 +135,7 @@ describe('WorktreeCard quick actions', () => {
     browserTabsByWorktree = {}
     settings = null
     workspaceDeleteModifierPressed = false
+    gitConflictOperationByWorktree = {}
   })
 
   it('marks the unread toggle as a workspace-board-preserving action', () => {
@@ -139,7 +147,31 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('data-workspace-board-preserve-open=""')
   })
 
-  it('keeps the branch row by default when it repeats the workspace title', () => {
+  it('renders repo identity in the detailed metadata row', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).not.toContain('aria-label="Project orca"')
+    expect(markup).toContain('>orca</span>')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('renders folder kind in the detailed metadata row', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: 'Docs folder', branch: '' })}
+        repo={{ ...makeRepo(), kind: 'folder' }}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Docs folder')
+    expect(markup).toContain('>Folder</span>')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('renders the repeated branch metadata row in detailed cards', () => {
     worktreeCardProperties = []
 
     const markup = renderToStaticMarkup(
@@ -157,7 +189,7 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('tabindex="0"')
   })
 
-  it('hides the repeated branch row only when compact cards are enabled', () => {
+  it('omits the repeated branch metadata row when compact cards are enabled', () => {
     worktreeCardProperties = []
     settings = { experimentalCompactWorktreeCards: true }
 
@@ -174,7 +206,7 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('tabindex="0"')
   })
 
-  it('keeps the branch row when the workspace has a custom title', () => {
+  it('omits the branch metadata row when the workspace has a custom title', () => {
     worktreeCardProperties = []
     settings = { experimentalCompactWorktreeCards: true }
 
@@ -188,9 +220,9 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('Custom workspace')
-    expect(markup).toContain('quick-action')
-    expect(markup).toContain('data-worktree-card-meta-row=""')
-    expect(markup).toContain('text-[11px] text-muted-foreground truncate leading-none')
+    expect(markup).not.toContain('>quick-action<')
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    expect(markup).not.toContain('text-[11px] text-muted-foreground truncate leading-none')
   })
 
   it('uses the pre-compact unread lane and primary badge when compact cards are disabled', () => {
@@ -331,5 +363,29 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).not.toContain('aria-label="Delete workspace"')
+  })
+
+  it('does not show the rebase operation chip on the card', () => {
+    const worktree = makeWorktree()
+    gitConflictOperationByWorktree = { [worktree.id]: 'rebase' }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).not.toContain('Rebasing')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('keeps non-rebase operation chips on the card', () => {
+    const worktree = makeWorktree()
+    gitConflictOperationByWorktree = { [worktree.id]: 'merge' }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('Merging')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 })

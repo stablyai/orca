@@ -159,9 +159,10 @@ export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
 
 export async function getBitbucketPullRequest(
   repoPath: string,
-  prNumber: number
+  prNumber: number,
+  connectionId?: string | null
 ): Promise<BitbucketPullRequestInfo | null> {
-  const repo = await getBitbucketRepoRef(repoPath)
+  const repo = await getBitbucketRepoRef(repoPath, connectionId)
   if (!repo) {
     return null
   }
@@ -174,14 +175,15 @@ export async function getBitbucketPullRequest(
 export async function getBitbucketPullRequestForBranch(
   repoPath: string,
   branch: string,
-  linkedPRNumber?: number | null
+  linkedPRNumber?: number | null,
+  connectionId?: string | null
 ): Promise<BitbucketPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
     return null
   }
 
-  const repo = await getBitbucketRepoRef(repoPath)
+  const repo = await getBitbucketRepoRef(repoPath, connectionId)
   if (!repo) {
     return null
   }
@@ -217,6 +219,9 @@ export async function getBitbucketPullRequestForBranch(
   return raw ? normalizePullRequest(repo, raw) : null
 }
 
-export async function getBitbucketRepoSlug(repoPath: string): Promise<BitbucketRepoRef | null> {
-  return getBitbucketRepoRef(repoPath)
+export async function getBitbucketRepoSlug(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<BitbucketRepoRef | null> {
+  return getBitbucketRepoRef(repoPath, connectionId)
 }

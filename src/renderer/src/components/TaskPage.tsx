@@ -26,7 +26,6 @@ import {
   LayoutGrid,
   List,
   LoaderCircle,
-  Lock,
   Minus,
   Plus,
   RefreshCw,
@@ -76,7 +75,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
-import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
+import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
+import { LinearScopeSelector } from '@/components/linear-scope-selector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
@@ -98,11 +98,12 @@ import {
   getLinearOrganizationUrlKeyFromIssueUrl
 } from '../../../shared/linear-links'
 import PRFilterDropdowns, { type PRFilterChange } from '@/components/github/PRFilterDropdowns'
+import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import { buildGitHubRepoUrl, parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import {
-  findGithubPrWorkspaceAttachment,
-  getGithubPrWorkspaceAttachmentLabel
-} from '@/lib/github-pr-workspace-attachment'
+  findGithubWorkItemWorkspaceAttachment,
+  getGithubWorkItemWorkspaceAttachmentLabel
+} from '@/lib/github-work-item-workspace-attachment'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
@@ -110,6 +111,12 @@ import PullRequestPage from '@/components/PullRequestPage'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
+import {
+  LinearCollectionNotice,
+  LinearCustomViewTable,
+  LinearProjectOverview,
+  LinearProjectTable
+} from '@/components/linear-project-view-surfaces'
 import { cn } from '@/lib/utils'
 import {
   getLinkedWorkItemSuggestedName,
@@ -118,6 +125,7 @@ import {
   CROSS_REPO_DISPLAY_LIMIT
 } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import {
   buildTaskPageRepoSourceState,
@@ -140,9 +148,14 @@ import type {
   GitHubWorkItem,
   GitLabTodo,
   GitLabWorkItem,
+  LinearCollectionResult,
+  LinearCustomViewModel,
+  LinearCustomViewSummary,
   LinearIssue,
+  LinearProjectDetail,
   LinearProjectSummary,
   LinearTeam,
+  LinearWorkspaceSelection,
   LinearWorkflowState,
   Repo,
   TaskProvider,
@@ -150,7 +163,13 @@ import type {
 } from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { useTeamStates, useTeamMembers, useTeamLabels } from '@/hooks/useIssueMetadata'
+import {
+  useRepoAssignees,
+  useRepoLabels,
+  useTeamStates,
+  useTeamMembers,
+  useTeamLabels
+} from '@/hooks/useIssueMetadata'
 import {
   linearCreateIssue,
   linearGetIssue,
@@ -210,18 +229,6 @@ const PR_TASK_QUERY_PRESETS: TaskQueryPreset[] = [
 
 function getGitHubTaskKindPresets(kind: GitHubTaskKind): TaskQueryPreset[] {
   return kind === 'prs' ? PR_TASK_QUERY_PRESETS : ISSUE_TASK_QUERY_PRESETS
-}
-
-function getRuntimeTargetForRepoId(repoId: string | null | undefined) {
-  if (!repoId) {
-    return null
-  }
-  const state = useAppStore.getState()
-  const target = getActiveRuntimeTarget(state.settings)
-  if (target.kind !== 'environment') {
-    return null
-  }
-  return state.repos.some((repo) => repo.id === repoId) ? target : null
 }
 
 type SourceOption = {
@@ -388,6 +395,8 @@ const LINEAR_PRIORITY_LABELS: Record<number, string> = {
 }
 
 type LinearViewMode = 'list' | 'board'
+type LinearMode = 'issues' | 'projects' | 'views'
+type LinearProjectTab = 'overview' | 'issues'
 type LinearGroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'team'
 type LinearOrderBy = 'priority' | 'updated' | 'identifier'
 type LinearDisplayProperty = 'state' | 'priority' | 'assignee' | 'team' | 'labels' | 'updated'
@@ -403,6 +412,17 @@ type LinearIssueListRow =
   | { type: 'issue'; issue: LinearIssue }
 
 const LINEAR_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-linear-issue-id'
+
+const LINEAR_MODE_OPTIONS: { id: LinearMode; label: string }[] = [
+  { id: 'issues', label: 'Issues' },
+  { id: 'projects', label: 'Projects' },
+  { id: 'views', label: 'Views' }
+]
+
+const LINEAR_CUSTOM_VIEW_MODEL_OPTIONS: { id: LinearCustomViewModel; label: string }[] = [
+  { id: 'issue', label: 'Issues' },
+  { id: 'project', label: 'Projects' }
+]
 
 const LINEAR_VIEW_OPTIONS: {
   id: LinearViewMode
@@ -905,6 +925,197 @@ function GitHubAssigneeAvatar({ assignee }: { assignee: GitHubAssignableUser }):
   )
 }
 
+function GitHubIssueLabelSelector({
+  labels,
+  selectedLabels,
+  loading,
+  error,
+  disabled,
+  onChange
+}: {
+  labels: string[]
+  selectedLabels: string[]
+  loading: boolean
+  error: string | null
+  disabled: boolean
+  onChange: (labels: string[]) => void
+}): React.JSX.Element {
+  const selectedSet = useMemo(() => new Set(selectedLabels), [selectedLabels])
+  const toggleLabel = useCallback(
+    (label: string) => {
+      onChange(
+        selectedSet.has(label)
+          ? selectedLabels.filter((name) => name !== label)
+          : [...selectedLabels, label]
+      )
+    },
+    [onChange, selectedLabels, selectedSet]
+  )
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <label className="text-[11px] font-medium text-muted-foreground">Labels</label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            className="h-auto min-h-9 justify-start gap-2 px-3 py-2 text-left"
+          >
+            {selectedLabels.length === 0 ? (
+              <span className="text-muted-foreground">None</span>
+            ) : (
+              <span className="flex min-w-0 flex-wrap gap-1.5">
+                {selectedLabels.map((label) => (
+                  <span
+                    key={label}
+                    className="rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[11px] font-medium"
+                  >
+                    {label}
+                  </span>
+                ))}
+              </span>
+            )}
+            {loading ? <LoaderCircle className="ml-auto size-3.5 animate-spin" /> : null}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="popover-scroll-content scrollbar-sleek w-64 p-1" align="start">
+          {error ? (
+            <div className="px-2 py-2 text-xs text-destructive">{error}</div>
+          ) : labels.length === 0 ? (
+            <div className="px-2 py-2 text-xs text-muted-foreground">No labels.</div>
+          ) : (
+            labels.map((label) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => toggleLabel(label)}
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
+              >
+                <span
+                  className={cn(
+                    'flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
+                    selectedSet.has(label)
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-input'
+                  )}
+                >
+                  {selectedSet.has(label) ? <Check className="size-2.5" /> : null}
+                </span>
+                <span className="min-w-0 truncate">{label}</span>
+              </button>
+            ))
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
+function GitHubIssueAssigneeSelector({
+  assignees,
+  selectedAssignees,
+  loading,
+  error,
+  disabled,
+  onChange
+}: {
+  assignees: GitHubAssignableUser[]
+  selectedAssignees: GitHubAssignableUser[]
+  loading: boolean
+  error: string | null
+  disabled: boolean
+  onChange: (assignees: GitHubAssignableUser[]) => void
+}): React.JSX.Element {
+  const selectedLogins = useMemo(
+    () => new Set(selectedAssignees.map((assignee) => assignee.login.toLowerCase())),
+    [selectedAssignees]
+  )
+  const toggleAssignee = useCallback(
+    (assignee: GitHubAssignableUser) => {
+      const key = assignee.login.toLowerCase()
+      onChange(
+        selectedLogins.has(key)
+          ? selectedAssignees.filter((current) => current.login.toLowerCase() !== key)
+          : [...selectedAssignees, assignee]
+      )
+    },
+    [onChange, selectedAssignees, selectedLogins]
+  )
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <label className="text-[11px] font-medium text-muted-foreground">Assignees</label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            className="h-auto min-h-9 justify-start gap-2 px-3 py-2 text-left"
+          >
+            {selectedAssignees.length === 0 ? (
+              <span className="text-muted-foreground">Unassigned</span>
+            ) : (
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="flex -space-x-1">
+                  {selectedAssignees.slice(0, 3).map((assignee) => (
+                    <GitHubAssigneeAvatar key={assignee.login} assignee={assignee} />
+                  ))}
+                </span>
+                <span className="min-w-0 truncate text-xs">
+                  {selectedAssignees.map((assignee) => assignee.login).join(', ')}
+                </span>
+              </span>
+            )}
+            {loading ? <LoaderCircle className="ml-auto size-3.5 animate-spin" /> : null}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="popover-scroll-content scrollbar-sleek w-72 p-1" align="start">
+          {error ? (
+            <div className="px-2 py-2 text-xs text-destructive">{error}</div>
+          ) : assignees.length === 0 ? (
+            <div className="px-2 py-2 text-xs text-muted-foreground">No assignable users.</div>
+          ) : (
+            assignees.map((assignee) => {
+              const selected = selectedLogins.has(assignee.login.toLowerCase())
+              return (
+                <button
+                  key={assignee.login}
+                  type="button"
+                  onClick={() => toggleAssignee(assignee)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
+                >
+                  <span
+                    className={cn(
+                      'flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
+                      selected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input'
+                    )}
+                  >
+                    {selected ? <Check className="size-2.5" /> : null}
+                  </span>
+                  <GitHubAssigneeAvatar assignee={assignee} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{assignee.login}</span>
+                    {assignee.name ? (
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {assignee.name}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              )
+            })
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
 function GHAssigneesCell({
   item,
   repo
@@ -1217,15 +1428,51 @@ function PRReviewCell({
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
   )
+  const [reviewRequestsSource, setReviewRequestsSource] = useState(() => ({
+    itemId: item.id,
+    repoId: item.repoId,
+    reviewRequests: item.reviewRequests
+  }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const [activeReviewerIndex, setActiveReviewerIndex] = useState(0)
+  const [activeReviewerCursor, setActiveReviewerCursor] = useState({ resetKey: '', index: 0 })
   const [submitting, setSubmitting] = useState(false)
   const settings = useAppStore((s) => s.settings)
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
+  const reviewerInputFocusFrameRef = useRef<number | null>(null)
 
-  useEffect(() => {
+  const cancelReviewerInputFocusFrame = useCallback((): void => {
+    if (reviewerInputFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(reviewerInputFocusFrameRef.current)
+    reviewerInputFocusFrameRef.current = null
+  }, [])
+
+  const setReviewerInputNode = useCallback(
+    (node: HTMLInputElement | null): void => {
+      // Why: the queued picker focus is only valid while this input is mounted.
+      if (!node) {
+        cancelReviewerInputFocusFrame()
+      }
+      reviewerInputRef.current = node
+    },
+    [cancelReviewerInputFocusFrame]
+  )
+
+  // Why: reviewer edits are optimistic, but item switches/refetches must clear
+  // stale local requests before paint; a passive Effect leaves one stale render.
+  if (
+    reviewRequestsSource.itemId !== item.id ||
+    reviewRequestsSource.repoId !== item.repoId ||
+    reviewRequestsSource.reviewRequests !== item.reviewRequests
+  ) {
+    setReviewRequestsSource({
+      itemId: item.id,
+      repoId: item.repoId,
+      reviewRequests: item.reviewRequests
+    })
     setLocalReviewRequests(item.reviewRequests ?? [])
-  }, [item.id, item.reviewRequests])
+  }
 
   const reviewerSeedUsers = useMemo<GitHubAssignableUser[]>(() => {
     const byLogin = new Map<string, GitHubAssignableUser>()
@@ -1329,9 +1576,24 @@ function PRReviewCell({
     [everyoneElseReviewerRows, suggestedReviewerRows]
   )
 
-  useEffect(() => {
-    setActiveReviewerIndex(0)
-  }, [reviewerQuery, actionableReviewerRows.length])
+  const reviewerCursorResetKey = `${reviewerQuery}\u0000${actionableReviewerRows.length}`
+  if (activeReviewerCursor.resetKey !== reviewerCursorResetKey) {
+    setActiveReviewerCursor({ resetKey: reviewerCursorResetKey, index: 0 })
+  }
+  const activeReviewerIndex =
+    activeReviewerCursor.resetKey === reviewerCursorResetKey ? activeReviewerCursor.index : 0
+  const setActiveReviewerIndex = useCallback(
+    (nextIndex: number | ((current: number) => number)): void => {
+      setActiveReviewerCursor((current) => {
+        const currentIndex = current.resetKey === reviewerCursorResetKey ? current.index : 0
+        return {
+          resetKey: reviewerCursorResetKey,
+          index: typeof nextIndex === 'function' ? nextIndex(currentIndex) : nextIndex
+        }
+      })
+    },
+    [reviewerCursorResetKey]
+  )
 
   if (item.type !== 'pr') {
     return <span className="text-[11px] text-muted-foreground">Issue</span>
@@ -1412,9 +1674,14 @@ function PRReviewCell({
   const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
     setOpen(nextOpen)
     if (nextOpen) {
-      requestAnimationFrame(() => reviewerInputRef.current?.focus())
+      cancelReviewerInputFocusFrame()
+      reviewerInputFocusFrameRef.current = requestAnimationFrame(() => {
+        reviewerInputFocusFrameRef.current = null
+        reviewerInputRef.current?.focus()
+      })
       return
     }
+    cancelReviewerInputFocusFrame()
     setReviewerInput('')
   }
 
@@ -1493,7 +1760,7 @@ function PRReviewCell({
         </div>
         <div className="border-b border-border/70 p-3">
           <Input
-            ref={reviewerInputRef}
+            ref={setReviewerInputNode}
             value={reviewerInput}
             onChange={(event) => setReviewerInput(event.target.value)}
             placeholder="Type or choose a user"
@@ -1943,13 +2210,21 @@ export default function TaskPage(): React.JSX.Element {
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
-  const connectLinear = useAppStore((s) => s.connectLinear)
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
   const getCachedLinearIssues = useAppStore((s) => s.getCachedLinearIssues)
   const getCachedLinearTeams = useAppStore((s) => s.getCachedLinearTeams)
   const listLinearTeams = useAppStore((s) => s.listLinearTeams)
+  const getCachedLinearProjects = useAppStore((s) => s.getCachedLinearProjects)
+  const listLinearProjectsFromStore = useAppStore((s) => s.listLinearProjects)
+  const fetchLinearProject = useAppStore((s) => s.fetchLinearProject)
+  const listLinearProjectIssues = useAppStore((s) => s.listLinearProjectIssues)
+  const getCachedLinearCustomViews = useAppStore((s) => s.getCachedLinearCustomViews)
+  const listLinearCustomViews = useAppStore((s) => s.listLinearCustomViews)
+  const fetchLinearCustomView = useAppStore((s) => s.fetchLinearCustomView)
+  const listLinearCustomViewIssues = useAppStore((s) => s.listLinearCustomViewIssues)
+  const listLinearCustomViewProjects = useAppStore((s) => s.listLinearCustomViewProjects)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
@@ -2030,6 +2305,10 @@ export default function TaskPage(): React.JSX.Element {
     linearStatus.activeWorkspaceId ??
     linearWorkspaces[0]?.id ??
     null
+  const selectedLinearWorkspace =
+    selectedLinearWorkspaceId && selectedLinearWorkspaceId !== 'all'
+      ? (linearWorkspaces.find((workspace) => workspace.id === selectedLinearWorkspaceId) ?? null)
+      : null
   const preferredVisibleTaskProviders = useMemo(
     () => normalizeVisibleTaskProviders(settings?.visibleTaskProviders),
     [settings?.visibleTaskProviders]
@@ -2138,19 +2417,18 @@ export default function TaskPage(): React.JSX.Element {
   const [gitlabTodos, setGitlabTodos] = useState<GitLabTodo[]>([])
   const [gitlabTodosLoading, setGitlabTodosLoading] = useState(false)
 
-  // Why: Issues and MRs expose different filter sets. Reset before fetching
-  // so a stale chip cannot become an invalid glab CLI flag.
-  useEffect(() => {
-    const filterIsValid =
-      gitlabView === 'issues'
-        ? isGitLabIssueFilter(gitlabFilter)
-        : gitlabView === 'mrs'
-          ? isGitLabMRFilter(gitlabFilter)
-          : true
-    if (!filterIsValid) {
-      setGitlabFilter('opened')
-    }
-  }, [gitlabView, gitlabFilter])
+  const gitlabFilterIsValid =
+    gitlabView === 'issues'
+      ? isGitLabIssueFilter(gitlabFilter)
+      : gitlabView === 'mrs'
+        ? isGitLabMRFilter(gitlabFilter)
+        : true
+  const activeGitlabFilter = gitlabFilterIsValid ? gitlabFilter : 'opened'
+  // Why: Issues and MRs expose different filter sets; repair before commit so
+  // fetch Effects never issue `glab` with a stale filter from the other view.
+  if (!gitlabFilterIsValid) {
+    setGitlabFilter('opened')
+  }
 
   const displayedGitLabItems = useMemo(() => {
     if (gitlabView === 'issues') {
@@ -2412,6 +2690,8 @@ export default function TaskPage(): React.JSX.Element {
   const [newIssueOpen, setNewIssueOpen] = useState(false)
   const [newIssueTitle, setNewIssueTitle] = useState('')
   const [newIssueBody, setNewIssueBody] = useState('')
+  const [newIssueLabels, setNewIssueLabels] = useState<string[]>([])
+  const [newIssueAssignees, setNewIssueAssignees] = useState<GitHubAssignableUser[]>([])
   const [newIssueSubmitting, setNewIssueSubmitting] = useState(false)
   const [newIssueRepoId, setNewIssueRepoId] = useState<string | null>(null)
 
@@ -2422,6 +2702,31 @@ export default function TaskPage(): React.JSX.Element {
     () => selectedRepos.find((r) => r.id === newIssueRepoId) ?? selectedRepos[0] ?? null,
     [selectedRepos, newIssueRepoId]
   )
+  const newIssueRuntimeTarget = useMemo(() => {
+    if (!newIssueTargetRepo?.id) {
+      return null
+    }
+    const target = getActiveRuntimeTarget(settings)
+    if (target.kind !== 'environment') {
+      return null
+    }
+    return repos.some((repo) => repo.id === newIssueTargetRepo.id) ? target : null
+  }, [newIssueTargetRepo?.id, repos, settings])
+  const newIssueRepoLabels = useRepoLabels(
+    newIssueOpen ? (newIssueTargetRepo?.path ?? null) : null,
+    newIssueOpen ? (newIssueTargetRepo?.id ?? null) : null,
+    { runtimeEnvironmentId: newIssueOpen ? (newIssueRuntimeTarget?.environmentId ?? null) : null }
+  )
+  const newIssueRepoAssignees = useRepoAssignees(
+    newIssueOpen ? (newIssueTargetRepo?.path ?? null) : null,
+    newIssueOpen ? (newIssueTargetRepo?.id ?? null) : null,
+    { runtimeEnvironmentId: newIssueOpen ? (newIssueRuntimeTarget?.environmentId ?? null) : null }
+  )
+
+  useEffect(() => {
+    setNewIssueLabels([])
+    setNewIssueAssignees([])
+  }, [newIssueTargetRepo?.id])
 
   const [selectedLinearIssueId, setSelectedLinearIssueId] = useState<string | null>(null)
   const [selectedLinearIssueFallback, setSelectedLinearIssueFallback] =
@@ -2507,6 +2812,7 @@ export default function TaskPage(): React.JSX.Element {
   }, [clearSelectedLinearIssue, setDialogWorkItem])
 
   // Linear tab state
+  const [linearMode, setLinearMode] = useState<LinearMode>('issues')
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
   const [linearLoading, setLinearLoading] = useState(false)
   const [linearError, setLinearError] = useState<string | null>(null)
@@ -2521,6 +2827,46 @@ export default function TaskPage(): React.JSX.Element {
   >(() => new Set(DEFAULT_LINEAR_DISPLAY_PROPERTIES))
   const [linearTeamPropertyTouched, setLinearTeamPropertyTouched] = useState(false)
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
+  const [linearProjectSearchInput, setLinearProjectSearchInput] = useState('')
+  const [appliedLinearProjectSearch, setAppliedLinearProjectSearch] = useState('')
+  const [linearProjectsResult, setLinearProjectsResult] = useState<
+    LinearCollectionResult<LinearProjectSummary>
+  >({ items: [] })
+  const [linearProjectsLoading, setLinearProjectsLoading] = useState(false)
+  const [linearProjectsError, setLinearProjectsError] = useState<string | null>(null)
+  const [selectedLinearProject, setSelectedLinearProject] = useState<LinearProjectSummary | null>(
+    null
+  )
+  const [selectedLinearProjectDetail, setSelectedLinearProjectDetail] =
+    useState<LinearProjectDetail | null>(null)
+  const [linearProjectDetailLoading, setLinearProjectDetailLoading] = useState(false)
+  const [linearProjectDetailError, setLinearProjectDetailError] = useState<string | null>(null)
+  const [linearProjectTab, setLinearProjectTab] = useState<LinearProjectTab>('overview')
+  const [linearProjectIssuesResult, setLinearProjectIssuesResult] = useState<
+    LinearCollectionResult<LinearIssue>
+  >({ items: [] })
+  const [linearProjectIssuesLoading, setLinearProjectIssuesLoading] = useState(false)
+  const [linearProjectIssuesError, setLinearProjectIssuesError] = useState<string | null>(null)
+  const [linearCustomViewModel, setLinearCustomViewModel] = useState<LinearCustomViewModel>('issue')
+  const [linearCustomViewsResult, setLinearCustomViewsResult] = useState<
+    LinearCollectionResult<LinearCustomViewSummary>
+  >({ items: [] })
+  const [linearCustomViewsLoading, setLinearCustomViewsLoading] = useState(false)
+  const [linearCustomViewsError, setLinearCustomViewsError] = useState<string | null>(null)
+  const [selectedLinearCustomView, setSelectedLinearCustomView] =
+    useState<LinearCustomViewSummary | null>(null)
+  const [linearProjectParentView, setLinearProjectParentView] =
+    useState<LinearCustomViewSummary | null>(null)
+  const [linearCustomViewIssuesResult, setLinearCustomViewIssuesResult] = useState<
+    LinearCollectionResult<LinearIssue>
+  >({ items: [] })
+  const [linearCustomViewProjectsResult, setLinearCustomViewProjectsResult] = useState<
+    LinearCollectionResult<LinearProjectSummary>
+  >({ items: [] })
+  const [linearCustomViewContentsLoading, setLinearCustomViewContentsLoading] = useState(false)
+  const [linearCustomViewContentsError, setLinearCustomViewContentsError] = useState<string | null>(
+    null
+  )
   const [linearBoardDraggingIssueId, setLinearBoardDraggingIssueId] = useState<string | null>(null)
   const [linearBoardDragOverKey, setLinearBoardDragOverKey] = useState<string | null>(null)
   const [linearBoardUpdatingIssueIds, setLinearBoardUpdatingIssueIds] = useState<
@@ -2528,6 +2874,88 @@ export default function TaskPage(): React.JSX.Element {
   >(() => new Set())
   const lastLinearRequestRef = useRef<{ nonce: number; signature: string } | null>(null)
   const landingLinearRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
+  const linearContextResumeAttemptedRef = useRef(false)
+
+  const patchScopedLinearIssue = useCallback((issueId: string, patch: Partial<LinearIssue>) => {
+    const patchResult = (result: LinearCollectionResult<LinearIssue>) => ({
+      ...result,
+      items: result.items.map((item) => (item.id === issueId ? { ...item, ...patch } : item))
+    })
+    setLinearProjectIssuesResult(patchResult)
+    setLinearCustomViewIssuesResult(patchResult)
+  }, [])
+
+  const selectLinearMode = useCallback(
+    (mode: LinearMode) => {
+      clearSelectedLinearIssue()
+      setSelectedLinearProject(null)
+      setSelectedLinearProjectDetail(null)
+      setSelectedLinearCustomView(null)
+      setLinearProjectParentView(null)
+      setLinearProjectIssuesResult({ items: [] })
+      setLinearCustomViewIssuesResult({ items: [] })
+      setLinearCustomViewProjectsResult({ items: [] })
+      setLinearMode(mode)
+      setTaskResumeState({ linearMode: mode, linearContext: undefined })
+    },
+    [clearSelectedLinearIssue, setTaskResumeState]
+  )
+
+  const openLinearProjectContext = useCallback(
+    (project: LinearProjectSummary, options?: { parentView?: LinearCustomViewSummary | null }) => {
+      if (!project.workspaceId) {
+        toast.error('Linear project is missing workspace context.')
+        return
+      }
+      const parentView = options?.parentView ?? null
+      clearSelectedLinearIssue()
+      setLinearProjectParentView(parentView)
+      if (parentView) {
+        setSelectedLinearCustomView(parentView)
+      } else {
+        setSelectedLinearCustomView(null)
+        setLinearCustomViewProjectsResult({ items: [] })
+      }
+      setLinearProjectIssuesResult({ items: [] })
+      setLinearCustomViewIssuesResult({ items: [] })
+      setSelectedLinearProject(project)
+      setLinearProjectTab('overview')
+      setLinearMode('projects')
+      setTaskResumeState({
+        linearMode: 'projects',
+        linearContext: { kind: 'project', id: project.id, workspaceId: project.workspaceId }
+      })
+    },
+    [clearSelectedLinearIssue, setTaskResumeState]
+  )
+
+  const openLinearCustomViewContext = useCallback(
+    (view: LinearCustomViewSummary) => {
+      if (!view.workspaceId) {
+        toast.error('Linear view is missing workspace context.')
+        return
+      }
+      clearSelectedLinearIssue()
+      setSelectedLinearProject(null)
+      setSelectedLinearProjectDetail(null)
+      setLinearProjectParentView(null)
+      setLinearProjectIssuesResult({ items: [] })
+      setLinearCustomViewIssuesResult({ items: [] })
+      setLinearCustomViewProjectsResult({ items: [] })
+      setSelectedLinearCustomView(view)
+      setLinearMode('views')
+      setTaskResumeState({
+        linearMode: 'views',
+        linearContext: {
+          kind: 'view',
+          id: view.id,
+          workspaceId: view.workspaceId,
+          model: view.model
+        }
+      })
+    },
+    [clearSelectedLinearIssue, setTaskResumeState]
+  )
 
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
@@ -2561,6 +2989,7 @@ export default function TaskPage(): React.JSX.Element {
 
     const linearPreset = taskResumeState?.linearPreset ?? 'all'
     const linearQuery = taskResumeState?.linearQuery ?? ''
+    setLinearMode(taskResumeState?.linearMode ?? 'issues')
     setActiveLinearPreset(linearPreset)
     setLinearSearchInput(linearQuery)
     setAppliedLinearSearch(linearQuery)
@@ -2578,10 +3007,102 @@ export default function TaskPage(): React.JSX.Element {
     visibleTaskProviders
   ])
 
+  useEffect(() => {
+    const context = taskResumeState?.linearContext
+    if (
+      linearContextResumeAttemptedRef.current ||
+      !taskResumeApplied ||
+      taskSource !== 'linear' ||
+      !linearStatus.connected ||
+      !context
+    ) {
+      return
+    }
+    linearContextResumeAttemptedRef.current = true
+    let cancelled = false
+
+    if (context.kind === 'project') {
+      void fetchLinearProject(context.id, context.workspaceId, { force: true })
+        .then((project) => {
+          if (cancelled) {
+            return
+          }
+          if (!project) {
+            setSelectedLinearProject(null)
+            setSelectedLinearProjectDetail(null)
+            setLinearProjectParentView(null)
+            setLinearProjectsError('Saved Linear project was not found.')
+            setTaskResumeState({ linearContext: undefined })
+            return
+          }
+          setSelectedLinearProject(project)
+          setSelectedLinearProjectDetail(project)
+          setLinearMode('projects')
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setSelectedLinearProject(null)
+            setSelectedLinearProjectDetail(null)
+            setLinearProjectParentView(null)
+            setLinearProjectsError('Failed to restore saved Linear project.')
+            setTaskResumeState({ linearContext: undefined })
+          }
+        })
+      return () => {
+        cancelled = true
+      }
+    }
+
+    if (context.kind === 'view' && context.model) {
+      setLinearCustomViewModel(context.model)
+      setLinearMode('views')
+      setLinearCustomViewsLoading(true)
+      setLinearCustomViewsError(null)
+      void fetchLinearCustomView(context.id, context.workspaceId, context.model, {
+        force: true
+      })
+        .then((restoredView) => {
+          if (cancelled) {
+            return
+          }
+          setLinearCustomViewsLoading(false)
+          if (!restoredView) {
+            setSelectedLinearCustomView(null)
+            setLinearCustomViewsError('Saved Linear view was not found.')
+            setTaskResumeState({ linearContext: undefined })
+            return
+          }
+          setSelectedLinearCustomView(restoredView)
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setSelectedLinearCustomView(null)
+            setLinearCustomViewsLoading(false)
+            setLinearCustomViewsError('Failed to restore saved Linear view.')
+            setTaskResumeState({ linearContext: undefined })
+          }
+        })
+      return () => {
+        cancelled = true
+      }
+    }
+    return undefined
+  }, [
+    fetchLinearCustomView,
+    fetchLinearProject,
+    listLinearCustomViews,
+    linearStatus.connected,
+    setTaskResumeState,
+    taskResumeApplied,
+    taskResumeState?.linearContext,
+    taskSource
+  ])
+
   // Why: fetch the full team list from the Linear API so the selector shows
   // all teams the user belongs to, not just teams with issues in the current
   // fetch window. Fetched once when the Linear tab is active and connected.
   const [availableTeams, setAvailableTeams] = useState<LinearTeam[]>([])
+  const [linearTeamRefreshNonce, setLinearTeamRefreshNonce] = useState(0)
 
   useEffect(() => {
     if (!taskResumeApplied) {
@@ -2616,6 +3137,7 @@ export default function TaskPage(): React.JSX.Element {
     taskSource,
     linearStatus.connected,
     selectedLinearWorkspaceId,
+    linearTeamRefreshNonce,
     taskResumeApplied,
     getCachedLinearTeams,
     listLinearTeams
@@ -2642,9 +3164,9 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
     const activeIssueFilter =
-      gitlabView === 'issues' && isGitLabIssueFilter(gitlabFilter) ? gitlabFilter : null
+      gitlabView === 'issues' && isGitLabIssueFilter(activeGitlabFilter) ? activeGitlabFilter : null
     const activeMRFilter =
-      gitlabView === 'mrs' && isGitLabMRFilter(gitlabFilter) ? gitlabFilter : null
+      gitlabView === 'mrs' && isGitLabMRFilter(activeGitlabFilter) ? activeGitlabFilter : null
     if (
       (gitlabView === 'issues' && !activeIssueFilter) ||
       (gitlabView === 'mrs' && !activeMRFilter)
@@ -2741,7 +3263,7 @@ export default function TaskPage(): React.JSX.Element {
       stale = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey encodes the only selectedRepos fields read above; keying off the array ref would re-run on every parent render.
-  }, [taskSource, gitlabView, gitlabFilter, gitlabRefreshNonce, selectedReposKey])
+  }, [taskSource, gitlabView, activeGitlabFilter, gitlabRefreshNonce, selectedReposKey])
 
   // Why: Todos fetch lives in its own effect — different trigger
   // condition from the project view (no chip filter dependence) and a
@@ -2787,9 +3309,40 @@ export default function TaskPage(): React.JSX.Element {
     return new Set(defaultLinearTeamSelection)
   })
 
+  const activeLinearIssues =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? linearProjectIssuesResult.items
+      : selectedLinearCustomView?.model === 'issue'
+        ? linearCustomViewIssuesResult.items
+        : linearIssues
+  const activeLinearIssueLoading =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? linearProjectIssuesLoading
+      : selectedLinearCustomView?.model === 'issue'
+        ? linearCustomViewContentsLoading
+        : linearLoading
+  const activeLinearIssueError =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? linearProjectIssuesError
+      : selectedLinearCustomView?.model === 'issue'
+        ? linearCustomViewContentsError
+        : linearError
+  const activeLinearIssueCollectionErrors =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? linearProjectIssuesResult.errors
+      : selectedLinearCustomView?.model === 'issue'
+        ? linearCustomViewIssuesResult.errors
+        : undefined
+  const activeLinearIssueHasCollectionError = (activeLinearIssueCollectionErrors?.length ?? 0) > 0
+  const activeLinearIssueContextLabel = selectedLinearProject
+    ? `Project: ${selectedLinearProject.name}`
+    : selectedLinearCustomView?.model === 'issue'
+      ? `View: ${selectedLinearCustomView.name}`
+      : null
+
   const displayedLinearIssues = useMemo(
     () =>
-      linearIssues.map(
+      activeLinearIssues.map(
         (issue) =>
           findTaskPageLinearIssue(
             linearCacheSnapshot.issueCache,
@@ -2797,7 +3350,7 @@ export default function TaskPage(): React.JSX.Element {
             issue.id
           ) ?? issue
       ),
-    [linearIssues, linearCacheSnapshot.issueCache, linearCacheSnapshot.searchCache]
+    [activeLinearIssues, linearCacheSnapshot.issueCache, linearCacheSnapshot.searchCache]
   )
 
   const linearIssueTeams = useMemo(() => {
@@ -2854,13 +3407,16 @@ export default function TaskPage(): React.JSX.Element {
   }, [linearTeamOptions, defaultLinearTeamSelection])
 
   const filteredLinearIssues = useMemo(() => {
+    if (activeLinearIssueContextLabel) {
+      return displayedLinearIssues
+    }
     // Why: team options can be derived after issue rows render. Treat an
     // empty selection as "all" until reconciliation has a concrete team set.
     if (displayedLinearIssues.length > 0 && linearTeamSelection.size === 0) {
       return displayedLinearIssues
     }
     return displayedLinearIssues.filter((issue) => linearTeamSelection.has(issue.team.id))
-  }, [displayedLinearIssues, linearTeamSelection])
+  }, [activeLinearIssueContextLabel, displayedLinearIssues, linearTeamSelection])
 
   const selectedLinearTeamForExternalLink = useMemo(() => {
     if (linearTeamSelection.size !== 1) {
@@ -3012,6 +3568,7 @@ export default function TaskPage(): React.JSX.Element {
         }
 
         patchLinearIssue(issue.id, { state: nextState })
+        patchScopedLinearIssue(issue.id, { state: nextState })
         applyFallbackState(nextState)
 
         const result = await linearUpdateIssue(
@@ -3022,11 +3579,13 @@ export default function TaskPage(): React.JSX.Element {
         )
         if (result.ok === false) {
           patchLinearIssue(issue.id, { state: previousState })
+          patchScopedLinearIssue(issue.id, { state: previousState })
           applyFallbackState(previousState)
           toast.error(result.error ?? 'Failed to update Linear state')
         }
       } catch {
         patchLinearIssue(issue.id, { state: previousState })
+        patchScopedLinearIssue(issue.id, { state: previousState })
         applyFallbackState(previousState)
         toast.error('Failed to update Linear state')
       } finally {
@@ -3042,6 +3601,7 @@ export default function TaskPage(): React.JSX.Element {
       linearBoardDraggingIssueId,
       linearBoardUpdatingIssueIds,
       linearStatusBoardEnabled,
+      patchScopedLinearIssue,
       patchLinearIssue,
       settings
     ]
@@ -3096,7 +3656,7 @@ export default function TaskPage(): React.JSX.Element {
     linearListProjects(settings, undefined, 100, targetWorkspaceId)
       .then((p) => {
         if (!cancelled) {
-          setNewLinearIssueProjects(p)
+          setNewLinearIssueProjects(p.items)
         }
       })
       .catch(() => {})
@@ -3118,9 +3678,16 @@ export default function TaskPage(): React.JSX.Element {
     setNewLinearIssueStateId(null)
     setNewLinearIssueAssigneeId(null)
     setNewLinearIssuePriority(0)
-    setNewLinearIssueProjectId(null)
+    if (
+      selectedLinearProject &&
+      selectedLinearProject.workspaceId === newLinearIssueTargetTeam?.workspaceId
+    ) {
+      setNewLinearIssueProjectId(selectedLinearProject.id)
+    } else {
+      setNewLinearIssueProjectId(null)
+    }
     setNewLinearIssueLabelIds([])
-  }, [newLinearIssueTargetTeam?.id, newLinearIssueTargetTeam?.workspaceId])
+  }, [newLinearIssueTargetTeam?.id, newLinearIssueTargetTeam?.workspaceId, selectedLinearProject])
 
   const newLinearStates = useTeamStates(
     newLinearIssueTargetTeam?.id || null,
@@ -3149,11 +3716,6 @@ export default function TaskPage(): React.JSX.Element {
   }, [newLinearStates.data, newLinearIssueStateId])
 
   const [linearConnectOpen, setLinearConnectOpen] = useState(false)
-  const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
-  const [linearConnectState, setLinearConnectState] = useState<'idle' | 'connecting' | 'error'>(
-    'idle'
-  )
-  const [linearConnectError, setLinearConnectError] = useState<string | null>(null)
 
   const activeGithubTaskKind = getGitHubTaskKind(activeTaskPreset, appliedTaskSearch)
   const selectedGitHubRepoExternalLink = useMemo(() => {
@@ -3768,11 +4330,12 @@ export default function TaskPage(): React.JSX.Element {
     [openComposerForItem]
   )
 
-  const handleOpenOrUseGitHubPR = useCallback(
+  const handleOpenOrUseGitHubWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
-      const currentAttached = findGithubPrWorkspaceAttachment(
+      const currentAttached = findGithubWorkItemWorkspaceAttachment(
         useAppStore.getState().allWorktrees(),
         item.repoId,
+        item.type,
         item.number
       )
       if (!currentAttached) {
@@ -3782,7 +4345,11 @@ export default function TaskPage(): React.JSX.Element {
 
       const result = activateAndRevealWorktree(currentAttached.id)
       if (result === false) {
-        toast.error('Unable to open the workspace attached to this pull request.')
+        toast.error(
+          item.type === 'pr'
+            ? 'Unable to open the workspace attached to this pull request.'
+            : 'Unable to open the workspace attached to this issue.'
+        )
       }
     },
     [handleUseWorkItem]
@@ -3823,19 +4390,26 @@ export default function TaskPage(): React.JSX.Element {
     }
     setNewIssueSubmitting(true)
     try {
-      const target = getRuntimeTargetForRepoId(newIssueTargetRepo.id)
-      const result = target
+      const result = newIssueRuntimeTarget
         ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.createIssue>>>(
-            target,
+            newIssueRuntimeTarget,
             'github.createIssue',
-            { repo: newIssueTargetRepo.id, title, body: newIssueBody },
+            {
+              repo: newIssueTargetRepo.id,
+              title,
+              body: newIssueBody,
+              labels: newIssueLabels,
+              assignees: newIssueAssignees.map((assignee) => assignee.login)
+            },
             { timeoutMs: 30_000 }
           )
         : await window.api.gh.createIssue({
             repoPath: newIssueTargetRepo.path,
             repoId: newIssueTargetRepo.id,
             title,
-            body: newIssueBody
+            body: newIssueBody,
+            labels: newIssueLabels,
+            assignees: newIssueAssignees.map((assignee) => assignee.login)
           })
       if (!result.ok) {
         toast.error(result.error || 'Failed to create issue.')
@@ -3852,6 +4426,8 @@ export default function TaskPage(): React.JSX.Element {
       setNewIssueOpen(false)
       setNewIssueTitle('')
       setNewIssueBody('')
+      setNewIssueLabels([])
+      setNewIssueAssignees([])
       // Why: bump the nonce so the list refetches and shows the new issue.
       setTaskRefreshNonce((current) => current + 1)
 
@@ -3866,15 +4442,16 @@ export default function TaskPage(): React.JSX.Element {
         title,
         state: 'open',
         url: result.url,
-        labels: [],
+        labels: newIssueLabels,
+        assignees: newIssueAssignees,
         updatedAt: new Date().toISOString(),
         author: null
       }
       openGitHubDetailPage(stub)
       const stubRepoId = newIssueTargetRepo.id
-      const fullIssuePromise = target
+      const fullIssuePromise = newIssueRuntimeTarget
         ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
-            target,
+            newIssueRuntimeTarget,
             'github.workItem',
             { repo: newIssueTargetRepo.id, number: result.number, type: 'issue' },
             { timeoutMs: 30_000 }
@@ -3902,6 +4479,9 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [
     newIssueBody,
+    newIssueAssignees,
+    newIssueLabels,
+    newIssueRuntimeTarget,
     newIssueSubmitting,
     newIssueTargetRepo,
     newIssueTitle,
@@ -3915,6 +4495,14 @@ export default function TaskPage(): React.JSX.Element {
     }
     const title = newLinearIssueTitle.trim()
     if (!title || newLinearIssueSubmitting) {
+      return
+    }
+    if (
+      selectedLinearProject &&
+      newLinearIssueProjectId === selectedLinearProject.id &&
+      newLinearIssueTargetTeam.workspaceId !== selectedLinearProject.workspaceId
+    ) {
+      toast.error('Select a team from the project workspace before filing this issue.')
       return
     }
     setNewLinearIssueSubmitting(true)
@@ -3975,6 +4563,7 @@ export default function TaskPage(): React.JSX.Element {
     newLinearIssueProjectId,
     newLinearIssueLabelIds,
     openLinearDetailPage,
+    selectedLinearProject,
     settings
   ])
 
@@ -4073,6 +4662,9 @@ export default function TaskPage(): React.JSX.Element {
     if (taskSource !== 'linear') {
       return
     }
+    if (linearMode !== 'issues') {
+      return
+    }
     if (!linearStatus.connected) {
       return
     }
@@ -4154,6 +4746,7 @@ export default function TaskPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskSource,
+    linearMode,
     linearStatus.connected,
     selectedLinearWorkspaceId,
     appliedLinearSearch,
@@ -4161,6 +4754,233 @@ export default function TaskPage(): React.JSX.Element {
     linearRefreshNonce,
     taskResumeApplied,
     getCachedLinearIssues
+  ])
+
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    const timeout = window.setTimeout(() => {
+      setAppliedLinearProjectSearch(linearProjectSearchInput)
+    }, TASK_SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timeout)
+  }, [linearProjectSearchInput, taskResumeApplied])
+
+  useEffect(() => {
+    if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'projects') {
+      return
+    }
+    if (!linearStatus.connected || selectedLinearProject) {
+      return
+    }
+    let cancelled = false
+    const query = appliedLinearProjectSearch.trim()
+    const cached = getCachedLinearProjects(query || undefined, LINEAR_ITEM_LIMIT)
+    if (cached) {
+      setLinearProjectsResult(cached)
+    }
+    const force = linearRefreshNonce > 0
+    setLinearProjectsLoading(force || cached === null)
+    setLinearProjectsError(null)
+    void listLinearProjectsFromStore(query || undefined, LINEAR_ITEM_LIMIT, undefined, {
+      force
+    })
+      .then((result) => {
+        if (!cancelled) {
+          setLinearProjectsResult(result)
+          setLinearProjectsLoading(false)
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLinearProjectsError(
+            error instanceof Error ? error.message : 'Failed to load projects.'
+          )
+          setLinearProjectsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    taskResumeApplied,
+    taskSource,
+    linearMode,
+    linearStatus.connected,
+    selectedLinearWorkspaceId,
+    selectedLinearProject,
+    appliedLinearProjectSearch,
+    linearRefreshNonce,
+    getCachedLinearProjects
+  ])
+
+  useEffect(() => {
+    if (!selectedLinearProject?.workspaceId) {
+      setSelectedLinearProjectDetail(null)
+      return
+    }
+    let cancelled = false
+    setLinearProjectDetailLoading(true)
+    setLinearProjectDetailError(null)
+    void fetchLinearProject(selectedLinearProject.id, selectedLinearProject.workspaceId, {
+      force: linearRefreshNonce > 0
+    })
+      .then((project) => {
+        if (!cancelled) {
+          setSelectedLinearProjectDetail(project)
+          setLinearProjectDetailLoading(false)
+          if (!project) {
+            setSelectedLinearProject(null)
+            setLinearProjectParentView(null)
+            setLinearProjectDetailError(null)
+            setLinearProjectsError('Project was not found.')
+            setTaskResumeState({ linearContext: undefined })
+          }
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLinearProjectDetailError(
+            error instanceof Error ? error.message : 'Failed to load project.'
+          )
+          setLinearProjectDetailLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [fetchLinearProject, linearRefreshNonce, selectedLinearProject, setTaskResumeState])
+
+  useEffect(() => {
+    if (!selectedLinearProject?.workspaceId || linearProjectTab !== 'issues') {
+      return
+    }
+    let cancelled = false
+    setLinearProjectIssuesLoading(true)
+    setLinearProjectIssuesError(null)
+    void listLinearProjectIssues(
+      selectedLinearProject.id,
+      selectedLinearProject.workspaceId,
+      LINEAR_ITEM_LIMIT,
+      { force: linearRefreshNonce > 0 }
+    )
+      .then((result) => {
+        if (!cancelled) {
+          setLinearProjectIssuesResult(result)
+          setLinearProjectIssuesLoading(false)
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLinearProjectIssuesError(
+            error instanceof Error ? error.message : 'Failed to load project issues.'
+          )
+          setLinearProjectIssuesLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [linearProjectTab, linearRefreshNonce, listLinearProjectIssues, selectedLinearProject])
+
+  useEffect(() => {
+    if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'views') {
+      return
+    }
+    if (!linearStatus.connected || selectedLinearCustomView) {
+      return
+    }
+    let cancelled = false
+    const cached = getCachedLinearCustomViews(linearCustomViewModel, LINEAR_ITEM_LIMIT)
+    if (cached) {
+      setLinearCustomViewsResult(cached)
+    }
+    const force = linearRefreshNonce > 0
+    setLinearCustomViewsLoading(force || cached === null)
+    setLinearCustomViewsError(null)
+    void listLinearCustomViews(linearCustomViewModel, LINEAR_ITEM_LIMIT, undefined, { force })
+      .then((result) => {
+        if (!cancelled) {
+          setLinearCustomViewsResult(result)
+          setLinearCustomViewsLoading(false)
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLinearCustomViewsError(
+            error instanceof Error ? error.message : 'Failed to load views.'
+          )
+          setLinearCustomViewsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    taskResumeApplied,
+    taskSource,
+    linearMode,
+    linearStatus.connected,
+    selectedLinearWorkspaceId,
+    selectedLinearCustomView,
+    linearCustomViewModel,
+    linearRefreshNonce,
+    getCachedLinearCustomViews
+  ])
+
+  useEffect(() => {
+    if (!selectedLinearCustomView?.workspaceId) {
+      setLinearCustomViewIssuesResult({ items: [] })
+      setLinearCustomViewProjectsResult({ items: [] })
+      return
+    }
+    let cancelled = false
+    setLinearCustomViewContentsLoading(true)
+    setLinearCustomViewContentsError(null)
+    const request =
+      selectedLinearCustomView.model === 'issue'
+        ? listLinearCustomViewIssues(
+            selectedLinearCustomView.id,
+            selectedLinearCustomView.workspaceId,
+            LINEAR_ITEM_LIMIT,
+            { force: linearRefreshNonce > 0 }
+          )
+        : listLinearCustomViewProjects(
+            selectedLinearCustomView.id,
+            selectedLinearCustomView.workspaceId,
+            LINEAR_ITEM_LIMIT,
+            { force: linearRefreshNonce > 0 }
+          )
+    void request
+      .then((result) => {
+        if (cancelled) {
+          return
+        }
+        if (selectedLinearCustomView.model === 'issue') {
+          setLinearCustomViewIssuesResult(result as LinearCollectionResult<LinearIssue>)
+        } else {
+          setLinearCustomViewProjectsResult(result as LinearCollectionResult<LinearProjectSummary>)
+        }
+        setLinearCustomViewContentsLoading(false)
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLinearCustomViewContentsError(
+            error instanceof Error ? error.message : 'Failed to load view contents.'
+          )
+          setLinearCustomViewContentsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    linearRefreshNonce,
+    listLinearCustomViewIssues,
+    listLinearCustomViewProjects,
+    selectedLinearCustomView
   ])
 
   useEffect(() => {
@@ -4204,16 +5024,10 @@ export default function TaskPage(): React.JSX.Element {
   // Why: for Linear issues the "Use" flow opens the composer with the issue
   // info adapted to the LinkedWorkItemSummary shape. Linear identifiers are
   // strings (e.g. "ENG-123") so we use 0 as a placeholder number since the
-  // URL is the primary artifact the agent will act on.
+  // provider-generic work item shape still expects numeric issue metadata.
   const openComposerForLinearItem = useCallback(
-    (issue: LinearIssue): void => {
-      const linkedWorkItem: LinkedWorkItemSummary = {
-        type: 'issue',
-        number: 0,
-        title: issue.title,
-        url: issue.url,
-        linearIdentifier: issue.identifier
-      }
+    (issue: LinearIssue, renderedText?: string): void => {
+      const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue, renderedText)
       openModal('new-workspace-composer', {
         linkedWorkItem,
         prefilledName: getLinkedWorkItemSuggestedName(issue),
@@ -4224,38 +5038,78 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const handleUseLinearItem = useCallback(
-    (issue: LinearIssue): void => {
+    (issue: LinearIssue, renderedText?: string): void => {
       // Why: same rationale as handleUseWorkItem — open the New Workspace
       // dialog pre-filled rather than yolo-creating the worktree, so the
       // user can confirm name / agent / setup before the worktree lands in
       // the sidebar. Telemetry attribution flows via openComposerForLinearItem.
-      openComposerForLinearItem(issue)
+      openComposerForLinearItem(issue, renderedText)
     },
     [openComposerForLinearItem]
   )
 
-  const handleLinearConnect = useCallback(async (): Promise<void> => {
-    const key = linearApiKeyDraft.trim()
-    if (!key) {
-      return
-    }
-    setLinearConnectState('connecting')
-    setLinearConnectError(null)
-    try {
-      const result = await connectLinear(key)
-      if (result.ok) {
-        setLinearApiKeyDraft('')
-        setLinearConnectState('idle')
-        setLinearConnectOpen(false)
-      } else {
-        setLinearConnectState('error')
-        setLinearConnectError(result.error)
-      }
-    } catch (error) {
-      setLinearConnectState('error')
-      setLinearConnectError(error instanceof Error ? error.message : 'Connection failed')
-    }
-  }, [connectLinear, linearApiKeyDraft])
+  const handleLinearWorkspaceChange = useCallback(
+    (workspaceId: LinearWorkspaceSelection): void => {
+      clearSelectedLinearIssue()
+      setSelectedLinearProject(null)
+      setSelectedLinearProjectDetail(null)
+      setSelectedLinearCustomView(null)
+      setLinearProjectParentView(null)
+      setLinearProjectTab('overview')
+      setLinearProjectsResult({ items: [] })
+      setLinearCustomViewsResult({ items: [] })
+      setLinearProjectIssuesResult({ items: [] })
+      setLinearCustomViewIssuesResult({ items: [] })
+      setLinearCustomViewProjectsResult({ items: [] })
+      setLinearProjectDetailError(null)
+      setLinearProjectsError(null)
+      setLinearCustomViewsError(null)
+      setLinearCustomViewContentsError(null)
+      setTaskResumeState({
+        linearMode,
+        linearContext: undefined
+      })
+      linearContextResumeAttemptedRef.current = false
+      setLinearIssues([])
+      setLinearError(null)
+      setLinearLoading(true)
+      void selectLinearWorkspace(workspaceId)
+        .then(() => {
+          setLinearTeamRefreshNonce((n) => n + 1)
+        })
+        .catch(() => {
+          setLinearLoading(false)
+          toast.error('Failed to switch Linear workspace.')
+        })
+    },
+    [clearSelectedLinearIssue, linearMode, selectLinearWorkspace, setTaskResumeState]
+  )
+
+  const handleLinearTeamSelectionChange = useCallback(
+    (next: ReadonlySet<string>, persisted: string[] | null): void => {
+      setLinearTeamSelection(new Set(next))
+      void updateSettings({ defaultLinearTeamSelection: persisted }).catch(() => {
+        toast.error('Failed to save team selection.')
+      })
+    },
+    [updateSettings]
+  )
+
+  const handleLinearScopeOpen = useCallback((): void => {
+    void checkLinearConnection(true)
+    void listLinearTeams(selectedLinearWorkspaceId, { force: true })
+      .then((teams) => {
+        setAvailableTeams(teams)
+      })
+      .catch(() => {
+        console.warn('[TaskPage] Failed to refresh Linear teams')
+      })
+  }, [checkLinearConnection, listLinearTeams, selectedLinearWorkspaceId])
+
+  const handleLinearAccessConnected = useCallback((): void => {
+    setLinearTeamRefreshNonce((n) => n + 1)
+    setLinearRefreshNonce((n) => n + 1)
+  }, [])
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
@@ -4337,32 +5191,17 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                   {taskSource === 'linear' && linearStatus.connected ? (
                     <div className="flex items-center gap-2">
-                      {linearWorkspaces.length > 1 ? (
-                        <Select
-                          value={selectedLinearWorkspaceId ?? undefined}
-                          onValueChange={(value) => {
-                            clearSelectedLinearIssue()
-                            setLinearIssues([])
-                            setLinearError(null)
-                            setLinearLoading(true)
-                            void selectLinearWorkspace(value).catch(() => {
-                              toast.error('Failed to switch Linear workspace.')
-                            })
-                          }}
-                        >
-                          <SelectTrigger className="h-8 w-[200px] rounded-md border-border/50 bg-muted/50 text-xs font-medium shadow-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All workspaces</SelectItem>
-                            {linearWorkspaces.map((workspace) => (
-                              <SelectItem key={workspace.id} value={workspace.id}>
-                                {workspace.organizationName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : null}
+                      <LinearScopeSelector
+                        workspaces={linearWorkspaces}
+                        selectedWorkspaceId={selectedLinearWorkspaceId}
+                        teams={linearTeamOptions}
+                        selectedTeamIds={linearTeamSelection}
+                        teamSelectionIsStickyAll={defaultLinearTeamSelection == null}
+                        onWorkspaceChange={handleLinearWorkspaceChange}
+                        onTeamSelectionChange={handleLinearTeamSelectionChange}
+                        onAddTeamAccess={() => setLinearConnectOpen(true)}
+                        onOpen={handleLinearScopeOpen}
+                      />
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -4375,6 +5214,7 @@ export default function TaskPage(): React.JSX.Element {
                               }
                               void window.api.shell.openUrl(selectedLinearTeamForExternalLink.url)
                             }}
+                            disabled={!selectedLinearTeamForExternalLink}
                             aria-label={
                               selectedLinearTeamForExternalLink
                                 ? `Open ${selectedLinearTeamForExternalLink.name} in Linear`
@@ -4391,27 +5231,6 @@ export default function TaskPage(): React.JSX.Element {
                             : 'Select one team to open in Linear'}
                         </TooltipContent>
                       </Tooltip>
-                      <div className="min-w-0 w-full sm:w-[200px]">
-                        <TeamMultiCombobox
-                          teams={linearTeamOptions}
-                          selected={linearTeamSelection}
-                          onChange={(next) => {
-                            setLinearTeamSelection(next)
-                            void updateSettings({ defaultLinearTeamSelection: [...next] }).catch(
-                              () => {
-                                toast.error('Failed to save team selection.')
-                              }
-                            )
-                          }}
-                          onSelectAll={() => {
-                            setLinearTeamSelection(new Set(linearTeamOptions.map((t) => t.id)))
-                            void updateSettings({ defaultLinearTeamSelection: null }).catch(() => {
-                              toast.error('Failed to save team selection.')
-                            })
-                          }}
-                          triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                        />
-                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -4592,6 +5411,8 @@ export default function TaskPage(): React.JSX.Element {
                               onClick={() => {
                                 setNewIssueTitle('')
                                 setNewIssueBody('')
+                                setNewIssueLabels([])
+                                setNewIssueAssignees([])
                                 setNewIssueRepoId(primaryRepo?.id ?? null)
                                 setNewIssueOpen(true)
                               }}
@@ -4707,29 +5528,28 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : taskSource === 'linear' && linearStatus.connected ? (
                   <div className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap gap-2">
-                        {LINEAR_PRESETS.map((preset) => {
-                          const active = !linearSearchInput && activeLinearPreset === preset.id
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                      <div
+                        className="flex items-center gap-1 text-xs"
+                        role="group"
+                        aria-label="Linear task mode"
+                      >
+                        {LINEAR_MODE_OPTIONS.map((mode) => {
+                          const active = linearMode === mode.id
                           return (
                             <button
-                              key={preset.id}
+                              key={mode.id}
                               type="button"
-                              onClick={() => {
-                                setLinearSearchInput('')
-                                setAppliedLinearSearch('')
-                                setActiveLinearPreset(preset.id)
-                                setTaskResumeState({ linearPreset: preset.id, linearQuery: '' })
-                                setLinearRefreshNonce((n) => n + 1)
-                              }}
+                              aria-pressed={active}
+                              onClick={() => selectLinearMode(mode.id)}
                               className={cn(
                                 'rounded-md border px-2 py-1 text-xs transition',
                                 active
-                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                  ? 'border-border/50 bg-foreground/90 text-background'
                                   : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
                               )}
                             >
-                              {preset.label}
+                              {mode.label}
                             </button>
                           )
                         })}
@@ -4743,12 +5563,21 @@ export default function TaskPage(): React.JSX.Element {
                               onClick={() => {
                                 setNewLinearIssueTitle('')
                                 setNewLinearIssueBody('')
-                                setNewLinearIssueTeamId(availableTeams[0]?.id ?? null)
+                                const projectTeamId =
+                                  selectedLinearProject?.teams?.[0]?.id ??
+                                  availableTeams.find(
+                                    (team) =>
+                                      team.workspaceId === selectedLinearProject?.workspaceId
+                                  )?.id
+                                setNewLinearIssueTeamId(
+                                  projectTeamId ?? availableTeams[0]?.id ?? null
+                                )
+                                setNewLinearIssueProjectId(selectedLinearProject?.id ?? null)
                                 setNewLinearIssueOpen(true)
                               }}
                               disabled={availableTeams.length === 0}
                               aria-label="New Linear issue"
-                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                              className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
                               <Plus className="size-4" />
                             </Button>
@@ -4763,11 +5592,23 @@ export default function TaskPage(): React.JSX.Element {
                               variant="outline"
                               size="icon"
                               onClick={() => setLinearRefreshNonce((n) => n + 1)}
-                              disabled={linearLoading}
-                              aria-label="Refresh Linear issues"
-                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                              disabled={
+                                linearMode === 'issues'
+                                  ? linearLoading
+                                  : linearMode === 'projects'
+                                    ? linearProjectsLoading || linearProjectDetailLoading
+                                    : linearCustomViewsLoading || linearCustomViewContentsLoading
+                              }
+                              aria-label="Refresh Linear"
+                              className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
-                              {linearLoading ? (
+                              {linearMode === 'issues' && linearLoading ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                              ) : linearMode === 'projects' &&
+                                (linearProjectsLoading || linearProjectDetailLoading) ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                              ) : linearMode === 'views' &&
+                                (linearCustomViewsLoading || linearCustomViewContentsLoading) ? (
                                 <LoaderCircle className="size-4 animate-spin" />
                               ) : (
                                 <RefreshCw className="size-4" />
@@ -4775,55 +5616,151 @@ export default function TaskPage(): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            Refresh Linear issues
+                            Refresh Linear
                           </TooltipContent>
                         </Tooltip>
                       </div>
                     </div>
-                    <div className="mt-3 flex min-w-0 items-center gap-3">
-                      <div className="relative min-w-0 flex-1 basis-64">
-                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          value={linearSearchInput}
-                          onChange={(e) => setLinearSearchInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              if (
-                                shouldSuppressEnterSubmit(
-                                  { isComposing: e.nativeEvent.isComposing, shiftKey: e.shiftKey },
-                                  false
-                                )
-                              ) {
-                                return
-                              }
-                              e.preventDefault()
-                              const trimmed = linearSearchInput.trim()
-                              setLinearSearchInput(trimmed)
-                              setAppliedLinearSearch(trimmed)
-                              setTaskResumeState({ linearQuery: trimmed })
-                              setLinearRefreshNonce((n) => n + 1)
-                            }
-                          }}
-                          placeholder="Search Linear issues..."
-                          className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
-                        />
-                        {linearSearchInput ? (
-                          <button
-                            type="button"
-                            aria-label="Clear search"
-                            onClick={() => {
-                              setLinearSearchInput('')
-                              setAppliedLinearSearch('')
-                              setTaskResumeState({ linearQuery: '' })
-                              setLinearRefreshNonce((n) => n + 1)
-                            }}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
-                          >
-                            <X className="size-4" />
-                          </button>
-                        ) : null}
+
+                    {linearMode === 'issues' ? (
+                      <>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {LINEAR_PRESETS.map((preset) => {
+                            const active = !linearSearchInput && activeLinearPreset === preset.id
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => {
+                                  setLinearSearchInput('')
+                                  setAppliedLinearSearch('')
+                                  setActiveLinearPreset(preset.id)
+                                  setTaskResumeState({
+                                    linearPreset: preset.id,
+                                    linearQuery: '',
+                                    linearMode: 'issues'
+                                  })
+                                  setLinearRefreshNonce((n) => n + 1)
+                                }}
+                                className={cn(
+                                  'rounded-md border px-2 py-1 text-xs transition',
+                                  active
+                                    ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                    : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                                )}
+                              >
+                                {preset.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <div className="mt-3 flex min-w-0 items-center gap-3">
+                          <div className="relative min-w-0 flex-1 basis-64">
+                            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              value={linearSearchInput}
+                              onChange={(e) => setLinearSearchInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  if (
+                                    shouldSuppressEnterSubmit(
+                                      {
+                                        isComposing: e.nativeEvent.isComposing,
+                                        shiftKey: e.shiftKey
+                                      },
+                                      false
+                                    )
+                                  ) {
+                                    return
+                                  }
+                                  e.preventDefault()
+                                  const trimmed = linearSearchInput.trim()
+                                  setLinearSearchInput(trimmed)
+                                  setAppliedLinearSearch(trimmed)
+                                  setTaskResumeState({ linearQuery: trimmed, linearMode: 'issues' })
+                                  setLinearRefreshNonce((n) => n + 1)
+                                }
+                              }}
+                              placeholder="Search Linear issues..."
+                              className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
+                            />
+                            {linearSearchInput ? (
+                              <button
+                                type="button"
+                                aria-label="Clear search"
+                                onClick={() => {
+                                  setLinearSearchInput('')
+                                  setAppliedLinearSearch('')
+                                  setTaskResumeState({ linearQuery: '', linearMode: 'issues' })
+                                  setLinearRefreshNonce((n) => n + 1)
+                                }}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                              >
+                                <X className="size-4" />
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </>
+                    ) : linearMode === 'projects' && !selectedLinearProject ? (
+                      <div className="mt-3 flex min-w-0 items-center gap-3">
+                        <div className="relative min-w-0 flex-1 basis-64">
+                          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            value={linearProjectSearchInput}
+                            onChange={(e) => setLinearProjectSearchInput(e.target.value)}
+                            placeholder="Search Linear projects..."
+                            className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
+                          />
+                          {linearProjectSearchInput ? (
+                            <button
+                              type="button"
+                              aria-label="Clear search"
+                              onClick={() => {
+                                setLinearProjectSearchInput('')
+                                setAppliedLinearProjectSearch('')
+                                setLinearRefreshNonce((n) => n + 1)
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                            >
+                              <X className="size-4" />
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
+                    ) : linearMode === 'views' && !selectedLinearCustomView ? (
+                      <div
+                        className="mt-3 flex min-w-0 flex-wrap items-center gap-2"
+                        role="group"
+                        aria-label="Linear view type"
+                      >
+                        {LINEAR_CUSTOM_VIEW_MODEL_OPTIONS.map((option) => {
+                          const active = option.id === linearCustomViewModel
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => {
+                                setSelectedLinearCustomView(null)
+                                setLinearCustomViewModel(option.id)
+                                setLinearCustomViewsResult({ items: [] })
+                                setLinearCustomViewsError(null)
+                                setLinearRefreshNonce((n) => n + 1)
+                              }}
+                              className={cn(
+                                'rounded-md border px-2 py-1 text-xs transition',
+                                active
+                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                              )}
+                            >
+                              {option.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : null}
                   </div>
                 ) : taskSource === 'gitlab' ? (
                   <>
@@ -4880,7 +5817,7 @@ export default function TaskPage(): React.JSX.Element {
                                   ? GITLAB_ISSUE_FILTERS
                                   : GITLAB_MR_FILTERS
                                 ).map(({ id, label }) => {
-                                  const active = gitlabFilter === id
+                                  const active = activeGitlabFilter === id
                                   return (
                                     <button
                                       key={id}
@@ -5135,12 +6072,14 @@ export default function TaskPage(): React.JSX.Element {
                   {!showGitHubTaskSkeletons &&
                     filteredWorkItems.map((item) => {
                       const itemRepo = repoMap.get(item.repoId) ?? null
-                      const attachedWorkspace =
-                        item.type === 'pr'
-                          ? findGithubPrWorkspaceAttachment(allWorktrees, item.repoId, item.number)
-                          : null
+                      const attachedWorkspace = findGithubWorkItemWorkspaceAttachment(
+                        allWorktrees,
+                        item.repoId,
+                        item.type,
+                        item.number
+                      )
                       const attachedWorkspaceLabel = attachedWorkspace
-                        ? getGithubPrWorkspaceAttachmentLabel(attachedWorkspace)
+                        ? getGithubWorkItemWorkspaceAttachmentLabel(attachedWorkspace)
                         : null
                       return (
                         // Why: the row is a clickable container rather than a
@@ -5292,29 +6231,34 @@ export default function TaskPage(): React.JSX.Element {
                                 <ButtonGroup>
                                   <Button
                                     type="button"
-                                    variant="outline"
+                                    variant={attachedWorkspace ? 'default' : 'outline'}
                                     size="xs"
                                     onClick={(event) => {
                                       event.stopPropagation()
-                                      handleOpenOrUseGitHubPR(item)
+                                      handleOpenOrUseGitHubWorkItem(item)
                                     }}
-                                    className="bg-background/80"
+                                    className={cn(
+                                      'min-w-[72px] gap-1 font-semibold',
+                                      attachedWorkspace ? 'shadow-xs' : 'bg-background/80'
+                                    )}
                                     aria-label={
                                       attachedWorkspace
-                                        ? 'Open workspace attached to PR'
+                                        ? 'Resume workspace attached to PR'
                                         : 'Start workspace from PR'
                                     }
                                   >
-                                    {attachedWorkspace ? 'Open' : 'Start'}
+                                    {attachedWorkspace ? 'Resume' : 'Start'}
                                     <ArrowRight className="size-3" />
                                   </Button>
                                   <DropdownMenuTrigger asChild>
                                     <Button
                                       type="button"
-                                      variant="outline"
+                                      variant={attachedWorkspace ? 'default' : 'outline'}
                                       size="icon-xs"
                                       onClick={(event) => event.stopPropagation()}
-                                      className="bg-background/80"
+                                      className={cn(
+                                        attachedWorkspace ? 'shadow-xs' : 'bg-background/80'
+                                      )}
                                       aria-label="More PR actions"
                                     >
                                       <ChevronDown className="size-3" />
@@ -5344,11 +6288,16 @@ export default function TaskPage(): React.JSX.Element {
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  handleUseWorkItem(item)
+                                  handleOpenOrUseGitHubWorkItem(item)
                                 }}
+                                aria-label={
+                                  attachedWorkspace
+                                    ? 'Open workspace attached to issue'
+                                    : 'Start workspace from issue'
+                                }
                                 className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-[11px] text-foreground transition hover:bg-muted/60"
                               >
-                                Start
+                                {attachedWorkspace ? 'Open' : 'Start'}
                                 <ArrowRight className="size-3" />
                               </button>
                             )}
@@ -5368,6 +6317,12 @@ export default function TaskPage(): React.JSX.Element {
                                   align="end"
                                   onClick={(e) => e.stopPropagation()}
                                 >
+                                  {attachedWorkspace ? (
+                                    <DropdownMenuItem onSelect={() => handleUseWorkItem(item)}>
+                                      <Plus className="size-4" />
+                                      Start new workspace
+                                    </DropdownMenuItem>
+                                  ) : null}
                                   <DropdownMenuItem
                                     onSelect={() => window.api.shell.openUrl(item.url)}
                                   >
@@ -5610,7 +6565,7 @@ export default function TaskPage(): React.JSX.Element {
             <LinearIssueWorkspace
               issue={selectedLinearIssue}
               variant="page"
-              backLabel="Linear list"
+              backLabel={activeLinearIssueContextLabel ?? 'Linear list'}
               onUse={handleUseLinearItem}
               onOpenIssue={openRelatedLinearIssue}
               onClose={closeTaskDetailPage}
@@ -5629,20 +6584,230 @@ export default function TaskPage(): React.JSX.Element {
               <Button
                 className="mt-5"
                 onClick={() => {
-                  setLinearApiKeyDraft('')
-                  setLinearConnectState('idle')
-                  setLinearConnectError(null)
                   setLinearConnectOpen(true)
                 }}
               >
-                Connect Linear
+                Add Linear access
               </Button>
+            </div>
+          ) : selectedLinearProject && linearProjectTab === 'overview' ? (
+            <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+              <LinearProjectOverview
+                project={selectedLinearProjectDetail ?? selectedLinearProject}
+                loading={linearProjectDetailLoading}
+                error={linearProjectDetailError}
+                onBack={() => {
+                  if (linearProjectParentView) {
+                    setSelectedLinearProject(null)
+                    setSelectedLinearProjectDetail(null)
+                    setLinearProjectTab('overview')
+                    setLinearMode('views')
+                    setSelectedLinearCustomView(linearProjectParentView)
+                    setTaskResumeState(
+                      linearProjectParentView.workspaceId
+                        ? {
+                            linearMode: 'views',
+                            linearContext: {
+                              kind: 'view',
+                              id: linearProjectParentView.id,
+                              workspaceId: linearProjectParentView.workspaceId,
+                              model: linearProjectParentView.model
+                            }
+                          }
+                        : {
+                            linearMode: 'views',
+                            linearContext: undefined
+                          }
+                    )
+                    setLinearProjectParentView(null)
+                    return
+                  }
+                  setSelectedLinearProject(null)
+                  setSelectedLinearProjectDetail(null)
+                  setLinearProjectParentView(null)
+                  setLinearProjectTab('overview')
+                  setTaskResumeState({ linearContext: undefined })
+                }}
+                onOpenProject={(project) => {
+                  if (project.url) {
+                    void window.api.shell.openUrl(project.url)
+                  }
+                }}
+                onRefresh={() => setLinearRefreshNonce((n) => n + 1)}
+                onOpenIssues={() => setLinearProjectTab('issues')}
+              />
+            </div>
+          ) : linearMode === 'projects' && !selectedLinearProject ? (
+            <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+              <div className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground grid-cols-[minmax(180px,1.5fr)_110px_100px_90px_120px_110px_80px_70px]">
+                <span>Project</span>
+                <span>Status</span>
+                <span>Health</span>
+                <span>Priority</span>
+                <span>Lead</span>
+                <span>Target</span>
+                <span>Issues</span>
+                <span />
+              </div>
+              <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-sleek">
+                {linearProjectsError ? (
+                  <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+                    {linearProjectsError}
+                  </div>
+                ) : null}
+                <LinearProjectTable
+                  projects={linearProjectsResult.items}
+                  loading={linearProjectsLoading}
+                  hasError={!!linearProjectsResult.errors?.length}
+                  workspaceSelection={selectedLinearWorkspaceId}
+                  onSelectProject={openLinearProjectContext}
+                  onOpenProject={(project) => {
+                    if (project.url) {
+                      void window.api.shell.openUrl(project.url)
+                    }
+                  }}
+                  onUseProjectIssues={(project) => {
+                    openLinearProjectContext(project)
+                    setLinearProjectTab('issues')
+                  }}
+                />
+              </div>
+              <LinearCollectionNotice
+                errors={linearProjectsResult.errors}
+                hasMore={linearProjectsResult.hasMore}
+                count={linearProjectsResult.items.length}
+                label="projects"
+              />
+            </div>
+          ) : linearMode === 'views' && !selectedLinearCustomView ? (
+            <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+              <div className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground grid-cols-[minmax(220px,1.5fr)_120px_120px_120px_130px_60px]">
+                <span>View</span>
+                <span>Model</span>
+                <span>Visibility</span>
+                <span>Owner</span>
+                <span>Updated</span>
+                <span />
+              </div>
+              <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-sleek">
+                {linearCustomViewsError ? (
+                  <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+                    {linearCustomViewsError}
+                  </div>
+                ) : null}
+                <LinearCustomViewTable
+                  views={linearCustomViewsResult.items}
+                  model={linearCustomViewModel}
+                  loading={linearCustomViewsLoading}
+                  hasError={!!linearCustomViewsResult.errors?.length}
+                  workspaceSelection={selectedLinearWorkspaceId}
+                  onSelectView={openLinearCustomViewContext}
+                  onOpenView={(view) => {
+                    if (view.url) {
+                      void window.api.shell.openUrl(view.url)
+                    }
+                  }}
+                />
+              </div>
+              <LinearCollectionNotice
+                errors={linearCustomViewsResult.errors}
+                hasMore={linearCustomViewsResult.hasMore}
+                count={linearCustomViewsResult.items.length}
+                label={`${linearCustomViewModel} views`}
+              />
+            </div>
+          ) : selectedLinearCustomView?.model === 'project' && !selectedLinearProject ? (
+            <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+              <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => {
+                      setSelectedLinearCustomView(null)
+                      setLinearProjectParentView(null)
+                      setTaskResumeState({ linearContext: undefined })
+                    }}
+                    aria-label="Back to views"
+                  >
+                    <ChevronLeft className="size-3.5" />
+                  </Button>
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-medium text-foreground">
+                      {selectedLinearCustomView.name}
+                    </div>
+                    <div className="truncate text-[11px] text-muted-foreground">Linear / Views</div>
+                  </div>
+                </div>
+                {selectedLinearCustomView.url ? (
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => void window.api.shell.openUrl(selectedLinearCustomView.url!)}
+                    className="gap-1 border-border/50 bg-background/70"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Linear
+                  </Button>
+                ) : null}
+              </div>
+              <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-sleek">
+                {linearCustomViewContentsError ? (
+                  <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+                    {linearCustomViewContentsError}
+                  </div>
+                ) : null}
+                <LinearProjectTable
+                  projects={linearCustomViewProjectsResult.items}
+                  loading={linearCustomViewContentsLoading}
+                  hasError={!!linearCustomViewProjectsResult.errors?.length}
+                  workspaceSelection={selectedLinearWorkspaceId}
+                  onSelectProject={(project) =>
+                    openLinearProjectContext(project, { parentView: selectedLinearCustomView })
+                  }
+                  onOpenProject={(project) => {
+                    if (project.url) {
+                      void window.api.shell.openUrl(project.url)
+                    }
+                  }}
+                  onUseProjectIssues={(project) => {
+                    openLinearProjectContext(project, { parentView: selectedLinearCustomView })
+                    setLinearProjectTab('issues')
+                  }}
+                />
+              </div>
+              <LinearCollectionNotice
+                errors={linearCustomViewProjectsResult.errors}
+                hasMore={linearCustomViewProjectsResult.hasMore}
+                count={linearCustomViewProjectsResult.items.length}
+                label="projects"
+              />
             </div>
           ) : (
             <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
               <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
-                <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  Linear issues
+                <div className="flex min-w-0 items-center gap-2">
+                  {activeLinearIssueContextLabel ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => {
+                        if (selectedLinearProject) {
+                          setLinearProjectTab('overview')
+                          return
+                        }
+                        setSelectedLinearCustomView(null)
+                        setLinearProjectParentView(null)
+                        setTaskResumeState({ linearContext: undefined })
+                      }}
+                      aria-label="Back"
+                    >
+                      <ChevronLeft className="size-3.5" />
+                    </Button>
+                  ) : null}
+                  <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {activeLinearIssueContextLabel ?? 'Linear issues'}
+                  </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <div
@@ -5774,13 +6939,13 @@ export default function TaskPage(): React.JSX.Element {
                 className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
                 style={{ scrollbarGutter: 'stable' }}
               >
-                {linearError ? (
+                {activeLinearIssueError ? (
                   <div className="border-b border-border px-4 py-4 text-sm text-destructive">
-                    {linearError}
+                    {activeLinearIssueError}
                   </div>
                 ) : null}
 
-                {linearLoading && linearIssues.length === 0 ? (
+                {activeLinearIssueLoading && activeLinearIssues.length === 0 ? (
                   <div className="divide-y divide-border/50">
                     {Array.from({ length: 12 }).map((_, i) => (
                       <div key={i} className="px-3 py-3">
@@ -5791,24 +6956,46 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
 
-                {!linearLoading && linearIssues.length === 0 && !linearError ? (
+                {!activeLinearIssueLoading &&
+                activeLinearIssues.length === 0 &&
+                !activeLinearIssueError &&
+                activeLinearIssueHasCollectionError ? (
                   <div className="px-4 py-10 text-center">
-                    <p className="text-sm font-medium text-foreground">No Linear issues found</p>
+                    <p className="text-sm font-medium text-foreground">
+                      Unable to load Linear issues
+                    </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      {linearSearchInput
-                        ? 'Try a different search query.'
-                        : 'No assigned issues. Try searching for something.'}
+                      Review the workspace error below, then refresh.
                     </p>
                   </div>
                 ) : null}
 
-                {!linearLoading && linearIssues.length > 0 && filteredLinearIssues.length === 0 ? (
+                {!activeLinearIssueLoading &&
+                activeLinearIssues.length === 0 &&
+                !activeLinearIssueError &&
+                !activeLinearIssueHasCollectionError ? (
+                  <div className="px-4 py-10 text-center">
+                    <p className="text-sm font-medium text-foreground">No Linear issues found</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {activeLinearIssueContextLabel
+                        ? 'No issues match this Linear context.'
+                        : linearSearchInput
+                          ? 'Try a different search query.'
+                          : 'No assigned issues. Try searching for something.'}
+                    </p>
+                  </div>
+                ) : null}
+
+                {!activeLinearIssueLoading &&
+                activeLinearIssues.length > 0 &&
+                filteredLinearIssues.length === 0 ? (
                   <div className="px-4 py-10 text-center">
                     <p className="text-sm font-medium text-foreground">
-                      No issues match the selected teams
+                      No fetched issues match the selected teams
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Try selecting more teams or click &ldquo;All teams&rdquo;.
+                      Try selecting more teams or refreshing; team filters apply to the current
+                      fetched issue set.
                     </p>
                   </div>
                 ) : null}
@@ -6154,6 +7341,21 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 )}
               </div>
+              {selectedLinearProject && linearProjectTab === 'issues' ? (
+                <LinearCollectionNotice
+                  errors={linearProjectIssuesResult.errors}
+                  hasMore={linearProjectIssuesResult.hasMore}
+                  count={linearProjectIssuesResult.items.length}
+                  label="project issues"
+                />
+              ) : selectedLinearCustomView?.model === 'issue' ? (
+                <LinearCollectionNotice
+                  errors={linearCustomViewIssuesResult.errors}
+                  hasMore={linearCustomViewIssuesResult.hasMore}
+                  count={linearCustomViewIssuesResult.items.length}
+                  label="view issues"
+                />
+              ) : null}
             </div>
           )}
         </div>
@@ -6168,7 +7370,7 @@ export default function TaskPage(): React.JSX.Element {
         }}
       >
         <DialogContent
-          className="sm:max-w-lg"
+          className="sm:max-w-2xl"
           onKeyDown={(event) => {
             if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
@@ -6291,13 +7493,31 @@ export default function TaskPage(): React.JSX.Element {
               <label className="text-[11px] font-medium text-muted-foreground">
                 Description (optional, markdown)
               </label>
-              <textarea
+              <GitHubMarkdownComposer
                 value={newIssueBody}
-                onChange={(e) => setNewIssueBody(e.target.value)}
+                onChange={setNewIssueBody}
                 placeholder="What's going on?"
-                rows={6}
                 disabled={newIssueSubmitting}
-                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
+                minHeightClassName="min-h-40"
+                onSubmitShortcut={() => void handleCreateNewIssue()}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <GitHubIssueLabelSelector
+                labels={newIssueRepoLabels.data}
+                selectedLabels={newIssueLabels}
+                loading={newIssueRepoLabels.loading}
+                error={newIssueRepoLabels.error}
+                disabled={newIssueSubmitting || !newIssueTargetRepo}
+                onChange={setNewIssueLabels}
+              />
+              <GitHubIssueAssigneeSelector
+                assignees={newIssueRepoAssignees.data}
+                selectedAssignees={newIssueAssignees}
+                loading={newIssueRepoAssignees.loading}
+                error={newIssueRepoAssignees.error}
+                disabled={newIssueSubmitting || !newIssueTargetRepo}
+                onChange={setNewIssueAssignees}
               />
             </div>
             <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
@@ -6869,94 +8089,13 @@ export default function TaskPage(): React.JSX.Element {
         onClose={() => setGitlabDialogItem(null)}
       />
 
-      <Dialog
+      <LinearApiKeyDialog
         open={linearConnectOpen}
-        onOpenChange={(open) => {
-          if (linearConnectState !== 'connecting') {
-            setLinearConnectOpen(open)
-          }
-        }}
-      >
-        <DialogContent
-          className="sm:max-w-md"
-          onKeyDown={(e) => {
-            if (
-              e.key === 'Enter' &&
-              linearApiKeyDraft.trim() &&
-              linearConnectState !== 'connecting'
-            ) {
-              e.preventDefault()
-              void handleLinearConnect()
-            }
-          }}
-        >
-          <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">Connect Linear workspace</DialogTitle>
-            <DialogDescription>
-              Paste a <strong className="font-semibold text-foreground">Personal API key</strong> to
-              browse issues from that workspace.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            <Input
-              autoFocus
-              type="password"
-              placeholder="lin_api_..."
-              value={linearApiKeyDraft}
-              onChange={(e) => {
-                setLinearApiKeyDraft(e.target.value)
-                if (linearConnectState === 'error') {
-                  setLinearConnectState('idle')
-                  setLinearConnectError(null)
-                }
-              }}
-              disabled={linearConnectState === 'connecting'}
-            />
-            {linearConnectState === 'error' && linearConnectError && (
-              <p className="text-xs text-destructive">{linearConnectError}</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Create one in{' '}
-              <button
-                className="text-primary underline-offset-2 hover:underline"
-                onClick={() =>
-                  window.api.shell.openUrl('https://linear.app/settings/account/security')
-                }
-              >
-                Linear Settings → Security
-              </button>{' '}
-              → <strong className="font-semibold text-foreground">New API key</strong> (not{' '}
-              <span className="text-foreground">New passkey</span>).
-            </p>
-            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-              <Lock className="size-3 shrink-0" />
-              Your key is encrypted via the OS keychain and stored locally.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setLinearConnectOpen(false)}
-              disabled={linearConnectState === 'connecting'}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleLinearConnect()}
-              disabled={!linearApiKeyDraft.trim() || linearConnectState === 'connecting'}
-            >
-              {linearConnectState === 'connecting' ? (
-                <>
-                  <LoaderCircle className="size-4 animate-spin" />
-                  Verifying…
-                </>
-              ) : (
-                'Connect'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setLinearConnectOpen}
+        workspace={selectedLinearWorkspace}
+        connectLabel={selectedLinearWorkspace ? 'Update access' : 'Add Linear access'}
+        onConnected={handleLinearAccessConnected}
+      />
     </div>
   )
 }

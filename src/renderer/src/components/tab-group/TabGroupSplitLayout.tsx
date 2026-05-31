@@ -238,7 +238,10 @@ export default function TabGroupSplitLayout({
           state. The leftmost pane suppresses its own `border-l` via
           `touchesLeftEdge`, so the seam is always exactly 1px — previously
           both painted and stacked into a 2px bar below the drag strip. */}
-      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border">
+      <div
+        ref={dragSplit.setDragRootNode}
+        className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
+      >
         <div
           className="h-[4px] shrink-0 bg-card"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}

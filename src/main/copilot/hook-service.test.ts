@@ -46,6 +46,16 @@ function readConfig(): Record<string, unknown> {
   return JSON.parse(readFileSync(join(copilotHome, 'hooks', 'orca.json'), 'utf-8'))
 }
 
+function makeStaleManagedHookDefinition(): Record<string, unknown> {
+  if (process.platform === 'win32') {
+    return {
+      type: 'command',
+      powershell: 'powershell.exe -File C:/old/agent-hooks/copilot-hook.ps1'
+    }
+  }
+  return { type: 'command', bash: '/bin/sh "/old/agent-hooks/copilot-hook.sh"' }
+}
+
 describe('CopilotHookService', () => {
   it('installs a user-level Copilot hook file under COPILOT_HOME', () => {
     const service = new CopilotHookService()
@@ -118,9 +128,9 @@ describe('CopilotHookService', () => {
           hooks: {
             UserPromptSubmit: [
               { type: 'command', bash: 'echo user prompt' },
-              { type: 'command', bash: '/bin/sh "/old/agent-hooks/copilot-hook.sh"' }
+              makeStaleManagedHookDefinition()
             ],
-            OldEvent: [{ type: 'command', bash: '/bin/sh "/old/agent-hooks/copilot-hook.sh"' }]
+            OldEvent: [makeStaleManagedHookDefinition()]
           }
         },
         null,
@@ -137,6 +147,46 @@ describe('CopilotHookService', () => {
       expect.arrayContaining([expect.objectContaining({ bash: 'echo user prompt' })])
     )
     expect(hooks.UserPromptSubmit).toHaveLength(2)
+  })
+
+  it('reports partial when stale managed hooks only exist under retired events', () => {
+    const configPath = join(copilotHome, 'hooks', 'orca.json')
+    mkdirSync(join(copilotHome, 'hooks'), { recursive: true })
+    writeFileSync(
+      configPath,
+      JSON.stringify(
+        {
+          version: 1,
+          hooks: {
+            OldEvent: [makeStaleManagedHookDefinition()]
+          }
+        },
+        null,
+        2
+      )
+    )
+
+    const status = new CopilotHookService().getStatus()
+
+    expect(status.state).toBe('partial')
+    expect(status.managedHooksPresent).toBe(true)
+    expect(status.detail).toBe('Managed Copilot hook file contains stale entries')
+  })
+
+  it('reports partial when stale managed hooks remain alongside current hooks', () => {
+    const service = new CopilotHookService()
+    service.install()
+    const configPath = join(copilotHome, 'hooks', 'orca.json')
+    const config = readConfig()
+    const hooks = config.hooks as Record<string, unknown[]>
+    hooks.UserPromptSubmit.push(makeStaleManagedHookDefinition())
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`)
+
+    const status = service.getStatus()
+
+    expect(status.state).toBe('partial')
+    expect(status.managedHooksPresent).toBe(true)
+    expect(status.detail).toBe('Managed Copilot hook file contains stale entries')
   })
 
   it('forces version 1 in the dedicated Copilot hook file', () => {

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 export function FeatureWallContinueButton(props: {
   label: string
   enableKeyboardShortcut: boolean
-  isMacPlatform: boolean
+  shortcutModifierLabel: string
   onClick: () => void
 }): JSX.Element {
   return (
@@ -13,7 +13,7 @@ export function FeatureWallContinueButton(props: {
       {props.label}
       {props.enableKeyboardShortcut ? (
         <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary-foreground/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-          <span>{props.isMacPlatform ? '⌘' : 'Ctrl'}</span>
+          <span>{props.shortcutModifierLabel}</span>
           <CornerDownLeft className="size-3" />
         </span>
       ) : null}

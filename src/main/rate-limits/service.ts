@@ -42,8 +42,8 @@ const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual ref
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
 
-// Why: the internal state only tracks claude and codex. The inactiveClaudeAccounts
-// array is derived from the cache on demand in getState() and pushToRenderer().
+// Why: inactive account arrays are derived from provider-specific caches on
+// demand in getState() and pushToRenderer().
 type InternalRateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
@@ -98,6 +98,7 @@ export class RateLimitService {
   private lastInactiveClaudeFetchAt = 0
   private inactiveClaudeAccountsGeneration = 0
   private lastInactiveCodexFetchAt = 0
+  private inactiveCodexAccountsGeneration = 0
   private stateListeners = new Set<(state: RateLimitState) => void>()
 
   constructor() {}
@@ -142,6 +143,8 @@ export class RateLimitService {
 
   setInactiveCodexAccountsResolver(resolver: () => InactiveCodexAccountInfo[]): void {
     this.inactiveCodexAccountsResolver = resolver
+    this.inactiveCodexAccountsGeneration += 1
+    this.pruneInactiveCodexState()
   }
 
   attach(mainWindow: BrowserWindow): void {
@@ -150,21 +153,28 @@ export class RateLimitService {
     const refreshOnResume = (): void => {
       void this.refreshIfWindowActive()
     }
-    mainWindow.on('focus', refreshOnResume)
-    mainWindow.on('show', refreshOnResume)
-    mainWindow.on('restore', refreshOnResume)
-    this.detachWindowListeners = () => {
+    // Why: attach() can replace windows; the previous closed listener also
+    // captures this service and must be removed with the focus listeners.
+    const detachWindowListeners = (): void => {
       mainWindow.removeListener('focus', refreshOnResume)
       mainWindow.removeListener('show', refreshOnResume)
       mainWindow.removeListener('restore', refreshOnResume)
+      mainWindow.removeListener('closed', onClosed)
     }
-    mainWindow.on('closed', () => {
-      this.detachWindowListeners?.()
-      this.detachWindowListeners = null
+    const onClosed = (): void => {
+      detachWindowListeners()
+      if (this.detachWindowListeners === detachWindowListeners) {
+        this.detachWindowListeners = null
+      }
       if (this.mainWindow === mainWindow) {
         this.mainWindow = null
       }
-    })
+    }
+    mainWindow.on('focus', refreshOnResume)
+    mainWindow.on('show', refreshOnResume)
+    mainWindow.on('restore', refreshOnResume)
+    mainWindow.on('closed', onClosed)
+    this.detachWindowListeners = detachWindowListeners
   }
 
   start(): void {
@@ -181,6 +191,8 @@ export class RateLimitService {
   }
 
   getState(): RateLimitState {
+    this.pruneInactiveClaudeState()
+    this.pruneInactiveCodexState()
     return {
       ...this.state,
       claudeTarget: this.claudeFetchTarget,
@@ -219,6 +231,8 @@ export class RateLimitService {
     }
     this.codexFetchTarget = nextTarget
     this.codexFetchGeneration += 1
+    this.inactiveCodexAccountsGeneration += 1
+    this.pruneInactiveCodexState()
     this.lastInactiveCodexFetchAt = 0
     // Why: switching the selected Codex account must immediately clear the old
     // Codex quota view. Keeping stale values visible would show the previous
@@ -350,6 +364,7 @@ export class RateLimitService {
     if (Date.now() - this.lastInactiveCodexFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }
+    this.pruneInactiveCodexState()
     if (this.inactiveCodexFetching.size > 0) {
       return
     }
@@ -357,6 +372,9 @@ export class RateLimitService {
     if (accounts.length === 0) {
       return
     }
+    // Why: account switching can make a previewed account active while its
+    // RPC-only usage fetch is still in flight; stale results must be ignored.
+    const fetchGeneration = this.inactiveCodexAccountsGeneration
 
     for (const account of accounts) {
       this.inactiveCodexFetching.add(account.id)
@@ -364,6 +382,17 @@ export class RateLimitService {
     this.pushToRenderer()
 
     for (const account of accounts) {
+      if (
+        fetchGeneration !== this.inactiveCodexAccountsGeneration ||
+        !this.isCurrentInactiveCodexAccount(account.id)
+      ) {
+        this.inactiveCodexFetching.delete(account.id)
+        if (!this.isCurrentInactiveCodexAccount(account.id)) {
+          this.inactiveCodexCache.delete(account.id)
+        }
+        this.pushToRenderer()
+        continue
+      }
       try {
         // Why: fetchCodexRateLimits already accepts codexHomePath, so we can
         // point it at the managed account's home directory directly without
@@ -375,16 +404,35 @@ export class RateLimitService {
           codexHomePath: account.managedHomePath,
           allowPtyFallback: false
         })
+        if (
+          fetchGeneration !== this.inactiveCodexAccountsGeneration ||
+          !this.isCurrentInactiveCodexAccount(account.id)
+        ) {
+          this.inactiveCodexFetching.delete(account.id)
+          if (!this.isCurrentInactiveCodexAccount(account.id)) {
+            this.inactiveCodexCache.delete(account.id)
+          }
+          this.pushToRenderer()
+          continue
+        }
         const cached = this.inactiveCodexCache.get(account.id) ?? null
         this.inactiveCodexCache.set(account.id, this.applyStalePolicy(fresh, cached))
       } catch {
         // Why: per-account try/catch prevents one failure from aborting the batch.
+        if (
+          fetchGeneration !== this.inactiveCodexAccountsGeneration ||
+          !this.isCurrentInactiveCodexAccount(account.id)
+        ) {
+          this.inactiveCodexCache.delete(account.id)
+        }
       }
       this.inactiveCodexFetching.delete(account.id)
       this.pushToRenderer()
     }
 
-    this.lastInactiveCodexFetchAt = Date.now()
+    if (fetchGeneration === this.inactiveCodexAccountsGeneration) {
+      this.lastInactiveCodexFetchAt = Date.now()
+    }
   }
 
   evictInactiveClaudeCache(accountId: string): void {
@@ -396,6 +444,12 @@ export class RateLimitService {
 
   private isCurrentInactiveClaudeAccount(accountId: string): boolean {
     return (this.inactiveClaudeAccountsResolver?.() ?? []).some(
+      (account) => account.id === accountId
+    )
+  }
+
+  private isCurrentInactiveCodexAccount(accountId: string): boolean {
+    return (this.inactiveCodexAccountsResolver?.() ?? []).some(
       (account) => account.id === accountId
     )
   }
@@ -416,7 +470,24 @@ export class RateLimitService {
     }
   }
 
+  private pruneInactiveCodexState(): void {
+    const currentIds = new Set(
+      (this.inactiveCodexAccountsResolver?.() ?? []).map((account) => account.id)
+    )
+    for (const accountId of this.inactiveCodexCache.keys()) {
+      if (!currentIds.has(accountId)) {
+        this.inactiveCodexCache.delete(accountId)
+      }
+    }
+    for (const accountId of this.inactiveCodexFetching) {
+      if (!currentIds.has(accountId)) {
+        this.inactiveCodexFetching.delete(accountId)
+      }
+    }
+  }
+
   evictInactiveCodexCache(accountId: string): void {
+    this.inactiveCodexAccountsGeneration += 1
     this.inactiveCodexCache.delete(accountId)
     this.inactiveCodexFetching.delete(accountId)
     this.pushToRenderer()
@@ -949,12 +1020,11 @@ export class RateLimitService {
     cache: Map<string, ProviderRateLimits>,
     fetching: Set<string>
   ): InactiveAccountUsage[] {
-    this.pruneInactiveClaudeState()
     const result: InactiveAccountUsage[] = []
     for (const [accountId, limits] of cache) {
       result.push({
         accountId,
-        claude: limits,
+        rateLimits: limits,
         updatedAt: limits.updatedAt,
         isFetching: fetching.has(accountId)
       })
@@ -965,7 +1035,7 @@ export class RateLimitService {
       if (!cache.has(accountId)) {
         result.push({
           accountId,
-          claude: null,
+          rateLimits: null,
           updatedAt: 0,
           isFetching: true
         })

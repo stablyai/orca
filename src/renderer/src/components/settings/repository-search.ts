@@ -68,8 +68,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
               'branch name',
               'rename',
               'model',
-              'prompt',
-              'instructions'
+              'prompt'
             ]
           },
           {

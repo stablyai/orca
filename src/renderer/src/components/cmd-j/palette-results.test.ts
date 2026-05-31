@@ -53,6 +53,16 @@ const actions: CmdJQuickAction[] = [
     run: noopRun
   },
   {
+    id: 'delete-workspace',
+    kind: 'action',
+    title: 'Delete Workspace',
+    description: 'Delete the current workspace.',
+    icon: Globe,
+    verbKeywords: ['delete workspace', 'delete current workspace', 'remove workspace'],
+    isAvailable: available,
+    run: noopRun
+  },
+  {
     id: 'add-quick-command',
     kind: 'action',
     title: 'Add Quick Command',
@@ -147,6 +157,8 @@ describe('Cmd+J palette middle-band ranking', () => {
     ['create workspace', 'create-workspace'],
     ['add workspace', 'create-workspace'],
     ['new workspace', 'create-workspace'],
+    ['delete workspace', 'delete-workspace'],
+    ['remove workspace', 'delete-workspace'],
     ['terminal settings', 'settings:terminal'],
     ['browser settings', 'settings:browser'],
     ['ssh', 'settings:ssh'],

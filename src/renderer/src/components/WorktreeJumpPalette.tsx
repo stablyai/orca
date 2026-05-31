@@ -50,6 +50,7 @@ import {
 } from '@/components/browser-pane/browser-focus'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
+import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import {
   buildCmdJActionResults,
   buildCmdJSettingsResults,
@@ -119,6 +120,17 @@ type PaletteItem =
   | BrowserPaletteItem
 
 type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
+
+function appendPaletteListEntries(
+  target: PaletteListEntry[],
+  source: readonly PaletteItem[]
+): void {
+  // Why: query mode can expose generated-size workspace/tab result lists.
+  // Avoid the function argument limit from `push(...source)`.
+  for (const entry of source) {
+    target.push(entry)
+  }
+}
 
 type BrowserSelection = {
   worktree: Worktree
@@ -257,6 +269,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const wasVisibleRef = useRef(false)
   const skipRestoreFocusRef = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const fallbackFocusOuterFrameRef = useRef<number | null>(null)
+  const fallbackFocusInnerFrameRef = useRef<number | null>(null)
   const createLookupGuard = useMemo(() => createWorktreePaletteRequestGuard(), [])
   const preserveCreateLookupOnCloseRef = useRef(false)
 
@@ -488,6 +502,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     )
   }, [openModal])
 
+  const deleteActiveWorkspaceAction = useCallback(() => {
+    const { activeView, activeWorktreeId } = useAppStore.getState()
+    if (activeView !== 'terminal' || !activeWorktreeId) {
+      return
+    }
+    // Why: the delete confirmation is also a modal; let the palette close
+    // before mounting it so Radix focus teardown cannot fight the new dialog.
+    queueMicrotask(() => runWorktreeDelete(activeWorktreeId))
+  }, [])
+
   const openAddQuickCommandAction = useCallback(() => {
     openSettingsTarget({ pane: 'quick-commands', repoId: null, intent: 'add-quick-command' })
     openSettingsPage()
@@ -502,9 +526,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         openNewMarkdownFile: openNewMarkdownInActiveWorkspace,
         openNewTerminalTab: openNewTerminalTabInActiveWorkspace,
         openCreateWorkspace: openCreateWorkspaceAction,
+        deleteActiveWorkspace: deleteActiveWorkspaceAction,
         openAddQuickCommand: openAddQuickCommandAction
       }),
     [
+      deleteActiveWorkspaceAction,
       openAddQuickCommandAction,
       openCreateWorkspaceAction,
       openNewBrowserTabInActiveWorkspace,
@@ -612,7 +638,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: hasQuery ? 'Workspaces' : 'Recent Workspaces'
         })
       }
-      entries.push(...visibleWorktreeItems)
+      appendPaletteListEntries(entries, visibleWorktreeItems)
       if (showCreateAction) {
         // Why: the typed create affordance is workspace-scoped, so keep it
         // directly under workspace matches instead of after actions/tabs.
@@ -634,7 +660,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: 'Actions & Settings'
         })
       }
-      entries.push(...visibleMiddleItems)
+      appendPaletteListEntries(entries, visibleMiddleItems)
     }
     if (visibleBrowserItems.length > 0) {
       if (showBrowserHeader) {
@@ -644,7 +670,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: 'Browser Tabs'
         })
       }
-      entries.push(...visibleBrowserItems)
+      appendPaletteListEntries(entries, visibleBrowserItems)
     }
     return entries
   }, [hasQuery, paletteSections, showCreateAction, worktreeItems.length])
@@ -727,9 +753,25 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     listRef.current?.scrollTo(0, 0)
   }, [])
 
+  const cancelFallbackFocusFrames = useCallback((): void => {
+    if (fallbackFocusOuterFrameRef.current !== null) {
+      cancelAnimationFrame(fallbackFocusOuterFrameRef.current)
+      fallbackFocusOuterFrameRef.current = null
+    }
+    if (fallbackFocusInnerFrameRef.current !== null) {
+      cancelAnimationFrame(fallbackFocusInnerFrameRef.current)
+      fallbackFocusInnerFrameRef.current = null
+    }
+  }, [])
+
+  useEffect(() => cancelFallbackFocusFrames, [cancelFallbackFocusFrames])
+
   const focusFallbackSurface = useCallback(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    cancelFallbackFocusFrames()
+    fallbackFocusOuterFrameRef.current = requestAnimationFrame(() => {
+      fallbackFocusOuterFrameRef.current = null
+      fallbackFocusInnerFrameRef.current = requestAnimationFrame(() => {
+        fallbackFocusInnerFrameRef.current = null
         const xterm = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
         if (xterm) {
           xterm.focus()
@@ -741,7 +783,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
       })
     })
-  }, [])
+  }, [cancelFallbackFocusFrames])
 
   const requestBrowserFocus = useCallback(
     (detail: { pageId: string; target: 'webview' | 'address-bar' }) => {

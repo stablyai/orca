@@ -97,6 +97,13 @@ export type MRComment = {
 }
 
 export type GitLabCommentResult = { ok: true; comment: MRComment } | { ok: false; error: string }
+export type GitLabDiscussionResolveResult = { ok: true } | { ok: false; error: string }
+
+export type GitLabJobTraceResult = { ok: true; trace: string } | { ok: false; error: string }
+
+export type GitLabRetryJobResult =
+  | { ok: true; job?: GitLabPipelineJob }
+  | { ok: false; error: string }
 
 export type GitLabIssueInfo = {
   number: number
@@ -120,11 +127,56 @@ export type GitLabViewer = {
   email: string | null
 }
 
+export type GitLabAuthDiagnostic = {
+  glabAvailable: boolean
+  authenticated: boolean
+  hosts: string[]
+  activeHost: string | null
+  envTokenInProcess: 'GITLAB_TOKEN' | 'GLAB_TOKEN' | null
+  error: string | null
+}
+
+export type GitLabRateLimitBucket = {
+  limit: number
+  remaining: number
+  resetAt: number | null
+}
+
+export type GitLabRateLimitSnapshot = {
+  rest: GitLabRateLimitBucket | null
+  host: string | null
+  fetchedAt: number
+}
+
+export type GetGitLabRateLimitResult =
+  | { ok: true; snapshot: GitLabRateLimitSnapshot }
+  | { ok: false; error: string }
+
 export type GitLabAssignableUser = {
+  id?: number
   username: string
   name: string | null
   avatarUrl: string
+  state?: string | null
 }
+
+export type GitLabMRApprovalRule = {
+  id: number
+  name: string
+  approvalsRequired: number
+  approved: boolean
+}
+
+export type GitLabMRApprovalState = {
+  approvalsRequired: number | null
+  approvalsLeft: number | null
+  approvedBy: GitLabAssignableUser[]
+  rules: GitLabMRApprovalRule[]
+}
+
+export type GitLabMRReviewersUpdateResult =
+  | { ok: true; reviewers: GitLabAssignableUser[] }
+  | { ok: false; error: string }
 
 export type GitLabWorkItem = {
   id: string
@@ -159,6 +211,17 @@ export type GitLabMRFile = {
   deletions: number
   /** GitLab marks files above its diff size limit as binary; we skip content fetches for these. */
   isBinary: boolean
+  diff?: string
+}
+
+export type GitLabMRInlineCommentInput = {
+  body: string
+  path: string
+  oldPath?: string
+  line: number
+  baseSha: string
+  startSha: string
+  headSha: string
 }
 
 // Why: parallel of GitHubProjectSettings, scoped to plain GitLab
@@ -212,6 +275,7 @@ export type GitLabTodo = {
 // component is reusable.
 export type GitLabPipelineJob = {
   id: number
+  pipelineId?: number
   name: string
   /** GitLab stage name, e.g. 'build' / 'test' / 'deploy'. */
   stage: string
@@ -238,8 +302,13 @@ export type GitLabWorkItemDetails = {
    *  Files tab; the dialog reads `body` for now. */
   headSha?: string
   baseSha?: string
+  startSha?: string
+  files?: GitLabMRFile[]
   /** MR-only — populated when the MR's head_pipeline exists. */
   pipelineJobs?: GitLabPipelineJob[]
+  /** MR-only reviewers and approval status. */
+  reviewers?: GitLabAssignableUser[]
+  approvalState?: GitLabMRApprovalState
   participants?: GitLabAssignableUser[]
   /** Issue-only — usernames of current assignees. */
   assignees?: string[]
@@ -255,6 +324,13 @@ export type GitLabIssueUpdate = {
   removeLabels?: string[]
   addAssignees?: string[]
   removeAssignees?: string[]
+}
+
+export type GitLabMRUpdate = {
+  title?: string
+  body?: string
+  addLabels?: string[]
+  removeLabels?: string[]
 }
 
 // Why: GitLab-native MR list filter — Open / Merged / Closed / All —

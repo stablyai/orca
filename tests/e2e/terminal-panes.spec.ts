@@ -224,6 +224,24 @@ test.describe('Terminal Panes', () => {
     expect(activeLeafId).toMatch(UUID_RE)
   })
 
+  test('terminal context menu copies the stable pane ID', async ({ orcaPage }) => {
+    const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const leafId = snapshot.panes[0]?.leafId
+    if (!leafId) {
+      throw new Error('No terminal pane leaf id found')
+    }
+    const expectedPaneKey = `${snapshot.tabId}:${leafId}`
+
+    await openTerminalContextMenu(orcaPage)
+    await orcaPage.getByText('Copy Pane ID', { exact: true }).click()
+
+    await expect
+      .poll(() => orcaPage.evaluate(() => window.api.ui.readClipboardText()), { timeout: 3_000 })
+      .toBe(expectedPaneKey)
+    await expect(orcaPage.getByText('Pane ID copied', { exact: true })).toBeVisible()
+    expect(leafId).toMatch(UUID_RE)
+  })
+
   test('first Set Title from terminal context menu stays open for typing', async ({ orcaPage }) => {
     const title = `First menu title ${Date.now()}`
 

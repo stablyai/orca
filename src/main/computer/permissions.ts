@@ -1,28 +1,9 @@
-import { Notification, shell, systemPreferences } from 'electron'
+import { Notification, shell } from 'electron'
 
 const ACCESSIBILITY_SETTINGS_URL =
   'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
-const DEFAULT_ACCESSIBILITY_INSTRUCTIONS =
-  'System Settings -> Privacy & Security -> Accessibility -> enable Orca'
 
 const activePermissionNotifications = new Set<Notification>()
-
-/** Probe accessibility permissions; lazy -- invoked only on first failure path. */
-export async function checkAccessibilityPermission(): Promise<{
-  ok: boolean
-  instructions?: string
-}> {
-  if (process.platform !== 'darwin') {
-    return { ok: true }
-  }
-
-  try {
-    const ok = systemPreferences.isTrustedAccessibilityClient(false)
-    return ok ? { ok: true } : { ok: false, instructions: DEFAULT_ACCESSIBILITY_INSTRUCTIONS }
-  } catch {
-    return { ok: false, instructions: DEFAULT_ACCESSIBILITY_INSTRUCTIONS }
-  }
-}
 
 /** Surface a notification through Orca's existing notification system (do not duplicate UI). */
 export function notifyPermissionRequired(instructions: string): void {
@@ -46,6 +27,7 @@ export function notifyPermissionRequired(instructions: string): void {
     activePermissionNotifications.delete(notification)
     notification.removeListener('close', release)
     notification.removeListener('click', onClick)
+    notification.removeListener('failed', onFailed)
     if (releaseTimer) {
       clearTimeout(releaseTimer)
       releaseTimer = null
@@ -57,8 +39,17 @@ export function notifyPermissionRequired(instructions: string): void {
       void shell.openExternal(ACCESSIBILITY_SETTINGS_URL)
     }
   }
+  function onFailed(_event: unknown, error?: string): void {
+    // Why: Electron 42 reports macOS UNNotification delivery failures here,
+    // most commonly when a local validation build is not code-signed.
+    console.warn(
+      `[computer] Accessibility permission notification failed${error ? `: ${error}` : '.'}`
+    )
+    release()
+  }
   notification.on('close', release)
   notification.on('click', onClick)
+  notification.on('failed', onFailed)
   releaseTimer = setTimeout(release, 5 * 60 * 1000)
   if (typeof releaseTimer.unref === 'function') {
     releaseTimer.unref()

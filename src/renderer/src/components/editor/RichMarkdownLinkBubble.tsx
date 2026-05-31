@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import { ExternalLink, Pencil, Unlink } from 'lucide-react'
 
@@ -38,16 +38,20 @@ function LinkEditInput({
   onCancel: () => void
 }): React.JSX.Element {
   const [value, setValue] = useState(initialHref)
-  const ref = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    ref.current?.focus()
-    ref.current?.select()
+  const setInputElement = useCallback((input: HTMLInputElement | null) => {
+    if (!input) {
+      return
+    }
+    // Why: edit mode should start with the current URL selected, but typing
+    // changes must not re-select the field on every value update.
+    input.focus()
+    input.select()
   }, [])
 
   return (
     <input
-      ref={ref}
+      ref={setInputElement}
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={(e) => {

@@ -275,6 +275,15 @@ export type GitPushTarget = {
   remoteCreated?: boolean
 }
 
+export type GitHubPrStartPoint = {
+  baseBranch: string
+  pushTarget?: GitPushTarget
+  /** Verified PR head commit. Present when checkout can be tied to a stable SHA. */
+  headSha?: string
+  /** Exact local branch name to create/reuse when the PR head is a safe same-repo branch. */
+  branchNameOverride?: string
+}
+
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
 export type WorktreeMeta = {
   /** Immutable per-workspace-instance ID used to reject stale lineage after path reuse. */
@@ -427,6 +436,7 @@ export type Tab = {
   worktreeId: string
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
+  generatedLabel?: string | null
   customLabel: string | null
   color: string | null
   sortOrder: number
@@ -459,6 +469,8 @@ export type TerminalTab = {
    *  Why: agent CLIs overwrite the live title via OSC updates, but Orca still
    *  needs the original terminal label for numbering and reset behavior. */
   defaultTitle?: string
+  /** Stable opt-in label derived from the first known agent prompt. */
+  generatedTitle?: string | null
   customTitle: string | null
   color: string | null
   sortOrder: number
@@ -469,6 +481,12 @@ export type TerminalTab = {
    *  PTY and tab icon stay stable even if the default shell setting changes
    *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
+  /** Why: the coding-harness agent Orca launched in this tab. Lets the tab bar
+   *  show the provider icon immediately, before the agent emits its first hook
+   *  event (a freshly-launched, idle agent reports no live status yet). Live
+   *  hook status overrides this once the agent does anything. Plain terminals
+   *  and manually-started agents omit it. */
+  launchAgent?: TuiAgent
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
    *  not by the user doing work. Without this flag the resulting
@@ -682,6 +700,8 @@ export type WorkspaceSessionState = {
   lastVisitedAtByWorktreeId?: Record<string, number>
 }
 
+export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>
+
 // ─── GitHub ──────────────────────────────────────────────────────────
 export type PRState = 'open' | 'closed' | 'merged' | 'draft'
 export type IssueState = 'open' | 'closed'
@@ -762,6 +782,8 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedHasPR?: boolean | null
   cachedPRState?: PRState | null
   cachedChecksStatus?: CheckStatus | null
+  cachedMergeable?: PRMergeableState | null
+  cachedMergeStateStatus?: string | null
 }
 
 export type GitHubPRRefreshSkippedReason =
@@ -1051,9 +1073,25 @@ export type LinearWorkspace = LinearViewer & {
   id: string
   organizationId: string
   isLegacy?: true
+  credentialRevision?: number
 }
 
 export type LinearWorkspaceSelection = string | 'all'
+export type LinearWorkspaceSelector = LinearWorkspaceSelection | undefined
+export type LinearConcreteWorkspaceId = string
+
+export type LinearWorkspaceError = {
+  workspaceId: string
+  workspaceName?: string
+  type: 'auth' | 'rate_limited' | 'network' | 'unknown'
+  message: string
+}
+
+export type LinearCollectionResult<T> = {
+  items: T[]
+  errors?: LinearWorkspaceError[]
+  hasMore?: boolean
+}
 
 export type LinearConnectionStatus = {
   connected: boolean
@@ -1097,9 +1135,109 @@ export type LinearIssue = {
 
 export type LinearProjectSummary = {
   id: string
+  workspaceId?: string
+  workspaceName?: string
   name: string
   url?: string
   color?: string
+  icon?: string
+  description?: string
+  content?: string
+  status?: LinearProjectStatusSummary
+  health?: string | null
+  priority?: number | null
+  priorityLabel?: string | null
+  lead?: LinearProjectMemberSummary
+  members?: LinearProjectMemberSummary[]
+  teams?: {
+    id: string
+    name: string
+    key?: string
+  }[]
+  labels?: {
+    id: string
+    name: string
+    color?: string
+  }[]
+  startDate?: string | null
+  targetDate?: string | null
+  createdAt?: string
+  updatedAt?: string
+  completedAt?: string | null
+  canceledAt?: string | null
+  startedAt?: string | null
+  progress?: number | null
+  scope?: number | null
+  issueCount?: number
+  completedIssueCount?: number
+}
+
+export type LinearProjectStatusSummary = {
+  id: string
+  name: string
+  type?: string
+  color?: string
+}
+
+export type LinearProjectMemberSummary = {
+  id: string
+  displayName: string
+  avatarUrl?: string
+}
+
+export type LinearProjectMilestoneSummary = {
+  id: string
+  name: string
+  status?: string
+  targetDate?: string | null
+  progress?: number | null
+}
+
+export type LinearProjectResourceSummary = {
+  id: string
+  title: string
+  url: string
+  type?: string
+}
+
+export type LinearProjectUpdateSummary = {
+  id: string
+  body?: string
+  health?: string | null
+  url?: string
+  createdAt?: string
+  updatedAt?: string
+  user?: LinearProjectMemberSummary
+}
+
+export type LinearProjectDetail = LinearProjectSummary & {
+  milestones?: LinearProjectMilestoneSummary[]
+  resources?: LinearProjectResourceSummary[]
+  latestUpdate?: LinearProjectUpdateSummary
+}
+
+export type LinearCustomViewModel = 'issue' | 'project'
+
+export type LinearCustomViewSummary = {
+  id: string
+  workspaceId?: string
+  workspaceName?: string
+  name: string
+  description?: string
+  model: LinearCustomViewModel
+  url?: string
+  color?: string
+  icon?: string
+  shared?: boolean
+  team?: {
+    id: string
+    name?: string
+    key?: string
+  }
+  owner?: LinearProjectMemberSummary
+  creator?: LinearProjectMemberSummary
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type LinearIssueChildSummary = {
@@ -1120,6 +1258,11 @@ export type LinearComment = {
 }
 
 // ─── Issue Mutations ────────────────────────────────────────────────
+
+export type GitHubCreateIssueFields = {
+  labels?: string[]
+  assignees?: string[]
+}
 
 export type GitHubIssueUpdate = {
   state?: 'open' | 'closed'
@@ -1173,21 +1316,33 @@ export type GitHubOwnerRepo = GitHubRepositoryIdentity
 // (`from '../shared/types'`) keep working without changes.
 export type {
   GitLabAssignableUser,
+  GitLabAuthDiagnostic,
   GitLabCommentResult,
+  GitLabDiscussionResolveResult,
   GitLabIssueInfo,
   GitLabIssueState,
   GitLabIssueUpdate,
+  GitLabJobTraceResult,
+  GitLabRateLimitBucket,
+  GitLabRateLimitSnapshot,
+  GitLabMRApprovalRule,
+  GitLabMRApprovalState,
   GitLabMRFile,
+  GitLabMRInlineCommentInput,
+  GitLabMRReviewersUpdateResult,
+  GitLabMRUpdate,
   GitLabPagedResult,
   GitLabPipelineJob,
   GitLabProjectRef,
   GitLabProjectSettings,
+  GitLabRetryJobResult,
   GitLabReaction,
   GitLabTodo,
   GitLabTodoTargetType,
   GitLabViewer,
   GitLabWorkItem,
   GitLabWorkItemDetails,
+  GetGitLabRateLimitResult,
   ListMergeRequestsResult,
   MRCheckDetail,
   MRComment,
@@ -1393,6 +1548,19 @@ export type CreateWorktreeResult = {
   localBaseRefRefresh?: LocalBaseRefRefreshResult
 }
 
+export type PreservedWorktreeBranch = {
+  branchName: string
+  head?: string
+}
+
+export type RemoveWorktreeResult = {
+  preservedBranch?: PreservedWorktreeBranch
+}
+
+export type ForceDeleteWorktreeBranchResult = {
+  deleted: true
+}
+
 export type LocalBaseRefRefreshResult = {
   status: 'updated' | 'skipped_dirty_worktree' | 'skipped_not_fast_forward' | 'skipped_error'
   baseRef: string
@@ -1565,6 +1733,7 @@ export type ClaudeManagedAccountRuntimeSelection = {
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
 export type TuiAgent =
   | 'claude' // Claude Code
+  | 'openclaude' // OpenClaude
   | 'codex' // OpenAI Codex
   | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
@@ -1917,6 +2086,9 @@ export type GlobalSettings = {
   /** Why: disabling must persist so startup does not reinstall global agent
    *  hook entries right after the user removes them from Settings or CLI. */
   agentStatusHooksEnabled: boolean
+  /** Why: generated tab titles are semantic but subjective, so they stay opt-in
+   *  and manual renames remain the stronger user intent. */
+  tabAutoGenerateTitle: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
   /** Why: macOS terminals must choose between letting Option compose layout
@@ -2204,6 +2376,10 @@ export type WorktreeCardProperty =
   // view options.
   | 'inline-agents'
 
+export type AgentActivityDisplayMode = 'compact' | 'full'
+
+export type WorkspaceBoardColumnLayout = 'full' | 'fit'
+
 export type StatusBarItem =
   | 'claude'
   | 'codex'
@@ -2219,8 +2395,15 @@ export type TaskResumeState = {
   githubItemsPreset?: TaskViewPresetId | null
   githubItemsQuery?: string
   githubProjectHiddenFieldIdsByView?: Record<string, string[]>
+  linearMode?: 'issues' | 'projects' | 'views'
   linearPreset?: 'assigned' | 'created' | 'all' | 'completed'
   linearQuery?: string
+  linearContext?: {
+    kind: 'project' | 'view'
+    id: string
+    workspaceId: LinearConcreteWorkspaceId
+    model?: LinearCustomViewModel
+  }
 }
 
 export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
@@ -2252,9 +2435,10 @@ export type PersistedUIState = {
   uiZoomLevel: number
   editorFontZoomLevel: number
   worktreeCardProperties: WorktreeCardProperty[]
+  agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
-  workspaceBoardCompact?: boolean
+  workspaceBoardColumnLayout?: WorkspaceBoardColumnLayout
   workspaceBoardColumnWidth?: number
   /** One-shot migration flag for a short-lived build that persisted the
    *  default workspace statuses in reverse workflow order. Once stamped,

@@ -13,7 +13,7 @@ const MAX_QUICK_COMMAND_REPO_ID_LENGTH = 200
 const MAX_QUICK_COMMAND_TEXT_LENGTH = 4000
 const REMOVED_PRESET_IDS = new Set(['default-pwd', 'default-git-status'])
 
-export const DEFAULT_TERMINAL_QUICK_COMMANDS: TerminalQuickCommand[] = []
+const DEFAULT_TERMINAL_QUICK_COMMANDS: TerminalQuickCommand[] = []
 
 export function getDefaultTerminalQuickCommands(): TerminalQuickCommand[] {
   return DEFAULT_TERMINAL_QUICK_COMMANDS.map((command) => ({ ...command }))
@@ -58,12 +58,6 @@ export function isTerminalAgentQuickCommand(
   command: TerminalQuickCommand
 ): command is TerminalAgentQuickCommand {
   return getTerminalQuickCommandAction(command) === 'agent-prompt'
-}
-
-export function isTerminalCommandQuickCommand(
-  command: TerminalQuickCommand
-): command is TerminalCommandQuickCommand {
-  return getTerminalQuickCommandAction(command) === 'terminal-command'
 }
 
 export function supportsTerminalAgentQuickCommand(

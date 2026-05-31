@@ -22,6 +22,7 @@ const {
   healthCheckDaemonMock,
   getMacDaemonSystemResolverHealthMock,
   getDaemonLaunchIdentityMock,
+  isDaemonOlderThanPathMtimeMock,
   killStaleDaemonMock,
   getProcessStartedAtMsMock,
   daemonClientMock,
@@ -54,6 +55,10 @@ const {
         }
         return this
       },
+      removeListener(event: string, cb: () => void) {
+        handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+        return this
+      },
       destroy() {}
     }
   })
@@ -61,6 +66,7 @@ const {
   const healthCheckDaemonMock = vi.fn(async () => true)
   const getMacDaemonSystemResolverHealthMock = vi.fn(() => 'healthy')
   const getDaemonLaunchIdentityMock = vi.fn(() => 'match')
+  const isDaemonOlderThanPathMtimeMock = vi.fn(() => false)
   const killStaleDaemonMock = vi.fn(async () => true)
   const getProcessStartedAtMsMock = vi.fn(() => 1_000_000)
 
@@ -93,6 +99,7 @@ const {
     healthCheckDaemonMock,
     getMacDaemonSystemResolverHealthMock,
     getDaemonLaunchIdentityMock,
+    isDaemonOlderThanPathMtimeMock,
     killStaleDaemonMock,
     getProcessStartedAtMsMock,
     daemonClientMock,
@@ -161,6 +168,7 @@ vi.mock('./daemon-health', () => ({
   getDaemonLaunchIdentity: getDaemonLaunchIdentityMock,
   getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock,
   healthCheckDaemon: healthCheckDaemonMock,
+  isDaemonOlderThanPathMtime: isDaemonOlderThanPathMtimeMock,
   killStaleDaemon: killStaleDaemonMock,
   getProcessStartedAtMs: getProcessStartedAtMsMock
 }))
@@ -252,6 +260,8 @@ async function importFresh() {
   getMacDaemonSystemResolverHealthMock.mockReset()
   getMacDaemonSystemResolverHealthMock.mockReturnValue('healthy')
   getDaemonLaunchIdentityMock.mockClear()
+  isDaemonOlderThanPathMtimeMock.mockReset()
+  isDaemonOlderThanPathMtimeMock.mockReturnValue(false)
   killStaleDaemonMock.mockClear()
   getAppPathMock.mockReset()
   getAppPathMock.mockReturnValue('/fake/app')
@@ -450,6 +460,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           }
           return this
         },
+        removeListener(event: string, cb: () => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
         destroy() {}
       }
     })
@@ -577,6 +591,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           }
           return this
         },
+        removeListener(event: string, cb: () => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
         destroy() {}
       }
     })
@@ -588,6 +606,48 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(requestMock).toHaveBeenCalledWith('shutdown', { killSessions: true })
     // The fallback killStaleDaemon must NOT fire when the RPC path worked.
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
+  })
+
+  it('cleans up daemon socket probe listeners when the probe times out', async () => {
+    vi.useFakeTimers()
+    try {
+      const handlers: Record<string, Set<() => void>> = {
+        connect: new Set(),
+        error: new Set()
+      }
+      const socket = {
+        on(event: string, cb: () => void) {
+          handlers[event]?.add(cb)
+          return this
+        },
+        removeListener(event: string, cb: () => void) {
+          handlers[event]?.delete(cb)
+          return this
+        },
+        destroy: vi.fn(),
+        listenerCount(event: string) {
+          return handlers[event]?.size ?? 0
+        }
+      }
+      probeSocketExistsMock.mockReturnValue(true)
+      netConnectMock.mockReturnValueOnce(socket)
+      const mod = await importFresh()
+
+      const cleanup = mod.cleanupDaemonForProtocol('/fake/daemon', PROTOCOL_VERSION)
+      await Promise.resolve()
+
+      expect(socket.listenerCount('connect')).toBe(1)
+      expect(socket.listenerCount('error')).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(1000)
+
+      await expect(cleanup).resolves.toEqual({ cleaned: false, killedCount: 0 })
+      expect(socket.destroy).toHaveBeenCalledTimes(1)
+      expect(socket.listenerCount('connect')).toBe(0)
+      expect(socket.listenerCount('error')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('coalesces concurrent restartDaemon() calls so the 7-step sequence runs exactly once', async () => {
@@ -969,7 +1029,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(child.unref).not.toHaveBeenCalled()
   })
 
-  it('keeps packaged healthy-daemon reuse independent of dev app-path identity', async () => {
+  it('preserves a packaged healthy daemon when its app bundle is current', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
@@ -981,12 +1041,76 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     killStaleDaemonMock.mockClear()
     forkMock.mockClear()
     isPackagedMock.mockReturnValue(true)
-    getDaemonLaunchIdentityMock.mockReturnValueOnce('mismatch')
 
     await launcher('/fake/socket', '/fake/token')
 
-    expect(getDaemonLaunchIdentityMock).not.toHaveBeenCalled()
+    expect(getDaemonLaunchIdentityMock).toHaveBeenCalledWith(
+      '/fake/userData/daemon',
+      '/fake/socket',
+      '/fake/token',
+      '/fake/app/out/main/daemon-entry.js'
+    )
+    expect(isDaemonOlderThanPathMtimeMock).toHaveBeenCalledWith(
+      '/fake/userData/daemon',
+      '/fake/socket',
+      '/fake/token',
+      '/fake/app/out/main/daemon-entry.js'
+    )
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()
+  })
+
+  it('respawns a packaged daemon that predates the current app bundle', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    isPackagedMock.mockReturnValue(true)
+    isDaemonOlderThanPathMtimeMock.mockReturnValueOnce(true)
+    forkMock.mockImplementationOnce(() => {
+      const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+        message: [],
+        error: [],
+        exit: []
+      }
+      return {
+        pid: 12345,
+        on(event: string, cb: (arg?: unknown) => void) {
+          handlers[event]?.push(cb)
+          if (event === 'message') {
+            queueMicrotask(() => cb({ type: 'ready' }))
+          }
+          return this
+        },
+        off(event: string, cb: (arg?: unknown) => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
+        disconnect: vi.fn(),
+        unref: vi.fn()
+      }
+    })
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(isDaemonOlderThanPathMtimeMock).toHaveBeenCalledWith(
+      '/fake/userData/daemon',
+      '/fake/socket',
+      '/fake/token',
+      '/fake/app/out/main/daemon-entry.js'
+    )
+    expect(killStaleDaemonMock).toHaveBeenCalledWith(
+      '/fake/userData/daemon',
+      '/fake/socket',
+      '/fake/token'
+    )
+    expect(forkMock).toHaveBeenCalledWith(
+      '/fake/app/out/main/daemon-entry.js',
+      ['--socket', '/fake/socket', '--token', '/fake/token'],
+      expect.objectContaining({ detached: true })
+    )
   })
 })

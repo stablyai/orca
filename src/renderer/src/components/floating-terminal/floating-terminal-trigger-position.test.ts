@@ -21,8 +21,8 @@ describe('floating terminal trigger position', () => {
     stubViewport(1200, 800)
 
     expect(getDefaultFloatingTerminalTriggerPosition()).toEqual({
-      left: 1144,
-      top: 696
+      left: 1140,
+      top: 692
     })
   })
 
@@ -30,7 +30,7 @@ describe('floating terminal trigger position', () => {
     stubViewport(640, 480)
 
     expect(clampFloatingTerminalTriggerPosition({ left: 900, top: -20 })).toEqual({
-      left: 600,
+      left: 596,
       top: 36
     })
   })
@@ -42,8 +42,8 @@ describe('floating terminal trigger position', () => {
     stubViewport(1200, 800)
 
     expect(resolveFloatingTerminalTriggerPosition(initialPosition, 'default')).toEqual({
-      left: 1144,
-      top: 696
+      left: 1140,
+      top: 692
     })
   })
 

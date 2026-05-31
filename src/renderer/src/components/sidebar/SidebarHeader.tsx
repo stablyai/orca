@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Kanban, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -11,22 +11,49 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
   const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
   const [workspaceBoardMenuOpen, setWorkspaceBoardMenuOpen] = useState(false)
+  const workspaceBoardOpenRef = useRef(workspaceBoardOpen)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
   const groupBy = useAppStore((s) => s.groupBy)
   const canCreateWorkspace = repos.length > 0
   const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
+  workspaceBoardOpenRef.current = workspaceBoardOpen
 
-  const handleWorkspaceBoardOpenChange = useCallback((open: boolean) => {
-    setWorkspaceBoardOpen(open)
-    if (!open) {
-      setWorkspaceBoardMenuOpen(false)
+  const openWorkspaceBoard = useCallback(() => {
+    if (workspaceBoardOpenRef.current) {
+      return
     }
+    workspaceBoardOpenRef.current = true
+    // Why: opening the board is the user action; recording here avoids a
+    // post-render bookkeeping Effect in the drawer.
+    useAppStore.getState().recordFeatureInteraction('workspace-board')
+    setWorkspaceBoardOpen(true)
   }, [])
+
+  const closeWorkspaceBoard = useCallback(() => {
+    workspaceBoardOpenRef.current = false
+    setWorkspaceBoardOpen(false)
+    setWorkspaceBoardMenuOpen(false)
+  }, [])
+
+  const handleWorkspaceBoardOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        openWorkspaceBoard()
+        return
+      }
+      closeWorkspaceBoard()
+    },
+    [closeWorkspaceBoard, openWorkspaceBoard]
+  )
 
   const handleWorkspaceBoardToggle = useCallback(() => {
-    setWorkspaceBoardOpen((open) => !open)
-  }, [])
+    if (workspaceBoardOpen) {
+      closeWorkspaceBoard()
+      return
+    }
+    openWorkspaceBoard()
+  }, [closeWorkspaceBoard, openWorkspaceBoard, workspaceBoardOpen])
 
   useEffect(() => {
     if (!workspaceBoardOpen) {
@@ -54,14 +81,14 @@ const SidebarHeader = React.memo(function SidebarHeader() {
         return
       }
       event.preventDefault()
-      setWorkspaceBoardOpen(false)
+      closeWorkspaceBoard()
     }
 
     // Why: the workspace board is a non-modal companion panel, so focus may
     // be outside the sheet when Escape should still dismiss it.
     document.addEventListener('keydown', handleKeyDown, true)
     return () => document.removeEventListener('keydown', handleKeyDown, true)
-  }, [workspaceBoardMenuOpen, workspaceBoardOpen])
+  }, [closeWorkspaceBoard, workspaceBoardMenuOpen, workspaceBoardOpen])
 
   return (
     <>

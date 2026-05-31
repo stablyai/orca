@@ -24,6 +24,8 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
+import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
+import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
@@ -174,6 +176,14 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
   return formatted
 }
 
+function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
+  const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
+  if (!trimmed || trimmed === 'xterm-256color') {
+    return null
+  }
+  return trimmed.split(/[\\/]/).pop() || null
+}
+
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
@@ -230,6 +240,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   if (process.platform === 'win32') {
     const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
+    const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellPath)
     // Why: daemon spawn requests can carry either a canonical shell family
     // (`powershell.exe`) or a concrete PowerShell executable path from a
     // one-off override. Normalize both forms back to the PowerShell family so
@@ -238,18 +249,24 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     const shouldResolvePowerShellFamily =
       opts.terminalWindowsPowerShellImplementation !== undefined ||
       pathWin32.basename(shellPath) === shellPath
-    shellPath = shouldResolvePowerShellFamily
-      ? (resolveEffectiveWindowsPowerShell({
-          shellFamily:
-            normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-              ? 'powershell.exe'
-              : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                ? normalizedShellFamily
-                : undefined,
-          implementation: opts.terminalWindowsPowerShellImplementation,
-          pwshAvailable: isPwshAvailable()
-        }) ?? shellPath)
-      : shellPath
+    if (resolvedGitBashPath) {
+      shellPath = resolvedGitBashPath
+    } else if (shellPath === WINDOWS_GIT_BASH_SHELL) {
+      shellPath = 'powershell.exe'
+    } else {
+      shellPath = shouldResolvePowerShellFamily
+        ? (resolveEffectiveWindowsPowerShell({
+            shellFamily:
+              normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+                ? 'powershell.exe'
+                : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+                  ? normalizedShellFamily
+                  : undefined,
+            implementation: opts.terminalWindowsPowerShellImplementation,
+            pwshAvailable: isPwshAvailable()
+          }) ?? shellPath)
+        : shellPath
+    }
     // Why: matches LocalPtyProvider — CMD needs chcp 65001, PowerShell needs
     // $PROFILE dot-sourcing, WSL needs a --bash entry with a translated cwd.
     // Reuse the same shared launch-args helper after resolving the effective
@@ -264,6 +281,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
     validationCwd = resolved.validationCwd
+    if (isWindowsGitBashShellPath(shellPath)) {
+      // Why: Git for Windows login startup files otherwise cd to $HOME,
+      // ignoring node-pty's cwd for repo-scoped terminals.
+      env.CHERE_INVOKING ??= '1'
+    }
     const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       if (codexHomeWslInfo) {
@@ -386,6 +408,20 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   return {
     pid: proc.pid,
+    getForegroundProcess: () => {
+      // Why: node-pty's `.process` getter reports the PTY's live foreground
+      // process name (the agent running in the shell, or the shell itself) and
+      // updates as it changes. Null once the child is gone — `.process` on a
+      // reaped pty can read a recycled pid.
+      if (dead) {
+        return null
+      }
+      try {
+        return normalizeForegroundProcessName(proc.process)
+      } catch {
+        return null
+      }
+    },
     write: (data) => {
       if (dead) {
         return

@@ -1020,14 +1020,16 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
  * Stage a file.
  */
 export async function stageFile(worktreePath: string, filePath: string): Promise<void> {
-  await gitExecFileAsync(['add', '--', filePath], { cwd: worktreePath })
+  await gitExecFileAsync(['add', '--', literalPathspec(filePath)], { cwd: worktreePath })
 }
 
 /**
  * Unstage a file.
  */
 export async function unstageFile(worktreePath: string, filePath: string): Promise<void> {
-  await gitExecFileAsync(['restore', '--staged', '--', filePath], { cwd: worktreePath })
+  await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath)], {
+    cwd: worktreePath
+  })
 }
 
 export async function getStagedCommitContext(
@@ -1105,7 +1107,7 @@ export async function discardChanges(worktreePath: string, filePath: string): Pr
 
   let tracked = false
   try {
-    await gitExecFileAsync(['ls-files', '--error-unmatch', '--', filePath], {
+    await gitExecFileAsync(['ls-files', '--error-unmatch', '--', literalPathspec(filePath)], {
       cwd: worktreePath
     })
     tracked = true
@@ -1114,9 +1116,12 @@ export async function discardChanges(worktreePath: string, filePath: string): Pr
   }
 
   if (tracked) {
-    await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', filePath], {
-      cwd: worktreePath
-    })
+    await gitExecFileAsync(
+      ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath)],
+      {
+        cwd: worktreePath
+      }
+    )
     return
   }
 
@@ -1127,6 +1132,11 @@ export async function discardChanges(worktreePath: string, filePath: string): Pr
 
 function normalizeGitPathForCompare(filePath: string): string {
   return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
+}
+
+function literalPathspec(filePath: string): string {
+  // Why: source-control selections are concrete paths, not user-authored Git globs.
+  return `:(literal)${filePath}`
 }
 
 function isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
@@ -1144,10 +1154,19 @@ async function listTrackedPathSpecs(
   const trackedPaths: string[] = []
   for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-    const { stdout } = await gitExecFileAsync(['ls-files', '-z', '--', ...chunk], {
-      cwd: worktreePath
-    })
-    trackedPaths.push(...stdout.split('\0').filter(Boolean))
+    const { stdout } = await gitExecFileAsync(
+      ['ls-files', '-z', '--', ...chunk.map(literalPathspec)],
+      {
+        cwd: worktreePath
+      }
+    )
+    // Why: a tracked directory can contain enough paths for push(...split)
+    // to exceed the JavaScript argument limit before discard decisions run.
+    for (const trackedPath of stdout.split('\0')) {
+      if (trackedPath) {
+        trackedPaths.push(trackedPath)
+      }
+    }
   }
   return trackedPaths
 }
@@ -1160,7 +1179,9 @@ async function cleanUntrackedPaths(
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
     if (chunk.length > 0) {
       // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
-      await gitExecFileAsync(['clean', '-ffdx', '--', ...chunk], { cwd: worktreePath })
+      await gitExecFileAsync(['clean', '-ffdx', '--', ...chunk.map(literalPathspec)], {
+        cwd: worktreePath
+      })
     }
   }
 }
@@ -1193,9 +1214,12 @@ export async function bulkDiscardChanges(worktreePath: string, filePaths: string
     async () => {
       for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
         const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-        await gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', ...chunk], {
-          cwd: worktreePath
-        })
+        await gitExecFileAsync(
+          ['restore', '--worktree', '--source=HEAD', '--', ...chunk.map(literalPathspec)],
+          {
+            cwd: worktreePath
+          }
+        )
       }
     }
   )
@@ -1224,7 +1248,7 @@ export async function bulkStageFiles(worktreePath: string, filePaths: string[]):
   }
   for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-    await gitExecFileAsync(['add', '--', ...chunk], { cwd: worktreePath })
+    await gitExecFileAsync(['add', '--', ...chunk.map(literalPathspec)], { cwd: worktreePath })
   }
 }
 
@@ -1237,6 +1261,8 @@ export async function bulkUnstageFiles(worktreePath: string, filePaths: string[]
   }
   for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-    await gitExecFileAsync(['restore', '--staged', '--', ...chunk], { cwd: worktreePath })
+    await gitExecFileAsync(['restore', '--staged', '--', ...chunk.map(literalPathspec)], {
+      cwd: worktreePath
+    })
   }
 }

@@ -24,7 +24,7 @@ export type RpcFailure = {
 
 export type RpcResponse = RpcSuccess | RpcFailure
 
-export const PAIRING_OFFER_VERSION = 2
+const PAIRING_OFFER_VERSION = 2
 
 export const PairingOfferSchema = z.object({
   v: z.literal(PAIRING_OFFER_VERSION),

@@ -36,7 +36,7 @@ export function normalizeAbsolutePath(pathValue: string): NormalizedAbsolutePath
     }
   }
 
-  const uncMatch = /^\\\\([^\\/]+)[\\/]+([^\\/]+)(?:[\\/]*(.*))?$/.exec(pathValue)
+  const uncMatch = /^(?:\\\\|\/\/)([^\\/]+)[\\/]+([^\\/]+)(?:[\\/]*(.*))?$/.exec(pathValue)
   if (uncMatch) {
     const server = uncMatch[1]
     const share = uncMatch[2]

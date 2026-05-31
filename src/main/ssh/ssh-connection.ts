@@ -94,8 +94,9 @@ export class SshConnection {
     if (!this.client) {
       throw new Error('Not connected')
     }
-    return new Promise((res, rej) =>
-      this.client!.exec(wrapRemoteCommandForPosixShell(cmd), (e, ch) => (e ? rej(e) : res(ch)))
+    const client = this.client
+    return this.waitForSshCallback('SSH exec channel timed out', (callback) =>
+      client.exec(wrapRemoteCommandForPosixShell(cmd), callback)
     )
   }
 
@@ -106,7 +107,43 @@ export class SshConnection {
     if (!this.client) {
       throw new Error('Not connected')
     }
-    return new Promise((res, rej) => this.client!.sftp((e, s) => (e ? rej(e) : res(s))))
+    const client = this.client
+    return this.waitForSshCallback('SSH SFTP channel timed out', (callback) =>
+      client.sftp(callback)
+    )
+  }
+
+  private waitForSshCallback<T>(
+    timeoutMessage: string,
+    register: (callback: (error: Error | undefined, value: T) => void) => void
+  ): Promise<T> {
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const timer = setTimeout(() => {
+        settled = true
+        reject(new Error(timeoutMessage))
+      }, CONNECT_TIMEOUT_MS)
+      const finish = (error: Error | undefined, value?: T): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timer)
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve(value as T)
+      }
+
+      try {
+        // Why: higher-level channel timers start only after ssh2 invokes its
+        // open callback. A stale SSH socket can otherwise keep exec/sftp stuck.
+        register(finish)
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)))
+      }
+    })
   }
 
   async uploadDirectory(localDir: string, remoteDir: string): Promise<void> {
@@ -372,47 +409,60 @@ export class SshConnection {
         let stdout = ''
         let stderr = ''
         let settled = false
-        const timeout = setTimeout(() => {
+        const cleanup = (): void => {
+          clearTimeout(timeout)
+          channel.off('data', onStdoutData)
+          channel.stderr.off('data', onStderrData)
+          channel.off('error', onError)
+          channel.off('close', onClose)
+          this.systemCommandChannels.delete(channel)
+        }
+        const settle = (callback: () => void): void => {
+          if (settled) {
+            return
+          }
           settled = true
-          channel.close()
-          reject(new Error('System SSH connection timed out'))
+          cleanup()
+          callback()
+        }
+        const onStdoutData = (data: Buffer): void => {
+          stdout += data.toString('utf-8')
+        }
+        const onStderrData = (data: Buffer): void => {
+          stderr += data.toString('utf-8')
+        }
+        const onError = (err: Error): void => {
+          settle(() => reject(err))
+        }
+        const onClose = (code: number | null): void => {
+          settle(() => {
+            if (this.disposed || connectGeneration !== this.connectGeneration) {
+              reject(new Error('SSH connection attempt was cancelled'))
+              return
+            }
+            if (code !== 0 || !stdout.includes('ORCA-SYSTEM-SSH-OK')) {
+              reject(
+                new Error(
+                  `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderr ? ` stderr: ${stderr.trim()}` : ''}`
+                )
+              )
+              return
+            }
+            this.setState('connected')
+            resolve()
+          })
+        }
+        const timeout = setTimeout(() => {
+          settle(() => {
+            channel.close()
+            reject(new Error('System SSH connection timed out'))
+          })
         }, CONNECT_TIMEOUT_MS)
 
-        channel.on('data', (data: Buffer) => {
-          stdout += data.toString('utf-8')
-        })
-        channel.stderr.on('data', (data: Buffer) => {
-          stderr += data.toString('utf-8')
-        })
-        channel.on('error', (err: Error) => {
-          if (settled) {
-            return
-          }
-          settled = true
-          clearTimeout(timeout)
-          reject(err)
-        })
-        channel.on('close', (code: number | null) => {
-          if (settled) {
-            return
-          }
-          settled = true
-          clearTimeout(timeout)
-          if (this.disposed || connectGeneration !== this.connectGeneration) {
-            reject(new Error('SSH connection attempt was cancelled'))
-            return
-          }
-          if (code !== 0 || !stdout.includes('ORCA-SYSTEM-SSH-OK')) {
-            reject(
-              new Error(
-                `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderr ? ` stderr: ${stderr.trim()}` : ''}`
-              )
-            )
-            return
-          }
-          this.setState('connected')
-          resolve()
-        })
+        channel.on('data', onStdoutData)
+        channel.stderr.on('data', onStderrData)
+        channel.on('error', onError)
+        channel.on('close', onClose)
       })
     } catch (err) {
       this.useSystemSshTransport = false

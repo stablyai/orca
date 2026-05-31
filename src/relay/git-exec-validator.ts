@@ -19,6 +19,7 @@ const ALLOWED_GIT_SUBCOMMANDS = new Set([
   'diff',
   'ls-files',
   'for-each-ref',
+  'check-ref-format',
   'config'
 ])
 const CONFIG_READ_ONLY_FLAGS = new Set(['--get', '--get-all', '--list', '--get-regexp', '-l'])

@@ -52,14 +52,22 @@ vi.mock('./project-header-drag', () => ({
 vi.mock('./WorktreeCard', () => ({
   default: ({
     worktree,
+    contentIndent,
+    flushSurface,
     lineageChildren
   }: {
     worktree: Worktree
+    contentIndent?: number
+    flushSurface?: boolean
     lineageChildren?: React.ReactNode
   }) =>
     React.createElement(
       'section',
-      { 'data-worktree-card-id': worktree.id },
+      {
+        'data-worktree-card-id': worktree.id,
+        'data-content-indent': contentIndent,
+        'data-flush-surface': flushSurface ? 'true' : undefined
+      },
       React.createElement('h2', null, worktree.displayName),
       lineageChildren
     )
@@ -191,6 +199,7 @@ function setLineageFixtureState(groupBy: 'none' | 'repo' = 'none'): void {
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
+    agentStatusEpoch: 0,
     agentStatusByPaneKey: {},
     browserTabsByWorktree: {},
     clearPendingRevealWorktreeId: vi.fn(),
@@ -207,6 +216,7 @@ function setLineageFixtureState(groupBy: 'none' | 'repo' = 'none'): void {
     ptyIdsByTabId: {},
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
+    retainedAgentsByPaneKey: {},
     repos: [repo],
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),
@@ -259,6 +269,7 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
+    agentStatusEpoch: 0,
     agentStatusByPaneKey: {},
     browserTabsByWorktree: {},
     clearPendingRevealWorktreeId: vi.fn(),
@@ -276,6 +287,7 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
     ptyIdsByTabId: {},
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
+    retainedAgentsByPaneKey: {},
     repos: [repo],
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),
@@ -356,12 +368,15 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(parentRow).not.toContain('padding-left')
   })
 
-  it('adds one group indentation step when grouped by project', async () => {
+  it('passes one group indentation step into the card when grouped by project', async () => {
     setLineageFixtureState('repo')
     const markup = await renderWorktreeListMarkup()
 
     const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
 
-    expect(parentRow).toContain('style="padding-left:18px"')
+    expect(parentRow).not.toContain('padding-left')
+    expect(markup).toContain(
+      '<section data-worktree-card-id="parent" data-content-indent="18" data-flush-surface="true">'
+    )
   })
 })

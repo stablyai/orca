@@ -25,6 +25,7 @@ type WorktreeTitleInlineRenameProps = {
   className?: string
   editingClassName?: string
   inputClassName?: string
+  titleWrapper?: (title: React.ReactElement) => React.ReactElement
   onEditingChange?: (editing: boolean) => void
   onRename: (displayName: string) => Promise<void> | void
 }
@@ -36,14 +37,22 @@ export function WorktreeTitleInlineRename({
   className,
   editingClassName,
   inputClassName,
+  titleWrapper,
   onEditingChange,
   onRename
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
   const editingRef = useRef(false)
   const savingRef = useRef(false)
+  const mountedRef = useRef(true)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(displayName)
   const [saving, setSaving] = useState(false)
+
+  const handleRootRef = useCallback((node: HTMLSpanElement | null): void => {
+    // Why: rename can resolve after this inline title unmounts; the rendered
+    // root owns that stale-write guard without a mount-only Effect.
+    mountedRef.current = node !== null
+  }, [])
 
   const setEditingMode = useCallback(
     (nextEditing: boolean) => {
@@ -104,12 +113,18 @@ export function WorktreeTitleInlineRename({
     setSaving(true)
     try {
       await onRename(commit.displayName)
-      setEditingMode(false)
+      if (mountedRef.current) {
+        setEditingMode(false)
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+      }
     } finally {
       savingRef.current = false
-      setSaving(false)
+      if (mountedRef.current) {
+        setSaving(false)
+      }
     }
   }, [cancelRename, displayName, onRename, setEditingMode, value])
 
@@ -130,6 +145,7 @@ export function WorktreeTitleInlineRename({
   if (editing) {
     return (
       <span
+        ref={handleRootRef}
         className={cn(
           'relative grid min-w-0 truncate leading-tight text-foreground',
           showUnreadEmphasis ? 'font-semibold' : 'font-normal',
@@ -173,6 +189,7 @@ export function WorktreeTitleInlineRename({
 
   const title = (
     <span
+      ref={handleRootRef}
       className={cn(
         'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
         showUnreadEmphasis ? 'font-semibold' : 'font-normal',
@@ -187,6 +204,10 @@ export function WorktreeTitleInlineRename({
       {displayName}
     </span>
   )
+
+  if (titleWrapper) {
+    return titleWrapper(title)
+  }
 
   return (
     <Tooltip>

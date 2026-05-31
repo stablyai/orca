@@ -264,6 +264,9 @@ export class DaemonServer {
         }
       }
 
+      case 'cancelCreateOrAttach':
+        return {}
+
       case 'write':
         try {
           this.lastInputAtBySessionId.set(request.payload.sessionId, performance.now())
@@ -305,6 +308,9 @@ export class DaemonServer {
       case 'getCwd':
         return { cwd: await this.host.getCwd(request.payload.sessionId) }
 
+      case 'getForegroundProcess':
+        return { foregroundProcess: this.host.getForegroundProcess(request.payload.sessionId) }
+
       case 'clearScrollback':
         this.host.clearScrollback(request.payload.sessionId)
         return {}
@@ -319,7 +325,7 @@ export class DaemonServer {
         return { pong: true }
 
       case 'systemResolverHealth':
-        return { health: readCurrentProcessMacSystemResolverHealth() }
+        return { health: await readCurrentProcessMacSystemResolverHealth() }
 
       case 'shutdown':
         if (request.payload.killSessions) {
@@ -327,10 +333,8 @@ export class DaemonServer {
         }
         process.nextTick(() => this.shutdown())
         return {}
-
-      default:
-        throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
     }
+    throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
   }
 
   private sendExitEvent(

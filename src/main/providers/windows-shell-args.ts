@@ -1,4 +1,5 @@
 import { win32 as pathWin32 } from 'path'
+import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {
   encodePowerShellCommand,
@@ -71,6 +72,14 @@ export function resolveWindowsShellLaunchArgs(
         '-EncodedCommand',
         encodePowerShellCommand(getPowerShellOsc133Bootstrap())
       ],
+      effectiveCwd: cwd,
+      validationCwd: cwd
+    }
+  }
+
+  if (isWindowsGitBashShellPath(shellPath)) {
+    return {
+      shellArgs: ['--login', '-i'],
       effectiveCwd: cwd,
       validationCwd: cwd
     }

@@ -170,12 +170,10 @@ export function ExternalAutomationRunTable({
   const pageStart = totalCount === 0 || !hasVisibleRuns ? 0 : page * PAGE_SIZE + 1
   const pageEnd = Math.min(totalCount, page * PAGE_SIZE + visibleRuns.length)
 
-  useEffect(() => {
-    if (selectedRunId && visibleRuns.some((run) => run.id === selectedRunId)) {
-      return
-    }
-    setSelectedRunId(visibleRuns[0]?.id ?? null)
-  }, [selectedRunId, visibleRuns])
+  const handlePageChange = (nextPage: number): void => {
+    setPage(nextPage)
+    setSelectedRunId(null)
+  }
 
   return (
     <div className="mt-2 rounded-md border border-border/50 bg-background/50">
@@ -261,7 +259,7 @@ export function ExternalAutomationRunTable({
             size="icon-xs"
             aria-label="Previous run page"
             disabled={page === 0 || isLoading}
-            onClick={() => setPage((current) => Math.max(0, current - 1))}
+            onClick={() => handlePageChange(Math.max(0, page - 1))}
           >
             <ChevronLeft className="size-3.5" />
           </Button>
@@ -274,7 +272,7 @@ export function ExternalAutomationRunTable({
             size="icon-xs"
             aria-label="Next run page"
             disabled={page >= totalPages - 1 || isLoading}
-            onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
+            onClick={() => handlePageChange(Math.min(totalPages - 1, page + 1))}
           >
             <ChevronRight className="size-3.5" />
           </Button>

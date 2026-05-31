@@ -28,6 +28,15 @@ export function createBellDetector(): BellDetector {
 
   return {
     chunkContainsBell(data: string): boolean {
+      if (!inOsc && !pendingEscape && !data.includes('\x07')) {
+        // Why: CSI/plain chunks with no BEL and no OSC start cannot affect
+        // bell state; avoid walking every byte of normal terminal output.
+        if (!data.includes('\x1b]')) {
+          pendingEscape = data.endsWith('\x1b')
+          return false
+        }
+      }
+
       for (let i = 0; i < data.length; i += 1) {
         const char = data[i]
 

@@ -1,6 +1,10 @@
+/* eslint-disable max-lines -- Why: the generated URL cache, grant list, and
+   settings form stay together so revocation and cache invalidation remain
+   auditable. */
 import { Check, Copy, Loader2, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { RuntimeAccessGrant } from '../../../../shared/runtime-access-grants'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -112,64 +116,86 @@ export function RuntimePairingUrlGenerator({
   const [isGeneratingPairing, setIsGeneratingPairing] = useState(false)
   const networkInterfaceLoadIdRef = useRef(0)
   const accessGrantLoadIdRef = useRef(0)
+  const copiedTargetResetTimerRef = useRef<number | null>(null)
+  const mountedRef = useMountedRef()
 
-  useEffect(() => {
-    if (copiedTarget === null) {
+  const clearCopiedTargetResetTimer = useCallback((): void => {
+    if (copiedTargetResetTimerRef.current === null) {
       return
     }
-    const target = copiedTarget
-    const timeout = window.setTimeout(() => {
-      setCopiedTarget((current) => (current === target ? null : current))
-    }, 1400)
-    return () => window.clearTimeout(timeout)
-  }, [copiedTarget])
+    window.clearTimeout(copiedTargetResetTimerRef.current)
+    copiedTargetResetTimerRef.current = null
+  }, [])
+
+  const setContainerNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: copy feedback timers are owned by this settings surface; clear
+      // them when Settings collapses or navigates away.
+      if (!node) {
+        clearCopiedTargetResetTimer()
+      }
+    },
+    [clearCopiedTargetResetTimer]
+  )
 
   const loadRuntimeAccessGrants = useCallback(
     async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
       const loadId = accessGrantLoadIdRef.current + 1
       accessGrantLoadIdRef.current = loadId
-      setIsLoadingAccessGrants(true)
+      if (mountedRef.current) {
+        setIsLoadingAccessGrants(true)
+      }
       try {
         const result = await window.api.mobile.listRuntimeAccessGrants()
-        if (loadId === accessGrantLoadIdRef.current) {
+        if (mountedRef.current && loadId === accessGrantLoadIdRef.current) {
           setRuntimeAccessGrants(result.grants)
         }
       } catch (error) {
-        if (loadId === accessGrantLoadIdRef.current && options.showToastOnError) {
+        if (
+          mountedRef.current &&
+          loadId === accessGrantLoadIdRef.current &&
+          options.showToastOnError
+        ) {
           toast.error(
             error instanceof Error ? error.message : 'Failed to load shared access grants.'
           )
         }
       } finally {
-        if (loadId === accessGrantLoadIdRef.current) {
+        if (mountedRef.current && loadId === accessGrantLoadIdRef.current) {
           setIsLoadingAccessGrants(false)
         }
       }
     },
-    []
+    [mountedRef]
   )
 
   const loadNetworkInterfaces = useCallback(
     async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
       const loadId = networkInterfaceLoadIdRef.current + 1
       networkInterfaceLoadIdRef.current = loadId
-      setRefreshingNetworkInterfaces(true)
+      if (mountedRef.current) {
+        setRefreshingNetworkInterfaces(true)
+      }
       try {
         const result = await window.api.mobile.listNetworkInterfaces()
-        if (loadId === networkInterfaceLoadIdRef.current) {
+        if (mountedRef.current && loadId === networkInterfaceLoadIdRef.current) {
           setNetworkInterfaces(result.interfaces)
         }
       } catch {
-        if (loadId === networkInterfaceLoadIdRef.current && options.showToastOnError) {
+        if (
+          mountedRef.current &&
+          loadId === networkInterfaceLoadIdRef.current &&
+          options.showToastOnError
+        ) {
           toast.error('Failed to refresh network interfaces.')
         }
       } finally {
-        if (loadId === networkInterfaceLoadIdRef.current) {
+        if (mountedRef.current && loadId === networkInterfaceLoadIdRef.current) {
           setRefreshingNetworkInterfaces(false)
         }
       }
     },
-    []
+    [mountedRef]
   )
 
   useEffect(() => {
@@ -190,9 +216,11 @@ export function RuntimePairingUrlGenerator({
     runtimePairingUrlCache.runtimePairingUrl = null
     runtimePairingUrlCache.webClientUrl = null
     runtimePairingUrlCache.runtimePairingDeviceId = null
-    setRuntimePairingUrl(null)
-    setWebClientUrl(null)
-    setRuntimePairingDeviceId(null)
+    if (mountedRef.current) {
+      setRuntimePairingUrl(null)
+      setWebClientUrl(null)
+      setRuntimePairingDeviceId(null)
+    }
   }
 
   const generateRuntimePairingUrl = async (): Promise<void> => {
@@ -205,21 +233,31 @@ export function RuntimePairingUrlGenerator({
       })
       if (!result.available) {
         clearGeneratedUrls()
-        toast.error('Runtime pairing is unavailable.')
+        if (mountedRef.current) {
+          toast.error('Runtime pairing is unavailable.')
+        }
         return
       }
       runtimePairingUrlCache.runtimePairingUrl = result.pairingUrl
       runtimePairingUrlCache.webClientUrl = result.webClientUrl
       runtimePairingUrlCache.runtimePairingDeviceId = result.deviceId
-      setRuntimePairingUrl(result.pairingUrl)
-      setWebClientUrl(result.webClientUrl)
-      setRuntimePairingDeviceId(result.deviceId)
+      if (mountedRef.current) {
+        setRuntimePairingUrl(result.pairingUrl)
+        setWebClientUrl(result.webClientUrl)
+        setRuntimePairingDeviceId(result.deviceId)
+      }
       await loadRuntimeAccessGrants()
-      toast.success(result.webClientUrl ? 'Generated web client URL.' : 'Generated pairing URL.')
+      if (mountedRef.current) {
+        toast.success(result.webClientUrl ? 'Generated web client URL.' : 'Generated pairing URL.')
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to generate pairing URL.')
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to generate pairing URL.')
+      }
     } finally {
-      setIsGeneratingPairing(false)
+      if (mountedRef.current) {
+        setIsGeneratingPairing(false)
+      }
     }
   }
 
@@ -228,31 +266,52 @@ export function RuntimePairingUrlGenerator({
     try {
       const result = await window.api.mobile.revokeRuntimeAccess({ deviceId: grant.deviceId })
       if (!result.revoked) {
-        toast.error('Shared access was already revoked.')
+        if (mountedRef.current) {
+          toast.error('Shared access was already revoked.')
+        }
         await loadRuntimeAccessGrants()
         return
       }
-      setRuntimeAccessGrants((current) =>
-        current.filter((entry) => entry.deviceId !== grant.deviceId)
-      )
+      if (mountedRef.current) {
+        setRuntimeAccessGrants((current) =>
+          current.filter((entry) => entry.deviceId !== grant.deviceId)
+        )
+      }
       if (runtimePairingDeviceId === grant.deviceId) {
         clearGeneratedUrls()
       }
-      toast.success('Shared access revoked.')
+      if (mountedRef.current) {
+        toast.success('Shared access revoked.')
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to revoke shared access.')
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to revoke shared access.')
+      }
     } finally {
-      setRevokingGrantId(null)
+      if (mountedRef.current) {
+        setRevokingGrantId(null)
+      }
     }
   }
 
   const copyGeneratedUrl = async (target: 'web' | 'pairing', value: string): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(value)
-      setCopiedTarget(target)
-      toast.success(target === 'web' ? 'Copied web client URL.' : 'Copied pairing URL.')
+      if (mountedRef.current) {
+        clearCopiedTargetResetTimer()
+        setCopiedTarget(target)
+        copiedTargetResetTimerRef.current = window.setTimeout(() => {
+          copiedTargetResetTimerRef.current = null
+          if (mountedRef.current) {
+            setCopiedTarget((current) => (current === target ? null : current))
+          }
+        }, 1400)
+        toast.success(target === 'web' ? 'Copied web client URL.' : 'Copied pairing URL.')
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to copy URL.')
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to copy URL.')
+      }
     }
   }
 
@@ -272,7 +331,7 @@ export function RuntimePairingUrlGenerator({
   }
 
   return (
-    <div className={containerClassName}>
+    <div ref={setContainerNode} className={containerClassName}>
       {showHeader ? (
         <div className="space-y-1">
           <Label id="runtime-share-server-label">Share this Orca server</Label>

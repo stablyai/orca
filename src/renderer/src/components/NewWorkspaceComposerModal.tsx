@@ -100,7 +100,14 @@ function QuickTabBody({
   active: boolean
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const { cardProps, composerRef, nameInputRef, submitQuick, createDisabled } = useComposerState({
+  const {
+    cardProps,
+    composerRef,
+    onComposerNodeChange,
+    nameInputRef,
+    submitQuick,
+    createDisabled
+  } = useComposerState({
     initialName: modalData.prefilledName ?? '',
     // Why: the modal is quick-create only now, so prompt-prefill state is
     // intentionally ignored even if older callers still send it.
@@ -219,6 +226,7 @@ function QuickTabBody({
       </DialogHeader>
       <NewWorkspaceComposerCard
         composerRef={composerRef}
+        onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}

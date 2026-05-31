@@ -16,12 +16,17 @@ import {
 } from '../../../../shared/browser-url'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
-import { BROWSER_PANE_SEARCH_ENTRIES as BROWSER_CORE_SEARCH_ENTRIES } from './browser-search'
+import {
+  BROWSER_PANE_SEARCH_ENTRIES as BROWSER_CORE_SEARCH_ENTRIES,
+  getBrowserLinkRoutingDescription
+} from './browser-search'
 import { BROWSER_USE_PANE_SEARCH_ENTRIES } from './browser-use-search'
 import { BROWSER_PANE_SEARCH_ENTRIES } from './browser-pane-search'
 import { BrowserProfileRow } from './BrowserProfileRow'
 import { BrowserUseSetup } from './BrowserUsePane'
 import { KagiSessionLinkForm } from './KagiSessionLinkForm'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 export { BROWSER_PANE_SEARCH_ENTRIES }
 
 type BrowserPaneProps = {
@@ -54,6 +59,7 @@ export function BrowserPane({
   const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
+  const mountedRef = useMountedRef()
   const [homePageDraft, setHomePageDraft] = useState(browserDefaultUrl ?? '')
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
@@ -78,6 +84,8 @@ export function BrowserPane({
   const showLinkRouting = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[2]])
   const showCookies = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[3]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, BROWSER_USE_PANE_SEARCH_ENTRIES)
+  const isMac = isMacUserAgent()
+  const linkRoutingDescription = getBrowserLinkRoutingDescription({ isMac })
 
   const requestSessionCookieScrollFrame = (callback: FrameRequestCallback): void => {
     let completed = false
@@ -224,7 +232,7 @@ export function BrowserPane({
       {showLinkRouting ? (
         <SearchableSetting
           title="Link Routing"
-          description="Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. Shift+Cmd/Ctrl+click always uses your system browser."
+          description={linkRoutingDescription}
           keywords={[
             'browser',
             'preview',
@@ -232,6 +240,7 @@ export function BrowserPane({
             'localhost',
             'webview',
             'markdown',
+            isMac ? 'cmd' : 'ctrl',
             'file',
             'editor'
           ]}
@@ -239,10 +248,7 @@ export function BrowserPane({
         >
           <div className="space-y-0.5">
             <Label>Link Routing</Label>
-            <p className="text-xs text-muted-foreground">
-              Open http(s) links in Orca&apos;s built-in browser — from the terminal, markdown, and
-              the editor. Shift+Cmd/Ctrl+click always uses your system browser.
-            </p>
+            <p className="text-xs text-muted-foreground">{linkRoutingDescription}</p>
           </div>
           <button
             role="switch"
@@ -354,6 +360,9 @@ export function BrowserPane({
                 const profile = await useAppStore
                   .getState()
                   .createBrowserSessionProfile('isolated', trimmed)
+                if (!mountedRef.current) {
+                  return
+                }
                 if (profile) {
                   setNewProfileDialogOpen(false)
                   setNewProfileName('')
@@ -362,7 +371,9 @@ export function BrowserPane({
                   toast.error('Failed to create profile.')
                 }
               } finally {
-                setIsCreatingProfile(false)
+                if (mountedRef.current) {
+                  setIsCreatingProfile(false)
+                }
               }
             }}
           >

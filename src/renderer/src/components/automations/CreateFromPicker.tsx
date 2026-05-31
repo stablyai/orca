@@ -70,23 +70,40 @@ export function CreateFromPicker({
     return Array.from(options).sort((left, right) => left.localeCompare(right))
   }, [effectiveDefault, searchResults, worktrees])
 
-  const focusSearchInput = React.useCallback(() => {
+  const cancelFocusFrame = React.useCallback((): void => {
     if (focusFrameRef.current !== null) {
       cancelAnimationFrame(focusFrameRef.current)
+      focusFrameRef.current = null
     }
+  }, [])
+
+  const setInputNode = React.useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
+
+  const focusSearchInput = React.useCallback(() => {
+    cancelFocusFrame()
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       inputRef.current?.focus()
     })
-  }, [])
+  }, [cancelFocusFrame])
 
-  const handleOpenChange = React.useCallback((nextOpen: boolean) => {
-    setOpen(nextOpen)
-    if (!nextOpen && focusFrameRef.current !== null) {
-      cancelAnimationFrame(focusFrameRef.current)
-      focusFrameRef.current = null
-    }
-  }, [])
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen)
+      if (!nextOpen) {
+        cancelFocusFrame()
+      }
+    },
+    [cancelFocusFrame]
+  )
 
   React.useEffect(() => {
     if (!repoId) {
@@ -179,7 +196,7 @@ export function CreateFromPicker({
         >
           <Command>
             <CommandInput
-              ref={inputRef}
+              ref={setInputNode}
               value={query}
               onValueChange={setQuery}
               placeholder="Search repo branches..."
