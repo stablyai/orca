@@ -3610,7 +3610,7 @@ function SourceControlInner(): React.JSX.Element {
       if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
         return
       }
-      const message = error instanceof Error ? error.message : 'Failed to load git graph'
+      const message = error instanceof Error ? error.message : 'Failed to load commits'
       setGitHistoryByWorktree((prev) => {
         const previous = prev[worktreeId]
         return {
@@ -3650,7 +3650,7 @@ function SourceControlInner(): React.JSX.Element {
 
   useEffect(() => {
     // Why: history shells out to git. Defer the first load until the user
-    // expands Graph so source control stays cheap for large/remote repos.
+    // expands Commits so source control stays cheap for large/remote repos.
     if (!isBranchVisible || !isGitHistoryExpanded || !isGitHistoryVisible) {
       return
     }
