@@ -487,7 +487,11 @@ export class RateLimitService {
   }
 
   evictInactiveCodexCache(accountId: string): void {
-    this.inactiveCodexAccountsGeneration += 1
+    // Why: only the evicted account's state should be cleared. The per-account
+    // isCurrentInactiveCodexAccount guard in fetchInactiveCodexAccountsOnOpen
+    // already catches a removed account when its resolver entry disappears,
+    // so bumping the generation here would also invalidate sibling fetches
+    // still in flight and discard their fresh results.
     this.inactiveCodexCache.delete(accountId)
     this.inactiveCodexFetching.delete(accountId)
     this.pushToRenderer()

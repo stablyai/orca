@@ -526,9 +526,9 @@ describe('AgentBrowserBridge', () => {
         expect(wc.on).toHaveBeenCalledWith('did-finish-load', expect.any(Function))
       })
 
-      const finishListener = wc.on.mock.calls.find(
-        ([event]) => event === 'did-finish-load'
-      )?.[1] as (() => void) | undefined
+      const finishListener = wc.on.mock.calls.find(([event]) => event === 'did-finish-load')?.[1] as
+        | (() => void)
+        | undefined
       const failListener = wc.on.mock.calls.find(([event]) => event === 'did-fail-load')?.[1] as
         | (() => void)
         | undefined

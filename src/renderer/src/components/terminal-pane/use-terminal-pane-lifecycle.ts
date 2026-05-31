@@ -72,6 +72,11 @@ import {
 } from '@/constants/terminal'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 
+function extractUncHost(value: string | undefined): string | null {
+  const match = /^(?:\\\\|\/\/)([^\\/]+)/.exec(value ?? '')
+  return match?.[1] || null
+}
+
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
@@ -477,6 +482,7 @@ export function useTerminalPaneLifecycle({
 
     const fileOpenLinkHint = getTerminalFileOpenHint()
     const urlOpenLinkHint = getTerminalUrlOpenHint()
+    const osc7UncHost = extractUncHost(cwd)
 
     let releaseWebviewDragPassthrough: (() => void) | null = null
 
@@ -530,10 +536,10 @@ export function useTerminalPaneLifecycle({
         // consumer registers on code 7, registration order decides who sees
         // each sequence.
         const osc7Disposable = pane.terminal.parser.registerOscHandler(7, (data) => {
-          const cwd = parseOsc7(data)
-          if (cwd) {
+          const parsedCwd = parseOsc7(data, { uncHost: osc7UncHost })
+          if (parsedCwd) {
             const confirmed = !isPaneReplaying(replayingPanesRef, pane.id)
-            paneCwdRef.current.set(pane.id, { cwd, confirmed })
+            paneCwdRef.current.set(pane.id, { cwd: parsedCwd, confirmed })
           }
           return true
         })

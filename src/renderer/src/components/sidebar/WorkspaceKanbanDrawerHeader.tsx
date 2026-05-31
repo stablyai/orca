@@ -1,7 +1,7 @@
 import React from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { SheetClose, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import type {
   WorkspaceBoardColumnLayout,
   WorkspaceStatusDefinition
@@ -21,6 +21,7 @@ type WorkspaceKanbanDrawerHeaderProps = {
   onRemoveStatus: (statusId: string) => void
   onAddStatus: () => void
   onFilterMenuOpenChange: (open: boolean) => void
+  onClose: () => void
 }
 
 export default function WorkspaceKanbanDrawerHeader({
@@ -34,7 +35,8 @@ export default function WorkspaceKanbanDrawerHeader({
   onMoveStatus,
   onRemoveStatus,
   onAddStatus,
-  onFilterMenuOpenChange
+  onFilterMenuOpenChange,
+  onClose
 }: WorkspaceKanbanDrawerHeaderProps): React.JSX.Element {
   return (
     <>
@@ -70,11 +72,9 @@ export default function WorkspaceKanbanDrawerHeader({
           onRemoveStatus={onRemoveStatus}
           onAddStatus={onAddStatus}
         />
-        <SheetClose asChild>
-          <Button variant="ghost" size="icon-xs" aria-label="Close">
-            <X className="size-3.5" />
-          </Button>
-        </SheetClose>
+        <Button variant="ghost" size="icon-xs" aria-label="Close" onClick={onClose}>
+          <X className="size-3.5" />
+        </Button>
       </div>
     </>
   )
