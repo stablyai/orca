@@ -58,6 +58,11 @@ export type CodexHookTrustState = {
   enabled?: boolean
 }
 
+export type CodexHookTrustBlock = {
+  key: string
+  trustedHash: string
+}
+
 export type CodexProjectTrustLevel = 'trusted' | 'untrusted'
 
 // Why: matches Codex's canonical_json. Sorts object keys recursively before
@@ -104,6 +109,10 @@ export function computeTrustedHash(entry: CodexTrustEntry): string {
 
 export function computeTrustKey(entry: CodexTrustEntry): string {
   return `${getCodexCanonicalTrustPath(entry.sourcePath)}:${entry.eventLabel}:${entry.groupIndex}:${entry.handlerIndex}`
+}
+
+export function computeTrustKeyWithSourcePath(entry: CodexTrustEntry, sourcePath: string): string {
+  return `${sourcePath}:${entry.eventLabel}:${entry.groupIndex}:${entry.handlerIndex}`
 }
 
 export function getCodexCanonicalTrustPath(sourcePath: string): string {
@@ -212,6 +221,18 @@ export function upsertHookTrustEntries(
   writeConfigAtomically(configPath, updated)
 }
 
+export function upsertHookTrustBlocks(
+  configPath: string,
+  blocks: readonly CodexHookTrustBlock[]
+): void {
+  const existing = existsSync(configPath) ? readTomlFile(configPath) : ''
+  const updated = upsertHookTrustBlocksInContent(existing, blocks)
+  if (updated === existing) {
+    return
+  }
+  writeConfigAtomically(configPath, updated)
+}
+
 export function upsertHookTrustEntriesInContent(
   existingContent: string,
   entries: readonly CodexTrustEntry[]
@@ -221,6 +242,19 @@ export function upsertHookTrustEntriesInContent(
   let updated = existing
   for (const entry of entries) {
     updated = upsertTrustBlock(updated, computeTrustKey(entry), computeTrustedHash(entry))
+  }
+  return updated
+}
+
+export function upsertHookTrustBlocksInContent(
+  existingContent: string,
+  blocks: readonly CodexHookTrustBlock[]
+): string {
+  const existing =
+    existingContent.charCodeAt(0) === 0xfeff ? existingContent.slice(1) : existingContent
+  let updated = existing
+  for (const block of blocks) {
+    updated = upsertTrustBlock(updated, block.key, block.trustedHash)
   }
   return updated
 }

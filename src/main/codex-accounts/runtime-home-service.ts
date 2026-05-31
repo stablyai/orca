@@ -33,6 +33,7 @@ import {
 } from '../codex/codex-launch-home-paths'
 import { syncSystemCodexSessionsIntoManagedHome } from '../codex/codex-session-bridge'
 import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
+import { trustCodexLaunchHomeHooks } from '../codex/hook-service'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   getSelectedCodexAccountIdForTarget,
@@ -1053,9 +1054,15 @@ export class CodexRuntimeHomeService {
   }
 
   private materializeCurrentHostLaunchHome(): string {
-    return materializeOrcaCodexLaunchHome(
+    const launchHomePath = materializeOrcaCodexLaunchHome(
       normalizeCodexRuntimeSelection(this.store.getSettings()).host
     )
+    try {
+      trustCodexLaunchHomeHooks(launchHomePath)
+    } catch (error) {
+      console.warn('[codex-runtime-home] Failed to trust host launch-home hooks:', error)
+    }
+    return launchHomePath
   }
 
   private getHostLaunchSelectionKey(accountId: string | null): string {
