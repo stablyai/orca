@@ -19,6 +19,8 @@ type SparseWorktreeCreateError = Error & {
   cleanupFailed?: boolean
 }
 
+const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
+
 function getErrorCode(error: unknown): string | undefined {
   return typeof error === 'object' && error !== null && 'code' in error
     ? String((error as { code?: unknown }).code)
@@ -222,15 +224,7 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
       const translatedPath = translateWorktreePath(worktree.path, repoPath)
       return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
     })
-    return Promise.all(
-      worktrees.map(async (worktree) => {
-        if (worktree.isBare || worktree.isSparse) {
-          return worktree
-        }
-        const isSparse = await detectSparseCheckout(worktree.path)
-        return isSparse ? { ...worktree, isSparse } : worktree
-      })
-    )
+    return annotateSparseCheckoutStatus(worktrees)
   } catch (err) {
     if (getErrorCode(err) === 'ENOENT') {
       try {
@@ -251,6 +245,34 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
     console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
     return []
   }
+}
+
+async function annotateSparseCheckoutStatus(
+  worktrees: GitWorktreeInfo[]
+): Promise<GitWorktreeInfo[]> {
+  const annotated = [...worktrees]
+  let nextIndex = 0
+
+  async function detectNext(): Promise<void> {
+    while (nextIndex < worktrees.length) {
+      const index = nextIndex
+      nextIndex += 1
+      const worktree = worktrees[index]
+      if (!worktree || worktree.isBare || worktree.isSparse) {
+        continue
+      }
+      const isSparse = await detectSparseCheckout(worktree.path)
+      if (isSparse) {
+        annotated[index] = { ...worktree, isSparse }
+      }
+    }
+  }
+
+  // Why: worktree refreshes run on git-status polling paths. Many worktrees can
+  // otherwise fan out `.git`/sparse-checkout filesystem probes all at once.
+  const workerCount = Math.min(SPARSE_CHECKOUT_DETECTION_CONCURRENCY, worktrees.length)
+  await Promise.all(Array.from({ length: workerCount }, () => detectNext()))
+  return annotated
 }
 
 async function refreshLocalBaseRefForWorktreeCreate(
