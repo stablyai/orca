@@ -149,12 +149,6 @@ export function CrashReportDialog(): React.JSX.Element {
   )
 
   useEffect(() => {
-    return () => {
-      viewerRequestIdRef.current += 1
-    }
-  }, [])
-
-  useEffect(() => {
     if (promptedThisLaunch.current) {
       return
     }
