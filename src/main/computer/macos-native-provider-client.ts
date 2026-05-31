@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: the macOS provider transport owns one lifecycle across stdio fallback and helper-app socket mode. */
-import { spawn } from 'child_process'
+import { spawn, type ChildProcess } from 'child_process'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import type net from 'net'
 import { release, tmpdir } from 'os'
@@ -192,14 +192,16 @@ export class MacOSNativeProviderClient {
     writeFileSync(this.socketTokenPath, this.socketToken, { encoding: 'utf8', mode: 0o600 })
     // Why: launching the nested helper via LaunchServices can make TCC evaluate
     // Orca.app as responsible; the signed helper executable owns this grant.
-    const provider = spawn(
-      helperExecutablePath,
-      ['--agent', this.socketPath, '--token-file', this.socketTokenPath],
-      { detached: true, stdio: 'ignore' }
-    )
-    provider.unref()
+    const provider = spawnProvider(helperExecutablePath, this.socketPath, this.socketTokenPath)
+    const providerFailure = waitForProviderLaunchFailure(provider)
+    const connectAbort = new AbortController()
     try {
-      const socket = await connectMacOSProviderSocket(this.socketPath, HELPER_CONNECT_TIMEOUT_MS)
+      const socket = await Promise.race([
+        connectMacOSProviderSocket(this.socketPath, HELPER_CONNECT_TIMEOUT_MS, connectAbort.signal),
+        providerFailure.promise.finally(() => connectAbort.abort())
+      ])
+      providerFailure.cleanup()
+      rmSync(this.socketTokenPath, { force: true })
       socket.setEncoding('utf8')
       this.socketBuffer = ''
       const onData = (chunk: string) => this.handleSocketData(socket, chunk)
@@ -218,6 +220,9 @@ export class MacOSNativeProviderClient {
       this.socket = socket
       return socket
     } catch (error) {
+      connectAbort.abort()
+      providerFailure.cleanup()
+      provider.kill()
       this.cleanupSocketDirectory()
       this.socketPath = null
       this.socketTokenPath = null
@@ -323,4 +328,52 @@ export class MacOSNativeProviderClient {
 function isMacOS14OrNewer(): boolean {
   const darwinMajor = Number.parseInt(release().split('.')[0] ?? '', 10)
   return Number.isFinite(darwinMajor) && darwinMajor >= 23
+}
+
+function spawnProvider(
+  helperExecutablePath: string,
+  socketPath: string,
+  socketTokenPath: string
+): ChildProcess {
+  const provider = spawn(
+    helperExecutablePath,
+    ['--agent', socketPath, '--token-file', socketTokenPath],
+    { detached: true, stdio: 'ignore' }
+  )
+  provider.unref()
+  return provider
+}
+
+function waitForProviderLaunchFailure(provider: ChildProcess): {
+  promise: Promise<never>
+  cleanup: () => void
+} {
+  let cleanup = (): void => {}
+  const promise = new Promise<never>((_resolve, reject) => {
+    const fail = (error: Error) => {
+      reject(
+        new RuntimeClientError(
+          'accessibility_error',
+          `native macOS helper app failed to start: ${error.message}`
+        )
+      )
+    }
+    const exit = (code: number | null, signal: NodeJS.Signals | null) => {
+      reject(
+        new RuntimeClientError(
+          'accessibility_error',
+          `native macOS helper app exited before connecting: ${
+            typeof code === 'number' ? `code ${code}` : `signal ${signal ?? 'unknown'}`
+          }`
+        )
+      )
+    }
+    provider.once('error', fail)
+    provider.once('exit', exit)
+    cleanup = () => {
+      provider.off('error', fail)
+      provider.off('exit', exit)
+    }
+  })
+  return { promise, cleanup }
 }
