@@ -1044,8 +1044,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(webContentsId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return false
     }
     guest.openDevTools({ mode: 'detach' })
@@ -1111,8 +1112,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(webContentsId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return false
     }
 
@@ -1140,8 +1142,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(webContentsId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return false
     }
 
@@ -1247,8 +1250,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(guestId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(guestId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return null
     }
     return guest

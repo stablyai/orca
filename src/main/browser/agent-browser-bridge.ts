@@ -584,6 +584,7 @@ export class AgentBrowserBridge {
     for (const [tabId, wcId] of tabs) {
       const wc = this.getWebContents(wcId)
       if (!wc) {
+        this.browserManager.unregisterGuest(tabId)
         continue
       }
       if (firstLiveWcId === null) {
@@ -1849,6 +1850,7 @@ export class AgentBrowserBridge {
     }
 
     if (!this.getWebContents(webContentsId)) {
+      this.browserManager.unregisterGuest(browserPageId)
       throw new BrowserError(
         'browser_tab_not_found',
         `Browser page ${browserPageId} is no longer available`
@@ -1875,6 +1877,15 @@ export class AgentBrowserBridge {
         if (wcId === preferredWcId && this.getWebContents(wcId)) {
           return { browserPageId: tabId, webContentsId: wcId }
         }
+        if (wcId === preferredWcId) {
+          this.browserManager.unregisterGuest(tabId)
+          if (this.activeWebContentsId === wcId) {
+            this.activeWebContentsId = null
+          }
+          if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === wcId) {
+            this.activeWebContentsPerWorktree.delete(worktreeId)
+          }
+        }
       }
     }
 
@@ -1890,6 +1901,7 @@ export class AgentBrowserBridge {
         }
         return { browserPageId: tabId, webContentsId: wcId }
       }
+      this.browserManager.unregisterGuest(tabId)
     }
 
     throw new BrowserError(
@@ -2044,6 +2056,7 @@ export class AgentBrowserBridge {
     // could be destroyed. Check here to give a clear error instead of letting the
     // proxy fail with cryptic Electron debugger errors.
     if (!this.getWebContents(session.webContentsId)) {
+      await this.destroySession(sessionName)
       throw this.createPageUnavailableError(sessionName)
     }
 

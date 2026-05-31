@@ -69,6 +69,7 @@ function mockBrowserManager(
     getWebContentsIdByTabId: () => tabs,
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
     getGuestWebContentsId: vi.fn(() => null),
+    unregisterGuest: vi.fn(),
     ensureWebviewVisible: vi.fn(async () => () => {}),
     acquireAutomationVisibility: vi.fn(async () => () => {}),
     ...overrides
@@ -376,6 +377,21 @@ describe('AgentBrowserBridge', () => {
         { browserPageId: 'tab-b', active: false }
       ])
       expect(b.getActiveWebContentsId()).toBeNull()
+    })
+
+    it('unregisters stale tab-list entries when their WebContents is gone', () => {
+      const tabs = new Map([
+        ['tab-a', 1],
+        ['tab-b', 2]
+      ])
+      const wc2 = mockWebContents(2, 'https://b.com', 'B')
+      webContentsFromIdMock.mockImplementation((id: number) => (id === 2 ? wc2 : null))
+      const unregisterGuest = vi.fn()
+
+      const b = new AgentBrowserBridge(mockBrowserManager(tabs, new Map(), { unregisterGuest }))
+
+      expect(b.tabList().tabs).toMatchObject([{ browserPageId: 'tab-b', active: true }])
+      expect(unregisterGuest).toHaveBeenCalledWith('tab-a')
     })
   })
 
