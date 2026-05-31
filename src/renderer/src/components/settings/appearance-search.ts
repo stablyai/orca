@@ -1,5 +1,6 @@
 import type { StatusBarItem } from '../../../../shared/types'
 import type { SettingsSearchEntry } from './settings-search'
+import { TERMINAL_APPEARANCE_SEARCH_ENTRIES } from './terminal-search'
 
 export const STATUS_BAR_TOGGLES: readonly {
   id: StatusBarItem
@@ -123,6 +124,7 @@ export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...THEME_ENTRIES,
   ...TYPOGRAPHY_ENTRIES,
   ...ZOOM_ENTRIES,
+  ...TERMINAL_APPEARANCE_SEARCH_ENTRIES,
   ...LAYOUT_ENTRIES,
   ...TITLEBAR_ENTRIES,
   ...STATUS_BAR_ENTRIES,

@@ -179,7 +179,7 @@ export function buildSettingsNavigationMetadata({
     {
       id: 'terminal',
       title: 'Terminal',
-      description: 'Shells, terminal appearance, and pane behavior.',
+      description: 'Shells, renderer, sessions, and terminal behavior.',
       icon: SquareTerminal,
       searchEntries: terminalPaneSearchEntries,
       group: 'workflows'
@@ -215,7 +215,7 @@ export function buildSettingsNavigationMetadata({
     {
       id: 'appearance',
       title: 'Appearance',
-      description: 'Theme, zoom, app font, sidebars, and status bar.',
+      description: 'Theme, zoom, app and terminal appearance, sidebars, and status bar.',
       icon: Palette,
       searchEntries: APPEARANCE_PANE_SEARCH_ENTRIES,
       group: 'interface'

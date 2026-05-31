@@ -154,7 +154,7 @@ const ghosttyMock = {
   handleOpenChange: vi.fn()
 }
 
-import { TerminalPane } from './TerminalPane'
+import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 
 type ReactElementLike = {
   type: unknown
@@ -234,40 +234,36 @@ function findGhosttyImportModal(node: unknown): ReactElementLike | null {
   return null
 }
 
-describe('TerminalPane ghostty import wiring', () => {
+describe('TerminalAppearanceSection ghostty import wiring', () => {
   beforeEach(() => {
     mockStateValues.length = 0
     resetMockState()
     vi.clearAllMocks()
   })
 
-  // Why: the Ghostty import trigger button lives on the section header in
-  // Settings.tsx (headerAction) — not inside TerminalPane. Keep this test
-  // around so a regression that moves the button back into the pane fails.
-  it('does not render an Import from Ghostty button inside the pane', () => {
-    const element = TerminalPane({
+  it('renders the Import from Ghostty button with terminal appearance controls', () => {
+    const element = TerminalAppearanceSection({
       settings: {} as never,
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      scrollbackMode: 'preset',
-      setScrollbackMode: () => {},
       ghostty: ghosttyMock
     })
 
     const buttons = findButtons(element)
     const importButton = buttons.find((b) => b.text === 'Import from Ghostty')
-    expect(importButton).toBeUndefined()
+    expect(importButton).toBeDefined()
+
+    importButton?.onClick?.()
+    expect(ghosttyMock.handleClick).toHaveBeenCalled()
   })
 
   it('passes hook state to GhosttyImportModal', () => {
-    const element = TerminalPane({
+    const element = TerminalAppearanceSection({
       settings: {} as never,
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      scrollbackMode: 'preset',
-      setScrollbackMode: () => {},
       ghostty: ghosttyMock
     })
 

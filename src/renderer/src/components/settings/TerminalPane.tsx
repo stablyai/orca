@@ -1,29 +1,12 @@
-/* eslint-disable max-lines -- Why: TerminalPane is the single owner of all terminal settings UI;
-   splitting individual settings into separate files would scatter related controls without a
-   meaningful abstraction boundary. Mirrors the same decision made for GeneralPane.tsx. */
-import { useState } from 'react'
+/* eslint-disable max-lines -- Why: TerminalPane keeps terminal workflow, runtime, and recovery
+   settings together so search shows one focused terminal behavior surface. */
 import type { GlobalSettings, SetupScriptLaunchMode } from '../../../../shared/types'
-import {
-  DEFAULT_TERMINAL_FONT_WEIGHT,
-  TERMINAL_FONT_WEIGHT_MAX,
-  TERMINAL_FONT_WEIGHT_MIN,
-  TERMINAL_FONT_WEIGHT_STEP,
-  normalizeTerminalFontWeight
-} from '../../../../shared/terminal-fonts'
-import {
-  fontFamilyHasKnownLigatures,
-  resolveTerminalLigaturesEnabled
-} from '../../../../shared/terminal-ligatures'
-import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Separator } from '../ui/separator'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { Minus, Plus } from 'lucide-react'
-import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal-theme'
+import { clampNumber } from '@/lib/terminal-theme'
 import {
-  FontAutocomplete,
-  NumberField,
   SettingsRow,
   SettingsSegmentedControl,
   SettingsSubsectionHeader,
@@ -37,16 +20,11 @@ import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/p
 import {
   MANAGE_SESSIONS_SEARCH_ENTRIES,
   TERMINAL_ADVANCED_SEARCH_ENTRIES,
-  TERMINAL_CURSOR_SEARCH_ENTRIES,
-  TERMINAL_DARK_THEME_SEARCH_ENTRIES,
-  TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
   TERMINAL_MAC_OPTION_SEARCH_ENTRIES,
   TERMINAL_MAC_YEN_SEARCH_ENTRIES,
-  TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
+  TERMINAL_PANE_INTERACTION_SEARCH_ENTRIES,
   TERMINAL_RENDERING_SEARCH_ENTRIES,
-  TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
-  TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
-  TERMINAL_WINDOW_SEARCH_ENTRIES
+  TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES
 } from './terminal-search'
 import {
   TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY,
@@ -54,26 +32,15 @@ import {
   TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY
 } from './terminal-windows-search'
 import { useDetectedOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
-import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
-import { TerminalWindowSection } from './TerminalWindowSection'
-import { GhosttyImportModal } from './GhosttyImportModal'
-import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { ManageSessionsSection } from './ManageSessionsSection'
-import { TerminalSettingsPreview } from './TerminalSettingsPreview'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 
 type TerminalPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  systemPrefersDark: boolean
-  terminalFontSuggestions: string[]
   scrollbackMode: 'preset' | 'custom'
   setScrollbackMode: (mode: 'preset' | 'custom') => void
-  /** Ghostty import modal state + handlers. Lifted to the Settings shell so
-   *  the section header can render the trigger button as a headerAction
-   *  instead of taking its own row inside the settings list. */
-  ghostty: UseGhosttyImportReturn
   /** Whether WSL is installed on this Windows machine. */
   wslAvailable?: boolean
   /** Installed WSL distro names, used to choose the default WSL terminal target. */
@@ -89,11 +56,8 @@ type TerminalPaneProps = {
 export function TerminalPane({
   settings,
   updateSettings,
-  systemPrefersDark,
-  terminalFontSuggestions,
   scrollbackMode,
   setScrollbackMode,
-  ghostty,
   wslAvailable,
   wslDistros = [],
   wslCapabilitiesLoading = false,
@@ -103,12 +67,6 @@ export function TerminalPane({
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isWindows = isWindowsUserAgent()
   const isMac = isMacUserAgent()
-  const [themeSearchDark, setThemeSearchDark] = useState('')
-  const [themeSearchLight, setThemeSearchLight] = useState('')
-  // Why: hover preview lets the font picker update the sample without committing a setting.
-  const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
-
-  const paneStyleOptions = resolvePaneStyleOptions(settings)
   const detectedLayout = useDetectedOptionAsAlt()
   const detectedLayoutLabel =
     detectedLayout === 'us'
@@ -225,196 +183,6 @@ export function TerminalPane({
         </div>
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES) ? (
-      <section key="typography" className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-3">
-          <SettingsSubsectionHeader
-            title="Typography"
-            description="Default terminal typography for new panes and live updates."
-          />
-
-          <div className="divide-y divide-border/40">
-            <SearchableSetting
-              title="Font Size"
-              description="Default terminal font size for new panes and live updates."
-              keywords={['terminal', 'typography', 'text size']}
-            >
-              <SettingsRow
-                label="Font Size"
-                description="Default terminal font size for new panes and live updates."
-                control={
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={() => {
-                        const next = Math.max(10, settings.terminalFontSize - 1)
-                        updateSettings({ terminalFontSize: next })
-                      }}
-                      disabled={settings.terminalFontSize <= 10}
-                    >
-                      <Minus className="size-3" />
-                    </Button>
-                    <Input
-                      type="number"
-                      min={10}
-                      max={24}
-                      value={settings.terminalFontSize}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value, 10)
-                        if (!Number.isNaN(value) && value >= 10 && value <= 24) {
-                          updateSettings({ terminalFontSize: value })
-                        }
-                      }}
-                      className="w-14 text-center tabular-nums"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={() => {
-                        const next = Math.min(24, settings.terminalFontSize + 1)
-                        updateSettings({ terminalFontSize: next })
-                      }}
-                      disabled={settings.terminalFontSize >= 24}
-                    >
-                      <Plus className="size-3" />
-                    </Button>
-                    <span className="text-xs text-muted-foreground">px</span>
-                  </div>
-                }
-              />
-            </SearchableSetting>
-
-            <SearchableSetting
-              title="Font Family"
-              description="Default terminal font family for new panes and live updates."
-              keywords={['terminal', 'typography', 'font']}
-            >
-              <SettingsRow
-                alignTop
-                label="Font Family"
-                description="Default terminal font family for new panes and live updates."
-                control={
-                  <FontAutocomplete
-                    value={settings.terminalFontFamily}
-                    suggestions={terminalFontSuggestions}
-                    onChange={(value) => updateSettings({ terminalFontFamily: value })}
-                    onPreviewFontFamily={setPreviewFontFamily}
-                  />
-                }
-              />
-            </SearchableSetting>
-
-            <SearchableSetting
-              title="Font Weight"
-              description="Controls the terminal text font weight."
-              keywords={['terminal', 'typography', 'weight']}
-            >
-              <NumberField
-                label="Font Weight"
-                description="Controls the terminal text font weight."
-                value={normalizeTerminalFontWeight(settings.terminalFontWeight)}
-                defaultValue={DEFAULT_TERMINAL_FONT_WEIGHT}
-                min={TERMINAL_FONT_WEIGHT_MIN}
-                max={TERMINAL_FONT_WEIGHT_MAX}
-                step={TERMINAL_FONT_WEIGHT_STEP}
-                suffix="100–900"
-                onChange={(value) =>
-                  updateSettings({
-                    terminalFontWeight: normalizeTerminalFontWeight(value)
-                  })
-                }
-              />
-            </SearchableSetting>
-
-            <SearchableSetting
-              title="Line Height"
-              description="Controls the terminal line height multiplier."
-              keywords={['terminal', 'typography', 'line height', 'spacing']}
-            >
-              <NumberField
-                label="Line Height"
-                description="Controls the terminal line height multiplier."
-                value={settings.terminalLineHeight}
-                defaultValue={1}
-                min={1}
-                max={3}
-                step={0.1}
-                suffix="1–3"
-                onChange={(value) =>
-                  updateSettings({
-                    terminalLineHeight: clampNumber(value, 1, 3)
-                  })
-                }
-              />
-            </SearchableSetting>
-
-            <SearchableSetting
-              title="Font Ligatures"
-              description='Render programming ligatures (e.g. =>, !=, ===) for fonts that ship them. "Auto" enables ligatures only for known ligature fonts (Fira Code, JetBrains Mono, Cascadia Code, Iosevka, etc.).'
-              keywords={[
-                'terminal',
-                'typography',
-                'ligatures',
-                'ligature',
-                'fira code',
-                'jetbrains mono',
-                'cascadia code',
-                'iosevka',
-                'calt',
-                'font features'
-              ]}
-            >
-              <SettingsRow
-                label="Font Ligatures"
-                description={
-                  settings.terminalLigatures === 'on'
-                    ? 'Always on. Fonts without ligatures simply render as-is.'
-                    : settings.terminalLigatures === 'off'
-                      ? 'Always off, even for fonts that ship them.'
-                      : fontFamilyHasKnownLigatures(settings.terminalFontFamily)
-                        ? `Auto — enabled for "${settings.terminalFontFamily}".`
-                        : `Auto — disabled for "${
-                            settings.terminalFontFamily || 'the current font'
-                          }".`
-                }
-                control={
-                  <SettingsSegmentedControl
-                    ariaLabel="Font Ligatures"
-                    value={settings.terminalLigatures ?? 'auto'}
-                    onChange={(option) => updateSettings({ terminalLigatures: option })}
-                    options={[
-                      { value: 'auto', label: 'Auto' },
-                      { value: 'on', label: 'On' },
-                      { value: 'off', label: 'Off' }
-                    ]}
-                  />
-                }
-              />
-              {/* Why: surface the resolved state explicitly so the "Auto" label
-                  isn't ambiguous when a user is staring at it. */}
-              <p className="sr-only" aria-live="polite">
-                Ligatures are currently{' '}
-                {resolveTerminalLigaturesEnabled(
-                  settings.terminalLigatures,
-                  settings.terminalFontFamily
-                )
-                  ? 'enabled'
-                  : 'disabled'}
-                .
-              </p>
-            </SearchableSetting>
-          </div>
-        </div>
-        <TerminalSettingsPreview
-          title="Preview"
-          settings={settings}
-          systemPrefersDark={systemPrefersDark}
-          previewFontFamily={previewFontFamily}
-          showThemeToggle
-        />
-      </section>
-    ) : null,
     matchesSettingsSearch(searchQuery, TERMINAL_RENDERING_SEARCH_ENTRIES) ? (
       <section key="rendering" className="space-y-3">
         <SettingsSubsectionHeader
@@ -464,129 +232,16 @@ export function TerminalPane({
         </div>
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_CURSOR_SEARCH_ENTRIES) ? (
-      <section key="cursor" className="space-y-3">
-        <SettingsSubsectionHeader
-          title="Cursor"
-          description="Default cursor appearance for Orca terminal panes."
-        />
-
-        <div className="divide-y divide-border/40">
-          <SearchableSetting
-            title="Cursor Shape"
-            description="Default cursor appearance for Orca terminal panes."
-            keywords={['terminal', 'cursor', 'bar', 'block', 'underline']}
-          >
-            <SettingsRow
-              label="Cursor Shape"
-              description="Default cursor appearance for Orca terminal panes."
-              control={
-                <SettingsSegmentedControl
-                  ariaLabel="Cursor Shape"
-                  value={settings.terminalCursorStyle}
-                  onChange={(option) => updateSettings({ terminalCursorStyle: option })}
-                  options={[
-                    { value: 'bar', label: 'Bar' },
-                    { value: 'block', label: 'Block' },
-                    { value: 'underline', label: 'Underline' }
-                  ]}
-                />
-              }
-            />
-          </SearchableSetting>
-
-          <SearchableSetting
-            title="Blinking Cursor"
-            description="Uses the blinking variant of the selected cursor shape."
-            keywords={['terminal', 'cursor', 'blink']}
-          >
-            <SettingsSwitchRow
-              label="Blinking Cursor"
-              description="Uses the blinking variant of the selected cursor shape."
-              checked={settings.terminalCursorBlink}
-              onChange={() =>
-                updateSettings({ terminalCursorBlink: !settings.terminalCursorBlink })
-              }
-            />
-          </SearchableSetting>
-
-          <SearchableSetting
-            title="Cursor Opacity"
-            description="Opacity of the terminal cursor."
-            keywords={['terminal', 'cursor', 'opacity', 'transparency']}
-          >
-            <NumberField
-              label="Cursor Opacity"
-              description="Opacity of the terminal cursor."
-              value={settings.terminalCursorOpacity ?? 1}
-              defaultValue={1}
-              min={0}
-              max={1}
-              step={0.05}
-              suffix="0–1"
-              onChange={(value) =>
-                updateSettings({
-                  terminalCursorOpacity: clampNumber(value, 0, 1)
-                })
-              }
-            />
-          </SearchableSetting>
-        </div>
-      </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_PANE_STYLE_SEARCH_ENTRIES) ||
+    matchesSettingsSearch(searchQuery, TERMINAL_PANE_INTERACTION_SEARCH_ENTRIES) ||
     (isWindows &&
       matchesSettingsSearch(searchQuery, TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY)) ? (
-      <section key="pane-styling" className="space-y-3">
+      <section key="pane-interaction" className="space-y-3">
         <SettingsSubsectionHeader
-          title="Pane Styling"
-          description="Control inactive pane dimming, divider thickness, mouse behavior, and transition timing."
+          title="Terminal Interaction"
+          description="Mouse and clipboard behavior for terminal panes."
         />
 
         <div className="divide-y divide-border/40">
-          <SearchableSetting
-            title="Inactive Pane Opacity"
-            description="Opacity applied to panes that are not currently active."
-            keywords={['pane', 'opacity', 'dimming']}
-          >
-            <NumberField
-              label="Inactive Pane Opacity"
-              description="Opacity applied to panes that are not currently active."
-              value={paneStyleOptions.inactivePaneOpacity}
-              defaultValue={0.8}
-              min={0}
-              max={1}
-              step={0.05}
-              suffix="0–1"
-              onChange={(value) =>
-                updateSettings({
-                  terminalInactivePaneOpacity: clampNumber(value, 0, 1)
-                })
-              }
-            />
-          </SearchableSetting>
-          <SearchableSetting
-            title="Divider Thickness"
-            description="Thickness of the pane divider line."
-            keywords={['pane', 'divider', 'thickness']}
-          >
-            <NumberField
-              label="Divider Thickness"
-              description="Thickness of the pane divider line."
-              value={paneStyleOptions.dividerThicknessPx}
-              defaultValue={1}
-              min={1}
-              max={32}
-              step={1}
-              suffix="px"
-              onChange={(value) =>
-                updateSettings({
-                  terminalDividerThicknessPx: clampNumber(value, 1, 32)
-                })
-              }
-            />
-          </SearchableSetting>
-
           {/* Why: the Windows-only right-click toggle lives in this section, so the
               section must also match that search term or settings search would hide
               the control even though it is present. */}
@@ -686,30 +341,6 @@ export function TerminalPane({
           </SearchableSetting>
         </div>
       </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_WINDOW_SEARCH_ENTRIES) ? (
-      <TerminalWindowSection key="window" settings={settings} updateSettings={updateSettings} />
-    ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_DARK_THEME_SEARCH_ENTRIES) ? (
-      <DarkTerminalThemeSection
-        key="dark-theme"
-        settings={settings}
-        systemPrefersDark={systemPrefersDark}
-        themeSearchDark={themeSearchDark}
-        setThemeSearchDark={setThemeSearchDark}
-        updateSettings={updateSettings}
-        previewFontFamily={previewFontFamily}
-      />
-    ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_LIGHT_THEME_SEARCH_ENTRIES) ? (
-      <LightTerminalThemeSection
-        key="light-theme"
-        settings={settings}
-        themeSearchLight={themeSearchLight}
-        setThemeSearchLight={setThemeSearchLight}
-        updateSettings={updateSettings}
-        previewFontFamily={previewFontFamily}
-      />
     ) : null,
     matchesSettingsSearch(searchQuery, TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES) ? (
       <section key="setup-script" className="space-y-3">
@@ -1048,15 +679,6 @@ export function TerminalPane({
           {section}
         </div>
       ))}
-      <GhosttyImportModal
-        open={ghostty.open}
-        onOpenChange={ghostty.handleOpenChange}
-        preview={ghostty.preview}
-        loading={ghostty.loading}
-        onApply={ghostty.handleApply}
-        applied={ghostty.applied}
-        applyError={ghostty.applyError}
-      />
     </div>
   )
 }

@@ -24,9 +24,7 @@ import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
 import { useGhosttyImport } from './useGhosttyImport'
-import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
-import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { RepositoryPane } from './RepositoryPane'
 import { GitPane } from './GitPane'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
@@ -194,9 +192,8 @@ function Settings(): React.JSX.Element {
   // reveals controls that the renderer will intentionally hide.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
   const [prevScrollbackBytes, setPrevScrollbackBytes] = useState(settings?.terminalScrollbackBytes)
-  // Why: lifted out of TerminalPane so the Terminal section header can render
-  // the import trigger as a headerAction. The modal itself still lives inside
-  // TerminalPane, driven by this shared state.
+  // Why: Appearance owns terminal visual controls, but the Ghostty import flow
+  // still needs Settings-level state so the modal survives section remounts.
   const ghostty = useGhosttyImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
@@ -962,31 +959,15 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="terminal"
                   title="Terminal"
-                  description="Shells, terminal appearance, and pane behavior."
+                  description="Shells, renderer, sessions, and terminal behavior."
                   searchEntries={getSectionSearchEntries('terminal')}
-                  headerAction={
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={() => void ghostty.handleClick()}
-                    >
-                      <img src={ghosttyIcon} alt="" aria-hidden="true" className="size-4" />
-                      Import from Ghostty
-                    </Button>
-                  }
                 >
                   {isSectionMounted('terminal') ? (
                     <TerminalPane
                       settings={settings}
                       updateSettings={updateSettings}
-                      systemPrefersDark={systemPrefersDark}
-                      terminalFontSuggestions={fontSuggestions.filter(
-                        (font) => font !== DEFAULT_APP_FONT_FAMILY
-                      )}
                       scrollbackMode={scrollbackMode}
                       setScrollbackMode={setScrollbackMode}
-                      ghostty={ghostty}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
@@ -1042,7 +1023,7 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="appearance"
                   title="Appearance"
-                  description="Theme, zoom, app font, sidebars, and status bar."
+                  description="Theme, zoom, app and terminal appearance, sidebars, and status bar."
                   searchEntries={getSectionSearchEntries('appearance')}
                 >
                   {isSectionMounted('appearance') ? (
@@ -1051,6 +1032,11 @@ function Settings(): React.JSX.Element {
                       updateSettings={updateSettings}
                       applyTheme={applyTheme}
                       fontSuggestions={fontSuggestions}
+                      terminalFontSuggestions={fontSuggestions.filter(
+                        (font) => font !== DEFAULT_APP_FONT_FAMILY
+                      )}
+                      systemPrefersDark={systemPrefersDark}
+                      ghostty={ghostty}
                     />
                   ) : null}
                 </SettingsSection>

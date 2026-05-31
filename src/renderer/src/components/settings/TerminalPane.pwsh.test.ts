@@ -149,17 +149,6 @@ vi.mock('@/lib/terminal-theme', () => ({
   resolvePaneStyleOptions: () => ({ inactivePaneOpacity: 0.8, dividerThicknessPx: 1 })
 }))
 
-const ghosttyMock = {
-  open: false,
-  preview: null,
-  loading: false,
-  applied: false,
-  applyError: null,
-  handleClick: vi.fn(),
-  handleApply: vi.fn(),
-  handleOpenChange: vi.fn()
-}
-
 import { TerminalPane } from './TerminalPane'
 
 type ReactElementLike = {
@@ -239,11 +228,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
       gitBashAvailable: false
@@ -264,11 +250,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: false,
@@ -287,11 +270,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
       gitBashAvailable: false
@@ -310,11 +290,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: true,
       wslDistros: ['Ubuntu', 'Debian'],
       pwshAvailable: false,
@@ -337,11 +314,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
       gitBashAvailable: true
@@ -359,11 +333,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
       gitBashAvailable: false
