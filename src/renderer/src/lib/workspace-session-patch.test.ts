@@ -156,4 +156,25 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(Object.hasOwn(patch, 'activeConnectionIdsAtShutdown')).toBe(true)
     expect(patch.activeConnectionIdsAtShutdown).toBeUndefined()
   })
+
+  it('persists default terminal tab idempotency marker changes', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({ defaultTerminalTabsAppliedByWorktreeId: { 'wt-1': true } }),
+      ['defaultTerminalTabsAppliedByWorktreeId']
+    )
+
+    expect(patch).toEqual({
+      defaultTerminalTabsAppliedByWorktreeId: { 'wt-1': true }
+    })
+  })
+
+  it('keeps default terminal tab marker clearing keys in patches', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({ defaultTerminalTabsAppliedByWorktreeId: {} }),
+      ['defaultTerminalTabsAppliedByWorktreeId']
+    )
+
+    expect(Object.hasOwn(patch, 'defaultTerminalTabsAppliedByWorktreeId')).toBe(true)
+    expect(patch.defaultTerminalTabsAppliedByWorktreeId).toBeUndefined()
+  })
 })

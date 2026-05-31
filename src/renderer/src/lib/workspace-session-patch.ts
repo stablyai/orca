@@ -122,6 +122,13 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('lastVisitedAtByWorktreeId')) {
     patch.lastVisitedAtByWorktreeId = buildLastVisitedAtByWorktreeId(snapshot)
   }
+  if (changed.has('defaultTerminalTabsAppliedByWorktreeId')) {
+    patch.defaultTerminalTabsAppliedByWorktreeId =
+      snapshot.defaultTerminalTabsAppliedByWorktreeId &&
+      Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
+        ? snapshot.defaultTerminalTabsAppliedByWorktreeId
+        : undefined
+  }
 
   return patch
 }
