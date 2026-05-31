@@ -30,6 +30,7 @@ import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout
 } from '../src/diagnostics/diagnostic-fetch-timeout'
+import { formatEndpoint, testHostReachability } from '../src/diagnostics/host-reachability'
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -313,40 +314,6 @@ export default function TroubleshootScreen() {
       </ScrollView>
     </View>
   )
-}
-
-// Why: WebSocket reachability is tested by opening a connection and waiting for
-// the server to respond with any frame, or timing out after 4 seconds.
-// We don't complete the E2EE handshake — just verify the endpoint is listening.
-async function testHostReachability(endpoint: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      ws.close()
-      resolve(false)
-    }, 4000)
-
-    const ws = new WebSocket(endpoint)
-
-    ws.onopen = () => {
-      clearTimeout(timeout)
-      ws.close()
-      resolve(true)
-    }
-
-    ws.onerror = () => {
-      clearTimeout(timeout)
-      resolve(false)
-    }
-  })
-}
-
-function formatEndpoint(endpoint: string): string {
-  try {
-    const url = new URL(endpoint)
-    return url.host
-  } catch {
-    return endpoint
-  }
 }
 
 const styles = StyleSheet.create({
