@@ -827,7 +827,7 @@ function applyPRCacheResult(
     return cache
   }
   if (accepted) {
-    return { ...cache, [cacheKey]: { data: pr, fetchedAt } }
+    return withBoundedCacheEntry(cache, cacheKey, { data: pr, fetchedAt })
   }
   if (!cache[cacheKey]) {
     return cache
@@ -1963,8 +1963,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       const persisted = await window.api.cache.getGitHub()
       if (persisted) {
         set({
-          prCache: persisted.pr || {},
-          issueCache: persisted.issue || {}
+          prCache: evictStaleEntries(persisted.pr || {}),
+          issueCache: evictStaleEntries(persisted.issue || {})
         })
       }
     } catch (err) {
@@ -2153,14 +2153,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       try {
         const issue = await window.api.gh.issue({ repoPath, repoId, number })
         set((s) => ({
-          issueCache: { ...s.issueCache, [cacheKey]: { data: issue, fetchedAt: Date.now() } }
+          issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
+            data: issue,
+            fetchedAt: Date.now()
+          })
         }))
         debouncedSaveCache(get())
         return issue
       } catch (err) {
         console.error('Failed to fetch issue:', err)
         set((s) => ({
-          issueCache: { ...s.issueCache, [cacheKey]: { data: null, fetchedAt: Date.now() } }
+          issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
+            data: null,
+            fetchedAt: Date.now()
+          })
         }))
         debouncedSaveCache(get())
         return null
