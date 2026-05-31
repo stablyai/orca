@@ -938,6 +938,11 @@ export class BrowserManager {
     download.pendingCancelTimer = setTimeout(() => {
       this.cancelDownloadInternal(downloadId, 'Timed out waiting for user approval.')
     }, 60_000)
+    // Why: approval timeout is a fail-closed safety net, not a reason to keep
+    // Electron main alive after the browser/runtime is otherwise shutting down.
+    if (typeof download.pendingCancelTimer.unref === 'function') {
+      download.pendingCancelTimer.unref()
+    }
   }
 
   getDownloadPrompt(downloadId: string, senderWebContentsId: number): { filename: string } | null {
