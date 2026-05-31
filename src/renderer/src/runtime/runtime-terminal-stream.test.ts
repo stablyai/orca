@@ -6,7 +6,10 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
-import { resetRemoteRuntimeTerminalMultiplexersForTests } from './remote-runtime-terminal-multiplexer'
+import {
+  _getRemoteRuntimeTerminalMultiplexerCountForTest,
+  resetRemoteRuntimeTerminalMultiplexersForTests
+} from './remote-runtime-terminal-multiplexer'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle,
@@ -106,8 +109,36 @@ describe('remote runtime terminal data subscriptions', () => {
     )
 
     expect(watcher).toHaveBeenCalledWith('live')
+    expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(1)
     dispose()
     expect(unsubscribe).toHaveBeenCalled()
+    expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(0)
+  })
+
+  it('keeps the shared terminal multiplexer until the last watcher closes', async () => {
+    const firstDispose = await subscribeToRuntimeTerminalData(
+      { activeRuntimeEnvironmentId: 'env-fallback' },
+      'remote:env-1@@terminal-1',
+      'watcher-1',
+      vi.fn()
+    )
+    const secondDispose = await subscribeToRuntimeTerminalData(
+      { activeRuntimeEnvironmentId: 'env-fallback' },
+      'remote:env-1@@terminal-2',
+      'watcher-2',
+      vi.fn()
+    )
+
+    expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
+    expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(1)
+
+    firstDispose()
+    expect(unsubscribe).not.toHaveBeenCalled()
+    expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(1)
+
+    secondDispose()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(0)
   })
 
   it('rejects remote terminal subscriptions when the multiplex connection fails', async () => {
@@ -123,5 +154,6 @@ describe('remote runtime terminal data subscriptions', () => {
     ).rejects.toThrow('offline')
 
     expect(sendBinary).not.toHaveBeenCalled()
+    expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(0)
   })
 })
