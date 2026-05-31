@@ -86,6 +86,7 @@ import {
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { dirname } from '@/lib/path'
+import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 
 type MarkdownPreviewProps = {
   content: string
@@ -383,20 +384,18 @@ function findWorktreeForMarkdownPreviewPath(
   worktreesByRepo: Record<string, Worktree[]>,
   absolutePath: string
 ): Worktree | null {
-  const normalizedAbsolutePath = normalizeMarkdownPreviewAbsolutePath(absolutePath)
   let bestMatch: Worktree | null = null
   let bestMatchLength = -1
 
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
-      const normalizedWorktreePath = normalizeMarkdownPreviewAbsolutePath(worktree.path)
-      if (
-        normalizedAbsolutePath === normalizedWorktreePath ||
-        normalizedAbsolutePath.startsWith(`${normalizedWorktreePath}/`)
-      ) {
-        if (normalizedWorktreePath.length > bestMatchLength) {
+      if (relativePathInsideRoot(worktree.path, absolutePath) !== null) {
+        const normalizedWorktreePathLength = normalizeMarkdownPreviewAbsolutePath(
+          worktree.path
+        ).length
+        if (normalizedWorktreePathLength > bestMatchLength) {
           bestMatch = worktree
-          bestMatchLength = normalizedWorktreePath.length
+          bestMatchLength = normalizedWorktreePathLength
         }
       }
     }
@@ -415,6 +414,13 @@ export function resolveMarkdownPreviewSourceWorktree(
     : null
 
   return sourceWorktree ?? findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)
+}
+
+export function getMarkdownPreviewSourceRelativePath(
+  filePath: string,
+  sourceWorktreePath: string
+): string | null {
+  return relativePathInsideRoot(sourceWorktreePath, filePath)
 }
 
 export default function MarkdownPreview({
@@ -495,15 +501,7 @@ export default function MarkdownPreview({
     if (!sourceWorktree) {
       return null
     }
-    const normalizedFilePath = normalizeMarkdownPreviewAbsolutePath(filePath)
-    const normalizedRoot = normalizeMarkdownPreviewAbsolutePath(sourceWorktree.path)
-    if (normalizedFilePath === normalizedRoot) {
-      return ''
-    }
-    if (!normalizedFilePath.startsWith(`${normalizedRoot}/`)) {
-      return null
-    }
-    return normalizedFilePath.slice(normalizedRoot.length + 1)
+    return getMarkdownPreviewSourceRelativePath(filePath, sourceWorktree.path)
   }, [filePath, sourceWorktree])
   const markdownComments = useMemo(
     () =>
