@@ -5,6 +5,7 @@ const { sshExecMock } = vi.hoisted(() => ({
 }))
 
 import {
+  _getAzureDevOpsRepoRefCacheSize,
   _resetAzureDevOpsRepoRefCache,
   getAzureDevOpsRepoRefForRemote,
   parseAzureDevOpsRepoRef
@@ -92,6 +93,20 @@ describe('parseAzureDevOpsRepoRef', () => {
     })
 
     expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
+  })
+
+  it('bounds cached repository refs for distinct repo paths', async () => {
+    sshExecMock.mockResolvedValue({
+      stdout: 'git@ssh.dev.azure.com:v3/acme/Project/repo\n',
+      stderr: ''
+    })
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    for (let i = 0; i < 513; i += 1) {
+      await getAzureDevOpsRepoRefForRemote(`/repo-${i}`, 'origin', 'conn-1')
+    }
+
+    expect(_getAzureDevOpsRepoRefCacheSize()).toBe(512)
   })
 
   it('does not cache transient SSH provider failures as unsupported repos', async () => {

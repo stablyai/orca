@@ -10,6 +10,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 import {
+  _getBitbucketRepoRefCacheSize,
   _resetBitbucketRepoRefCache,
   getBitbucketRepoRefForRemote,
   getBitbucketRepoRef,
@@ -80,6 +81,19 @@ describe('Bitbucket repository refs', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo'
     })
+  })
+
+  it('bounds cached repository refs for distinct repo paths', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'git@bitbucket.org:team/project.git\n',
+      stderr: ''
+    })
+
+    for (let i = 0; i < 513; i += 1) {
+      await getBitbucketRepoRef(`/repo-${i}`)
+    }
+
+    expect(_getBitbucketRepoRefCacheSize()).toBe(512)
   })
 
   it('resolves project refs through the SSH git provider for connected repos', async () => {

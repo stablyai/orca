@@ -10,6 +10,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 import {
+  _getGiteaRepoRefCacheSize,
   _resetGiteaRepoRefCache,
   getGiteaRepoRef,
   getGiteaRepoRefForRemote,
@@ -107,6 +108,19 @@ describe('Gitea repository ref parsing', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo'
     })
+  })
+
+  it('bounds cached repository refs for distinct repo paths', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://git.example.com/team/project.git\n',
+      stderr: ''
+    })
+
+    for (let i = 0; i < 513; i += 1) {
+      await getGiteaRepoRef(`/repo-${i}`)
+    }
+
+    expect(_getGiteaRepoRefCacheSize()).toBe(512)
   })
 
   it('resolves repository refs through the SSH git provider for connected repos', async () => {
