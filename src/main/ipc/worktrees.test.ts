@@ -2767,6 +2767,83 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('limits concurrent repo scans in worktrees:listAll while preserving order', async () => {
+    const repos = Array.from({ length: 10 }, (_, index) => ({
+      id: `repo-${index}`,
+      path: `/workspace/repo-${index}`,
+      displayName: `repo-${index}`,
+      badgeColor: '#000',
+      addedAt: 0
+    }))
+    store.getRepos.mockReturnValue(repos)
+    let activeScans = 0
+    let maxActiveScans = 0
+    let notifyScanStarted: (() => void) | undefined
+    const waitForScanCount = async (count: number): Promise<void> => {
+      while (listWorktreesMock.mock.calls.length < count) {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(
+            () => reject(new Error(`Timed out waiting for ${count} scans`)),
+            1000
+          )
+          notifyScanStarted = () => {
+            clearTimeout(timeout)
+            resolve()
+          }
+        })
+      }
+    }
+    const pendingScans: (() => void)[] = []
+    listWorktreesMock.mockImplementation(
+      async (
+        repoPath: string
+      ): Promise<
+        { path: string; head: string; branch: string; isBare: false; isMainWorktree: true }[]
+      > => {
+        activeScans += 1
+        maxActiveScans = Math.max(maxActiveScans, activeScans)
+        await new Promise<void>((resolve) => {
+          pendingScans.push(resolve)
+          notifyScanStarted?.()
+          notifyScanStarted = undefined
+        })
+        activeScans -= 1
+        return [
+          {
+            path: repoPath,
+            head: 'abc123',
+            branch: 'refs/heads/main',
+            isBare: false,
+            isMainWorktree: true
+          }
+        ]
+      }
+    )
+
+    const listPromise = handlers['worktrees:listAll'](null, undefined) as Promise<
+      { path: string }[]
+    >
+    await Promise.resolve()
+
+    expect(listWorktreesMock).toHaveBeenCalledTimes(8)
+    expect(maxActiveScans).toBe(8)
+
+    for (const resolve of pendingScans.splice(0)) {
+      resolve()
+    }
+    await waitForScanCount(10)
+
+    expect(listWorktreesMock).toHaveBeenCalledTimes(10)
+
+    for (const resolve of pendingScans.splice(0)) {
+      resolve()
+    }
+    const listed = await listPromise
+
+    expect(maxActiveScans).toBe(8)
+    expect(listed.map((worktree) => worktree.path)).toEqual(repos.map((repo) => repo.path))
+  })
+
   it('skips past a suffix that already belongs to a PR after an initial branch conflict', async () => {
     // Why: `gh pr list` is network-bound and previously fired on every single
     // create, adding 1–3s to the happy path. We now only probe PR conflicts
