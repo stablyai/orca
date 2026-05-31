@@ -819,6 +819,36 @@ describe('browserManager', () => {
     expect(guestOnMock.mock.calls.filter(([event]) => event === 'will-redirect')).toHaveLength(1)
   })
 
+  it('cleans attached guest policy state when a guest is destroyed before registration', () => {
+    const guest = {
+      id: 304,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const destroyedHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'destroyed'
+    )?.[1] as (() => void) | undefined
+    expect(destroyedHandler).toBeTypeOf('function')
+
+    destroyedHandler?.()
+    browserManager.registerGuest({
+      browserPageId: 'browser-destroyed-before-register',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    expect(browserManager.getGuestWebContentsId('browser-destroyed-before-register')).toBeNull()
+  })
+
   it('replays a queued main-frame load failure after the guest registers', () => {
     const rendererSendMock = vi.fn()
     const guest = {
