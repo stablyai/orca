@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useRef, useState, type MutableRefObject } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -83,8 +83,13 @@ export function BrowserPane({
     setHomePageDraftState((current) => ({ ...current, value }))
   }
 
-  useEffect(() => {
-    return () => cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
+  const setBrowserPaneRootNode = useCallback((node: HTMLDivElement | null) => {
+    if (node !== null) {
+      return
+    }
+    // Why: session-cookie scroll frames are owned by this Settings pane surface;
+    // cancel them as soon as the pane unmounts so stale jumps cannot fire later.
+    cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
   }, [])
 
   const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
@@ -136,7 +141,7 @@ export function BrowserPane({
   }
 
   return (
-    <div className="space-y-6">
+    <div ref={setBrowserPaneRootNode} className="space-y-6">
       {showBrowserUse ? (
         <BrowserUseSetup
           onConfigureMoreBrowsers={scrollToSessionCookies}
