@@ -9,7 +9,7 @@ import {
   TextInput
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Search,
   X,
@@ -495,12 +495,6 @@ export default function HostScreen() {
     }
   }, [client, connState, hostId])
 
-  useEffect(() => {
-    if (connState === 'connected') {
-      void fetchWorktrees()
-    }
-  }, [connState, fetchWorktrees])
-
   // Why: read desktop's protocol version from status.get on every connect
   // and re-evaluate compatibility. If the desktop declares this mobile
   // build too old (or vice versa via the local minimum), the host detail
@@ -542,13 +536,18 @@ export default function HostScreen() {
     }
   }, [connState, client])
 
-  useEffect(() => {
-    if (connState !== 'connected') return
-    const interval = setInterval(() => {
+  useFocusEffect(
+    useCallback(() => {
+      if (connState !== 'connected') return
       void fetchWorktrees()
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [connState, fetchWorktrees])
+      // Why: React Navigation keeps previous stack screens mounted; only
+      // poll the host list while this route is visible.
+      const interval = setInterval(() => {
+        void fetchWorktrees()
+      }, 3000)
+      return () => clearInterval(interval)
+    }, [connState, fetchWorktrees])
+  )
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
