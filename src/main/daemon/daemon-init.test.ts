@@ -771,6 +771,83 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     )
   })
 
+  it('preserves a daemon launched from another app path when it owns live sessions', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const requestMock = vi.fn(async (method: string) => {
+      if (method === 'listSessions') {
+        return {
+          sessions: [
+            { sessionId: 'wt-1@@live', isAlive: true },
+            { sessionId: 'wt-1@@dead', isAlive: false }
+          ]
+        }
+      }
+      return {}
+    })
+    const disconnectMock = vi.fn()
+    daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: requestMock,
+        disconnect: disconnectMock
+      }
+    })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    getDaemonLaunchIdentityMock.mockReturnValueOnce('mismatch')
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(getDaemonLaunchIdentityMock).toHaveBeenCalledWith(
+      '/fake/userData/daemon',
+      '/fake/socket',
+      '/fake/token',
+      '/fake/app/out/main/daemon-entry.js'
+    )
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(disconnectMock).toHaveBeenCalledOnce()
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
+    expect(forkMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves a daemon launched from another app path when live session state cannot be verified', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const requestMock = vi.fn(async (method: string) => {
+      if (method === 'listSessions') {
+        throw new Error('listSessions failed')
+      }
+      return {}
+    })
+    const disconnectMock = vi.fn()
+    daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: requestMock,
+        disconnect: disconnectMock
+      }
+    })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    getDaemonLaunchIdentityMock.mockReturnValueOnce('mismatch')
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(disconnectMock).toHaveBeenCalledOnce()
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
+    expect(forkMock).not.toHaveBeenCalled()
+  })
+
   it('respawns instead of reusing a protocol-healthy daemon with broken macOS resolver state', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
@@ -1112,5 +1189,47 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       ['--socket', '/fake/socket', '--token', '/fake/token'],
       expect.objectContaining({ detached: true })
     )
+  })
+
+  it('preserves a packaged daemon that predates the current app bundle when it owns live sessions', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const requestMock = vi.fn(async (method: string) => {
+      if (method === 'listSessions') {
+        return {
+          sessions: [{ sessionId: 'wt-1@@live', isAlive: true }]
+        }
+      }
+      return {}
+    })
+    const disconnectMock = vi.fn()
+    daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: requestMock,
+        disconnect: disconnectMock
+      }
+    })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    isPackagedMock.mockReturnValue(true)
+    isDaemonOlderThanPathMtimeMock.mockReturnValueOnce(true)
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(isDaemonOlderThanPathMtimeMock).toHaveBeenCalledWith(
+      '/fake/userData/daemon',
+      '/fake/socket',
+      '/fake/token',
+      '/fake/app/out/main/daemon-entry.js'
+    )
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(disconnectMock).toHaveBeenCalledOnce()
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
+    expect(forkMock).not.toHaveBeenCalled()
   })
 })
