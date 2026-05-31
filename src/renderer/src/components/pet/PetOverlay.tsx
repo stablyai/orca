@@ -183,18 +183,29 @@ const SIZE = 180
 const POSITION_STORAGE_KEY = 'pet-overlay-position'
 const LEGACY_POSITION_STORAGE_KEY = 'sidekick-overlay-position'
 
-type Position = { x: number; y: number }
+export type Position = { x: number; y: number }
+
+export function clampPositionToViewport(
+  pos: Position,
+  size: number,
+  viewport: { width: number; height: number }
+): Position {
+  const maxX = Math.max(0, viewport.width - size)
+  const maxY = Math.max(0, viewport.height - size)
+  return {
+    x: Math.min(Math.max(0, pos.x), maxX),
+    y: Math.min(Math.max(0, pos.y), maxY)
+  }
+}
 
 function clampToViewport(pos: Position, size: number = SIZE): Position {
   if (typeof window === 'undefined') {
     return pos
   }
-  const maxX = Math.max(0, window.innerWidth - size)
-  const maxY = Math.max(0, window.innerHeight - size)
-  return {
-    x: Math.min(Math.max(0, pos.x), maxX),
-    y: Math.min(Math.max(0, pos.y), maxY)
-  }
+  return clampPositionToViewport(pos, size, {
+    width: window.innerWidth,
+    height: window.innerHeight
+  })
 }
 
 function loadStoredPosition(size: number = SIZE): Position | null {
@@ -262,15 +273,12 @@ export function PetOverlay(): React.JSX.Element {
   const dragOffsetRef = useRef<Position>({ x: 0, y: 0 })
 
   useEffect(() => {
-    const onResize = (): void => setPosition((prev) => clampToViewport(prev, size))
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [size])
-
-  // Why: when the user shrinks/grows the overlay, re-clamp so the box never
-  // overflows the viewport edges (which would otherwise leave it un-draggable).
-  useEffect(() => {
-    setPosition((prev) => clampToViewport(prev, size))
+    const clampPosition = (): void => setPosition((prev) => clampToViewport(prev, size))
+    // Why: resizing the pet or the window uses the same viewport boundary; keep
+    // that clamp in one Effect so size changes do not need a second render pass.
+    clampPosition()
+    window.addEventListener('resize', clampPosition)
+    return () => window.removeEventListener('resize', clampPosition)
   }, [size])
 
   useEffect(() => {
