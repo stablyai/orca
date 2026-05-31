@@ -524,6 +524,87 @@ describe('fs:importExternalPaths', () => {
     expect(closeMock).toHaveBeenCalled()
   })
 
+  it('stages runtime upload directories whose child names start with dotdot characters', async () => {
+    const sourcePath = '/tmp/dropped/project'
+    const resolvedPath = path.resolve(sourcePath)
+    const childDir = path.join(resolvedPath, '..assets')
+    const childFile = path.join(childDir, 'icon.txt')
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === resolvedPath || p === childDir) {
+        return {
+          size: 0,
+          ino: 1,
+          dev: 1,
+          isFile: () => false,
+          isDirectory: () => true,
+          isSymbolicLink: () => false
+        }
+      }
+      if (p === childFile) {
+        return {
+          size: 4,
+          ino: 2,
+          dev: 1,
+          isFile: () => true,
+          isDirectory: () => false,
+          isSymbolicLink: () => false
+        }
+      }
+      throw enoent()
+    })
+    readdirMock.mockImplementation(async (p: string) => {
+      if (p === resolvedPath) {
+        return [
+          {
+            name: '..assets',
+            isDirectory: () => true,
+            isSymbolicLink: () => false,
+            isFile: () => false
+          }
+        ]
+      }
+      if (p === childDir) {
+        return [
+          {
+            name: 'icon.txt',
+            isDirectory: () => false,
+            isSymbolicLink: () => false,
+            isFile: () => true
+          }
+        ]
+      }
+      return []
+    })
+    openMock.mockResolvedValue({
+      stat: vi.fn().mockResolvedValue({
+        size: 4,
+        ino: 2,
+        dev: 1,
+        isFile: () => true
+      }),
+      readFile: vi.fn().mockResolvedValue(Buffer.from('icon')),
+      close: vi.fn().mockResolvedValue(undefined)
+    })
+
+    const result = (await handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, {
+      sourcePaths: [sourcePath]
+    })) as { sources: unknown[] }
+
+    expect(result.sources).toEqual([
+      {
+        sourcePath,
+        status: 'staged',
+        name: 'project',
+        kind: 'directory',
+        entries: [
+          { relativePath: '', kind: 'directory' },
+          { relativePath: '..assets', kind: 'directory' },
+          { relativePath: '..assets/icon.txt', kind: 'file', contentBase64: 'aWNvbg==' }
+        ]
+      }
+    ])
+  })
+
   it('fails runtime upload staging when a file changes between lstat and open', async () => {
     const sourcePath = '/tmp/dropped/logo.png'
     const resolvedPath = path.resolve(sourcePath)

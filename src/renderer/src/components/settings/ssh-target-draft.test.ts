@@ -25,6 +25,15 @@ describe('parseSshHostInput', () => {
     })
   })
 
+  it('normalizes bracketed IPv6 hosts from ssh URLs', () => {
+    expect(parseSshHostInput('ssh://deploy@[::1]:2202/srv/app')).toEqual({
+      host: '::1',
+      username: 'deploy',
+      port: 2202,
+      configHost: '::1'
+    })
+  })
+
   it('keeps plain OpenSSH config aliases valid without a username', () => {
     expect(parseSshHostInput('prod-box')).toEqual({
       host: 'prod-box',

@@ -120,15 +120,18 @@ function parseSshUrl(input: string): ParsedSshHostInput | null {
     if (url.protocol !== 'ssh:' || !url.hostname) {
       return null
     }
+    // Why: URL.hostname keeps IPv6 literals bracketed, but ssh2 and DNS
+    // resolution expect the bare address. The non-URL parser already strips.
+    const host = url.hostname.replace(/^\[|\]$/g, '')
     const port = url.port ? parseInt(url.port, 10) : undefined
     if (port !== undefined && !isValidPort(port)) {
       return null
     }
     return {
-      host: url.hostname,
+      host,
       username: url.username ? decodeURIComponent(url.username) : undefined,
       port,
-      configHost: url.hostname
+      configHost: host
     }
   } catch {
     return null

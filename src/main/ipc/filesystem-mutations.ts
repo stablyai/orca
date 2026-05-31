@@ -14,7 +14,7 @@ import {
   unlink,
   writeFile
 } from 'fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path'
 import { pipeline } from 'stream/promises'
 import type { Store } from '../persistence'
 import { authorizeExternalPath, resolveAuthorizedPath, isENOENT } from './filesystem-auth'
@@ -554,7 +554,11 @@ async function assertRealPathInsideRoot(
 ): Promise<void> {
   const candidateRealPath = await realpath(candidatePath)
   const relativeToRoot = relative(rootRealPath, candidateRealPath)
-  if (relativeToRoot !== '' && (relativeToRoot.startsWith('..') || isAbsolute(relativeToRoot))) {
+  // Why: `..name` is a valid child path; only `..` and `../...` escape.
+  if (
+    relativeToRoot !== '' &&
+    (relativeToRoot === '..' || relativeToRoot.startsWith(`..${sep}`) || isAbsolute(relativeToRoot))
+  ) {
     throw new Error(`Path escaped upload root during staging: '${displayPath}'`)
   }
 }

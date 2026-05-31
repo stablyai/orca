@@ -371,6 +371,36 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
+  it('opens Windows absolute OSC link targets that parse as URL schemes', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'C:\\repo\\src\\index.ts:12:3',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        startupCwd: 'C:\\repo',
+        worktreePath: 'C:\\repo'
+      }
+    )
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: 'C:/repo/src/index.ts'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' })
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: 'C:/repo/src/index.ts',
+      line: 12,
+      column: 3,
+      matchLength: 0
+    })
+  })
+
   it('opens Windows UNC file URL links from Windows worktrees', async () => {
     setPlatform('Windows')
 

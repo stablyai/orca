@@ -119,6 +119,19 @@ describe('terminal path helpers', () => {
       })
     })
 
+    it('detects framework route paths with bracket and paren segments', () => {
+      const links = extractTerminalFileLinks(
+        'Error in app/(shop)/products/[productId]/page.tsx:42:7'
+      )
+      expect(links).toHaveLength(1)
+      expect(links[0]).toMatchObject({
+        pathText: 'app/(shop)/products/[productId]/page.tsx',
+        line: 42,
+        column: 7,
+        displayText: 'app/(shop)/products/[productId]/page.tsx:42:7'
+      })
+    })
+
     it('handles large spaced path lists without quadratic overlap scans', () => {
       const line = Array.from({ length: 20_000 }, () => '/tmp/Foo Bar/file').join(', ')
 
