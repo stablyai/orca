@@ -20,7 +20,8 @@
  * sites must use this module; see filesystem.ts and relay/fs-handler.ts.
  */
 import { join, relative } from 'path'
-import type { SearchFileResult, SearchOptions, SearchResult } from './types'
+import { escapeRegex } from './string-utils'
+import type { SearchFileResult, SearchMatch, SearchOptions, SearchResult } from './types'
 
 export type SearchAccumulator = {
   fileMap: Map<string, SearchFileResult>
@@ -98,6 +99,42 @@ function clampLineContext(
     displayColumn: column,
     displayMatchLength: clampedMatchLength
   }
+}
+
+// Why: the rg and git-grep ingest paths share this exact append-and-cap step.
+// It sets `acc.truncated = true` SYNCHRONOUSLY in the same tick it returns
+// 'stop' (the truncation-ordering invariant the design doc requires — see
+// ingestRgJsonLine's doc comment); callers must return 'stop' as-is without
+// touching `truncated` themselves.
+function pushMatch(
+  fileResult: SearchFileResult,
+  acc: SearchAccumulator,
+  clamped: ReturnType<typeof clampLineContext>,
+  lineNumber: number,
+  maxResults: number
+): 'continue' | 'stop' {
+  // Why: direct assignment over conditional spread — this runs once per match
+  // (up to maxResults), and the spread form allocates two throwaway objects per
+  // call even on the common short-line path where both display fields are unset.
+  const match: SearchMatch = {
+    line: lineNumber,
+    column: clamped.column,
+    matchLength: clamped.matchLength,
+    lineContent: clamped.lineContent
+  }
+  if (clamped.displayColumn !== undefined) {
+    match.displayColumn = clamped.displayColumn
+  }
+  if (clamped.displayMatchLength !== undefined) {
+    match.displayMatchLength = clamped.displayMatchLength
+  }
+  fileResult.matches.push(match)
+  acc.totalMatches++
+  if (acc.totalMatches >= maxResults) {
+    acc.truncated = true
+    return 'stop'
+  }
+  return 'continue'
 }
 
 // ─── rg ─────────────────────────────────────────────────────────────
@@ -247,19 +284,7 @@ export function ingestRgJsonLine(
 
   for (const sub of submatches) {
     const clamped = clampLineContext(lineContent, sub.start, sub.end - sub.start)
-    fileResult.matches.push({
-      line: lineNumber,
-      column: clamped.column,
-      matchLength: clamped.matchLength,
-      lineContent: clamped.lineContent,
-      ...(clamped.displayColumn !== undefined ? { displayColumn: clamped.displayColumn } : {}),
-      ...(clamped.displayMatchLength !== undefined
-        ? { displayMatchLength: clamped.displayMatchLength }
-        : {})
-    })
-    acc.totalMatches++
-    if (acc.totalMatches >= maxResults) {
-      acc.truncated = true
+    if (pushMatch(fileResult, acc, clamped, lineNumber, maxResults) === 'stop') {
       return 'stop'
     }
   }
@@ -267,17 +292,6 @@ export function ingestRgJsonLine(
 }
 
 // ─── git grep ───────────────────────────────────────────────────────
-
-// Why: esbuild's parser chokes on regex literals containing brace/bracket
-// character classes, so we escape special chars with a simple loop.
-const REGEX_SPECIAL = '.*+?^${}()|[]\\'
-function escapeRegexSource(str: string): string {
-  let out = ''
-  for (let i = 0; i < str.length; i++) {
-    out += REGEX_SPECIAL.includes(str[i]) ? `\\${str[i]}` : str[i]
-  }
-  return out
-}
 
 /**
  * Convert a user-facing glob pattern into a git pathspec.
@@ -361,7 +375,7 @@ export function buildSubmatchRegex(
   query: string,
   opts: { useRegex?: boolean; wholeWord?: boolean; caseSensitive?: boolean }
 ): RegExp | null {
-  let pattern = opts.useRegex ? query : escapeRegexSource(query)
+  let pattern = opts.useRegex ? query : escapeRegex(query)
   if (opts.wholeWord) {
     pattern = `\\b${pattern}\\b`
   }
@@ -416,41 +430,14 @@ export function ingestGitGrepLine(
   // whole-line highlight so the result still shows up in the UI.
   if (submatchRegex === null) {
     const clamped = clampLineContext(lineContent, 0, lineContent.length)
-    fileResult.matches.push({
-      line: lineNum,
-      column: clamped.column,
-      matchLength: clamped.matchLength,
-      lineContent: clamped.lineContent,
-      ...(clamped.displayColumn !== undefined ? { displayColumn: clamped.displayColumn } : {}),
-      ...(clamped.displayMatchLength !== undefined
-        ? { displayMatchLength: clamped.displayMatchLength }
-        : {})
-    })
-    acc.totalMatches++
-    if (acc.totalMatches >= maxResults) {
-      acc.truncated = true
-      return 'stop'
-    }
-    return 'continue'
+    return pushMatch(fileResult, acc, clamped, lineNum, maxResults)
   }
 
   submatchRegex.lastIndex = 0
   let m: RegExpExecArray | null
   while ((m = submatchRegex.exec(lineContent)) !== null) {
     const clamped = clampLineContext(lineContent, m.index, m[0].length)
-    fileResult.matches.push({
-      line: lineNum,
-      column: clamped.column,
-      matchLength: clamped.matchLength,
-      lineContent: clamped.lineContent,
-      ...(clamped.displayColumn !== undefined ? { displayColumn: clamped.displayColumn } : {}),
-      ...(clamped.displayMatchLength !== undefined
-        ? { displayMatchLength: clamped.displayMatchLength }
-        : {})
-    })
-    acc.totalMatches++
-    if (acc.totalMatches >= maxResults) {
-      acc.truncated = true
+    if (pushMatch(fileResult, acc, clamped, lineNum, maxResults) === 'stop') {
       return 'stop'
     }
     // Prevent infinite loop on zero-length regex matches.
