@@ -567,6 +567,12 @@ function unsubscribe(worktreePath: string, senderId: number): void {
       clearTimeout(root.batch.timer)
     }
 
+    // Why: duplicate renderer cleanup can call unwatch more than once for a
+    // root; keep one tracked grace timer instead of leaking overwritten timers.
+    if (pendingTeardowns.has(rootKey)) {
+      return
+    }
+
     const teardownTimer = setTimeout(() => {
       pendingTeardowns.delete(rootKey)
       // Re-check: a new listener may have arrived during the grace period.

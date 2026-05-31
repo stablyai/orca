@@ -225,4 +225,30 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     expect(senderOne.once).toHaveBeenCalledWith('destroyed', expect.any(Function))
     expect(senderTwo.once).toHaveBeenCalledWith('destroyed', expect.any(Function))
   })
+
+  it('keeps a single grace teardown timer for duplicate local unwatch calls', async () => {
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    const unsubscribeMock = vi.fn()
+    vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
+    const sender = {
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn(),
+      id: 1
+    }
+
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
+
+    vi.useFakeTimers()
+    try {
+      handlers['fs:unwatchWorktree']({ sender: { id: 1 } }, { worktreePath: '/tmp/repo' })
+      handlers['fs:unwatchWorktree']({ sender: { id: 1 } }, { worktreePath: '/tmp/repo' })
+
+      expect(vi.getTimerCount()).toBe(1)
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(unsubscribeMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
