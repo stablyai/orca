@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock } = vi.hoisted(() => ({
   handleMock: vi.fn()
@@ -46,6 +46,10 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       handlers[channel] = handler
     })
     registerFilesystemWatcherHandlers()
+    await closeAllWatchers()
+  })
+
+  afterEach(async () => {
     await closeAllWatchers()
   })
 
@@ -119,5 +123,38 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     resolveUnsubscribe()
     await shutdownPromise
     expect(shutdownResolved).toBe(true)
+  })
+
+  it('unsubscribes if the sender is destroyed while the local watcher is opening', async () => {
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    let destroyed = false
+    let resolveSubscribe: (subscription: { unsubscribe: () => void }) => void = () => {}
+    const unsubscribeMock = vi.fn()
+    vi.mocked(subscribeParcelWatcher).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSubscribe = resolve as typeof resolveSubscribe
+        })
+    )
+    const sender = {
+      isDestroyed: () => destroyed,
+      send: vi.fn(),
+      once: vi.fn(),
+      id: 1
+    }
+
+    const watchPromise = handlers['fs:watchWorktree'](
+      { sender },
+      { worktreePath: '/tmp/repo' }
+    ) as Promise<unknown>
+    await vi.waitFor(() => {
+      expect(subscribeParcelWatcher).toHaveBeenCalled()
+    })
+    destroyed = true
+    resolveSubscribe({ unsubscribe: unsubscribeMock })
+    await watchPromise
+
+    expect(unsubscribeMock).toHaveBeenCalledTimes(1)
+    expect(sender.once).not.toHaveBeenCalled()
   })
 })

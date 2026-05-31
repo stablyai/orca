@@ -388,6 +388,9 @@ function registerSenderCleanup(sender: WebContents): void {
 
 async function subscribe(worktreePath: string, sender: WebContents): Promise<void> {
   const rootKey = normalizeRootPath(worktreePath)
+  if (sender.isDestroyed()) {
+    return
+  }
 
   // Don't retry roots that already failed — avoids repeated error spam.
   if (unwatchableRoots.has(rootKey)) {
@@ -437,6 +440,20 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
       return
     }
     watchedRoots.set(rootKey, root)
+  }
+
+  if (sender.isDestroyed()) {
+    // Why: native watcher creation is async. A renderer can close while we
+    // await subscribe(), and its `destroyed` event will not fire again after
+    // we register cleanup below. Tear down a newly-idle root immediately.
+    if (root.listeners.size === 0) {
+      if (root.batch.timer) {
+        clearTimeout(root.batch.timer)
+      }
+      void trackLocalUnsubscribe(rootKey, root)
+      watchedRoots.delete(rootKey)
+    }
+    return
   }
 
   root.listeners.set(sender.id, sender)
