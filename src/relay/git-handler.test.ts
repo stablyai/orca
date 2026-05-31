@@ -425,6 +425,36 @@ describe('GitHandler', () => {
       expect(result.originalContent).toBe('original')
       expect(result.modifiedContent).toBe('staged-content')
     })
+
+    it('returns diff for tracked files in valid dot-dot-prefixed directories', async () => {
+      gitInit(tmpDir)
+      mkdirSync(path.join(tmpDir, '..fixtures'))
+      writeFileSync(path.join(tmpDir, '..fixtures', 'file.txt'), 'original')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, '..fixtures', 'file.txt'), 'modified')
+
+      const result = (await dispatcher.callRequest('git.diff', {
+        worktreePath: tmpDir,
+        filePath: '..fixtures/file.txt',
+        staged: false
+      })) as { kind: string; originalContent: string; modifiedContent: string }
+
+      expect(result.kind).toBe('text')
+      expect(result.originalContent).toBe('original')
+      expect(result.modifiedContent).toBe('modified')
+    })
+
+    it('rejects diff paths that traverse outside the worktree', async () => {
+      gitInit(tmpDir)
+
+      await expect(
+        dispatcher.callRequest('git.diff', {
+          worktreePath: tmpDir,
+          filePath: '../outside.txt',
+          staged: false
+        })
+      ).rejects.toThrow('outside the worktree')
+    })
   })
 
   describe('discard', () => {
@@ -1037,6 +1067,39 @@ describe('GitHandler', () => {
       expect(result.length).toBeGreaterThanOrEqual(1)
       expect(result[0].isMainWorktree).toBe(true)
     })
+
+    it.skipIf(process.platform === 'win32')(
+      'lists worktrees whose paths contain newlines',
+      async () => {
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
+        gitCommit(tmpDir, 'initial')
+        const worktreePath = path.join(
+          path.dirname(tmpDir),
+          `${path.basename(tmpDir)}-linked\nremote`
+        )
+
+        try {
+          execFileSync(
+            'git',
+            ['worktree', 'add', '--quiet', '-b', 'feature/newline', worktreePath],
+            {
+              cwd: tmpDir,
+              stdio: 'pipe'
+            }
+          )
+          const realWorktreePath = await fs.realpath(worktreePath)
+
+          const result = (await dispatcher.callRequest('git.listWorktrees', {
+            repoPath: tmpDir
+          })) as Record<string, unknown>[]
+
+          expect(result.map((worktree) => worktree.path)).toContain(realWorktreePath)
+        } finally {
+          await fs.rm(worktreePath, { recursive: true, force: true })
+        }
+      }
+    )
   })
 
   describe('addWorktree', () => {

@@ -5,7 +5,7 @@ import { existsSync } from 'fs'
 import { open, readdir, readFile, realpath, stat } from 'fs/promises'
 import { createRequire } from 'module'
 import { homedir } from 'os'
-import { isAbsolute, join, relative, resolve } from 'path'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { promisify } from 'util'
 import type { RelayDispatcher } from './dispatcher'
 
@@ -246,7 +246,11 @@ export class ExternalAutomationsHandler {
       const relativeToHermesHome = relative(resolve(homeRealPath), resolve(logRealPath))
       // Why: the output body can contain agent-authored text, so only hydrate
       // referenced files that resolve inside Hermes' own data directory.
-      if (relativeToHermesHome.startsWith('..') || isAbsolute(relativeToHermesHome)) {
+      if (
+        relativeToHermesHome === '..' ||
+        relativeToHermesHome.startsWith(`..${sep}`) ||
+        isAbsolute(relativeToHermesHome)
+      ) {
         return null
       }
       const logStat = await stat(logPath)

@@ -3,7 +3,7 @@
 import { existsSync } from 'fs'
 import { open, readdir, readFile, realpath, stat } from 'fs/promises'
 import { homedir } from 'os'
-import { isAbsolute, join, relative, resolve } from 'path'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 import Database from '../sqlite/sync-database'
 
 const HERMES_HOME = process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
@@ -162,7 +162,11 @@ async function readReferencedLogFile(content: string): Promise<{
     const relativeToHermesHome = relative(resolve(homeRealPath), resolve(logRealPath))
     // Why: the output body can contain agent-authored text, so only hydrate
     // referenced files that resolve inside Hermes' own data directory.
-    if (relativeToHermesHome.startsWith('..') || isAbsolute(relativeToHermesHome)) {
+    if (
+      relativeToHermesHome === '..' ||
+      relativeToHermesHome.startsWith(`..${sep}`) ||
+      isAbsolute(relativeToHermesHome)
+    ) {
       return null
     }
     const logStat = await stat(logPath)

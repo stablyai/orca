@@ -160,6 +160,36 @@ branch refs/heads/main
     ])
   })
 
+  it('parses NUL-delimited porcelain output with newline paths', () => {
+    const output = [
+      'worktree /repo',
+      'HEAD abc123',
+      'branch refs/heads/main',
+      '',
+      'worktree /repo/linked\nworktree',
+      'HEAD def456',
+      'branch refs/heads/feature/newline',
+      ''
+    ].join('\0')
+
+    expect(parseWorktreeList(output, { nulDelimited: true })).toEqual([
+      {
+        path: '/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/repo/linked\nworktree',
+        head: 'def456',
+        branch: 'refs/heads/feature/newline',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+  })
+
   it('parses multiple bare entries mixed with regular entries', () => {
     const output = `worktree /bare-one
 HEAD 0000000

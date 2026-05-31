@@ -662,6 +662,47 @@ describe('CodexHookService', () => {
     expect(systemToml).not.toContain(':session_start:0:0')
   })
 
+  it('removes very large legacy Orca-managed hook lists from system ~/.codex', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    const legacyScriptPath = join(
+      tmpHome,
+      '.orca',
+      'agent-hooks',
+      process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
+    )
+    const legacyCommand =
+      process.platform === 'win32' ? legacyScriptPath : wrapPosixHookCommand(legacyScriptPath)
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify({
+        hooks: {
+          Stop: Array.from({ length: 130_000 }, () => ({
+            hooks: [{ type: 'command', command: legacyCommand }]
+          }))
+        }
+      })}\n`,
+      'utf-8'
+    )
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      expect(new CodexHookService().install().state).toBe('installed')
+
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        '[codex-hook-service] failed to clean legacy Codex hooks',
+        expect.anything()
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
+    const systemHooks = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
+      hooks: Record<string, unknown>
+    }
+    expect(systemHooks.hooks.Stop).toBeUndefined()
+  })
+
   it('removes the legacy Orca Codex profile file when it only contains managed hooks', () => {
     const systemCodexHome = join(tmpHome, '.codex')
     const profilePath = join(systemCodexHome, 'orca-agent-status.config.toml')
