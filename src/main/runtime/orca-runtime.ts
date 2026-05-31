@@ -907,6 +907,32 @@ function normalizeLocalBranchName(branchName: string | undefined): string {
   return branchName?.replace(/^refs\/heads\//, '') ?? ''
 }
 
+// Clamp terminal dimensions to the PTY's supported range (cols 20–240, rows 8–120).
+function clampTerminalViewport(cols: number, rows: number): { cols: number; rows: number } {
+  return {
+    cols: Math.max(20, Math.min(240, Math.round(cols))),
+    rows: Math.max(8, Math.min(120, Math.round(rows)))
+  }
+}
+
+// Subscribe a listener to a per-key Set, pruning the key's entry once its last
+// listener unsubscribes. Returns the unsubscribe callback.
+function addListenerToMap<T>(map: Map<string, Set<T>>, key: string, listener: T): () => void {
+  let listeners = map.get(key)
+  if (!listeners) {
+    listeners = new Set<T>()
+    map.set(key, listeners)
+  }
+  const set = listeners
+  set.add(listener)
+  return () => {
+    set.delete(listener)
+    if (set.size === 0) {
+      map.delete(key)
+    }
+  }
+}
+
 async function canCheckoutExistingLocalBranch(
   repoPath: string,
   branchName: string,
@@ -2408,51 +2434,18 @@ export class OrcaRuntimeService {
   }
 
   subscribeToTerminalData(ptyId: string, listener: (data: string) => void): () => void {
-    let listeners = this.dataListeners.get(ptyId)
-    if (!listeners) {
-      listeners = new Set()
-      this.dataListeners.set(ptyId, listeners)
-    }
-    listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-      if (listeners.size === 0) {
-        this.dataListeners.delete(ptyId)
-      }
-    }
+    return addListenerToMap(this.dataListeners, ptyId, listener)
   }
 
   subscribeToFitOverrideChanges(
     ptyId: string,
     listener: (event: { mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }) => void
   ): () => void {
-    let listeners = this.fitOverrideListeners.get(ptyId)
-    if (!listeners) {
-      listeners = new Set()
-      this.fitOverrideListeners.set(ptyId, listeners)
-    }
-    listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-      if (listeners.size === 0) {
-        this.fitOverrideListeners.delete(ptyId)
-      }
-    }
+    return addListenerToMap(this.fitOverrideListeners, ptyId, listener)
   }
 
   subscribeToDriverChanges(ptyId: string, listener: (driver: DriverState) => void): () => void {
-    let listeners = this.driverListeners.get(ptyId)
-    if (!listeners) {
-      listeners = new Set()
-      this.driverListeners.set(ptyId, listeners)
-    }
-    listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-      if (listeners.size === 0) {
-        this.driverListeners.delete(ptyId)
-      }
-    }
+    return addListenerToMap(this.driverListeners, ptyId, listener)
   }
 
   private notifyFitOverrideListeners(
@@ -2700,9 +2693,6 @@ export class OrcaRuntimeService {
       // Why: mobile scrollback should not depend on a mounted renderer pane.
       // If renderer serialization races reload/unmount, the runtime snapshot
       // below can still preserve colored terminal state.
-    }
-    if (rendererSnapshot && rendererSnapshot.data.length > 0) {
-      return rendererSnapshot
     }
     return rendererSnapshot
   }
@@ -3145,8 +3135,7 @@ export class OrcaRuntimeService {
       if (cols == null || rows == null || !Number.isFinite(cols) || !Number.isFinite(rows)) {
         throw new Error('invalid_dimensions')
       }
-      const clampedCols = Math.max(20, Math.min(240, Math.round(cols)))
-      const clampedRows = Math.max(8, Math.min(120, Math.round(rows)))
+      const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(cols, rows)
 
       const currentSize = this.getTerminalSize(ptyId)
       const existing = this.terminalFitOverrides.get(ptyId)
@@ -3383,7 +3372,7 @@ export class OrcaRuntimeService {
       }
       this.setDriver(ptyId, { kind: 'mobile', clientId: next.clientId })
 
-      const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+      const mode = this.getMobileDisplayMode(ptyId)
       if (mode === 'desktop') {
         continue
       }
@@ -3569,7 +3558,7 @@ export class OrcaRuntimeService {
     sub.viewport = viewport
     sub.lastActedAt = Date.now()
 
-    const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    const mode = this.getMobileDisplayMode(ptyId)
     if (mode === 'desktop') {
       // Watching at desktop dims — viewport is informational only.
       return true
@@ -3581,8 +3570,10 @@ export class OrcaRuntimeService {
     }
     const winnerSub = inner!.get(winner.clientId)
     const driveViewport = winnerSub?.viewport ?? viewport
-    const clampedCols = Math.max(20, Math.min(240, Math.round(driveViewport.cols)))
-    const clampedRows = Math.max(8, Math.min(120, Math.round(driveViewport.rows)))
+    const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(
+      driveViewport.cols,
+      driveViewport.rows
+    )
 
     sub.wasResizedToPhone = true
     // The driver is already mobile{this client} when we got here; refresh
@@ -3612,8 +3603,7 @@ export class OrcaRuntimeService {
     ) {
       return false
     }
-    const cols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
-    const rows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
+    const { cols, rows } = clampTerminalViewport(viewport.cols, viewport.rows)
     let resized = false
     try {
       resized = this.ptyController?.resize?.(ptyId, cols, rows) ?? false
@@ -4080,7 +4070,7 @@ export class OrcaRuntimeService {
     clientId: string,
     viewport?: { cols: number; rows: number }
   ): Promise<boolean> {
-    const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    const mode = this.getMobileDisplayMode(ptyId)
     if (!viewport) {
       return false
     }
@@ -4093,8 +4083,10 @@ export class OrcaRuntimeService {
       this.pendingRestoreTimers.delete(ptyId)
     }
 
-    const clampedCols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
-    const clampedRows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
+    const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(
+      viewport.cols,
+      viewport.rows
+    )
 
     // Resubscribe-grace honor: same client returning within soft-leave
     // window restores prior record (preserving baseline so we don't capture
@@ -4273,7 +4265,7 @@ export class OrcaRuntimeService {
 
     // Last subscriber leaving — clean up.
     this.mobileSubscribers.delete(ptyId)
-    const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    const mode = this.getMobileDisplayMode(ptyId)
 
     // Resubscribe-grace: hold driver=mobile{clientId} for ~250ms so a quick
     // re-subscribe (older clients without updateViewport) doesn't flash the
@@ -4358,7 +4350,7 @@ export class OrcaRuntimeService {
   // phone-fit dims. The earliest-by-subscribe-time subscriber's
   // previousCols/Rows drive the desktop-restore target.
   async applyMobileDisplayMode(ptyId: string): Promise<void> {
-    const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    const mode = this.getMobileDisplayMode(ptyId)
     const inner = this.mobileSubscribers.get(ptyId)
     const subscriber = inner ? this.pickMostRecentActor(inner) : null
     const subscriberRecord = subscriber && inner ? inner.get(subscriber.clientId) : null
@@ -4513,18 +4505,7 @@ export class OrcaRuntimeService {
       seq?: number
     }) => void
   ): () => void {
-    let listeners = this.resizeListeners.get(ptyId)
-    if (!listeners) {
-      listeners = new Set()
-      this.resizeListeners.set(ptyId, listeners)
-    }
-    listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-      if (listeners.size === 0) {
-        this.resizeListeners.delete(ptyId)
-      }
-    }
+    return addListenerToMap(this.resizeListeners, ptyId, listener)
   }
 
   private notifyTerminalResize(
@@ -10538,6 +10519,7 @@ export class OrcaRuntimeService {
       return []
     }
     const now = Date.now()
+    const metaById = this.store.getAllWorktreeMeta() ?? {}
     const perRepoWorktrees = await Promise.all(
       this.store.getRepos().map(async (repo) => {
         if (isFolderRepo(repo)) {
@@ -10568,7 +10550,6 @@ export class OrcaRuntimeService {
         if (scan.ok) {
           this.pruneLineageForMissingRepoWorktrees(repo, gitWorktrees)
         }
-        const metaById = this.store?.getAllWorktreeMeta() ?? {}
         return gitWorktrees.map((gitWorktree) => {
           const worktreeId = `${repo.id}::${gitWorktree.path}`
           // Why: lineage validation needs a durable instance ID even when the
@@ -13191,15 +13172,11 @@ function branchSelectorMatches(branch: string, selector: string): boolean {
   // or `foo` depending on which plumbing path produced the record. Orca's
   // branch selectors should accept either form so newly created worktrees stay
   // discoverable without exposing internal ref-shape differences to users.
-  return normalizeBranchRef(branch) === normalizeBranchRef(selector)
+  return normalizeLocalBranchName(branch) === normalizeLocalBranchName(selector)
 }
 
 function runtimePathsEqual(left: string, right: string): boolean {
   return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
-}
-
-function normalizeBranchRef(branch: string): string {
-  return branch.startsWith('refs/heads/') ? branch.slice('refs/heads/'.length) : branch
 }
 
 function inferWorktreeIdFromPtyId(ptyId: string): string | null {
