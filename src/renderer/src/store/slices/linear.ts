@@ -107,6 +107,7 @@ type InflightLinearListRequest = {
 type InflightLinearCollectionRequest<T> = {
   promise: Promise<LinearCollectionResult<T>>
   force: boolean
+  generation: number
 }
 type InflightLinearDetailRequest<T> = {
   promise: Promise<T>
@@ -915,9 +916,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     let entry: InflightLinearCollectionRequest<LinearProjectSummary>
+    const requestCacheGeneration = linearCacheGeneration
     const promise = linearListProjects(get().settings, trimmed, limit, resolvedWorkspaceId)
       .then((result) => {
-        if (inflightProjectRequests.get(cacheKey) === entry) {
+        if (
+          inflightProjectRequests.get(cacheKey) === entry &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
           set((s) => ({
             linearProjectCache: evictStaleEntries({
               ...s.linearProjectCache,
@@ -940,9 +945,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         if (inflightProjectRequests.get(cacheKey) === entry) {
           inflightProjectRequests.delete(cacheKey)
         }
+        if (
+          shouldRefreshStatusAfterRead(resolvedWorkspaceId) &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
+          void get().checkLinearConnection(true)
+        }
       })
 
-    entry = { promise, force: Boolean(options?.force) }
+    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
     inflightProjectRequests.set(cacheKey, entry)
     return promise
   },
@@ -1010,9 +1021,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     let entry: InflightLinearCollectionRequest<LinearIssue>
+    const requestCacheGeneration = linearCacheGeneration
     const promise = linearListProjectIssues(get().settings, projectId, limit, workspaceId)
       .then((result) => {
-        if (inflightProjectIssueRequests.get(cacheKey) === entry) {
+        if (
+          inflightProjectIssueRequests.get(cacheKey) === entry &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
           set((s) => ({
             linearProjectIssueCache: evictStaleEntries({
               ...s.linearProjectIssueCache,
@@ -1037,7 +1052,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
 
-    entry = { promise, force: Boolean(options?.force) }
+    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
     inflightProjectIssueRequests.set(cacheKey, entry)
     return promise
   },
@@ -1062,9 +1077,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     let entry: InflightLinearCollectionRequest<LinearCustomViewSummary>
+    const requestCacheGeneration = linearCacheGeneration
     const promise = linearListCustomViews(get().settings, model, limit, resolvedWorkspaceId)
       .then((result) => {
-        if (inflightCustomViewRequests.get(cacheKey) === entry) {
+        if (
+          inflightCustomViewRequests.get(cacheKey) === entry &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
           set((s) => ({
             linearCustomViewCache: evictStaleEntries({
               ...s.linearCustomViewCache,
@@ -1088,9 +1107,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         if (inflightCustomViewRequests.get(cacheKey) === entry) {
           inflightCustomViewRequests.delete(cacheKey)
         }
+        if (
+          shouldRefreshStatusAfterRead(resolvedWorkspaceId) &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
+          void get().checkLinearConnection(true)
+        }
       })
 
-    entry = { promise, force: Boolean(options?.force) }
+    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
     inflightCustomViewRequests.set(cacheKey, entry)
     return promise
   },
@@ -1158,9 +1183,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     let entry: InflightLinearCollectionRequest<LinearIssue>
+    const requestCacheGeneration = linearCacheGeneration
     const promise = linearListCustomViewIssues(get().settings, viewId, limit, workspaceId)
       .then((result) => {
-        if (inflightCustomViewIssueRequests.get(cacheKey) === entry) {
+        if (
+          inflightCustomViewIssueRequests.get(cacheKey) === entry &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
           set((s) => ({
             linearCustomViewIssueCache: evictStaleEntries({
               ...s.linearCustomViewIssueCache,
@@ -1185,7 +1214,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
 
-    entry = { promise, force: Boolean(options?.force) }
+    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
     inflightCustomViewIssueRequests.set(cacheKey, entry)
     return promise
   },
@@ -1203,9 +1232,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     let entry: InflightLinearCollectionRequest<LinearProjectSummary>
+    const requestCacheGeneration = linearCacheGeneration
     const promise = linearListCustomViewProjects(get().settings, viewId, limit, workspaceId)
       .then((result) => {
-        if (inflightCustomViewProjectRequests.get(cacheKey) === entry) {
+        if (
+          inflightCustomViewProjectRequests.get(cacheKey) === entry &&
+          requestCacheGeneration === linearCacheGeneration
+        ) {
           set((s) => ({
             linearCustomViewProjectCache: evictStaleEntries({
               ...s.linearCustomViewProjectCache,
@@ -1231,7 +1264,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
 
-    entry = { promise, force: Boolean(options?.force) }
+    entry = { promise, force: Boolean(options?.force), generation: requestCacheGeneration }
     inflightCustomViewProjectRequests.set(cacheKey, entry)
     return promise
   },
