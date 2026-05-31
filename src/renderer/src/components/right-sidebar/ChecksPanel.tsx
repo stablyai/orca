@@ -18,6 +18,7 @@ import {
   PullRequestIcon,
   prStateColor,
   ConflictingFilesSection,
+  ConflictTriageStrip,
   MergeConflictNotice,
   ChecksList,
   PRCommentsList,
@@ -29,6 +30,7 @@ import type {
   GitLabWorkItemDetails,
   PRInfo,
   PRCheckDetail,
+  PRCheckRunDetails,
   PRComment
 } from '../../../../shared/types'
 import { getConnectionId } from '@/lib/connection-context'
@@ -38,7 +40,11 @@ import {
   buildResolvePullRequestConflictsPrompt,
   pickDefaultSourceControlAgent
 } from './SourceControl'
-import { buildFixBrokenChecksPrompt, getBrokenChecks } from '../pr-checks-fix-prompt'
+import {
+  buildFixBrokenChecksPrompt,
+  getBrokenChecks,
+  getCheckDetailsPromptKey
+} from '../pr-checks-fix-prompt'
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type {
   HostedReviewCreationEligibility,
@@ -1798,12 +1804,44 @@ export default function ChecksPanel(): React.JSX.Element {
       if (!isCurrentAsyncResult(requestKey)) {
         return
       }
+      const checkRunDetailsByCheckKey: Record<string, PRCheckRunDetails> = {}
+      if (activeReview.provider !== 'gitlab' && repo) {
+        await Promise.all(
+          broken.slice(0, 5).map(async (check, index) => {
+            if (!check.checkRunId && !check.workflowRunId && !check.url) {
+              return
+            }
+            try {
+              const details = await fetchPRCheckDetails(
+                repo.path,
+                {
+                  checkRunId: check.checkRunId,
+                  workflowRunId: check.workflowRunId,
+                  checkName: check.name,
+                  url: check.url,
+                  prRepo: pr?.prRepo ?? null
+                },
+                { repoId: repo.id }
+              )
+              if (details) {
+                checkRunDetailsByCheckKey[getCheckDetailsPromptKey(check, index)] = details
+              }
+            } catch (error) {
+              console.warn('[ChecksPanel] failed to load check details for AI fix prompt', error)
+            }
+          })
+        )
+      }
+      if (!isCurrentAsyncResult(requestKey)) {
+        return
+      }
       const prompt = buildFixBrokenChecksPrompt({
         reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',
         reviewNumber: activeReview.number,
         reviewTitle: activeReview.title,
         reviewUrl: activeReview.url,
-        checks
+        checks,
+        checkRunDetailsByCheckKey
       })
       const result = launchAgentInNewTab({
         agent,
@@ -1827,8 +1865,11 @@ export default function ChecksPanel(): React.JSX.Element {
     activeReview,
     activeWorktreeId,
     checks,
+    fetchPRCheckDetails,
     isCurrentAsyncResult,
     isFixingChecksWithAI,
+    pr?.prRepo,
+    repo,
     stateRequestKey
   ])
 
@@ -2352,17 +2393,8 @@ export default function ChecksPanel(): React.JSX.Element {
 
       {activeConflictReview && (
         <>
-          <ConflictingFilesSection
-            pr={activeConflictReview}
-            isResolvingWithAI={isResolvingConflictsWithAI}
-            onResolveWithAI={() => void handleResolveConflictsWithAI()}
-            resolveDisabled={Boolean(aiActionDisabledReason)}
-            resolveDisabledReason={aiActionDisabledReason}
-          />
-          <MergeConflictNotice
-            pr={activeConflictReview}
-            isRefreshingConflictDetails={isRefreshing || conflictDetailsRefreshing}
-          />
+          {/* Why: the triage strip owns the single Resolve action for PR and MR
+              conflicts; the file list and fallback notice are informational. */}
           {pr ? (
             <PRTriageStrip
               pr={pr}
@@ -2376,7 +2408,20 @@ export default function ChecksPanel(): React.JSX.Element {
               fixChecksDisabled={Boolean(aiActionDisabledReason)}
               fixChecksDisabledReason={aiActionDisabledReason}
             />
-          ) : null}
+          ) : (
+            <ConflictTriageStrip
+              reviewKind={activeConflictReview.provider === 'gitlab' ? 'MR' : 'PR'}
+              isResolvingConflictsWithAI={isResolvingConflictsWithAI}
+              onResolveConflictsWithAI={() => void handleResolveConflictsWithAI()}
+              resolveConflictsDisabled={Boolean(aiActionDisabledReason)}
+              resolveConflictsDisabledReason={aiActionDisabledReason}
+            />
+          )}
+          <ConflictingFilesSection pr={activeConflictReview} />
+          <MergeConflictNotice
+            pr={activeConflictReview}
+            isRefreshingConflictDetails={isRefreshing || conflictDetailsRefreshing}
+          />
         </>
       )}
       {/* Why: when the hosted review has merge conflicts and no checks have been fetched,

@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { PRCheckDetail, PRComment, PRInfo } from '../../../../shared/types'
 import {
+  CheckJobLogTail,
+  ConflictTriageStrip,
   getFailedChecksForDetails,
   MergeConflictNotice,
   PRCommentsList,
@@ -83,6 +85,20 @@ describe('MergeConflictNotice', () => {
     expect(markup).toContain('lucide-sparkles')
     expect(markup).not.toContain('Resolve with AI')
   })
+
+  it('renders a conflict resolve action for merge requests without PR data', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(ConflictTriageStrip, {
+        reviewKind: 'MR',
+        isResolvingConflictsWithAI: false,
+        onResolveConflictsWithAI: () => {}
+      })
+    )
+
+    expect(markup).toContain('Conflicts block this MR')
+    expect(markup).toContain('Resolve')
+    expect(markup).toContain('lucide-sparkles')
+  })
 })
 
 describe('PRCommentsList', () => {
@@ -106,7 +122,7 @@ describe('PRCommentsList', () => {
       })
     )
 
-    expect(markup.indexOf('Existing review context')).toBeLessThan(markup.indexOf('Add Comment'))
+    expect(markup.indexOf('Existing review context')).toBeLessThan(markup.indexOf('Add a comment…'))
     expect(markup).not.toContain('Add a PR comment')
   })
 })
@@ -126,5 +142,19 @@ describe('getFailedChecksForDetails', () => {
       'lint',
       'e2e'
     ])
+  })
+})
+
+describe('CheckJobLogTail', () => {
+  it('renders a labeled monospace log tail with copy affordance', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(CheckJobLogTail, {
+        logTail: 'Error: expected true to be false'
+      })
+    )
+
+    expect(markup).toContain('Log tail (last 200 lines)')
+    expect(markup).toContain('Error: expected true to be false')
+    expect(markup).toContain('Copy log tail')
   })
 })

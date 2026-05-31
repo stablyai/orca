@@ -878,12 +878,14 @@ export type PRCheckStep = {
 }
 
 export type PRCheckJob = {
+  id: number | null
   name: string
   status: string | null
   conclusion: string | null
   startedAt: string | null
   completedAt: string | null
   url: string | null
+  logTail: string | null
   steps: PRCheckStep[]
 }
 

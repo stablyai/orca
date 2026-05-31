@@ -88,6 +88,24 @@ import {
 type GhExecOptions = ReturnType<typeof ghRepoExecOptions>
 
 const ORCA_REPO = 'stablyai/orca'
+const PR_CHECK_LOG_TAIL_LINES = 200
+const PR_CHECK_LOG_TAIL_BYTES = 16 * 1024
+const PR_CHECK_LOG_TAIL_JOB_LIMIT = 5
+// Why: each entry holds up to 16KB of log text; bound the cache so a long
+// session reviewing many failing checks can't grow it without limit.
+const PR_CHECK_LOG_TAIL_CACHE_MAX_ENTRIES = 128
+const prCheckLogTailCache = new Map<string, string | null>()
+
+function setPrCheckLogTailCache(cacheKey: string, logTail: string | null): void {
+  prCheckLogTailCache.set(cacheKey, logTail)
+  while (prCheckLogTailCache.size > PR_CHECK_LOG_TAIL_CACHE_MAX_ENTRIES) {
+    const oldestKey = prCheckLogTailCache.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    prCheckLogTailCache.delete(oldestKey)
+  }
+}
 const MERGE_QUEUE_CACHE_TTL_MS = 10 * 60 * 1000
 const MERGE_QUEUE_UNKNOWN_CACHE_TTL_MS = 60 * 1000
 const MERGE_QUEUE_CACHE_MAX_ENTRIES = 256
@@ -2492,12 +2510,14 @@ function mapWorkflowJobs(raw: unknown, checkName?: string): PRCheckRunDetails['j
   const jobs = (raw as { jobs: unknown[] }).jobs
     .filter((job): job is Record<string, unknown> => Boolean(job))
     .map((job) => ({
+      id: nullableNumber(job.id),
       name: nullableString(job.name) ?? 'Unnamed job',
       status: nullableString(job.status),
       conclusion: nullableString(job.conclusion),
       startedAt: nullableString(job.started_at),
       completedAt: nullableString(job.completed_at),
       url: nullableString(job.html_url),
+      logTail: null,
       steps: Array.isArray(job.steps)
         ? job.steps
             .filter((step): step is Record<string, unknown> => Boolean(step))
@@ -2512,6 +2532,63 @@ function mapWorkflowJobs(raw: unknown, checkName?: string): PRCheckRunDetails['j
     }))
   const exactMatches = checkName ? jobs.filter((job) => job.name === checkName) : []
   return exactMatches.length > 0 ? exactMatches : jobs
+}
+
+function isCheckJobFailureState(state: string | null | undefined): boolean {
+  return state === 'failure' || state === 'failed' || state === 'cancelled' || state === 'timed_out'
+}
+
+function sliceCheckLogTail(logText: string): string {
+  const lineTail = logText.split(/\r?\n/).slice(-PR_CHECK_LOG_TAIL_LINES).join('\n')
+  const bytes = Buffer.from(lineTail, 'utf8')
+  if (bytes.byteLength <= PR_CHECK_LOG_TAIL_BYTES) {
+    return lineTail
+  }
+  return bytes.subarray(bytes.byteLength - PR_CHECK_LOG_TAIL_BYTES).toString('utf8')
+}
+
+function getCheckJobLogTailCacheKey(job: PRCheckRunDetails['jobs'][number]): string | null {
+  if (job.id === null) {
+    return null
+  }
+  return `${job.id}:${job.completedAt ?? ''}`
+}
+
+async function attachFailedJobLogTails(
+  jobs: PRCheckRunDetails['jobs'],
+  ownerRepo: OwnerRepo,
+  ghOptions: GhExecOptions
+): Promise<void> {
+  const failedJobs = jobs
+    .filter((job) => {
+      const state = job.conclusion ?? job.status
+      return job.id !== null && isCheckJobFailureState(state)
+    })
+    .slice(0, PR_CHECK_LOG_TAIL_JOB_LIMIT)
+
+  // Why: failed workflows can have many jobs; cap log fetches so details remain
+  // a lazy, bounded follow-up request instead of a burst of hosted log downloads.
+  for (const job of failedJobs) {
+    const cacheKey = getCheckJobLogTailCacheKey(job)
+    if (!cacheKey) {
+      continue
+    }
+    if (prCheckLogTailCache.has(cacheKey)) {
+      job.logTail = prCheckLogTailCache.get(cacheKey) ?? null
+      continue
+    }
+    try {
+      const { stdout } = await ghExecFileAsync(
+        ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/actions/jobs/${job.id}/logs`],
+        ghOptions
+      )
+      job.logTail = sliceCheckLogTail(stdout)
+    } catch (err) {
+      console.warn('getPRCheckDetails workflow job log fetch failed:', err)
+      job.logTail = null
+    }
+    setPrCheckLogTailCache(cacheKey, job.logTail)
+  }
 }
 
 function getWorkflowRunIdFromCheckRun(
@@ -2582,6 +2659,7 @@ export async function getPRCheckDetails(
           ghOptions
         )
         jobs = mapWorkflowJobs(JSON.parse(stdout), args.checkName)
+        await attachFailedJobLogTails(jobs, ownerRepo, ghOptions)
       } catch (err) {
         console.warn('getPRCheckDetails workflow jobs fetch failed:', err)
       }

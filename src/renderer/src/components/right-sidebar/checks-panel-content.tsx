@@ -18,8 +18,7 @@ import {
   RefreshCw,
   Wrench,
   AlertTriangle,
-  Maximize2,
-  Plus
+  Maximize2
 } from 'lucide-react'
 import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -99,62 +98,18 @@ type ConflictReview = {
   conflictSummary?: PRConflictSummary
 }
 
-function ResolveConflictsWithAIButton({
-  isResolvingWithAI,
-  onResolveWithAI,
-  disabled,
-  disabledReason
-}: {
-  isResolvingWithAI: boolean
-  onResolveWithAI: () => void
-  disabled?: boolean
-  disabledReason?: string
-}): React.JSX.Element {
-  return (
-    <Button
-      type="button"
-      variant="default"
-      size="sm"
-      className="mt-2 h-7 w-full text-xs"
-      disabled={isResolvingWithAI || disabled}
-      onClick={onResolveWithAI}
-      title={disabled ? disabledReason : undefined}
-    >
-      {isResolvingWithAI ? (
-        <RefreshCw className="size-3.5 animate-spin" />
-      ) : (
-        <Sparkles className="size-3.5" />
-      )}
-      Resolve with AI
-    </Button>
-  )
-}
-
-export function ConflictingFilesSection({
-  pr,
-  isResolvingWithAI,
-  onResolveWithAI,
-  resolveDisabled,
-  resolveDisabledReason
-}: {
-  pr: ConflictReview
-  isResolvingWithAI: boolean
-  onResolveWithAI: () => void
-  resolveDisabled?: boolean
-  resolveDisabledReason?: string
-}): React.JSX.Element | null {
+export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.JSX.Element | null {
   const files = pr.conflictSummary?.files ?? []
   if (pr.mergeable !== 'CONFLICTING' || files.length === 0) {
     return null
   }
 
+  // Why: the resolve action lives in the triage strip above; this section is
+  // purely the informational conflict file list so the action isn't duplicated.
   return (
-    <div className="border-t border-border px-3 py-3">
-      <div className="text-[11px] font-medium text-foreground">
-        This branch has conflicts that must be resolved
-      </div>
-      <div className="mt-1 text-[11px] text-muted-foreground">
-        It&apos;s {pr.conflictSummary!.commitsBehind} commit
+    <div className="border-b border-border px-3 py-3">
+      <div className="text-[11px] text-muted-foreground">
+        {pr.conflictSummary!.commitsBehind} commit
         {pr.conflictSummary!.commitsBehind === 1 ? '' : 's'} behind (base commit:{' '}
         <span className="font-mono text-[10px]">{pr.conflictSummary!.baseCommit}</span>)
       </div>
@@ -162,21 +117,18 @@ export function ConflictingFilesSection({
         <Files className="size-3.5 shrink-0 text-muted-foreground" />
         <div className="text-[11px] text-muted-foreground">Conflicting files</div>
       </div>
-      <div className="mt-2 space-y-2">
+      <div className="mt-2 space-y-1.5">
         {files.map((filePath) => (
-          <div key={filePath} className="rounded-md border border-border bg-accent/20 px-2.5 py-2">
+          <div
+            key={filePath}
+            className="rounded-md border border-border bg-accent/20 px-2.5 py-1.5"
+          >
             <div className="break-all font-mono text-[11px] leading-4 text-foreground">
               {filePath}
             </div>
           </div>
         ))}
       </div>
-      <ResolveConflictsWithAIButton
-        isResolvingWithAI={isResolvingWithAI}
-        onResolveWithAI={onResolveWithAI}
-        disabled={resolveDisabled}
-        disabledReason={resolveDisabledReason}
-      />
     </div>
   )
 }
@@ -237,34 +189,13 @@ export function PRTriageStrip({
 
   if (pr.mergeable === 'CONFLICTING') {
     return (
-      <div className="border-b border-border px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[11px] font-medium text-foreground">
-              Conflicts block this PR
-            </div>
-            <div className="truncate text-[10px] text-muted-foreground">
-              Resolve conflicts before checks and merge can complete.
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="default"
-            size="xs"
-            disabled={isResolvingConflictsWithAI || resolveConflictsDisabled}
-            title={resolveConflictsDisabled ? resolveConflictsDisabledReason : undefined}
-            onClick={onResolveConflictsWithAI}
-          >
-            {isResolvingConflictsWithAI ? (
-              <RefreshCw className="size-3 animate-spin" />
-            ) : (
-              <Sparkles className="size-3" />
-            )}
-            Resolve
-          </Button>
-        </div>
-      </div>
+      <ConflictTriageStrip
+        reviewKind="PR"
+        isResolvingConflictsWithAI={isResolvingConflictsWithAI}
+        onResolveConflictsWithAI={onResolveConflictsWithAI}
+        resolveConflictsDisabled={resolveConflictsDisabled}
+        resolveConflictsDisabledReason={resolveConflictsDisabledReason}
+      />
     )
   }
 
@@ -331,6 +262,51 @@ export function PRTriageStrip({
             Checks and comments below show the current fetched context.
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+export function ConflictTriageStrip({
+  reviewKind,
+  isResolvingConflictsWithAI,
+  onResolveConflictsWithAI,
+  resolveConflictsDisabled,
+  resolveConflictsDisabledReason
+}: {
+  reviewKind: 'PR' | 'MR'
+  isResolvingConflictsWithAI: boolean
+  onResolveConflictsWithAI: () => void
+  resolveConflictsDisabled?: boolean
+  resolveConflictsDisabledReason?: string
+}): React.JSX.Element {
+  return (
+    <div className="border-b border-border px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[11px] font-medium text-foreground">
+            Conflicts block this {reviewKind}
+          </div>
+          <div className="truncate text-[10px] text-muted-foreground">
+            Resolve conflicts before checks and merge can complete.
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="default"
+          size="xs"
+          disabled={isResolvingConflictsWithAI || resolveConflictsDisabled}
+          title={resolveConflictsDisabled ? resolveConflictsDisabledReason : undefined}
+          onClick={onResolveConflictsWithAI}
+        >
+          {isResolvingConflictsWithAI ? (
+            <RefreshCw className="size-3 animate-spin" />
+          ) : (
+            <Sparkles className="size-3" />
+          )}
+          Resolve
+        </Button>
       </div>
     </div>
   )
@@ -455,17 +431,18 @@ function CheckRunDetails({
   const hasOutput = Boolean(details?.title || details?.summary || details?.text)
   const hasAnnotations = (details?.annotations.length ?? 0) > 0
   const hasJobs = jobs.length > 0
+  const hasLogTail = jobs.some((job) => Boolean(job.logTail))
 
   return (
-    <div className="mx-3 mb-2 min-w-0 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
+    <div className="mb-1 ml-[26px] mr-3 min-w-0 border-l border-border pl-3">
       {state?.loading ? (
-        <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
+        <div className="flex items-center gap-2 py-1.5 text-[12px] text-muted-foreground">
           <LoaderCircle className="size-3.5 animate-spin" />
           Loading check details…
         </div>
       ) : (
-        <div className="flex min-w-0 flex-col gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+        <div className="flex min-w-0 flex-col gap-2.5 py-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
             <span>
               Status:{' '}
               {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
@@ -481,7 +458,7 @@ function CheckRunDetails({
           {state?.error && <div className="text-[12px] text-muted-foreground">{state.error}</div>}
 
           {hasOutput && (
-            <div className="min-w-0 rounded-md border border-border/40 bg-background/70 px-2.5 py-2">
+            <div className="min-w-0">
               {details?.title && (
                 <div className="mb-1 text-[12px] font-medium text-foreground">{details.title}</div>
               )}
@@ -503,19 +480,13 @@ function CheckRunDetails({
           )}
 
           {hasAnnotations && (
-            <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
-              <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
+            <div className="min-w-0 border-t border-border/60 pt-2">
+              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Annotations
               </div>
-              <div className="flex max-h-40 flex-col overflow-y-auto scrollbar-sleek">
+              <div className="flex max-h-40 flex-col gap-2 overflow-y-auto scrollbar-sleek">
                 {details!.annotations.map((annotation, index) => (
-                  <div
-                    key={`${annotation.path ?? 'annotation'}-${index}`}
-                    className={cn(
-                      'min-w-0 px-2.5 py-2 text-[12px]',
-                      index > 0 && 'border-t border-border/30'
-                    )}
-                  >
+                  <div key={`${annotation.path ?? 'annotation'}-${index}`} className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
                         {annotation.path ?? 'Annotation'}
@@ -528,11 +499,11 @@ function CheckRunDetails({
                       )}
                     </div>
                     {annotation.title && (
-                      <div className="mt-1 text-[12px] font-medium text-foreground">
+                      <div className="mt-0.5 text-[12px] font-medium text-foreground">
                         {annotation.title}
                       </div>
                     )}
-                    <div className="mt-1 break-words text-[12px] text-foreground">
+                    <div className="mt-0.5 break-words text-[12px] text-foreground">
                       {annotation.message}
                     </div>
                     {annotation.rawDetails && (
@@ -544,7 +515,7 @@ function CheckRunDetails({
                 ))}
               </div>
               {details!.annotations.length >= 20 && (
-                <div className="border-t border-border/40 px-2.5 py-1.5 text-[10px] text-muted-foreground">
+                <div className="mt-1.5 text-[10px] text-muted-foreground">
                   Showing first 20 annotations
                 </div>
               )}
@@ -552,16 +523,13 @@ function CheckRunDetails({
           )}
 
           {hasJobs && (
-            <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
-              <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
+            <div className="min-w-0 border-t border-border/60 pt-2">
+              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {failedJobs.length > 0 ? 'Failed jobs' : 'Jobs'}
               </div>
-              <div className="flex max-h-48 flex-col overflow-y-auto scrollbar-sleek">
+              <div className="flex max-h-48 flex-col gap-2 overflow-y-auto scrollbar-sleek">
                 {jobs.map((job, index) => (
-                  <div
-                    key={`${job.name}-${index}`}
-                    className={cn('min-w-0 px-2.5 py-2', index > 0 && 'border-t border-border/30')}
-                  >
+                  <div key={`${job.name}-${index}`} className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-foreground">
                         {job.name}
@@ -571,7 +539,7 @@ function CheckRunDetails({
                       </span>
                     </div>
                     {job.steps.length > 0 && (
-                      <div className="mt-1 grid gap-1">
+                      <div className="mt-1 grid gap-0.5 pl-2">
                         {job.steps
                           .filter((step) => {
                             const state = step.conclusion ?? step.status
@@ -592,10 +560,16 @@ function CheckRunDetails({
                 ))}
               </div>
               {(details?.jobs.length ?? 0) >= 100 && (
-                <div className="border-t border-border/40 px-2.5 py-1.5 text-[10px] text-muted-foreground">
+                <div className="mt-1.5 text-[10px] text-muted-foreground">
                   Showing first 100 jobs
                 </div>
               )}
+            </div>
+          )}
+
+          {hasLogTail && (
+            <div className="text-[11px] text-muted-foreground">
+              Log tail available in full details.
             </div>
           )}
 
@@ -651,7 +625,7 @@ function CheckRunDetails({
   )
 }
 
-function CheckRunDetailsDialog({
+export function CheckRunDetailsDialog({
   check,
   state,
   detailsStatusCheck,
@@ -784,6 +758,7 @@ function CheckRunDetailsDialog({
                         ))}
                       </div>
                     )}
+                    {job.logTail && <CheckJobLogTail logTail={job.logTail} />}
                   </div>
                 ))}
               </div>
@@ -814,6 +789,22 @@ function CheckRunDetailsDialog({
         </div>
       )}
     </DialogContent>
+  )
+}
+
+export function CheckJobLogTail({ logTail }: { logTail: string }): React.JSX.Element {
+  return (
+    <div className="mt-3 min-w-0">
+      <div className="mb-1.5 flex min-w-0 items-center gap-2">
+        <div className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Log tail (last 200 lines)
+        </div>
+        <CopyButton text={logTail} title="Copy log tail" />
+      </div>
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek">
+        {logTail}
+      </pre>
+    </div>
   )
 }
 
@@ -1094,7 +1085,13 @@ export function ChecksList({
   )
 }
 
-function CopyButton({ text }: { text: string }): React.JSX.Element {
+function CopyButton({
+  text,
+  title = 'Copy comment'
+}: {
+  text: string
+  title?: string
+}): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
   // Why: clipboard IPC can resolve after this row action unmounts; avoid
@@ -1140,7 +1137,7 @@ function CopyButton({ text }: { text: string }): React.JSX.Element {
     <button
       ref={setCopyButtonRef}
       className="p-1 rounded hover:bg-accent text-muted-foreground/40 hover:text-foreground transition-colors shrink-0"
-      title="Copy comment"
+      title={title}
       onClick={handleCopy}
     >
       {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
@@ -1534,11 +1531,13 @@ export function PRCommentsList({
           <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
         </div>
       ) : comments.length === 0 ? (
-        <div className="flex items-center justify-center py-6 text-[11px] text-muted-foreground">
-          No comments
+        // Why: with the composer pinned below as the call to action, the empty
+        // state stays a quiet caption instead of competing for attention.
+        <div className="flex items-center justify-center py-5 text-[11px] text-muted-foreground">
+          {onAddComment ? 'No comments yet — start the conversation below.' : 'No comments'}
         </div>
       ) : visibleComments.length === 0 ? (
-        <div className="flex items-center justify-center py-6 text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-center py-5 text-[11px] text-muted-foreground">
           {getPRCommentAudienceEmptyLabel(commentFilter)}
         </div>
       ) : (
@@ -1588,19 +1587,18 @@ export function PRCommentsList({
               onSubmit={onAddComment}
             />
           ) : (
-            <div className="flex justify-center">
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                disabled={commentsDisabled}
-                title={commentsDisabled ? commentsDisabledReason : undefined}
-                onClick={() => setIsAddingComment(true)}
-              >
-                <Plus className="size-3" />
-                Add Comment
-              </Button>
-            </div>
+            // Quiet full-width affordance that reads as a composer field, not a
+            // lonely button; clicking expands the markdown editor in place.
+            <button
+              type="button"
+              disabled={commentsDisabled}
+              title={commentsDisabled ? commentsDisabledReason : undefined}
+              className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-background px-2.5 text-left text-[12px] text-muted-foreground transition-colors hover:border-ring/50 hover:bg-accent/30 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => setIsAddingComment(true)}
+            >
+              <MessageSquare className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate">Add a comment…</span>
+            </button>
           )}
         </div>
       )}
