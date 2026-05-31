@@ -74,6 +74,30 @@ describe('runRemoteOrcaCli', () => {
     expect(db.getUnreadMessages('term_windows')[0]?.from_handle).toBe('term_ssh')
   })
 
+  it('accepts equals-style orchestration flags in the remote shim', async () => {
+    const { runtime, db } = createRuntime()
+
+    const result = await runRemoteOrcaCli(runtime, {
+      argv: [
+        'orchestration',
+        'send',
+        '--to=term_windows',
+        '--subject=ping',
+        '--body=--literal-body',
+        '--json'
+      ],
+      cwd: '/home/alice/repo',
+      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+    })
+
+    expect(result.exitCode).toBe(0)
+    const payload = JSON.parse(result.stdout) as { ok: boolean }
+    expect(payload.ok).toBe(true)
+    const message = db.getUnreadMessages('term_windows')[0]
+    expect(message?.from_handle).toBe('term_ssh')
+    expect(message?.body).toBe('--literal-body')
+  })
+
   it('uses the remote ORCA_TERMINAL_HANDLE as orchestration check identity', async () => {
     const { runtime, db } = createRuntime()
     db.insertMessage({

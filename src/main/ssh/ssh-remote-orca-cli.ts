@@ -136,7 +136,16 @@ function parseRemoteCliArgs(argv: string[]): ParsedRemoteCli {
       commandPath.push(token)
       continue
     }
-    const flag = token.slice(2)
+    const assignment = token.slice(2)
+    // Why: the SSH relay-backed shim should accept the same `--flag=value`
+    // form as the local CLI, including values that themselves start with `--`.
+    const equalsIndex = assignment.indexOf('=')
+    if (equalsIndex !== -1) {
+      flags.set(assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      continue
+    }
+
+    const flag = assignment
     const next = argv[i + 1]
     if (next && !next.startsWith('--')) {
       flags.set(flag, next)
