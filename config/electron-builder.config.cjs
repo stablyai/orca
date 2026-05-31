@@ -2,6 +2,11 @@ const { chmodSync, existsSync, readdirSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
+const {
+  createPackagedRuntimeNodeModuleResources,
+  isPackagedExternalSpecifier,
+  packageNameFromSpecifier
+} = require('./packaged-runtime-node-modules.cjs')
 
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
 const featureWallResources = {
@@ -14,6 +19,25 @@ const featureWallResources = {
 const relayExtraResource = {
   from: 'out/relay',
   to: 'relay'
+}
+// Why: the main bundle, packaged CLI, SSH paths, and speech worker all execute
+// from package directories where pnpm's symlink farm is absent. Copy the exact
+// runtime dependency closure to Resources/node_modules so bare require() calls
+// do not fall through to a developer checkout's node_modules.
+const packagedRuntimeNodeModuleResources = createPackagedRuntimeNodeModuleResources()
+
+const commonExtraResources = [relayExtraResource, ...packagedRuntimeNodeModuleResources]
+const macSpeechNativeResource = {
+  from: 'node_modules/sherpa-onnx-darwin-${arch}',
+  to: 'node_modules/sherpa-onnx-darwin-${arch}'
+}
+const linuxSpeechNativeResource = {
+  from: 'node_modules/sherpa-onnx-linux-${arch}',
+  to: 'node_modules/sherpa-onnx-linux-${arch}'
+}
+const winSpeechNativeResource = {
+  from: 'node_modules/sherpa-onnx-win-x64',
+  to: 'node_modules/sherpa-onnx-win-x64'
 }
 
 /** @type {import('electron-builder').Configuration} */
@@ -89,6 +113,7 @@ module.exports = {
     if (!existsSync(resourcesDir)) {
       return
     }
+    verifyPackagedMainRuntimeDeps(resourcesDir)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
@@ -105,7 +130,8 @@ module.exports = {
   win: {
     executableName: 'Orca',
     extraResources: [
-      relayExtraResource,
+      ...commonExtraResources,
+      winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'
@@ -159,7 +185,8 @@ module.exports = {
     hardenedRuntime: isMacRelease,
     notarize: isMacRelease,
     extraResources: [
-      relayExtraResource,
+      ...commonExtraResources,
+      macSpeechNativeResource,
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
@@ -199,7 +226,8 @@ module.exports = {
     // sizes; a single 1024px PNG is ignored by some Linux docks/launchers.
     icon: 'resources/build/icon.icns',
     extraResources: [
-      relayExtraResource,
+      ...commonExtraResources,
+      linuxSpeechNativeResource,
       {
         from: 'resources/linux/bin/orca-ide',
         to: 'bin/orca-ide'
@@ -244,6 +272,39 @@ module.exports = {
     owner: 'stablyai',
     repo: 'orca',
     releaseType: 'release'
+  }
+}
+
+function verifyPackagedMainRuntimeDeps(resourcesDir) {
+  const asarPath = join(resourcesDir, 'app.asar')
+  if (!existsSync(asarPath)) {
+    return
+  }
+
+  const { extractFile } = require('@electron/asar')
+  const mainFiles = ['out/main/index.js', 'out/main/agent-hooks/managed-agent-hook-controls.js']
+  const missing = new Set()
+
+  for (const file of mainFiles) {
+    const source = extractFile(asarPath, file).toString('utf8')
+    for (const match of source.matchAll(/require\(["']([^"']+)["']\)/g)) {
+      const specifier = match[1]
+      if (!isPackagedExternalSpecifier(specifier)) {
+        continue
+      }
+      const packageName = packageNameFromSpecifier(specifier)
+      if (!existsSync(join(resourcesDir, 'node_modules', ...packageName.split('/')))) {
+        missing.add(packageName)
+      }
+    }
+  }
+
+  if (missing.size > 0) {
+    throw new Error(
+      `Packaged main bundle has bare runtime imports without copied node_modules: ${[
+        ...missing
+      ].join(', ')}`
+    )
   }
 }
 

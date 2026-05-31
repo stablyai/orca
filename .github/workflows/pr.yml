@@ -98,6 +98,7 @@ jobs:
         run: pnpm build:unpack
 
       # Why: the packaged CLI runs outside Electron's asar integration, so
-      # bare runtime imports must be present in app.asar.unpacked.
+      # bare runtime imports must be present in the package itself. Run from a
+      # temp copy so Node cannot mask missing package deps with repo node_modules.
       - name: Smoke packaged CLI
-        run: dist/linux-unpacked/resources/bin/orca-ide --help
+        run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked

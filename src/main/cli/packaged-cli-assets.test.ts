@@ -10,18 +10,32 @@ const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
 const itRunsUnixShell = process.platform === 'win32' ? it.skip : it
 const builderConfig = require('../../../config/electron-builder.config.cjs') as {
-  asarUnpack?: string[]
+  mac?: { extraResources?: { from?: string; to?: string }[] }
+  linux?: { extraResources?: { from?: string; to?: string }[] }
+  win?: { extraResources?: { from?: string; to?: string }[] }
 }
 const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
 
 describe('packaged CLI assets', () => {
-  it('unpacks runtime dependencies used before Electron asar integration is available', () => {
-    expect(builderConfig.asarUnpack).toEqual(
+  it('copies runtime dependencies used before Electron asar integration is available', () => {
+    const runtimeResourceTargets = new Set(
+      [
+        ...(builderConfig.mac?.extraResources ?? []),
+        ...(builderConfig.linux?.extraResources ?? []),
+        ...(builderConfig.win?.extraResources ?? [])
+      ].map((resource) => resource.to)
+    )
+
+    expect([...runtimeResourceTargets]).toEqual(
       expect.arrayContaining([
-        'node_modules/ws/**',
-        'node_modules/tweetnacl/**',
-        'node_modules/zod/**',
-        'node_modules/yaml/**'
+        join('node_modules', 'ws'),
+        join('node_modules', 'tweetnacl'),
+        join('node_modules', 'zod'),
+        join('node_modules', 'yaml'),
+        join('node_modules', 'node-pty'),
+        join('node_modules', 'sherpa-onnx-darwin-${arch}'),
+        join('node_modules', 'sherpa-onnx-linux-${arch}'),
+        join('node_modules', 'sherpa-onnx-win-x64')
       ])
     )
   })

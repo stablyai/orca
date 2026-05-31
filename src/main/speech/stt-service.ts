@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: speech worker ownership, warm reuse, and
 timeout teardown must stay co-located so dictation lifecycle state cannot drift. */
 import { Worker } from 'worker_threads'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 import { getCatalogModel } from './model-catalog'
@@ -386,6 +387,10 @@ export class SttService {
         : `sherpa-onnx-${process.platform}-${process.arch}`
 
     if (app.isPackaged) {
+      const resourcesNodeModule = join(process.resourcesPath, 'node_modules', nativePkg)
+      if (existsSync(resourcesNodeModule)) {
+        return resourcesNodeModule
+      }
       return join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', nativePkg)
     }
 
