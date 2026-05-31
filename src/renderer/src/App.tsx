@@ -921,17 +921,18 @@ function App(): React.JSX.Element {
     return createSessionWriteSubscriber({
       store: useAppStore,
       shouldSchedulePersist: () => !isRemoteWorkspaceSnapshotApplyInProgress(),
-      persist: (payload) => {
-        void window.api.session.set(payload)
+      persist: ({ patch }) => {
+        const localWrite = window.api.session.patch(patch)
+        void localWrite
         const state = useAppStore.getState()
         const hydratedTargetIds = Array.from(state.remoteWorkspaceHydratedTargetIds).filter(
           (targetId) => state.remoteWorkspaceSyncStatusByTargetId[targetId]?.phase !== 'conflict'
         )
         if (hydratedTargetIds.length > 0) {
-          void window.api.remoteWorkspace
-            ?.setForConnectedTargets({ session: payload, hydratedTargetIds })
+          void localWrite
+            .then(() => window.api.remoteWorkspace?.setForConnectedTargets({ hydratedTargetIds }))
             .then((results) => {
-              for (const { targetId, result } of results) {
+              for (const { targetId, result } of results ?? []) {
                 applyRemoteWorkspacePatchStatus(targetId, result)
               }
             })

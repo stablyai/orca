@@ -3001,6 +3001,71 @@ describe('Store', () => {
     expect(store.getWorkspaceSession()).toEqual(session)
   })
 
+  it('patches workspace session without replacing unchanged slices', async () => {
+    const store = await createStore()
+    const tabsByWorktree = {
+      wt1: [makeTerminalTab({ id: 'tab1', ptyId: null, worktreeId: 'wt1' })]
+    }
+    const terminalLayoutsByTabId = {
+      tab1: { root: null, activeLeafId: null, expandedLeafId: null }
+    }
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree,
+      terminalLayoutsByTabId,
+      activeConnectionIdsAtShutdown: ['ssh-1']
+    })
+
+    store.patchWorkspaceSession({
+      activeTabId: 'tab2',
+      activeConnectionIdsAtShutdown: undefined
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.activeTabId).toBe('tab2')
+    expect(session.tabsByWorktree).toEqual(tabsByWorktree)
+    expect(session.terminalLayoutsByTabId).toEqual(terminalLayoutsByTabId)
+    expect(session.activeConnectionIdsAtShutdown).toBeUndefined()
+  })
+
+  it('uses full normalization for structural workspace session patches', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'local-repo', connectionId: null }))
+    store.setWorkspaceSession({
+      activeRepoId: 'local-repo',
+      activeWorktreeId: 'local-repo::/worktree',
+      activeTabId: 'tab-local',
+      tabsByWorktree: {
+        'local-repo::/worktree': [
+          makeTerminalTab({
+            id: 'tab-local',
+            ptyId: 'pty-local',
+            worktreeId: 'local-repo::/worktree'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    store.patchWorkspaceSession({
+      terminalLayoutsByTabId: {
+        'tab-local': {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          buffersByLeafId: { [TEST_LEAF_1]: 'local-scrollback' },
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-local' }
+        }
+      }
+    })
+
+    expect(
+      store.getWorkspaceSession().terminalLayoutsByTabId['tab-local'].buffersByLeafId
+    ).toBeUndefined()
+  })
+
   it('strips local terminal scrollback buffers when setting workspace session', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'local-repo', connectionId: null }))

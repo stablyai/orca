@@ -2011,6 +2011,7 @@ const api = {
   session: {
     get: (): Promise<unknown> => ipcRenderer.invoke('session:get'),
     set: (args: unknown): Promise<void> => ipcRenderer.invoke('session:set', args),
+    patch: (args: unknown): Promise<void> => ipcRenderer.invoke('session:patch', args),
     /** Synchronous session save for beforeunload — blocks until flushed to disk. */
     setSync: (args: unknown): void => {
       ipcRenderer.sendSync('session:set-sync', args)

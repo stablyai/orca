@@ -691,6 +691,8 @@ export type WorkspaceSessionState = {
   lastVisitedAtByWorktreeId?: Record<string, number>
 }
 
+export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>
+
 // ─── GitHub ──────────────────────────────────────────────────────────
 export type PRState = 'open' | 'closed' | 'merged' | 'draft'
 export type IssueState = 'open' | 'closed'
