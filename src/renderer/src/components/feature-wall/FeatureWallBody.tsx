@@ -90,7 +90,7 @@ export function FeatureWallBody(props: {
             ? 'w-[480px]'
             : isAgentsUsage
               ? isOnboardingUsage
-                ? 'w-[340px]'
+                ? 'w-[360px]'
                 : 'w-[400px]'
               : isAgentsStatuses
                 ? 'w-[420px]'
@@ -142,7 +142,6 @@ export function FeatureWallBody(props: {
     (isOnboardingAgentsStep && Boolean(settingContent)) ||
     isAgentsUsage ||
     isAgentsOrchestration ||
-    isWorkbenchBrowser ||
     isReviewSettingBesideVisual
   const shouldLabelOnboardingTourZones = isOnboardingAgentsStep && settingBesideVisual
   // Why: several visuals expand/collapse internally; setup controls should sit
@@ -187,7 +186,7 @@ export function FeatureWallBody(props: {
     <AgentsOrchestrationVisual
       reducedMotion={prefersReducedMotion}
       activeStepId={agentsActiveStep.id}
-      widthPx={isAgentsUsage ? (isOnboardingUsage ? 340 : 400) : isAgentsStatuses ? 420 : undefined}
+      widthPx={isAgentsUsage ? (isOnboardingUsage ? 360 : 400) : isAgentsStatuses ? 420 : undefined}
       heightPx={isAgentsStatuses ? 250 : undefined}
     />
   ) : null
@@ -203,7 +202,7 @@ export function FeatureWallBody(props: {
         className={cn(
           'max-w-full',
           animatedVisualWidth,
-          isAgentsOrchestration ? 'translate-x-6' : null
+          isAgentsOrchestration && !isOnboardingOrchestrationBesideVisual ? 'translate-x-6' : null
         )}
       >
         {animatedVisual}
@@ -266,7 +265,7 @@ export function FeatureWallBody(props: {
                   'justify-center',
                   isAgentsUsage
                     ? isOnboardingUsage
-                      ? '@[780px]:grid-cols-[minmax(360px,400px)_minmax(320px,340px)] @[780px]:items-center'
+                      ? '@[780px]:grid-cols-[minmax(360px,400px)_minmax(340px,360px)] @[780px]:items-center'
                       : '@[860px]:grid-cols-[minmax(400px,440px)_minmax(360px,400px)] @[860px]:items-center'
                     : isOnboardingStatuses
                       ? '@[760px]:grid-cols-[minmax(320px,360px)_minmax(400px,420px)] @[760px]:items-center'
