@@ -83,6 +83,7 @@ const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_STARTUP_RENDERER_QUERY_WINDOW_MS = 10_000
 const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
+const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 // Why: this is only shown if renderer backlog overflowed and main-owned
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
@@ -330,6 +331,7 @@ export function connectPanePty(
   let wasAgentTaskCompleteNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
   let terminalBellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let pendingTerminalBellNotification = false
+  let reattachIdleAgentCursorResetTimer: ReturnType<typeof setTimeout> | null = null
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
@@ -426,6 +428,41 @@ export function connectPanePty(
         clearInferredInterruptWorkingTitle()
       }
     }, AGENT_INTERRUPT_SETTLE_MS)
+  }
+  const clearReattachIdleAgentCursorResetTimer = (): void => {
+    if (reattachIdleAgentCursorResetTimer !== null) {
+      clearTimeout(reattachIdleAgentCursorResetTimer)
+      reattachIdleAgentCursorResetTimer = null
+    }
+  }
+  const getCurrentTerminalTitle = (): string | null => {
+    const state = useAppStore.getState()
+    const runtimeTitle = state.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+    const tabTitle = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
+      (entry) => entry.id === deps.tabId
+    )?.title
+    return runtimeTitle ?? tabTitle ?? null
+  }
+  const scheduleReattachIdleAgentCursorReset = (): void => {
+    const status = detectAgentStatusFromTitle(getCurrentTerminalTitle() ?? '')
+    if (status !== 'idle' && status !== 'permission') {
+      return
+    }
+    clearReattachIdleAgentCursorResetTimer()
+    reattachIdleAgentCursorResetTimer = setTimeout(() => {
+      reattachIdleAgentCursorResetTimer = null
+      if (disposed) {
+        return
+      }
+      const latestStatus = detectAgentStatusFromTitle(getCurrentTerminalTitle() ?? '')
+      if (latestStatus !== 'idle' && latestStatus !== 'permission') {
+        return
+      }
+      // Why: restored idle agent TUIs can repaint after reattach SIGWINCH and
+      // reapply DECSCUSR steady-bar; the normal working→idle reset will not
+      // fire because the agent was already idle before Orca restarted.
+      queueAgentIdleCursorReset()
+    }, REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS)
   }
   const interruptInference = createAgentInterruptInference({
     paneKey: cacheKey,
@@ -1773,6 +1810,7 @@ export function connectPanePty(
         if (!isRemoteRuntimePtyId(currentPtyId)) {
           window.api.pty.signal(currentPtyId, 'SIGWINCH')
         }
+        scheduleReattachIdleAgentCursorReset()
       }
       restoreScrollStateAfterSnapshotReplay(scrollState)
     }
@@ -2076,6 +2114,7 @@ export function connectPanePty(
       if (!isRemoteRuntimePtyId(ptyId)) {
         window.api.pty.signal(ptyId, 'SIGWINCH')
       }
+      scheduleReattachIdleAgentCursorReset()
 
       scheduleRuntimeGraphSync()
     }
@@ -2567,6 +2606,7 @@ export function connectPanePty(
       clearPendingAgentTaskCompleteNotification()
       pendingTerminalBellNotification = false
       clearTerminalBellNotificationTimer()
+      clearReattachIdleAgentCursorResetTimer()
       unregisterBacklogRecovery?.()
       unregisterBacklogRecovery = null
       unregisterDocumentVisibilityRecovery?.()

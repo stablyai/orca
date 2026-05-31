@@ -2434,6 +2434,53 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('resets an already-idle agent cursor again after reattach SIGWINCH repaint', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: 'restored idle codex snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', title: 'Codex done' }]
+      },
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'Codex done' }
+      },
+      settings: {
+        ...mockStoreState.settings
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(window.api.pty.signal).toHaveBeenCalledWith('tab-pty', 'SIGWINCH')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      RESET_TERMINAL_CURSOR_STYLE,
+      expect.any(Function)
+    )
+
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      RESET_TERMINAL_CURSOR_STYLE,
+      expect.any(Function)
+    )
+  })
+
   // Why: when a reattach result carries both snapshot and replay (the daemon
   // host serves the snapshot, the relay replay buffer covers the same tail),
   // painting both into xterm doubles the same lines. This is the duplicated-
