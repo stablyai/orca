@@ -118,6 +118,15 @@ export function resolveRepoAiDraftState(
   persistedSerialized = serializeRepoAiDraft(persistedRepoAi)
 ): RepoAiDraftState {
   const currentSerialized = serializeRepoAiDraft(current.value)
+  // Why: render-time draft sync relies on object identity to avoid repeating
+  // the same state update during server-rendered settings tests.
+  if (
+    current.repoId === repoId &&
+    currentSerialized === persistedSerialized &&
+    current.baseSerialized === persistedSerialized
+  ) {
+    return current
+  }
   if (
     current.repoId !== repoId ||
     currentSerialized === current.baseSerialized ||
