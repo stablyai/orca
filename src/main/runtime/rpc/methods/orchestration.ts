@@ -136,11 +136,23 @@ const AskParams = z.object({
   from: OptionalString
 })
 
-const ResetParams = z.object({
-  all: OptionalBoolean,
-  tasks: OptionalBoolean,
-  messages: OptionalBoolean
-})
+const ResetParams = z
+  .object({
+    all: OptionalBoolean,
+    tasks: OptionalBoolean,
+    messages: OptionalBoolean
+  })
+  .superRefine((params, ctx) => {
+    const selectedScopeCount = [params.all, params.tasks, params.messages].filter(
+      (scope) => scope === true
+    ).length
+    if (selectedScopeCount !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose exactly one reset scope: --all, --tasks, or --messages.'
+      })
+    }
+  })
 
 export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
@@ -228,7 +240,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const readAndReturn = () => {
         const messages = showUnread
           ? db.getUnreadMessages(handle, typeFilter)
-          : db.getAllMessagesForHandle(handle)
+          : db.getAllMessagesForHandle(handle, undefined, typeFilter)
 
         if (showUnread && messages.length > 0) {
           db.markAsRead(messages.map((m) => m.id))
@@ -499,7 +511,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.ask',
     params: AskParams,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, signal }) => {
       // Why: group addresses have no unambiguous answer semantics (whose
       // reply wins? first? consensus?) and the ~60-LOC scope is not the
       // place to design that. Rejecting here closes the silent-timeout
@@ -554,11 +566,16 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             timedOut: false
           }
         }
+        if (signal?.aborted) {
+          return { answer: null, messageId: null, threadId, timedOut: true }
+        }
         const remainingMs = deadline - Date.now()
         if (remainingMs <= 0) {
           return { answer: null, messageId: null, threadId, timedOut: true }
         }
-        await runtime.waitForMessage(from, { timeoutMs: remainingMs })
+        // Why: if the asking client disconnects, release the waiter immediately
+        // while leaving the already-sent decision gate visible to the recipient.
+        await runtime.waitForMessage(from, { timeoutMs: remainingMs, signal })
       }
     }
   }),
@@ -582,8 +599,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         db.resetMessages()
         return { reset: 'messages' }
       }
-      db.resetAll()
-      return { reset: 'all' }
+      throw new Error('Invalid reset scope')
     }
   })
 ]

@@ -50,7 +50,7 @@ describe('hosted remote URLs', () => {
 
     expect(
       buildHostedRemoteFileUrl('git@gitlab.com:group/sub/repo.git', 'src/a.ts', 'feature/x', 9)
-    ).toBe('https://gitlab.com/group/sub/repo/tree/feature%2Fx/src/a.ts#L9')
+    ).toBe('https://gitlab.com/group/sub/repo/-/blob/feature%2Fx/src/a.ts#L9')
 
     expect(
       buildHostedRemoteFileUrl('git@bitbucket.org:team/repo.git', 'src/a.ts', 'feature/x', 7)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { Button } from '../ui/button'
@@ -6,13 +6,15 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Trash2 } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { BaseRefPicker } from './BaseRefPicker'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
 import { McpConfigSection } from './McpConfigSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
+import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
 import { SearchableSetting } from './SearchableSetting'
-import { matchesSettingsSearch } from './settings-search'
+import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { useAppStore } from '../../store'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './RepositoryIconPicker'
@@ -26,7 +28,17 @@ type RepositoryPaneProps = {
   hooksInspectionReady: boolean
   mayNeedUpdate: boolean
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
-  removeRepo: (repoId: string) => void
+  removeProject: (repoId: string) => void
+}
+
+export function matchesRepositoryIdentitySearch(query: string, repo: Repo): boolean {
+  const normalizedQuery = normalizeSettingsSearchQuery(query)
+  if (!normalizedQuery) {
+    return false
+  }
+  return [repo.displayName, repo.path].some((value) =>
+    value.toLowerCase().includes(normalizedQuery)
+  )
 }
 
 export function RepositoryPane({
@@ -36,17 +48,41 @@ export function RepositoryPane({
   hooksInspectionReady,
   mayNeedUpdate,
   updateRepo,
-  removeRepo
+  removeProject
 }: RepositoryPaneProps): React.JSX.Element {
   const isFolder = isFolderRepo(repo)
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const symlinksEnabled = useAppStore((state) => state.settings?.experimentalWorktreeSymlinks)
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
+  const copiedTemplateResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after settings navigation; avoid starting
+  // a reset timer that will outlive this pane.
+  const isMountedRef = useRef(false)
+  // Why: searching a project name is navigation to that project, not a
+  // request to hide every child row that does not repeat the project name.
+  const forceFullPaneForRepoMatch = matchesRepositoryIdentitySearch(searchQuery, repo)
 
-  const handleRemoveRepo = (repoId: string) => {
+  const clearCopiedTemplateResetTimer = useCallback((): void => {
+    if (copiedTemplateResetTimerRef.current !== null) {
+      window.clearTimeout(copiedTemplateResetTimerRef.current)
+      copiedTemplateResetTimerRef.current = null
+    }
+  }, [])
+
+  const setRepositoryPaneRootRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      isMountedRef.current = node !== null
+      if (node === null) {
+        clearCopiedTemplateResetTimer()
+      }
+    },
+    [clearCopiedTemplateResetTimer]
+  )
+
+  const handleRemoveProject = (repoId: string) => {
     if (confirmingRemove === repoId) {
-      removeRepo(repoId)
+      removeProject(repoId)
       setConfirmingRemove(null)
       return
     }
@@ -68,8 +104,15 @@ export function RepositoryPane({
     pnpm worktree:setup
   archive: |
     echo "Cleaning up before archive"`)
+    if (!isMountedRef.current) {
+      return
+    }
+    clearCopiedTemplateResetTimer()
     setCopiedTemplate(true)
-    window.setTimeout(() => setCopiedTemplate(false), 1500)
+    copiedTemplateResetTimerRef.current = window.setTimeout(() => {
+      copiedTemplateResetTimerRef.current = null
+      setCopiedTemplate(false)
+    }, 1500)
   }
 
   const allEntries = getRepositoryPaneSearchEntries(repo)
@@ -92,9 +135,12 @@ export function RepositoryPane({
   )
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Symlinks')
+  const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Source Control AI')
+  const removeProjectLabel =
+    confirmingRemove === repo.id ? 'Confirm Remove Project' : 'Remove Project'
 
   const hooksSection =
-    !isFolder && matchesSettingsSearch(searchQuery, hooksEntries) ? (
+    !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
       <RepositoryHooksSection
         key="hooks"
         repo={repo}
@@ -103,6 +149,7 @@ export function RepositoryPane({
         hooksInspectionReady={hooksInspectionReady}
         mayNeedUpdate={mayNeedUpdate}
         copiedTemplate={copiedTemplate}
+        forceVisible={forceFullPaneForRepoMatch}
         onCopyTemplate={() => void handleCopyTemplate()}
         onUpdateHookSettings={updateSelectedRepoHookSettings}
       />
@@ -112,10 +159,10 @@ export function RepositoryPane({
   // thing a user sees. Setup commands follow immediately because they're the
   // most-edited surface and should beat MCP/symlinks/sparse-presets.
   const visibleSections = [
-    matchesSettingsSearch(searchQuery, identityEntries) ? (
-      <section key="identity" className="space-y-8">
+    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, identityEntries) ? (
+      <section key="identity" className="relative space-y-8">
         <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
+          <div className="space-y-1 pr-12">
             <h3 className="text-sm font-semibold">Identity</h3>
             <p className="text-xs text-muted-foreground">
               Project-specific display details for the sidebar and tabs.
@@ -133,17 +180,26 @@ export function RepositoryPane({
             title="Remove Project"
             description="Remove this project from Orca."
             keywords={[repo.displayName, 'delete', 'project', 'repository']}
+            className="absolute top-0 right-0 z-10 w-auto max-w-none"
+            forceVisible={forceFullPaneForRepoMatch}
           >
-            <Button
-              variant={confirmingRemove === repo.id ? 'destructive' : 'outline'}
-              size="sm"
-              onClick={() => handleRemoveRepo(repo.id)}
-              onBlur={() => setConfirmingRemove(null)}
-              className="gap-2"
-            >
-              <Trash2 className="size-3.5" />
-              {confirmingRemove === repo.id ? 'Confirm Remove' : 'Remove Project'}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={confirmingRemove === repo.id ? 'destructive' : 'outline'}
+                  size="icon-sm"
+                  onClick={() => handleRemoveProject(repo.id)}
+                  onBlur={() => setConfirmingRemove(null)}
+                  aria-label={removeProjectLabel}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {removeProjectLabel}
+              </TooltipContent>
+            </Tooltip>
           </SearchableSetting>
         </div>
 
@@ -152,6 +208,7 @@ export function RepositoryPane({
           description="Project-specific display details for the sidebar and tabs."
           keywords={[repo.displayName, repo.path, 'project name', 'repository name']}
           className="space-y-2"
+          forceVisible={forceFullPaneForRepoMatch}
         >
           <Label className="text-sm font-semibold">Display Name</Label>
           <Input
@@ -180,6 +237,7 @@ export function RepositoryPane({
           ]}
           className="space-y-2"
           id={getRepositoryIconSectionId(repo.id)}
+          forceVisible={forceFullPaneForRepoMatch}
         >
           <RepositoryIconPicker repo={repo} updateRepo={updateRepo} />
         </SearchableSetting>
@@ -190,6 +248,7 @@ export function RepositoryPane({
             description="Default base branch or ref when creating worktrees."
             keywords={[repo.displayName, 'base ref', 'branch']}
             className="space-y-3"
+            forceVisible={forceFullPaneForRepoMatch}
           >
             <Label className="text-sm font-semibold">Default Worktree Base</Label>
             <BaseRefPicker
@@ -204,21 +263,30 @@ export function RepositoryPane({
     ) : null,
     hooksSection,
     !isFolder &&
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sourceControlAiEntries)) ? (
+      <RepositorySourceControlAiSection
+        key="source-control-ai"
+        repo={repo}
+        updateRepo={updateRepo}
+      />
+    ) : null,
+    !isFolder &&
     !repo.connectionId &&
     symlinksEnabled &&
-    matchesSettingsSearch(searchQuery, symlinkEntries) ? (
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, symlinkEntries)) ? (
       <WorktreeSymlinksSection key="symlinks" repo={repo} updateRepo={updateRepo} />
     ) : null,
-    !isFolder && matchesSettingsSearch(searchQuery, sparsePresetEntries) ? (
+    !isFolder &&
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sparsePresetEntries)) ? (
       <SparsePresetSettingsSection key="sparse-presets" repoId={repo.id} />
     ) : null,
-    !isFolder && matchesSettingsSearch(searchQuery, mcpEntries) ? (
+    !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
       <McpConfigSection key="mcp-configs" repo={repo} />
     ) : null
   ].filter(Boolean)
 
   return (
-    <div className="space-y-8">
+    <div ref={setRepositoryPaneRootRef} className="space-y-8">
       {visibleSections.map((section, index) => (
         <div key={index} className="space-y-8">
           {index > 0 ? <Separator /> : null}

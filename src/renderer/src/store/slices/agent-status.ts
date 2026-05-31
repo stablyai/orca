@@ -11,6 +11,10 @@ import {
   type MigrationUnsupportedPtyEntry,
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
+import {
+  resolveAgentStatusIdentity,
+  shouldSuppressInheritedTerminalStatus
+} from '../../../../shared/agent-status-identity'
 import type { TerminalTab } from '../../../../shared/types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
@@ -124,6 +128,31 @@ function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boo
   return false
 }
 
+function isAgentCompletionState(state: ParsedAgentStatusPayload['state']): boolean {
+  return state === 'done' || state === 'waiting' || state === 'blocked'
+}
+
+function getTabIdFromPaneKey(paneKey: string): string | null {
+  const separator = paneKey.indexOf(':')
+  if (separator <= 0 || separator !== paneKey.lastIndexOf(':')) {
+    return null
+  }
+  return paneKey.slice(0, separator)
+}
+
+function findAgentPaneWorktreeId(state: AppState, paneKey: string): string | null {
+  const tabId = getTabIdFromPaneKey(paneKey)
+  if (!tabId) {
+    return null
+  }
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    if (tabs.some((tab) => tab.id === tabId)) {
+      return worktreeId
+    }
+  }
+  return null
+}
+
 function pruneMigrationUnsupportedEntries(
   entries: Record<string, MigrationUnsupportedPtyEntry>,
   predicate: (entry: MigrationUnsupportedPtyEntry) => boolean
@@ -173,6 +202,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
     setAgentStatus: (paneKey, payload, terminalTitle, timing) => {
       const updatedAt = timing?.updatedAt ?? Date.now()
+      let completionRefreshWorktreeId: string | null = null
+      let suppressedInheritedTerminalStatus = false
       set((s) => {
         const existing = s.agentStatusByPaneKey[paneKey]
         // Why: snapshots and live pushes share receivedAt from the same main-side
@@ -223,6 +254,27 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const stateStartedAt =
           timing?.stateStartedAt ??
           (existing && existing.state === payload.state ? existing.stateStartedAt : updatedAt)
+        const identity = resolveAgentStatusIdentity({
+          existing: existing
+            ? {
+                agentType: existing.agentType,
+                state: existing.state,
+                updatedAt: existing.updatedAt
+              }
+            : undefined,
+          incoming: payload.agentType,
+          now: updatedAt
+        })
+        if (
+          existing &&
+          shouldSuppressInheritedTerminalStatus({
+            inheritedFromActivePane: identity.inheritedFromActivePane,
+            incomingState: payload.state
+          })
+        ) {
+          suppressedInheritedTerminalStatus = true
+          return s
+        }
 
         // Why: tool/assistant fields come pre-merged from the main-process
         // cache (see `resolveToolState` in server.ts), so the payload always
@@ -234,19 +286,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           prompt: payload.prompt,
           updatedAt,
           stateStartedAt,
-          // Why: unlike tool/prompt/assistant fields (which legitimately clear on a
-          // fresh turn), agentType is the agent's identity for the pane — it does
-          // not change between updates. Preserve the prior value when a payload
-          // omits it so the icon/label does not flicker out between hook pings.
-          // 'unknown' is the sentinel for "agent didn't identify itself" in
-          // WellKnownAgentType. Treat it like absence so a well-known prior
-          // identity (e.g. 'claude' learned from an earlier hook ping) isn't
-          // stomped by a later ping that lost the identity (e.g. legacy/partial
-          // integrations).
-          agentType:
-            (payload.agentType && payload.agentType !== 'unknown'
-              ? payload.agentType
-              : existing?.agentType) ?? 'unknown',
+          agentType: identity.agentType,
           paneKey,
           terminalTitle: effectiveTitle,
           stateHistory: history,
@@ -262,6 +302,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // the field through directly preserves truth for done and resets
           // it when a new turn starts (working → Stop reprices it).
           interrupted: payload.interrupted
+        }
+        if (
+          isAgentCompletionState(entry.state) &&
+          existing !== undefined &&
+          !isAgentCompletionState(existing.state)
+        ) {
+          completionRefreshWorktreeId = findAgentPaneWorktreeId(s, paneKey)
         }
         // Why: broad freshness-aware subscribers only need a global tick when
         // an entry appears, changes state, crosses stale->fresh, or receives
@@ -326,9 +373,19 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             sortRelevantChange || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
+      if (suppressedInheritedTerminalStatus) {
+        return
+      }
+      get().setGeneratedTabTitleFromAgentPrompt(paneKey, payload.prompt)
       // Why: schedule after set completes so the timer reads the updated map.
       // queueMicrotask avoids re-entry into the zustand store during set.
       queueMicrotask(() => freshness.schedule())
+      if (completionRefreshWorktreeId) {
+        const worktreeId = completionRefreshWorktreeId
+        // Why: agents can create a PR via `gh pr create`, bypassing Orca's
+        // create-PR flow and leaving a fresh "no PR" cache entry in place.
+        queueMicrotask(() => get().refreshGitHubForWorktreeIfStale(worktreeId))
+      }
     },
 
     setMigrationUnsupportedPty: (entry) => {

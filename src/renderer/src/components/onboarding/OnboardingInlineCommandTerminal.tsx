@@ -8,6 +8,9 @@ import { useAppStore } from '@/store'
 const ONBOARDING_INLINE_TERMINAL_WORKTREE_ID = 'onboarding-inline-terminal'
 const AUTO_INSERT_DELAY_MS = 250
 const READY_RETRY_MS = 100
+// Why: PTY startup can fail before [data-pty-id] appears; cap polling so the
+// setup panel does not leave a hidden retry timer alive forever.
+export const READY_MAX_ATTEMPTS = 50
 const PTY_TEXT_FALLBACK_MS = 750
 
 type OnboardingInlineCommandTerminalProps = {
@@ -17,6 +20,7 @@ type OnboardingInlineCommandTerminalProps = {
   ariaLabel: string
   terminalHeightPx?: number
   terminalTopMarginPx?: number
+  descriptionPaddingClassName?: string
   autoScrollIntoView?: boolean
   worktreeId?: string
   onOpened?: () => void
@@ -30,6 +34,7 @@ export function OnboardingInlineCommandTerminal({
   ariaLabel,
   terminalHeightPx = 280,
   terminalTopMarginPx = 20,
+  descriptionPaddingClassName = 'px-4 py-3',
   autoScrollIntoView = true,
   worktreeId = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
   onOpened,
@@ -60,26 +65,35 @@ export function OnboardingInlineCommandTerminal({
   }, [onOpened])
 
   useEffect(() => {
-    void window.api.app.getFloatingTerminalCwd({ path: '~' }).then(setCwd)
+    let cancelled = false
+    void window.api.app.getFloatingTerminalCwd({ path: '~' }).then((nextCwd) => {
+      if (!cancelled) {
+        setCwd(nextCwd)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
     const tab = createTab(worktreeId, undefined, undefined, {
-      activate: false
+      activate: false,
+      recordInteraction: false
     })
     setActiveTabForWorktree(worktreeId, tab.id)
-    setTabCustomTitle(tab.id, title)
+    setTabCustomTitle(tab.id, title, { recordInteraction: false })
     setTabId(tab.id)
     return () => {
       // Why: inline setup panels can disappear after detection succeeds; close
       // the backing tab so installer shells do not keep running invisibly.
-      closeTab(tab.id)
+      closeTab(tab.id, { recordInteraction: false })
     }
   }, [closeTab, createTab, setActiveTabForWorktree, setTabCustomTitle, title, worktreeId])
 
   useEffect(() => {
     if (!autoScrollIntoView) {
-      return
+      return undefined
     }
     if (prefersReducedMotion) {
       const scrollFrame = window.requestAnimationFrame(() => {
@@ -90,20 +104,32 @@ export function OnboardingInlineCommandTerminal({
     // Why: double rAF guarantees the browser commits the initial collapsed
     // styles before we flip to `entered`, so the height/opacity transition
     // actually plays instead of snapping straight to the final state.
+    let enteredFrame: number | null = null
     const enterFrame = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => setEntered(true))
+      enteredFrame = window.requestAnimationFrame(() => setEntered(true))
     })
-    return () => window.cancelAnimationFrame(enterFrame)
+    return () => {
+      window.cancelAnimationFrame(enterFrame)
+      if (enteredFrame !== null) {
+        window.cancelAnimationFrame(enteredFrame)
+      }
+    }
   }, [autoScrollIntoView, prefersReducedMotion])
 
   useEffect(() => {
     if (autoScrollIntoView) {
-      return
+      return undefined
     }
+    let enteredFrame: number | null = null
     const enterFrame = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => setEntered(true))
+      enteredFrame = window.requestAnimationFrame(() => setEntered(true))
     })
-    return () => window.cancelAnimationFrame(enterFrame)
+    return () => {
+      window.cancelAnimationFrame(enterFrame)
+      if (enteredFrame !== null) {
+        window.cancelAnimationFrame(enteredFrame)
+      }
+    }
   }, [autoScrollIntoView])
 
   // Why: tracking scroll *during* the height transition is unavoidably
@@ -167,7 +193,7 @@ export function OnboardingInlineCommandTerminal({
       }, AUTO_INSERT_DELAY_MS)
     }
 
-    const waitForTerminal = (): void => {
+    const waitForTerminal = (attempt: number): void => {
       if (canceled) {
         return
       }
@@ -189,10 +215,13 @@ export function OnboardingInlineCommandTerminal({
       } else {
         ptyFirstSeenAt = null
       }
-      retryTimer = window.setTimeout(waitForTerminal, READY_RETRY_MS)
+      const nextAttempt = getNextTerminalReadyRetryAttempt(attempt)
+      if (nextAttempt !== null) {
+        retryTimer = window.setTimeout(() => waitForTerminal(nextAttempt), READY_RETRY_MS)
+      }
     }
 
-    waitForTerminal()
+    waitForTerminal(0)
     return () => {
       canceled = true
       if (retryTimer !== null) {
@@ -224,7 +253,7 @@ export function OnboardingInlineCommandTerminal({
         className="min-h-0 overflow-hidden rounded-xl border border-border bg-card"
       >
         {description ? (
-          <div className="border-b border-border px-4 py-3">
+          <div className={`border-b border-border ${descriptionPaddingClassName}`}>
             <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
           </div>
         ) : null}
@@ -241,8 +270,8 @@ export function OnboardingInlineCommandTerminal({
               cwd={cwd}
               isActive
               isVisible
-              onPtyExit={() => closeTab(tabId)}
-              onCloseTab={() => closeTab(tabId)}
+              onPtyExit={() => closeTab(tabId, { recordInteraction: false })}
+              onCloseTab={() => closeTab(tabId, { recordInteraction: false })}
             />
           ) : (
             <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
@@ -263,6 +292,10 @@ function findTerminalTabElement(tabId: string): HTMLElement | null {
     }
   }
   return null
+}
+
+export function getNextTerminalReadyRetryAttempt(attempt: number): number | null {
+  return attempt < READY_MAX_ATTEMPTS ? attempt + 1 : null
 }
 
 function terminalReadyForCommand(element: HTMLElement | null): boolean {

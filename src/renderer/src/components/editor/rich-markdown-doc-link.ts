@@ -5,16 +5,18 @@ import type { MarkdownDocument } from '../../../../shared/types'
 import type { MarkdownDocumentIndex } from './markdown-doc-links'
 import {
   createMarkdownDocumentIndex,
-  getMarkdownDocLinkTarget,
+  formatMarkdownDocLink,
+  parseMarkdownDocLink,
   resolveMarkdownDocLink
 } from './markdown-doc-links'
+import { isDocLinkLiteralCodeTextNode } from './rich-markdown-doc-link-code-context'
 
 const DOC_LINK_PLACEHOLDER_PREFIX = '[[ORCA_DOC_LINK:'
 const DOC_LINK_PLACEHOLDER_SUFFIX = ']]'
 
 // Why: `.matchAll()` at each call site creates a fresh iterator so the shared
 // `/g` regex never leaks `lastIndex` state across nested or concurrent scans.
-const DOC_LINK_PATTERN = /\[\[([^[\]\r\n|]+)\]\]/g
+const DOC_LINK_PATTERN = /\[\[([^[\]\r\n]+)\]\]/g
 
 const docLinkDissolveKey = new PluginKey('docLinkDissolve')
 const docLinkAutoConvertKey = new PluginKey('docLinkAutoConvert')
@@ -45,13 +47,16 @@ function buildPreviewDecorations(state: EditorState, storage: DocLinkStorage): D
   const decorations: Decoration[] = []
   const index = getDocIndex(storage)
   const cursor = state.selection.from
-  state.doc.descendants((node, pos) => {
+  state.doc.descendants((node, pos, parent) => {
     if (node.type.name !== 'text' || !node.text) {
       return
     }
+    if (isDocLinkLiteralCodeTextNode(node, parent)) {
+      return
+    }
     for (const match of node.text.matchAll(DOC_LINK_PATTERN)) {
-      const target = getMarkdownDocLinkTarget(match[1])
-      if (!target || match.index === undefined) {
+      const link = parseMarkdownDocLink(match[1])
+      if (!link || match.index === undefined) {
         continue
       }
       const from = pos + match.index
@@ -62,7 +67,7 @@ function buildPreviewDecorations(state: EditorState, storage: DocLinkStorage): D
       if (cursor <= from || cursor > to) {
         continue
       }
-      const resolved = resolveAgainstIndex(target, index)
+      const resolved = resolveAgainstIndex(link.target, index)
       const cls = resolved
         ? 'rich-markdown-doc-link-preview'
         : 'rich-markdown-doc-link-preview rich-markdown-doc-link-preview--missing'
@@ -77,6 +82,18 @@ function resolveAgainstIndex(target: string, index: MarkdownDocumentIndex | null
     return false
   }
   return resolveMarkdownDocLink(target, index).status === 'resolved'
+}
+
+function getDocLinkTarget(node: { attrs: Record<string, unknown> }): string {
+  return typeof node.attrs.target === 'string' ? node.attrs.target : ''
+}
+
+function getDocLinkAlias(node: { attrs: Record<string, unknown> }): string | null {
+  return typeof node.attrs.label === 'string' && node.attrs.label ? node.attrs.label : null
+}
+
+function getDocLinkDisplayText(node: { attrs: Record<string, unknown> }): string {
+  return getDocLinkAlias(node) ?? getDocLinkTarget(node)
 }
 
 export const MarkdownDocLink = Node.create({
@@ -99,6 +116,10 @@ export const MarkdownDocLink = Node.create({
       target: {
         default: '',
         parseHTML: (el: HTMLElement) => el.getAttribute('data-doc-link-target') ?? ''
+      },
+      label: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute('data-doc-link-label')
       }
     }
   },
@@ -119,12 +140,16 @@ export const MarkdownDocLink = Node.create({
       }
 
       const placeholder = src.slice(0, endIndex + DOC_LINK_PLACEHOLDER_SUFFIX.length)
-      const target = src.slice(DOC_LINK_PLACEHOLDER_PREFIX.length, endIndex)
+      const link = parseMarkdownDocLink(src.slice(DOC_LINK_PLACEHOLDER_PREFIX.length, endIndex))
+      if (!link) {
+        return undefined
+      }
 
       return {
         type: 'markdownDocLink',
         raw: placeholder,
-        text: target
+        text: link.target,
+        label: link.alias ?? undefined
       }
     }
   },
@@ -134,24 +159,32 @@ export const MarkdownDocLink = Node.create({
       return []
     }
     return helpers.createNode('markdownDocLink', {
-      target: typeof token.text === 'string' ? token.text : ''
+      target: typeof token.text === 'string' ? token.text : '',
+      label:
+        typeof (token as { label?: unknown }).label === 'string'
+          ? (token as { label: string }).label
+          : null
     })
   },
 
   renderMarkdown: (node) =>
-    `[[${typeof node.attrs?.target === 'string' ? node.attrs.target : ''}]]`,
+    formatMarkdownDocLink(
+      typeof node.attrs?.target === 'string' ? node.attrs.target : '',
+      typeof node.attrs?.label === 'string' ? node.attrs.label : null
+    ),
 
   addNodeView() {
     const storage = this.storage as DocLinkStorage
     return ({ node }: { node: { type: { name: string }; attrs: Record<string, unknown> } }) => {
-      const getTarget = (n: { attrs: Record<string, unknown> }): string =>
-        typeof n.attrs.target === 'string' ? n.attrs.target : ''
-
-      const target = getTarget(node)
+      const target = getDocLinkTarget(node)
       const dom = document.createElement('span')
       dom.setAttribute('data-doc-link-target', target)
+      const alias = getDocLinkAlias(node)
+      if (alias) {
+        dom.setAttribute('data-doc-link-label', alias)
+      }
       dom.setAttribute('contenteditable', 'false')
-      dom.textContent = target
+      dom.textContent = getDocLinkDisplayText(node)
 
       const applyResolutionClass = (t: string): void => {
         const resolved = resolveAgainstIndex(t, getDocIndex(storage))
@@ -171,9 +204,15 @@ export const MarkdownDocLink = Node.create({
           if (updatedNode.type.name !== 'markdownDocLink') {
             return false
           }
-          const newTarget = getTarget(updatedNode)
+          const newTarget = getDocLinkTarget(updatedNode)
+          const newAlias = getDocLinkAlias(updatedNode)
           dom.setAttribute('data-doc-link-target', newTarget)
-          dom.textContent = newTarget
+          if (newAlias) {
+            dom.setAttribute('data-doc-link-label', newAlias)
+          } else {
+            dom.removeAttribute('data-doc-link-label')
+          }
+          dom.textContent = getDocLinkDisplayText(updatedNode)
           applyResolutionClass(newTarget)
           return true
         }
@@ -217,8 +256,8 @@ export const MarkdownDocLink = Node.create({
             if (!adjacent || adjacent.type.name !== 'markdownDocLink') {
               return false
             }
-            const target = typeof adjacent.attrs.target === 'string' ? adjacent.attrs.target : ''
-            const text = `[[${target}]]`
+            const target = getDocLinkTarget(adjacent)
+            const text = formatMarkdownDocLink(target, getDocLinkAlias(adjacent))
             const nodeStart = direction === 'left' ? $from.pos - adjacent.nodeSize : $from.pos
             const nodeEnd = nodeStart + adjacent.nodeSize
             const tr = state.tr.replaceWith(nodeStart, nodeEnd, state.schema.text(text))
@@ -237,14 +276,17 @@ export const MarkdownDocLink = Node.create({
           const cursor = newState.selection.from
           let modified = false
 
-          newState.doc.descendants((node, pos) => {
+          newState.doc.descendants((node, pos, parent) => {
             if (node.type.name !== 'text' || !node.text) {
+              return
+            }
+            if (isDocLinkLiteralCodeTextNode(node, parent)) {
               return
             }
 
             for (const match of node.text.matchAll(DOC_LINK_PATTERN)) {
-              const target = getMarkdownDocLinkTarget(match[1])
-              if (!target || match.index === undefined) {
+              const link = parseMarkdownDocLink(match[1])
+              if (!link || match.index === undefined) {
                 continue
               }
 
@@ -258,7 +300,7 @@ export const MarkdownDocLink = Node.create({
                 continue
               }
 
-              const docLinkNode = nodeType.create({ target })
+              const docLinkNode = nodeType.create({ target: link.target, label: link.alias })
               tr.replaceWith(tr.mapping.map(from), tr.mapping.map(to), docLinkNode)
               modified = true
             }
@@ -300,14 +342,16 @@ export const MarkdownDocLink = Node.create({
 
   renderHTML({ HTMLAttributes, node }) {
     const target = typeof node.attrs.target === 'string' ? node.attrs.target : ''
+    const label = typeof node.attrs.label === 'string' ? node.attrs.label : null
     return [
       'span',
       mergeAttributes(HTMLAttributes, {
         'data-doc-link-target': target,
+        ...(label ? { 'data-doc-link-label': label } : {}),
         contenteditable: 'false',
         class: 'rich-markdown-doc-link'
       }),
-      target
+      label ?? target
     ]
   }
 })

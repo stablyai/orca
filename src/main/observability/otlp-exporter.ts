@@ -21,7 +21,7 @@
 // (~80 KB of transitive deps) for a feature gated entirely on an env var
 // the typical user will never set.
 
-import { request as httpRequest } from 'node:http'
+import { request as httpRequest, type ClientRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { URL } from 'node:url'
 import { redactSpan, type RedactableSpan, type SpanEvent } from './redactor'
@@ -298,6 +298,33 @@ function encodeOtlpPayload(serviceName: string, spans: RedactableSpan[]): OtlpPa
 
 function postJson(url: string, body: unknown, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
+    let settled = false
+    let req: ClientRequest | null = null
+    const cleanupListeners = (): void => {
+      req?.off('error', onError)
+      req?.off('timeout', onTimeout)
+    }
+    const resolveOnce = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanupListeners()
+      resolve()
+    }
+    const rejectOnce = (error: Error, options?: { destroy?: boolean }): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (options?.destroy) {
+        req?.destroy()
+      }
+      cleanupListeners()
+      reject(error)
+    }
+    const onError = (error: Error): void => rejectOnce(error)
+    const onTimeout = (): void => rejectOnce(new Error('OTLP timeout'), { destroy: true })
     let parsed: URL
     try {
       parsed = new URL(url)
@@ -307,7 +334,7 @@ function postJson(url: string, body: unknown, timeoutMs: number): Promise<void> 
     }
     const data = JSON.stringify(body)
     const protocol = parsed.protocol === 'https:' ? httpsRequest : httpRequest
-    const req = protocol(
+    req = protocol(
       {
         protocol: parsed.protocol,
         hostname: parsed.hostname,
@@ -326,16 +353,14 @@ function postJson(url: string, body: unknown, timeoutMs: number): Promise<void> 
         res.resume()
         const status = res.statusCode ?? 0
         if (status >= 200 && status < 300) {
-          resolve()
+          resolveOnce()
         } else {
-          reject(new Error(`OTLP HTTP ${status}`))
+          rejectOnce(new Error(`OTLP HTTP ${status}`))
         }
       }
     )
-    req.on('error', reject)
-    req.on('timeout', () => {
-      req.destroy(new Error('OTLP timeout'))
-    })
+    req.on('error', onError)
+    req.on('timeout', onTimeout)
     req.write(data)
     req.end()
   })

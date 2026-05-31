@@ -94,15 +94,15 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
   // destructive or read/write operation, so the security boundary remains
   // enforced where it matters.
   const repos = getLocalRepos(store)
-  const perRepoResults = await Promise.all(
+  const perProjectResults = await Promise.all(
     repos.map(async (repo) => {
       const roots: string[] = []
       try {
         roots.push(resolve(repo.path))
 
-        const worktrees = await listRepoWorktrees(repo)
-        const worktreeRoots = worktrees.map((wt) => resolve(wt.path))
-        roots.push(...worktreeRoots)
+        for (const worktree of await listRepoWorktrees(repo)) {
+          roots.push(resolve(worktree.path))
+        }
       } catch (error) {
         // Why: a single inaccessible repo (EACCES, EIO, etc.) must not break
         // the entire cache rebuild — that would disable File Explorer and
@@ -117,7 +117,7 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
   registeredWorktreeRoots.clear()
   registeredWorktreeRootsByRepo.clear()
   registeredWorktreeRootRepoIds.clear()
-  for (const { repoId, roots } of perRepoResults) {
+  for (const { repoId, roots } of perProjectResults) {
     const normalizedRoots = new Set<string>()
     for (const root of roots) {
       normalizedRoots.add(root)

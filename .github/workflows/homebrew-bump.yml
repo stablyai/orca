@@ -6,9 +6,9 @@ name: Homebrew Cask Bump
 #   - workflow_dispatch → manual backfill for a specific tag
 #
 # The job computes the sha256 of orca-macos-arm64.dmg + orca-macos-x64.dmg
-# from the release, templates Casks/orca.rb in this repo with the new
-# version and hashes, then PRs the result into stablyai/homebrew-orca. It
-# does NOT run for -rc.* tags: the stable cask should only track GA.
+# from the release, templates the channel-specific cask in this repo with the
+# new version and hashes, then PRs the result into stablyai/homebrew-orca.
+# Stable tags update Casks/orca.rb; RC tags update Casks/orca@rc.rb.
 #
 # Why no `release.published` trigger: other products shipped from this repo
 # (e.g. mobile under `mobile-v*`) also publish GitHub Releases. A blanket
@@ -35,20 +35,16 @@ on:
 jobs:
   bump-cask:
     runs-on: ubuntu-latest
-    # Why: defense in depth. The desktop release pipeline already refuses
-    # to invoke this workflow for `-rc.*` tags, but a manual backfill could
-    # still pass one in — reject it here so the stable cask can never point
-    # at an RC. Also requires the desktop tag shape `v<digit>...` so a
-    # mis-typed mobile tag like `mobile-v0.0.1` is rejected up front.
+    # Why: only desktop tags have the macOS DMGs this workflow downloads.
+    # A mobile tag such as `mobile-v0.0.1` must never rewrite either cask.
     if: >
       inputs.tag != '' &&
-      !contains(inputs.tag, '-rc.') &&
       startsWith(inputs.tag, 'v')
     permissions:
       contents: read
     steps:
       - name: Checkout orca
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Resolve tag and version
         id: tag
@@ -65,6 +61,35 @@ jobs:
           version="${tag#v}"
           echo "tag=$tag" >>"$GITHUB_OUTPUT"
           echo "version=$version" >>"$GITHUB_OUTPUT"
+
+      - name: Resolve cask target
+        id: cask
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            token="orca@rc"
+            branch_token="orca-rc"
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            token="orca"
+            branch_token="orca"
+          else
+            echo "::error::Unsupported desktop tag shape: $TAG" >&2
+            exit 1
+          fi
+
+          path="Casks/${token}.rb"
+          if [[ ! -f "$path" ]]; then
+            echo "::error::Missing cask template: $path" >&2
+            exit 1
+          fi
+
+          echo "token=$token" >>"$GITHUB_OUTPUT"
+          echo "path=$path" >>"$GITHUB_OUTPUT"
+          echo "branch=bump/${branch_token}-${VERSION}" >>"$GITHUB_OUTPUT"
+          echo "title=${token} ${VERSION}" >>"$GITHUB_OUTPUT"
 
       - name: Download DMGs and compute sha256
         id: hash
@@ -89,11 +114,12 @@ jobs:
           VERSION: ${{ steps.tag.outputs.version }}
           ARM_SHA: ${{ steps.hash.outputs.arm }}
           INTEL_SHA: ${{ steps.hash.outputs.intel }}
+          CASK_PATH: ${{ steps.cask.outputs.path }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import os, re, pathlib
-          p = pathlib.Path("Casks/orca.rb")
+          p = pathlib.Path(os.environ["CASK_PATH"])
           src = p.read_text()
           src = re.sub(r'version "[^"]+"',
                        f'version "{os.environ["VERSION"]}"', src, count=1)
@@ -113,7 +139,7 @@ jobs:
       # installation token can.
       - name: Generate buf0-bot token
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: 2590194
           private-key: ${{ secrets.BUFO_BOT_PRIVATE_KEY }}
@@ -121,7 +147,7 @@ jobs:
           repositories: homebrew-orca
 
       - name: Checkout tap
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: stablyai/homebrew-orca
           path: tap
@@ -132,10 +158,13 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.tag.outputs.version }}
           TAG: ${{ steps.tag.outputs.tag }}
+          CASK_PATH: ${{ steps.cask.outputs.path }}
+          BRANCH: ${{ steps.cask.outputs.branch }}
+          TITLE: ${{ steps.cask.outputs.title }}
         run: |
           set -euo pipefail
-          mkdir -p tap/Casks
-          cp Casks/orca.rb tap/Casks/orca.rb
+          mkdir -p "tap/$(dirname "$CASK_PATH")"
+          cp "$CASK_PATH" "tap/$CASK_PATH"
 
           cd tap
           # Why: commit author must match the buf0-bot app so commits are
@@ -148,20 +177,20 @@ jobs:
             exit 0
           fi
 
-          branch="bump/orca-$VERSION"
+          branch="$BRANCH"
           git checkout -b "$branch"
-          git add Casks/orca.rb
-          git commit -m "orca $VERSION"
+          git add "$CASK_PATH"
+          git commit -m "$TITLE"
           git push -u origin "$branch" --force
 
-          # Why: prefer --fill so the PR body matches the commit; fall back
-          # to a brief body if the PR already exists for this branch.
+          # Why: repeated backfills can race an existing PR branch, so edit
+          # the PR title if creation reports that one already exists.
           gh pr create \
-            --title "orca $VERSION" \
-            --body "Automated bump from stablyai/orca release $TAG." \
+            --title "$TITLE" \
+            --body "Automated bump of $CASK_PATH from stablyai/orca release $TAG." \
             --base main \
             --head "$branch" \
-            || gh pr edit "$branch" --title "orca $VERSION"
+            || gh pr edit "$branch" --title "$TITLE"
 
           # Why: squash-merge immediately rather than --auto. The tap has no
           # required checks or branch protection, and `gh pr merge --auto`

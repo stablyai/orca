@@ -31,6 +31,7 @@ describe('validateGitExecArgs', () => {
       [['config', '--list']],
       [['config', '-l']],
       [['config', '--get-regexp', 'user']],
+      [['check-ref-format', '--branch', 'feature/ssh-pr-head']],
       [['for-each-ref', '--format=%(refname)', 'refs/remotes']],
       [
         [

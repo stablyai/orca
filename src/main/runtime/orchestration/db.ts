@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: the orchestration DB keeps schema creation, message CRUD, task DAG resolution, and dispatch context management in one class so transactional invariants (e.g. promoteReadyTasks running inside the same writer as updateTaskStatus) are enforced by locality. */
-import Database from 'better-sqlite3'
 import { randomBytes } from 'crypto'
+import Database from '../../sqlite/sync-database'
 import type {
   MessageType,
   MessagePriority,
@@ -380,7 +380,15 @@ export class OrchestrationDb {
   // message for a handle regardless of read/delivered state; never touches the
   // read bit. Stale-handle safe: if the handle no longer exists, the query
   // just returns whatever historical rows remain (§3.3).
-  getAllMessagesForHandle(toHandle: string, limit = 100): MessageRow[] {
+  getAllMessagesForHandle(toHandle: string, limit = 100, types?: MessageType[]): MessageRow[] {
+    if (types && types.length > 0) {
+      const placeholders = types.map(() => '?').join(',')
+      return this.db
+        .prepare(
+          `SELECT * FROM messages WHERE to_handle = ? AND type IN (${placeholders}) ORDER BY sequence DESC LIMIT ?`
+        )
+        .all(toHandle, ...types, limit) as MessageRow[]
+    }
     return this.db
       .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
       .all(toHandle, limit) as MessageRow[]
@@ -461,7 +469,7 @@ export class OrchestrationDb {
     dispatch_id: string | null
   })[] {
     const whereClauses: string[] = []
-    const params: unknown[] = []
+    const params: Database.BindValue[] = []
     if (filter?.ready) {
       whereClauses.push("t.status = 'ready'")
     } else if (filter?.status) {
@@ -586,6 +594,12 @@ export class OrchestrationDb {
     return this.db
       .prepare('SELECT * FROM dispatch_contexts WHERE task_id = ? ORDER BY rowid DESC LIMIT 1')
       .get(taskId) as DispatchContextRow | undefined
+  }
+
+  getDispatchContextById(dispatchId: string): DispatchContextRow | undefined {
+    return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(dispatchId) as
+      | DispatchContextRow
+      | undefined
   }
 
   getActiveDispatchForTerminal(handle: string): DispatchContextRow | undefined {

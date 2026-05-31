@@ -55,23 +55,38 @@ import {
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
-import { acquireSingleInstanceLock } from './startup/single-instance-lock'
+import {
+  acquireSingleInstanceLock,
+  logSingleInstanceLockBypass,
+  logSingleInstanceLockFailure,
+  shouldBypassSingleInstanceLock
+} from './startup/single-instance-lock'
+import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
 import { RateLimitService } from './rate-limits/service'
+import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
+import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
+import {
+  normalizeCodexRuntimeSelection,
+  type CodexAccountSelectionTarget
+} from './codex-accounts/runtime-selection'
+import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService } from './codex/hook-service'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
+import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import {
   getPtyIdForPaneKey,
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
-  registerHeadlessPtyRuntime
+  registerHeadlessPtyRuntime,
+  isRendererPtyOutputPaused
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
@@ -123,6 +138,51 @@ let automations: AutomationService | null = null
 let keybindings: KeybindingService | null = null
 let expectedRendererReload: { webContentsId: number; until: number } | null = null
 const isServeMode = process.argv.includes('--serve')
+
+// Why: the store/runtime singletons live here in index.ts; injecting them keeps
+// the rename orchestrator free of module-level state and unit-testable.
+function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
+  paneKey: string
+  tabId: string | undefined
+  worktreeId: string | undefined
+  payload: { state: string; prompt?: string; lastAssistantMessage?: string }
+  isReplay: boolean | undefined
+}): void {
+  const currentStore = store
+  const currentRuntime = runtime
+  if (!currentStore || !currentRuntime) {
+    return
+  }
+  void maybeAutoRenameBranchOnFirstWork(
+    {
+      paneKey: event.paneKey,
+      tabId: event.tabId,
+      worktreeId: event.worktreeId,
+      state: event.payload.state,
+      prompt: event.payload.prompt,
+      assistantMessage: event.payload.lastAssistantMessage,
+      isReplay: event.isReplay
+    },
+    {
+      getSettings: () => currentStore.getSettings(),
+      getRepo: (repoId) => currentStore.getRepo(repoId),
+      getAgentEnvResolvers: () => currentRuntime.getCommitMessageAgentEnvironmentResolvers(),
+      getCurrentDisplayName: (worktreeId) => currentStore.getWorktreeMeta(worktreeId)?.displayName,
+      canRenameOrcaCreatedBranch: (worktreeId) => {
+        const meta = currentStore.getWorktreeMeta(worktreeId)
+        // Why: a user/imported branch can coincidentally be named after a creature.
+        // Only worktrees Orca stamped at creation are safe to auto-rename.
+        return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
+      },
+      setDisplayName: (worktreeId, displayName) => {
+        currentStore.setWorktreeMeta(worktreeId, { displayName })
+      },
+      resolveWorktreeIdForTab: (tabId) => currentStore.getWorktreeIdForTab(tabId),
+      onRenamed: (repoId) => currentRuntime.notifyBranchRenamed(repoId)
+    }
+  )
+}
+
 const devInstanceIdentity = getDevInstanceIdentity(is.dev)
 const devAgentHookEndpointNamespace = devInstanceIdentity.isDev
   ? devInstanceIdentity.appUserModelId
@@ -154,6 +214,17 @@ configureDevUserDataPath(is.dev)
 // Why: CLI-shared Codex helpers cannot import Electron. Seed the resolved
 // app userData path once Electron has applied dev/e2e overrides.
 process.env.ORCA_USER_DATA_PATH ??= app.getPath('userData')
+const startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
+if (startupDiagnosticsEnabled) {
+  logStartupDiagnostic('before-single-instance-lock', {
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    platform: process.platform,
+    osRelease: os.release(),
+    userData: app.getPath('userData'),
+    e2eUserData: Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
+  })
+}
 
 function focusExistingWindow(): void {
   // Why: the second-instance event fires on the *primary* Electron process
@@ -217,17 +288,32 @@ function getExpectedTeardownScope(webContentsId?: number): ExpectedTeardownScope
 // hook endpoint files are namespaced per dev instance when the hook server
 // starts below. Packaged Orca keeps the lock to protect against the corruption
 // documented in PR #1326 / issue #1312.
+const bypassSingleInstanceLock = shouldBypassSingleInstanceLock({
+  isDev: is.dev,
+  isServeMode
+})
+if (bypassSingleInstanceLock) {
+  // Why: this is an explicit diagnostic escape hatch for macOS builds where
+  // Electron reports a false lock loss before any normal app logs exist.
+  logSingleInstanceLockBypass()
+}
 const hasSingleInstanceLock =
-  is.dev && !isServeMode ? true : acquireSingleInstanceLock(app, focusExistingWindow)
+  is.dev && !isServeMode
+    ? true
+    : bypassSingleInstanceLock
+      ? true
+      : acquireSingleInstanceLock(app, focusExistingWindow)
+if (startupDiagnosticsEnabled) {
+  logStartupDiagnostic('single-instance-lock-result', {
+    acquired: hasSingleInstanceLock,
+    bypassed: bypassSingleInstanceLock,
+    skippedForDev: is.dev && !isServeMode
+  })
+}
 if (!hasSingleInstanceLock) {
-  if (is.dev) {
-    // Why: packaged runs have no attached console, but dev runs do. Emit a
-    // single line so a `pnpm dev` operator does not mistake a silent exit
-    // for a broken launcher.
-    console.log(
-      '[single-instance] Another Orca instance is already running against this userData path — focusing existing window.'
-    )
-  }
+  // Why: if Electron returns a false negative here, packaged macOS launches
+  // otherwise look like silent crashes. `open --stderr` can capture this line.
+  logSingleInstanceLockFailure()
   app.quit()
 }
 
@@ -261,8 +347,8 @@ if (hasSingleInstanceLock) {
   enableMainProcessGpuFeatures()
 }
 
-function prepareCodexRuntimeHomeForLaunch(): string {
-  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch()
+function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
+  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
   try {
     // Why: launch prep is reachable after startup via PTY/runtime paths; honor
@@ -441,7 +527,7 @@ function openMainWindow(): BrowserWindow {
     store,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
-    () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
+    (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
         if (window.webContents.id === webContentsId) {
@@ -478,10 +564,20 @@ function openMainWindow(): BrowserWindow {
   window.on('hide', stopSyntheticTitleSpinnerTimer)
   window.on('minimize', stopSyntheticTitleSpinnerTimer)
   agentHookServer.setListener(
-    ({ paneKey, tabId, worktreeId, connectionId, payload, receivedAt, stateStartedAt }) => {
+    ({
+      paneKey,
+      tabId,
+      worktreeId,
+      connectionId,
+      payload,
+      receivedAt,
+      stateStartedAt,
+      isReplay
+    }) => {
       if (mainWindow?.isDestroyed()) {
         return
       }
+      maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       mainWindow?.webContents.send('agentStatus:set', {
         ...payload,
@@ -809,6 +905,9 @@ function sendSyntheticTitle(ptyId: string, data: string, options: { force?: bool
   if (!mainWindow || mainWindow.isDestroyed()) {
     return
   }
+  if (options.force !== true && isRendererPtyOutputPaused(ptyId)) {
+    return
+  }
   // Why: repeated working-spinner frames are decorative and can arrive every
   // 80ms per agent. Final/permission frames are forced because they drive BEL.
   if (
@@ -992,8 +1091,14 @@ app.whenReady().then(async () => {
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
-  rateLimits.setCodexHomePathResolver(() => codexRuntimeHome!.prepareForRateLimitFetch())
-  rateLimits.setClaudeAuthPreparationResolver(() => claudeRuntimeAuth!.prepareForRateLimitFetch())
+  rateLimits.setCodexHomePathResolver((target) =>
+    codexRuntimeHome!.prepareForRateLimitFetch(target)
+  )
+  rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
+  rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
+  rateLimits.setClaudeAuthPreparationResolver((target) =>
+    claudeRuntimeAuth!.prepareForRateLimitFetch(target)
+  )
   rateLimits.setSettingsResolver(() => store!.getSettings())
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
@@ -1002,14 +1107,32 @@ app.whenReady().then(async () => {
   browserManager.setSettingsResolver(() => ({ keybindings: keybindings?.getOverrides() }))
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store!.getSettings()
+    const activeIds = new Set(
+      [
+        normalizeClaudeRuntimeSelection(settings).host,
+        ...Object.values(normalizeClaudeRuntimeSelection(settings).wsl)
+      ].filter(Boolean)
+    )
     return settings.claudeManagedAccounts
-      .filter((account) => account.id !== settings.activeClaudeManagedAccountId)
-      .map((account) => ({ id: account.id, managedAuthPath: account.managedAuthPath }))
+      .filter((account) => !activeIds.has(account.id))
+      .map((account) => ({
+        id: account.id,
+        managedAuthPath: account.managedAuthPath,
+        managedAuthRuntime: account.managedAuthRuntime,
+        wslDistro: account.wslDistro,
+        wslLinuxAuthPath: account.wslLinuxAuthPath
+      }))
   })
   rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store!.getSettings()
+    const activeIds = new Set(
+      [
+        normalizeCodexRuntimeSelection(settings).host,
+        ...Object.values(normalizeCodexRuntimeSelection(settings).wsl)
+      ].filter(Boolean)
+    )
     return settings.codexManagedAccounts
-      .filter((account) => account.id !== settings.activeCodexManagedAccountId)
+      .filter((account) => !activeIds.has(account.id))
       .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
   })
   const runtimeService = new OrcaRuntimeService(store, stats, {
@@ -1114,11 +1237,7 @@ app.whenReady().then(async () => {
       // Why: these appearance settings are default-on for older profiles, so
       // a missing persisted value must toggle from visible -> hidden.
       const next = getNextDefaultOnAppearanceSettingValue(current[key])
-      store.updateSettings({ [key]: next })
-      // Why: settings:get returns the current snapshot; renderer tracks
-      // settings through window.api.settings.get(). Push the new value so
-      // the sidebar/titlebar re-render without waiting for a round-trip.
-      mainWindow?.webContents.send('settings:changed', { [key]: next })
+      store.updateSettings({ [key]: next }, { notifyListeners: true })
       rebuildAppMenu()
     },
     getAppearanceState: () => {
@@ -1197,7 +1316,7 @@ app.whenReady().then(async () => {
       runtime,
       prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
-      () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
+      (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
       store
     )
     // Why: headless servers have no renderer graph publisher. Publish an

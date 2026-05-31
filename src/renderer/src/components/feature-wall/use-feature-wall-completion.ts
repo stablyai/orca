@@ -19,6 +19,7 @@ import {
 import { hasFeatureWallUsageTracking } from './feature-wall-usage-tracking'
 import { usePersistedFeatureWallCompletion } from './use-persisted-feature-wall-completion'
 import { useFeatureWallSessionDepth } from './use-feature-wall-session-depth'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 export type FeatureWallCompletionState = {
   workflowDone: Record<FeatureWallWorkflowId, boolean>
@@ -43,6 +44,7 @@ export function useFeatureWallCompletion(
 ): FeatureWallCompletionState {
   const { onTourDepthSummaryChange } = options
   const settings = useAppStore((s) => s.settings)
+  const mountedRef = useMountedRef()
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const rateLimits = useAppStore((s) => s.rateLimits)
   const fetchRateLimits = useAppStore((s) => s.fetchRateLimits)
@@ -51,7 +53,11 @@ export function useFeatureWallCompletion(
   const commitMessageAi = settings?.commitMessageAi
   const resolvedCommitMessageAgent =
     settings && commitMessageAi?.enabled === true
-      ? resolveCommitMessageAgentChoice(commitMessageAi.agentId, settings.defaultTuiAgent)
+      ? resolveCommitMessageAgentChoice(
+          commitMessageAi.agentId,
+          settings.defaultTuiAgent,
+          settings.disabledTuiAgents
+        )
       : null
   const aiCommitPrConfigured =
     commitMessageAi?.enabled === true &&
@@ -62,7 +68,7 @@ export function useFeatureWallCompletion(
         : false)
 
   const [hasUsageAccount, setHasUsageAccount] = useState(false)
-  const persistedCompletion = usePersistedFeatureWallCompletion(isOpen)
+  const persistedCompletion = usePersistedFeatureWallCompletion()
   const {
     visitedWorkflows,
     visitedAgentSteps,
@@ -96,8 +102,11 @@ export function useFeatureWallCompletion(
   }, [rateLimits.claude, rateLimits.codex])
 
   const refreshUsageAccountState = useCallback(async (): Promise<void> => {
-    setHasUsageAccount(await readUsageAccountState())
-  }, [readUsageAccountState])
+    const nextHasUsageAccount = await readUsageAccountState()
+    if (mountedRef.current) {
+      setHasUsageAccount(nextHasUsageAccount)
+    }
+  }, [mountedRef, readUsageAccountState])
 
   const sessionDepth = useFeatureWallSessionDepth({
     isOpen,

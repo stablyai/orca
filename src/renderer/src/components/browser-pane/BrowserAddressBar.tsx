@@ -4,25 +4,8 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { useAppStore } from '@/store'
-import {
-  buildSearchUrl,
-  looksLikeSearchQuery,
-  normalizeBrowserNavigationUrl,
-  SEARCH_ENGINE_LABELS,
-  DEFAULT_SEARCH_ENGINE,
-  type SearchEngine
-} from '../../../../shared/browser-url'
-
-const MAX_SUGGESTIONS = 8
-
-type SuggestionEntry = {
-  url: string
-  title: string
-  subtitle: string
-  lastVisitedAt: number
-  visitCount: number
-  isSearch: boolean
-}
+import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../shared/browser-url'
+import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
 
 type BrowserAddressBarProps = {
   value: string
@@ -30,28 +13,6 @@ type BrowserAddressBarProps = {
   onSubmit: () => void
   onNavigate: (url: string) => void
   inputRef: React.RefObject<HTMLInputElement | null>
-}
-
-function scoreSuggestion(
-  entry: { url: string; title: string; lastVisitedAt: number; visitCount: number },
-  query: string
-): number {
-  const lowerQuery = query.toLowerCase()
-  const lowerUrl = entry.url.toLowerCase()
-  const lowerTitle = entry.title.toLowerCase()
-
-  if (!lowerUrl.includes(lowerQuery) && !lowerTitle.includes(lowerQuery)) {
-    return -1
-  }
-
-  let score = 0
-  if (lowerUrl.startsWith(lowerQuery) || lowerUrl.startsWith(`https://${lowerQuery}`)) {
-    score += 100
-  }
-  score += Math.min(entry.visitCount, 50)
-  const ageHours = (Date.now() - entry.lastVisitedAt) / (1000 * 60 * 60)
-  score += Math.max(0, 24 - ageHours)
-  return score
 }
 
 export default function BrowserAddressBar({
@@ -62,84 +23,62 @@ export default function BrowserAddressBar({
   inputRef
 }: BrowserAddressBarProps): React.ReactElement {
   const [open, setOpen] = useState(false)
-  const [selectedValue, setSelectedValue] = useState('')
+  const [selectedValueOverride, setSelectedValueOverride] = useState<string | null>(null)
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
   const closingRef = useRef(false)
   const openedAtRef = useRef(0)
+  const blurCloseTimerRef = useRef<number | null>(null)
+  const closingResetTimerRef = useRef<number | null>(null)
+
+  const clearAddressBarTimers = useCallback((): void => {
+    if (blurCloseTimerRef.current !== null) {
+      window.clearTimeout(blurCloseTimerRef.current)
+      blurCloseTimerRef.current = null
+    }
+    if (closingResetTimerRef.current !== null) {
+      window.clearTimeout(closingResetTimerRef.current)
+      closingResetTimerRef.current = null
+    }
+  }, [])
+
+  const setAddressBarFormRef = useCallback(
+    (node: HTMLFormElement | null) => {
+      if (node === null) {
+        clearAddressBarTimers()
+      }
+    },
+    [clearAddressBarTimers]
+  )
 
   const searchEngine: SearchEngine =
     (browserDefaultSearchEngine as SearchEngine | null) ?? DEFAULT_SEARCH_ENGINE
 
-  const suggestions = useMemo((): SuggestionEntry[] => {
-    const trimmed = value.trim()
-    if (trimmed === '' || trimmed === 'about:blank' || trimmed.startsWith('data:')) {
-      if (browserUrlHistory.length === 0) {
-        return []
-      }
-      return [...browserUrlHistory]
-        .sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
-        .slice(0, MAX_SUGGESTIONS)
-        .map((entry) => ({ ...entry, subtitle: entry.url, isSearch: false }))
-    }
+  const suggestions = useMemo(
+    () =>
+      buildBrowserAddressBarSuggestions({
+        browserUrlHistory,
+        kagiSessionLink: browserKagiSessionLink,
+        searchEngine,
+        value
+      }),
+    [browserUrlHistory, value, searchEngine, browserKagiSessionLink]
+  )
 
-    const historySuggestions: SuggestionEntry[] =
-      browserUrlHistory.length > 0
-        ? browserUrlHistory
-            .map((entry) => ({ entry, score: scoreSuggestion(entry, trimmed) }))
-            .filter((item) => item.score >= 0)
-            .sort((a, b) => b.score - a.score)
-            .slice(0, MAX_SUGGESTIONS - 1)
-            .map((item) => ({ ...item.entry, subtitle: item.entry.url, isSearch: false }))
-        : []
-
-    // Why: the top row of the dropdown must always mirror what pressing Enter
-    // will do — i.e. what `normalizeBrowserNavigationUrl` resolves to. Chrome
-    // and Firefox omniboxes work this way: for URL-like inputs the top row is
-    // the typed URL itself (navigate), and for bare queries it is the search.
-    // The earlier implementation appended a "Google Search" row as a fallback
-    // for URL-like inputs, which then got auto-selected when no history
-    // matched — so Enter on "www.example.com" hit Google instead of the site.
-    const isQuery = looksLikeSearchQuery(trimmed)
-    const topAction: SuggestionEntry = isQuery
-      ? {
-          url: buildSearchUrl(trimmed, searchEngine, {
-            kagiSessionLink: browserKagiSessionLink
-          }),
-          title: trimmed,
-          subtitle: `${SEARCH_ENGINE_LABELS[searchEngine]} Search`,
-          lastVisitedAt: 0,
-          visitCount: 0,
-          isSearch: true
-        }
-      : {
-          url:
-            normalizeBrowserNavigationUrl(trimmed, searchEngine, {
-              kagiSessionLink: browserKagiSessionLink
-            }) ?? trimmed,
-          title: trimmed,
-          subtitle: '',
-          lastVisitedAt: 0,
-          visitCount: 0,
-          isSearch: false
-        }
-
-    // Why: if a history row already targets the same URL as the top action,
-    // skip the synthetic top row — the history row is more informative (real
-    // page title) and will be auto-selected, so Enter still navigates to the
-    // same place.
-    const duplicateIdx = historySuggestions.findIndex((h) => h.url === topAction.url)
-    if (duplicateIdx >= 0) {
-      return historySuggestions.slice(0, MAX_SUGGESTIONS)
-    }
-
-    return [topAction, ...historySuggestions].slice(0, MAX_SUGGESTIONS)
-  }, [browserUrlHistory, value, searchEngine, browserKagiSessionLink])
+  const selectedValue =
+    selectedValueOverride &&
+    suggestions.some((suggestion) => suggestion.url === selectedValueOverride)
+      ? selectedValueOverride
+      : (suggestions[0]?.url ?? '')
 
   const handleFocus = useCallback(() => {
     if (closingRef.current) {
       return
+    }
+    if (blurCloseTimerRef.current !== null) {
+      window.clearTimeout(blurCloseTimerRef.current)
+      blurCloseTimerRef.current = null
     }
     inputRef.current?.select()
     openedAtRef.current = Date.now()
@@ -158,7 +97,11 @@ export default function BrowserAddressBar({
     // — producing the "flash then disappear" on first click.
     const elapsed = Date.now() - openedAtRef.current
     const grace = elapsed < 400
-    setTimeout(() => {
+    if (blurCloseTimerRef.current !== null) {
+      window.clearTimeout(blurCloseTimerRef.current)
+    }
+    blurCloseTimerRef.current = window.setTimeout(() => {
+      blurCloseTimerRef.current = null
       if (grace && inputRef.current && document.activeElement === inputRef.current) {
         return
       }
@@ -170,8 +113,13 @@ export default function BrowserAddressBar({
     (url: string) => {
       closingRef.current = true
       setOpen(false)
+      setSelectedValueOverride(null)
       onNavigate(url)
-      setTimeout(() => {
+      if (closingResetTimerRef.current !== null) {
+        window.clearTimeout(closingResetTimerRef.current)
+      }
+      closingResetTimerRef.current = window.setTimeout(() => {
+        closingResetTimerRef.current = null
         closingRef.current = false
       }, 100)
     },
@@ -182,7 +130,7 @@ export default function BrowserAddressBar({
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.key === 'Escape') {
         setOpen(false)
-        setSelectedValue('')
+        setSelectedValueOverride(null)
         return
       }
 
@@ -192,21 +140,17 @@ export default function BrowserAddressBar({
 
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        setSelectedValue((prev) => {
-          const idx = suggestions.findIndex((s) => s.url === prev)
-          const next = idx < suggestions.length - 1 ? idx + 1 : 0
-          return suggestions[next].url
-        })
+        const idx = suggestions.findIndex((s) => s.url === selectedValue)
+        const next = idx < suggestions.length - 1 ? idx + 1 : 0
+        setSelectedValueOverride(suggestions[next].url)
         return
       }
 
       if (event.key === 'ArrowUp') {
         event.preventDefault()
-        setSelectedValue((prev) => {
-          const idx = suggestions.findIndex((s) => s.url === prev)
-          const next = idx > 0 ? idx - 1 : suggestions.length - 1
-          return suggestions[next].url
-        })
+        const idx = suggestions.findIndex((s) => s.url === selectedValue)
+        const next = idx > 0 ? idx - 1 : suggestions.length - 1
+        setSelectedValueOverride(suggestions[next].url)
         return
       }
 
@@ -235,13 +179,6 @@ export default function BrowserAddressBar({
     }
   }, [open, suggestions.length, inputRef])
 
-  // Why: auto-select the top suggestion so Enter navigates to the best match
-  // without an extra ArrowDown. Fall back to clearing selection when nothing
-  // matches so stale highlights don't persist.
-  useEffect(() => {
-    setSelectedValue(suggestions[0]?.url ?? '')
-  }, [suggestions])
-
   return (
     <Popover
       open={open}
@@ -258,6 +195,7 @@ export default function BrowserAddressBar({
     >
       <PopoverTrigger asChild>
         <form
+          ref={setAddressBarFormRef}
           className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-background px-3 py-1 shadow-sm"
           onSubmit={(event) => {
             event.preventDefault()
@@ -269,7 +207,6 @@ export default function BrowserAddressBar({
           <Input
             ref={inputRef}
             value={value}
-            onChange={(event) => onChange(event.target.value)}
             onFocus={handleFocus}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
@@ -278,6 +215,12 @@ export default function BrowserAddressBar({
             spellCheck={false}
             autoCapitalize="none"
             autoCorrect="off"
+            onChange={(event) => {
+              // Why: typing creates a new suggestion list, so keyboard selection
+              // should return to the derived top match instead of a stale row.
+              setSelectedValueOverride(null)
+              onChange(event.target.value)
+            }}
             role="combobox"
             aria-expanded={open}
             aria-controls="browser-history-listbox"
@@ -297,7 +240,11 @@ export default function BrowserAddressBar({
             e.preventDefault()
           }}
         >
-          <Command shouldFilter={false} value={selectedValue} onValueChange={setSelectedValue}>
+          <Command
+            shouldFilter={false}
+            value={selectedValue}
+            onValueChange={setSelectedValueOverride}
+          >
             <CommandList id="browser-history-listbox" role="listbox">
               <CommandGroup>
                 {suggestions.map((entry) => (

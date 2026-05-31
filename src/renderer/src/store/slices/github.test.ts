@@ -3,7 +3,13 @@ envelope, and IssueSourceIndicator suppression tests in one file keeps the
 GitHub slice's cross-cutting invariants verifiable in one place. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
-import { createGitHubSlice, prChecksCacheSuffix, workItemsCacheKey } from './github'
+import {
+  _getGitHubPRRequestGenerationCountForTest,
+  createGitHubSlice,
+  mergePRCommentIntoList,
+  prChecksCacheSuffix,
+  workItemsCacheKey
+} from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
 import type { GitHubWorkItem, PRInfo } from '../../../../shared/types'
@@ -26,7 +32,11 @@ const mockApi = {
     enqueuePRRefresh: vi.fn().mockResolvedValue(undefined),
     issue: vi.fn().mockResolvedValue(null),
     prChecks: vi.fn().mockResolvedValue([]),
+    prCheckDetails: vi.fn().mockResolvedValue(null),
     prComments: vi.fn().mockResolvedValue([]),
+    addIssueComment: vi.fn(),
+    addPRReviewCommentReply: vi.fn(),
+    resolveReviewThread: vi.fn(),
     listWorkItems: vi.fn(),
     getProjectViewTable: vi.fn()
   },
@@ -728,6 +738,240 @@ describe('createGitHubSlice.fetchPRComments', () => {
   })
 })
 
+describe('createGitHubSlice.fetchPRCheckDetails', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+    mockApi.gh.prCheckDetails.mockResolvedValue(null)
+  })
+
+  it('routes active runtime check-detail loads through runtime RPC', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-check-details',
+      ok: true,
+      result: {
+        name: 'build',
+        status: 'completed',
+        conclusion: 'failure',
+        url: null,
+        detailsUrl: null,
+        startedAt: null,
+        completedAt: null,
+        title: null,
+        summary: null,
+        text: null,
+        annotations: [],
+        jobs: []
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchPRCheckDetails(
+      repoPath,
+      {
+        checkRunId: 123,
+        checkName: 'build',
+        prRepo: { owner: 'Acme', repo: 'Widgets' }
+      },
+      { repoId }
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.prCheckDetails',
+      params: {
+        repo: repoId,
+        checkRunId: 123,
+        workflowRunId: undefined,
+        checkName: 'build',
+        url: undefined,
+        prRepo: { owner: 'Acme', repo: 'Widgets' }
+      },
+      timeoutMs: 30_000
+    })
+    expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
+  })
+})
+
+describe('createGitHubSlice PR comment mutations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+    mockApi.gh.addIssueComment.mockResolvedValue({
+      ok: true,
+      comment: {
+        id: 10,
+        author: 'me',
+        authorAvatarUrl: '',
+        body: 'done',
+        createdAt: '2026-03-28T00:00:00Z',
+        url: ''
+      }
+    })
+    mockApi.gh.addPRReviewCommentReply.mockResolvedValue({
+      ok: true,
+      comment: {
+        id: 11,
+        author: 'me',
+        authorAvatarUrl: '',
+        body: 'reply',
+        createdAt: '2026-03-28T00:01:00Z',
+        url: ''
+      }
+    })
+  })
+
+  it('deduplicates merged PR comments and preserves existing thread metadata', () => {
+    expect(
+      mergePRCommentIntoList(
+        [
+          {
+            id: 4,
+            author: 'reviewer',
+            authorAvatarUrl: '',
+            body: 'old',
+            createdAt: '2026-03-28T00:00:00Z',
+            url: '',
+            threadId: 'PRRT_1',
+            path: 'src/a.ts',
+            line: 12,
+            isResolved: false
+          }
+        ],
+        {
+          id: 4,
+          author: 'reviewer',
+          authorAvatarUrl: '',
+          body: 'new',
+          createdAt: '2026-03-28T00:02:00Z',
+          url: ''
+        }
+      )
+    ).toEqual([
+      {
+        id: 4,
+        author: 'reviewer',
+        authorAvatarUrl: '',
+        body: 'new',
+        createdAt: '2026-03-28T00:02:00Z',
+        url: '',
+        threadId: 'PRRT_1',
+        path: 'src/a.ts',
+        line: 12,
+        isResolved: false
+      }
+    ])
+  })
+
+  it('posts top-level PR comments with the visible PR repo and pr invalidation type', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().addPRConversationComment(repoPath, 12, 'done', {
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+
+    expect(mockApi.gh.addIssueComment).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      number: 12,
+      body: 'done',
+      type: 'pr',
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+    expect(
+      store.getState().commentsCache[`${repoId}::pr-comments::acme/widgets::12`]?.data?.[0].body
+    ).toBe('done')
+  })
+
+  it('routes runtime PR review replies with prRepo and merges returned thread metadata', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-pr-reply',
+      ok: true,
+      result: {
+        ok: true,
+        comment: {
+          id: 12,
+          author: 'me',
+          authorAvatarUrl: '',
+          body: 'reply',
+          createdAt: '2026-03-28T00:02:00Z',
+          url: ''
+        }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().addPRReviewCommentReply(repoPath, 12, 99, 'reply', {
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
+      threadId: 'PRRT_1',
+      path: 'src/a.ts',
+      line: 8
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.addPRReviewCommentReply',
+      params: {
+        repo: repoId,
+        prNumber: 12,
+        commentId: 99,
+        body: 'reply',
+        threadId: 'PRRT_1',
+        path: 'src/a.ts',
+        line: 8,
+        prRepo: { owner: 'Acme', repo: 'Widgets' }
+      },
+      timeoutMs: 30_000
+    })
+    expect(
+      store.getState().commentsCache[`runtime:env-1::${repoId}::pr-comments::acme/widgets::12`]
+        ?.data?.[0]
+    ).toMatchObject({ body: 'reply', threadId: 'PRRT_1', path: 'src/a.ts', line: 8 })
+  })
+
+  it('does not mutate the PR comments cache when GitHub omits the comment payload', async () => {
+    mockApi.gh.addIssueComment.mockResolvedValueOnce({ ok: true })
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    const result = await store.getState().addPRConversationComment(repoPath, 12, 'done', {
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+
+    expect(result).toEqual({ ok: false, error: 'GitHub did not return the new comment.' })
+    expect(
+      store.getState().commentsCache[`${repoId}::pr-comments::acme/widgets::12`]
+    ).toBeUndefined()
+  })
+})
+
 describe('createGitHubSlice.fetchPRForBranch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -767,6 +1011,25 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       await expect(initialFetch).resolves.toBeNull()
 
       expect(store.getState().prCache[prCacheKey]?.data).toMatchObject({ number: 99 })
+    } finally {
+      mockApi.gh.refreshPRNow = refreshPRNow
+    }
+  })
+
+  it('does not retain PR request generation keys after the active request settles', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/no-generation-leak'
+    const beforeCount = _getGitHubPRRequestGenerationCountForTest()
+    const refreshPRNow = mockApi.gh.refreshPRNow
+    ;(mockApi.gh as unknown as { refreshPRNow?: typeof refreshPRNow }).refreshPRNow = undefined
+    mockApi.gh.prForBranch.mockResolvedValueOnce(makePR({ number: 31 }))
+
+    try {
+      await expect(
+        store.getState().fetchPRForBranch(repoPath, branch, { force: true })
+      ).resolves.toMatchObject({ number: 31 })
+      expect(_getGitHubPRRequestGenerationCountForTest()).toBe(beforeCount)
     } finally {
       mockApi.gh.refreshPRNow = refreshPRNow
     }
@@ -2014,7 +2277,8 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
         repoPath,
         branch,
         cacheKey: `repo-1::${branch}`,
-        cachedPRState: 'open'
+        cachedPRState: 'open',
+        cachedMergeable: 'UNKNOWN'
       }),
       reason: 'active',
       priority: 80
@@ -2683,6 +2947,91 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
     const after = store.getState().getWorkItemsSourcesAndError('repo-id', 24, '')
     expect(after.error).toBeNull()
+  })
+
+  it('threads noCache only when explicitly requested for work-item fetches', async () => {
+    const store = createTestStore()
+    mockApi.gh.listWorkItems
+      .mockResolvedValueOnce({
+        items: [],
+        sources: { issues: null, prs: null, upstreamCandidate: null }
+      })
+      .mockResolvedValueOnce({
+        items: [],
+        sources: { issues: null, prs: null, upstreamCandidate: null }
+      })
+      .mockResolvedValueOnce({
+        items: [],
+        sources: { issues: null, prs: null, upstreamCandidate: null }
+      })
+
+    await store.getState().fetchWorkItems('repo-normal', '/repo/normal', 24, '')
+    await store.getState().fetchWorkItems('repo-force', '/repo/force', 24, '', { force: true })
+    await store.getState().fetchWorkItems('repo-fresh', '/repo/fresh', 24, '', {
+      force: true,
+      noCache: true
+    })
+
+    expect(mockApi.gh.listWorkItems).toHaveBeenNthCalledWith(1, {
+      repoPath: '/repo/normal',
+      repoId: 'repo-normal',
+      limit: 24,
+      query: undefined
+    })
+    expect(mockApi.gh.listWorkItems).toHaveBeenNthCalledWith(2, {
+      repoPath: '/repo/force',
+      repoId: 'repo-force',
+      limit: 24,
+      query: undefined
+    })
+    expect(mockApi.gh.listWorkItems).toHaveBeenNthCalledWith(3, {
+      repoPath: '/repo/fresh',
+      repoId: 'repo-fresh',
+      limit: 24,
+      query: undefined,
+      noCache: true
+    })
+  })
+
+  it('does not dedupe a no-cache forced fetch onto a cacheable forced request', async () => {
+    const store = createTestStore()
+    type WorkItemsEnvelope = {
+      items: []
+      sources: { issues: null; prs: null; upstreamCandidate: null }
+    }
+    let resolveCacheable: (value: WorkItemsEnvelope) => void = () => {}
+    const cacheableRequest = new Promise<WorkItemsEnvelope>((resolve) => {
+      resolveCacheable = resolve
+    })
+    mockApi.gh.listWorkItems.mockReturnValueOnce(cacheableRequest).mockResolvedValueOnce({
+      items: [],
+      sources: { issues: null, prs: null, upstreamCandidate: null }
+    })
+
+    const landingProbe = store
+      .getState()
+      .fetchWorkItems('repo-id', '/repo', 24, '', { force: true })
+    await Promise.resolve()
+    const noCacheRefresh = store
+      .getState()
+      .fetchWorkItems('repo-id', '/repo', 24, '', { force: true, noCache: true })
+
+    expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(1)
+    resolveCacheable({
+      items: [],
+      sources: { issues: null, prs: null, upstreamCandidate: null }
+    })
+    await landingProbe
+    await noCacheRefresh
+
+    expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
+    expect(mockApi.gh.listWorkItems).toHaveBeenNthCalledWith(2, {
+      repoPath: '/repo',
+      repoId: 'repo-id',
+      limit: 24,
+      query: undefined,
+      noCache: true
+    })
   })
 
   it('routes work item fetches through repo-scoped IPC even when a runtime is active', async () => {

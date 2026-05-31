@@ -16,9 +16,9 @@ import type { ConnectionState } from './types'
 //   session but haven't been for ≥ 1 minute despite the retry loop
 //   spinning, treat the same as never-connected. Catches the case
 //   where the desktop's IP changed mid-session.
-export const WARNING_ATTEMPTS = 3
-export const UNREACHABLE_ATTEMPTS = 12
-export const STALE_SINCE_LAST_CONNECT_MS = 60_000
+const WARNING_ATTEMPTS = 3
+const UNREACHABLE_ATTEMPTS = 12
+const STALE_SINCE_LAST_CONNECT_MS = 60_000
 
 export type ConnectionVerdict =
   | { kind: 'normal'; label: string }
@@ -75,14 +75,4 @@ export function classifyConnection(args: {
   }
 
   return { kind: 'normal', label: 'Reconnecting…' }
-}
-
-// Why: the message under the banner explains what likely happened so the
-// user understands why we're suggesting Re-pair. Tuned to be specific
-// about IP/port without being technical (we don't want to leak
-// "ws://192.168.x.y:port" unless someone is debugging).
-export function unreachableHint(reason: 'never-connected' | 'stale'): string {
-  return reason === 'never-connected'
-    ? "Can't reach this Orca desktop. Its network address may have changed since pairing — try re-pairing from the desktop's Settings → Mobile screen."
-    : 'Lost contact with the Orca desktop. If your network changed (different Wi-Fi, IP renewed, or desktop restarted), try re-pairing.'
 }

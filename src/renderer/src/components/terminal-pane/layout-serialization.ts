@@ -42,12 +42,20 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
 //   1000/1002/1003/1006 — mouse reporting variants
 //   1004                — focus event reporting (the actual bug source)
 //   2004                — bracketed paste
-export const POST_REPLAY_MODE_RESET =
-  '\x1b[0 q\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
+//   <99u/=0u            — Kitty keyboard flags pushed by TUIs such as Codex
+export const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
+export const RESET_KITTY_KEYBOARD_PROTOCOL = '\x1b[<99u\x1b[=0u'
+
+export const POST_REPLAY_MODE_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l`
+
+// Why: hidden-output recovery replays a snapshot of the same live renderer
+// session. Keep cursor/focus cleanup, but preserve Kitty keyboard flags that
+// the still-running foreground TUI may rely on.
+export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h\x1b[?1004l`
 
 // Why: daemon snapshot restore reattaches to a live session, so we avoid the
 // full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still
-// rely on mouse or bracketed-paste modes. Three exceptions are safe to reset:
+// rely on mouse or bracketed-paste modes. Four exceptions are safe to reset:
 //
 //   0 q  — DECSCUSR cursor style/blink reset: raw replay can contain a stale
 //          steady cursor override, while SerializeAddon does not preserve an
@@ -63,7 +71,9 @@ export const POST_REPLAY_MODE_RESET =
 //   1004 — focus event reporting: preserving `?1004h` makes restored shells
 //          ring BEL on pane focus/blur (shells like zsh treat `\e[I`/`\e[O`
 //          as unbound key input).
-export const POST_REPLAY_REATTACH_RESET = '\x1b[0 q\x1b[?25h\x1b[?1004l'
+//   <99u/=0u — Kitty keyboard mode is renderer-side xterm state; stale copies
+//              can make the next Ctrl+C encode as CSI-u after reattach.
+export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1004l`
 
 // Cross-platform monospace fallback chain ensures the terminal always has a
 // usable font regardless of OS.  macOS-only fonts like SF Mono and Menlo are

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ActivityIndicator,
@@ -56,7 +56,10 @@ import {
 import { buildGitHubCheckSummary } from '../../../src/tasks/github-check-summary'
 import { buildTaskWorkspaceCreateParams } from '../../../src/tasks/workspace-create-params'
 import {
+  filterWorkspaceAgents,
+  isWorkspaceAgentEnabled,
   pickWorkspaceAgent,
+  resolveWorkspaceAgentSelection,
   workspaceAgentLabel,
   type WorkspaceAgentChoice
 } from '../../../src/tasks/workspace-agent-selection'
@@ -421,6 +424,7 @@ type TaskResumeState = {
 }
 type RuntimeTaskSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null
+  disabledTuiAgents?: TuiAgent[]
   agentCmdOverrides?: Record<string, string>
   defaultTaskSource?: TaskProvider
   defaultTaskViewPreset?: GitHubPreset | 'all'
@@ -2531,7 +2535,9 @@ export default function MobileTasksScreen() {
     return [...logins].sort().join(',')
   }, [projectRowDetail, projectRowItem?.content.assignees])
 
-  useEffect(() => {
+  // Why: task-loading effects use this as a stale-client guard, so the ref
+  // must be current before those passive effects can run after commit.
+  useLayoutEffect(() => {
     clientRef.current = client
   }, [client])
 
@@ -4514,15 +4520,18 @@ export default function MobileTasksScreen() {
     workspaceSparseDraftParsed !== null
 
   const workspaceAgentOptions = useMemo<PickerOption<WorkspaceAgentChoice>[]>(() => {
+    const enabledAgents = filterWorkspaceAgents(
+      MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
+      runtimeTaskSettings.disabledTuiAgents
+    )
     const availableAgents =
       workspaceDetectedAgentIds === null
-        ? new Set<TuiAgent>(MOBILE_TUI_AGENT_AUTO_PICK_ORDER)
-        : new Set<TuiAgent>(
-            MOBILE_TUI_AGENT_AUTO_PICK_ORDER.filter((agent) => workspaceDetectedAgentIds.has(agent))
-          )
+        ? new Set<TuiAgent>(enabledAgents)
+        : new Set<TuiAgent>(enabledAgents.filter((agent) => workspaceDetectedAgentIds.has(agent)))
     if (
       workspaceAgent &&
       workspaceAgent !== 'blank' &&
+      isWorkspaceAgentEnabled(workspaceAgent, runtimeTaskSettings.disabledTuiAgents) &&
       (workspaceDetectedAgentIds === null || workspaceDetectedAgentIds.has(workspaceAgent))
     ) {
       availableAgents.add(workspaceAgent)
@@ -4542,7 +4551,7 @@ export default function MobileTasksScreen() {
         renderIcon: () => <MobileAgentIcon agentId="__blank__" size={18} />
       }
     ]
-  }, [workspaceAgent, workspaceDetectedAgentIds])
+  }, [runtimeTaskSettings.disabledTuiAgents, workspaceAgent, workspaceDetectedAgentIds])
 
   const openWorkspaceCreate = useCallback((item: ActionableTaskItem, repoIdOverride?: string) => {
     const suggestedName = taskWorkspaceSuggestedName(item)
@@ -4990,40 +4999,22 @@ export default function MobileTasksScreen() {
     workspaceCreateTargetRepo
   ])
 
-  useEffect(() => {
-    if (!tasksSupported || !workspaceCreateDraft || workspaceAgentOverridden) return
-    setWorkspaceAgent(pickWorkspaceAgent(runtimeTaskSettings, workspaceDetectedAgentIds))
-  }, [
-    runtimeTaskSettings,
-    tasksSupported,
-    workspaceAgentOverridden,
-    workspaceCreateDraft,
-    workspaceDetectedAgentIds
-  ])
-
-  useEffect(() => {
-    if (
-      !workspaceCreateDraft ||
-      !tasksSupported ||
-      workspaceDetectedAgentIds === null ||
-      !workspaceAgent ||
-      workspaceAgent === 'blank' ||
-      workspaceDetectedAgentIds.has(workspaceAgent)
-    ) {
-      return
-    }
-    // Why: the drawer can open before SSH/local detection settles. If the user
-    // picked an agent that is not actually available on that host, fall back to
-    // the same detected-agent rule desktop uses instead of launching a bad CLI.
-    setWorkspaceAgent(pickWorkspaceAgent(runtimeTaskSettings, workspaceDetectedAgentIds))
-    setWorkspaceAgentOverridden(false)
-  }, [
-    runtimeTaskSettings,
-    tasksSupported,
-    workspaceAgent,
-    workspaceCreateDraft,
-    workspaceDetectedAgentIds
-  ])
+  const workspaceAgentSelection = resolveWorkspaceAgentSelection({
+    selectionActive: tasksSupported && workspaceCreateDraft !== null,
+    settings: runtimeTaskSettings,
+    detectedAgentIds: workspaceDetectedAgentIds,
+    agent: workspaceAgent,
+    overridden: workspaceAgentOverridden
+  })
+  if (
+    workspaceAgentSelection.agent !== workspaceAgent ||
+    workspaceAgentSelection.overridden !== workspaceAgentOverridden
+  ) {
+    // Why: the drawer can open before SSH/local detection settles. Resolve the
+    // visible agent before commit so users do not see an unavailable override.
+    setWorkspaceAgent(workspaceAgentSelection.agent)
+    setWorkspaceAgentOverridden(workspaceAgentSelection.overridden)
+  }
 
   const resolvedWorkspaceAgent = useMemo(
     () => workspaceAgent ?? pickWorkspaceAgent(runtimeTaskSettings, workspaceDetectedAgentIds),
@@ -5101,6 +5092,33 @@ export default function MobileTasksScreen() {
           )
         }
         await ensureWorkspaceSshReady(targetRepo)
+        let latestRuntimeTaskSettings = runtimeTaskSettings
+        try {
+          const settingsResponse = await client.sendRequest('settings.get')
+          if (isSuccess(settingsResponse)) {
+            latestRuntimeTaskSettings = ((
+              settingsResponse.result as { settings?: RuntimeTaskSettings }
+            ).settings ?? {}) as RuntimeTaskSettings
+            setRuntimeTaskSettings(latestRuntimeTaskSettings)
+          }
+        } catch {
+          // Best-effort refresh; the runtime still validates agent availability before spawning.
+        }
+        const selectedAgent =
+          agentOverride &&
+          (agentOverride === 'blank' ||
+            isWorkspaceAgentEnabled(agentOverride, latestRuntimeTaskSettings.disabledTuiAgents))
+            ? agentOverride
+            : pickWorkspaceAgent(latestRuntimeTaskSettings, workspaceDetectedAgentIds)
+        if (
+          agentOverride &&
+          agentOverride !== 'blank' &&
+          !isWorkspaceAgentEnabled(agentOverride, latestRuntimeTaskSettings.disabledTuiAgents)
+        ) {
+          setWorkspaceAgent(selectedAgent)
+          setWorkspaceAgentOverridden(false)
+          throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+        }
         const setupResolution = await resolveCreateSetupDecision(targetRepo, setupOverride)
         const comment = noteOverride?.trim()
         if (setupResolution.kind === 'prompt') {
@@ -5154,7 +5172,6 @@ export default function MobileTasksScreen() {
           })
           return
         }
-        const selectedAgent = agentOverride
         let params: Record<string, unknown>
         if (item.provider === 'github') {
           const source = item.source
@@ -5291,9 +5308,11 @@ export default function MobileTasksScreen() {
       hostId,
       resolveCreateSetupDecision,
       router,
+      runtimeTaskSettings,
       taskStateHydrated,
       tasksSupported,
-      trustedOrcaHooks
+      trustedOrcaHooks,
+      workspaceDetectedAgentIds
     ]
   )
 

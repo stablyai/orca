@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { WebSocketServer, type WebSocket } from 'ws'
+import WebSocketClient, { WebSocketServer, type WebSocket } from 'ws'
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
 import {
   decrypt,
@@ -57,6 +57,39 @@ describe('subscribeRemoteRuntimeRequest', () => {
     expect(onError).not.toHaveBeenCalled()
     subscription.close()
   })
+
+  it('detaches subscription socket listeners after close', async () => {
+    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+    try {
+      const server = await createSubscriptionServer()
+      const onResponse = vi.fn()
+      const onError = vi.fn()
+      const onClose = vi.fn()
+
+      const subscription = await subscribeRemoteRuntimeRequest(
+        server.pairing,
+        'terminal.subscribe',
+        { terminal: 't1' },
+        1000,
+        {
+          onResponse,
+          onError,
+          onClose
+        }
+      )
+
+      await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+      subscription.close()
+      await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
+
+      const removedEvents = offSpy.mock.calls.map(([event]) => event)
+      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
+      expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
+      expect(onError).not.toHaveBeenCalled()
+    } finally {
+      offSpy.mockRestore()
+    }
+  })
 })
 
 describe('sendRemoteRuntimeRequest', () => {
@@ -74,6 +107,25 @@ describe('sendRemoteRuntimeRequest', () => {
       ok: true,
       result: { satisfied: true }
     })
+  })
+
+  it('detaches one-shot socket listeners after a successful response', async () => {
+    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+    try {
+      const server = await createOneShotServer()
+
+      await sendRemoteRuntimeRequest<{ satisfied: boolean }>(
+        server.pairing,
+        'terminal.wait',
+        { terminal: 't1', for: 'tui-idle', timeoutMs: 550 },
+        300
+      )
+
+      const removedEvents = offSpy.mock.calls.map(([event]) => event)
+      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
+    } finally {
+      offSpy.mockRestore()
+    }
   })
 })
 

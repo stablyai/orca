@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useRef, useState, type ReactElement } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { BrowserDriverState } from '@/lib/pane-manager/browser-mobile-driver-state'
@@ -10,14 +10,16 @@ type Props = {
 
 export function BrowserMobileDriverOverlay({ driver, onTakeBack }: Props): ReactElement | null {
   const [pending, setPending] = useState(false)
-  const mountedRef = useRef(true)
+  const mountedRef = useRef(false)
 
-  useEffect(
-    () => () => {
-      mountedRef.current = false
-    },
-    []
-  )
+  const setOverlayRef = useCallback((node: HTMLDivElement | null): void => {
+    mountedRef.current = node !== null
+    if (node) {
+      // Why: take-back can resolve after the overlay renders null; a later
+      // mobile session must not inherit the stale disabled state.
+      setPending(false)
+    }
+  }, [])
 
   if (driver.kind !== 'mobile') {
     return null
@@ -39,6 +41,7 @@ export function BrowserMobileDriverOverlay({ driver, onTakeBack }: Props): React
 
   return (
     <div
+      ref={setOverlayRef}
       role="dialog"
       aria-live="assertive"
       className={cn(

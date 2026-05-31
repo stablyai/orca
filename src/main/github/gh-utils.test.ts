@@ -39,6 +39,14 @@ describe('github owner/repo resolution', () => {
       owner: 'acme',
       repo: 'widgets'
     })
+    expect(parseGitHubOwnerRepo('https://alice@github.com/acme/widgets.git')).toEqual({
+      owner: 'acme',
+      repo: 'widgets'
+    })
+    expect(parseGitHubOwnerRepo('https://github.com:443/acme/widgets.git')).toEqual({
+      owner: 'acme',
+      repo: 'widgets'
+    })
     expect(parseGitHubOwnerRepo('git@github.com:stablyai/orca.git')).toEqual({
       owner: 'stablyai',
       repo: 'orca'
@@ -46,6 +54,14 @@ describe('github owner/repo resolution', () => {
     expect(parseGitHubOwnerRepo('git@github.com:TheBoredTeam/boring.notch.git')).toEqual({
       owner: 'TheBoredTeam',
       repo: 'boring.notch'
+    })
+    expect(parseGitHubOwnerRepo('ssh://git@github.com/stablyai/orca.git')).toEqual({
+      owner: 'stablyai',
+      repo: 'orca'
+    })
+    expect(parseGitHubOwnerRepo('ssh://git@ssh.github.com:443/stablyai/orca.git')).toEqual({
+      owner: 'stablyai',
+      repo: 'orca'
     })
     expect(parseGitHubOwnerRepo('git@example.com:stablyai/orca.git')).toBeNull()
   })
@@ -70,6 +86,17 @@ describe('github owner/repo resolution', () => {
     })
 
     await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'fork', repo: 'orca' })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+  })
+
+  it('resolves GitHub HTTPS origin remotes with user info and a default port', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'https://alice@github.com:443/acme/widgets.git\n'
+    })
+
+    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'acme', repo: 'widgets' })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo'
     })

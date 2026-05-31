@@ -10,7 +10,8 @@ const RepoSelector = z.object({
 const WorkItemsList = RepoSelector.extend({
   limit: OptionalFiniteNumber,
   query: OptionalString,
-  before: OptionalString
+  before: OptionalString,
+  noCache: z.boolean().optional()
 })
 
 const IssuesList = RepoSelector.extend({
@@ -122,6 +123,12 @@ const MergePr = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
+const SetPrAutoMerge = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  enabled: z.boolean(),
+  prRepo: SlugRepo.nullable().optional()
+})
+
 const UpdatePrState = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   updates: z.object({
@@ -141,7 +148,9 @@ const RemovePrReviewers = RepoSelector.extend({
 
 const CreateIssue = RepoSelector.extend({
   title: requiredString('Missing title'),
-  body: z.string()
+  body: z.string(),
+  labels: z.array(z.string()).optional(),
+  assignees: z.array(z.string()).optional()
 })
 
 const IssueUpdate = z.object({
@@ -162,7 +171,8 @@ const UpdateIssue = RepoSelector.extend({
 const IssueComment = RepoSelector.extend({
   number: z.number().int().positive(),
   body: requiredString('Comment body required'),
-  type: z.enum(['issue', 'pr']).optional()
+  type: z.enum(['issue', 'pr']).optional(),
+  prRepo: SlugRepo.nullable().optional()
 })
 
 const PRReviewComment = RepoSelector.extend({
@@ -180,7 +190,8 @@ const PRReviewCommentReply = RepoSelector.extend({
   body: requiredString('Comment body required'),
   threadId: OptionalString,
   path: OptionalString,
-  line: z.number().int().positive().optional()
+  line: z.number().int().positive().optional(),
+  prRepo: SlugRepo.nullable().optional()
 })
 
 const ProjectOwnerType = z.enum(['organization', 'user'])
@@ -283,7 +294,13 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.listWorkItems',
     params: WorkItemsList,
     handler: async (params, { runtime }) =>
-      runtime.listRepoWorkItems(params.repo, params.limit, params.query, params.before)
+      runtime.listRepoWorkItems(
+        params.repo,
+        params.limit,
+        params.query,
+        params.before,
+        params.noCache
+      )
   }),
   defineMethod({
     name: 'github.listIssues',
@@ -434,6 +451,17 @@ export const GITHUB_METHODS: RpcMethod[] = [
       runtime.mergeRepoPR(params.repo, params.prNumber, params.method, params.prRepo ?? null)
   }),
   defineMethod({
+    name: 'github.setPRAutoMerge',
+    params: SetPrAutoMerge,
+    handler: async (params, { runtime }) =>
+      runtime.setRepoPRAutoMerge(
+        params.repo,
+        params.prNumber,
+        params.enabled,
+        params.prRepo ?? null
+      )
+  }),
+  defineMethod({
     name: 'github.updatePRState',
     params: UpdatePrState,
     handler: async (params, { runtime }) =>
@@ -454,8 +482,15 @@ export const GITHUB_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'github.createIssue',
     params: CreateIssue,
-    handler: async (params, { runtime }) =>
-      runtime.createRepoIssue(params.repo, params.title, params.body)
+    handler: async (params, { runtime }) => {
+      const fields =
+        params.labels !== undefined || params.assignees !== undefined
+          ? { labels: params.labels, assignees: params.assignees }
+          : undefined
+      return fields
+        ? runtime.createRepoIssue(params.repo, params.title, params.body, fields)
+        : runtime.createRepoIssue(params.repo, params.title, params.body)
+    }
   }),
   defineMethod({
     name: 'github.updateIssue',
@@ -467,7 +502,7 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.addIssueComment',
     params: IssueComment,
     handler: async (params, { runtime }) =>
-      runtime.addRepoIssueComment(params.repo, params.number, params.body)
+      runtime.addRepoIssueComment(params.repo, params.number, params.body, params.prRepo ?? null)
   }),
   defineMethod({
     name: 'github.addPRReviewComment',
@@ -492,7 +527,8 @@ export const GITHUB_METHODS: RpcMethod[] = [
         body: params.body,
         threadId: params.threadId,
         path: params.path,
-        line: params.line
+        line: params.line,
+        prRepo: params.prRepo ?? null
       })
   }),
   defineMethod({

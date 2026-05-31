@@ -3,6 +3,7 @@ SFTP binary writes, watch fan-out, and provider lifecycle tests together so
 transport parity regressions are visible in one suite. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshFilesystemProvider } from './ssh-filesystem-provider'
+import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -116,6 +117,7 @@ describe('SshFilesystemProvider', () => {
       const written: Buffer[] = []
       const writeStream = {
         on: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
+        off: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
         end: vi.fn((buffer: Buffer) => {
           written.push(buffer)
           const closeHandler = writeStream.on.mock.calls.find(([event]) => event === 'close')?.[1]
@@ -140,6 +142,7 @@ describe('SshFilesystemProvider', () => {
     it('can append decoded chunks through SFTP', async () => {
       const writeStream = {
         on: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
+        off: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
         end: vi.fn((_buffer: Buffer) => {
           const closeHandler = writeStream.on.mock.calls.find(([event]) => event === 'close')?.[1]
           closeHandler?.()
@@ -254,6 +257,29 @@ describe('SshFilesystemProvider', () => {
   it('rename sends fs.rename request', async () => {
     await provider.rename('/home/old.txt', '/home/new.txt')
     expect(mux.request).toHaveBeenCalledWith('fs.rename', {
+      oldPath: '/home/old.txt',
+      newPath: '/home/new.txt'
+    })
+  })
+
+  it('renameNoClobber sends fs.renameNoClobber request', async () => {
+    await provider.renameNoClobber('/home/old.txt', '/home/new.txt')
+    expect(mux.request).toHaveBeenCalledWith('fs.renameNoClobber', {
+      oldPath: '/home/old.txt',
+      newPath: '/home/new.txt'
+    })
+  })
+
+  it('renameNoClobber fails closed when the relay lacks safe rename support', async () => {
+    mux.request.mockRejectedValueOnce(
+      Object.assign(new Error('Method not found'), { code: JsonRpcErrorCode.MethodNotFound })
+    )
+
+    await expect(provider.renameNoClobber('/home/old.txt', '/home/new.txt')).rejects.toThrow(
+      'Remote safe rename is unavailable'
+    )
+    expect(mux.request).toHaveBeenCalledTimes(1)
+    expect(mux.request).toHaveBeenCalledWith('fs.renameNoClobber', {
       oldPath: '/home/old.txt',
       newPath: '/home/new.txt'
     })

@@ -29,6 +29,10 @@ const runtimeEnvironmentCall = vi.fn().mockResolvedValue({
 })
 const runtimeEnvironmentTransportCall = vi.fn()
 const mockApi = {
+  ui: {
+    recordFeatureInteraction: vi.fn().mockResolvedValue({ featureInteractions: {} }),
+    set: vi.fn().mockResolvedValue(undefined)
+  },
   worktrees: {
     list: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({}),
@@ -434,6 +438,7 @@ describe('markDiffCommentsSent', () => {
 
   it('marks selected notes as sent and persists once', async () => {
     const store = createTestStore()
+    store.setState({ persistedUIReady: true })
     seed(store, [
       makeComment({ id: 'c1', filePath: 'src/foo.ts' }),
       makeComment({ id: 'c2', filePath: 'src/bar.ts' })
@@ -453,6 +458,9 @@ describe('markDiffCommentsSent', () => {
         diffComments: [expect.objectContaining({ id: 'c1', sentAt: 3000 }), expect.any(Object)]
       }
     })
+    expect(store.getState().featureInteractions['review-notes']).toEqual(
+      expect.objectContaining({ interactionCount: 1 })
+    )
   })
 
   it('returns success without persisting when no selected notes match', async () => {

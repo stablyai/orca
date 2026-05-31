@@ -22,6 +22,8 @@ type DividerFlexFrameScheduler = {
   cancel: () => void
 }
 
+const dividerDragCleanups = new WeakMap<HTMLElement, () => void>()
+
 export function createDividerFlexFrameScheduler({
   apply,
   requestFrame = requestAnimationFrame,
@@ -95,6 +97,22 @@ export function createDivider(
   return divider
 }
 
+export function disposeDivider(divider: HTMLElement): void {
+  const cleanup = dividerDragCleanups.get(divider)
+  if (!cleanup) {
+    return
+  }
+  cleanup()
+  dividerDragCleanups.delete(divider)
+}
+
+export function disposeDividersIn(root: HTMLElement): void {
+  const dividers = root.querySelectorAll('.pane-divider')
+  for (const divider of dividers) {
+    disposeDivider(divider as HTMLElement)
+  }
+}
+
 function attachDividerDrag(
   divider: HTMLElement,
   isVertical: boolean,
@@ -110,6 +128,7 @@ function attachDividerDrag(
   let totalSize = 0
   let prevEl: HTMLElement | null = null
   let nextEl: HTMLElement | null = null
+  let activePointerId: number | null = null
   const flexScheduler = createDividerFlexFrameScheduler({
     apply: (newPrev, newNext) => {
       if (!prevEl || !nextEl) {
@@ -124,6 +143,7 @@ function attachDividerDrag(
     e.preventDefault()
     flexScheduler.cancel()
     divider.setPointerCapture(e.pointerId)
+    activePointerId = e.pointerId
     divider.classList.add('is-dragging')
     dragging = true
     didMove = false
@@ -182,7 +202,10 @@ function attachDividerDrag(
     }
     dragging = false
     flexScheduler.flush()
-    divider.releasePointerCapture(e.pointerId)
+    activePointerId = null
+    if (divider.hasPointerCapture(e.pointerId)) {
+      divider.releasePointerCapture(e.pointerId)
+    }
     divider.classList.remove('is-dragging')
     // Final refit at the exact drop position.
     if (prevEl) {
@@ -220,6 +243,27 @@ function attachDividerDrag(
   divider.addEventListener('pointermove', onPointerMove)
   divider.addEventListener('pointerup', onPointerUp)
   divider.addEventListener('dblclick', onDoubleClick)
+  dividerDragCleanups.set(divider, () => {
+    flexScheduler.cancel()
+    if (activePointerId !== null) {
+      try {
+        if (divider.hasPointerCapture(activePointerId)) {
+          divider.releasePointerCapture(activePointerId)
+        }
+      } catch {
+        // Best effort: the captured pointer may already be gone during teardown.
+      }
+    }
+    activePointerId = null
+    dragging = false
+    prevEl = null
+    nextEl = null
+    divider.classList.remove('is-dragging')
+    divider.removeEventListener('pointerdown', onPointerDown)
+    divider.removeEventListener('pointermove', onPointerMove)
+    divider.removeEventListener('pointerup', onPointerUp)
+    divider.removeEventListener('dblclick', onDoubleClick)
+  })
 }
 
 export function applyDividerStyles(root: HTMLElement, styleOptions: PaneStyleOptions): void {

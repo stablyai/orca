@@ -1,13 +1,27 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const setTabGroupSplitRatioMock = vi.fn()
+const recordFeatureInteractionMock = vi.fn()
+const setDragRootNodeMock = vi.fn()
 const useAppStoreMock = vi.fn(
-  (selector: (state: { setTabGroupSplitRatio: () => void }) => unknown) =>
-    selector({ setTabGroupSplitRatio: setTabGroupSplitRatioMock })
+  (
+    selector: (state: {
+      recordFeatureInteraction: typeof recordFeatureInteractionMock
+      setTabGroupSplitRatio: typeof setTabGroupSplitRatioMock
+    }) => unknown
+  ) =>
+    selector({
+      recordFeatureInteraction: recordFeatureInteractionMock,
+      setTabGroupSplitRatio: setTabGroupSplitRatioMock
+    })
 )
 vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: { setTabGroupSplitRatio: () => void }) => unknown) =>
-    useAppStoreMock(selector)
+  useAppStore: (
+    selector: (state: {
+      recordFeatureInteraction: typeof recordFeatureInteractionMock
+      setTabGroupSplitRatio: typeof setTabGroupSplitRatioMock
+    }) => unknown
+  ) => useAppStoreMock(selector)
 }))
 
 vi.mock('./TabGroupPanel', () => ({
@@ -24,13 +38,21 @@ vi.mock('./useTabDragSplit', () => ({
     onDragMove: vi.fn(),
     onDragOver: vi.fn(),
     onDragStart: vi.fn(),
-    sensors: []
+    sensors: [],
+    setDragRootNode: setDragRootNodeMock
   })
 }))
 
 import TabGroupSplitLayout from './TabGroupSplitLayout'
 
 describe('TabGroupSplitLayout', () => {
+  beforeEach(() => {
+    setTabGroupSplitRatioMock.mockClear()
+    recordFeatureInteractionMock.mockClear()
+    setDragRootNodeMock.mockClear()
+    useAppStoreMock.mockClear()
+  })
+
   function getLeafPanelProps(isWorktreeActive: boolean) {
     const element = TabGroupSplitLayout({
       layout: { type: 'leaf', groupId: 'group-1' },
@@ -82,6 +104,19 @@ describe('TabGroupSplitLayout', () => {
     )
   })
 
+  it('wires the split layout root to drag cleanup ownership', () => {
+    const element = TabGroupSplitLayout({
+      layout: { type: 'leaf', groupId: 'group-1' },
+      worktreeId: 'wt-1',
+      focusedGroupId: 'group-1',
+      isWorktreeActive: true
+    })
+
+    const layoutWrapper = element.props.children[0]
+
+    expect(layoutWrapper.props.ref).toBe(setDragRootNodeMock)
+  })
+
   it('only reserves top-right header space for the floating explorer toggle', () => {
     const element = TabGroupSplitLayout({
       layout: {
@@ -123,5 +158,30 @@ describe('TabGroupSplitLayout', () => {
         reserveCollapsedSidebarHeaderSpace: false
       })
     )
+  })
+
+  it('records pane resizing at the start of the gesture', () => {
+    const element = TabGroupSplitLayout({
+      layout: {
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.5,
+        first: { type: 'leaf', groupId: 'left-group' },
+        second: { type: 'leaf', groupId: 'right-group' }
+      },
+      worktreeId: 'wt-1',
+      focusedGroupId: 'right-group',
+      isWorktreeActive: true
+    })
+
+    const layoutWrapper = element.props.children[0]
+    const splitBody = layoutWrapper.props.children[1]
+    const splitNodeElement = splitBody.props.children
+    const rootElement = splitNodeElement.type(splitNodeElement.props)
+    const resizeHandle = rootElement.props.children[1]
+
+    resizeHandle.props.onResizeStart()
+
+    expect(recordFeatureInteractionMock).toHaveBeenCalledWith('terminal-panes')
   })
 })

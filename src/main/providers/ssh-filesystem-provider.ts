@@ -214,6 +214,19 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     await this.mux.request('fs.rename', { oldPath, newPath })
   }
 
+  async renameNoClobber(oldPath: string, newPath: string): Promise<void> {
+    try {
+      await this.mux.request('fs.renameNoClobber', { oldPath, newPath })
+    } catch (err) {
+      if (isMethodNotFoundError(err)) {
+        // Why: falling back to raw fs.rename can silently clobber the target on
+        // older relays. Fail closed and let reconnect deploy the safe relay.
+        throw new Error('Remote safe rename is unavailable. Reconnect the SSH target and retry.')
+      }
+      throw err
+    }
+  }
+
   async copy(source: string, destination: string): Promise<void> {
     await this.mux.request('fs.copy', { source, destination })
   }

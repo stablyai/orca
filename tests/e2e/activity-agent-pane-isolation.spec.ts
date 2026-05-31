@@ -167,12 +167,14 @@ async function enableActivityAgentsView(page: Page): Promise<void> {
 }
 
 async function clickWorkspaceCardAgentRow(page: Page, prompt: string): Promise<void> {
-  const rowLabel = page
-    .getByRole('group', { name: 'Agents' })
-    .locator(`span[title="${prompt}"]`)
-    .first()
-  await expect(rowLabel).toBeVisible({ timeout: 10_000 })
-  await rowLabel.click()
+  const agentsGroup = page.getByRole('group', { name: 'Agents' }).first()
+  const collapsedSummary = agentsGroup.getByRole('button', { name: /^Expand \d+ agents?:/ })
+  if (await collapsedSummary.isVisible()) {
+    await collapsedSummary.click()
+  }
+  const agentRow = agentsGroup.getByRole('treeitem').filter({ hasText: prompt }).first()
+  await expect(agentRow).toBeVisible({ timeout: 10_000 })
+  await agentRow.click()
 }
 
 async function readActivePaneSelection(page: Page): Promise<ActivePaneSelection> {

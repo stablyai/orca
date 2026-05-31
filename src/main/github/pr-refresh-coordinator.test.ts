@@ -51,7 +51,7 @@ function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
     url: 'https://github.com/acme/repo/pull/12',
     checksStatus: 'pending',
     updatedAt: '2026-05-12T00:00:00Z',
-    mergeable: 'UNKNOWN',
+    mergeable: 'MERGEABLE',
     headSha: 'head-sha',
     ...overrides
   }
@@ -98,7 +98,7 @@ describe('pr-refresh-coordinator', () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock.mockResolvedValueOnce({
       kind: 'found',
-      pr: makePR({ checksStatus: 'pending' }),
+      pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
       fetchedAt: Date.now()
     })
 
@@ -119,7 +119,7 @@ describe('pr-refresh-coordinator', () => {
     getPRForBranchOutcomeMock
       .mockResolvedValueOnce({
         kind: 'found',
-        pr: makePR({ checksStatus: 'pending' }),
+        pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
         fetchedAt: Date.now()
       })
       .mockResolvedValueOnce({
@@ -205,7 +205,7 @@ describe('pr-refresh-coordinator', () => {
     enqueuePRRefresh({ ...candidate, cachedFetchedAt: Date.now() }, 'active', 80, 1)
     visibleOutcome.resolve({
       kind: 'found',
-      pr: makePR({ checksStatus: 'pending' }),
+      pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
       fetchedAt: Date.now()
     })
     await vi.advanceTimersByTimeAsync(0)
@@ -360,7 +360,7 @@ describe('pr-refresh-coordinator', () => {
     getPRForBranchOutcomeMock
       .mockResolvedValueOnce({
         kind: 'found',
-        pr: makePR({ checksStatus: 'pending' }),
+        pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
         fetchedAt: Date.now()
       })
       .mockResolvedValueOnce({
@@ -399,6 +399,31 @@ describe('pr-refresh-coordinator', () => {
       '/repo::feature/a',
       '/repo::feature/b'
     ])
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries visible PRs with unknown mergeability before the success-check interval', async () => {
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success', mergeable: 'UNKNOWN' }),
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success', mergeable: 'MERGEABLE' }),
+        fetchedAt: Date.now()
+      })
+
+    reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(9_999)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1)
+
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 })

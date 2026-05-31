@@ -19,12 +19,21 @@ describe('crash-reporting shared helpers', () => {
   })
 
   it('keeps details on a strict primitive allowlist', () => {
+    const longStack = [
+      'Error: boom',
+      ...Array.from(
+        { length: 80 },
+        (_, index) => `at Component${index} (/Users/alice/project/src/file-${index}.tsx:1:1)`
+      )
+    ].join('\n')
+
     expect(
       sanitizeCrashReportDetails({
         name: 'GPU /home/alice/repo',
         code: 9,
         crashed: true,
         missing: null,
+        error_stack: longStack,
         nested: { nope: true },
         infinite: Number.POSITIVE_INFINITY
       })
@@ -32,8 +41,12 @@ describe('crash-reporting shared helpers', () => {
       name: 'GPU [redacted-path]',
       code: 9,
       crashed: true,
-      missing: null
+      missing: null,
+      error_stack: expect.stringContaining('[redacted-path]')
     })
+    expect(
+      String(sanitizeCrashReportDetails({ error_stack: longStack }).error_stack).length
+    ).toBeGreaterThan(240)
   })
 
   it('sanitizes breadcrumb data and caps to the latest thirty entries', () => {

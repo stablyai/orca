@@ -1,4 +1,4 @@
-const TRIGGER_SIZE = 32
+const TRIGGER_SIZE = 36
 const DEFAULT_RIGHT_GAP = 24
 const DEFAULT_BOTTOM_GAP = 72
 const DRAG_MARGIN = 8
@@ -8,6 +8,8 @@ export type FloatingTerminalTriggerPosition = {
   left: number
   top: number
 }
+
+export type FloatingTerminalTriggerPositionSource = 'default' | 'user'
 
 function getViewport(): { width: number; height: number } {
   return {
@@ -40,6 +42,30 @@ export function clampFloatingTerminalTriggerPosition(
   }
 }
 
+export function hasUsableFloatingTerminalTriggerViewport(): boolean {
+  const viewport = getViewport()
+  return (
+    viewport.width >= TRIGGER_SIZE + DRAG_MARGIN * 2 &&
+    viewport.height >= TRIGGER_SIZE + TITLEBAR_SAFE_TOP + DRAG_MARGIN
+  )
+}
+
+export function shouldReconcileFloatingTerminalTriggerPosition(
+  source: FloatingTerminalTriggerPositionSource
+): boolean {
+  return source === 'default' || hasUsableFloatingTerminalTriggerViewport()
+}
+
+export function resolveFloatingTerminalTriggerPosition(
+  position: FloatingTerminalTriggerPosition,
+  source: FloatingTerminalTriggerPositionSource
+): FloatingTerminalTriggerPosition {
+  if (source === 'default') {
+    return getDefaultFloatingTerminalTriggerPosition()
+  }
+  return clampFloatingTerminalTriggerPosition(position)
+}
+
 export function parseFloatingTerminalTriggerPosition(
   serialized: string | null
 ): FloatingTerminalTriggerPosition | null {
@@ -51,7 +77,7 @@ export function parseFloatingTerminalTriggerPosition(
     if (!isFiniteCoordinate(parsed.left) || !isFiniteCoordinate(parsed.top)) {
       return null
     }
-    return clampFloatingTerminalTriggerPosition({ left: parsed.left, top: parsed.top })
+    return { left: parsed.left, top: parsed.top }
   } catch {
     return null
   }

@@ -23,6 +23,7 @@ import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-
 import { RelayStreamRegistry } from './fs-stream-registry'
 import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 import { buildRelayCommandEnv } from './relay-command-env'
+import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
 
 type WatchState = {
   rootPath: string
@@ -84,6 +85,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.createDir', (p) => this.createDir(p))
     this.dispatcher.onRequest('fs.createDirNoClobber', (p) => this.createDirNoClobber(p))
     this.dispatcher.onRequest('fs.rename', (p) => this.rename(p))
+    this.dispatcher.onRequest('fs.renameNoClobber', (p) => this.renameNoClobber(p))
     this.dispatcher.onRequest('fs.copy', (p) => this.copy(p))
     this.dispatcher.onRequest('fs.realpath', (p) => this.realpath(p))
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
@@ -205,6 +207,15 @@ export class FsHandler {
   private async rename(params: Record<string, unknown>) {
     const oldPath = expandTilde(params.oldPath as string)
     const newPath = expandTilde(params.newPath as string)
+    await rename(oldPath, newPath)
+  }
+
+  private async renameNoClobber(params: Record<string, unknown>) {
+    const oldPath = expandTilde(params.oldPath as string)
+    const newPath = expandTilde(params.newPath as string)
+    // Why: user-facing file renames must not inherit fs.rename's overwrite
+    // behavior; keep the guard inside the relay so SSH checks the remote FS.
+    await assertNoClobberRenameDestinationAvailable(oldPath, newPath)
     await rename(oldPath, newPath)
   }
 

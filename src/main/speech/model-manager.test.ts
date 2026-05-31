@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
 
-const { spawnMock } = vi.hoisted(() => ({
+const { httpsGetMock, spawnMock } = vi.hoisted(() => ({
+  httpsGetMock: vi.fn(),
   spawnMock: vi.fn()
 }))
 
@@ -21,6 +22,11 @@ vi.mock('child_process', async () => {
   return { ...(actual as Record<string, unknown>), spawn: spawnMock }
 })
 
+vi.mock('https', async () => {
+  const actual = await vi.importActual('https')
+  return { ...(actual as Record<string, unknown>), get: httpsGetMock }
+})
+
 type ModelManagerInternals = {
   verifyArchiveSha256: (archivePath: string, expectedSha256: string) => Promise<void>
   downloadFile: (
@@ -28,7 +34,8 @@ type ModelManagerInternals = {
     dest: string,
     expectedSize: number,
     modelId: string,
-    isAborted: () => boolean
+    isAborted: () => boolean,
+    signal?: AbortSignal
   ) => Promise<void>
   extractArchive: (
     archivePath: string,
@@ -40,6 +47,7 @@ type ModelManagerInternals = {
 
 describe('ModelManager', () => {
   beforeEach(() => {
+    httpsGetMock.mockReset()
     spawnMock.mockReset()
   })
 
@@ -81,6 +89,156 @@ describe('ModelManager', () => {
         )
       ).rejects.toThrow(/HTTPS/)
     } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('aborts an in-flight model download request when cancelled', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manifest = SPEECH_MODEL_CATALOG[0]
+      const errorHandlers: ((err: Error) => void)[] = []
+      const timeoutHandlers: (() => void)[] = []
+      const request = {
+        destroy: vi.fn((err?: Error) => {
+          queueMicrotask(() => {
+            for (const handler of errorHandlers) {
+              handler(err ?? new Error('destroyed'))
+            }
+          })
+          return request
+        }),
+        setTimeout: vi.fn((_ms: number, cb: () => void) => {
+          timeoutHandlers.push(cb)
+          return request
+        }),
+        on: vi.fn((event: string, cb: (err: Error) => void) => {
+          if (event === 'error') {
+            errorHandlers.push(cb)
+          }
+          return request
+        }),
+        off: vi.fn((event: string, cb: ((err: Error) => void) | (() => void)) => {
+          if (event === 'error') {
+            const index = errorHandlers.indexOf(cb as (err: Error) => void)
+            if (index !== -1) {
+              errorHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'timeout') {
+            const index = timeoutHandlers.indexOf(cb as () => void)
+            if (index !== -1) {
+              timeoutHandlers.splice(index, 1)
+            }
+          }
+          return request
+        })
+      }
+      httpsGetMock.mockImplementation(
+        (
+          _url: URL,
+          options: { signal?: AbortSignal } | ((response: unknown) => void),
+          _cb?: (response: unknown) => void
+        ) => {
+          if (typeof options !== 'function') {
+            options.signal?.addEventListener('abort', () => request.destroy(new Error('Aborted')), {
+              once: true
+            })
+          }
+          return request
+        }
+      )
+      const manager = new ModelManager(dir)
+
+      const download = manager.downloadModel(manifest.id)
+      manager.cancelDownload(manifest.id)
+      await expect(download).resolves.toBeUndefined()
+
+      expect(request.destroy).toHaveBeenCalledWith(expect.any(Error))
+      expect(request.off).toHaveBeenCalledWith('error', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('timeout', expect.any(Function))
+      expect(errorHandlers).toHaveLength(0)
+      expect(timeoutHandlers).toHaveLength(0)
+      expect((await manager.getModelState(manifest.id)).status).toBe('not-downloaded')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('times out a model download request that never responds', async () => {
+    vi.useFakeTimers()
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const errorHandlers: ((err: Error) => void)[] = []
+      const timeoutHandlers: (() => void)[] = []
+      const request = {
+        destroy: vi.fn((err?: Error) => {
+          if (err) {
+            queueMicrotask(() => {
+              for (const handler of errorHandlers) {
+                handler(err)
+              }
+            })
+          }
+          return request
+        }),
+        setTimeout: vi.fn((ms: number, cb: () => void) => {
+          timeoutHandlers.push(cb)
+          setTimeout(() => {
+            for (const handler of timeoutHandlers) {
+              handler()
+            }
+          }, ms)
+          return request
+        }),
+        on: vi.fn((event: string, cb: (err: Error) => void) => {
+          if (event === 'error') {
+            errorHandlers.push(cb)
+          }
+          return request
+        }),
+        off: vi.fn((event: string, cb: ((err: Error) => void) | (() => void)) => {
+          if (event === 'error') {
+            const index = errorHandlers.indexOf(cb as (err: Error) => void)
+            if (index !== -1) {
+              errorHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'timeout') {
+            const index = timeoutHandlers.indexOf(cb as () => void)
+            if (index !== -1) {
+              timeoutHandlers.splice(index, 1)
+            }
+          }
+          return request
+        })
+      }
+      httpsGetMock.mockReturnValue(request)
+      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+
+      const download = manager.downloadFile(
+        'https://example.com/model.tar.bz2',
+        join(dir, 'model.tar.bz2'),
+        1,
+        'm',
+        () => false
+      )
+      const outcomePromise = download.then(
+        () => 'resolved',
+        (error) => (error instanceof Error ? error.message : String(error))
+      )
+
+      await vi.advanceTimersByTimeAsync(120_000)
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toBe('Model download timed out after 120 seconds without network activity')
+      expect(request.destroy).toHaveBeenCalledWith()
+      expect(request.off).toHaveBeenCalledWith('error', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('timeout', expect.any(Function))
+      expect(errorHandlers).toHaveLength(0)
+      expect(timeoutHandlers).toHaveLength(0)
+    } finally {
+      vi.useRealTimers()
       rmSync(dir, { recursive: true, force: true })
     }
   })

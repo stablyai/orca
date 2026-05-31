@@ -2,8 +2,9 @@ import type { SettingsSearchEntry } from './settings-search'
 
 export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'Enable AI commit messages',
-    description: 'Adds a Generate button to the Source Control panel.',
+    title: 'Enable Source Control AI',
+    description:
+      'Adds AI generation to Source Control commit, pull request, and branch-name flows.',
     keywords: [
       'ai',
       'commit',
@@ -18,12 +19,12 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Agent',
-    description: 'Which agent to invoke when generating a commit message.',
-    keywords: ['agent', 'claude', 'codex']
+    description: 'Which agent to invoke for Source Control text generation.',
+    keywords: ['agent', 'claude', 'codex', 'source control']
   },
   {
-    title: 'Model',
-    description: 'Which model the selected agent uses to generate the message.',
+    title: 'Default model',
+    description: 'Which model Source Control AI uses unless an operation override exists.',
     keywords: ['model', 'haiku', 'sonnet', 'opus', 'gpt']
   },
   {
@@ -32,10 +33,24 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['thinking', 'effort', 'reasoning']
   },
   {
-    title: 'Custom prompt',
-    description:
-      'Optional instructions appended to the base prompt (e.g. Conventional Commits style).',
+    title: 'Advanced model overrides',
+    description: 'Optional per-operation model choices for commit messages and PR details.',
+    keywords: ['model', 'override', 'commit', 'pull request', 'pr', 'thinking']
+  },
+  {
+    title: 'Commit message prompt',
+    description: 'Additional prompt text appended only when generating commit messages.',
     keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
+  },
+  {
+    title: 'Pull request prompt',
+    description: 'Additional prompt text appended only when generating pull request details.',
+    keywords: ['prompt', 'pull request', 'pr', 'description', 'template']
+  },
+  {
+    title: 'PR creation defaults',
+    description: 'Defaults used when the Create PR composer opens.',
+    keywords: ['pull request', 'pr', 'draft', 'template', 'generate', 'open']
   },
   {
     title: 'Custom command',

@@ -27,17 +27,32 @@ import {
   MoreHorizontal,
   Plus,
   RefreshCw,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react-native'
 import { useHostClient } from '../../../../src/transport/client-context'
+import type { RpcClient } from '../../../../src/transport/rpc-client'
 import type { RpcSuccess } from '../../../../src/transport/types'
 import {
   ActionSheetModal,
   type ActionSheetAction
 } from '../../../../src/components/ActionSheetModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
+import { BottomDrawer } from '../../../../src/components/BottomDrawer'
 import { triggerError, triggerSelection, triggerSuccess } from '../../../../src/platform/haptics'
 import { colors, radii, spacing, typography } from '../../../../src/theme/mobile-theme'
+import {
+  buildMobileDiffLines,
+  type MobileDiffLine
+} from '../../../../src/session/mobile-diff-lines'
+import {
+  buildMobileBranchCompareSection,
+  canOpenMobileBranchCompareDiff,
+  formatMobileBranchCompareSummary,
+  type MobileGitBranchChangeEntry,
+  type MobileGitBranchCompareResult,
+  type MobileGitBranchCompareSummary
+} from '../../../../src/source-control/mobile-branch-compare'
 import {
   MOBILE_GIT_STATUS_LABELS,
   buildMobileSourceControlSections,
@@ -86,6 +101,43 @@ type MobileGitStatusEntryView = MobileGitStatusEntry & {
   unstageActionId: string
 }
 
+type MobileBranchCompareState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'ready'; result: MobileGitBranchCompareResult }
+  | { kind: 'error'; message: string }
+
+type MobileBranchEntryView = MobileGitBranchChangeEntry & {
+  canOpen: boolean
+}
+
+type MobileBranchDiffPreviewState =
+  | { kind: 'loading'; entry: MobileGitBranchChangeEntry }
+  | {
+      kind: 'ready'
+      entry: MobileGitBranchChangeEntry
+      summary: MobileGitBranchCompareSummary
+      lines: MobileDiffLine[]
+      truncated: boolean
+    }
+  | { kind: 'error'; entry: MobileGitBranchChangeEntry; message: string }
+
+type RuntimeRepoSummary = {
+  id: string
+  worktreeBaseRef?: string | null
+}
+
+type RepoBaseRefDefaultResult = {
+  defaultBaseRef: string | null
+  remoteCount: number
+}
+
+type GitDiffTextResult = {
+  kind: 'text'
+  originalContent: string
+  modifiedContent: string
+}
+
 const KEYBOARD_COMMIT_BAR_CLEARANCE = 10
 const SELECTOR_RETRY_COUNT = 3
 const SELECTOR_RETRY_DELAY_MS = 250
@@ -96,6 +148,45 @@ function firstParam(value: string | string[] | undefined): string {
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function getRepoIdFromMobileWorktreeId(id: string): string {
+  // Why: mobile cannot import desktop shared modules in its standalone tsc run,
+  // but the runtime worktree id wire format is still `${repoId}::${path}`.
+  const separatorIdx = id.indexOf('::')
+  return separatorIdx === -1 ? id : id.slice(0, separatorIdx)
+}
+
+async function resolveMobileBranchCompareBaseRef(
+  client: RpcClient,
+  worktreeId: string
+): Promise<string | null> {
+  const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
+  if (!repoId) {
+    return null
+  }
+
+  let repoBaseRef: string | null = null
+  const repoResponse = await client.sendRequest('repo.list')
+  if (repoResponse.ok) {
+    const repos = ((repoResponse as RpcSuccess).result as { repos?: RuntimeRepoSummary[] }).repos
+    const repo = repos?.find((candidate) => candidate.id === repoId)
+    repoBaseRef = repo?.worktreeBaseRef?.trim() || null
+  }
+
+  if (repoBaseRef) {
+    return repoBaseRef
+  }
+
+  const defaultResponse = await client.sendRequest('repo.baseRefDefault', { repo: `id:${repoId}` })
+  if (!defaultResponse.ok) {
+    if (isMobileGitUnavailable(defaultResponse.error?.code, defaultResponse.error?.message)) {
+      return null
+    }
+    throw new Error(defaultResponse.error?.message || 'Unable to resolve branch base')
+  }
+  const result = (defaultResponse as RpcSuccess).result as RepoBaseRefDefaultResult
+  return result.defaultBaseRef?.trim() || null
 }
 
 function getWorktreeLabel(name: string | undefined, worktreeId: string): string {
@@ -133,6 +224,27 @@ function statusColor(status: MobileGitFileStatus): string {
   }
 }
 
+function formatBranchEntryMeta(entry: MobileGitBranchChangeEntry): string | null {
+  const stats =
+    entry.added !== undefined || entry.removed !== undefined
+      ? `+${entry.added ?? 0} -${entry.removed ?? 0}`
+      : null
+  if (entry.oldPath) {
+    return stats ? `from ${entry.oldPath}; ${stats}` : `from ${entry.oldPath}`
+  }
+  return stats
+}
+
+function diffLinePrefix(kind: MobileDiffLine['kind']): string {
+  if (kind === 'add') return '+'
+  if (kind === 'delete') return '-'
+  return ' '
+}
+
+function diffLineNumber(line: MobileDiffLine): string {
+  return String(line.newLineNumber ?? line.oldLineNumber ?? '')
+}
+
 export default function MobileSourceControlScreen() {
   const params = useLocalSearchParams<{
     hostId?: string | string[]
@@ -148,6 +260,12 @@ export default function MobileSourceControlScreen() {
   const insets = useSafeAreaInsets()
   const { client, state: connState } = useHostClient(hostId)
   const [screenState, setScreenState] = useState<ScreenState>({ kind: 'loading' })
+  const [branchCompareState, setBranchCompareState] = useState<MobileBranchCompareState>({
+    kind: 'idle'
+  })
+  const [branchDiffPreview, setBranchDiffPreview] = useState<MobileBranchDiffPreviewState | null>(
+    null
+  )
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [commitMessage, setCommitMessage] = useState('')
   const [discardTarget, setDiscardTarget] = useState<MobileGitStatusEntry | null>(null)
@@ -155,20 +273,26 @@ export default function MobileSourceControlScreen() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [keyboardLift, setKeyboardLift] = useState(0)
   const [openingPath, setOpeningPath] = useState<string | null>(null)
+  const [openingBranchPath, setOpeningBranchPath] = useState<string | null>(null)
   const busyActionRef = useRef<string | null>(null)
   const currentStatusIdentityRef = useRef('')
+  const currentBranchCompareIdentityRef = useRef('')
   const loadGenerationRef = useRef(0)
+  const branchCompareGenerationRef = useRef(0)
   const mountedRef = useRef(true)
   const openingPathRef = useRef<string | null>(null)
+  const openingBranchPathRef = useRef<string | null>(null)
   const statusLoadInFlightRef = useRef<StatusLoadInFlight | null>(null)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
   const statusIdentityKey = `${hostId}\0${worktreeId}`
   currentStatusIdentityRef.current = statusIdentityKey
+  currentBranchCompareIdentityRef.current = statusIdentityKey
 
   useEffect(() => {
     return () => {
       mountedRef.current = false
       loadGenerationRef.current += 1
+      branchCompareGenerationRef.current += 1
     }
   }, [])
 
@@ -187,6 +311,63 @@ export default function MobileSourceControlScreen() {
       onHide.remove()
     }
   }, [insets.bottom])
+
+  const loadBranchCompare = useCallback(
+    async (options?: { preserveReadyOnFailure?: boolean }) => {
+      const loadKey = statusIdentityKey
+      const generation = branchCompareGenerationRef.current + 1
+      branchCompareGenerationRef.current = generation
+      const isCurrentLoad = () =>
+        mountedRef.current &&
+        branchCompareGenerationRef.current === generation &&
+        currentBranchCompareIdentityRef.current === loadKey
+
+      if (!worktreeId || !client || connState !== 'connected') {
+        if (isCurrentLoad()) {
+          setBranchCompareState({ kind: 'idle' })
+        }
+        return false
+      }
+
+      setBranchCompareState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
+      try {
+        const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
+        if (!isCurrentLoad()) return false
+        if (!baseRef) {
+          setBranchCompareState({ kind: 'idle' })
+          return true
+        }
+        const response = await client.sendRequest('git.branchCompare', {
+          worktree: `id:${worktreeId}`,
+          baseRef
+        })
+        if (!isCurrentLoad()) return false
+        if (!response.ok) {
+          if (isMobileGitUnavailable(response.error?.code, response.error?.message)) {
+            setBranchCompareState({ kind: 'idle' })
+            return false
+          }
+          throw new Error(response.error?.message || 'Unable to load committed changes')
+        }
+        setBranchCompareState({
+          kind: 'ready',
+          result: (response as RpcSuccess).result as MobileGitBranchCompareResult
+        })
+        return true
+      } catch (err) {
+        if (!isCurrentLoad()) return false
+        const message = err instanceof Error ? err.message : 'Unable to load committed changes'
+        setBranchCompareState((prev) => {
+          if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
+            return prev
+          }
+          return { kind: 'error', message }
+        })
+        return false
+      }
+    },
+    [client, connState, statusIdentityKey, worktreeId]
+  )
 
   const loadStatus = useCallback(
     async (options?: LoadStatusOptions) => {
@@ -230,6 +411,7 @@ export default function MobileSourceControlScreen() {
             if (response.ok) {
               const result = (response as RpcSuccess).result as MobileGitStatusResult
               setScreenState({ kind: 'ready', status: result })
+              void loadBranchCompare({ preserveReadyOnFailure: true })
               if (options?.clearActionErrorOnSuccess !== false) {
                 setActionError(null)
               }
@@ -278,7 +460,7 @@ export default function MobileSourceControlScreen() {
         }
       }
     },
-    [client, connState, statusIdentityKey, worktreeId]
+    [client, connState, loadBranchCompare, statusIdentityKey, worktreeId]
   )
 
   useEffect(() => {
@@ -301,6 +483,31 @@ export default function MobileSourceControlScreen() {
     [entries]
   )
   const sections = useMemo(() => buildMobileSourceControlSections(derivedEntries), [derivedEntries])
+  const branchCompareResult = branchCompareState.kind === 'ready' ? branchCompareState.result : null
+  const branchCompareSection = useMemo(
+    () => buildMobileBranchCompareSection(branchCompareResult?.entries ?? []),
+    [branchCompareResult]
+  )
+  const branchCompareSummaryText = branchCompareResult
+    ? formatMobileBranchCompareSummary(branchCompareResult.summary)
+    : null
+  const branchCompareCanOpen = branchCompareResult
+    ? canOpenMobileBranchCompareDiff(branchCompareResult.summary)
+    : false
+  const branchEntries = useMemo<MobileBranchEntryView[]>(
+    () =>
+      (branchCompareSection?.data ?? []).map((entry) => ({
+        ...entry,
+        canOpen: branchCompareCanOpen
+      })),
+    [branchCompareCanOpen, branchCompareSection]
+  )
+  const shouldShowBranchCompareSection =
+    branchEntries.length > 0 ||
+    branchCompareState.kind === 'loading' ||
+    branchCompareState.kind === 'error' ||
+    (branchCompareResult !== null && branchCompareResult.summary.status !== 'ready')
+  const hasVisibleChanges = sections.length > 0 || shouldShowBranchCompareSection
   const stageablePaths = useMemo(() => getStageablePaths(entries), [entries])
   const unstageablePaths = useMemo(() => getUnstageablePaths(entries), [entries])
   const stagedCount = useMemo(() => countStagedEntries(entries), [entries])
@@ -622,13 +829,81 @@ export default function MobileSourceControlScreen() {
     [client, connState, hostId, name, origin, router, worktreeId]
   )
 
+  const openBranchDiff = useCallback(
+    async (entry: MobileGitBranchChangeEntry) => {
+      if (openingBranchPathRef.current || openingPathRef.current || busyActionRef.current) return
+      if (!client || connState !== 'connected') {
+        if (!mountedRef.current) return
+        setActionError('Waiting for desktop...')
+        return
+      }
+      if (branchCompareState.kind !== 'ready') {
+        return
+      }
+      const summary = branchCompareState.result.summary
+      if (!canOpenMobileBranchCompareDiff(summary) || !summary.headOid || !summary.mergeBase) {
+        return
+      }
+
+      openingBranchPathRef.current = entry.path
+      setOpeningBranchPath(entry.path)
+      setBranchDiffPreview({ kind: 'loading', entry })
+      try {
+        const response = await client.sendRequest('git.branchDiff', {
+          worktree: `id:${worktreeId}`,
+          filePath: entry.path,
+          ...(entry.oldPath ? { oldPath: entry.oldPath } : {}),
+          compare: {
+            baseRef: summary.baseRef,
+            ...(summary.baseOid ? { baseOid: summary.baseOid } : {}),
+            headOid: summary.headOid,
+            mergeBase: summary.mergeBase
+          }
+        })
+        if (!response.ok) {
+          throw new Error(response.error?.message || 'Unable to load committed diff')
+        }
+        const result = (response as RpcSuccess).result as GitDiffTextResult | { kind: 'binary' }
+        if (result.kind !== 'text') {
+          throw new Error('Binary branch diff preview unavailable on mobile')
+        }
+        const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
+        if (!mountedRef.current) return
+        setBranchDiffPreview({
+          kind: 'ready',
+          entry,
+          summary,
+          lines: diff.lines,
+          truncated: diff.truncated
+        })
+        triggerSelection()
+      } catch (err) {
+        if (!mountedRef.current) return
+        triggerError()
+        setBranchDiffPreview({
+          kind: 'error',
+          entry,
+          message: err instanceof Error ? err.message : 'Unable to load committed diff'
+        })
+      } finally {
+        if (openingBranchPathRef.current === entry.path) {
+          openingBranchPathRef.current = null
+          if (mountedRef.current) {
+            setOpeningBranchPath(null)
+          }
+        }
+      }
+    },
+    [branchCompareState, client, connState, worktreeId]
+  )
+
   const actionSheetActions = useMemo<ActionSheetAction[]>(() => {
     const hasMessage = commitMessage.trim().length > 0
     const hasStaged = stagedCount > 0
     const hasUpstream = upstream?.hasUpstream === true
     const ahead = upstream?.ahead ?? 0
     const behind = upstream?.behind ?? 0
-    const busy = busyAction !== null
+    const busy = busyAction !== null || openingPath !== null || openingBranchPath !== null
     const commitHint = !hasStaged
       ? 'Stage at least one file'
       : !hasMessage
@@ -749,6 +1024,8 @@ export default function MobileSourceControlScreen() {
   }, [
     busyAction,
     commitMessage,
+    openingBranchPath,
+    openingPath,
     runActionSheetCommit,
     runActionSheetCommitSequence,
     runActionSheetCommitSync,
@@ -771,7 +1048,8 @@ export default function MobileSourceControlScreen() {
         busyAction === item.unstageActionId ||
         busyAction === item.discardActionId ||
         openingPath === item.path
-      const rowDisabled = !item.canOpen || busyAction !== null || openingPath !== null
+      const rowDisabled =
+        !item.canOpen || busyAction !== null || openingPath !== null || openingBranchPath !== null
       return (
         <Pressable
           style={({ pressed }) => [
@@ -817,10 +1095,11 @@ export default function MobileSourceControlScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.iconButton,
-                (busyAction !== null || openingPath !== null) && styles.iconButtonDisabled,
+                (busyAction !== null || openingPath !== null || openingBranchPath !== null) &&
+                  styles.iconButtonDisabled,
                 pressed && styles.iconButtonPressed
               ]}
-              disabled={busyAction !== null || openingPath !== null}
+              disabled={busyAction !== null || openingPath !== null || openingBranchPath !== null}
               onPress={() =>
                 void runGitAction(item.unstageActionId, 'git.unstage', { filePath: item.path })
               }
@@ -835,10 +1114,13 @@ export default function MobileSourceControlScreen() {
                 <Pressable
                   style={({ pressed }) => [
                     styles.iconButton,
-                    (busyAction !== null || openingPath !== null) && styles.iconButtonDisabled,
+                    (busyAction !== null || openingPath !== null || openingBranchPath !== null) &&
+                      styles.iconButtonDisabled,
                     pressed && styles.iconButtonPressed
                   ]}
-                  disabled={busyAction !== null || openingPath !== null}
+                  disabled={
+                    busyAction !== null || openingPath !== null || openingBranchPath !== null
+                  }
                   onPress={() =>
                     void runGitAction(item.stageActionId, 'git.stage', { filePath: item.path })
                   }
@@ -852,10 +1134,13 @@ export default function MobileSourceControlScreen() {
                 <Pressable
                   style={({ pressed }) => [
                     styles.iconButton,
-                    (busyAction !== null || openingPath !== null) && styles.iconButtonDisabled,
+                    (busyAction !== null || openingPath !== null || openingBranchPath !== null) &&
+                      styles.iconButtonDisabled,
                     pressed && styles.iconButtonPressed
                   ]}
-                  disabled={busyAction !== null || openingPath !== null}
+                  disabled={
+                    busyAction !== null || openingPath !== null || openingBranchPath !== null
+                  }
                   onPress={() => setDiscardTarget(item)}
                   hitSlop={8}
                   accessibilityLabel={`Discard ${item.path}`}
@@ -868,7 +1153,7 @@ export default function MobileSourceControlScreen() {
         </Pressable>
       )
     },
-    [busyAction, openFile, openingPath, runGitAction]
+    [busyAction, openFile, openingBranchPath, openingPath, runGitAction]
   )
 
   const keyExtractor = useCallback(
@@ -885,6 +1170,170 @@ export default function MobileSourceControlScreen() {
     ),
     []
   )
+
+  const renderBranchCompareFooter = useCallback(() => {
+    if (!shouldShowBranchCompareSection) {
+      return null
+    }
+
+    return (
+      <View style={styles.branchCompareBlock}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.branchSectionTitleBlock}>
+            <Text style={styles.sectionTitle}>Committed on Branch</Text>
+            {branchCompareSummaryText ? (
+              <Text style={styles.branchSectionSubtitle} numberOfLines={1}>
+                {branchCompareSummaryText}
+              </Text>
+            ) : null}
+          </View>
+          <Text style={styles.sectionCount}>{branchEntries.length}</Text>
+        </View>
+        {branchCompareState.kind === 'loading' ? (
+          <View style={styles.branchStateRow}>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+            <Text style={styles.branchStateText}>Loading committed changes...</Text>
+          </View>
+        ) : branchCompareState.kind === 'error' ? (
+          <View style={styles.branchStateRow}>
+            <Text style={styles.branchStateText}>{branchCompareState.message}</Text>
+          </View>
+        ) : branchCompareResult && branchCompareResult.summary.status !== 'ready' ? (
+          <View style={styles.branchStateRow}>
+            <Text style={styles.branchStateText}>
+              {branchCompareResult.summary.errorMessage ?? 'Committed changes unavailable.'}
+            </Text>
+          </View>
+        ) : (
+          branchEntries.map((entry) => {
+            const rowBusy = openingBranchPath === entry.path
+            const rowDisabled =
+              !entry.canOpen ||
+              busyAction !== null ||
+              openingPath !== null ||
+              openingBranchPath !== null
+            const meta = formatBranchEntryMeta(entry)
+            return (
+              <Pressable
+                key={`${entry.path}:${entry.oldPath ?? ''}`}
+                style={({ pressed }) => [
+                  styles.fileRow,
+                  pressed && entry.canOpen && styles.fileRowPressed,
+                  rowDisabled && styles.fileRowDisabled,
+                  !entry.canOpen && styles.fileRowUnavailable
+                ]}
+                onPress={() => void openBranchDiff(entry)}
+                disabled={rowDisabled}
+                accessibilityLabel={`Open committed change ${entry.path}`}
+              >
+                <View style={styles.statusBadge}>
+                  <Text style={[styles.statusBadgeText, { color: statusColor(entry.status) }]}>
+                    {MOBILE_GIT_STATUS_LABELS[entry.status]}
+                  </Text>
+                </View>
+                <FileText
+                  size={16}
+                  color={entry.canOpen ? colors.textSecondary : colors.textMuted}
+                  strokeWidth={2.1}
+                />
+                <View style={styles.fileTextBlock}>
+                  <Text
+                    style={[styles.filePath, !entry.canOpen && styles.filePathDisabled]}
+                    numberOfLines={1}
+                  >
+                    {entry.path}
+                  </Text>
+                  {meta ? (
+                    <Text style={styles.fileMeta} numberOfLines={1}>
+                      {meta}
+                    </Text>
+                  ) : null}
+                </View>
+                {rowBusy ? <ActivityIndicator size="small" color={colors.textSecondary} /> : null}
+              </Pressable>
+            )
+          })
+        )}
+      </View>
+    )
+  }, [
+    branchCompareResult,
+    branchCompareState,
+    branchCompareSummaryText,
+    branchEntries,
+    busyAction,
+    openBranchDiff,
+    openingBranchPath,
+    openingPath,
+    shouldShowBranchCompareSection
+  ])
+
+  const renderBranchDiffPreview = useCallback(() => {
+    if (!branchDiffPreview) {
+      return null
+    }
+    const entry = branchDiffPreview.entry
+    return (
+      <BottomDrawer
+        visible={branchDiffPreview !== null}
+        onClose={() => setBranchDiffPreview(null)}
+        dragContentToDismiss={false}
+        zIndex={1100}
+      >
+        <View style={styles.diffDrawerHeader}>
+          <View style={styles.diffDrawerTitleBlock}>
+            <Text style={styles.diffDrawerTitle} numberOfLines={1}>
+              {entry.path}
+            </Text>
+            <Text style={styles.diffDrawerMeta} numberOfLines={1}>
+              {branchDiffPreview.kind === 'ready'
+                ? `${branchDiffPreview.summary.baseRef}..HEAD`
+                : 'Committed on branch'}
+            </Text>
+          </View>
+          <Pressable
+            style={({ pressed }) => [styles.diffCloseButton, pressed && styles.iconButtonPressed]}
+            onPress={() => setBranchDiffPreview(null)}
+            hitSlop={8}
+            accessibilityLabel="Close committed diff preview"
+          >
+            <X size={18} color={colors.textSecondary} strokeWidth={2.1} />
+          </Pressable>
+        </View>
+
+        {branchDiffPreview.kind === 'loading' ? (
+          <View style={styles.diffState}>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+          </View>
+        ) : branchDiffPreview.kind === 'error' ? (
+          <View style={styles.diffState}>
+            <Text style={styles.stateTitle}>Unable to Load Diff</Text>
+            <Text style={styles.stateText}>{branchDiffPreview.message}</Text>
+          </View>
+        ) : (
+          <View style={styles.diffLines}>
+            {branchDiffPreview.truncated ? (
+              <Text style={styles.diffTruncatedText}>Diff truncated for mobile preview.</Text>
+            ) : null}
+            {branchDiffPreview.lines.map((line, index) => (
+              <View
+                key={`${index}:${line.kind}:${line.oldLineNumber ?? ''}:${line.newLineNumber ?? ''}`}
+                style={[
+                  styles.diffLine,
+                  line.kind === 'add' && styles.diffLineAdd,
+                  line.kind === 'delete' && styles.diffLineDelete
+                ]}
+              >
+                <Text style={styles.diffLineNumber}>{diffLineNumber(line)}</Text>
+                <Text style={styles.diffLinePrefix}>{diffLinePrefix(line.kind)}</Text>
+                <Text style={styles.diffLineText}>{line.text || ' '}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </BottomDrawer>
+    )
+  }, [branchDiffPreview])
 
   return (
     <View style={styles.container}>
@@ -909,11 +1358,12 @@ export default function MobileSourceControlScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.refreshButton,
-              (busyAction !== null || openingPath !== null) && styles.refreshButtonDisabled,
+              (busyAction !== null || openingPath !== null || openingBranchPath !== null) &&
+                styles.refreshButtonDisabled,
               pressed && styles.refreshButtonPressed
             ]}
             onPress={() => void loadStatus()}
-            disabled={busyAction !== null || openingPath !== null}
+            disabled={busyAction !== null || openingPath !== null || openingBranchPath !== null}
             hitSlop={8}
             accessibilityLabel="Refresh source control"
           >
@@ -953,6 +1403,9 @@ export default function MobileSourceControlScreen() {
             <View style={styles.countRow}>
               <Text style={styles.countText}>{unstagedCount} changed</Text>
               <Text style={styles.countText}>{stagedCount} staged</Text>
+              {branchEntries.length > 0 ? (
+                <Text style={styles.countText}>{branchEntries.length} on branch</Text>
+              ) : null}
               {status && status.conflictOperation !== 'unknown' ? (
                 <Text style={styles.conflictText}>{status.conflictOperation}</Text>
               ) : null}
@@ -968,13 +1421,19 @@ export default function MobileSourceControlScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.bulkButton,
-                  (stageablePaths.length === 0 || busyAction !== null || openingPath !== null) &&
+                  (stageablePaths.length === 0 ||
+                    busyAction !== null ||
+                    openingPath !== null ||
+                    openingBranchPath !== null) &&
                     styles.bulkButtonDisabled,
                   pressed && styles.bulkButtonPressed
                 ]}
                 onPress={() => void stageAll()}
                 disabled={
-                  busyAction !== null || openingPath !== null || stageablePaths.length === 0
+                  busyAction !== null ||
+                  openingPath !== null ||
+                  openingBranchPath !== null ||
+                  stageablePaths.length === 0
                 }
               >
                 {busyAction === 'stage-all' ? (
@@ -987,13 +1446,19 @@ export default function MobileSourceControlScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.bulkButton,
-                  (unstageablePaths.length === 0 || busyAction !== null || openingPath !== null) &&
+                  (unstageablePaths.length === 0 ||
+                    busyAction !== null ||
+                    openingPath !== null ||
+                    openingBranchPath !== null) &&
                     styles.bulkButtonDisabled,
                   pressed && styles.bulkButtonPressed
                 ]}
                 onPress={() => void unstageAll()}
                 disabled={
-                  busyAction !== null || openingPath !== null || unstageablePaths.length === 0
+                  busyAction !== null ||
+                  openingPath !== null ||
+                  openingBranchPath !== null ||
+                  unstageablePaths.length === 0
                 }
               >
                 {busyAction === 'unstage-all' ? (
@@ -1007,10 +1472,11 @@ export default function MobileSourceControlScreen() {
                 style={({ pressed }) => [
                   styles.bulkMenuButton,
                   pressed && styles.bulkButtonPressed,
-                  (busyAction !== null || openingPath !== null) && styles.bulkButtonDisabled
+                  (busyAction !== null || openingPath !== null || openingBranchPath !== null) &&
+                    styles.bulkButtonDisabled
                 ]}
                 onPress={() => setShowActionSheet(true)}
-                disabled={busyAction !== null || openingPath !== null}
+                disabled={busyAction !== null || openingPath !== null || openingBranchPath !== null}
                 hitSlop={8}
                 accessibilityLabel="Open source control actions"
               >
@@ -1019,7 +1485,7 @@ export default function MobileSourceControlScreen() {
             </View>
           </View>
 
-          {entries.length === 0 ? (
+          {!hasVisibleChanges ? (
             <View style={styles.state}>
               <Text style={styles.stateTitle}>No Changes</Text>
               <Text style={styles.stateText}>Working tree is clean.</Text>
@@ -1030,6 +1496,7 @@ export default function MobileSourceControlScreen() {
               renderItem={renderItem}
               keyExtractor={keyExtractor}
               renderSectionHeader={renderSectionHeader}
+              ListFooterComponent={renderBranchCompareFooter}
               stickySectionHeadersEnabled={false}
               contentContainerStyle={styles.listContent}
             />
@@ -1062,7 +1529,9 @@ export default function MobileSourceControlScreen() {
                   onChangeText={setCommitMessage}
                   placeholder="Commit message"
                   placeholderTextColor={colors.textMuted}
-                  editable={busyAction === null && openingPath === null}
+                  editable={
+                    busyAction === null && openingPath === null && openingBranchPath === null
+                  }
                   returnKeyType="done"
                   onSubmitEditing={() => void commit()}
                 />
@@ -1073,7 +1542,8 @@ export default function MobileSourceControlScreen() {
                   (!commitMessage.trim() ||
                     stagedCount === 0 ||
                     busyAction !== null ||
-                    openingPath !== null) &&
+                    openingPath !== null ||
+                    openingBranchPath !== null) &&
                     styles.commitButtonDisabled,
                   pressed && styles.commitButtonPressed
                 ]}
@@ -1082,7 +1552,8 @@ export default function MobileSourceControlScreen() {
                   !commitMessage.trim() ||
                   stagedCount === 0 ||
                   busyAction !== null ||
-                  openingPath !== null
+                  openingPath !== null ||
+                  openingBranchPath !== null
                 }
               >
                 {busyAction === 'commit' ? (
@@ -1095,6 +1566,8 @@ export default function MobileSourceControlScreen() {
           </View>
         </>
       )}
+
+      {renderBranchDiffPreview()}
 
       <ActionSheetModal
         visible={showActionSheet}
@@ -1298,6 +1771,33 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   },
+  branchCompareBlock: {
+    paddingBottom: spacing.sm
+  },
+  branchSectionTitleBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  branchSectionSubtitle: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    marginTop: 2
+  },
+  branchStateRow: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
+  },
+  branchStateText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    lineHeight: 18
+  },
   fileRow: {
     minHeight: 50,
     flexDirection: 'row',
@@ -1446,5 +1946,83 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
+  },
+  diffDrawerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
+  },
+  diffDrawerTitleBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  diffDrawerTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '700'
+  },
+  diffDrawerMeta: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    marginTop: 2
+  },
+  diffCloseButton: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.button,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  diffState: {
+    minHeight: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg
+  },
+  diffLines: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg
+  },
+  diffTruncatedText: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    marginBottom: spacing.sm
+  },
+  diffLine: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+    paddingVertical: 2,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radii.row
+  },
+  diffLineAdd: {
+    backgroundColor: colors.diffAddedBg
+  },
+  diffLineDelete: {
+    backgroundColor: colors.diffDeletedBg
+  },
+  diffLineNumber: {
+    width: 40,
+    color: colors.textMuted,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize,
+    textAlign: 'right'
+  },
+  diffLinePrefix: {
+    width: 12,
+    color: colors.textSecondary,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize
+  },
+  diffLineText: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize,
+    lineHeight: 17
   }
 })

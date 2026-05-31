@@ -5,13 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import {
   createFilePathLinkProvider,
+  getTerminalFileOpenHint,
   getTerminalHtmlFileOpenHint,
-  handleOscLink,
   installFilePathLinkClickFallback,
   isTerminalLinkActivation,
   openFilePathLinkAtBufferPosition,
   openDetectedFilePath
 } from './terminal-link-handlers'
+import { handleOscLink } from './terminal-osc-link-routing'
+import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { getConnectionId } from '@/lib/connection-context'
 import {
@@ -94,6 +96,7 @@ beforeEach(() => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCallMock(args)
   })
   vi.mocked(getConnectionId).mockReturnValue(null)
+  openFilePathMock.mockResolvedValue(true)
   storeState.settings = undefined
   registerHttpLinkStoreAccessor(() => storeState)
   vi.stubGlobal('window', {
@@ -114,6 +117,9 @@ beforeEach(() => {
   })
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
     return setTimeout(() => callback(0), 0) as unknown as number
+  })
+  vi.stubGlobal('cancelAnimationFrame', (handle: number): void => {
+    clearTimeout(handle)
   })
 })
 
@@ -206,7 +212,7 @@ describe('handleOscLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
-  it('routes .html file paths straight into the embedded browser', async () => {
+  it('opens local .html file paths in Orca browser tabs with the platform modifier', async () => {
     setPlatform('Macintosh')
 
     openDetectedFilePath('/tmp/report.html', null, null, deps)
@@ -214,7 +220,6 @@ describe('handleOscLink', () => {
     // openDetectedFilePath is async (fire-and-forget), so flush the microtask queue
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    // Why: .html should not open Monaco — it should render in the browser tab.
     expect(openFileMock).not.toHaveBeenCalled()
     expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).toHaveBeenCalledWith(
@@ -222,9 +227,10 @@ describe('handleOscLink', () => {
       'file:///tmp/report.html',
       expect.objectContaining({ title: 'report.html', activate: true })
     )
+    expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
-  it('also routes .htm paths to the embedded browser', async () => {
+  it('also opens local .htm paths in Orca browser tabs with the platform modifier', async () => {
     setPlatform('Macintosh')
 
     openDetectedFilePath('/tmp/legacy.HTM', null, null, deps)
@@ -237,9 +243,10 @@ describe('handleOscLink', () => {
       'file:///tmp/legacy.HTM',
       expect.objectContaining({ title: 'legacy.HTM' })
     )
+    expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
-  it('schedules Monaco reveal with default column 1 for :line links', async () => {
+  it('opens local file paths in Orca and reveals default column 1 with the platform modifier', async () => {
     setPlatform('Macintosh')
 
     openDetectedFilePath('/tmp/src/main.ts', 42, null, deps)
@@ -256,9 +263,10 @@ describe('handleOscLink', () => {
       column: 1,
       matchLength: 0
     })
+    expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
-  it('preserves explicit column for :line:column links', async () => {
+  it('preserves explicit column for Orca opens from :line:column links', async () => {
     setPlatform('Macintosh')
 
     openDetectedFilePath('/tmp/src/main.ts', 42, 7, deps)
@@ -272,26 +280,85 @@ describe('handleOscLink', () => {
       column: 7,
       matchLength: 0
     })
+    expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
-  it('advertises the browser-open behavior in the html hover hint', () => {
+  it('uses the system default app for shift+cmd/ctrl-click file paths', async () => {
     setPlatform('Macintosh')
-    expect(getTerminalHtmlFileOpenHint()).toBe('⌘+click to open in browser')
+
+    openDetectedFilePath('/tmp/src/main.ts', 42, 7, {
+      ...deps,
+      openWithSystemDefault: true
+    })
+    await flushAsyncWork()
+
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/src/main.ts')
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to Orca when shift+cmd/ctrl-click system default open fails', async () => {
+    setPlatform('Macintosh')
+    openFilePathMock.mockResolvedValueOnce(false)
+
+    openDetectedFilePath('/tmp/src/main.ts', 42, 7, {
+      ...deps,
+      openWithSystemDefault: true
+    })
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/src/main.ts')
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/src/main.ts' })
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '/tmp/src/main.ts',
+      line: 42,
+      column: 7,
+      matchLength: 0
+    })
+  })
+
+  it('cancels a pending Monaco reveal frame when another file open starts', async () => {
+    setPlatform('Macintosh')
+    const cancelAnimationFrame = vi.fn()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 42)
+    )
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
+
+    openDetectedFilePath('/tmp/src/main.ts', 42, null, deps)
+    await flushAsyncWork()
+
+    openDetectedFilePath('/tmp/src/other.ts', null, null, deps)
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42)
+    expect(setPendingEditorRevealMock).toHaveBeenCalledWith(null)
+  })
+
+  it('advertises the system default open behavior in hover hints', () => {
+    setPlatform('Macintosh')
+    expect(getTerminalFileOpenHint()).toBe('⌘+click to open or ⇧⌘+click for default app')
+    expect(getTerminalHtmlFileOpenHint()).toBe('⌘+click to open or ⇧⌘+click for default browser')
 
     setPlatform('Windows')
-    expect(getTerminalHtmlFileOpenHint()).toBe('Ctrl+click to open in browser')
+    expect(getTerminalFileOpenHint()).toBe('Ctrl+click to open or Shift+Ctrl+click for default app')
+    expect(getTerminalHtmlFileOpenHint()).toBe(
+      'Ctrl+click to open or Shift+Ctrl+click for default browser'
+    )
   })
 
-  it('opens file links in Orca instead of via shell when the platform modifier is pressed', async () => {
+  it('opens local file URL links in Orca when the platform modifier is pressed', async () => {
     setPlatform('Windows')
 
     handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: false }, deps)
     // Without modifier, nothing happens
-    expect(openFileUriMock).not.toHaveBeenCalled()
+    expect(openFilePathMock).not.toHaveBeenCalled()
 
     handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: true }, deps)
-    // Should NOT call shell.openFileUri (which opens system default editor)
-    expect(openFileUriMock).not.toHaveBeenCalled()
 
     // openDetectedFilePath is async (fire-and-forget), so flush the microtask queue
     // before asserting on positive behavior.
@@ -301,9 +368,48 @@ describe('handleOscLink', () => {
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' })
     )
+    expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
-  it('preserves #L line anchors from file URL links', async () => {
+  it('opens Windows UNC file URL links from Windows worktrees', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'file://server/share/repo/test.txt',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        worktreePath: '\\\\server\\share\\repo'
+      }
+    )
+    await flushAsyncWork()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: '//server/share/repo/test.txt'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '//server/share/repo/test.txt' })
+    )
+  })
+
+  it('rejects hosted file URL links when the active worktree is not Windows-local', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'file://server/share/repo/test.txt',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        worktreePath: '/home/user/repo'
+      }
+    )
+    await flushAsyncWork()
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+  })
+
+  it('opens #L file URL links in Orca and preserves anchors', async () => {
     setPlatform('Macintosh')
 
     handleOscLink('file:///tmp/test.txt#L42', { metaKey: true, ctrlKey: false }, deps)
@@ -311,6 +417,7 @@ describe('handleOscLink', () => {
     await flushDoubleRaf()
 
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' })
     )
@@ -323,10 +430,31 @@ describe('handleOscLink', () => {
     })
   })
 
-  it('preserves trailing line and column suffixes from file URL links', async () => {
+  it('opens file URL links with the system default app for shift+cmd/ctrl-click', async () => {
     setPlatform('Macintosh')
 
-    handleOscLink('file:///tmp/test.txt:42:7', { metaKey: true, ctrlKey: false }, deps)
+    handleOscLink(
+      'file:///tmp/test.txt#L42',
+      { metaKey: true, ctrlKey: false, shiftKey: true },
+      deps
+    )
+    await flushAsyncWork()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/test.txt')
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves trailing line and column suffixes when shift+cmd/ctrl-click native open falls back', async () => {
+    setPlatform('Macintosh')
+    openFilePathMock.mockResolvedValueOnce(false)
+
+    handleOscLink(
+      'file:///tmp/test.txt:42:7',
+      { metaKey: true, ctrlKey: false, shiftKey: true },
+      deps
+    )
     await flushAsyncWork()
     await flushDoubleRaf()
 
@@ -366,6 +494,33 @@ describe('handleOscLink', () => {
         relativePath: 'project/docs/README.md'
       })
     )
+    expect(openFilePathMock).not.toHaveBeenCalled()
+  })
+
+  it('opens tilde OSC file links against explicit terminal home when cwd is outside home', async () => {
+    setPlatform('Macintosh')
+
+    handleOscLink(
+      '~/file.ts',
+      { metaKey: true, ctrlKey: false },
+      {
+        ...deps,
+        startupCwd: '/workspace/project',
+        terminalHomePath: '/home/alice'
+      }
+    )
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: '/home/alice/file.ts'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/home/alice/file.ts'
+      })
+    )
+    expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
   it('stats remote-runtime file links through the active runtime environment', async () => {
@@ -438,7 +593,8 @@ describe('handleOscLink', () => {
 
     openDetectedFilePath('/home/me/repo/src/main.ts', null, null, {
       worktreeId: 'wt-1',
-      worktreePath: '/home/me/repo'
+      worktreePath: '/home/me/repo',
+      openWithSystemDefault: true
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -461,7 +617,8 @@ describe('handleOscLink', () => {
 
     openDetectedFilePath('/home/me/repo/report.html', null, null, {
       worktreeId: 'wt-1',
-      worktreePath: '/home/me/repo'
+      worktreePath: '/home/me/repo',
+      openWithSystemDefault: true
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -489,7 +646,7 @@ describe('handleOscLink', () => {
     expect(openFileMock).not.toHaveBeenCalled()
   })
 
-  it('ignores stale async completion so latest click wins for open and reveal', async () => {
+  it('ignores stale async completion so latest local click wins for Orca open and reveal', async () => {
     setPlatform('Macintosh')
     const firstStat = createDeferred<{ isDirectory: boolean }>()
     const secondStat = createDeferred<{ isDirectory: boolean }>()
@@ -508,6 +665,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
+    expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledTimes(1)
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/src/second.ts' })
@@ -519,7 +677,6 @@ describe('handleOscLink', () => {
       column: 3,
       matchLength: 0
     })
-    expect(setPendingEditorRevealMock).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -577,12 +734,13 @@ describe('createFilePathLinkProvider range bounds', () => {
     }
   }
 
-  function createProvider(rows: TestBufferLine[]) {
+  function createProviderSetup(rows: TestBufferLine[]) {
     const pane = makePane(rows)
     const managerRef = {
       current: { getPanes: () => [pane] } as unknown as PaneManager
     }
-    return createFilePathLinkProvider(
+    const linkTooltip = { textContent: '', style: { display: '' } } as unknown as HTMLElement
+    const provider = createFilePathLinkProvider(
       1,
       {
         worktreeId: 'wt-1',
@@ -592,12 +750,19 @@ describe('createFilePathLinkProvider range bounds', () => {
         linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
         pathExistsCache: new Map<string, boolean>([
           ['/repo/CLAUDE.md', true],
-          ['/repo/package.json', true]
+          ['/repo/package.json', true],
+          ['/repo/Folder With Space/content.js', true],
+          ['/repo/My Folder', true]
         ])
       },
-      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
-      'hint'
+      linkTooltip,
+      getTerminalFileOpenHint()
     )
+    return { provider, linkTooltip }
+  }
+
+  function createProvider(rows: TestBufferLine[]) {
+    return createProviderSetup(rows).provider
   }
 
   function collectLinks(
@@ -637,7 +802,8 @@ describe('createFilePathLinkProvider range bounds', () => {
   }
 
   function makeFallbackTerminal(rows: TestBufferLine[]): {
-    terminal: Parameters<typeof installFilePathLinkClickFallback>[1]
+    terminal: Parameters<typeof installFilePathLinkClickFallback>[1] &
+      Parameters<typeof installHttpLinkClickFallback>[0]
     element: {
       addEventListener: ReturnType<typeof vi.fn>
       removeEventListener: ReturnType<typeof vi.fn>
@@ -686,6 +852,16 @@ describe('createFilePathLinkProvider range bounds', () => {
     return registration![1] as (event: MouseEvent) => void
   }
 
+  function getRegisteredBubbleMouseUpHandler(element: {
+    addEventListener: ReturnType<typeof vi.fn>
+  }): (event: MouseEvent) => void {
+    const registration = element.addEventListener.mock.calls.find(
+      ([eventName, _handler, options]) => eventName === 'mouseup' && options === undefined
+    )
+    expect(registration, 'bubble mouseup handler should be registered').toBeDefined()
+    return registration![1] as (event: MouseEvent) => void
+  }
+
   it('underlines only the filename itself, not the column padding from `ls`', async () => {
     // ls pads each column with trailing spaces. Regression: the provider used
     // to report `end.x = endIndex + 1`, which in xterm's 1-based *inclusive*
@@ -707,6 +883,35 @@ describe('createFilePathLinkProvider range bounds', () => {
     const pkgStartIndex = line.indexOf('package.json')
     expect(pkg!.range.start.x).toBe(pkgStartIndex + 1)
     expect(pkg!.range.end.x).toBe(pkgStartIndex + 'package.json'.length)
+  })
+
+  it('shows the Orca plus default-app hint for local file link hover', async () => {
+    setPlatform('Macintosh')
+    const { provider, linkTooltip } = createProviderSetup([makeBufferLine('CLAUDE.md')])
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+    expect(links[0]).toBeDefined()
+    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
+
+    expect(linkTooltip.textContent).toBe(
+      '/repo/CLAUDE.md (⌘+click to open or ⇧⌘+click for default app)'
+    )
+  })
+
+  it('shows the Orca hint for SSH file link hover', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+    const { provider, linkTooltip } = createProviderSetup([makeBufferLine('CLAUDE.md')])
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+    expect(links[0]).toBeDefined()
+    links[0]!.hover?.({} as MouseEvent, links[0]!.text)
+
+    expect(linkTooltip.textContent).toBe('/repo/CLAUDE.md (⌘+click to open in Orca)')
   })
 
   it('opens a single-row file path from a direct modifier-click fallback', async () => {
@@ -734,6 +939,76 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/package.json' })
     )
+    expect(openFilePathMock).not.toHaveBeenCalled()
+  })
+
+  it('opens a single-row file path with the system default from shift modifier fallback', async () => {
+    setPlatform('Macintosh')
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([makeBufferLine('package.json')]),
+      { x: 4, y: 1 },
+      80,
+      {
+        startupCwd: '/tmp',
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        runtimeEnvironmentId: null,
+        openWithSystemDefault: true
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/package.json')
+    expect(openFileMock).not.toHaveBeenCalled()
+  })
+
+  it('opens a tilde-prefixed path from a direct modifier-click fallback', async () => {
+    setPlatform('Macintosh')
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([makeBufferLine('~/Documents/Path/file_name')]),
+      { x: 4, y: 1 },
+      80,
+      {
+        startupCwd: '/Users/alice/project',
+        worktreeId: 'wt-1',
+        worktreePath: '/Users/alice/project',
+        runtimeEnvironmentId: null
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/Users/alice/Documents/Path/file_name' })
+    )
+    expect(openFilePathMock).not.toHaveBeenCalled()
+  })
+
+  it('opens a tilde path using explicit terminal home when cwd is outside home', async () => {
+    setPlatform('Macintosh')
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([makeBufferLine('~/Documents/Path/file_name')]),
+      { x: 4, y: 1 },
+      80,
+      {
+        startupCwd: '/workspace/project',
+        terminalHomePath: '/home/alice',
+        worktreeId: 'wt-1',
+        worktreePath: '/workspace/project',
+        runtimeEnvironmentId: null
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/home/alice/Documents/Path/file_name' })
+    )
+    expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
   it('opens a wrapped continuation-row html path from a direct modifier-click fallback', async () => {
@@ -762,6 +1037,67 @@ describe('createFilePathLinkProvider range bounds', () => {
       'file:///tmp/mobile/mock-homepage.html',
       expect.objectContaining({ title: 'mock-homepage.html', activate: true })
     )
+    expect(openFilePathMock).not.toHaveBeenCalled()
+  })
+
+  it('returns one file link for an absolute path containing spaces', async () => {
+    const pathText = '/repo/Folder With Space/content.js'
+    const links = await collectLinks(pathText)
+
+    expect(links.map((link) => link.text)).toEqual([pathText])
+    expect(links[0].range).toEqual({
+      start: { x: 1, y: 1 },
+      end: { x: pathText.length, y: 1 }
+    })
+  })
+
+  it('returns one file link for an extensionless path ending in a spaced segment', async () => {
+    const pathText = '/repo/My Folder'
+    const links = await collectLinks(pathText)
+
+    expect(links.map((link) => link.text)).toEqual([pathText])
+    expect(links[0].range).toEqual({
+      start: { x: 1, y: 1 },
+      end: { x: pathText.length, y: 1 }
+    })
+  })
+
+  it('returns an existing extensionless spaced prefix before trailing prose', async () => {
+    vi.mocked(window.api.shell.pathExists).mockImplementation(async (pathValue) => {
+      return pathValue === '/repo/My Folder'
+    })
+
+    const links = await collectLinks('see /repo/My Folder now')
+
+    expect(links.map((link) => link.text)).toEqual(['/repo/My Folder'])
+  })
+
+  it('opens an existing extensionless spaced prefix from direct fallback cache', async () => {
+    setPlatform('Macintosh')
+    const line = 'see /repo/My Folder now'
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([makeBufferLine(line)]),
+      { x: line.indexOf('Folder') + 1, y: 1 },
+      80,
+      {
+        startupCwd: '/repo',
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        runtimeEnvironmentId: null,
+        pathExistsCache: new Map<string, boolean>([
+          ['active\0/repo/My Folder now', false],
+          ['active\0/repo/My Folder', true]
+        ])
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/repo/My Folder' })
+    )
+    expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
   it('retries a wrapped file click even when xterm already marked the link active', async () => {
@@ -789,6 +1125,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       button: 0,
       metaKey: true,
       ctrlKey: false,
+      shiftKey: true,
       clientX: 20,
       clientY: 45,
       preventDefault,
@@ -796,11 +1133,8 @@ describe('createFilePathLinkProvider range bounds', () => {
     } as unknown as MouseEvent)
     await flushAsyncWork()
 
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath:
-          '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt'
-      })
+    expect(openFilePathMock).toHaveBeenCalledWith(
+      '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt'
     )
     expect(preventDefault).toHaveBeenCalled()
     expect(stopPropagation).toHaveBeenCalled()
@@ -808,6 +1142,103 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     disposable.dispose()
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp, { capture: true })
+  })
+
+  it('does not intercept regular URL clicks in the file-path fallback', async () => {
+    setPlatform('Macintosh')
+    const rows = [
+      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
+    ]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installFilePathLinkClickFallback(1, terminal, {
+      startupCwd: '/tmp',
+      worktreeId: 'wt-1',
+      worktreePath: '/tmp',
+      runtimeEnvironmentId: null,
+      managerRef: { current: null },
+      linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+      pathExistsCache: new Map<string, boolean>()
+    })
+    const mouseUp = getRegisteredMouseUpHandler(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      clientX: 230,
+      clientY: 25,
+      preventDefault,
+      stopPropagation
+    } as unknown as MouseEvent)
+    await flushAsyncWork()
+
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(stopPropagation).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).not.toHaveBeenCalled()
+
+    disposable.dispose()
+  })
+
+  it('opens regular URLs from a direct modifier-click fallback when xterm did not handle them', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+    const rows = [
+      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
+    ]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      defaultPrevented: false,
+      clientX: 230,
+      clientY: 25,
+      preventDefault,
+      stopPropagation
+    } as unknown as MouseEvent)
+
+    expect(openUrlMock).toHaveBeenCalledWith(
+      'https://github.com/stablyai/orca-marketing-website/pull/82'
+    )
+    expect(preventDefault).toHaveBeenCalled()
+    expect(stopPropagation).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).toHaveBeenCalled()
+
+    disposable.dispose()
+    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
+  })
+
+  it('does not double-open URLs when xterm already handled the mouseup', () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+    const rows = [makeBufferLine('Open https://github.com/stablyai/orca/pull/2914')]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
+      ctrlKey: false,
+      defaultPrevented: true,
+      clientX: 90,
+      clientY: 25,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent)
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).not.toHaveBeenCalled()
+
+    disposable.dispose()
   })
 
   it('opens a deeply wrapped absolute path from its final short continuation row', async () => {
@@ -831,16 +1262,14 @@ describe('createFilePathLinkProvider range bounds', () => {
       startupCwd: '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5',
       worktreeId: 'wt-1',
       worktreePath: '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5',
-      runtimeEnvironmentId: null
+      runtimeEnvironmentId: null,
+      openWithSystemDefault: true
     })
     await flushAsyncWork()
 
     expect(opened).toBe(true)
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath:
-          '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt'
-      })
+    expect(openFilePathMock).toHaveBeenCalledWith(
+      '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt'
     )
   })
 

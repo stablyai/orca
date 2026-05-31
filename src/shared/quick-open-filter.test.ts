@@ -66,6 +66,16 @@ describe('buildExcludePathPrefixes', () => {
     expect(buildExcludePathPrefixes('/home/u/repo', ['/home/u/other'])).toEqual([])
   })
 
+  it('keeps dot-dot-prefixed names inside the root while rejecting parent escapes', () => {
+    expect(
+      buildExcludePathPrefixes('/home/u/repo', [
+        '/home/u/repo/..env',
+        '/home/u/repo/..workspace/app',
+        '/home/u/repo/../outside'
+      ])
+    ).toEqual(['..env', '..workspace/app'])
+  })
+
   it('handles Windows-style roots and paths', () => {
     expect(buildExcludePathPrefixes('C:\\repo', ['C:\\repo\\packages\\app'])).toEqual([
       'packages/app'
@@ -74,6 +84,12 @@ describe('buildExcludePathPrefixes', () => {
 
   it('strips trailing slashes', () => {
     expect(buildExcludePathPrefixes('/r', ['/r/a/', '/r/b///'])).toEqual(['a', 'b'])
+  })
+
+  it('keeps valid child prefixes whose segment starts with dotdot characters', () => {
+    expect(buildExcludePathPrefixes('/home/u/repo', ['/home/u/repo/..fixtures'])).toEqual([
+      '..fixtures'
+    ])
   })
 })
 
@@ -179,6 +195,18 @@ describe('normalizeQuickOpenRgLine', () => {
     expect(normalizeQuickOpenRgLine('./src/a.ts', { kind: 'cwd-relative' })).toBe('src/a.ts')
   })
 
+  it('keeps cwd-relative dot-dot-prefixed names but rejects parent escapes', () => {
+    expect(normalizeQuickOpenRgLine('./..fixtures/a.ts', { kind: 'cwd-relative' })).toBe(
+      '..fixtures/a.ts'
+    )
+    expect(normalizeQuickOpenRgLine('..env', { kind: 'cwd-relative' })).toBe('..env')
+    expect(normalizeQuickOpenRgLine('..workspace/file.ts', { kind: 'cwd-relative' })).toBe(
+      '..workspace/file.ts'
+    )
+    expect(normalizeQuickOpenRgLine('../outside.ts', { kind: 'cwd-relative' })).toBeNull()
+    expect(normalizeQuickOpenRgLine('..', { kind: 'cwd-relative' })).toBeNull()
+  })
+
   it('strips CRLF', () => {
     expect(normalizeQuickOpenRgLine('/root/a.ts\r', { kind: 'absolute', rootPath: '/root' })).toBe(
       'a.ts'
@@ -194,6 +222,11 @@ describe('normalizeQuickOpenRgLine', () => {
   it('returns null for empty or root-equal lines', () => {
     expect(normalizeQuickOpenRgLine('', { kind: 'cwd-relative' })).toBeNull()
     expect(normalizeQuickOpenRgLine('.', { kind: 'cwd-relative' })).toBeNull()
+  })
+
+  it('returns null for cwd-relative parent-directory escapes', () => {
+    expect(normalizeQuickOpenRgLine('../outside/a.ts', { kind: 'cwd-relative' })).toBeNull()
+    expect(normalizeQuickOpenRgLine('./../outside/a.ts', { kind: 'cwd-relative' })).toBeNull()
   })
 })
 

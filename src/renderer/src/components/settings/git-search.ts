@@ -1,4 +1,5 @@
 import type { SettingsSearchEntry } from './settings-search'
+import { AUTO_RENAME_BRANCH_SEARCH_ENTRIES } from './auto-rename-branch-search'
 
 export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
@@ -20,10 +21,16 @@ export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'worktree'
     ]
   },
+  ...AUTO_RENAME_BRANCH_SEARCH_ENTRIES,
   {
     title: 'GitHub API Budget',
     description: 'Current GitHub CLI REST, Search, and GraphQL rate limits.',
     keywords: ['github', 'gh', 'graphql', 'rate limit', 'api budget']
+  },
+  {
+    title: 'GitLab API Budget',
+    description: 'Current GitLab CLI REST rate-limit headers when available.',
+    keywords: ['gitlab', 'glab', 'rate limit', 'api budget']
   },
   {
     title: 'Orca Attribution',

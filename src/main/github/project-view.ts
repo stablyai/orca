@@ -113,14 +113,6 @@ function ownerScopeKey(owner: string, ownerType: GitHubProjectOwnerType): string
   return `${owner}\u0000${ownerType}`
 }
 
-/** @internal — test-only */
-export function _resetProjectViewModuleState(): void {
-  ownerTypeCache.clear()
-  parentFieldRetriedByOwner.clear()
-  parentFieldWarningLoggedByOwner.clear()
-  parentFieldProbeInFlight.clear()
-}
-
 // ─── Normalizers ───────────────────────────────────────────────────────
 
 type RawProjectV2Field = {
@@ -282,6 +274,7 @@ export function normalizeFieldValue(
         .filter((u): u is GitHubProjectUser => u !== null)
       return { kind: 'users', fieldId, users }
     }
+    case undefined:
     default:
       // Unknown __typename → forward-compat: drop silently, do not throw,
       // do not classify as drift (see design §Error Handling).

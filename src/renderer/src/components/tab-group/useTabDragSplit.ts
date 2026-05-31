@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines -- Why: the drag-split hook co-locates drop-zone
  * resolution, same-group reordering, and cross-group handoff so state
  * transitions stay readable in one place. */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   closestCenter,
   pointerWithin,
@@ -15,7 +15,7 @@ import {
   useSensor,
   useSensors
 } from '@dnd-kit/core'
-import type { TabGroup } from '../../../../shared/types'
+import type { TabGroup, TuiAgent } from '../../../../shared/types'
 import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-types'
 import { useAppStore } from '../../store'
 import {
@@ -48,6 +48,11 @@ export type TabDragItemData = {
   label: string
   iconPath?: string
   color?: string | null
+  /** Coding-harness agent running in a terminal tab, so the drag ghost shows
+   *  the provider glyph and matches the resting tab. Resolved per-tab in
+   *  SortableTab (not at the TabBar level) to avoid re-rendering the whole tab
+   *  strip on every agent-status ping. */
+  agent?: TuiAgent | null
 }
 
 export type TabPaneDropData = {
@@ -199,6 +204,7 @@ export function useTabDragSplit({
   onDragOver: (event: DragOverEvent) => void
   onDragStart: (event: DragStartEvent) => void
   sensors: ReturnType<typeof useSensors>
+  setDragRootNode: (node: HTMLDivElement | null) => void
 } {
   const reorderUnifiedTabs = useAppStore((state) => state.reorderUnifiedTabs)
   const dropUnifiedTab = useAppStore((state) => state.dropUnifiedTab)
@@ -230,7 +236,17 @@ export function useTabDragSplit({
     releaseWebviewDragPassthroughRef.current = acquireWebviewsDragPassthrough()
   }, [releaseWebviewDragPassthrough])
 
-  useEffect(() => () => releaseWebviewDragPassthrough(), [releaseWebviewDragPassthrough])
+  const setDragRootNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      if (node) {
+        return
+      }
+      // Why: this root owns the dnd-kit gesture that temporarily puts browser
+      // webviews in pointer passthrough, so root teardown must release it.
+      releaseWebviewDragPassthrough()
+    },
+    [releaseWebviewDragPassthrough]
+  )
 
   const clearDragState = useCallback(() => {
     releaseWebviewDragPassthrough()
@@ -460,6 +476,7 @@ export function useTabDragSplit({
     onDragMove,
     onDragOver,
     onDragStart,
-    sensors
+    sensors,
+    setDragRootNode
   }
 }

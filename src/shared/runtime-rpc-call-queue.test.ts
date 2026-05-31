@@ -37,4 +37,16 @@ describe('runtime RPC call queue', () => {
     pending.shift()?.('background-2')
     await expect(background2).resolves.toBe('background-2')
   })
+
+  it('frees the queue slot when a runtime call throws synchronously', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1)
+    const first = queue.enqueue('web-runtime', 'status.get', () => {
+      throw new Error('invalid stored runtime pairing')
+    })
+
+    await expect(first).rejects.toThrow('invalid stored runtime pairing')
+
+    const second = queue.enqueue('web-runtime', 'status.get', async () => 'second')
+    await expect(second).resolves.toBe('second')
+  })
 })

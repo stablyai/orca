@@ -1,10 +1,8 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { create } from 'zustand'
-import type { AppState } from '../types'
 import type { Tab, TabGroup } from '../../../../shared/types'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultUIState } from '../../../../shared/constants'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -42,6 +40,9 @@ const mockApi = {
   },
   settings: {
     get: vi.fn().mockResolvedValue({}),
+    set: vi.fn().mockResolvedValue(undefined)
+  },
+  ui: {
     set: vi.fn().mockResolvedValue(undefined)
   },
   cache: {
@@ -101,69 +102,9 @@ const mockApi = {
 // @ts-expect-error -- mock
 globalThis.window = { api: mockApi }
 
-import { createRepoSlice } from './repos'
-import { createSparsePresetsSlice } from './sparse-presets'
-import { createWorktreeSlice } from './worktrees'
-import { createTerminalSlice } from './terminals'
-import { createTabsSlice } from './tabs'
-import { createUISlice } from './ui'
-import { createSettingsSlice } from './settings'
-import { createKeybindingsSlice } from './keybindings'
-import { createGitHubSlice } from './github'
-import { createHostedReviewSlice } from './hosted-review'
-import { createLinearSlice } from './linear'
-import { createPreflightSlice } from './preflight'
-import { createEditorSlice } from './editor'
-import { createStatsSlice } from './stats'
-import { createMemorySlice } from './memory'
-import { createWorkspaceSpaceSlice } from './workspace-space'
-import { createClaudeUsageSlice } from './claude-usage'
-import { createCodexUsageSlice } from './codex-usage'
-import { createOpenCodeUsageSlice } from './opencode-usage'
-import { createBrowserSlice } from './browser'
-import { createRateLimitSlice } from './rate-limits'
-import { createSshSlice } from './ssh'
-import { createAgentStatusSlice } from './agent-status'
-import { createDiffCommentsSlice } from './diffComments'
-import { createDetectedAgentsSlice } from './detected-agents'
-import { createWorktreeNavHistorySlice } from './worktree-nav-history'
-import { createDictationSlice } from './dictation'
-import { createWorkspaceCleanupSlice } from './workspace-cleanup'
+import { createTestStore } from './store-test-helpers'
 
 const WT = 'repo1::/tmp/feature'
-
-function createTestStore() {
-  return create<AppState>()((...a) => ({
-    ...createRepoSlice(...a),
-    ...createSparsePresetsSlice(...a),
-    ...createWorktreeSlice(...a),
-    ...createTerminalSlice(...a),
-    ...createTabsSlice(...a),
-    ...createUISlice(...a),
-    ...createSettingsSlice(...a),
-    ...createKeybindingsSlice(...a),
-    ...createGitHubSlice(...a),
-    ...createHostedReviewSlice(...a),
-    ...createLinearSlice(...a),
-    ...createPreflightSlice(...a),
-    ...createEditorSlice(...a),
-    ...createStatsSlice(...a),
-    ...createMemorySlice(...a),
-    ...createWorkspaceSpaceSlice(...a),
-    ...createClaudeUsageSlice(...a),
-    ...createCodexUsageSlice(...a),
-    ...createOpenCodeUsageSlice(...a),
-    ...createBrowserSlice(...a),
-    ...createRateLimitSlice(...a),
-    ...createSshSlice(...a),
-    ...createAgentStatusSlice(...a),
-    ...createDiffCommentsSlice(...a),
-    ...createDetectedAgentsSlice(...a),
-    ...createWorktreeNavHistorySlice(...a),
-    ...createDictationSlice(...a),
-    ...createWorkspaceCleanupSlice(...a)
-  }))
-}
 
 describe('TabsSlice', () => {
   let store: ReturnType<typeof createTestStore>
@@ -245,6 +186,24 @@ describe('TabsSlice', () => {
       store.getState().createUnifiedTab(WT, 'editor', { id: 'f.ts', label: 'f.ts' })
 
       expect(store.getState().groupsByWorktree[WT]).toHaveLength(1)
+    })
+  })
+
+  describe('terminal tab creation tracking', () => {
+    it('records normal terminal tab creation without recording activation fallback tabs', () => {
+      const setMock = vi.mocked(window.api.ui.set)
+      store.getState().hydratePersistedUI(getDefaultUIState())
+      setMock.mockClear()
+
+      store.getState().createTab(WT)
+      store.getState().createTab(WT, undefined, undefined, { pendingActivationSpawn: true })
+
+      expect(setMock).toHaveBeenCalledTimes(1)
+      expect(setMock).toHaveBeenCalledWith({
+        featureInteractions: {
+          'terminal-tabs': expect.objectContaining({ interactionCount: 1 })
+        }
+      })
     })
   })
 
@@ -873,6 +832,7 @@ describe('TabsSlice', () => {
     })
 
     it('merges a group into its sibling', () => {
+      const setMock = vi.mocked(window.api.ui.set)
       const t1 = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'file-a.ts',
         label: 'file-a.ts'
@@ -885,6 +845,8 @@ describe('TabsSlice', () => {
         label: 'file-b.ts',
         targetGroupId: targetGroupId!
       })
+      store.getState().hydratePersistedUI(getDefaultUIState())
+      setMock.mockClear()
 
       const mergedInto = store.getState().mergeGroupIntoSibling(WT, targetGroupId!)
 
@@ -893,6 +855,12 @@ describe('TabsSlice', () => {
       expect(state.groupsByWorktree[WT]).toHaveLength(1)
       expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([t1.id, 'file-b.ts'])
       expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: sourceGroupId })
+      expect(setMock).toHaveBeenCalledTimes(1)
+      expect(setMock).toHaveBeenCalledWith({
+        featureInteractions: {
+          'terminal-panes': expect.objectContaining({ interactionCount: 1 })
+        }
+      })
     })
 
     it('drops a unified tab into another group and collapses an emptied source group', () => {

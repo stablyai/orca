@@ -50,6 +50,7 @@ import {
 } from '@/components/browser-pane/browser-focus'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
+import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import {
   buildCmdJActionResults,
   buildCmdJSettingsResults,
@@ -119,6 +120,17 @@ type PaletteItem =
   | BrowserPaletteItem
 
 type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
+
+function appendPaletteListEntries(
+  target: PaletteListEntry[],
+  source: readonly PaletteItem[]
+): void {
+  // Why: query mode can expose generated-size workspace/tab result lists.
+  // Avoid the function argument limit from `push(...source)`.
+  for (const entry of source) {
+    target.push(entry)
+  }
+}
 
 type BrowserSelection = {
   worktree: Worktree
@@ -191,6 +203,7 @@ function findBrowserSelection(
 function getSettingsTargetFromSectionId(sectionId: string): {
   pane: SettingsNavTarget
   repoId: string | null
+  sectionId?: string
 } {
   if (sectionId.startsWith('repo-')) {
     return { pane: 'repo', repoId: sectionId.slice('repo-'.length) }
@@ -255,8 +268,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const activeGroupSnapshotRef = useRef<CmdJActiveGroupSnapshot | null>(null)
   const wasVisibleRef = useRef(false)
   const skipRestoreFocusRef = useRef(false)
-  const prevQueryRef = useRef('')
   const listRef = useRef<HTMLDivElement>(null)
+  const fallbackFocusOuterFrameRef = useRef<number | null>(null)
+  const fallbackFocusInnerFrameRef = useRef<number | null>(null)
   const createLookupGuard = useMemo(() => createWorktreePaletteRequestGuard(), [])
   const preserveCreateLookupOnCloseRef = useRef(false)
 
@@ -488,6 +502,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     )
   }, [openModal])
 
+  const deleteActiveWorkspaceAction = useCallback(() => {
+    const { activeView, activeWorktreeId } = useAppStore.getState()
+    if (activeView !== 'terminal' || !activeWorktreeId) {
+      return
+    }
+    // Why: the delete confirmation is also a modal; let the palette close
+    // before mounting it so Radix focus teardown cannot fight the new dialog.
+    queueMicrotask(() => runWorktreeDelete(activeWorktreeId))
+  }, [])
+
   const openAddQuickCommandAction = useCallback(() => {
     openSettingsTarget({ pane: 'quick-commands', repoId: null, intent: 'add-quick-command' })
     openSettingsPage()
@@ -502,9 +526,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         openNewMarkdownFile: openNewMarkdownInActiveWorkspace,
         openNewTerminalTab: openNewTerminalTabInActiveWorkspace,
         openCreateWorkspace: openCreateWorkspaceAction,
+        deleteActiveWorkspace: deleteActiveWorkspaceAction,
         openAddQuickCommand: openAddQuickCommandAction
       }),
     [
+      deleteActiveWorkspaceAction,
       openAddQuickCommandAction,
       openCreateWorkspaceAction,
       openNewBrowserTabInActiveWorkspace,
@@ -612,7 +638,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: hasQuery ? 'Workspaces' : 'Recent Workspaces'
         })
       }
-      entries.push(...visibleWorktreeItems)
+      appendPaletteListEntries(entries, visibleWorktreeItems)
       if (showCreateAction) {
         // Why: the typed create affordance is workspace-scoped, so keep it
         // directly under workspace matches instead of after actions/tabs.
@@ -634,7 +660,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: 'Actions & Settings'
         })
       }
-      entries.push(...visibleMiddleItems)
+      appendPaletteListEntries(entries, visibleMiddleItems)
     }
     if (visibleBrowserItems.length > 0) {
       if (showBrowserHeader) {
@@ -644,7 +670,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: 'Browser Tabs'
         })
       }
-      entries.push(...visibleBrowserItems)
+      appendPaletteListEntries(entries, visibleBrowserItems)
     }
     return entries
   }, [hasQuery, paletteSections, showCreateAction, worktreeItems.length])
@@ -688,9 +714,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           ? 'address-bar'
           : 'webview'
       skipRestoreFocusRef.current = false
-      prevQueryRef.current = ''
       setQuery('')
       setSelectedItemId('')
+      listRef.current?.scrollTo(0, 0)
     }
 
     if (!visible && wasVisibleRef.current) {
@@ -714,33 +740,38 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     visible
   ])
 
-  useEffect(() => {
-    if (!visible) {
-      return
-    }
-    const queryChanged = deferredQuery !== prevQueryRef.current
-    prevQueryRef.current = deferredQuery
+  const commandSelectedItemId = getNextWorktreePaletteSelection({
+    currentSelectedItemId: selectedItemId,
+    queryChanged: false,
+    selectableItemIds: selectionItemIds,
+    showCreateAction
+  })
 
-    const nextSelectedItemId = getNextWorktreePaletteSelection({
-      currentSelectedItemId: selectedItemId,
-      queryChanged,
-      selectableItemIds: selectionItemIds,
-      showCreateAction
-    })
-    if (queryChanged) {
-      setSelectedItemId(nextSelectedItemId)
-      listRef.current?.scrollTo(0, 0)
-      return
-    }
+  const handleQueryChange = useCallback((nextQuery: string) => {
+    setQuery(nextQuery)
+    setSelectedItemId('')
+    listRef.current?.scrollTo(0, 0)
+  }, [])
 
-    if (nextSelectedItemId !== selectedItemId) {
-      setSelectedItemId(nextSelectedItemId)
+  const cancelFallbackFocusFrames = useCallback((): void => {
+    if (fallbackFocusOuterFrameRef.current !== null) {
+      cancelAnimationFrame(fallbackFocusOuterFrameRef.current)
+      fallbackFocusOuterFrameRef.current = null
     }
-  }, [deferredQuery, selectedItemId, showCreateAction, visible, selectionItemIds])
+    if (fallbackFocusInnerFrameRef.current !== null) {
+      cancelAnimationFrame(fallbackFocusInnerFrameRef.current)
+      fallbackFocusInnerFrameRef.current = null
+    }
+  }, [])
+
+  useEffect(() => cancelFallbackFocusFrames, [cancelFallbackFocusFrames])
 
   const focusFallbackSurface = useCallback(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    cancelFallbackFocusFrames()
+    fallbackFocusOuterFrameRef.current = requestAnimationFrame(() => {
+      fallbackFocusOuterFrameRef.current = null
+      fallbackFocusInnerFrameRef.current = requestAnimationFrame(() => {
+        fallbackFocusInnerFrameRef.current = null
         const xterm = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
         if (xterm) {
           xterm.focus()
@@ -752,7 +783,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
       })
     })
-  }, [])
+  }, [cancelFallbackFocusFrames])
 
   const requestBrowserFocus = useCallback(
     (detail: { pageId: string; target: 'webview' | 'address-bar' }) => {
@@ -843,6 +874,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const handleSelectSettings = useCallback(
     (result: CmdJSettingsResult) => {
       const target = getSettingsTargetFromSectionId(result.sectionId)
+      if (result.targetSectionId) {
+        target.sectionId = result.targetSectionId
+      }
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
@@ -1089,7 +1123,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       contentClassName="top-[13%] w-[736px] max-w-[94vw] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
       commandProps={{
         loop: true,
-        value: selectedItemId,
+        value: commandSelectedItemId,
         onValueChange: setSelectedItemId,
         className: 'bg-transparent'
       }}
@@ -1097,7 +1131,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       <CommandInput
         placeholder="Search workspaces, settings, tabs, and actions..."
         value={query}
-        onValueChange={setQuery}
+        onValueChange={handleQueryChange}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
         className="h-12 text-[14px] placeholder:text-muted-foreground/75"

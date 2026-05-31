@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { GitStatusEntry } from '../../../../shared/types'
+import type { SourceControlRowOpenEvent } from './source-control-split-open'
 
 function isMacPlatform(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
@@ -50,10 +51,12 @@ export function getSelectionRangeKeys(
 export function useSourceControlSelection({
   flatEntries,
   onOpenDiff,
+  shouldOpenAsSplit,
   containerRef
 }: {
   flatEntries: FlatEntry[]
-  onOpenDiff: (entry: GitStatusEntry) => void
+  onOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  shouldOpenAsSplit?: (event: SourceControlRowOpenEvent) => boolean
   containerRef: RefObject<HTMLElement | null>
 }) {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
@@ -62,6 +65,7 @@ export function useSourceControlSelection({
   const anchorKeyRef = useRef<string | null>(anchorKey)
   const selectedKeysRef = useRef(selectedKeys)
   const onOpenDiffRef = useRef(onOpenDiff)
+  const shouldOpenAsSplitRef = useRef(shouldOpenAsSplit)
 
   useEffect(() => {
     flatEntriesRef.current = flatEntries
@@ -79,6 +83,10 @@ export function useSourceControlSelection({
     onOpenDiffRef.current = onOpenDiff
   }, [onOpenDiff])
 
+  useEffect(() => {
+    shouldOpenAsSplitRef.current = shouldOpenAsSplit
+  }, [shouldOpenAsSplit])
+
   // Clear stale selections if entries disappear
   useEffect(() => {
     const validKeys = new Set(flatEntries.map((e) => e.key))
@@ -95,6 +103,13 @@ export function useSourceControlSelection({
   }, [flatEntries, selectedKeys, anchorKey])
 
   const handleSelect = useCallback((e: React.MouseEvent, key: string, entry: GitStatusEntry) => {
+    if (shouldOpenAsSplitRef.current?.(e)) {
+      setSelectedKeys((prev) => (prev.size > 0 ? new Set() : prev))
+      setAnchorKey(null)
+      onOpenDiffRef.current(entry, e)
+      return
+    }
+
     const isShift = e.shiftKey
     const isCmdOrCtrl = isMacPlatform() ? e.metaKey : e.ctrlKey
 

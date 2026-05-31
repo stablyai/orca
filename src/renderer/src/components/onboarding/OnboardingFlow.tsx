@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronLeft, CornerDownLeft, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
 import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -12,8 +11,10 @@ import { AgentFeatureSetupStep } from './AgentFeatureSetupStep'
 import { IntegrationsStep } from './IntegrationsStep'
 import { RepoStep } from './RepoStep'
 import { OnboardingTourStep } from './OnboardingTourStep'
-import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
+import { useOnboardingFlow } from './use-onboarding-flow'
 import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
+import { OnboardingFooter } from './OnboardingFooter'
+import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
 import logo from '../../../../../resources/logo.svg'
 
 const stepCopy = {
@@ -35,8 +36,8 @@ const stepCopy = {
     subtitle: 'Turn on advanced Orca capabilities for agents.'
   },
   integrations: {
-    title: 'Connect your task sources',
-    subtitle: 'Connect GitHub or Linear to:'
+    title: 'Set up GitHub tasks',
+    subtitle: 'Install the GitHub CLI to:'
   },
   tour: {
     title: 'Explore Orca',
@@ -172,11 +173,7 @@ export default function OnboardingFlow({
       className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground backdrop-blur-[2px]"
       data-onboarding-overlay
       onPointerDown={(event) => {
-        if (event.button !== 0) {
-          return
-        }
-        const target = event.target
-        if (!(target instanceof Element) || target.closest('[data-onboarding-modal]')) {
+        if (!shouldRequestOnboardingSkipConfirmation(event)) {
           return
         }
         requestSkipConfirmation('button')
@@ -208,52 +205,50 @@ export default function OnboardingFlow({
             <span>Orca</span>
           </div>
 
-          <div
-            className={cn(
-              'flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-              isInlineTourRunning ? 'mt-7' : 'mt-10'
-            )}
-          >
-            <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-              {STEPS.map((step, idx) => {
-                const isActive = idx === stepIndex
-                const isDone = idx < stepIndex
-                return (
-                  <Tooltip key={step.id}>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className={cn(
-                          // Why: the visible bars stay 4px tall, but the invisible
-                          // hit area makes hover/click/tooltip targeting reliable.
-                          'relative h-1 rounded-full outline-none transition-all duration-300 before:absolute before:-inset-y-2 before:-inset-x-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
-                          isActive
-                            ? 'w-10 bg-foreground'
-                            : isDone
-                              ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
-                              : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
-                        )}
-                        aria-label={`Go to onboarding step ${step.stepNumber}: ${stepCopy[step.id].title}`}
-                        aria-current={isActive ? 'step' : undefined}
-                        onClick={() => flow.jumpToStep(idx)}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={8} style={{ zIndex: 110 }}>
-                      {stepTooltipLabels[step.id]}
-                    </TooltipContent>
-                  </Tooltip>
-                )
-              })}
-            </TooltipProvider>
-            <span className="ml-3 text-xs font-medium text-muted-foreground">
-              {stepIndex + 1} of {STEPS.length}
-            </span>
-            {isInlineTourRunning ? (
-              <h1 className="ml-5 text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
+          {isInlineTourRunning ? (
+            <div className="mt-7 flex items-center transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
+              <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
                 {stepTooltipLabels.tour}
               </h1>
-            ) : null}
-          </div>
+            </div>
+          ) : (
+            <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
+              <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+                {flow.visibleSteps.map(({ step, index: realStepIndex }, visibleIdx) => {
+                  const isActive = realStepIndex === stepIndex
+                  const isDone = realStepIndex < stepIndex
+                  return (
+                    <Tooltip key={step.id}>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className={cn(
+                            // Why: the visible bars stay 4px tall, but the invisible
+                            // hit area makes hover/click/tooltip targeting reliable.
+                            'relative h-1 rounded-full outline-none transition-all duration-300 before:absolute before:-inset-y-2 before:-inset-x-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
+                            isActive
+                              ? 'w-10 bg-foreground'
+                              : isDone
+                                ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
+                                : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
+                          )}
+                          aria-label={`Go to onboarding step ${visibleIdx + 1}: ${stepCopy[step.id].title}`}
+                          aria-current={isActive ? 'step' : undefined}
+                          onClick={() => flow.jumpToStep(realStepIndex)}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" sideOffset={8} style={{ zIndex: 110 }}>
+                        {stepTooltipLabels[step.id]}
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                })}
+              </TooltipProvider>
+              <span className="ml-3 text-xs font-medium text-muted-foreground">
+                {flow.visibleStepIndex + 1} of {flow.visibleSteps.length}
+              </span>
+            </div>
+          )}
 
           {shouldShowStepHeading ? (
             <div className="mt-8 shrink-0">
@@ -287,7 +282,13 @@ export default function OnboardingFlow({
                 ? 'mt-7 overflow-hidden'
                 : cn(
                     'scrollbar-sleek overflow-y-auto pr-1',
-                    currentStep.id === 'agentSetup' ? 'mt-4' : 'mt-10'
+                    currentStep.id === 'agentSetup'
+                      ? 'mt-4'
+                      : currentStep.id === 'repo'
+                        ? flow.nestedScan
+                          ? 'mt-6 overflow-hidden'
+                          : 'mt-6'
+                        : 'mt-10'
                   )
             )}
           >
@@ -335,6 +336,13 @@ export default function OnboardingFlow({
               <RepoStep
                 cloneUrl={flow.cloneUrl}
                 onCloneUrlChange={flow.setCloneUrl}
+                nestedScan={flow.nestedScan}
+                nestedSelectedPaths={flow.nestedSelectedPaths}
+                onNestedSelectedPathsChange={flow.setNestedSelectedPaths}
+                nestedGroupName={flow.nestedGroupName}
+                onNestedGroupNameChange={flow.setNestedGroupName}
+                onImportNested={(mode) => void flow.importNested(mode)}
+                onCancelNested={flow.cancelNested}
                 onOpenFolder={() => void flow.openFolder()}
                 onOpenServerFolder={(kind) => void flow.openFolder(kind)}
                 onClone={() => void flow.clone()}
@@ -352,56 +360,28 @@ export default function OnboardingFlow({
           </div>
 
           {shouldShowFooter && (
-            <footer className="mt-6 flex flex-none items-center justify-between border-t border-border pt-5">
-              {shouldShowSkipToProjectSetup ? (
-                <button
-                  className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
-                  disabled={Boolean(busyLabel)}
-                  onClick={() => void flow.skipToRepo()}
-                >
-                  Skip to project setup
-                </button>
-              ) : (
-                <span />
-              )}
-              <div className="flex items-center gap-2">
-                {stepIndex > 0 && (
-                  <button
-                    className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-60"
-                    disabled={Boolean(busyLabel)}
-                    onClick={flow.back}
-                  >
-                    <ChevronLeft className="size-4" />
-                    Back
-                  </button>
-                )}
-                {(currentStep.id !== 'repo' || flow.hasExistingProject) && (
-                  <button
-                    className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                    aria-busy={shouldShowFooterBusy}
-                    disabled={Boolean(busyLabel)}
-                    onClick={() => {
-                      if (isTourStep) {
-                        void flow.skipTourToRepo()
-                        return
-                      }
-                      if (currentStep.id === 'repo') {
-                        void flow.continueWithExistingProject()
-                        return
-                      }
-                      void flow.next()
-                    }}
-                  >
-                    {shouldShowFooterBusy ? <Loader2 className="size-4 animate-spin" /> : null}
-                    {footerPrimaryLabel}
-                    <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary-foreground/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-                      <span>{continueShortcutModifierLabel}</span>
-                      <CornerDownLeft className="size-3" />
-                    </span>
-                  </button>
-                )}
-              </div>
-            </footer>
+            <OnboardingFooter
+              shouldShowSkipToProjectSetup={shouldShowSkipToProjectSetup}
+              busyLabel={busyLabel}
+              onSkipToRepo={() => void flow.skipToRepo()}
+              stepIndex={stepIndex}
+              onBack={flow.nestedScan ? flow.cancelNested : flow.back}
+              showPrimary={currentStep.id !== 'repo' || flow.hasExistingProject}
+              primaryBusy={shouldShowFooterBusy}
+              primaryLabel={footerPrimaryLabel}
+              shortcutModifierLabel={continueShortcutModifierLabel}
+              onPrimary={() => {
+                if (isTourStep) {
+                  void flow.skipTourToRepo()
+                  return
+                }
+                if (currentStep.id === 'repo') {
+                  void flow.continueWithExistingProject()
+                  return
+                }
+                void flow.next()
+              }}
+            />
           )}
         </div>
       </section>

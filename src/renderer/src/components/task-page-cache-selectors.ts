@@ -23,9 +23,24 @@ export type TaskPageRepoSourceState = {
   error: WorkItemsCacheError | null
 }
 
+export type TaskPageWorkItemsFetchOptions = {
+  force: boolean
+  noCache: boolean
+}
+
 type WorkItemsCache = Record<string, CacheEntry<GitHubWorkItem[]>>
 type LinearIssueCache = Record<string, CacheEntry<LinearIssue>>
 type LinearSearchCache = Record<string, CacheEntry<LinearIssue[]>>
+
+export function deriveTaskPageGitHubWorkItemsFetchOptions(
+  forcedFetch: boolean,
+  shouldProbeOnLanding: boolean
+): TaskPageWorkItemsFetchOptions {
+  return {
+    force: forcedFetch || shouldProbeOnLanding,
+    noCache: forcedFetch
+  }
+}
 
 export function selectTaskPageWorkItemsCacheEntries(
   workItemsCache: WorkItemsCache,
@@ -118,6 +133,8 @@ function taskPageWorkItemStatusSignature(item: GitHubWorkItem): string {
     item.checksSummary?.failed ?? null,
     item.checksSummary?.pending ?? null,
     item.mergeable ?? null,
+    item.autoMergeEnabled ?? null,
+    item.mergeQueueRequired ?? null,
     item.mergeStateStatus ?? null,
     item.updatedAt
   ])

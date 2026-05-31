@@ -6,6 +6,7 @@ import {
   type HostProfile,
   type StoredHostProfile
 } from './types'
+import { getNextHostNameFromHosts } from './host-names'
 
 const STORAGE_KEY = 'orca:hosts'
 // Why: SecureStore keys must match [A-Za-z0-9._-]; colons are rejected.
@@ -161,14 +162,7 @@ export async function renameHost(hostId: string, newName: string): Promise<void>
 
 export async function getNextHostName(): Promise<string> {
   const hosts = await loadStoredHosts()
-  const existingNumbers = hosts
-    .map((h) => {
-      const match = h.name.match(/^Host (\d+)$/)
-      return match ? parseInt(match[1]!, 10) : 0
-    })
-    .filter((n) => n > 0)
-  const next = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1
-  return `Host ${next}`
+  return getNextHostNameFromHosts(hosts)
 }
 
 export async function updateLastConnected(hostId: string): Promise<void> {

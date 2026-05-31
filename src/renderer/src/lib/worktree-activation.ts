@@ -10,6 +10,7 @@ import { buildSetupRunnerCommand } from './setup-runner'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 import { CLIENT_PLATFORM } from './new-workspace'
 import { tuiAgentToAgentKind } from './telemetry'
+import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import {
@@ -42,10 +43,18 @@ type WorktreeActivationStore = {
     worktreeId: string,
     targetGroupId?: string,
     shellOverride?: string,
-    options?: { pendingActivationSpawn?: boolean }
+    options?: {
+      pendingActivationSpawn?: boolean
+      launchAgent?: TuiAgent
+      recordInteraction?: boolean
+    }
   ) => { id: string }
   setActiveTab: (tabId: string) => void
-  setTabCustomTitle: (tabId: string, title: string | null) => void
+  setTabCustomTitle: (
+    tabId: string,
+    title: string | null,
+    opts?: { recordInteraction?: boolean }
+  ) => void
   reconcileWorktreeTabModel: (worktreeId: string) => { renderableTabCount: number }
   queueTabStartupCommand: (
     tabId: string,
@@ -235,8 +244,17 @@ export function ensureWorktreeHasInitialTerminal(
   // that had no focusable surface yet. Tag it so the resulting PTY spawn
   // does not count as activity and reshuffle the Recent sort. Explicit
   // "New Tab" actions (handleNewTab in Terminal.tsx) do not set the flag.
+  //
+  // Why: the initial terminal can be seeded with a coding agent (new-workspace
+  // flow, or reopening an empty worktree created with an agent). The startup
+  // payload only carries telemetry's agent_kind, so reverse it back to a
+  // TuiAgent to stamp the tab — giving it the provider icon before any hook.
+  const launchAgent = startup?.telemetry
+    ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
+    : undefined
   const terminalTab = store.createTab(worktreeId, undefined, undefined, {
-    pendingActivationSpawn: true
+    pendingActivationSpawn: true,
+    ...(launchAgent ? { launchAgent } : {})
   })
   store.setActiveTab(terminalTab.id)
 
@@ -260,7 +278,9 @@ export function ensureWorktreeHasInitialTerminal(
       env: setup.envVars
     }
     if (mode === 'new-tab') {
-      const setupTab = store.createTab(worktreeId)
+      const setupTab = store.createTab(worktreeId, undefined, undefined, {
+        recordInteraction: false
+      })
       // Why: createTab auto-activates the new tab. Revert activation so the
       // user's focus stays on the primary terminal — per the design, the
       // Setup tab runs unattended in the background.
@@ -268,7 +288,7 @@ export function ensureWorktreeHasInitialTerminal(
       // Why: customTitle wins over the auto-generated "Terminal N" label
       // everywhere the tab is rendered (tab bar, switcher, session snapshots),
       // so labeling via customTitle is the single authoritative source.
-      store.setTabCustomTitle(setupTab.id, 'Setup')
+      store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
       store.queueTabStartupCommand(setupTab.id, setupCommand)
     } else {
       store.queueTabSetupSplit(terminalTab.id, {

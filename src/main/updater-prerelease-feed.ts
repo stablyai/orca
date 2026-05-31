@@ -161,6 +161,7 @@ type FetchNewerReleaseTagOptions = {
 export type FetchNewerReleaseTagsResult = {
   tags: string[]
   state: 'ready' | 'no-newer' | 'not-ready' | 'unavailable'
+  lastGoodTag?: string
 }
 
 export async function fetchNewerReleaseTag(
@@ -217,7 +218,14 @@ export async function fetchNewerReleaseTagsWithReadiness(
     ({ hasManifest, version }) => hasManifest && compareVersions(version, currentVersion) > 0
   )
   if (primaryIndex === -1) {
-    return { tags: [], state: 'not-ready' }
+    const lastGoodTag = manifestResults.find(({ hasManifest }) => hasManifest)?.tag
+    return lastGoodTag
+      ? { tags: [], state: 'not-ready', lastGoodTag }
+      : { tags: [], state: 'not-ready' }
+  }
+
+  if (primaryIndex > 0) {
+    return { tags: [], state: 'not-ready', lastGoodTag: manifestResults[primaryIndex].tag }
   }
 
   return {

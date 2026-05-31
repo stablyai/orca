@@ -39,22 +39,32 @@ let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 
 // Why: CLI-driven tab creation must wait until the renderer mounts the webview
 // and calls registerGuest, so the tab has a webContentsId and is operable by
-// subsequent commands. This map holds one-shot resolvers keyed by browserPageId.
-const pendingTabRegistrations = new Map<string, () => void>()
+// subsequent commands. Multiple commands can wait for the same page during
+// startup, so keep all one-shot resolvers keyed by browserPageId.
+const pendingTabRegistrations = new Map<string, Set<() => void>>()
 
 export function waitForTabRegistration(browserPageId: string, timeoutMs = 8_000): Promise<void> {
   if (browserManager.getGuestWebContentsId(browserPageId) !== null) {
     return Promise.resolve()
   }
   return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      pendingTabRegistrations.delete(browserPageId)
-      reject(new Error('Tab registration timed out'))
-    }, timeoutMs)
-    pendingTabRegistrations.set(browserPageId, () => {
+    let registrationResolvers = pendingTabRegistrations.get(browserPageId)
+    if (!registrationResolvers) {
+      registrationResolvers = new Set()
+      pendingTabRegistrations.set(browserPageId, registrationResolvers)
+    }
+    const resolveRegistration = (): void => {
       clearTimeout(timer)
       resolve()
-    })
+    }
+    const timer = setTimeout(() => {
+      registrationResolvers.delete(resolveRegistration)
+      if (registrationResolvers.size === 0) {
+        pendingTabRegistrations.delete(browserPageId)
+      }
+      reject(new Error('Tab registration timed out'))
+    }, timeoutMs)
+    registrationResolvers.add(resolveRegistration)
   })
 }
 
@@ -128,10 +138,12 @@ export function registerBrowserHandlers(): void {
       if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
         agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
       }
-      const pendingResolve = pendingTabRegistrations.get(args.browserPageId)
-      if (pendingResolve) {
+      const pendingResolves = pendingTabRegistrations.get(args.browserPageId)
+      if (pendingResolves) {
         pendingTabRegistrations.delete(args.browserPageId)
-        pendingResolve()
+        for (const pendingResolve of pendingResolves) {
+          pendingResolve()
+        }
       }
       return true
     }

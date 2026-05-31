@@ -85,6 +85,7 @@ import {
   main,
   normalizeWorktreeSelector
 } from './index'
+import { GLOBAL_FLAGS } from './args'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 
 describe('COMMAND_SPECS collision check', () => {
@@ -94,6 +95,20 @@ describe('COMMAND_SPECS collision check', () => {
       const key = spec.path.join(' ')
       expect(seen.has(key), `Duplicate COMMAND_SPECS path: "${key}"`).toBe(false)
       seen.add(key)
+    }
+  })
+
+  it('allows every flag documented in command usage strings', () => {
+    const flagPattern = /--([a-zA-Z0-9-]+)/g
+    for (const spec of COMMAND_SPECS) {
+      const allowed = new Set([...GLOBAL_FLAGS, ...spec.allowedFlags])
+      for (const match of spec.usage.matchAll(flagPattern)) {
+        const flag = match[1]
+        expect(
+          allowed.has(flag),
+          `Documented flag --${flag} is not allowed for command: ${spec.path.join(' ')}`
+        ).toBe(true)
+      }
     }
   })
 })
@@ -742,6 +757,22 @@ describe('orca cli worktree awareness', () => {
     process.exitCode = priorExitCode
   })
 
+  it('rejects value-less serve ports before launching the app', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['serve', '--port', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --port.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('lists saved environments even when ORCA_ENVIRONMENT is set', async () => {
     process.env.ORCA_ENVIRONMENT = 'stale-env'
     listEnvironmentsMock.mockReturnValue([addEnvironmentFromPairingCodeMock()])
@@ -1309,6 +1340,54 @@ describe('orca cli worktree awareness', () => {
       devMode: false
     })
     expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
+  })
+
+  it('passes all reset scope explicitly for no-flag orchestration reset', async () => {
+    callMock.mockResolvedValueOnce(okFixture('req_reset', { reset: 'all' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['orchestration', 'reset'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.reset', {
+      all: true,
+      tasks: undefined,
+      messages: undefined
+    })
+  })
+
+  it.each([
+    {
+      args: ['orchestration', 'reset', '--all'],
+      params: { all: true, tasks: undefined, messages: undefined },
+      reset: 'all'
+    },
+    {
+      args: ['orchestration', 'reset', '--tasks'],
+      params: { all: undefined, tasks: true, messages: undefined },
+      reset: 'tasks'
+    },
+    {
+      args: ['orchestration', 'reset', '--messages'],
+      params: { all: undefined, tasks: undefined, messages: true },
+      reset: 'messages'
+    },
+    {
+      args: ['orchestration', 'reset', '--tasks', '--messages'],
+      params: { all: undefined, tasks: true, messages: true },
+      reset: 'tasks'
+    },
+    {
+      args: ['orchestration', 'reset', '--all', '--tasks'],
+      params: { all: true, tasks: true, messages: undefined },
+      reset: 'all'
+    }
+  ])('passes explicit reset flags through for $args', async ({ args, params, reset }) => {
+    callMock.mockResolvedValueOnce(okFixture('req_reset', { reset }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(args, '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.reset', params)
   })
 
   it('rejects unknown task-update status with an enum-aware error', async () => {

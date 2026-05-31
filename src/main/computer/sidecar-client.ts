@@ -43,6 +43,10 @@ type PendingRequest = {
 const REQUEST_TIMEOUT_MS = 60_000
 let sidecar: ComputerSidecarProcess | null = null
 
+// Why: Node treats unhandled child 'error' events as process exceptions, so
+// stale children keep a no-op listener that does not retain the sidecar owner.
+function ignoreStaleChildError(): void {}
+
 export function shouldUseComputerSidecar(): boolean {
   return (
     (process.platform === 'darwin' ||
@@ -115,6 +119,7 @@ function loadElectronApp(): { getAppPath(): string; isPackaged: boolean } | null
 
 class ComputerSidecarProcess {
   private child: ChildProcess | null = null
+  private childListenerCleanup: (() => void) | null = null
   private nextId = 1
   private pending = new Map<number, PendingRequest>()
 
@@ -147,6 +152,7 @@ class ComputerSidecarProcess {
   shutdown(): void {
     const child = this.child
     this.child = null
+    this.cleanupActiveChildListeners()
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer)
       pending.reject(new RuntimeClientError('accessibility_error', 'computer sidecar shut down'))
@@ -159,6 +165,8 @@ class ComputerSidecarProcess {
     if (this.child && !this.child.killed) {
       return this.child
     }
+    this.cleanupActiveChildListeners()
+    this.child = null
 
     const child = fork(this.entryPath, [], {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -170,9 +178,25 @@ class ComputerSidecarProcess {
       ...(process.platform === 'win32' ? { windowsHide: true } : {})
     })
 
-    child.on('message', (message) => this.handleMessage(message))
-    child.on('exit', (code, signal) => this.handleExit(code, signal))
-    child.on('error', (error) => this.handleError(error))
+    const onMessage = (message: unknown) => {
+      if (this.child === child) {
+        this.handleMessage(message)
+      }
+    }
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) =>
+      this.handleExit(child, code, signal)
+    const onError = (error: Error) => this.handleError(child, error)
+
+    child.on('message', onMessage)
+    child.on('exit', onExit)
+    child.on('error', onError)
+    this.childListenerCleanup = () => {
+      child.off('message', onMessage)
+      child.off('exit', onExit)
+      child.off('error', onError)
+      child.off('error', ignoreStaleChildError)
+      child.on('error', ignoreStaleChildError)
+    }
     this.child = child
     return child
   }
@@ -194,7 +218,17 @@ class ComputerSidecarProcess {
     pending.reject(new RuntimeClientError(message.error.code, message.error.message))
   }
 
-  private handleExit(code: number | null, signal: NodeJS.Signals | null): void {
+  private handleExit(
+    child: ChildProcess,
+    code: number | null,
+    signal: NodeJS.Signals | null
+  ): void {
+    // Why: a timed-out child can exit after a replacement has started; stale
+    // exits must not clear the live child or reject its in-flight requests.
+    if (this.child !== child) {
+      return
+    }
+    this.cleanupActiveChildListeners()
     this.child = null
     const detail = signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`
     const error = new RuntimeClientError(
@@ -208,13 +242,28 @@ class ComputerSidecarProcess {
     }
   }
 
-  private handleError(error: Error): void {
+  private handleError(child: ChildProcess, error: Error): void {
+    // Why: late errors from a prior child should not poison the current sidecar.
+    if (this.child !== child) {
+      return
+    }
+    this.cleanupActiveChildListeners()
+    // Why: an active process error makes the IPC sidecar unreliable; restart
+    // on the next call instead of reusing a broken helper.
+    this.child = null
+    child.kill('SIGTERM')
     const wrapped = new RuntimeClientError('accessibility_error', error.message)
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer)
       pending.reject(wrapped)
       this.pending.delete(id)
     }
+  }
+
+  private cleanupActiveChildListeners(): void {
+    const cleanup = this.childListenerCleanup
+    this.childListenerCleanup = null
+    cleanup?.()
   }
 }
 

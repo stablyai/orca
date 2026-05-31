@@ -2,7 +2,11 @@
 import { stat } from 'fs/promises'
 import { join, posix, win32 } from 'path'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import type { GitWorktreeInfo, LocalBaseRefRefreshResult } from '../../shared/types'
+import type {
+  GitWorktreeInfo,
+  LocalBaseRefRefreshResult,
+  RemoveWorktreeResult
+} from '../../shared/types'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
@@ -432,7 +436,10 @@ export async function addSparseWorktree(
       }
       try {
         await removeWorktree(repoPath, worktreePath, true, {
-          deleteBranch: !options.checkoutExistingBranch
+          deleteBranch: !options.checkoutExistingBranch,
+          // Why: rolling back a failed creation — the just-created branch has no
+          // user commits, so force-delete it rather than preserving an orphan.
+          forceBranchDelete: !options.checkoutExistingBranch
         })
       } catch {
         wrapped.cleanupFailed = true
@@ -452,13 +459,18 @@ export async function removeWorktree(
   repoPath: string,
   worktreePath: string,
   force = false,
-  options: { deleteBranch?: boolean } = {}
-): Promise<void> {
+  // Why: forceBranchDelete is for cleaning up a worktree this code just created
+  // (e.g. rollback of a failed creation) where the fresh branch has no user work
+  // and must be removed outright. User-initiated deletes leave it false so unmerged
+  // commits are preserved.
+  options: { deleteBranch?: boolean; forceBranchDelete?: boolean } = {}
+): Promise<RemoveWorktreeResult> {
   const worktreesBeforeRemoval = await listWorktrees(repoPath)
   const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
     areWorktreePathsEqual(worktree.path, worktreePath)
   )
   const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
+  const branchHead = removedWorktree?.head ?? ''
 
   const args = ['worktree', 'remove']
   if (force) {
@@ -469,10 +481,10 @@ export async function removeWorktree(
   await gitExecFileAsync(['worktree', 'prune'], { cwd: repoPath })
 
   if (!branchName) {
-    return
+    return {}
   }
   if (options.deleteBranch === false) {
-    return
+    return {}
   }
 
   // Why: `git worktree list` can still include stale sibling records until
@@ -483,20 +495,88 @@ export async function removeWorktree(
     (worktree) => normalizeLocalBranchRef(worktree.branch) === branchName
   )
   if (branchStillInUse) {
-    return
+    return {}
   }
 
   try {
     // Why: `git worktree remove` only detaches the filesystem entry. Orca also
     // drops the now-unused local branch here so delete-worktree does not leave
     // behind orphaned feature branches unless another worktree still points at it.
-    await gitExecFileAsync(['branch', '-D', branchName], { cwd: repoPath })
+    // Use `-d` (not `-D`): Git refuses to delete a branch with commits not merged
+    // into its upstream or HEAD, so unpublished work is preserved instead of
+    // force-deleted. forceBranchDelete opts into `-D` for failed-creation rollback,
+    // where the fresh branch has no user work to protect.
+    const deleteFlag = options.forceBranchDelete ? '-D' : '-d'
+    await gitExecFileAsync(['branch', deleteFlag, '--', branchName], { cwd: repoPath })
+    return {}
   } catch (error) {
+    // Expected when the branch still has unmerged/unpublished commits: keep it.
+    // Deleting a worktree must never silently discard commits.
     console.warn(
-      `[git] Failed to delete local branch "${branchName}" after removing worktree`,
+      `[git] Preserved local branch "${branchName}" after removing worktree (not fully merged)`,
       error
     )
+    return { preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}) } }
   }
+}
+
+export async function forceDeleteLocalBranch(
+  repoPath: string,
+  branchName: string,
+  expectedHead: string,
+  runGit: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }> = (
+    args,
+    cwd
+  ) => gitExecFileAsync(args, { cwd })
+): Promise<void> {
+  if (!branchName || branchName.includes('\0')) {
+    throw new Error('Invalid branch name')
+  }
+  if (!expectedHead) {
+    throw new Error(
+      `Cannot force-delete local branch "${branchName}" without the commit Git preserved.`
+    )
+  }
+  if (await isLocalBranchCheckedOut(repoPath, branchName, runGit)) {
+    throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
+  }
+  // Why: stale toast actions must not delete a branch that moved after Git
+  // preserved it. `update-ref` deletes only if the ref still has expectedHead.
+  try {
+    await runGit(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
+  } catch {
+    throw new Error(
+      `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
+    )
+  }
+  if (await isLocalBranchCheckedOut(repoPath, branchName, runGit)) {
+    try {
+      await runGit(['update-ref', `refs/heads/${branchName}`, expectedHead, ''], repoPath)
+    } catch (restoreError) {
+      console.warn(
+        `[git] Failed to restore local branch "${branchName}" after concurrent checkout`,
+        restoreError
+      )
+    }
+    throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
+  }
+  try {
+    await runGit(['config', '--remove-section', `branch.${branchName}`], repoPath)
+  } catch {
+    // Best-effort parity with `git branch -D`; stale config is harmless and
+    // should not make the already-deleted ref look like a failed delete.
+  }
+}
+
+async function isLocalBranchCheckedOut(
+  repoPath: string,
+  branchName: string,
+  runGit: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>
+): Promise<boolean> {
+  const { stdout } = await runGit(['worktree', 'list', '--porcelain'], repoPath)
+  return parseWorktreeList(stdout).some(
+    (worktree) => normalizeLocalBranchRef(worktree.branch) === branchName
+  )
 }
 
 /**

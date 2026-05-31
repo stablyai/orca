@@ -203,16 +203,24 @@ function writeSftpFile(sftp: SFTPWrapper, remotePath: string, contents: string):
   return new Promise((resolve, reject) => {
     let settled = false
     const writeStream = sftp.createWriteStream(remotePath)
+    const cleanup = (): void => {
+      writeStream.off('close', onClose)
+      writeStream.off('error', onError)
+    }
     const settle = (fn: typeof resolve | typeof reject, val?: unknown): void => {
       if (settled) {
         return
       }
       settled = true
+      cleanup()
       writeStream.destroy()
       fn(val as never)
     }
-    writeStream.on('close', () => settle(resolve))
-    writeStream.on('error', (err) => settle(reject, err))
+    const onClose = (): void => settle(resolve)
+    const onError = (err: Error): void => settle(reject, err)
+
+    writeStream.on('close', onClose)
+    writeStream.on('error', onError)
     writeStream.end(contents)
   })
 }

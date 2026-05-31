@@ -74,7 +74,6 @@ export function OnboardingTourStep({
         doneLabel="Continue to project setup"
         footerText={null}
         compactRail
-        detachedFooter
         onTourDepthSummaryChange={onTourDepthSummaryChange}
         className="h-full min-h-0"
         panelClassName="rounded-xl border border-border bg-card"

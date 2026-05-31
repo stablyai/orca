@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { Copy, Check } from 'lucide-react'
 
 type CodeBlockCopyButtonProps = React.HTMLAttributes<HTMLPreElement> & {
@@ -10,6 +10,27 @@ export default function CodeBlockCopyButton({
   ...props
 }: CodeBlockCopyButtonProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+  const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after this button unmounts; avoid starting
+  // a reset timer that will outlive the component.
+  const isMountedRef = useRef(false)
+
+  const clearCopiedResetTimer = useCallback((): void => {
+    if (copiedResetTimerRef.current !== null) {
+      window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = null
+    }
+  }, [])
+
+  const setCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
+      if (node === null) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
 
   const handleCopy = useCallback(() => {
     // Extract the text content from the nested <code> element rendered by
@@ -28,18 +49,26 @@ export default function CodeBlockCopyButton({
     void window.api.ui
       .writeClipboardText(text)
       .then(() => {
+        if (!isMountedRef.current) {
+          return
+        }
+        clearCopiedResetTimer()
         setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
+        copiedResetTimerRef.current = window.setTimeout(() => {
+          copiedResetTimerRef.current = null
+          setCopied(false)
+        }, 1500)
       })
       .catch(() => {
         // Silently swallow clipboard write failures (e.g. permission denied).
       })
-  }, [children])
+  }, [children, clearCopiedResetTimer])
 
   return (
     <div className="code-block-wrapper">
       <pre {...props}>{children}</pre>
       <button
+        ref={setCopyButtonRef}
         type="button"
         className="code-block-copy-btn"
         onClick={handleCopy}
