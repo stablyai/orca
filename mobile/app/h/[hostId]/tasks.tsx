@@ -50,7 +50,7 @@ import { MobileAgentIcon } from '../../../src/components/MobileAgentIcon'
 import { PickerModal, type PickerOption } from '../../../src/components/PickerModal'
 import { TaskProviderLogo } from '../../../src/components/TaskProviderLogo'
 import {
-  buildGitHubPrFileDiffLines,
+  buildGitHubPrFileDiffPreview,
   type GitHubPrFileDiffLine
 } from '../../../src/tasks/github-pr-file-diff'
 import { buildGitHubCheckSummary } from '../../../src/tasks/github-check-summary'
@@ -1873,14 +1873,19 @@ function GitHubPrFileDiff({
   onCommentDraftChange: (key: string, value: string) => void
   onSubmitComment: (line: number) => void
 }): ReactNode {
-  const diffLines = useMemo(
-    () => buildGitHubPrFileDiffLines(contents.original, contents.modified),
+  const diffPreview = useMemo(
+    () =>
+      buildGitHubPrFileDiffPreview(
+        contents.original,
+        contents.modified,
+        MAX_RENDERED_PR_DIFF_LINES
+      ),
     [contents.modified, contents.original]
   )
-  const visibleDiffLines = diffLines.slice(0, MAX_RENDERED_PR_DIFF_LINES)
-  const hiddenDiffLineCount = Math.max(0, diffLines.length - visibleDiffLines.length)
+  const visibleDiffLines = diffPreview.lines
+  const hiddenDiffLineCount = Math.max(0, diffPreview.totalLineCount - visibleDiffLines.length)
 
-  if (diffLines.length === 0) {
+  if (diffPreview.totalLineCount === 0) {
     return <Text style={styles.detailMuted}>No text changes found.</Text>
   }
 
@@ -1888,7 +1893,7 @@ function GitHubPrFileDiff({
     <View style={styles.fileDiff}>
       {hiddenDiffLineCount > 0 ? (
         <Text style={styles.detailMuted}>
-          Showing first {MAX_RENDERED_PR_DIFF_LINES} of {diffLines.length} diff lines.
+          Showing first {MAX_RENDERED_PR_DIFF_LINES} of {diffPreview.totalLineCount} diff lines.
         </Text>
       ) : null}
       {visibleDiffLines.map((line) => {
