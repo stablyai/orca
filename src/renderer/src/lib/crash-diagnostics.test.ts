@@ -9,12 +9,21 @@ describe('renderer crash diagnostics', () => {
   let listeners: Map<string, Listener[]>
   let recordBreadcrumbMock: ReturnType<typeof vi.fn>
   let setIntervalMock: ReturnType<typeof vi.fn>
+  let clearIntervalMock: ReturnType<typeof vi.fn>
+  let removeEventListenerMock: ReturnType<typeof vi.fn>
 
   beforeEach(async () => {
     vi.resetModules()
     listeners = new Map()
     recordBreadcrumbMock = vi.fn()
     setIntervalMock = vi.fn(() => 1)
+    clearIntervalMock = vi.fn()
+    removeEventListenerMock = vi.fn((type: string, listener: Listener) => {
+      listeners.set(
+        type,
+        (listeners.get(type) ?? []).filter((candidate) => candidate !== listener)
+      )
+    })
     vi.stubGlobal('window', {
       api: {
         crashReports: {
@@ -26,7 +35,9 @@ describe('renderer crash diagnostics', () => {
         current.push(listener)
         listeners.set(type, current)
       }),
+      removeEventListener: removeEventListenerMock,
       setInterval: setIntervalMock,
+      clearInterval: clearIntervalMock,
       performance: {
         memory: {
           usedJSHeapSize: 32 * 1024 * 1024,
@@ -95,6 +106,18 @@ describe('renderer crash diagnostics', () => {
         reasonMessage: 'missing startup dependency'
       }
     })
+  })
+
+  it('disposes global listeners and the memory interval', () => {
+    diagnostics.installRendererCrashDiagnostics()
+
+    diagnostics._disposeRendererCrashDiagnosticsForTests()
+
+    expect(removeEventListenerMock).toHaveBeenCalledWith('error', expect.any(Function))
+    expect(removeEventListenerMock).toHaveBeenCalledWith('unhandledrejection', expect.any(Function))
+    expect(clearIntervalMock).toHaveBeenCalledWith(1)
+    expect(listeners.get('error')).toHaveLength(0)
+    expect(listeners.get('unhandledrejection')).toHaveLength(0)
   })
 
   it('does not throw when preload is unavailable', () => {

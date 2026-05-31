@@ -13,6 +13,7 @@ type BrowserPerformanceMemory = {
 }
 
 let rendererCrashDiagnosticsInstalled = false
+let rendererMemoryInterval: number | null = null
 
 export function recordRendererCrashBreadcrumb(
   name: string,
@@ -42,8 +43,34 @@ export function installRendererCrashDiagnostics(): void {
 
   if (getPerformanceMemory()) {
     recordRendererMemory('startup')
-    window.setInterval(() => recordRendererMemory('interval'), RENDERER_MEMORY_SAMPLE_INTERVAL_MS)
+    rendererMemoryInterval = window.setInterval(
+      () => recordRendererMemory('interval'),
+      RENDERER_MEMORY_SAMPLE_INTERVAL_MS
+    )
   }
+}
+
+export function _disposeRendererCrashDiagnosticsForTests(): void {
+  disposeRendererCrashDiagnostics()
+}
+
+function disposeRendererCrashDiagnostics(): void {
+  if (!rendererCrashDiagnosticsInstalled || typeof window === 'undefined') {
+    return
+  }
+  rendererCrashDiagnosticsInstalled = false
+  window.removeEventListener('error', recordRendererError)
+  window.removeEventListener('unhandledrejection', recordRendererUnhandledRejection)
+  if (rendererMemoryInterval !== null) {
+    window.clearInterval(rendererMemoryInterval)
+    rendererMemoryInterval = null
+  }
+}
+
+if (typeof import.meta !== 'undefined' && import.meta.hot) {
+  // Why: Vite can replace this module without a full renderer reload. Remove
+  // global diagnostics hooks so dev sessions do not accumulate listeners.
+  import.meta.hot.dispose(disposeRendererCrashDiagnostics)
 }
 
 function recordRendererError(event: ErrorEvent): void {
