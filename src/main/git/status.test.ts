@@ -8,6 +8,7 @@ const {
   lstatMock,
   realpathMock,
   readFileMock,
+  statMock,
   rmMock,
   existsSyncMock
 } = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ const {
   lstatMock: vi.fn(),
   realpathMock: vi.fn(),
   readFileMock: vi.fn(),
+  statMock: vi.fn(),
   rmMock: vi.fn(),
   existsSyncMock: vi.fn()
 }))
@@ -33,6 +35,7 @@ vi.mock('fs/promises', () => ({
   lstat: lstatMock,
   realpath: realpathMock,
   readFile: readFileMock,
+  stat: statMock,
   rm: rmMock
 }))
 
@@ -252,7 +255,12 @@ describe('getDiff', () => {
     gitExecFileAsyncBufferMock.mockReset()
     lstatMock.mockReset()
     readFileMock.mockReset()
+    statMock.mockReset()
     existsSyncMock.mockReset()
+    statMock.mockResolvedValue({
+      isFile: () => true,
+      size: 12
+    })
   })
 
   it('uses the index as the left side for unstaged diffs when present', async () => {
@@ -316,6 +324,21 @@ describe('getDiff', () => {
     expect(result.kind).toBe('binary')
     expect(result.originalIsBinary).toBe(true)
     expect(result.modifiedIsBinary).toBe(false)
+  })
+
+  it('does not read oversized working-tree files into memory', async () => {
+    gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: Buffer.from('index-content\n') })
+    statMock.mockResolvedValueOnce({
+      isFile: () => true,
+      size: 10 * 1024 * 1024 + 1
+    })
+
+    const result = await getDiff('/repo', 'dist/large.log', false)
+
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(result.kind).toBe('binary')
+    expect(result.modifiedIsBinary).toBe(true)
+    expect(result.modifiedContent).toBe('')
   })
 
   it('includes preview metadata for pdf diffs', async () => {

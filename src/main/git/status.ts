@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { existsSync } from 'fs'
-import { readFile } from 'fs/promises'
+import { readFile, stat } from 'fs/promises'
 import * as path from 'path'
 import type {
   GitBranchChangeEntry,
@@ -950,6 +950,15 @@ async function readGitBlobAtOidPath(
 
 async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult> {
   try {
+    const fileStat = await stat(filePath)
+    if (!fileStat.isFile()) {
+      return { content: '', isBinary: false, exists: false }
+    }
+    if (fileStat.size > MAX_GIT_SHOW_BYTES) {
+      // Why: git blob reads are capped through maxBuffer; mirror that bound for
+      // unstaged working-tree content before readFile can pull in huge assets.
+      return { content: '', isBinary: true, exists: true }
+    }
     const buffer = await readFile(filePath)
     return bufferToBlob(buffer, filePath)
   } catch {
