@@ -754,7 +754,7 @@ async function loadBranchChanges(
       gitOptions
     ),
     gitExecFileAsync(
-      ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', mergeBase, headOid],
+      ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', '-C', mergeBase, headOid],
       gitOptions
     )
   ])
@@ -797,11 +797,12 @@ async function loadCommitChanges(
         commitOid
       ]
   const numstatArgs = parentOid
-    ? ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', parentOid, commitOid]
+    ? ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', '-C', parentOid, commitOid]
     : [
         '-c',
         'core.quotePath=false',
         'diff-tree',
+        '-z',
         '--root',
         '--no-commit-id',
         '--numstat',
