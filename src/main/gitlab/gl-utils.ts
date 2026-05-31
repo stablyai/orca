@@ -138,7 +138,7 @@ function normalizeHost(value: string): string {
 }
 
 function stripGitSuffix(path: string): string {
-  return path.replace(/\.git$/i, '')
+  return path.replace(/\/+$/, '').replace(/\.git$/i, '')
 }
 
 function makeProjectRef(

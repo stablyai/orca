@@ -93,6 +93,17 @@ describe('gitlab project ref parsing', () => {
     })
   })
 
+  it('strips trailing slashes after .git suffixes', () => {
+    expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets.git/')).toEqual({
+      host: 'gitlab.com',
+      path: 'acme/widgets'
+    })
+    expect(parseGitLabProjectRef('ssh://git@gitlab.com/acme/widgets.git/')).toEqual({
+      host: 'gitlab.com',
+      path: 'acme/widgets'
+    })
+  })
+
   it('preserves git protocol remote support', () => {
     expect(parseGitLabProjectRef('git://gitlab.com/acme/widgets.git')).toEqual({
       host: 'gitlab.com',
