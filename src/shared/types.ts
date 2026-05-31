@@ -2278,6 +2278,7 @@ export type CommitMessageAiSettings = {
 export type GhosttyImportPreview = {
   found: boolean
   configPath?: string
+  configPaths?: string[]
   diff: Partial<GlobalSettings>
   unsupportedKeys: string[]
   error?: string

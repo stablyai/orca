@@ -66,6 +66,42 @@ background = #1a1a1a
     expect(result.unsupportedKeys).toEqual([])
   })
 
+  it('imports every discovered config file in Ghostty load order', async () => {
+    statMock.mockImplementation(async (p: string) => {
+      if (
+        p === '/Users/alice/.config/ghostty/config.ghostty' ||
+        p === '/Users/alice/.config/ghostty/config'
+      ) {
+        return { isFile: () => true }
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+    readFileMock.mockImplementation(async (p: string) => {
+      if (p === '/Users/alice/.config/ghostty/config.ghostty') {
+        return 'font-size = 22\nbackground = #1a1a1a\n'
+      }
+      if (p === '/Users/alice/.config/ghostty/config') {
+        return 'font-family = JetBrains Mono\nfont-size = 18\n'
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+
+    const result = await previewGhosttyImport(createStore())
+
+    expect(result.found).toBe(true)
+    expect(result.configPath).toBe('/Users/alice/.config/ghostty/config.ghostty')
+    expect(result.configPaths).toEqual([
+      '/Users/alice/.config/ghostty/config.ghostty',
+      '/Users/alice/.config/ghostty/config'
+    ])
+    expect(result.diff).toEqual({
+      terminalFontFamily: 'JetBrains Mono',
+      terminalFontSize: 18,
+      terminalColorOverrides: { background: '#1a1a1a' }
+    })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
   it('omits values that match current settings', async () => {
     statMock.mockImplementation(async (p: string) => {
       if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
