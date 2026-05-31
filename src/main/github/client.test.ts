@@ -100,6 +100,7 @@ import {
   setPRAutoMerge,
   updatePRState,
   updatePRTitle,
+  _getMergeQueueCacheSizeForTests,
   _resetOwnerRepoCache,
   _resetMergeQueueCacheForTests
 } from './client'
@@ -1684,6 +1685,41 @@ describe('GitHub GraphQL rate-limit guard', () => {
     expect(
       ghExecFileAsyncMock.mock.calls.filter((call) => call[0].includes('graphql'))
     ).toHaveLength(1)
+  })
+
+  it('bounds merge metadata cache entries across many base branches', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    let prViewCount = 0
+    ghExecFileAsyncMock.mockImplementation(async (args) => {
+      if (args.includes('graphql')) {
+        return { stdout: JSON.stringify({ data: { repository: { mergeQueue: null } } }) }
+      }
+      prViewCount += 1
+      return {
+        stdout: JSON.stringify({
+          number: prViewCount,
+          title: 'PR',
+          state: 'OPEN',
+          url: `https://github.com/stablyai/orca/pull/${prViewCount}`,
+          statusCheckRollup: [],
+          updatedAt: '2026-04-01T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          reviewDecision: 'APPROVED',
+          mergeStateStatus: 'CLEAN',
+          autoMergeRequest: null,
+          baseRefName: `base-${prViewCount}`,
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      }
+    })
+
+    for (let i = 0; i < 260; i++) {
+      await getPRForBranch('/repo-root', `feature/${i}`, i + 1)
+    }
+
+    expect(_getMergeQueueCacheSizeForTests()).toBe(256)
   })
 
   it('returns conflicting file details instead of running gh merge when PR is dirty', async () => {

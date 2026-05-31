@@ -90,6 +90,7 @@ type GhExecOptions = ReturnType<typeof ghRepoExecOptions>
 const ORCA_REPO = 'stablyai/orca'
 const MERGE_QUEUE_CACHE_TTL_MS = 10 * 60 * 1000
 const MERGE_QUEUE_UNKNOWN_CACHE_TTL_MS = 60 * 1000
+const MERGE_QUEUE_CACHE_MAX_ENTRIES = 256
 type GitHubRepositoryMergeMetadata = {
   mergeQueueRequired: boolean | null
   mergeMethodSettings?: GitHubPRMergeMethodSettings
@@ -101,6 +102,25 @@ const repositoryMergeMetadataCache = new Map<
 
 export function _resetMergeQueueCacheForTests(): void {
   repositoryMergeMetadataCache.clear()
+}
+
+export function _getMergeQueueCacheSizeForTests(): number {
+  return repositoryMergeMetadataCache.size
+}
+
+function pruneRepositoryMergeMetadataCache(now = Date.now()): void {
+  for (const [cacheKey, cached] of repositoryMergeMetadataCache) {
+    if (cached.expiresAt <= now) {
+      repositoryMergeMetadataCache.delete(cacheKey)
+    }
+  }
+  while (repositoryMergeMetadataCache.size > MERGE_QUEUE_CACHE_MAX_ENTRIES) {
+    const oldestKey = repositoryMergeMetadataCache.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    repositoryMergeMetadataCache.delete(oldestKey)
+  }
 }
 
 async function assertRateLimitBudget(bucket: RateLimitBucketKind): Promise<void> {
@@ -1803,10 +1823,16 @@ function cacheRepositoryMergeMetadata(
   value: GitHubRepositoryMergeMetadata,
   ttlMs: number
 ): void {
+  const now = Date.now()
+  pruneRepositoryMergeMetadataCache(now)
+  // Why: merge metadata is keyed by user-controlled branch names. Keep the
+  // per-session cache bounded even if many short-lived branches are inspected.
+  repositoryMergeMetadataCache.delete(cacheKey)
   repositoryMergeMetadataCache.set(cacheKey, {
     value,
-    expiresAt: Date.now() + ttlMs
+    expiresAt: now + ttlMs
   })
+  pruneRepositoryMergeMetadataCache(now)
 }
 
 async function detectRepositoryMergeMetadata(
@@ -1817,8 +1843,9 @@ async function detectRepositoryMergeMetadata(
   const cacheKey = `${ownerRepo.owner.toLowerCase()}/${ownerRepo.repo.toLowerCase()}:${
     branchName ?? '__repo__'
   }`
+  pruneRepositoryMergeMetadataCache()
   const cached = repositoryMergeMetadataCache.get(cacheKey)
-  if (cached && cached.expiresAt > Date.now()) {
+  if (cached) {
     return cached.value
   }
   const guard = rateLimitGuard('graphql')
