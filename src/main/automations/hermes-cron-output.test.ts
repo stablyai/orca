@@ -259,4 +259,27 @@ Run summary: monitor automation completed successfully.
       runs: []
     })
   })
+
+  it('evicts oldest count cache entries when many job ids are observed', async () => {
+    const home = await createHermesHome()
+    const outputDir = join(home, 'cron', 'output', 'job-0')
+    await mkdir(outputDir, { recursive: true })
+    await writeFile(join(outputDir, '2026-05-15_09-02-00.md'), 'first run', 'utf-8')
+
+    const { readHermesCronOutputRunsPage } = await loadReader()
+    await expect(readHermesCronOutputRunsPage('job-0', { page: 1, pageSize: 0 })).resolves.toEqual({
+      total: 1,
+      runs: []
+    })
+
+    for (let i = 1; i <= 200; i += 1) {
+      await readHermesCronOutputRunsPage(`job-${i}`, { page: 1, pageSize: 0 })
+    }
+    await writeFile(join(outputDir, '2026-05-15_09-03-00.md'), 'second run', 'utf-8')
+
+    await expect(readHermesCronOutputRunsPage('job-0', { page: 1, pageSize: 0 })).resolves.toEqual({
+      total: 2,
+      runs: []
+    })
+  })
 })
