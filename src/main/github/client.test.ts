@@ -1015,6 +1015,42 @@ describe('getPRForBranch', () => {
     })
   })
 
+  it('treats GitHub DIRTY merge state as conflicting when mergeable is still unknown', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 42,
+          title: 'Fix PR discovery',
+          state: 'OPEN',
+          url: 'https://github.com/acme/widgets/pull/42',
+          statusCheckRollup: [],
+          updatedAt: '2026-03-28T00:00:00Z',
+          isDraft: false,
+          mergeable: 'UNKNOWN',
+          mergeStateStatus: 'DIRTY',
+          baseRefName: 'main',
+          headRefName: 'feature/test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ data: { repository: { mergeQueue: null } } })
+      })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '1\n' })
+      .mockResolvedValueOnce({ stdout: 'result-tree-oid\u0000src/conflict.ts\u0000' })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', 42)
+
+    expect(pr?.mergeable).toBe('CONFLICTING')
+    expect(pr?.conflictSummary?.files).toEqual(['src/conflict.ts'])
+  })
+
   it('omits conflict summaries for SSH-backed repos', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({

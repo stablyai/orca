@@ -481,4 +481,48 @@ describe('pr-refresh-coordinator', () => {
 
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
+
+  it('does a prompt visible follow-up after a manual refresh returns unknown mergeability', async () => {
+    const { refreshPRNow, reportVisiblePRRefreshCandidates } =
+      await import('./pr-refresh-coordinator')
+    const visibleCandidate = makeCandidate()
+    const candidate = makeCandidate({
+      cachedFetchedAt: Date.now(),
+      cachedHasPR: true,
+      cachedPRState: 'open',
+      cachedChecksStatus: 'success',
+      cachedMergeable: 'MERGEABLE',
+      cachedMergeStateStatus: 'CLEAN'
+    })
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success', mergeable: 'MERGEABLE' }),
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success', mergeable: 'UNKNOWN' }),
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ checksStatus: 'success', mergeable: 'CONFLICTING' }),
+        fetchedAt: Date.now()
+      })
+
+    reportVisiblePRRefreshCandidates([visibleCandidate], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    await refreshPRNow(candidate)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(2_499)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
+  })
 })

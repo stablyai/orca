@@ -20,6 +20,7 @@ type QueueEntry = {
   reason: GitHubPRRefreshReason
   priority: number
   dueAt: number
+  bypassBackgroundBudget?: boolean
   windowId?: number
 }
 
@@ -30,6 +31,7 @@ type PRRefreshOutcomeObserver = (
 
 const MIN_BACKGROUND_REFRESH_AGE_MS = 60_000
 const MERGEABILITY_PENDING_REFRESH_MS = 10_000
+const MANUAL_MERGEABILITY_PENDING_REFRESH_MS = 2_500
 const BACKGROUND_BUDGET_WINDOW_MS = 5 * 60_000
 const MIN_BACKGROUND_SPACING_MS = 10_000
 const BACKGROUND_BUDGET_MAX = 20
@@ -131,6 +133,10 @@ function isBackground(reason: GitHubPRRefreshReason): boolean {
 
 function isBudgetedBackground(reason: GitHubPRRefreshReason): boolean {
   return reason === 'visible' || reason === 'swr'
+}
+
+function isBudgetedQueueEntry(entry: QueueEntry): boolean {
+  return isBudgetedBackground(entry.reason) && entry.bypassBackgroundBudget !== true
 }
 
 function validateCandidate(
@@ -273,7 +279,8 @@ function scheduleVisibleFollowUp(
   outcome: PRRefreshOutcome,
   priority: number,
   aliases: GitHubPRRefreshAlias[],
-  windowId?: number
+  windowId?: number,
+  options?: { pendingMergeabilityDelayMs?: number }
 ): void {
   if (!isVisibleKey(key)) {
     // Why: manual/active refreshes can remove the queued visible retry after
@@ -302,7 +309,15 @@ function scheduleVisibleFollowUp(
   }
   errorBackoff.delete(key)
   const followUpCandidate = visibleCandidateAfterOutcome(candidate, outcome)
-  const dueAt = freshRetryAt(followUpCandidate) ?? Date.now()
+  const regularDueAt = freshRetryAt(followUpCandidate) ?? Date.now()
+  const pendingMergeabilityDueAt =
+    options?.pendingMergeabilityDelayMs !== undefined && isMergeabilityPendingOutcome(outcome)
+      ? outcome.fetchedAt + options.pendingMergeabilityDelayMs
+      : null
+  const dueAt =
+    pendingMergeabilityDueAt === null
+      ? regularDueAt
+      : Math.min(regularDueAt, pendingMergeabilityDueAt)
   // Why: coalesced linked-PR refreshes may represent several local branches.
   // Preserve every alias for the next visible follow-up so all cache entries
   // keep receiving periodic updates.
@@ -313,6 +328,9 @@ function scheduleVisibleFollowUp(
     reason: 'visible',
     priority,
     dueAt,
+    // Why: this manual one-shot fixes GitHub's transient UNKNOWN state; visible
+    // spacing would otherwise delay it past the intended prompt retry window.
+    bypassBackgroundBudget: pendingMergeabilityDueAt !== null,
     windowId
   })
   scheduleDrain(Math.max(0, dueAt - Date.now()))
@@ -349,6 +367,15 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
 
 function hasResolvedMergeStateStatus(status: string | null | undefined): boolean {
   return status === 'CLEAN' || status === 'BEHIND' || status === 'BLOCKED'
+}
+
+function isMergeabilityPendingOutcome(outcome: PRRefreshOutcome): boolean {
+  return (
+    outcome.kind === 'found' &&
+    outcome.pr.state === 'open' &&
+    outcome.pr.mergeable === 'UNKNOWN' &&
+    !hasResolvedMergeStateStatus(outcome.pr.mergeStateStatus)
+  )
 }
 
 function backgroundRefreshBuckets(): ('core' | 'graphql')[] {
@@ -422,7 +449,7 @@ async function drainQueue(): Promise<void> {
         return
       }
 
-      const budgetDelay = isBudgetedBackground(next.reason) ? nextBudgetDelay() : 0
+      const budgetDelay = isBudgetedQueueEntry(next) ? nextBudgetDelay() : 0
       if (budgetDelay > 0) {
         scheduleDrain(budgetDelay)
         return
@@ -479,7 +506,7 @@ async function drainQueue(): Promise<void> {
           scheduleDrain(Math.max(1_000, retryAt - Date.now()))
           continue
         }
-        if (isBudgetedBackground(next.reason)) {
+        if (isBudgetedQueueEntry(next)) {
           noteBackgroundStart()
         }
         for (const bucket of buckets) {
@@ -622,6 +649,10 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
   )
   outcomeObserver?.(candidate, outcome)
   broadcast({ aliases, reason: 'manual', outcome, requestStartedAt }, requestSequence)
-  scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases)
+  scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases, undefined, {
+    // Why: GitHub often reports UNKNOWN immediately after `gh pr reopen`;
+    // do one prompt visible retry so conflicts replace the transient label.
+    pendingMergeabilityDelayMs: MANUAL_MERGEABILITY_PENDING_REFRESH_MS
+  })
   return outcome
 }

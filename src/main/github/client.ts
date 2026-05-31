@@ -1790,6 +1790,14 @@ function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {
   return 'UNKNOWN'
 }
 
+function derivePullRequestMergeable(data: PullRequestLookupData): PRMergeableState {
+  const mergeable = normalizePRMergeable(data.mergeable)
+  if (mergeable === 'CONFLICTING' || data.mergeStateStatus === 'DIRTY') {
+    return 'CONFLICTING'
+  }
+  return mergeable ?? 'UNKNOWN'
+}
+
 function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
   return {
     number: pr.number,
@@ -2306,9 +2314,10 @@ export async function getPRForBranchOutcome(
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 
+    const mergeable = derivePullRequestMergeable(data)
     const conflictSummary =
       !connectionId &&
-      data.mergeable === 'CONFLICTING' &&
+      mergeable === 'CONFLICTING' &&
       data.baseRefName &&
       data.baseRefOid &&
       data.headRefOid
@@ -2325,7 +2334,7 @@ export async function getPRForBranchOutcome(
         url: data.url,
         checksStatus: deriveCheckStatus(data.statusCheckRollup),
         updatedAt: data.updatedAt,
-        mergeable: (data.mergeable as PRMergeableState) ?? 'UNKNOWN',
+        mergeable,
         ...(data.reviewDecision !== undefined ? { reviewDecision: data.reviewDecision } : {}),
         ...(data.autoMergeEnabled !== undefined ? { autoMergeEnabled: data.autoMergeEnabled } : {}),
         ...(data.mergeQueueRequired !== undefined
