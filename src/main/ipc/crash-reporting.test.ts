@@ -24,6 +24,7 @@ vi.mock('./feedback', () => ({
 }))
 
 import {
+  _getCrashReportingStateSizesForTests,
   _resetRendererErrorReportDedupeForTests,
   registerCrashReportingHandlers
 } from './crash-reporting'
@@ -219,6 +220,29 @@ describe('registerCrashReportingHandlers', () => {
       report: pending
     })
     expect(markSent).not.toHaveBeenCalled()
+  })
+
+  it('bounds submitted report ids by evicting the oldest successful sends', async () => {
+    registerCrashReportingHandlers({
+      getById: vi.fn(async (reportId: string) => report('pending', reportId)),
+      dismiss: vi.fn(),
+      markSent: vi.fn(async (reportId: string) => report('sent', reportId)),
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => []),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    for (let i = 0; i < 260; i += 1) {
+      await handlers.get('crashReports:submit')?.(null, {
+        reportId: `crash-${i}`,
+        submitAnonymously: true,
+        githubLogin: null,
+        githubEmail: null
+      })
+    }
+
+    expect(_getCrashReportingStateSizesForTests().submittedReportIds).toBe(256)
   })
 
   it('records a deduped renderer error boundary report through the crash store', async () => {

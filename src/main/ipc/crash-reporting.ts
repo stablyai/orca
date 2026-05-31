@@ -1,3 +1,5 @@
+/* oxlint-disable max-lines -- Why: crash-reporting IPC handlers share one
+   dedupe/submission state machine and one crash-store contract. */
 import os from 'node:os'
 import { app, clipboard, ipcMain } from 'electron'
 import {
@@ -18,6 +20,7 @@ const recentRendererErrorReportKeys = new Map<string, number>()
 const RENDERER_ERROR_DEDUPE_MS = 10 * 60 * 1000
 const MAX_RENDERER_ERROR_KEY_AGE_MS = RENDERER_ERROR_DEDUPE_MS * 2
 const MAX_RECENT_RENDERER_ERROR_REPORT_KEYS = 256
+const MAX_SUBMITTED_REPORT_IDS = 256
 
 const REACT_ERROR_BOUNDARY_SURFACES = new Set<ReactErrorBoundaryReportArgs['surface']>([
   'app-root',
@@ -121,6 +124,20 @@ function getRendererErrorReportKey(args: ReactErrorBoundaryReportArgs): string {
   }).slice(0, 12_000)
 }
 
+function rememberSubmittedReportId(reportId: string): void {
+  // Why: report ids are IPC input. Keep duplicate-send suppression useful for
+  // recent reports without retaining every id a broken renderer can vary.
+  submittedReportIds.delete(reportId)
+  submittedReportIds.add(reportId)
+  while (submittedReportIds.size > MAX_SUBMITTED_REPORT_IDS) {
+    const oldestId = submittedReportIds.keys().next().value
+    if (oldestId === undefined) {
+      break
+    }
+    submittedReportIds.delete(oldestId)
+  }
+}
+
 async function recordRendererErrorReport(
   store: CrashReportStore,
   args: unknown
@@ -180,6 +197,20 @@ async function recordRendererErrorReport(
 
 export function _resetRendererErrorReportDedupeForTests(): void {
   recentRendererErrorReportKeys.clear()
+  submittedReportIds.clear()
+  inFlightSubmissions.clear()
+}
+
+export function _getCrashReportingStateSizesForTests(): {
+  submittedReportIds: number
+  inFlightSubmissions: number
+  recentRendererErrorReportKeys: number
+} {
+  return {
+    submittedReportIds: submittedReportIds.size,
+    inFlightSubmissions: inFlightSubmissions.size,
+    recentRendererErrorReportKeys: recentRendererErrorReportKeys.size
+  }
 }
 
 async function getLatestPendingReport(
@@ -290,7 +321,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         if (!result.ok) {
           return { ...result, report }
         }
-        submittedReportIds.add(report.id)
+        rememberSubmittedReportId(report.id)
         if (report.status === 'dismissed') {
           try {
             // Why: startup prompts are dismissed before the user can send from
