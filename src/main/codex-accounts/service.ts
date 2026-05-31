@@ -229,7 +229,7 @@ export class CodexAccountService {
     })
     this.runtimeHome.syncForCurrentSelection()
 
-    this.runtimeHome.removeHostLaunchHomeForAccount?.(accountId)
+    this.runtimeHome.removeLaunchHomeForAccount?.(account)
     this.safeRemoveManagedHome(account.managedHomePath)
     // Why: a removed account can no longer appear in the switcher dropdown,
     // so purge its cached usage to avoid stale entries.

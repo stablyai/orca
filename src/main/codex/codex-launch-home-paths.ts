@@ -16,8 +16,10 @@ import {
   unlinkSync,
   writeFileSync
 } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 
 const LAUNCH_HOME_MARKER = '.orca-managed-launch-home'
@@ -52,21 +54,53 @@ type LaunchEntryMarker = {
 }
 
 export function getOrcaCodexLaunchHomePath(accountId: string | null): string {
-  const launchHomePath = resolveOrcaCodexLaunchHomePath(accountId, { create: true })
+  return getScopedCodexLaunchHomePath(getOrcaCodexLaunchHostRootPath(), accountId)
+}
+
+export function ensureOrcaCodexLaunchHome(accountId: string | null): string {
+  return ensureScopedCodexLaunchHome(getOrcaCodexLaunchHostRootPath(), accountId)
+}
+
+export function materializeOrcaCodexLaunchHome(accountId: string | null): string {
+  return materializeScopedCodexLaunchHome(
+    getOrcaManagedCodexHomePath(),
+    getOrcaCodexLaunchHostRootPath(),
+    accountId
+  )
+}
+
+export function removeOrcaCodexLaunchHome(accountId: string): void {
+  removeScopedCodexLaunchHome(
+    getOrcaCodexLaunchHostRootPathWithOptions({ create: false }),
+    accountId
+  )
+}
+
+export function getScopedCodexLaunchHomePath(
+  launchRootPath: string,
+  accountId: string | null
+): string {
+  const launchHomePath = resolveCodexLaunchHomePath(launchRootPath, accountId)
   mkdirSync(launchHomePath, { recursive: true })
   return launchHomePath
 }
 
-export function ensureOrcaCodexLaunchHome(accountId: string | null): string {
-  const launchHomePath = getOrcaCodexLaunchHomePath(accountId)
+export function ensureScopedCodexLaunchHome(
+  launchRootPath: string,
+  accountId: string | null
+): string {
+  const launchHomePath = getScopedCodexLaunchHomePath(launchRootPath, accountId)
   writeLaunchHomeMarker(launchHomePath, accountId)
   return launchHomePath
 }
 
-export function materializeOrcaCodexLaunchHome(accountId: string | null): string {
-  reconcileMutableLaunchHomeFilesIntoSharedHome()
-  const sharedHomePath = getOrcaManagedCodexHomePath()
-  const launchHomePath = getOrcaCodexLaunchHomePath(accountId)
+export function materializeScopedCodexLaunchHome(
+  sharedHomePath: string,
+  launchRootPath: string,
+  accountId: string | null
+): string {
+  reconcileMutableLaunchHomeFilesIntoSharedHome(sharedHomePath, launchRootPath)
+  const launchHomePath = getScopedCodexLaunchHomePath(launchRootPath, accountId)
   writeLaunchHomeMarker(launchHomePath, accountId)
 
   const sharedEntries = new Set<string>()
@@ -78,8 +112,8 @@ export function materializeOrcaCodexLaunchHome(accountId: string | null): string
   return launchHomePath
 }
 
-export function removeOrcaCodexLaunchHome(accountId: string): void {
-  const launchHomePath = resolveOrcaCodexLaunchHomePath(accountId, { create: false })
+export function removeScopedCodexLaunchHome(launchRootPath: string, accountId: string): void {
+  const launchHomePath = resolveCodexLaunchHomePath(launchRootPath, accountId)
   if (!existsSync(launchHomePath)) {
     return
   }
@@ -94,8 +128,11 @@ export function removeOrcaCodexLaunchHome(accountId: string): void {
     rmSync(join(launchHomePath, 'auth.json'), { force: true })
     return
   }
-  if (!isContainedPath(getOrcaCodexLaunchHostRootPath(), launchHomePath)) {
+  if (!isContainedPath(launchRootPath, launchHomePath)) {
     console.warn('[codex-home] Refusing to remove launch home outside host root:', launchHomePath)
+    return
+  }
+  if (removeWslPathIfPossible(launchHomePath)) {
     return
   }
   rmSync(launchHomePath, { recursive: true, force: true })
@@ -113,15 +150,8 @@ function getOrcaCodexLaunchHostRootPathWithOptions(options: { create: boolean })
   return rootPath
 }
 
-function resolveOrcaCodexLaunchHomePath(
-  accountId: string | null,
-  options: { create: boolean }
-): string {
-  return join(
-    getOrcaCodexLaunchHostRootPathWithOptions(options),
-    getLaunchSelectionSegment(accountId),
-    'home'
-  )
+function resolveCodexLaunchHomePath(launchRootPath: string, accountId: string | null): string {
+  return join(launchRootPath, getLaunchSelectionSegment(accountId), 'home')
 }
 
 function getLaunchSelectionSegment(accountId: string | null): string {
@@ -170,12 +200,7 @@ function linkSharedEntryIntoLaunchHome(
   }
 
   try {
-    const sourceStat = lstatSync(sourcePath)
-    symlinkSync(
-      sourcePath,
-      targetPath,
-      sourceStat.isDirectory() && process.platform === 'win32' ? 'junction' : undefined
-    )
+    createSharedEntryLink(sourcePath, targetPath)
     markLaunchEntry(launchHomePath, entryName, sourcePath, 'link')
   } catch (error) {
     if (!copyFallbackAllowed(sourcePath, entryName)) {
@@ -197,6 +222,116 @@ function linkSharedEntryIntoLaunchHome(
   }
 }
 
+function createSharedEntryLink(sourcePath: string, targetPath: string): void {
+  if (createWslSymlinkIfPossible(sourcePath, targetPath)) {
+    return
+  }
+  const sourceStat = lstatSync(sourcePath)
+  symlinkSync(
+    sourcePath,
+    targetPath,
+    sourceStat.isDirectory() && process.platform === 'win32' ? 'junction' : undefined
+  )
+}
+
+function createWslSymlinkIfPossible(sourcePath: string, targetPath: string): boolean {
+  const paths = getSameDistroWslPaths(sourcePath, targetPath)
+  if (!paths) {
+    return false
+  }
+  execFileSync(
+    'wsl.exe',
+    ['-d', paths.distro, '--', 'ln', '-s', paths.sourceLinuxPath, paths.targetLinuxPath],
+    {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 5000
+    }
+  )
+  return true
+}
+
+function getSameDistroWslPaths(
+  sourcePath: string,
+  targetPath: string
+): { distro: string; sourceLinuxPath: string; targetLinuxPath: string } | null {
+  if (process.platform !== 'win32') {
+    return null
+  }
+  const sourceWsl = parseWslUncPath(sourcePath)
+  const targetWsl = parseWslUncPath(targetPath)
+  if (!sourceWsl || !targetWsl || sourceWsl.distro !== targetWsl.distro) {
+    return null
+  }
+  return {
+    distro: sourceWsl.distro,
+    sourceLinuxPath: sourceWsl.linuxPath,
+    targetLinuxPath: targetWsl.linuxPath
+  }
+}
+
+function runWslPathCommand(distro: string, args: string[]): boolean {
+  try {
+    execFileSync('wsl.exe', ['-d', distro, '--', ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 5000
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function wslPathExists(targetPath: string): boolean | null {
+  if (process.platform !== 'win32') {
+    return null
+  }
+  const targetWsl = parseWslUncPath(targetPath)
+  if (!targetWsl) {
+    return null
+  }
+  return runWslPathCommand(targetWsl.distro, [
+    'sh',
+    '-c',
+    'test -e "$1" || test -L "$1"',
+    'sh',
+    targetWsl.linuxPath
+  ])
+}
+
+function removeWslPathIfPossible(targetPath: string): boolean {
+  if (process.platform !== 'win32') {
+    return false
+  }
+  const targetWsl = parseWslUncPath(targetPath)
+  if (!targetWsl) {
+    return false
+  }
+  return runWslPathCommand(targetWsl.distro, ['rm', '-rf', '--', targetWsl.linuxPath])
+}
+
+function readWslSymlinkTarget(targetPath: string): string | null {
+  if (process.platform !== 'win32') {
+    return null
+  }
+  const targetWsl = parseWslUncPath(targetPath)
+  if (!targetWsl) {
+    return null
+  }
+  try {
+    return execFileSync(
+      'wsl.exe',
+      ['-d', targetWsl.distro, '--', 'readlink', targetWsl.linuxPath],
+      {
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 5000
+      }
+    ).trim()
+  } catch {
+    return null
+  }
+}
+
 function copyFallbackAllowed(sourcePath: string, entryName: string): boolean {
   if (entryName === 'hooks.json') {
     return false
@@ -215,24 +350,26 @@ function isContainedPath(rootPath: string, candidatePath: string): boolean {
   )
 }
 
-function reconcileMutableLaunchHomeFilesIntoSharedHome(): void {
-  const hostRootPath = getOrcaCodexLaunchHostRootPath()
+function reconcileMutableLaunchHomeFilesIntoSharedHome(
+  sharedHomePath: string,
+  launchRootPath: string
+): void {
   let selectionEntries: string[]
   try {
-    selectionEntries = readdirSync(hostRootPath)
+    selectionEntries = readdirSync(launchRootPath)
   } catch {
     return
   }
   for (const selectionEntry of selectionEntries.sort()) {
-    const launchHomePath = join(hostRootPath, selectionEntry, 'home')
+    const launchHomePath = join(launchRootPath, selectionEntry, 'home')
     if (!existsSync(join(launchHomePath, LAUNCH_HOME_MARKER))) {
       continue
     }
-    reconcileMarkedMutableFiles(launchHomePath)
+    reconcileMarkedMutableFiles(sharedHomePath, launchHomePath)
   }
 }
 
-function reconcileMarkedMutableFiles(launchHomePath: string): void {
+function reconcileMarkedMutableFiles(sharedHomePath: string, launchHomePath: string): void {
   const markerDir = join(launchHomePath, LAUNCH_HOME_LINK_MARKERS_DIR)
   let markerFiles: string[]
   try {
@@ -244,6 +381,9 @@ function reconcileMarkedMutableFiles(launchHomePath: string): void {
     const entryName = markerFile.replace(/\.json$/, '')
     const marker = readLaunchEntryMarker(launchHomePath, entryName)
     if (!marker || !MUTABLE_SHARED_FILE_ENTRIES.has(entryName)) {
+      continue
+    }
+    if (marker.sourcePath !== join(sharedHomePath, entryName)) {
       continue
     }
     reconcileMutableLaunchEntryIfNeeded(marker.sourcePath, join(launchHomePath, entryName), marker)
@@ -259,6 +399,9 @@ function reconcileMutableLaunchEntryIfNeeded(
     return
   }
   if (!targetExistsForLaunchRemoval(targetPath)) {
+    return
+  }
+  if (targetAlreadyPointsToSource(targetPath, sourcePath)) {
     return
   }
   try {
@@ -329,6 +472,9 @@ function removeLaunchEntry(targetPath: string): void {
     return
   }
   try {
+    if (removeWslPathIfPossible(targetPath)) {
+      return
+    }
     const stat = lstatSync(targetPath)
     if (stat.isSymbolicLink()) {
       try {
@@ -348,6 +494,10 @@ function removeLaunchEntry(targetPath: string): void {
 }
 
 function targetExistsForLaunchRemoval(targetPath: string): boolean {
+  const wslExists = wslPathExists(targetPath)
+  if (wslExists !== null) {
+    return wslExists
+  }
   try {
     lstatSync(targetPath)
     return true
@@ -436,6 +586,10 @@ function readLaunchEntryMarker(
 }
 
 function targetAlreadyPointsToSource(targetPath: string, sourcePath: string): boolean {
+  const paths = getSameDistroWslPaths(sourcePath, targetPath)
+  if (paths) {
+    return readWslSymlinkTarget(targetPath) === paths.sourceLinuxPath
+  }
   try {
     return (
       lstatSync(targetPath).isSymbolicLink() &&
@@ -447,6 +601,10 @@ function targetAlreadyPointsToSource(targetPath: string, sourcePath: string): bo
 }
 
 function linkTargetsMatch(actualTarget: string, expectedTarget: string): boolean {
+  const expectedWsl = parseWslUncPath(expectedTarget)
+  if (expectedWsl && actualTarget === expectedWsl.linuxPath) {
+    return true
+  }
   if (process.platform !== 'win32') {
     return actualTarget === expectedTarget
   }
