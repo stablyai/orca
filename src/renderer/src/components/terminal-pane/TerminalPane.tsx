@@ -7,6 +7,7 @@ import { X } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
   isTerminalBackgroundLight,
@@ -212,6 +213,7 @@ export default function TerminalPane({
   const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
   const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
+  const daemonActions = useDaemonActions()
   // Why: override state lives in a plain Map for perf (safeFit reads it on
   // every resize). This counter forces a re-render when overrides change so
   // the mobile-fit banner appears/disappears. When an override is cleared
@@ -1742,8 +1744,13 @@ export default function TerminalPane({
         }}
       />
       {terminalError && isActive && (
-        <TerminalErrorToast error={terminalError} onDismiss={() => setTerminalError(null)} />
+        <TerminalErrorToast
+          error={terminalError}
+          onDismiss={() => setTerminalError(null)}
+          onRestartDaemon={() => daemonActions.setPending('restart')}
+        />
       )}
+      <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog
           open={sessionStateSaveFailureOpen}
