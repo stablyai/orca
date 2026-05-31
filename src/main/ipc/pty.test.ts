@@ -152,6 +152,7 @@ import {
   clearProviderPtyState,
   deletePtyOwnership,
   getPtyIdForPaneKey,
+  hasPendingRendererSerializerForPaneKey,
   setPtyOwnership,
   setLocalPtyProvider,
   unregisterSshPtyProvider
@@ -2292,6 +2293,27 @@ describe('registerPtyHandlers', () => {
     expect(spawnController.hasRendererSerializer?.(result.id)).toBe(false)
     await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen })
     expect(spawnController.hasRendererSerializer?.(result.id)).toBe(true)
+  })
+
+  it('clears pending pane serializer declarations when their renderer is destroyed', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const paneKey = makePaneKey('tab-crash', '22222222-2222-4222-8222-222222222222')
+    const destroyedListeners: (() => void)[] = []
+    const sender = {
+      id: 42,
+      once: vi.fn((event: string, listener: () => void) => {
+        if (event === 'destroyed') {
+          destroyedListeners.push(listener)
+        }
+      })
+    }
+
+    await handlers.get('pty:declarePendingPaneSerializer')!({ sender }, { paneKey })
+
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(true)
+    expect(destroyedListeners).toHaveLength(1)
+    destroyedListeners[0]()
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
   })
 
   it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {

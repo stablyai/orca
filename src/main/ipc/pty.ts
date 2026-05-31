@@ -5,7 +5,7 @@ boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
 import { join, delimiter } from 'path'
 import { randomUUID } from 'crypto'
-import { type BrowserWindow, ipcMain, app, nativeTheme } from 'electron'
+import { type BrowserWindow, type WebContents, ipcMain, app, nativeTheme } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
@@ -141,7 +141,8 @@ export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListene
 // still matches, so a remount that pre-signals before the old PTY's teardown
 // runs is preserved. See docs/mobile-prefer-renderer-scrollback.md.
 let pendingSerializerGenSeq = 0
-const pendingByPaneKey = new Map<string, number>()
+const pendingByPaneKey = new Map<string, { gen: number; ownerWebContentsId: number | null }>()
+const pendingPaneSerializerCleanupRegistered = new Set<number>()
 // Why: at PTY spawn time we capture the gen that was pending for the spawn's
 // paneKey, so teardown can settle ONLY that gen. Without this, a paneKey
 // remount that replaces the pending entry with a new gen would still get
@@ -173,14 +174,32 @@ function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
   return normalizedPaneKey
 }
 
-function declarePendingPaneSerializer(paneKey: string): number {
+function cleanupPendingPaneSerializersForSender(ownerWebContentsId: number): void {
+  pendingPaneSerializerCleanupRegistered.delete(ownerWebContentsId)
+  for (const [paneKey, pending] of pendingByPaneKey) {
+    if (pending.ownerWebContentsId === ownerWebContentsId) {
+      pendingByPaneKey.delete(paneKey)
+    }
+  }
+}
+
+function registerPendingPaneSerializerCleanup(sender: WebContents | undefined): void {
+  if (!sender || pendingPaneSerializerCleanupRegistered.has(sender.id)) {
+    return
+  }
+  pendingPaneSerializerCleanupRegistered.add(sender.id)
+  sender.once('destroyed', () => cleanupPendingPaneSerializersForSender(sender.id))
+}
+
+function declarePendingPaneSerializer(paneKey: string, sender: WebContents | undefined): number {
   const gen = ++pendingSerializerGenSeq
-  pendingByPaneKey.set(paneKey, gen)
+  registerPendingPaneSerializerCleanup(sender)
+  pendingByPaneKey.set(paneKey, { gen, ownerWebContentsId: sender?.id ?? null })
   return gen
 }
 
 function settlePendingPaneSerializer(paneKey: string, gen: number): void {
-  if (pendingByPaneKey.get(paneKey) === gen) {
+  if (pendingByPaneKey.get(paneKey)?.gen === gen) {
     pendingByPaneKey.delete(paneKey)
   }
 }
@@ -2084,9 +2103,9 @@ export function registerPtyHandlers(
       // only settles its own generation. A remount that replaces the entry
       // with a new gen must not be stomped by the old PTY's teardown.
       if (validatedPaneKey && rendererPreSignaled) {
-        const gen = pendingByPaneKey.get(validatedPaneKey)
-        if (gen !== undefined) {
-          ptyPendingGenByPtyId.set(result.id, gen)
+        const pending = pendingByPaneKey.get(validatedPaneKey)
+        if (pending) {
+          ptyPendingGenByPtyId.set(result.id, pending.gen)
         }
       }
 
@@ -2437,11 +2456,11 @@ export function registerPtyHandlers(
   // or pane unmount before settle, renderer calls clear with the same gen.
   ipcMain.handle(
     'pty:declarePendingPaneSerializer',
-    async (_event, args: { paneKey?: unknown }): Promise<number> => {
+    async (event, args: { paneKey?: unknown }): Promise<number> => {
       if (!isValidPaneKey(args.paneKey)) {
         throw new Error('Invalid paneKey')
       }
-      return declarePendingPaneSerializer(args.paneKey)
+      return declarePendingPaneSerializer(args.paneKey, event?.sender)
     }
   )
 
