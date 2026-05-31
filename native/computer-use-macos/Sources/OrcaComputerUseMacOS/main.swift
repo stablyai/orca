@@ -135,6 +135,26 @@ struct Snapshot {
     let elements: [Int: ElementRecord]
     let truncated: Bool
     let maxDepthReached: Bool
+
+    func withoutScreenshotPayload() -> Snapshot {
+        Snapshot(
+            id: id,
+            app: app,
+            windowTitle: windowTitle,
+            windowBounds: windowBounds,
+            windowId: windowId,
+            windowLayer: windowLayer,
+            treeText: treeText,
+            focusedElementId: focusedElementId,
+            screenshot: nil,
+            screenshotStatus: .skipped,
+            screenshotScale: CGSize(width: 1, height: 1),
+            screenshotEngine: nil,
+            elements: elements,
+            truncated: truncated,
+            maxDepthReached: maxDepthReached
+        )
+    }
 }
 
 struct ScreenshotPayload {
@@ -223,18 +243,21 @@ final class Provider {
         )
         let keys = [query, app.name, app.bundleId ?? ""].filter { !$0.isEmpty }.map { $0.lowercased() }
         let namespace = snapshotNamespace(params)
+        // Why: cached snapshots only validate element identity for follow-up
+        // actions; retaining MB-scale screenshot base64 in the long-lived agent grows memory.
+        let cachedSnapshot = snapshot.withoutScreenshotPayload()
         for key in keys {
             if !isExplicitSnapshotNamespace(namespace) {
-                snapshots[key] = snapshot
-                snapshots[snapshotWindowKey(key, snapshot.windowId)] = snapshot
+                snapshots[key] = cachedSnapshot
+                snapshots[snapshotWindowKey(key, snapshot.windowId)] = cachedSnapshot
                 if let windowIndex {
-                    snapshots[snapshotWindowIndexKey(key, windowIndex)] = snapshot
+                    snapshots[snapshotWindowIndexKey(key, windowIndex)] = cachedSnapshot
                 }
             }
-            snapshots[namespacedSnapshotKey(namespace, key)] = snapshot
-            snapshots[namespacedSnapshotKey(namespace, snapshotWindowKey(key, snapshot.windowId))] = snapshot
+            snapshots[namespacedSnapshotKey(namespace, key)] = cachedSnapshot
+            snapshots[namespacedSnapshotKey(namespace, snapshotWindowKey(key, snapshot.windowId))] = cachedSnapshot
             if let windowIndex {
-                snapshots[namespacedSnapshotKey(namespace, snapshotWindowIndexKey(key, windowIndex))] = snapshot
+                snapshots[namespacedSnapshotKey(namespace, snapshotWindowIndexKey(key, windowIndex))] = cachedSnapshot
             }
         }
         return snapshot
