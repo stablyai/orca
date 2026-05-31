@@ -32,6 +32,7 @@ export type DaemonPtyAdapterOptions = {
 }
 
 const MAX_TOMBSTONES = 1000
+const MAX_CONCURRENT_CHECKPOINTS = 4
 
 export class TerminalKilledError extends Error {
   constructor(sessionId: string) {
@@ -625,10 +626,18 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (!this.historyManager) {
       return completed
     }
-    const promises: Promise<void>[] = []
-    for (const sessionId of sessionIds) {
-      promises.push(
-        this.client
+    const ids = Array.from(sessionIds)
+    let nextIndex = 0
+
+    const checkpointNext = async (): Promise<void> => {
+      for (;;) {
+        const index = nextIndex
+        nextIndex++
+        if (index >= ids.length) {
+          return
+        }
+        const sessionId = ids[index]
+        await this.client
           .request<GetSnapshotResult>('getSnapshot', { sessionId })
           .then((result) => {
             if (result.snapshot && this.historyManager) {
@@ -640,9 +649,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
             return undefined
           })
           .catch((err) => console.warn('[history] checkpoint failed:', sessionId, err))
-      )
+      }
     }
-    await Promise.all(promises)
+    // Why: snapshot serialization and checkpoint writes are CPU/disk heavy.
+    // Dirty-session filtering keeps idle terminals out; this cap prevents one
+    // tick from snapshotting every active dirty terminal at once.
+    const workers = Array.from({ length: Math.min(MAX_CONCURRENT_CHECKPOINTS, ids.length) }, () =>
+      checkpointNext()
+    )
+    await Promise.all(workers)
     return completed
   }
 

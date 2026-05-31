@@ -7,6 +7,7 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
 import type { SubprocessHandle } from './session'
+import type { GetSnapshotResult, TerminalSnapshot } from './types'
 import type * as DaemonHealthModule from './daemon-health'
 
 const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
@@ -52,6 +53,27 @@ function createMockSubprocess(): SubprocessHandle & {
     _simulateExit(code: number) {
       onExitCb?.(code)
     }
+  }
+}
+
+function createTestSnapshot(label: string): TerminalSnapshot {
+  return {
+    snapshotAnsi: label,
+    scrollbackAnsi: '',
+    rehydrateSequences: '',
+    cwd: null,
+    modes: {
+      bracketedPaste: false,
+      mouseTracking: false,
+      mouseTrackingMode: 'none',
+      sgrMouseMode: false,
+      sgrMousePixelsMode: false,
+      applicationCursor: false,
+      alternateScreen: false
+    },
+    cols: 80,
+    rows: 24,
+    scrollbackLines: 0
   }
 }
 
@@ -537,6 +559,57 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       } finally {
         adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
       }
+    })
+
+    it('limits concurrent checkpoint snapshot and disk work', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const releaseSnapshotRequests: (() => void)[] = []
+      const requestedSessionIds: string[] = []
+      let inFlight = 0
+      let maxInFlight = 0
+      const request = vi.fn(
+        async (_type: string, payload: { sessionId: string }): Promise<GetSnapshotResult> => {
+          requestedSessionIds.push(payload.sessionId)
+          inFlight++
+          maxInFlight = Math.max(maxInFlight, inFlight)
+          await new Promise<void>((resolve) => {
+            releaseSnapshotRequests.push(() => {
+              inFlight--
+              resolve()
+            })
+          })
+          return { snapshot: createTestSnapshot(payload.sessionId) }
+        }
+      )
+      const checkpoint = vi.fn(async () => {})
+      const dispose = vi.fn(async () => {})
+      const disconnect = vi.fn()
+      const internals = historyAdapter as unknown as {
+        client: { request: typeof request; disconnect: typeof disconnect }
+        historyManager: { checkpoint: typeof checkpoint; dispose: typeof dispose }
+        checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
+      }
+      internals.client = { request, disconnect }
+      internals.historyManager = { checkpoint, dispose }
+
+      const checkpointing = internals.checkpointSessions(['a', 'b', 'c', 'd', 'e', 'f'])
+      await waitFor(() => requestedSessionIds.length === 4)
+
+      expect(maxInFlight).toBe(4)
+      expect(requestedSessionIds).toEqual(['a', 'b', 'c', 'd'])
+
+      for (const release of releaseSnapshotRequests.splice(0)) {
+        release()
+      }
+      await waitFor(() => requestedSessionIds.length === 6)
+
+      expect(maxInFlight).toBe(4)
+
+      for (const release of releaseSnapshotRequests.splice(0)) {
+        release()
+      }
+      await expect(checkpointing).resolves.toEqual(new Set(['a', 'b', 'c', 'd', 'e', 'f']))
+      expect(checkpoint).toHaveBeenCalledTimes(6)
     })
 
     it('does not schedule a checkpoint timer until a session is dirty', async () => {
