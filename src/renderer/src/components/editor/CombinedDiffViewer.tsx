@@ -54,6 +54,10 @@ import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './dif
 import type { DiffSection } from './diff-section-types'
 import { getInitialCombinedDiffSectionLoadIndices } from './combined-diff-initial-section-load'
 import { createCombinedDiffLoadScheduler } from './combined-diff-load-scheduler'
+import {
+  beginCombinedDiffScrollbarDrag,
+  type CombinedDiffScrollbarDragCleanup
+} from './combined-diff-scrollbar-drag'
 
 type CachedCombinedDiffViewState = {
   entrySignature: string
@@ -216,6 +220,7 @@ export default function CombinedDiffViewer({
     height: COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT
   })
   const pendingRestoreScrollTopRef = useRef<number | null>(null)
+  const activeScrollbarDragCleanupRef = useRef<CombinedDiffScrollbarDragCleanup | null>(null)
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
@@ -252,6 +257,10 @@ export default function CombinedDiffViewer({
     }
   }, [])
 
+  const cleanupActiveScrollbarDrag = useCallback((): void => {
+    activeScrollbarDragCleanupRef.current?.()
+  }, [])
+
   const setScrollContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
       scrollContainerRef.current = node
@@ -260,19 +269,21 @@ export default function CombinedDiffViewer({
         // Why: copied feedback is tied to the combined-diff surface lifetime;
         // the root ref unmount is the same boundary that disables stale feedback.
         clearNotesCopiedResetTimer()
+        cleanupActiveScrollbarDrag()
         return
       }
       window.requestAnimationFrame(updateCombinedDiffScrollbar)
     },
-    [clearNotesCopiedResetTimer, updateCombinedDiffScrollbar]
+    [cleanupActiveScrollbarDrag, clearNotesCopiedResetTimer, updateCombinedDiffScrollbar]
   )
 
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
+      cleanupActiveScrollbarDrag()
     }
-  }, [])
+  }, [cleanupActiveScrollbarDrag])
   const loadSchedulerRef = useRef(
     createCombinedDiffLoadScheduler({
       loadSection: (index) => loadSectionRef.current(index)
@@ -1007,23 +1018,21 @@ export default function CombinedDiffViewer({
         container.scrollTop = getScrollTopForPointer(moveEvent.clientY, grabOffset)
         updateCombinedDiffScrollbar()
       }
-      const cleanupPointerDrag = (): void => {
-        if (track.hasPointerCapture(event.pointerId)) {
-          track.releasePointerCapture(event.pointerId)
+      cleanupActiveScrollbarDrag()
+      let cleanupPointerDrag: CombinedDiffScrollbarDragCleanup
+      cleanupPointerDrag = beginCombinedDiffScrollbarDrag({
+        track,
+        pointerId: event.pointerId,
+        onPointerMove: handlePointerMove,
+        onEnd: () => {
+          if (activeScrollbarDragCleanupRef.current === cleanupPointerDrag) {
+            activeScrollbarDragCleanupRef.current = null
+          }
         }
-        window.removeEventListener('pointermove', handlePointerMove)
-        window.removeEventListener('pointerup', cleanupPointerDrag)
-        window.removeEventListener('pointercancel', cleanupPointerDrag)
-        track.removeEventListener('lostpointercapture', cleanupPointerDrag)
-      }
-
-      track.setPointerCapture(event.pointerId)
-      window.addEventListener('pointermove', handlePointerMove)
-      window.addEventListener('pointerup', cleanupPointerDrag)
-      window.addEventListener('pointercancel', cleanupPointerDrag)
-      track.addEventListener('lostpointercapture', cleanupPointerDrag)
+      })
+      activeScrollbarDragCleanupRef.current = cleanupPointerDrag
     },
-    [updateCombinedDiffScrollbar]
+    [cleanupActiveScrollbarDrag, updateCombinedDiffScrollbar]
   )
 
   const handleCopyNotes = useCallback(async (): Promise<void> => {
