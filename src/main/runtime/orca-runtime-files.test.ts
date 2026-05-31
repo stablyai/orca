@@ -367,6 +367,36 @@ describe('RuntimeFileCommands', () => {
     expect(drained).toBe(true)
   })
 
+  it('collapses large Parcel watcher batches to an overflow refresh', async () => {
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    type ParcelCallback = (err: Error | null, events: { type: 'create'; path: string }[]) => void
+    const parcelCallbackRef: { current: ParcelCallback | null } = { current: null }
+    subscribeParcelWatcherMock.mockImplementation(async (_rootPath, callback) => {
+      parcelCallbackRef.current = callback as ParcelCallback
+      return { unsubscribe: vi.fn() }
+    })
+    const { commands } = createRuntimeFileCommands()
+    const onEvents = vi.fn()
+
+    await commands.watchFileExplorer('id:wt-1', onEvents)
+    statMock.mockClear()
+    if (!parcelCallbackRef.current) {
+      throw new Error('Parcel watcher callback was not registered')
+    }
+    parcelCallbackRef.current(
+      null,
+      Array.from({ length: 201 }, (_, index) => ({
+        type: 'create',
+        path: `/repo/generated-${index}.txt`
+      }))
+    )
+    await Promise.resolve()
+
+    expect(statMock).not.toHaveBeenCalled()
+    expect(onEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: '/repo' }])
+  })
+
   it('settles and detaches runtime rg searches when timeout kill is ignored', async () => {
     const resolveRuntimeGitTarget = vi.fn(async () => ({
       worktree: {
