@@ -123,11 +123,12 @@ export function NotesSendMenu<TNote>({
     [closeAgentSendPopoverTargetMode, defaultScope, openTargetMode, targetModeId]
   )
 
-  useEffect(() => {
-    if (sendMenuOpen && activeTargetModeId !== targetModeId) {
-      setSendMenuOpen(false)
-    }
-  }, [activeTargetModeId, sendMenuOpen, targetModeId])
+  const effectiveSendMenuOpen = sendMenuOpen && activeTargetModeId === targetModeId
+  if (sendMenuOpen && activeTargetModeId !== targetModeId) {
+    // Why: avoid rendering a stale menu for one paint after another send target
+    // wins; the local open bit is only meaningful while this target is active.
+    setSendMenuOpen(false)
+  }
 
   useEffect(
     () => () => {
@@ -137,7 +138,7 @@ export function NotesSendMenu<TNote>({
   )
 
   return (
-    <DropdownMenu modal={false} open={sendMenuOpen} onOpenChange={handleOpenChange}>
+    <DropdownMenu modal={false} open={effectiveSendMenuOpen} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>

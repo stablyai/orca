@@ -349,9 +349,10 @@ describe('NotesSendMenu', () => {
     hookRuntime.states[0] = true
     storeMocks.state.agentSendPopoverTargetMode = { id: 'some-other-menu' }
 
-    renderMenu()
+    const tree = renderMenu()
 
     expect(hookRuntime.states[0]).toBe(false)
+    expect(findByType(tree, 'DropdownMenu').props.open).toBe(false)
     for (const cleanup of hookRuntime.cleanups) {
       cleanup()
     }
