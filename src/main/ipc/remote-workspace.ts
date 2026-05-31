@@ -445,18 +445,21 @@ export function registerRemoteWorkspaceHandlers(
             (target) => hydratedTargetIds.has(target.id) && getActiveMultiplexer(target.id)
           ) ?? []
 
-      const results: { targetId: string; result: RemoteWorkspacePatchResult }[] = []
       const workspaceSession = args.session ?? store.getWorkspaceSession()
-      for (const target of targets) {
-        const session = exportSessionForTarget(store, target.id, workspaceSession)
-        const result = await queueRemoteWorkspacePatch(target.id, () =>
-          patchRemoteWorkspaceSession(target, session)
-        )
-        if (result) {
-          results.push({ targetId: target.id, result })
-        }
-      }
-      return results
+      const results = await Promise.all(
+        targets.map(async (target) => {
+          // Why: each target has its own revision stream. Keep same-target
+          // writes queued, but do not let one slow relay block others.
+          const session = exportSessionForTarget(store, target.id, workspaceSession)
+          const result = await queueRemoteWorkspacePatch(target.id, () =>
+            patchRemoteWorkspaceSession(target, session)
+          )
+          return result ? { targetId: target.id, result } : null
+        })
+      )
+      return results.filter(
+        (entry): entry is { targetId: string; result: RemoteWorkspacePatchResult } => entry !== null
+      )
     }
   )
 
