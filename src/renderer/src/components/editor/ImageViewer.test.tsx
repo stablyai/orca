@@ -12,6 +12,15 @@ vi.mock('react', async () => {
     useMemo<T>(factory: () => T) {
       return factory()
     },
+    useCallback<T extends (...args: never[]) => unknown>(callback: T) {
+      return callback
+    },
+    useEffect() {
+      return undefined
+    },
+    useRef<T>(initial: T) {
+      return { current: initial }
+    },
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
       if (!(stateIndex in reactHookRuntime.states)) {
