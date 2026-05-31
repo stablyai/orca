@@ -86,6 +86,13 @@ function parseRrule(rrule: string): ParsedRrule {
     throw new Error('Invalid recurrence minute.')
   }
   const byDay = (entries.get('BYDAY') ?? '').split(',').filter(Boolean)
+  if (
+    freq === 'WEEKLY' &&
+    (byDay.length === 0 ||
+      byDay.some((day) => !DAY_CODES.includes(day as (typeof DAY_CODES)[number])))
+  ) {
+    throw new Error('Invalid recurrence day.')
+  }
   return { kind: 'rrule', freq, byDay, byHour, byMinute }
 }
 

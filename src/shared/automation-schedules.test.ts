@@ -81,6 +81,19 @@ describe('automation schedules', () => {
     expect(tryParseAutomationRrule('FREQ=WEEKLY;BYDAY=MO,NO;BYHOUR=10;BYMINUTE=15')).toBeNull()
   })
 
+  it('rejects weekly RRULE schedules that cannot match any day', () => {
+    const rrule = 'FREQ=WEEKLY;BYHOUR=9;BYMINUTE=0'
+
+    expect(isValidAutomationSchedule(rrule)).toBe(false)
+    expect(() =>
+      nextAutomationOccurrenceAfter(
+        rrule,
+        new Date('2026-05-01T00:00:00').getTime(),
+        new Date('2026-05-02T00:00:00').getTime()
+      )
+    ).toThrow('Invalid recurrence day.')
+  })
+
   it('formats invalid schedules with a safe fallback label', () => {
     expect(formatAutomationSchedule('FREQ=YEARLY')).toBe('Invalid schedule')
   })
