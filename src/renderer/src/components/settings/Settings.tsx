@@ -258,6 +258,16 @@ function Settings(): React.JSX.Element {
     [setSettingsSearchQuery]
   )
 
+  const setContentScrollNode = useCallback((node: HTMLDivElement | null): void => {
+    contentScrollRef.current = node
+    if (node !== null) {
+      return
+    }
+    // Why: pending subsection jumps are scoped to the scroll container; cancel
+    // them with the container so a stale deep-link frame cannot run after close.
+    cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
+  }, [])
+
   const confirmDiscardSourceControlAiPromptChanges = useCallback(async (): Promise<boolean> => {
     if (!hasUnsavedSourceControlAiPromptChanges) {
       return true
@@ -606,10 +616,6 @@ function Settings(): React.JSX.Element {
   }, [neededRepoIds, repos, runtimeTargetIdentity])
 
   useEffect(() => {
-    return () => cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
-  }, [])
-
-  useEffect(() => {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
 
@@ -777,7 +783,7 @@ function Settings(): React.JSX.Element {
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div
-          ref={contentScrollRef}
+          ref={setContentScrollNode}
           className={cn(
             'min-h-0 flex-1',
             isFocusedShortcutsPane ? 'overflow-hidden' : 'overflow-y-auto scrollbar-sleek'
