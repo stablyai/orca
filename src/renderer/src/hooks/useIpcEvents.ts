@@ -98,6 +98,7 @@ import {
   syncAgentHookCompletionNotificationSettings
 } from './agent-hook-completion-notifications'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -2291,7 +2292,8 @@ export function useIpcEvents(): void {
         // Keep the defensive store guard and completion notification path in sync.
         return 'dropped'
       }
-      store.setAgentStatus(data.paneKey, statusPayload, title, {
+      const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
+      store.setAgentStatus(data.paneKey, statusPayload, terminalTitle, {
         updatedAt: data.receivedAt,
         stateStartedAt: data.stateStartedAt
       })

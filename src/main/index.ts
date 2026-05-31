@@ -111,6 +111,11 @@ import {
 } from './synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
 import { isCrashReportReason } from '../shared/crash-reporting'
+import {
+  SYNTHETIC_AGENT_TITLE_PROFILES,
+  type SyntheticAgentTitleProfile
+} from '../shared/synthetic-agent-title'
+import type { AgentStatusState } from '../shared/agent-status-types'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
 
@@ -625,7 +630,7 @@ function openMainWindow(): BrowserWindow {
       // spinner, unread badge, and worktree status dot for every other agent)
       // lights up for these panes too. Braille prefix → working keyword path;
       // "action required" → permission; bare label → idle.
-      const profile = SYNTHETIC_TITLE_PROFILES[payload.agentType ?? '']
+      const profile = SYNTHETIC_AGENT_TITLE_PROFILES[payload.agentType ?? '']
       if (profile) {
         driveSyntheticTitleFromHook(paneKey, payload.state, profile)
       }
@@ -765,41 +770,9 @@ function shutdownWatchersOnce(): Promise<void> {
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const SPINNER_INTERVAL_MS = 80
 
-// Why: per-agent labels for the synthesized titles. The detector classifies
-// these labels via `containsAgentName` + spinner/keyword rules, so the chosen
-// strings must round-trip through detectAgentStatusFromTitle to the right
-// status. See agent-status.test.ts for the pinned classifications.
-type SyntheticTitleProfile = {
-  workingLabel: string
-  permissionLabel: string
-  idleLabel: string
-}
-const SYNTHETIC_TITLE_PROFILES: Record<string, SyntheticTitleProfile> = {
-  cursor: {
-    workingLabel: 'Cursor Agent',
-    permissionLabel: 'Cursor - action required',
-    idleLabel: 'Cursor ready'
-  },
-  opencode: {
-    workingLabel: 'OpenCode',
-    permissionLabel: 'OpenCode - action required',
-    idleLabel: 'OpenCode ready'
-  },
-  droid: {
-    workingLabel: 'Droid',
-    permissionLabel: 'Droid - action required',
-    idleLabel: 'Droid ready'
-  },
-  hermes: {
-    workingLabel: 'Hermes',
-    permissionLabel: 'Hermes - action required',
-    idleLabel: 'Hermes ready'
-  }
-}
-
 const syntheticTitleSpinnerByPaneKey = new Map<
   string,
-  SyntheticTitleSpinnerEntry<SyntheticTitleProfile>
+  SyntheticTitleSpinnerEntry<SyntheticAgentTitleProfile>
 >()
 let syntheticTitleSpinnerTimer: ReturnType<typeof setInterval> | null = null
 
@@ -1017,8 +990,8 @@ function resumeSyntheticTitleSpinnerTimer(): void {
 
 function driveSyntheticTitleFromHook(
   paneKey: string,
-  state: string,
-  profile: SyntheticTitleProfile
+  state: AgentStatusState,
+  profile: SyntheticAgentTitleProfile
 ): void {
   const ptyId = getPtyIdForPaneKey(paneKey)
   if (!ptyId) {
