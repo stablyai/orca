@@ -621,12 +621,19 @@ export default function IpynbViewer({
     return registerPendingEditorFlush(fileId, flushSourceDrafts)
   }, [fileId, flushSourceDrafts])
 
-  useEffect(() => {
-    return () => {
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      rootRef.current = node
+      if (node !== null) {
+        return
+      }
+      // Why: pending source edits and structural mutation frames belong to the
+      // notebook scroll root; clear them when that DOM owner detaches.
       void flushSourceDrafts()
       cancelIpynbStructuralContentFrames(structuralContentFrameIdsRef)
-    }
-  }, [flushSourceDrafts])
+    },
+    [flushSourceDrafts]
+  )
 
   useEffect(() => {
     if (!parsed.notebook || Object.keys(sourceDraftsRef.current).length === 0) {
@@ -820,7 +827,7 @@ export default function IpynbViewer({
 
   return (
     <div
-      ref={rootRef}
+      ref={setRootRef}
       className="h-full min-h-0 overflow-auto bg-editor-surface scrollbar-editor"
       style={{ fontSize, fontFamily: settings?.terminalFontFamily || undefined }}
       onKeyDownCapture={handleNotebookKeyDownCapture}
