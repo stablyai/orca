@@ -1183,6 +1183,7 @@ function RemoteBrowserPagePane({
         remoteTabRefreshTimerRef.current = null
       }
       clearPendingRemoteWheel()
+      restartRemoteStreamForViewportRef.current = () => {}
       if (streamFrameUrlRef.current) {
         URL.revokeObjectURL(streamFrameUrlRef.current)
         streamFrameUrlRef.current = null
@@ -1782,12 +1783,6 @@ function RemoteBrowserPagePane({
     startRemoteStreamRef.current = startRemoteStream
     restartRemoteStreamForViewportRef.current = restartRemoteStreamForViewport
   }, [restartRemoteStreamForViewport, startRemoteStream])
-
-  useEffect(() => {
-    return () => {
-      restartRemoteStreamForViewportRef.current = () => {}
-    }
-  }, [])
 
   useEffect(() => {
     if (!isActive) {
