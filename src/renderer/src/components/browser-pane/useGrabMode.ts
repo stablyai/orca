@@ -48,13 +48,10 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   const browserTabIdRef = useRef(browserPageId)
   const mountedRef = useMountedRef()
 
-  useEffect(() => {
-    browserTabIdRef.current = browserPageId
-  }, [browserPageId])
-
   // Why: when the browser page changes while grab is active, cancel the
   // current grab operation so stale overlays don't survive tab switches.
   useEffect(() => {
+    browserTabIdRef.current = browserPageId
     return () => {
       const grabTabId = grabTabIdRef.current
       if (grabTabId) {
