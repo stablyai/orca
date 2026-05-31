@@ -38,7 +38,6 @@ import {
   Plus,
   RefreshCw,
   Send,
-  Settings,
   UndoDot,
   Users,
   Wrench,
@@ -158,27 +157,6 @@ function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
       return null
     }
     return { owner: segments[0], repo: segments[1] }
-  } catch {
-    return null
-  }
-}
-
-function getGitHubRepositoryLabelsUrl(itemUrl: string): string | null {
-  try {
-    const parsed = new URL(itemUrl)
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return null
-    }
-    const segments = parsed.pathname.split('/').filter(Boolean)
-    if (segments.length < 2) {
-      return null
-    }
-    // Why: label management is repository-scoped; preserving the origin keeps
-    // GitHub Enterprise URLs working while navigating away from the issue path.
-    parsed.pathname = `/${segments[0]}/${segments[1]}/labels`
-    parsed.search = ''
-    parsed.hash = ''
-    return parsed.toString()
   } catch {
     return null
   }
@@ -4478,37 +4456,6 @@ async function runPullRequestStateUpdate(args: {
   }
 }
 
-function GitHubLabelsSettingsLink({
-  url,
-  separated,
-  onOpen
-}: {
-  url: string | null
-  separated?: boolean
-  onOpen?: () => void
-}): React.JSX.Element | null {
-  if (!url) {
-    return null
-  }
-
-  return (
-    <div className={cn(separated && 'mt-1 border-t border-border/60 pt-1')}>
-      <button
-        type="button"
-        onClick={() => {
-          onOpen?.()
-          void window.api.shell.openUrl(url)
-        }}
-        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-      >
-        <Settings className="size-3.5 shrink-0" />
-        <span className="min-w-0 flex-1 text-left">Edit labels on GitHub</span>
-        <ExternalLink className="size-3 shrink-0 opacity-70" />
-      </button>
-    </div>
-  )
-}
-
 function GHEditSection({
   item,
   repoPath,
@@ -4570,7 +4517,6 @@ function GHEditSection({
   )
   const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
-  const repositoryLabelsUrl = useMemo(() => getGitHubRepositoryLabelsUrl(item.url), [item.url])
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId
@@ -4870,8 +4816,7 @@ function GHEditSection({
             <div className="px-2 py-3 text-center text-[12px] text-destructive">
               {repoLabels.error}
             </div>
-          ) : null}
-          {!repoLabels.error ? (
+          ) : (
             <div>
               {repoLabels.data.map((label) => (
                 <button
@@ -4894,12 +4839,7 @@ function GHEditSection({
                 </button>
               ))}
             </div>
-          ) : null}
-          <GitHubLabelsSettingsLink
-            url={repositoryLabelsUrl}
-            separated={!repoLabels.error && repoLabels.data.length > 0}
-            onOpen={() => setLabelPopoverOpen(false)}
-          />
+          )}
         </PopoverContent>
       </Popover>
 
