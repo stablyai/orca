@@ -197,6 +197,54 @@ describe('windows terminal capabilities', () => {
     expect(runtimeGetStatus).toHaveBeenCalledTimes(2)
   })
 
+  it('prunes expired runtime owner capability caches', async () => {
+    stubTerminalCapabilityApi({
+      wslAvailable: false,
+      pwshAvailable: false,
+      hostPlatform: 'linux'
+    })
+
+    await loadWindowsTerminalCapabilities({ ownerKey: 'runtime:old-host', now: 1_000 })
+    expect(getCachedWindowsTerminalCapabilities('runtime:old-host')).toMatchObject({
+      hostPlatform: 'linux'
+    })
+
+    await loadWindowsTerminalCapabilities({ ownerKey: 'runtime:new-host', now: 32_000 })
+
+    expect(getCachedWindowsTerminalCapabilities('runtime:old-host')).toEqual({
+      wslAvailable: false,
+      wslDistros: [],
+      pwshAvailable: false,
+      gitBashAvailable: false,
+      hostPlatform: null,
+      isLoading: false
+    })
+  })
+
+  it('bounds runtime owner capability caches by evicting the oldest owner', async () => {
+    stubTerminalCapabilityApi({
+      wslAvailable: false,
+      pwshAvailable: false,
+      hostPlatform: 'linux'
+    })
+
+    for (let i = 0; i < 33; i += 1) {
+      await loadWindowsTerminalCapabilities({ ownerKey: `runtime:host-${i}`, now: 1_000 + i })
+    }
+
+    expect(getCachedWindowsTerminalCapabilities('runtime:host-0')).toEqual({
+      wslAvailable: false,
+      wslDistros: [],
+      pwshAvailable: false,
+      gitBashAvailable: false,
+      hostPlatform: null,
+      isLoading: false
+    })
+    expect(getCachedWindowsTerminalCapabilities('runtime:host-32')).toMatchObject({
+      hostPlatform: 'linux'
+    })
+  })
+
   it('does not select the previous owner capabilities while a new owner loads', async () => {
     const isGitBashAvailable = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false)
     vi.stubGlobal('window', {

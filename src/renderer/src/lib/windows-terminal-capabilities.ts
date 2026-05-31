@@ -19,6 +19,7 @@ const UNAVAILABLE_CAPABILITIES: WindowsTerminalCapabilities = {
 }
 
 const CAPABILITY_CACHE_TTL_MS = 30_000
+const CAPABILITY_OWNER_CACHE_MAX = 32
 const cachedCapabilitiesByOwnerKey = new Map<
   string,
   { capabilities: WindowsTerminalCapabilities; loadedAt: number }
@@ -53,9 +54,37 @@ function publish(
   ownerKey: string,
   loadedAt = Date.now()
 ): void {
+  cachedCapabilitiesByOwnerKey.delete(ownerKey)
   cachedCapabilitiesByOwnerKey.set(ownerKey, { capabilities, loadedAt })
+  trimCapabilityOwnerCaches()
   for (const subscriber of subscribersByOwnerKey.get(ownerKey) ?? []) {
     subscriber(capabilities)
+  }
+}
+
+function pruneExpiredCapabilityOwners(now: number): void {
+  for (const [ownerKey, cached] of cachedCapabilitiesByOwnerKey) {
+    if (
+      now - cached.loadedAt >= CAPABILITY_CACHE_TTL_MS &&
+      !pendingCapabilitiesByOwnerKey.has(ownerKey) &&
+      !subscribersByOwnerKey.has(ownerKey)
+    ) {
+      cachedCapabilitiesByOwnerKey.delete(ownerKey)
+      latestCapabilityRequestIdByOwnerKey.delete(ownerKey)
+    }
+  }
+}
+
+function trimCapabilityOwnerCaches(): void {
+  while (cachedCapabilitiesByOwnerKey.size > CAPABILITY_OWNER_CACHE_MAX) {
+    const oldest = cachedCapabilitiesByOwnerKey.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    cachedCapabilitiesByOwnerKey.delete(oldest)
+    if (!pendingCapabilitiesByOwnerKey.has(oldest) && !subscribersByOwnerKey.has(oldest)) {
+      latestCapabilityRequestIdByOwnerKey.delete(oldest)
+    }
   }
 }
 
@@ -74,6 +103,7 @@ export function loadWindowsTerminalCapabilities(
 ): Promise<WindowsTerminalCapabilities> {
   const now = options.now ?? Date.now()
   const ownerKey = options.ownerKey ?? 'local'
+  pruneExpiredCapabilityOwners(now)
   const cached = cachedCapabilitiesByOwnerKey.get(ownerKey)
   if (cached && !options.force && now - cached.loadedAt < CAPABILITY_CACHE_TTL_MS) {
     return Promise.resolve(cached.capabilities)
