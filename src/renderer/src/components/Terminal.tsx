@@ -35,12 +35,12 @@ import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { TabGroupLayoutNode } from '../../../shared/types'
 import BrowserPane from './browser-pane/BrowserPane'
-import { destroyPersistentWebview } from './browser-pane/webview-registry'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
 import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
   collectBrowserWebviewIds,
+  destroyRemovedBrowserWebview,
   destroyWorkspaceWebviews
 } from '../store/slices/browser-webview-cleanup'
 import {
@@ -1442,7 +1442,7 @@ function Terminal(): React.JSX.Element | null {
       )
       for (const prevId of prevBrowserWebviewIdsRef.current) {
         if (!currentIds.has(prevId)) {
-          destroyPersistentWebview(prevId)
+          destroyRemovedBrowserWebview(prevId)
         }
       }
       prevBrowserWebviewIdsRef.current = currentIds
