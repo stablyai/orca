@@ -361,6 +361,9 @@ export function createAgentCompletionCoordinator(
   }
 
   function recordTitleWorking(): boolean {
+    // Why: hooks can report `done` before title tracking notices the next
+    // milestone. The title working signal must cancel that provisional done.
+    clearPendingHookDone()
     if (
       lastCompletionSource === 'hook' &&
       Date.now() - lastCompletionAt < COMPLETION_REPLAY_GUARD_MS
