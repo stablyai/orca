@@ -1,5 +1,11 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
+import {
+  LinearIssueLabelCreateArgsSchema,
+  LinearIssueLabelIdArgsSchema,
+  LinearIssueLabelListArgsSchema,
+  LinearIssueLabelUpdateArgsSchema
+} from '../../../linear/label-contract'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 
 const VALID_FILTERS = ['assigned', 'created', 'all', 'completed'] as const
@@ -121,55 +127,6 @@ const IssueUpdate = z.object({
   })
 })
 
-const StrictOptionalString = z.string().optional()
-const OptionalNullableString = z.union([z.string(), z.null()]).optional()
-const LabelName = requiredString('Label name is required').refine(
-  (value) => value.trim().length > 0,
-  {
-    message: 'Label name is required'
-  }
-)
-const LabelId = requiredString('Label ID is required').refine((value) => value.trim().length > 0, {
-  message: 'Label ID is required'
-})
-
-const ListIssueLabels = z
-  .object({
-    workspaceId: StrictOptionalString,
-    teamId: StrictOptionalString,
-    includeArchived: z.boolean().optional()
-  })
-  .optional()
-
-const IssueLabelCreate = z.object({
-  workspaceId: StrictOptionalString,
-  input: z.object({
-    name: LabelName,
-    color: StrictOptionalString,
-    description: OptionalNullableString,
-    teamId: OptionalNullableString,
-    parentId: OptionalNullableString,
-    isGroup: z.boolean().optional()
-  })
-})
-
-const IssueLabelUpdate = z.object({
-  id: LabelId,
-  workspaceId: StrictOptionalString,
-  input: z.object({
-    name: LabelName.optional(),
-    color: StrictOptionalString,
-    description: OptionalNullableString,
-    parentId: OptionalNullableString,
-    isGroup: z.boolean().optional()
-  })
-})
-
-const IssueLabelId = z.object({
-  id: LabelId,
-  workspaceId: StrictOptionalString
-})
-
 export const LINEAR_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'linear.connect',
@@ -256,39 +213,32 @@ export const LINEAR_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'linear.listIssueLabels',
-    params: ListIssueLabels,
-    handler: async (params, { runtime }) => runtime.linearListIssueLabels(params ?? {})
+    params: LinearIssueLabelListArgsSchema,
+    handler: async (params, { runtime }) => runtime.linearListIssueLabels(params)
   }),
   defineMethod({
     name: 'linear.createIssueLabel',
-    params: IssueLabelCreate,
+    params: LinearIssueLabelCreateArgsSchema,
     handler: async (params, { runtime }) =>
-      runtime.linearCreateIssueLabel(
-        { ...params.input, name: params.input.name.trim() },
-        params.workspaceId
-      )
+      runtime.linearCreateIssueLabel(params.input, params.workspaceId)
   }),
   defineMethod({
     name: 'linear.updateIssueLabel',
-    params: IssueLabelUpdate,
+    params: LinearIssueLabelUpdateArgsSchema,
     handler: async (params, { runtime }) =>
-      runtime.linearUpdateIssueLabel(
-        params.id.trim(),
-        { ...params.input, name: params.input.name?.trim() },
-        params.workspaceId
-      )
+      runtime.linearUpdateIssueLabel(params.id, params.input, params.workspaceId)
   }),
   defineMethod({
     name: 'linear.retireIssueLabel',
-    params: IssueLabelId,
+    params: LinearIssueLabelIdArgsSchema,
     handler: async (params, { runtime }) =>
-      runtime.linearRetireIssueLabel(params.id.trim(), params.workspaceId)
+      runtime.linearRetireIssueLabel(params.id, params.workspaceId)
   }),
   defineMethod({
     name: 'linear.restoreIssueLabel',
-    params: IssueLabelId,
+    params: LinearIssueLabelIdArgsSchema,
     handler: async (params, { runtime }) =>
-      runtime.linearRestoreIssueLabel(params.id.trim(), params.workspaceId)
+      runtime.linearRestoreIssueLabel(params.id, params.workspaceId)
   }),
   defineMethod({
     name: 'linear.listTeams',

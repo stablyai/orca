@@ -106,9 +106,8 @@ describe('Linear label catalog API', () => {
         parentId: 'parent-1',
         parentName: 'Type',
         isGroup: false,
-        archivedAt: null,
         retiredAt: null,
-        retired: false,
+        isRetired: false,
         workspaceId: 'workspace-1',
         workspaceName: 'Workspace'
       }
@@ -176,7 +175,7 @@ describe('Linear label catalog API', () => {
 
     await expect(
       listIssueLabels({ workspaceId: 'workspace-1', includeArchived: true })
-    ).resolves.toMatchObject([{ id: 'retired-label', retired: true }])
+    ).resolves.toMatchObject([{ id: 'retired-label', isRetired: true }])
   })
 
   it('follows label list pagination so large catalogs are complete', async () => {
@@ -218,6 +217,7 @@ describe('Linear label catalog API', () => {
   })
 
   it('throws label list failures for a single selected workspace', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const apiError = new Error('Linear unavailable')
     getClients.mockReturnValue([
       makeEntry({
@@ -229,6 +229,33 @@ describe('Linear label catalog API', () => {
     await expect(listIssueLabels({ workspaceId: 'workspace-1' })).rejects.toThrow(
       'Linear unavailable'
     )
+    warn.mockRestore()
+  })
+
+  it('surfaces label relation failures instead of silently dropping state', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const relationError = new Error('retired relation failed')
+    const rawRequest = vi.fn().mockResolvedValue({
+      data: {
+        issueLabels: {
+          nodes: [
+            labelNode({
+              retiredBy: Promise.reject(relationError),
+              team: null,
+              parent: null
+            })
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null }
+        }
+      }
+    })
+    getClients.mockReturnValue([makeEntry({ client: { client: { rawRequest } } } as never)])
+    const { listIssueLabels } = await import('./labels')
+
+    await expect(listIssueLabels({ workspaceId: 'workspace-1' })).rejects.toThrow(
+      'retired relation failed'
+    )
+    warn.mockRestore()
   })
 
   it('fans out label listing across selected workspaces and clears only the failed auth workspace', async () => {
@@ -317,6 +344,24 @@ describe('Linear label catalog API', () => {
     })
   })
 
+  it('reports committed mutation success when post-mutation hydration cannot find the label', async () => {
+    const createIssueLabel = vi.fn().mockResolvedValue({
+      success: true,
+      issueLabel: Promise.resolve({ id: 'label-committed' })
+    })
+    const rawRequest = vi.fn().mockResolvedValue({ data: { issueLabel: null } })
+    getClients.mockReturnValue([
+      makeEntry({ client: { client: { rawRequest }, createIssueLabel } } as never)
+    ])
+    const { createIssueLabel: createLinearIssueLabel } = await import('./labels')
+
+    await expect(createLinearIssueLabel({ name: 'Bug' }, 'workspace-1')).resolves.toEqual({
+      ok: true,
+      label: null,
+      warning: 'Linear label mutation succeeded but label could not be retrieved'
+    })
+  })
+
   it('updates labels and preserves nullable fields in the Linear payload', async () => {
     const updateIssueLabel = vi.fn().mockResolvedValue({ success: true, issueLabel: labelNode() })
     getClients.mockReturnValue([makeEntry({ client: { updateIssueLabel } } as never)])
@@ -395,7 +440,7 @@ describe('Linear label catalog API', () => {
 
     await expect(retireIssueLabel('label-1', 'workspace-1')).resolves.toMatchObject({
       ok: true,
-      label: { id: 'label-1', archivedAt, retired: true }
+      label: { id: 'label-1', retiredAt: archivedAt, isRetired: true }
     })
     expect(rawRequest).toHaveBeenCalledWith(expect.stringContaining('query OrcaLinearIssueLabel'), {
       id: 'label-1'

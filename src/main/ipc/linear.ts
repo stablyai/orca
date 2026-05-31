@@ -29,11 +29,16 @@ import {
   retireIssueLabel,
   updateIssueLabel
 } from '../linear/labels'
+import {
+  LinearIssueLabelCreateArgsSchema,
+  LinearIssueLabelIdArgsSchema,
+  LinearIssueLabelListArgsSchema,
+  LinearIssueLabelUpdateArgsSchema,
+  parseLinearLabelPayload
+} from '../linear/label-contract'
 import type { LinearListFilter } from '../linear/issues'
 import type {
   LinearCustomViewModel,
-  LinearIssueLabelCreateInput,
-  LinearIssueLabelUpdateInput,
   LinearIssueUpdate,
   LinearWorkspaceSelection
 } from '../../shared/types'
@@ -63,151 +68,6 @@ function normalizeCustomViewModel(value: unknown): LinearCustomViewModel {
   }
   return value
 }
-
-function normalizeOptionalStringField(
-  raw: Record<string, unknown>,
-  key: string,
-  label: string,
-  options: { nullable?: boolean } = {}
-): { ok: true; value: string | null | undefined } | { ok: false; error: string } {
-  const value = raw[key]
-  if (value === undefined) {
-    return { ok: true, value: undefined }
-  }
-  if (value === null && options.nullable) {
-    return { ok: true, value: null }
-  }
-  if (typeof value !== 'string') {
-    return {
-      ok: false,
-      error: `${label} must be a string${options.nullable ? ' or null' : ''}`
-    }
-  }
-  return { ok: true, value: value.trim() || undefined }
-}
-
-function normalizeOptionalWorkspaceId(
-  raw: Record<string, unknown>
-): { ok: true; value: string | undefined } | { ok: false; error: string } {
-  const value = raw.workspaceId
-  if (value === undefined) {
-    return { ok: true, value: undefined }
-  }
-  if (typeof value !== 'string') {
-    return { ok: false, error: 'Workspace ID must be a string' }
-  }
-  return { ok: true, value: value.trim() || undefined }
-}
-
-function normalizeOptionalBooleanField(
-  raw: Record<string, unknown>,
-  key: string,
-  label: string
-): { ok: true; value: boolean | undefined } | { ok: false; error: string } {
-  const value = raw[key]
-  if (value === undefined) {
-    return { ok: true, value: undefined }
-  }
-  if (typeof value !== 'boolean') {
-    return { ok: false, error: `${label} must be a boolean` }
-  }
-  return { ok: true, value }
-}
-
-function normalizeLabelCreateInput(
-  value: unknown
-): { ok: true; input: LinearIssueLabelCreateInput } | { ok: false; error: string } {
-  if (!value || typeof value !== 'object') {
-    return { ok: false, error: 'Label input is required' }
-  }
-  const raw = value as Record<string, unknown>
-  const name = normalizeWorkspaceId(raw.name)
-  if (!name) {
-    return { ok: false, error: 'Label name is required' }
-  }
-  const color = normalizeOptionalStringField(raw, 'color', 'Label color')
-  if (!color.ok) {
-    return color
-  }
-  const description = normalizeOptionalStringField(raw, 'description', 'Label description', {
-    nullable: true
-  })
-  if (!description.ok) {
-    return description
-  }
-  const teamId = normalizeOptionalStringField(raw, 'teamId', 'Label team ID', { nullable: true })
-  if (!teamId.ok) {
-    return teamId
-  }
-  const parentId = normalizeOptionalStringField(raw, 'parentId', 'Label parent ID', {
-    nullable: true
-  })
-  if (!parentId.ok) {
-    return parentId
-  }
-  const isGroup = normalizeOptionalBooleanField(raw, 'isGroup', 'Label group flag')
-  if (!isGroup.ok) {
-    return isGroup
-  }
-  return {
-    ok: true,
-    input: {
-      name,
-      color: color.value ?? undefined,
-      description: description.value,
-      teamId: teamId.value,
-      parentId: parentId.value,
-      isGroup: isGroup.value
-    }
-  }
-}
-
-function normalizeLabelUpdateInput(
-  value: unknown
-): { ok: true; input: LinearIssueLabelUpdateInput } | { ok: false; error: string } {
-  if (!value || typeof value !== 'object') {
-    return { ok: false, error: 'Label input is required' }
-  }
-  const raw = value as Record<string, unknown>
-  const name = normalizeOptionalStringField(raw, 'name', 'Label name')
-  if (!name.ok) {
-    return name
-  }
-  if (raw.name !== undefined && !name.value) {
-    return { ok: false, error: 'Label name is required' }
-  }
-  const color = normalizeOptionalStringField(raw, 'color', 'Label color')
-  if (!color.ok) {
-    return color
-  }
-  const description = normalizeOptionalStringField(raw, 'description', 'Label description', {
-    nullable: true
-  })
-  if (!description.ok) {
-    return description
-  }
-  const parentId = normalizeOptionalStringField(raw, 'parentId', 'Label parent ID', {
-    nullable: true
-  })
-  if (!parentId.ok) {
-    return parentId
-  }
-  const isGroup = normalizeOptionalBooleanField(raw, 'isGroup', 'Label group flag')
-  if (!isGroup.ok) {
-    return isGroup
-  }
-  return {
-    ok: true,
-    input: {
-      name: name.value ?? undefined,
-      color: color.value ?? undefined,
-      description: description.value,
-      parentId: parentId.value,
-      isGroup: isGroup.value
-    }
-  }
-}
-
 export function registerLinearHandlers(): void {
   ipcMain.handle('linear:connect', async (_event, args: { apiKey: string }) => {
     if (typeof args?.apiKey !== 'string' || !args.apiKey.trim()) {
@@ -523,87 +383,55 @@ export function registerLinearHandlers(): void {
       _event,
       args?: { workspaceId?: LinearWorkspaceSelection; teamId?: string; includeArchived?: boolean }
     ) => {
-      const rawArgs = (args ?? {}) as Record<string, unknown>
-      const workspaceId = normalizeOptionalWorkspaceId(rawArgs)
-      if (!workspaceId.ok) {
-        throw new Error(workspaceId.error)
+      const parsed = parseLinearLabelPayload(LinearIssueLabelListArgsSchema, args)
+      if (!parsed.ok) {
+        throw new Error(parsed.error)
       }
-      const teamId = normalizeOptionalStringField(rawArgs, 'teamId', 'Label team ID')
-      if (!teamId.ok) {
-        throw new Error(teamId.error)
-      }
-      if (rawArgs.includeArchived !== undefined && typeof rawArgs.includeArchived !== 'boolean') {
-        throw new Error('includeArchived must be a boolean')
-      }
-      return listIssueLabels({
-        workspaceId: workspaceId.value as LinearWorkspaceSelection | undefined,
-        teamId: teamId.value ?? undefined,
-        includeArchived: args?.includeArchived === true
-      })
+      return listIssueLabels(parsed.value)
     }
   )
 
   ipcMain.handle(
     'linear:createIssueLabel',
     async (_event, args: { input?: unknown; workspaceId?: string }) => {
-      const workspaceId = normalizeOptionalWorkspaceId((args ?? {}) as Record<string, unknown>)
-      if (!workspaceId.ok) {
-        return workspaceId
+      const parsed = parseLinearLabelPayload(LinearIssueLabelCreateArgsSchema, args)
+      if (!parsed.ok) {
+        return parsed
       }
-      const normalized = normalizeLabelCreateInput(args?.input)
-      if (!normalized.ok) {
-        return normalized
-      }
-      return createIssueLabel(normalized.input, workspaceId.value)
+      return createIssueLabel(parsed.value.input, parsed.value.workspaceId)
     }
   )
 
   ipcMain.handle(
     'linear:updateIssueLabel',
     async (_event, args: { id?: string; input?: unknown; workspaceId?: string }) => {
-      const id = normalizeWorkspaceId(args?.id)
-      if (!id) {
-        return { ok: false, error: 'Label ID is required' }
+      const parsed = parseLinearLabelPayload(LinearIssueLabelUpdateArgsSchema, args)
+      if (!parsed.ok) {
+        return parsed
       }
-      const workspaceId = normalizeOptionalWorkspaceId((args ?? {}) as Record<string, unknown>)
-      if (!workspaceId.ok) {
-        return workspaceId
-      }
-      const normalized = normalizeLabelUpdateInput(args.input)
-      if (!normalized.ok) {
-        return normalized
-      }
-      return updateIssueLabel(id, normalized.input, workspaceId.value)
+      return updateIssueLabel(parsed.value.id, parsed.value.input, parsed.value.workspaceId)
     }
   )
 
   ipcMain.handle(
     'linear:retireIssueLabel',
     async (_event, args: { id?: string; workspaceId?: string }) => {
-      const id = normalizeWorkspaceId(args?.id)
-      if (!id) {
-        return { ok: false, error: 'Label ID is required' }
+      const parsed = parseLinearLabelPayload(LinearIssueLabelIdArgsSchema, args)
+      if (!parsed.ok) {
+        return parsed
       }
-      const workspaceId = normalizeOptionalWorkspaceId((args ?? {}) as Record<string, unknown>)
-      if (!workspaceId.ok) {
-        return workspaceId
-      }
-      return retireIssueLabel(id, workspaceId.value)
+      return retireIssueLabel(parsed.value.id, parsed.value.workspaceId)
     }
   )
 
   ipcMain.handle(
     'linear:restoreIssueLabel',
     async (_event, args: { id?: string; workspaceId?: string }) => {
-      const id = normalizeWorkspaceId(args?.id)
-      if (!id) {
-        return { ok: false, error: 'Label ID is required' }
+      const parsed = parseLinearLabelPayload(LinearIssueLabelIdArgsSchema, args)
+      if (!parsed.ok) {
+        return parsed
       }
-      const workspaceId = normalizeOptionalWorkspaceId((args ?? {}) as Record<string, unknown>)
-      if (!workspaceId.ok) {
-        return workspaceId
-      }
-      return restoreIssueLabel(id, workspaceId.value)
+      return restoreIssueLabel(parsed.value.id, parsed.value.workspaceId)
     }
   )
 

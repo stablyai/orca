@@ -112,12 +112,8 @@ const ISSUE_LABEL_QUERY = `
   }
 `
 
-async function optionalRelation<T>(value: Relation<T>): Promise<T | undefined> {
-  try {
-    return (await value) ?? undefined
-  } catch {
-    return undefined
-  }
+async function resolveOptionalRelation<T>(value: Relation<T>): Promise<T | undefined> {
+  return (await value) ?? undefined
 }
 
 function dateToString(value: Date | string | null | undefined): string | null {
@@ -132,10 +128,12 @@ async function mapIssueLabelForWorkspace(
   label: LinearIssueLabelNode
 ): Promise<LinearIssueLabel> {
   const [team, parent, retiredBy] = await Promise.all([
-    optionalRelation(label.team),
-    optionalRelation(label.parent),
-    optionalRelation(label.retiredBy)
+    resolveOptionalRelation(label.team),
+    resolveOptionalRelation(label.parent),
+    resolveOptionalRelation(label.retiredBy)
   ])
+
+  const retiredAt = dateToString(label.retiredAt ?? label.archivedAt)
 
   return {
     id: label.id,
@@ -147,9 +145,8 @@ async function mapIssueLabelForWorkspace(
     parentId: parent?.id,
     parentName: parent?.name,
     isGroup: label.isGroup ?? false,
-    archivedAt: dateToString(label.archivedAt),
-    retiredAt: dateToString(label.retiredAt),
-    retired: Boolean(retiredBy),
+    retiredAt,
+    isRetired: Boolean(retiredAt || retiredBy),
     workspaceId: entry.workspace.id,
     workspaceName: entry.workspace.organizationName
   }
@@ -167,7 +164,7 @@ function buildLabelFilter(teamId?: string | null): Record<string, unknown> | und
 }
 
 function isMappedIssueLabelRetired(label: LinearIssueLabel): boolean {
-  return Boolean(label.archivedAt || label.retiredAt || label.retired)
+  return label.isRetired
 }
 
 async function fetchAllIssueLabelNodes(
@@ -313,20 +310,38 @@ async function runLabelMutation(
   await acquire()
   try {
     const result = await mutate(resolved.entry)
-    const label = await optionalRelation(result.issueLabel)
-    if (!result.success || !label?.id) {
+    if (!result.success) {
       return { ok: false, error: failureMessage }
     }
-    const hydratedLabel = await fetchIssueLabelNode(resolved.entry, label.id)
-    if (!hydratedLabel) {
-      return {
-        ok: false,
-        error: 'Linear label mutation succeeded but label could not be retrieved'
+
+    const committedWarning = 'Linear label mutation succeeded but label could not be retrieved'
+    let label: LinearIssueLabelNode | undefined
+    try {
+      label = await resolveOptionalRelation(result.issueLabel)
+    } catch (error) {
+      if (isAuthError(error)) {
+        clearToken(resolved.entry.workspace.id)
       }
+      return { ok: true, label: null, warning: committedWarning }
     }
-    return {
-      ok: true,
-      label: await mapIssueLabelForWorkspace(resolved.entry, hydratedLabel)
+    if (!label?.id) {
+      return { ok: true, label: null, warning: committedWarning }
+    }
+
+    try {
+      const hydratedLabel = await fetchIssueLabelNode(resolved.entry, label.id)
+      if (!hydratedLabel) {
+        return { ok: true, label: null, warning: committedWarning }
+      }
+      return {
+        ok: true,
+        label: await mapIssueLabelForWorkspace(resolved.entry, hydratedLabel)
+      }
+    } catch (error) {
+      if (isAuthError(error)) {
+        clearToken(resolved.entry.workspace.id)
+      }
+      return { ok: true, label: null, warning: committedWarning }
     }
   } catch (error) {
     if (isAuthError(error)) {

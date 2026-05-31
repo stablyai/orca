@@ -1459,9 +1459,8 @@ export type LinearIssueLabel = {
   parentId?: string
   parentName?: string
   isGroup: boolean
-  archivedAt?: string | null
-  retiredAt?: string | null
-  retired?: boolean
+  retiredAt: string | null
+  isRetired: boolean
 }
 
 export type LinearIssueLabelCreateInput = {
@@ -1482,7 +1481,8 @@ export type LinearIssueLabelUpdateInput = {
 }
 
 export type LinearIssueLabelMutationResult =
-  | { ok: true; label: LinearIssueLabel }
+  | { ok: true; label: LinearIssueLabel; warning?: string }
+  | { ok: true; label: null; warning: string }
   | { ok: false; error: string }
 
 export type LinearMember = {

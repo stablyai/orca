@@ -3,6 +3,7 @@ import type { LinearIssueLabel } from '../../../shared/types'
 import {
   compactLinearLabelCreateInput,
   compactLinearLabelUpdateInput,
+  getLinearLabelParentOptions,
   getLinearLabelsWorkspaceViewState,
   isLinearLabelRetired,
   mutateLinearLabelArchiveState,
@@ -67,18 +68,22 @@ describe('reconcileSelectedLinearLabelTeamId', () => {
   })
 })
 
-describe('isLinearLabelRetired', () => {
-  it('treats archivedAt and retiredAt as retired label states', () => {
-    expect(
-      isLinearLabelRetired({ archivedAt: '2026-05-30T12:00:00.000Z' } as LinearIssueLabel)
-    ).toBe(true)
-    expect(
-      isLinearLabelRetired({ retiredAt: '2026-05-31T01:00:00.000Z' } as LinearIssueLabel)
-    ).toBe(true)
-    expect(isLinearLabelRetired({ retired: true } as LinearIssueLabel)).toBe(true)
-    expect(isLinearLabelRetired({ archivedAt: null, retiredAt: null } as LinearIssueLabel)).toBe(
-      false
-    )
+describe('Linear label retired state', () => {
+  it('uses the canonical isRetired flag for retired label state', () => {
+    expect(isLinearLabelRetired({ isRetired: true } as LinearIssueLabel)).toBe(true)
+    expect(isLinearLabelRetired({ isRetired: false } as LinearIssueLabel)).toBe(false)
+  })
+
+  it('excludes retired groups from parent label options', () => {
+    const labels = [
+      { id: 'active-group', name: 'Active', isGroup: true, isRetired: false },
+      { id: 'retired-group', name: 'Retired', isGroup: true, isRetired: true },
+      { id: 'child', name: 'Child', isGroup: false, isRetired: false }
+    ] as LinearIssueLabel[]
+
+    expect(getLinearLabelParentOptions(labels, 'child').map((label) => label.id)).toEqual([
+      'active-group'
+    ])
   })
 })
 
