@@ -6,7 +6,6 @@ import {
 } from '@tanstack/react-virtual'
 import type { Range } from '@tanstack/react-virtual'
 import {
-  Check,
   ChevronDown,
   CircleX,
   Ellipsis,
@@ -17,8 +16,7 @@ import {
   Shapes,
   SlidersHorizontal,
   Trash2,
-  Workflow,
-  X
+  Workflow
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
@@ -186,7 +184,6 @@ import {
   type WorktreeSectionActivityState,
   type WorktreeSectionActivitySummary
 } from './worktree-section-activity'
-import { runWorktreeBatchDelete } from './delete-worktree-flow'
 
 export {
   getScrollTopToRevealBounds,
@@ -300,108 +297,6 @@ function getWorktreeVisibilityMenuLabel(repo: Repo): string {
   return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Show hidden worktrees'
 }
 
-function formatSelectedCount(count: number, singular: string): string {
-  return `${count} ${singular}${count === 1 ? '' : 's'} selected`
-}
-
-function SidebarSelectionCheckbox({
-  checked,
-  label,
-  className,
-  onClick
-}: {
-  checked: boolean
-  label: string
-  className?: string
-  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={checked}
-      aria-label={label}
-      data-checked={checked ? 'true' : 'false'}
-      onClick={onClick}
-      className={cn(
-        'flex size-4 shrink-0 items-center justify-center rounded-[4px] border text-[10px] transition-colors',
-        'border-sidebar-border bg-sidebar text-transparent hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
-        'data-[checked=true]:border-sidebar-primary data-[checked=true]:bg-sidebar-primary data-[checked=true]:text-sidebar-primary-foreground',
-        className
-      )}
-    >
-      {checked ? <Check className="size-3" strokeWidth={3} /> : null}
-    </button>
-  )
-}
-
-function SidebarBulkSelectionBar({
-  projectCount,
-  worktreeCount,
-  onRemoveProjects,
-  onDeleteWorktrees,
-  onClear
-}: {
-  projectCount: number
-  worktreeCount: number
-  onRemoveProjects: () => void
-  onDeleteWorktrees: () => void
-  onClear: () => void
-}): React.JSX.Element | null {
-  if (projectCount === 0 && worktreeCount === 0) {
-    return null
-  }
-
-  const summary =
-    projectCount > 0
-      ? formatSelectedCount(projectCount, 'project')
-      : formatSelectedCount(worktreeCount, 'workspace')
-
-  return (
-    <div
-      data-worktree-sidebar-bulk-selection=""
-      className="mx-2 mb-1 flex min-h-8 items-center gap-1 rounded-md border border-sidebar-border bg-sidebar-accent px-2 py-1 text-[11px] text-sidebar-accent-foreground"
-    >
-      <span className="min-w-0 flex-1 truncate font-medium">{summary}</span>
-      {projectCount > 0 ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="h-6 gap-1 px-1.5 text-[11px] hover:bg-sidebar"
-          onClick={onRemoveProjects}
-        >
-          <Trash2 className="size-3" />
-          Remove
-        </Button>
-      ) : null}
-      {worktreeCount > 0 ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="h-6 gap-1 px-1.5 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
-          onClick={onDeleteWorktrees}
-        >
-          <Trash2 className="size-3" />
-          Delete
-        </Button>
-      ) : null}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        className="size-6 text-muted-foreground hover:bg-sidebar hover:text-foreground"
-        aria-label="Clear selection"
-        onClick={onClear}
-      >
-        <X className="size-3.5" />
-      </Button>
-    </div>
-  )
-}
-
 const LINEAGE_INDENT = 18
 // Why: top-level worktrees are children of their project header; indent the
 // group one step so the status dots nest under the folder icon for hierarchy.
@@ -437,11 +332,7 @@ type VirtualizedWorktreeViewportProps = {
   worktrees: Worktree[]
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
-  selectedProjectIds: ReadonlySet<string>
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
-  onWorktreeCheckboxToggle: (event: React.MouseEvent<HTMLButtonElement>, worktreeId: string) => void
-  onProjectSelectionGesture: (event: React.MouseEvent<HTMLElement>, projectId: string) => boolean
-  onProjectCheckboxToggle: (event: React.MouseEvent<HTMLButtonElement>, projectId: string) => void
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
@@ -782,11 +673,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   worktrees,
   selectedWorktreeIds,
   selectedWorktrees,
-  selectedProjectIds,
   onSelectionGesture,
-  onWorktreeCheckboxToggle,
-  onProjectSelectionGesture,
-  onProjectCheckboxToggle,
   onContextMenuSelect,
   repoMap,
   worktreeMap,
@@ -2550,8 +2437,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               const isRepoHeader = groupBy === 'repo' && row.repo !== undefined
               const isProjectGroupHeader = groupBy === 'repo' && row.projectGroup !== undefined
               const projectIdForHeader = isRepoHeader ? row.repo!.id : undefined
-              const isProjectSelected =
-                projectIdForHeader !== undefined && selectedProjectIds.has(projectIdForHeader)
               const isDraggingThis =
                 canReorderRepoHeaders &&
                 repoDrag.state.draggingRepoId !== null &&
@@ -2615,8 +2500,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     className={cn(
                       'group flex h-7 w-full items-center gap-1.5 pr-1 text-left transition-all',
                       'cursor-pointer',
-                      isProjectSelected &&
-                        'rounded-md bg-sidebar-accent ring-1 ring-sidebar-ring/35',
                       isDraggingThis &&
                         'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
                       headerWorkspaceStatus &&
@@ -2651,17 +2534,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         ? (event) => handleWorkspaceStatusDrop(event, headerWorkspaceStatus)
                         : undefined
                     }
-                    onClick={(event) => {
-                      if (
-                        projectIdForHeader &&
-                        onProjectSelectionGesture(event, projectIdForHeader)
-                      ) {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        return
-                      }
-                      toggleGroupWithScrollAnchor(row.key)
-                    }}
+                    onClick={() => toggleGroupWithScrollAnchor(row.key)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
@@ -2669,15 +2542,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       }
                     }}
                   >
-                    {projectIdForHeader ? (
-                      <SidebarSelectionCheckbox
-                        checked={isProjectSelected}
-                        label={`Select project ${row.label}`}
-                        className="mr-0.5"
-                        onClick={(event) => onProjectCheckboxToggle(event, projectIdForHeader)}
-                      />
-                    ) : null}
-
                     {row.icon ? (
                       <div
                         onPointerDown={
@@ -3003,53 +2867,39 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     paddingLeft: nested && paddingLeft > 0 ? `${paddingLeft}px` : undefined
                   }}
                 >
-                  <div className="flex min-w-0 items-start gap-1">
-                    <SidebarSelectionCheckbox
-                      checked={selectedWorktreeIds.has(itemRow.worktree.id)}
-                      label={`Select workspace ${itemRow.worktree.displayName}`}
-                      className="mt-2"
-                      onClick={(event) => onWorktreeCheckboxToggle(event, itemRow.worktree.id)}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <WorktreeCard
-                        worktree={itemRow.worktree}
-                        repo={itemRow.repo}
-                        isActive={activeWorktreeId === itemRow.worktree.id}
-                        isCurrentWorktree={currentWorktreeId === itemRow.worktree.id}
-                        // Why: a child-active parent should look active without
-                        // running active-card side effects such as SSH reconnect UI.
-                        isActiveSurface={
-                          forceActiveSurface || activeWorktreeId === itemRow.worktree.id
-                        }
-                        isMultiSelected={selectedWorktreeIds.has(itemRow.worktree.id)}
-                        revealHighlight={highlightedRevealWorktreeId === itemRow.worktree.id}
-                        revealHighlightTone={revealHighlightTone}
-                        selectedWorktrees={selectedWorktrees}
-                        nativeDragEnabled={false}
-                        contentIndent={nested ? 0 : paddingLeft}
-                        flushSurface={!nested}
-                        onSelectionGesture={onSelectionGesture}
-                        onContextMenuSelect={(event) =>
-                          onContextMenuSelect(event, itemRow.worktree)
-                        }
-                        onCardDragStart={handleWorktreeCardDragStart}
-                        onCardDragEnd={clearWorktreeDrag}
-                        hideRepoBadge={groupBy === 'repo'}
-                        lineageChildCount={itemRow.lineageChildCount}
-                        lineageCollapsed={itemRow.lineageCollapsed}
-                        lineageChildren={lineageChildren}
-                        onLineageToggle={
-                          lineageToggleGroupKey
-                            ? (event) => {
-                                event.preventDefault()
-                                event.stopPropagation()
-                                toggleGroupWithScrollAnchor(lineageToggleGroupKey)
-                              }
-                            : undefined
-                        }
-                      />
-                    </div>
-                  </div>
+                  <WorktreeCard
+                    worktree={itemRow.worktree}
+                    repo={itemRow.repo}
+                    isActive={activeWorktreeId === itemRow.worktree.id}
+                    isCurrentWorktree={currentWorktreeId === itemRow.worktree.id}
+                    // Why: a child-active parent should look active without
+                    // running active-card side effects such as SSH reconnect UI.
+                    isActiveSurface={forceActiveSurface || activeWorktreeId === itemRow.worktree.id}
+                    isMultiSelected={selectedWorktreeIds.has(itemRow.worktree.id)}
+                    revealHighlight={highlightedRevealWorktreeId === itemRow.worktree.id}
+                    revealHighlightTone={revealHighlightTone}
+                    selectedWorktrees={selectedWorktrees}
+                    nativeDragEnabled={false}
+                    contentIndent={nested ? 0 : paddingLeft}
+                    flushSurface={!nested}
+                    onSelectionGesture={onSelectionGesture}
+                    onContextMenuSelect={(event) => onContextMenuSelect(event, itemRow.worktree)}
+                    onCardDragStart={handleWorktreeCardDragStart}
+                    onCardDragEnd={clearWorktreeDrag}
+                    hideRepoBadge={groupBy === 'repo'}
+                    lineageChildCount={itemRow.lineageChildCount}
+                    lineageCollapsed={itemRow.lineageCollapsed}
+                    lineageChildren={lineageChildren}
+                    onLineageToggle={
+                      lineageToggleGroupKey
+                        ? (event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            toggleGroupWithScrollAnchor(lineageToggleGroupKey)
+                          }
+                        : undefined
+                    }
+                  />
                 </div>
               )
             }
@@ -3086,118 +2936,110 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     selectedWorktrees={selectedWorktrees}
                     onContextMenuSelect={(event) => onContextMenuSelect(event, child.worktree)}
                   >
-                    <div className="flex min-w-0 items-start gap-1">
-                      <SidebarSelectionCheckbox
-                        checked={selectedWorktreeIds.has(child.worktree.id)}
-                        label={`Select workspace ${child.worktree.displayName}`}
-                        className="mt-2"
-                        onClick={(event) => onWorktreeCheckboxToggle(event, child.worktree.id)}
-                      />
-                      <div
-                        id={getWorktreeOptionId(child.worktree.id)}
-                        role="option"
-                        aria-selected={selectedWorktreeIds.has(child.worktree.id)}
-                        aria-current={isActive ? 'page' : undefined}
-                        className={cn(
-                          'relative flex min-w-0 flex-1 cursor-pointer items-start gap-1.5 rounded-md border border-transparent px-2 py-1.5 transition-colors',
-                          highlightedRevealWorktreeId === child.worktree.id && [
-                            'scroll-to-current-workspace-reveal-highlight',
-                            revealHighlightTone === 'ai' &&
-                              'scroll-to-current-workspace-reveal-highlight--ai'
-                          ],
-                          isActive
-                            ? 'border-black/[0.015] bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-border/40 dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-                            : 'worktree-sidebar-card-hover'
-                        )}
-                        data-scroll-reveal-highlight={
-                          highlightedRevealWorktreeId === child.worktree.id ? 'true' : undefined
-                        }
-                        onClick={handleClick}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                      >
-                        <span className="mt-[2px] flex w-4 shrink-0 justify-center pt-[2px]">
-                          <WorktreeActivityStatusIndicator worktreeId={child.worktree.id} />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[12px] leading-tight text-foreground">
-                            {child.worktree.displayName}
-                          </div>
-                          <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                            {child.repo && groupBy !== 'repo' ? (
-                              <span className="flex h-[16px] shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 text-[10px] font-semibold leading-none text-foreground dark:bg-accent/50 dark:border-border/60">
-                                <RepoBadgeMark color={child.repo.badgeColor} />
-                                <span className="max-w-[6rem] truncate lowercase">
-                                  {child.repo.displayName}
-                                </span>
+                    <div
+                      id={getWorktreeOptionId(child.worktree.id)}
+                      role="option"
+                      aria-selected={selectedWorktreeIds.has(child.worktree.id)}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={cn(
+                        'relative flex cursor-pointer items-start gap-1.5 rounded-md border border-transparent px-2 py-1.5 transition-colors',
+                        highlightedRevealWorktreeId === child.worktree.id && [
+                          'scroll-to-current-workspace-reveal-highlight',
+                          revealHighlightTone === 'ai' &&
+                            'scroll-to-current-workspace-reveal-highlight--ai'
+                        ],
+                        isActive
+                          ? 'border-black/[0.015] bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-border/40 dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
+                          : 'worktree-sidebar-card-hover'
+                      )}
+                      data-scroll-reveal-highlight={
+                        highlightedRevealWorktreeId === child.worktree.id ? 'true' : undefined
+                      }
+                      onClick={handleClick}
+                      onDoubleClick={(event) => event.stopPropagation()}
+                    >
+                      <span className="mt-[2px] flex w-4 shrink-0 justify-center pt-[2px]">
+                        <WorktreeActivityStatusIndicator worktreeId={child.worktree.id} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[12px] leading-tight text-foreground">
+                          {child.worktree.displayName}
+                        </div>
+                        <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                          {child.repo && groupBy !== 'repo' ? (
+                            <span className="flex h-[16px] shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 text-[10px] font-semibold leading-none text-foreground dark:bg-accent/50 dark:border-border/60">
+                              <RepoBadgeMark color={child.repo.badgeColor} />
+                              <span className="max-w-[6rem] truncate lowercase">
+                                {child.repo.displayName}
+                              </span>
+                            </span>
+                          ) : null}
+                          <span className="truncate text-[10.5px] leading-none text-muted-foreground">
+                            {branchDisplayName(child.worktree.branch)}
+                          </span>
+                        </div>
+                        {child.worktree.linkedIssue || child.worktree.comment ? (
+                          <div className="mt-1.5 truncate text-[10.5px] leading-tight text-muted-foreground">
+                            {child.worktree.linkedIssue ? (
+                              <span className="font-medium text-foreground/80">
+                                #{child.worktree.linkedIssue}
                               </span>
                             ) : null}
-                            <span className="truncate text-[10.5px] leading-none text-muted-foreground">
-                              {branchDisplayName(child.worktree.branch)}
-                            </span>
+                            {child.worktree.linkedIssue && child.worktree.comment ? '  ' : null}
+                            {child.worktree.comment}
                           </div>
-                          {child.worktree.linkedIssue || child.worktree.comment ? (
-                            <div className="mt-1.5 truncate text-[10.5px] leading-tight text-muted-foreground">
-                              {child.worktree.linkedIssue ? (
-                                <span className="font-medium text-foreground/80">
-                                  #{child.worktree.linkedIssue}
-                                </span>
-                              ) : null}
-                              {child.worktree.linkedIssue && child.worktree.comment ? '  ' : null}
-                              {child.worktree.comment}
-                            </div>
-                          ) : null}
-                          {showInlineAgentCards ? (
-                            // Why: nested lineage children use this lightweight
-                            // renderer instead of WorktreeCard, so their inline
-                            // agent rows must be mounted here explicitly.
-                            <WorktreeCardAgents
-                              worktreeId={child.worktree.id}
-                              className="mt-1 divide-y-0"
-                            />
-                          ) : null}
-                          {child.lineageChildCount > 0 && lineageToggleGroupKey ? (
-                            <div className="mt-1.5 flex min-w-0 justify-start">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="xs"
-                                    className="h-[18px] max-w-[8rem] gap-1 rounded-md border border-sidebar-border bg-sidebar px-1.5 text-[10px] font-medium leading-none text-muted-foreground shadow-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-sidebar-ring"
-                                    aria-label={`${child.lineageCollapsed ? 'Show' : 'Hide'} ${
-                                      child.lineageChildCount
-                                    } child ${
-                                      child.lineageChildCount === 1 ? 'workspace' : 'workspaces'
-                                    }`}
-                                    aria-expanded={!child.lineageCollapsed}
-                                    onClick={(event) => {
-                                      event.preventDefault()
-                                      event.stopPropagation()
-                                      toggleGroupWithScrollAnchor(lineageToggleGroupKey)
-                                    }}
-                                  >
-                                    <Workflow className="size-2.5" />
-                                    <span className="truncate">
-                                      {child.lineageChildCount}{' '}
-                                      {child.lineageChildCount === 1 ? 'child' : 'children'}
-                                    </span>
-                                    <ChevronDown
-                                      className={cn(
-                                        'size-2.5 transition-transform',
-                                        child.lineageCollapsed && '-rotate-90'
-                                      )}
-                                    />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="right" sideOffset={8}>
-                                  {child.lineageCollapsed
-                                    ? 'Show child workspaces'
-                                    : 'Hide child workspaces'}
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          ) : null}
-                        </div>
+                        ) : null}
+                        {showInlineAgentCards ? (
+                          // Why: nested lineage children use this lightweight
+                          // renderer instead of WorktreeCard, so their inline
+                          // agent rows must be mounted here explicitly.
+                          <WorktreeCardAgents
+                            worktreeId={child.worktree.id}
+                            className="mt-1 divide-y-0"
+                          />
+                        ) : null}
+                        {child.lineageChildCount > 0 && lineageToggleGroupKey ? (
+                          <div className="mt-1.5 flex min-w-0 justify-start">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="xs"
+                                  className="h-[18px] max-w-[8rem] gap-1 rounded-md border border-sidebar-border bg-sidebar px-1.5 text-[10px] font-medium leading-none text-muted-foreground shadow-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-sidebar-ring"
+                                  aria-label={`${child.lineageCollapsed ? 'Show' : 'Hide'} ${
+                                    child.lineageChildCount
+                                  } child ${
+                                    child.lineageChildCount === 1 ? 'workspace' : 'workspaces'
+                                  }`}
+                                  aria-expanded={!child.lineageCollapsed}
+                                  onClick={(event) => {
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                    toggleGroupWithScrollAnchor(lineageToggleGroupKey)
+                                  }}
+                                >
+                                  <Workflow className="size-2.5" />
+                                  <span className="truncate">
+                                    {child.lineageChildCount}{' '}
+                                    {child.lineageChildCount === 1 ? 'child' : 'children'}
+                                  </span>
+                                  <ChevronDown
+                                    className={cn(
+                                      'size-2.5 transition-transform',
+                                      child.lineageCollapsed && '-rotate-90'
+                                    )}
+                                  />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="right" sideOffset={8}>
+                                {child.lineageCollapsed
+                                  ? 'Show child workspaces'
+                                  : 'Hide child workspaces'}
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </WorktreeContextMenu>
@@ -3918,26 +3760,8 @@ const WorktreeList = React.memo(function WorktreeList({
     () => renderedWorktrees.map((worktree) => worktree.id),
     [renderedWorktrees]
   )
-  const renderedProjects = useMemo(
-    () =>
-      groupBy === 'repo'
-        ? rows
-            .filter((row): row is GroupHeaderRow => row.type === 'header' && row.repo != null)
-            .map((row) => row.repo!)
-        : [],
-    [groupBy, rows]
-  )
-  const renderedProjectIds = useMemo(
-    () => renderedProjects.map((project) => project.id),
-    [renderedProjects]
-  )
   const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
-  const [worktreeSelectionMode, setWorktreeSelectionMode] = useState<'navigation' | 'bulk'>(
-    'navigation'
-  )
-  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set())
-  const [projectSelectionAnchorId, setProjectSelectionAnchorId] = useState<string | null>(null)
 
   const prunedSelection = pruneWorktreeSelection(
     selectedWorktreeIds,
@@ -3952,22 +3776,6 @@ const WorktreeList = React.memo(function WorktreeList({
   if (selectionAnchorId !== prunedSelection.anchorId) {
     setSelectionAnchorId(prunedSelection.anchorId)
   }
-  if (worktreeSelectionMode === 'bulk' && prunedSelection.selectedIds.size === 0) {
-    setWorktreeSelectionMode('navigation')
-  }
-  const prunedProjectSelection = pruneWorktreeSelection(
-    selectedProjectIds,
-    projectSelectionAnchorId,
-    renderedProjectIds
-  )
-  // Why: removing or filtering a project header must not leave its checkbox
-  // selected in the bulk bar after the row disappears.
-  if (!areWorktreeSelectionsEqual(selectedProjectIds, prunedProjectSelection.selectedIds)) {
-    setSelectedProjectIds(prunedProjectSelection.selectedIds)
-  }
-  if (projectSelectionAnchorId !== prunedProjectSelection.anchorId) {
-    setProjectSelectionAnchorId(prunedProjectSelection.anchorId)
-  }
 
   const selectedWorktrees = useMemo(() => {
     if (selectedWorktreeIds.size === 0) {
@@ -3975,44 +3783,27 @@ const WorktreeList = React.memo(function WorktreeList({
     }
     return renderedWorktrees.filter((worktree) => selectedWorktreeIds.has(worktree.id))
   }, [renderedWorktrees, selectedWorktreeIds])
-  const selectedProjects = useMemo(() => {
-    if (selectedProjectIds.size === 0) {
-      return []
-    }
-    return renderedProjects.filter((project) => selectedProjectIds.has(project.id))
-  }, [renderedProjects, selectedProjectIds])
-  const bulkSelectedWorktrees = useMemo(
-    () => (worktreeSelectionMode === 'bulk' ? selectedWorktrees : []),
-    [selectedWorktrees, worktreeSelectionMode]
-  )
 
   useEffect(() => {
-    if (selectedWorktreeIds.size === 0 && selectedProjectIds.size === 0) {
+    if (selectedWorktreeIds.size === 0) {
       return
     }
 
     const clearSelectionOutsideSidebar = (event: PointerEvent): void => {
       const target = event.target
       const sidebarContainer = document.querySelector('[data-worktree-sidebar-container]')
-      const bulkSelectionBar = document.querySelector('[data-worktree-sidebar-bulk-selection]')
-      if (
-        target instanceof Node &&
-        (sidebarContainer?.contains(target) || bulkSelectionBar?.contains(target))
-      ) {
+      if (target instanceof Node && sidebarContainer?.contains(target)) {
         return
       }
       setSelectedWorktreeIds(new Set())
       setSelectionAnchorId(null)
-      setWorktreeSelectionMode('navigation')
-      setSelectedProjectIds(new Set())
-      setProjectSelectionAnchorId(null)
     }
 
     document.addEventListener('pointerdown', clearSelectionOutsideSidebar, { capture: true })
     return () => {
       document.removeEventListener('pointerdown', clearSelectionOutsideSidebar, { capture: true })
     }
-  }, [selectedProjectIds.size, selectedWorktreeIds.size])
+  }, [selectedWorktreeIds.size])
 
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktreeId: string): boolean => {
@@ -4026,85 +3817,11 @@ const WorktreeList = React.memo(function WorktreeList({
       })
       setSelectedWorktreeIds(result.selectedIds)
       setSelectionAnchorId(result.anchorId)
-      setWorktreeSelectionMode(intent === 'replace' ? 'navigation' : 'bulk')
-      if (result.selectedIds.size > 0) {
-        setSelectedProjectIds(new Set())
-        setProjectSelectionAnchorId(null)
-      }
       // Plain click keeps its existing navigation behavior; modifier gestures
       // are selection-only so users can build a batch without switching away.
       return intent !== 'replace'
     },
     [renderedWorktreeIds, selectedWorktreeIds, selectionAnchorId]
-  )
-
-  const updateWorktreeSelectionForCheckbox = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>, worktreeId: string): void => {
-      event.preventDefault()
-      event.stopPropagation()
-      const result = updateWorktreeSelection({
-        visibleIds: renderedWorktreeIds,
-        previousSelectedIds: selectedWorktreeIds,
-        previousAnchorId: selectionAnchorId,
-        targetId: worktreeId,
-        intent: event.shiftKey ? 'range' : 'toggle'
-      })
-      setSelectedWorktreeIds(result.selectedIds)
-      setSelectionAnchorId(result.anchorId)
-      setWorktreeSelectionMode(result.selectedIds.size > 0 ? 'bulk' : 'navigation')
-      if (result.selectedIds.size > 0) {
-        setSelectedProjectIds(new Set())
-        setProjectSelectionAnchorId(null)
-      }
-    },
-    [renderedWorktreeIds, selectedWorktreeIds, selectionAnchorId]
-  )
-
-  const updateProjectSelectionForGesture = useCallback(
-    (event: React.MouseEvent<HTMLElement>, projectId: string): boolean => {
-      const intent = getWorktreeSelectionIntent(event, navigator.userAgent.includes('Mac'))
-      if (intent === 'replace') {
-        return false
-      }
-      const result = updateWorktreeSelection({
-        visibleIds: renderedProjectIds,
-        previousSelectedIds: selectedProjectIds,
-        previousAnchorId: projectSelectionAnchorId,
-        targetId: projectId,
-        intent
-      })
-      setSelectedProjectIds(result.selectedIds)
-      setProjectSelectionAnchorId(result.anchorId)
-      if (result.selectedIds.size > 0) {
-        setSelectedWorktreeIds(new Set())
-        setSelectionAnchorId(null)
-        setWorktreeSelectionMode('navigation')
-      }
-      return true
-    },
-    [projectSelectionAnchorId, renderedProjectIds, selectedProjectIds]
-  )
-
-  const updateProjectSelectionForCheckbox = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>, projectId: string): void => {
-      event.preventDefault()
-      event.stopPropagation()
-      const result = updateWorktreeSelection({
-        visibleIds: renderedProjectIds,
-        previousSelectedIds: selectedProjectIds,
-        previousAnchorId: projectSelectionAnchorId,
-        targetId: projectId,
-        intent: event.shiftKey ? 'range' : 'toggle'
-      })
-      setSelectedProjectIds(result.selectedIds)
-      setProjectSelectionAnchorId(result.anchorId)
-      if (result.selectedIds.size > 0) {
-        setSelectedWorktreeIds(new Set())
-        setSelectionAnchorId(null)
-        setWorktreeSelectionMode('navigation')
-      }
-    },
-    [projectSelectionAnchorId, renderedProjectIds, selectedProjectIds]
   )
 
   const selectForContextMenu = useCallback(
@@ -4114,68 +3831,10 @@ const WorktreeList = React.memo(function WorktreeList({
       }
       setSelectedWorktreeIds(new Set([worktree.id]))
       setSelectionAnchorId(worktree.id)
-      setWorktreeSelectionMode('navigation')
-      setSelectedProjectIds(new Set())
-      setProjectSelectionAnchorId(null)
       return [worktree]
     },
     [selectedWorktreeIds, selectedWorktrees]
   )
-
-  const clearBulkSelection = useCallback(() => {
-    setSelectedWorktreeIds(new Set())
-    setSelectionAnchorId(null)
-    setWorktreeSelectionMode('navigation')
-    setSelectedProjectIds(new Set())
-    setProjectSelectionAnchorId(null)
-  }, [])
-
-  const handleDeleteSelectedWorktrees = useCallback(() => {
-    if (bulkSelectedWorktrees.length === 0) {
-      return
-    }
-    runWorktreeBatchDelete(
-      bulkSelectedWorktrees.map((worktree) => worktree.id),
-      {
-        onDeleted: (deletedIds) => {
-          const deleted = new Set(deletedIds)
-          setSelectedWorktreeIds((current) => {
-            const next = new Set([...current].filter((id) => !deleted.has(id)))
-            if (next.size === 0) {
-              setSelectionAnchorId(null)
-              setWorktreeSelectionMode('navigation')
-            }
-            return next
-          })
-        }
-      }
-    )
-  }, [bulkSelectedWorktrees])
-
-  const handleRemoveSelectedProjects = useCallback(() => {
-    if (selectedProjects.length === 0) {
-      return
-    }
-    const [singleProject] = selectedProjects
-    openModal('confirm-remove-folder', {
-      ...(selectedProjects.length === 1 && singleProject
-        ? { repoId: singleProject.id, displayName: singleProject.displayName }
-        : {
-            repoIds: selectedProjects.map((project) => project.id),
-            displayNames: selectedProjects.map((project) => project.displayName)
-          }),
-      onRemoved: (removedIds: string[]) => {
-        const removed = new Set(removedIds)
-        setSelectedProjectIds((current) => {
-          const next = new Set([...current].filter((id) => !removed.has(id)))
-          if (next.size === 0) {
-            setProjectSelectionAnchorId(null)
-          }
-          return next
-        })
-      }
-    })
-  }, [openModal, selectedProjects])
 
   // Why: full-page navigation views are not scoped to one worktree, so no
   // sidebar card should appear selected while one of them is active.
@@ -4579,13 +4238,6 @@ const WorktreeList = React.memo(function WorktreeList({
         }}
         onConfirm={handleConfirmDeleteProjectGroup}
       />
-      <SidebarBulkSelectionBar
-        projectCount={selectedProjects.length}
-        worktreeCount={bulkSelectedWorktrees.length}
-        onRemoveProjects={handleRemoveSelectedProjects}
-        onDeleteWorktrees={handleDeleteSelectedWorktrees}
-        onClear={clearBulkSelection}
-      />
       <VirtualizedWorktreeViewport
         key={viewportResetKey}
         rows={rows}
@@ -4614,11 +4266,7 @@ const WorktreeList = React.memo(function WorktreeList({
         worktrees={worktrees}
         selectedWorktreeIds={selectedWorktreeIds}
         selectedWorktrees={selectedWorktrees}
-        selectedProjectIds={selectedProjectIds}
         onSelectionGesture={updateSelectionForGesture}
-        onWorktreeCheckboxToggle={updateWorktreeSelectionForCheckbox}
-        onProjectSelectionGesture={updateProjectSelectionForGesture}
-        onProjectCheckboxToggle={updateProjectSelectionForCheckbox}
         onContextMenuSelect={selectForContextMenu}
         repoMap={repoMap}
         worktreeMap={worktreeMap}
