@@ -12,6 +12,7 @@ import {
   openFilePathLinkAtBufferPosition,
   openDetectedFilePath
 } from './terminal-link-handlers'
+import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from './terminal-path-exists-cache'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
@@ -974,6 +975,39 @@ describe('createFilePathLinkProvider range bounds', () => {
     links[0]!.hover?.({} as MouseEvent, links[0]!.text)
 
     expect(linkTooltip.textContent).toBe('/repo/CLAUDE.md (⌘+click to open in Orca)')
+  })
+
+  it('bounds the terminal path-exists cache while preserving recent probes', async () => {
+    const pathExistsCache = new Map<string, boolean>()
+    for (let index = 0; index < TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES; index += 1) {
+      pathExistsCache.set(`active\0/repo/old-${index}.ts`, true)
+    }
+    const pane = makePane([makeBufferLine('fresh.ts')])
+    const managerRef = {
+      current: { getPanes: () => [pane] } as unknown as PaneManager
+    }
+    const provider = createFilePathLinkProvider(
+      1,
+      {
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        startupCwd: '/repo',
+        managerRef,
+        linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+        pathExistsCache
+      },
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+      getTerminalFileOpenHint()
+    )
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(links.map((link) => link.text)).toEqual(['fresh.ts'])
+    expect(pathExistsCache.size).toBe(TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES)
+    expect(pathExistsCache.has('active\0/repo/old-0.ts')).toBe(false)
+    expect(pathExistsCache.get('active\0/repo/fresh.ts')).toBe(true)
   })
 
   it('opens a single-row file path from a direct modifier-click fallback', async () => {
