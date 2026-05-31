@@ -28,6 +28,7 @@ function createSnapshot(
     worktreesByRepo: {},
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
+    defaultTerminalTabsAppliedByWorktreeId: {},
     ...overrides
   }
 }

@@ -45,6 +45,9 @@ export function RichMarkdownCodeBlock({
   const language = (node.attrs.language as string) || ''
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after the node view unmounts; avoid
+  // starting a reset timer that will outlive the component.
+  const isMountedRef = useRef(false)
   const settings = useAppStore((s) => s.settings)
   const isDark =
     settings?.theme === 'dark' ||
@@ -61,6 +64,7 @@ export function RichMarkdownCodeBlock({
 
   const setCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
       if (node === null) {
         clearCopiedResetTimer()
       }
@@ -82,6 +86,9 @@ export function RichMarkdownCodeBlock({
       void window.api.ui
         .writeClipboardText(text)
         .then(() => {
+          if (!isMountedRef.current) {
+            return
+          }
           clearCopiedResetTimer()
           setCopied(true)
           copiedResetTimerRef.current = window.setTimeout(() => {

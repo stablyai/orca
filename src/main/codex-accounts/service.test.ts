@@ -1,7 +1,16 @@
 /* eslint-disable max-lines -- test suite covers config sync, login seeding, and fallback scenarios */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -31,6 +40,7 @@ function decodeEncodedWslBashCommand(command: string): string {
 function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   const appFontFamily = overrides.appFontFamily ?? 'Geist'
   const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
+  const tabAutoGenerateTitle = overrides.tabAutoGenerateTitle ?? false
   return {
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
@@ -124,7 +134,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     enableGitHubAttribution: true,
     ...overrides,
     appFontFamily,
-    agentStatusHooksEnabled
+    agentStatusHooksEnabled,
+    tabAutoGenerateTitle
   }
 }
 
@@ -223,6 +234,45 @@ describe('CodexAccountService config sync', () => {
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(
       '{"account":"managed"}\n'
     )
+  })
+
+  it('does not rewrite managed configs that already match canonical config', async () => {
+    const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+    const canonicalConfig = 'approval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
+    writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
+    const managedHomePath = createManagedHome(
+      testState.userDataDir,
+      'account-1',
+      canonicalConfig,
+      '{"account":"managed"}\n'
+    )
+    const managedConfigPath = join(managedHomePath, 'config.toml')
+    const oldDate = new Date('2024-01-01T00:00:00.000Z')
+    utimesSync(managedConfigPath, oldDate, oldDate)
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    const { CodexAccountService } = await import('./service')
+    new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
+
+    expect(statSync(managedConfigPath).mtimeMs).toBeLessThan(Date.now() - 60_000)
   })
 
   it('does not sync configs when ~/.codex/config.toml is missing', async () => {
@@ -992,5 +1042,60 @@ describe('CodexAccountService config sync', () => {
     await Promise.all([p1, p2])
 
     expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledTimes(2)
+  })
+
+  it('removes command listeners when Codex login times out', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: () => void
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const spawnMock = vi.fn(() => child)
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: spawnMock
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    try {
+      const settings = createSettings()
+      const store = createStore(settings)
+      const rateLimits = createRateLimits()
+      const runtimeHome = createRuntimeHome()
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
+      const loginPromise = (
+        service as unknown as {
+          runCodexLogin(managedHomePath: string): Promise<void>
+        }
+      ).runCodexLogin(testState.fakeHomeDir)
+      const rejection = expect(loginPromise).rejects.toThrow(
+        'Codex sign-in took too long to finish.'
+      )
+
+      await vi.advanceTimersByTimeAsync(120_000)
+
+      await rejection
+      expect(child.kill).toHaveBeenCalledTimes(1)
+      expect(child.stdout.listenerCount('data')).toBe(0)
+      expect(child.stderr.listenerCount('data')).toBe(0)
+      expect(child.listenerCount('error')).toBe(0)
+      expect(child.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../codex-cli/command')
+    }
   })
 })

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -14,6 +14,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -64,6 +65,7 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [busyAction, setBusyAction] = useState<'install' | 'remove' | null>(null)
+  const mountedRef = useMountedRef()
   const {
     installed: cliSkillDetected,
     loading: cliSkillLoading,
@@ -73,20 +75,33 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
 
-  const refreshStatus = async (): Promise<void> => {
+  const handleStatusChange = useCallback(
+    (nextStatus: CliInstallStatus): void => {
+      if (mountedRef.current) {
+        setStatus(nextStatus)
+      }
+    },
+    [mountedRef]
+  )
+
+  const refreshStatus = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
-      setStatus(await window.api.cli.getInstallStatus())
+      handleStatusChange(await window.api.cli.getInstallStatus())
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to load CLI status.')
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to load CLI status.')
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
-  }
+  }, [handleStatusChange, mountedRef])
 
   useEffect(() => {
     void refreshStatus()
-  }, [])
+  }, [refreshStatus])
 
   const isEnabled = status?.state === 'installed'
   const isSupported = status?.supported ?? false
@@ -100,15 +115,21 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
     setBusyAction('install')
     try {
       const next = await window.api.cli.install()
-      setStatus(next)
-      setDialogOpen(false)
-      toast.success(`Registered \`${next.commandName}\` in PATH.`)
+      if (mountedRef.current) {
+        setStatus(next)
+        setDialogOpen(false)
+        toast.success(`Registered \`${next.commandName}\` in PATH.`)
+      }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : `Failed to register \`${commandName}\` in PATH.`
-      )
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error ? error.message : `Failed to register \`${commandName}\` in PATH.`
+        )
+      }
     } finally {
-      setBusyAction(null)
+      if (mountedRef.current) {
+        setBusyAction(null)
+      }
     }
   }
 
@@ -116,15 +137,21 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
     setBusyAction('remove')
     try {
       const next = await window.api.cli.remove()
-      setStatus(next)
-      setDialogOpen(false)
-      toast.success(`Removed \`${next.commandName}\` from PATH.`)
+      if (mountedRef.current) {
+        setStatus(next)
+        setDialogOpen(false)
+        toast.success(`Removed \`${next.commandName}\` from PATH.`)
+      }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : `Failed to remove \`${commandName}\` from PATH.`
-      )
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error ? error.message : `Failed to remove \`${commandName}\` from PATH.`
+        )
+      }
     } finally {
-      setBusyAction(null)
+      if (mountedRef.current) {
+        setBusyAction(null)
+      }
     }
   }
 
@@ -248,7 +275,9 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
               error={cliSkillError}
               preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
               onBeforeOpenTerminal={async () => {
-                await ensureOrcaCliAvailableForAgentSkillTerminal({ onStatusChange: setStatus })
+                await ensureOrcaCliAvailableForAgentSkillTerminal({
+                  onStatusChange: handleStatusChange
+                })
               }}
               onRecheck={refreshCliSkill}
             />

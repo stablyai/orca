@@ -89,16 +89,28 @@ function shutdownChild(child: ChildProcess): Promise<void> {
       return
     }
 
-    const timeout = setTimeout(() => {
-      child.kill('SIGKILL')
+    let settled = false
+    let timeout: ReturnType<typeof setTimeout>
+    function finish(): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      child.off('exit', onExit)
       resolve()
+    }
+
+    function onExit(): void {
+      finish()
+    }
+
+    timeout = setTimeout(() => {
+      child.kill('SIGKILL')
+      finish()
     }, 5000)
 
-    child.once('exit', () => {
-      clearTimeout(timeout)
-      resolve()
-    })
-
+    child.once('exit', onExit)
     child.kill('SIGTERM')
   })
 }

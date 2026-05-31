@@ -18,16 +18,20 @@ type WriteTerminalOutputOptions = {
   foreground: boolean
   beforeWrite?: TerminalOutputBeforeWrite
   onBackgroundBacklogDropped?: () => void
+  latencySensitive?: boolean
+  forceForegroundRefresh?: boolean
 }
 
 type QueueChunk = {
   data: string
   foreground: boolean
+  forceForegroundRefresh: boolean
 }
 
 type QueuedWrite = {
   data: string
   foreground: boolean
+  forceForegroundRefresh: boolean
 }
 
 type QueueEntry = {
@@ -72,8 +76,10 @@ const debugEnabled = e2eConfig.exposeStore
 
 type TerminalOutputSchedulerDebugSnapshot = {
   backgroundEnqueueCount: number
+  deferredForegroundEnqueueCount: number
   foregroundWriteCount: number
   backgroundWriteCount: number
+  deferredForegroundWriteCount: number
   flushWriteCount: number
   scheduledDrainCount: number
   drainWrites: number[]
@@ -86,8 +92,10 @@ type TerminalOutputSchedulerDebugApi = {
 
 const debugState: TerminalOutputSchedulerDebugSnapshot = {
   backgroundEnqueueCount: 0,
+  deferredForegroundEnqueueCount: 0,
   foregroundWriteCount: 0,
   backgroundWriteCount: 0,
+  deferredForegroundWriteCount: 0,
   flushWriteCount: 0,
   scheduledDrainCount: 0,
   drainWrites: []
@@ -95,8 +103,10 @@ const debugState: TerminalOutputSchedulerDebugSnapshot = {
 
 function resetDebugState(): void {
   debugState.backgroundEnqueueCount = 0
+  debugState.deferredForegroundEnqueueCount = 0
   debugState.foregroundWriteCount = 0
   debugState.backgroundWriteCount = 0
+  debugState.deferredForegroundWriteCount = 0
   debugState.flushWriteCount = 0
   debugState.scheduledDrainCount = 0
   debugState.drainWrites = []
@@ -143,13 +153,21 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
   let remaining = limit
   let data = ''
   let foreground: boolean | null = null
+  let forceForegroundRefresh: boolean | null = null
 
   while (remaining > 0 && entry.chunkIndex < entry.chunks.length) {
     const chunk = entry.chunks[entry.chunkIndex]
     if (foreground !== null && chunk.foreground !== foreground) {
       break
     }
+    if (
+      forceForegroundRefresh !== null &&
+      chunk.forceForegroundRefresh !== forceForegroundRefresh
+    ) {
+      break
+    }
     foreground ??= chunk.foreground
+    forceForegroundRefresh ??= chunk.forceForegroundRefresh
     if (chunk.data.length <= remaining) {
       data += chunk.data
       remaining -= chunk.data.length
@@ -171,7 +189,13 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
   if (entry.queuedChars < 0) {
     entry.queuedChars = 0
   }
-  return data ? { data, foreground: foreground === true } : null
+  return data
+    ? {
+        data,
+        foreground: foreground === true,
+        forceForegroundRefresh: forceForegroundRefresh === true
+      }
+    : null
 }
 
 function compactConsumedChunks(entry: QueueEntry): void {
@@ -189,14 +213,24 @@ function compactConsumedChunks(entry: QueueEntry): void {
   }
 }
 
-function enqueueChunk(entry: QueueEntry, data: string, options?: { foreground?: boolean }): void {
-  entry.chunks.push({ data, foreground: options?.foreground === true })
+function enqueueChunk(
+  entry: QueueEntry,
+  data: string,
+  options?: { foreground?: boolean; forceForegroundRefresh?: boolean }
+): void {
+  entry.chunks.push({
+    data,
+    foreground: options?.foreground === true,
+    forceForegroundRefresh: options?.forceForegroundRefresh === true
+  })
   entry.queuedChars += data.length
 }
 
 function replaceBacklogWithWarning(entry: QueueEntry): void {
   const shouldNotify = !entry.backgroundBacklogDropped
-  entry.chunks = [{ data: BACKGROUND_BACKLOG_WARNING, foreground: false }]
+  entry.chunks = [
+    { data: BACKGROUND_BACKLOG_WARNING, foreground: false, forceForegroundRefresh: false }
+  ]
   entry.chunkIndex = 0
   entry.queuedChars = BACKGROUND_BACKLOG_WARNING.length
   entry.backgroundBacklogDropped = true
@@ -219,15 +253,17 @@ function hasHighPriorityBacklog(): boolean {
   return false
 }
 
-function writeQueuedChunk(entry: QueueEntry): boolean {
+function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null {
   const queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
   if (!queuedWrite) {
-    return false
+    return null
   }
   try {
     entry.beforeWrite?.(queuedWrite.data)
     if (queuedWrite.foreground) {
-      writeForegroundTerminalChunk(entry.terminal, queuedWrite.data)
+      writeForegroundTerminalChunk(entry.terminal, queuedWrite.data, {
+        forceViewportRefresh: queuedWrite.forceForegroundRefresh
+      })
     } else {
       entry.terminal.write(queuedWrite.data)
     }
@@ -238,9 +274,9 @@ function writeQueuedChunk(entry: QueueEntry): boolean {
     entry.chunks.length = 0
     entry.chunkIndex = 0
     entry.queuedChars = 0
-    return false
+    return null
   }
-  return true
+  return queuedWrite.foreground ? 'foreground' : 'background'
 }
 
 function drainQueuedOutput(): void {
@@ -258,10 +294,15 @@ function drainQueuedOutput(): void {
     }
 
     queuedByTerminal.delete(entry.terminal)
-    if (writeQueuedChunk(entry)) {
+    const writeKind = writeQueuedChunk(entry)
+    if (writeKind) {
       writes++
       if (debugEnabled) {
-        debugState.backgroundWriteCount++
+        if (writeKind === 'foreground') {
+          debugState.deferredForegroundWriteCount++
+        } else {
+          debugState.backgroundWriteCount++
+        }
       }
     }
     if (hasQueuedChunks(entry)) {
@@ -296,13 +337,50 @@ export function writeTerminalOutput(
     if (entry && entry.queuedChars > SYNC_FOREGROUND_FLUSH_CHARS) {
       entry.beforeWrite = options.beforeWrite
       entry.highPriority = true
-      enqueueChunk(entry, data, { foreground: true })
+      enqueueChunk(entry, data, {
+        foreground: true,
+        forceForegroundRefresh: options.forceForegroundRefresh
+      })
       if (debugEnabled) {
         debugState.foregroundWriteCount++
+        debugState.deferredForegroundEnqueueCount++
       }
       // Why: returning from a hidden window can have megabytes queued. Keep
       // byte order, but drain it asynchronously so the first foreground frame
       // is not pinned behind the entire backlog.
+      scheduleDrain(0)
+      return
+    }
+    if (options.latencySensitive === false) {
+      let queued = entry
+      if (!queued) {
+        queued = {
+          terminal,
+          chunks: [],
+          chunkIndex: 0,
+          queuedChars: 0,
+          beforeWrite: options.beforeWrite,
+          onBackgroundBacklogDropped: options.onBackgroundBacklogDropped,
+          backgroundBacklogDropped: false,
+          highPriority: true
+        }
+        queuedByTerminal.set(terminal, queued)
+      } else {
+        queued.beforeWrite = options.beforeWrite
+        queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
+        queued.highPriority = true
+      }
+      enqueueChunk(queued, data, {
+        foreground: true,
+        forceForegroundRefresh: options.forceForegroundRefresh
+      })
+      if (debugEnabled) {
+        debugState.foregroundWriteCount++
+        debugState.deferredForegroundEnqueueCount++
+      }
+      // Why: visible command floods are throughput work, not keystroke echo.
+      // Queue them behind a zero-delay drain so one IPC callback cannot pin
+      // the renderer in xterm.write while input and paint are waiting.
       scheduleDrain(0)
       return
     }
@@ -311,7 +389,9 @@ export function writeTerminalOutput(
       debugState.foregroundWriteCount++
     }
     options.beforeWrite?.(data)
-    writeForegroundTerminalChunk(terminal, data)
+    writeForegroundTerminalChunk(terminal, data, {
+      forceViewportRefresh: options.forceForegroundRefresh
+    })
     return
   }
 
@@ -378,7 +458,9 @@ export function flushTerminalOutput(
     try {
       entry.beforeWrite?.(queuedWrite.data)
       if (queuedWrite.foreground) {
-        writeForegroundTerminalChunk(terminal, queuedWrite.data)
+        writeForegroundTerminalChunk(terminal, queuedWrite.data, {
+          forceViewportRefresh: queuedWrite.forceForegroundRefresh
+        })
       } else {
         terminal.write(queuedWrite.data)
       }

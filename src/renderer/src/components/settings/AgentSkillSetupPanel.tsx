@@ -3,6 +3,7 @@ import { RefreshCw, Terminal } from 'lucide-react'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 
@@ -53,6 +54,7 @@ export function AgentSkillSetupPanel({
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(Boolean(preInstallNotice))
+  const mountedRef = useMountedRef()
 
   useEffect(() => {
     if (!preInstallNotice) {
@@ -88,9 +90,13 @@ export function AgentSkillSetupPanel({
     }
     try {
       const status = await window.api.cli.getInstallStatus()
-      setPreInstallNoticeVisible(!isOrcaCliAvailableOnPath(status))
+      if (mountedRef.current) {
+        setPreInstallNoticeVisible(!isOrcaCliAvailableOnPath(status))
+      }
     } catch {
-      setPreInstallNoticeVisible(true)
+      if (mountedRef.current) {
+        setPreInstallNoticeVisible(true)
+      }
     }
   }
   const actionRow = (
@@ -105,7 +111,9 @@ export function AgentSkillSetupPanel({
               await onBeforeOpenTerminal?.()
               await refreshPreInstallNotice()
             } finally {
-              setTerminalOpen(true)
+              if (mountedRef.current) {
+                setTerminalOpen(true)
+              }
             }
           })()
         }}

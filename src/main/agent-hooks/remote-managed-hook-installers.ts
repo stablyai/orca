@@ -9,6 +9,7 @@ import { cursorHookService } from '../cursor/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
+import { openClaudeHookService } from '../openclaude/hook-service'
 
 type RemoteManagedHookInstaller = readonly [
   AgentHookInstallStatus['agent'],
@@ -17,6 +18,7 @@ type RemoteManagedHookInstaller = readonly [
 
 const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['claude', (sftp, remoteHome) => claudeHookService.installRemote(sftp, remoteHome)],
+  ['openclaude', (sftp, remoteHome) => openClaudeHookService.installRemote(sftp, remoteHome)],
   ['codex', (sftp, remoteHome) => codexHookService.installRemote(sftp, remoteHome)],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],

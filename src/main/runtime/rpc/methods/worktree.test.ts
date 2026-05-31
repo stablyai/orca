@@ -24,6 +24,7 @@ describe('worktree RPC methods', () => {
         baseBranch: 'origin/main',
         setupDecision: 'skip',
         displayName: 'Feature title',
+        telemetrySource: 'sidebar',
         workspaceStatus: 'in-review',
         manualOrder: 123_456,
         linkedIssue: 123,
@@ -48,6 +49,7 @@ describe('worktree RPC methods', () => {
       linkedGitLabMR: 321,
       comment: undefined,
       displayName: 'Feature title',
+      telemetrySource: 'sidebar',
       workspaceStatus: 'in-review',
       manualOrder: 123_456,
       sparseCheckout: { directories: ['src'], presetId: 'preset-1' },
@@ -65,6 +67,36 @@ describe('worktree RPC methods', () => {
         orchestrationContext: undefined
       }
     })
+  })
+
+  it('forwards startup command and env to runtime worktree creation', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'agent-startup',
+        startupCommand: "codex 'summarize repo'",
+        startupEnv: { ORCA_AGENT_MODE: 'direct' },
+        activate: true
+      })
+    )
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoSelector: 'repo-1',
+        name: 'agent-startup',
+        activate: true,
+        startup: {
+          command: "codex 'summarize repo'",
+          env: { ORCA_AGENT_MODE: 'direct' }
+        }
+      })
+    )
   })
 
   it('forwards task startup drafts to runtime worktree creation', async () => {
@@ -96,6 +128,31 @@ describe('worktree RPC methods', () => {
     )
   })
 
+  it('maps unknown telemetry sources to the runtime default instead of rejecting create', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'feature',
+        telemetrySource: 'future_surface'
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoSelector: 'repo-1',
+        name: 'feature',
+        telemetrySource: undefined
+      })
+    )
+  })
+
   it('rejects worktree.create when both parent and no-parent are supplied', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -117,10 +174,15 @@ describe('worktree RPC methods', () => {
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
   })
 
-  it('passes explicit repo selectors to PR base resolution', async () => {
+  it('passes explicit repo selectors to PR base resolution and preserves start-point fields', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      resolveManagedPrBase: vi.fn().mockResolvedValue({ baseBranch: 'origin/pr-head' })
+      resolveManagedPrBase: vi.fn().mockResolvedValue({
+        baseBranch: 'abc123',
+        headSha: 'abc123',
+        branchNameOverride: 'feature/pr-head',
+        pushTarget: { remoteName: 'origin', branchName: 'feature/pr-head' }
+      })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
@@ -134,6 +196,14 @@ describe('worktree RPC methods', () => {
     )
 
     expect(response).toMatchObject({ ok: true })
+    expect(response).toMatchObject({
+      result: {
+        baseBranch: 'abc123',
+        headSha: 'abc123',
+        branchNameOverride: 'feature/pr-head',
+        pushTarget: { remoteName: 'origin', branchName: 'feature/pr-head' }
+      }
+    })
     expect(runtime.resolveManagedPrBase).toHaveBeenCalledWith({
       repoSelector: 'id:repo-1',
       prNumber: 42,

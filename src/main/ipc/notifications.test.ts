@@ -143,12 +143,12 @@ describe('registerNotificationHandlers', () => {
     return call[1] as (event: unknown) => unknown
   }
 
-  function getNotificationEventHandler(eventName: string): () => void {
+  function getNotificationEventHandler(eventName: string): (...args: unknown[]) => void {
     const call = notificationOnMock.mock.calls.find((c: unknown[]) => c[0] === eventName)
     if (!call) {
       throw new Error(`Notification ${eventName} handler not registered`)
     }
-    return call[1] as () => void
+    return call[1] as (...args: unknown[]) => void
   }
 
   function getNotificationOnceEventHandler(eventName: string): () => void {
@@ -433,6 +433,37 @@ describe('registerNotificationHandlers', () => {
 
     expect(vi.getTimerCount()).toBe(0)
     expect(notificationRemoveListenerMock).toHaveBeenCalledWith('close', closeHandler)
+  })
+
+  it('releases retained notifications when native delivery fails', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: true
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
+      expect(vi.getTimerCount()).toBe(1)
+
+      const failedHandler = getNotificationEventHandler('failed')
+      failedHandler({}, 'Application is not code signed')
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('agent-task-complete notification failed to show')
+      )
+      expect(vi.getTimerCount()).toBe(0)
+      expect(notificationRemoveListenerMock).toHaveBeenCalledWith('failed', failedHandler)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('formats agent-task-complete with the agent response when a status snapshot is present', () => {
@@ -934,6 +965,38 @@ describe('registerNotificationHandlers', () => {
     expect(notificationShowMock).toHaveBeenCalledTimes(2)
   })
 
+  it('bounds notification cooldown keys during unique worktree bursts', () => {
+    notificationIsSupportedMock.mockReturnValue(false)
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    for (let i = 0; i < 75; i++) {
+      expect(handler({}, { source: 'terminal-bell', worktreeId: `repo::wt-${i}` })).toEqual({
+        delivered: false,
+        reason: 'not-supported'
+      })
+    }
+
+    expect(handler({}, { source: 'terminal-bell', worktreeId: 'repo::wt-0' })).toEqual({
+      delivered: false,
+      reason: 'not-supported'
+    })
+    expect(handler({}, { source: 'terminal-bell', worktreeId: 'repo::wt-74' })).toEqual({
+      delivered: false,
+      reason: 'cooldown'
+    })
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
   it('deduplicates agent-task-complete and terminal-bell for the same worktree', () => {
     registerNotificationHandlers({
       getSettings: () => ({
@@ -992,10 +1055,14 @@ describe('registerNotificationHandlers', () => {
     const handler = getDispatchHandler()
 
     const result = handler({}, { source: 'test', requireDisplayConfirmation: true })
-    getNotificationOnceEventHandler('show')()
+    const showHandler = getNotificationOnceEventHandler('show')
+    const failedHandler = getNotificationOnceEventHandler('failed')
+    showHandler()
 
     await expect(result).resolves.toEqual({ delivered: true })
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('show', showHandler)
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('failed', failedHandler)
   })
 
   it('reports not-displayed when explicit test notifications never show', async () => {
@@ -1013,10 +1080,14 @@ describe('registerNotificationHandlers', () => {
     const handler = getDispatchHandler()
 
     const result = handler({}, { source: 'test', requireDisplayConfirmation: true })
+    const showHandler = getNotificationOnceEventHandler('show')
+    const failedHandler = getNotificationOnceEventHandler('failed')
     await vi.advanceTimersByTimeAsync(2501)
 
     await expect(result).resolves.toEqual({ delivered: false, reason: 'not-displayed' })
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('show', showHandler)
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('failed', failedHandler)
   })
 
   it('loads allowed custom sound files for preload playback', async () => {
@@ -1104,12 +1175,12 @@ describe('registerNotificationHandlers', () => {
 describe('triggerStartupNotificationRegistration', () => {
   const originalPlatform = process.platform
 
-  function getStartupNotificationEventHandler(eventName: string): () => void {
+  function getStartupNotificationEventHandler(eventName: string): (...args: unknown[]) => void {
     const call = notificationOnMock.mock.calls.find((c: unknown[]) => c[0] === eventName)
     if (!call) {
       throw new Error(`Startup notification ${eventName} handler not registered`)
     }
-    return call[1] as () => void
+    return call[1] as (...args: unknown[]) => void
   }
 
   beforeEach(() => {
@@ -1184,5 +1255,30 @@ describe('triggerStartupNotificationRegistration', () => {
     expect(vi.getTimerCount()).toBe(0)
     expect(notificationRemoveListenerMock).toHaveBeenCalledWith('click', expect.any(Function))
     expect(notificationRemoveListenerMock).toHaveBeenCalledWith('show', expect.any(Function))
+  })
+
+  it('cleans up startup notification registration when native delivery fails', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const store = {
+        getUI: () => ({ notificationPermissionRequested: undefined }),
+        updateUI: vi.fn()
+      }
+
+      triggerStartupNotificationRegistration(store as never)
+      expect(vi.getTimerCount()).toBe(1)
+
+      const failedHandler = getStartupNotificationEventHandler('failed')
+      failedHandler({}, 'Application is not code signed')
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('startup registration notification failed to show')
+      )
+      expect(notificationCloseMock).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(notificationRemoveListenerMock).toHaveBeenCalledWith('failed', failedHandler)
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

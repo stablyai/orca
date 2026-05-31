@@ -160,6 +160,36 @@ branch refs/heads/main
     ])
   })
 
+  it('parses NUL-delimited porcelain output with newline paths', () => {
+    const output = [
+      'worktree /repo',
+      'HEAD abc123',
+      'branch refs/heads/main',
+      '',
+      'worktree /repo/linked\nworktree',
+      'HEAD def456',
+      'branch refs/heads/feature/newline',
+      ''
+    ].join('\0')
+
+    expect(parseWorktreeList(output, { nulDelimited: true })).toEqual([
+      {
+        path: '/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/repo/linked\nworktree',
+        head: 'def456',
+        branch: 'refs/heads/feature/newline',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+  })
+
   it('parses multiple bare entries mixed with regular entries', () => {
     const output = `worktree /bare-one
 HEAD 0000000
@@ -846,6 +876,7 @@ describe('addWorktree', () => {
     expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
       'branch',
       '-D',
+      '--',
       'feature/test'
     ])
   })
@@ -871,11 +902,13 @@ describe('removeWorktree', () => {
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not fully merged')) // branch -d
 
     // Should not throw — the unmerged branch is preserved, not force-deleted.
-    await expect(removeWorktree('/repo', '/repo-feature', false)).resolves.toBeUndefined()
+    await expect(removeWorktree('/repo', '/repo-feature', false)).resolves.toEqual({
+      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+    })
 
     const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0])
-    expect(calls).toContainEqual(['branch', '-d', 'feature/test'])
-    expect(calls).not.toContainEqual(['branch', '-D', 'feature/test'])
+    expect(calls).toContainEqual(['branch', '-d', '--', 'feature/test'])
+    expect(calls).not.toContainEqual(['branch', '-D', '--', 'feature/test'])
   })
 
   it('deletes the branch when `branch -d` succeeds (fully merged)', async () => {
@@ -890,6 +923,7 @@ describe('removeWorktree', () => {
     expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
       'branch',
       '-d',
+      '--',
       'feature/test'
     ])
   })

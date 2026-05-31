@@ -15,11 +15,11 @@ This file records operational availability. Event contracts still live in `src/s
 
 ## Boundary Fields
 
-| Field | Meaning |
-| --- | --- |
-| `code_merged_at_utc` | When the implementation reached `main`. Useful for source history only. |
-| `first_released_at_utc` | First release commit/build that contains the code. This is the earliest possible user exposure. |
-| `first_seen_at_utc` | First observed PostHog row for the event/property. This proves at least one event flowed. |
+| Field                    | Meaning                                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `code_merged_at_utc`     | When the implementation reached `main`. Useful for source history only.                                                    |
+| `first_released_at_utc`  | First release commit/build that contains the code. This is the earliest possible user exposure.                            |
+| `first_seen_at_utc`      | First observed PostHog row for the event/property. This proves at least one event flowed.                                  |
 | `dashboard_ready_at_utc` | Earliest lower bound for saved dashboards after all required signals have first-valid rows and pass any validation window. |
 
 First-valid means the released app version has been observed, the required event/property fields are populated, joins used by the dashboard are available, and any validation window listed in the rollout entry has passed.
@@ -48,32 +48,32 @@ D1+/D3+/D7+ retention means the user fired `app_opened` at least once after 24/7
 
 Scope: `nth_repo_added` on repo/activation/retention events. Current schemas declare it on `app_opened`, `repo_added`, `add_repo_setup_step_action`, `add_repo_existing_workspaces_detected`, `workspace_created`, `workspace_create_failed`, `setup_script_prompt_shown`, `setup_script_prompt_action`, `agent_started`, `agent_prompt_sent`, and `agent_error`. The original rollout covered `app_opened`, `repo_added`, `add_repo_setup_step_action`, `workspace_created`, `workspace_create_failed`, `agent_started`, and `agent_error`; later events have their own first-seen timestamps below.
 
-| Field | Value |
-| --- | --- |
-| PR | `#1591` |
-| Merge commit | `002e2acc38cad262d694049cc86c0962ffd381ce` |
-| `code_merged_at_utc` | `2026-05-08T17:50:44Z` |
-| First release | `v1.3.42-rc.1` |
-| First release commit | `b6dab85aaa0e9b600ec93846824ba815542a1e1e` |
-| `first_released_at_utc` | `2026-05-08T17:56:35Z` |
-| Earliest `first_seen_at_utc` | `2026-05-08T18:40:00.354Z` on `app_opened` |
-| `dashboard_ready_at_utc` | Event-dependent. Use `2026-05-08T18:40:00.354Z` for general `app_opened` repo-count cuts; use `2026-05-08T20:01:06.364Z` or later for first-repo activation cuts requiring `repo_added`. |
+| Field                        | Value                                                                                                                                                                                    |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PR                           | `#1591`                                                                                                                                                                                  |
+| Merge commit                 | `002e2acc38cad262d694049cc86c0962ffd381ce`                                                                                                                                               |
+| `code_merged_at_utc`         | `2026-05-08T17:50:44Z`                                                                                                                                                                   |
+| First release                | `v1.3.42-rc.1`                                                                                                                                                                           |
+| First release commit         | `b6dab85aaa0e9b600ec93846824ba815542a1e1e`                                                                                                                                               |
+| `first_released_at_utc`      | `2026-05-08T17:56:35Z`                                                                                                                                                                   |
+| Earliest `first_seen_at_utc` | `2026-05-08T18:40:00.354Z` on `app_opened`                                                                                                                                               |
+| `dashboard_ready_at_utc`     | Event-dependent. Use `2026-05-08T18:40:00.354Z` for general `app_opened` repo-count cuts; use `2026-05-08T20:01:06.364Z` or later for first-repo activation cuts requiring `repo_added`. |
 
 PostHog evidence checked at `2026-05-23T23:34:32Z`:
 
-| Event | First seen with `nth_repo_added` |
-| --- | --- |
-| `app_opened` | `2026-05-08T18:40:00.354Z` (`1.3.42-rc.1`) |
-| `workspace_created` | `2026-05-08T19:15:06.913Z` |
-| `agent_started` | `2026-05-08T19:15:07.130Z` |
-| `agent_prompt_sent` | `TBD` |
-| `repo_added` | `2026-05-08T20:01:06.364Z` (`1.3.42`) |
-| `add_repo_setup_step_action` | `2026-05-08T20:01:20.897Z` |
-| `workspace_create_failed` | `2026-05-08T23:04:32.315Z` |
-| `agent_error` | `2026-05-13T14:13:16.096Z` |
-| `add_repo_existing_workspaces_detected` | `2026-05-20T05:33:20.160Z` |
-| `setup_script_prompt_shown` | `2026-05-21T04:09:04.231Z` |
-| `setup_script_prompt_action` | `2026-05-21T04:10:31.616Z` |
+| Event                                   | First seen with `nth_repo_added`           |
+| --------------------------------------- | ------------------------------------------ |
+| `app_opened`                            | `2026-05-08T18:40:00.354Z` (`1.3.42-rc.1`) |
+| `workspace_created`                     | `2026-05-08T19:15:06.913Z`                 |
+| `agent_started`                         | `2026-05-08T19:15:07.130Z`                 |
+| `agent_prompt_sent`                     | `TBD`                                      |
+| `repo_added`                            | `2026-05-08T20:01:06.364Z` (`1.3.42`)      |
+| `add_repo_setup_step_action`            | `2026-05-08T20:01:20.897Z`                 |
+| `workspace_create_failed`               | `2026-05-08T23:04:32.315Z`                 |
+| `agent_error`                           | `2026-05-13T14:13:16.096Z`                 |
+| `add_repo_existing_workspaces_detected` | `2026-05-20T05:33:20.160Z`                 |
+| `setup_script_prompt_shown`             | `2026-05-21T04:09:04.231Z`                 |
+| `setup_script_prompt_action`            | `2026-05-21T04:10:31.616Z`                 |
 
 Dashboard caveats:
 
@@ -87,26 +87,26 @@ Scope: `cohort` on onboarding events. Current schemas declare it on `onboarding_
 
 The original `#1608` rollout covered `onboarding_started`, `onboarding_step_viewed`, `onboarding_step_completed`, `onboarding_step_skipped`, `onboarding_step4_path_clicked`, `onboarding_step4_path_failed`, `onboarding_completed`, `onboarding_dismissed`, `onboarding_agent_picked`, and onboarding import events. Later onboarding events joined the roster by declaring `cohort` in their schemas.
 
-| Field | Value |
-| --- | --- |
-| PR | `#1608` |
-| Merge commit | `318e2b4c2c501b50280dc9e5b11ed34bd899bdd9` |
-| `code_merged_at_utc` | `2026-05-09T02:57:18Z` |
-| First release | `v1.3.44` |
-| First release commit | `e602decf1d35dc54c84eea516fc2b9afdc065cce` |
-| `first_released_at_utc` | `2026-05-09T08:05:39Z` |
-| Earliest `first_seen_at_utc` | `2026-05-09T09:54:03.038Z` on `onboarding_started { cohort: 'fresh_install' }` (`1.3.45`) |
-| `dashboard_ready_at_utc` | `2026-05-09T09:54:03.038Z` for fresh-install onboarding-start cohorts; use later event-specific first-seen timestamps where a tile requires another event. |
+| Field                        | Value                                                                                                                                                      |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PR                           | `#1608`                                                                                                                                                    |
+| Merge commit                 | `318e2b4c2c501b50280dc9e5b11ed34bd899bdd9`                                                                                                                 |
+| `code_merged_at_utc`         | `2026-05-09T02:57:18Z`                                                                                                                                     |
+| First release                | `v1.3.44`                                                                                                                                                  |
+| First release commit         | `e602decf1d35dc54c84eea516fc2b9afdc065cce`                                                                                                                 |
+| `first_released_at_utc`      | `2026-05-09T08:05:39Z`                                                                                                                                     |
+| Earliest `first_seen_at_utc` | `2026-05-09T09:54:03.038Z` on `onboarding_started { cohort: 'fresh_install' }` (`1.3.45`)                                                                  |
+| `dashboard_ready_at_utc`     | `2026-05-09T09:54:03.038Z` for fresh-install onboarding-start cohorts; use later event-specific first-seen timestamps where a tile requires another event. |
 
 Later onboarding cohort events:
 
-| Event | PR | First release | `first_seen_at_utc` |
-| --- | --- | --- | --- |
-| `onboarding_feature_setup_run` | `#1853` (`2e5ac1c8ebdc93f6281622d9e4ef60ab14c71096`) | `v1.4.2-rc.1` at `2026-05-14T22:23:46Z` | `2026-05-15T05:55:37.248Z` (`1.4.2-rc.4`) |
-| `onboarding_feature_setup_terminal_opened` | `#1853` (`2e5ac1c8ebdc93f6281622d9e4ef60ab14c71096`) | `v1.4.2-rc.1` at `2026-05-14T22:23:46Z` | `2026-05-15T05:55:37.261Z` (`1.4.2-rc.4`) |
+| Event                                          | PR                                                   | First release                           | `first_seen_at_utc`                       |
+| ---------------------------------------------- | ---------------------------------------------------- | --------------------------------------- | ----------------------------------------- |
+| `onboarding_feature_setup_run`                 | `#1853` (`2e5ac1c8ebdc93f6281622d9e4ef60ab14c71096`) | `v1.4.2-rc.1` at `2026-05-14T22:23:46Z` | `2026-05-15T05:55:37.248Z` (`1.4.2-rc.4`) |
+| `onboarding_feature_setup_terminal_opened`     | `#1853` (`2e5ac1c8ebdc93f6281622d9e4ef60ab14c71096`) | `v1.4.2-rc.1` at `2026-05-14T22:23:46Z` | `2026-05-15T05:55:37.261Z` (`1.4.2-rc.4`) |
 | `onboarding_feature_setup_terminal_interacted` | `#1853` (`2e5ac1c8ebdc93f6281622d9e4ef60ab14c71096`) | `v1.4.2-rc.1` at `2026-05-14T22:23:46Z` | `2026-05-15T11:47:28.022Z` (`1.4.2-rc.6`) |
-| `onboarding_feature_setup_toggled` | `#1853` (`2e5ac1c8ebdc93f6281622d9e4ef60ab14c71096`) | `v1.4.2-rc.1` at `2026-05-14T22:23:46Z` | `2026-05-17T03:03:54.535Z` (`1.4.3`) |
-| `onboarding_task_sources_snapshot` | `#2275` (`ececd27fd8203a7acb3e430fa016fb4653aaa93c`) | `v1.4.7-rc.1` at `2026-05-19T00:47:11Z` | `2026-05-19T04:18:23.872Z` (`1.4.7`) |
+| `onboarding_feature_setup_toggled`             | `#1853` (`2e5ac1c8ebdc93f6281622d9e4ef60ab14c71096`) | `v1.4.2-rc.1` at `2026-05-14T22:23:46Z` | `2026-05-17T03:03:54.535Z` (`1.4.3`)      |
+| `onboarding_task_sources_snapshot`             | `#2275` (`ececd27fd8203a7acb3e430fa016fb4653aaa93c`) | `v1.4.7-rc.1` at `2026-05-19T00:47:11Z` | `2026-05-19T04:18:23.872Z` (`1.4.7`)      |
 
 Dashboard caveats:
 
@@ -121,26 +121,26 @@ Dashboard caveats:
 
 Scope: first feature-wall tour event family before the inline onboarding tour. This added base open/close and tile activity telemetry. Historical `feature_wall_closed` rows from this rollout have `dwell_ms`; the source/depth fields needed for tour cohort retention only arrive in the later tour telemetry rollout.
 
-| Field | Value |
-| --- | --- |
-| PR | `#1772` |
-| Merge commit | `fdf7d9e97a46f27b3667d9bae6c8aca5d11345d8` |
-| `code_merged_at_utc` | `2026-05-14T22:20:50Z` |
-| First release | `v1.4.2-rc.1` |
-| First release commit | `c66e9801fe5f159cac23564ec7c028957973692a` |
-| `first_released_at_utc` | `2026-05-14T22:23:46Z` |
-| `first_seen_at_utc` | `2026-05-15T06:15:30.263Z` on `feature_wall_opened { source: 'popup' }` (`1.4.2-rc.4`) |
+| Field                    | Value                                                                                                            |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| PR                       | `#1772`                                                                                                          |
+| Merge commit             | `fdf7d9e97a46f27b3667d9bae6c8aca5d11345d8`                                                                       |
+| `code_merged_at_utc`     | `2026-05-14T22:20:50Z`                                                                                           |
+| First release            | `v1.4.2-rc.1`                                                                                                    |
+| First release commit     | `c66e9801fe5f159cac23564ec7c028957973692a`                                                                       |
+| `first_released_at_utc`  | `2026-05-14T22:23:46Z`                                                                                           |
+| `first_seen_at_utc`      | `2026-05-15T06:15:30.263Z` on `feature_wall_opened { source: 'popup' }` (`1.4.2-rc.4`)                           |
 | `dashboard_ready_at_utc` | Event-dependent. Useful for base feature-wall usage after first-seen rows, not for inline-tour cohort retention. |
 
 PostHog evidence checked at `2026-05-23T23:34:32Z`:
 
-| Event/property | `first_seen_at_utc` |
-| --- | --- |
-| `feature_wall_opened { source: 'popup' }` | `2026-05-15T06:15:30.263Z` (`1.4.2-rc.4`) |
-| `feature_wall_tile_focused` | `2026-05-15T06:15:31.073Z` (`1.4.2-rc.4`) |
-| `feature_wall_closed` with legacy `dwell_ms` only | `2026-05-15T06:18:22.677Z` |
-| `feature_wall_tile_clicked` | `2026-05-17T04:35:04.142Z` (`1.4.3`) |
-| `feature_wall_opened { source: 'help_menu' }` | `2026-05-17T07:02:23.278Z` (`1.4.3`) |
+| Event/property                                    | `first_seen_at_utc`                       |
+| ------------------------------------------------- | ----------------------------------------- |
+| `feature_wall_opened { source: 'popup' }`         | `2026-05-15T06:15:30.263Z` (`1.4.2-rc.4`) |
+| `feature_wall_tile_focused`                       | `2026-05-15T06:15:31.073Z` (`1.4.2-rc.4`) |
+| `feature_wall_closed` with legacy `dwell_ms` only | `2026-05-15T06:18:22.677Z`                |
+| `feature_wall_tile_clicked`                       | `2026-05-17T04:35:04.142Z` (`1.4.3`)      |
+| `feature_wall_opened { source: 'help_menu' }`     | `2026-05-17T07:02:23.278Z` (`1.4.3`)      |
 
 Dashboard caveats:
 
@@ -151,16 +151,16 @@ Dashboard caveats:
 
 Scope: optional "Explore Orca" tour during onboarding and the Help menu entry point. This shipped the product surface, not the full retention cohort instrumentation. It also added `source = 'onboarding'` to the feature-wall open source enum and added feature-wall group/feature/docs click events with source.
 
-| Field | Value |
-| --- | --- |
-| PR | `#2652` |
-| Merge commit | `669ade23133b9905fff1b6ed22755ee2911ea517` |
-| `code_merged_at_utc` | `2026-05-23T19:21:14Z` |
-| First release | `v1.4.23-rc.0` |
-| First release commit | `1f1171e0dee5d0fbf969de56845882bf8deb9037` |
-| `first_released_at_utc` | `2026-05-23T20:14:38Z` |
-| First app version observed | `1.4.23-rc.0` at `2026-05-23T20:54:12.343Z` |
-| `dashboard_ready_at_utc` | `TBD`; do not use this surface-only rollout for tour cohort retention tiles. |
+| Field                      | Value                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| PR                         | `#2652`                                                                      |
+| Merge commit               | `669ade23133b9905fff1b6ed22755ee2911ea517`                                   |
+| `code_merged_at_utc`       | `2026-05-23T19:21:14Z`                                                       |
+| First release              | `v1.4.23-rc.0`                                                               |
+| First release commit       | `1f1171e0dee5d0fbf969de56845882bf8deb9037`                                   |
+| `first_released_at_utc`    | `2026-05-23T20:14:38Z`                                                       |
+| First app version observed | `1.4.23-rc.0` at `2026-05-23T20:54:12.343Z`                                  |
+| `dashboard_ready_at_utc`   | `TBD`; do not use this surface-only rollout for tour cohort retention tiles. |
 
 Dashboard caveats:
 
@@ -179,32 +179,32 @@ Added/changed signals:
 - `feature_wall_closed` optional `source`, `exit_action`, `furthest_step`, `last_group_id`, and bounded visited/completed depth counts.
 - `feature_wall_opened { source: 'onboarding' }` through the inline tour surface.
 
-| Field | Value |
-| --- | --- |
-| PR | `#2713` |
-| Branch commit | `9115143927dce38547545a07e58b85d17796fd7a` |
-| Merge commit | `b9c55bb07127f799528761ec31d7e2b7f8598c07` |
-| `code_merged_at_utc` | `2026-05-23T21:15:11Z` |
-| First release | `v1.4.23-rc.1` |
-| First release commit | `c74765922e770c6540496735a5a2be838457256a` |
-| `first_released_at_utc` | `2026-05-23T21:16:38Z` |
-| `first_seen_at_utc` | `TBD` |
-| `dashboard_ready_at_utc` | `TBD` |
+| Field                    | Value                                      |
+| ------------------------ | ------------------------------------------ |
+| PR                       | `#2713`                                    |
+| Branch commit            | `9115143927dce38547545a07e58b85d17796fd7a` |
+| Merge commit             | `b9c55bb07127f799528761ec31d7e2b7f8598c07` |
+| `code_merged_at_utc`     | `2026-05-23T21:15:11Z`                     |
+| First release            | `v1.4.23-rc.1`                             |
+| First release commit     | `c74765922e770c6540496735a5a2be838457256a` |
+| `first_released_at_utc`  | `2026-05-23T21:16:38Z`                     |
+| `first_seen_at_utc`      | `TBD`                                      |
+| `dashboard_ready_at_utc` | `TBD`                                      |
 
 Required readiness signals:
 
-| Signal | `first_seen_at_utc` |
-| --- | --- |
-| `onboarding_tour_outcome` with valid `outcome` and joinable fresh-install start | `TBD` |
-| `onboarding_step_viewed { value_kind: 'tour' }` | `TBD` |
-| `feature_wall_closed` with non-null `source`, `exit_action`, and expected depth fields | `TBD` |
+| Signal                                                                                 | `first_seen_at_utc` |
+| -------------------------------------------------------------------------------------- | ------------------- |
+| `onboarding_tour_outcome` with valid `outcome` and joinable fresh-install start        | `TBD`               |
+| `onboarding_step_viewed { value_kind: 'tour' }`                                        | `TBD`               |
+| `feature_wall_closed` with non-null `source`, `exit_action`, and expected depth fields | `TBD`               |
 
 QA/opportunistic signals:
 
-| Signal | `first_seen_at_utc` |
-| --- | --- |
+| Signal                                           | `first_seen_at_utc`                                             |
+| ------------------------------------------------ | --------------------------------------------------------------- |
 | `onboarding_step_skipped { value_kind: 'tour' }` | `TBD`; do not gate dashboard readiness on natural skip traffic. |
-| `feature_wall_opened { source: 'onboarding' }` | `TBD`; surface availability only. |
+| `feature_wall_opened { source: 'onboarding' }`   | `TBD`; surface availability only.                               |
 
 PostHog evidence checked at `2026-05-23T23:34:32Z`:
 

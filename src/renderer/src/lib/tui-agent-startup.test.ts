@@ -267,6 +267,21 @@ describe('buildAgentDraftLaunchPlan', () => {
       expectedProcess: 'claude'
     })
   })
+
+  it('uses OpenClaude native prefill support for draft launches', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'openclaude',
+        draft: 'review this',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'openclaude',
+      launchCommand: "openclaude --prefill 'review this'",
+      expectedProcess: 'openclaude'
+    })
+  })
 })
 
 describe('isShellProcess', () => {

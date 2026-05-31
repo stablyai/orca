@@ -33,6 +33,7 @@ import {
   trackOrcaCliFeatureTipSetupClicked,
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 const WAVEFORM_BAR_HEIGHTS = [30, 60, 90, 70, 100, 50, 80, 35, 65]
 const CLI_AGENT_COMMANDS = [
@@ -42,15 +43,25 @@ const CLI_AGENT_COMMANDS = [
   'orca orchestration dispatch --task pr2 --to w2'
 ]
 
+function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
+  return (
+    <span className="rounded-sm bg-foreground/10 px-1 py-0.5 font-medium text-foreground">
+      {children}
+    </span>
+  )
+}
+
 function CliFeatureTipVisual(): JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
-  const [visibleCommandCount, setVisibleCommandCount] = useState(
-    reducedMotion ? CLI_AGENT_COMMANDS.length : 0
-  )
+  const [animatedVisibleCommandCount, setAnimatedVisibleCommandCount] = useState(0)
+  // Why: reduced-motion users should see the static completed state without a
+  // post-render state repair; only the animated path needs timer-backed state.
+  const visibleCommandCount = reducedMotion
+    ? CLI_AGENT_COMMANDS.length
+    : animatedVisibleCommandCount
 
   useEffect(() => {
     if (reducedMotion) {
-      setVisibleCommandCount(CLI_AGENT_COMMANDS.length)
       return
     }
 
@@ -63,9 +74,9 @@ function CliFeatureTipVisual(): JSX.Element {
     // Why: terminal lines mirror the orchestration tour beat timings so the
     // shell shows each command as the parent agent runs it.
     const runOnce = (): void => {
-      setVisibleCommandCount(0)
+      setAnimatedVisibleCommandCount(0)
       ORCHESTRATION_CLI_COMMAND_TIMINGS_MS.forEach((ms, index) => {
-        later(() => setVisibleCommandCount(index + 1), ms)
+        later(() => setAnimatedVisibleCommandCount(index + 1), ms)
       })
       later(runOnce, ORCHESTRATION_CLI_COMMAND_LOOP_MS)
     }
@@ -207,6 +218,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const modalData = useAppStore((s) => s.modalData)
+  const mountedRef = useMountedRef()
   const [primaryBusy, setPrimaryBusy] = useState(false)
   const [skillTerminalOpen, setSkillTerminalOpen] = useState(false)
   const isOpen = activeModal === 'feature-tips'
@@ -276,13 +288,19 @@ export default function FeatureTipsModal(): JSX.Element | null {
           const result = await installCliFromFeatureTip(() => window.api.cli.install())
           if (result.kind === 'installed') {
             trackOrcaCliFeatureTipSetupResult(telemetrySource, 'installed')
-            toast.success('Registered `orca` in PATH.')
             enableOrchestrationSkillSetup()
+            if (!mountedRef.current) {
+              return
+            }
+            toast.success('Registered `orca` in PATH.')
             setSkillTerminalOpen(true)
             return
           }
 
           trackOrcaCliFeatureTipSetupResult(telemetrySource, 'needs_attention')
+          if (!mountedRef.current) {
+            return
+          }
           toast.warning('Orca CLI needs attention', {
             description: result.status.detail ?? 'Open Settings to finish CLI setup.'
           })
@@ -295,16 +313,23 @@ export default function FeatureTipsModal(): JSX.Element | null {
             message.includes('Development mode uses a generated launcher for validation only')
           ) {
             trackOrcaCliFeatureTipSetupResult(telemetrySource, 'dev_preview')
-            toast.info('Development preview: opening skills setup terminal.')
             enableOrchestrationSkillSetup()
+            if (!mountedRef.current) {
+              return
+            }
+            toast.info('Development preview: opening skills setup terminal.')
             setSkillTerminalOpen(true)
             return
           }
 
           trackOrcaCliFeatureTipSetupResult(telemetrySource, 'failed')
-          toast.error(message)
+          if (mountedRef.current) {
+            toast.error(message)
+          }
         } finally {
-          setPrimaryBusy(false)
+          if (mountedRef.current) {
+            setPrimaryBusy(false)
+          }
         }
       }
     }
@@ -330,8 +355,14 @@ export default function FeatureTipsModal(): JSX.Element | null {
                 {skillTerminalOpen ? null : (
                   <div className="max-w-sm space-y-2 rounded-md border border-border/70 bg-muted/35 p-3 text-sm leading-relaxed text-muted-foreground">
                     <p className="font-medium text-foreground">Try asking:</p>
-                    <p>“Split this PR into two workspaces and create PRs for each.”</p>
-                    <p>“When the agent in workspace X finishes, send it the review task.”</p>
+                    <p>
+                      “Split this PR into two <WorktreePromptTerm>worktrees</WorktreePromptTerm> and
+                      create PRs for each.”
+                    </p>
+                    <p>
+                      “When the agent in <WorktreePromptTerm>worktree</WorktreePromptTerm> X
+                      finishes, send it the review task.”
+                    </p>
                   </div>
                 )}
               </div>

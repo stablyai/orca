@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: scan gating, pricing, and automation
+usage attribution share one stateful Claude usage store fixture. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedState } from './types'
 
@@ -260,6 +262,7 @@ describe('ClaudeUsageStore', () => {
 
   it('returns automation usage for a single matching worktree session', async () => {
     const worktreeId = 'repo-1::/workspace/repo-a'
+    const completedAt = Date.parse('2026-04-09T15:06:00.000Z')
     const store = createStoreWithState({
       scanState: {
         enabled: true,
@@ -298,7 +301,7 @@ describe('ClaudeUsageStore', () => {
         }
       ]
     })
-    ;(store as unknown as { refresh: typeof store.refresh }).refresh = vi.fn().mockResolvedValue({
+    const refreshMock = vi.fn().mockResolvedValue({
       enabled: true,
       isScanning: false,
       lastScanStartedAt: 1,
@@ -306,17 +309,28 @@ describe('ClaudeUsageStore', () => {
       lastScanError: null,
       hasAnyClaudeData: true
     })
-
-    const usage = await store.getAutomationRunUsage({
+    ;(store as unknown as { refresh: typeof store.refresh }).refresh = refreshMock
+    const request = {
       worktreeId,
       terminalSessionId: 'tab-1',
-      startedAt: new Date('2026-04-09T14:59:00.000Z').getTime(),
-      completedAt: new Date('2026-04-09T15:06:00.000Z').getTime()
-    })
+      startedAt: completedAt - 7 * 60_000,
+      completedAt
+    }
+
+    const usage = await store.getAutomationRunUsage(request)
 
     expect(usage.status).toBe('known')
     expect(usage.providerSessionId).toBe('session-1')
     expect(usage.totalTokens).toBe(1800)
     expect(usage.estimatedCostUsd).toBeCloseTo(0.010935)
+    expect(refreshMock).toHaveBeenCalledWith(true)
+
+    ;(
+      store as unknown as { state: ClaudeUsagePersistedState }
+    ).state.scanState.lastScanCompletedAt = completedAt + 1000
+    refreshMock.mockClear()
+    await store.getAutomationRunUsage(request)
+
+    expect(refreshMock).toHaveBeenCalledWith(false)
   })
 })

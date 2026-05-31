@@ -18,8 +18,19 @@ describe('getMarkdownDocLinkDecorationRanges', () => {
     ])
   })
 
+  it('returns ranges for aliased doc links', () => {
+    expect(getMarkdownDocLinkDecorationRanges('[[doc|Label]]')).toEqual([
+      {
+        startLineNumber: 1,
+        startColumn: 1,
+        endLineNumber: 1,
+        endColumn: 14
+      }
+    ])
+  })
+
   it('ignores unsupported doc link syntax', () => {
-    expect(getMarkdownDocLinkDecorationRanges('[[doc|Label]] [[bad [target]] [[]]')).toEqual([])
+    expect(getMarkdownDocLinkDecorationRanges('[[doc|]] [[bad [target]] [[]]')).toEqual([])
   })
 
   it('ignores doc links inside inline and fenced code', () => {

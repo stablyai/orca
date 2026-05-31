@@ -11,6 +11,7 @@ import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { getActiveMultiplexer } from './ssh'
 const execFileAsync = promisify(execFile)
+const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
 
 type PreflightRuntimeContext = {
   wslDistro?: string | null
@@ -59,15 +60,56 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
+type PreflightCommandResult = { stdout: string; stderr: string }
+
+// Why: a broken PATH shim or auth helper should not keep startup/settings
+// preflight IPC pending forever; WSL probes already use the same deadline.
+async function withPreflightTimeout<T>(command: string, commandPromise: Promise<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      commandPromise,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          const error = Object.assign(new Error(`Timed out running ${command}`), {
+            code: 'ETIMEDOUT'
+          })
+          reject(error)
+        }, PREFLIGHT_COMMAND_TIMEOUT_MS)
+        if (typeof timeout.unref === 'function') {
+          timeout.unref()
+        }
+      })
+    ])
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
+  }
+}
+
+async function execLocalPreflightCommand(
+  command: string,
+  args: string[]
+): Promise<PreflightCommandResult> {
+  const commandPromise = execFileAsync(command, args, {
+    encoding: 'utf-8',
+    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS
+  }) as Promise<PreflightCommandResult>
+
+  return withPreflightTimeout(command, commandPromise)
+}
+
 async function execCommandInWsl(
   target: WslPreflightTarget,
   command: string
 ): Promise<{ stdout: string; stderr: string }> {
   const distroArgs = target.distro ? ['-d', target.distro] : []
-  return execFileAsync('wsl.exe', [...distroArgs, '--', 'bash', '-lc', command], {
+  const commandPromise = execFileAsync('wsl.exe', [...distroArgs, '--', 'bash', '-lc', command], {
     encoding: 'utf-8',
-    timeout: 5000
+    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS
   }) as Promise<{ stdout: string; stderr: string }>
+  return withPreflightTimeout('wsl.exe', commandPromise)
 }
 
 async function isCommandAvailable(
@@ -77,7 +119,7 @@ async function isCommandAvailable(
   try {
     await (wslTarget
       ? execCommandInWsl(wslTarget, `${shellQuote(command)} --version`)
-      : execFileAsync(command, ['--version']))
+      : execLocalPreflightCommand(command, ['--version']))
     return true
   } catch {
     return false
@@ -92,7 +134,7 @@ async function isCommandOnPath(command: string, wslTarget?: WslPreflightTarget):
   try {
     const { stdout } = wslTarget
       ? await execCommandInWsl(wslTarget, `command -v ${shellQuote(command)}`)
-      : await execFileAsync(finder, [command], { encoding: 'utf-8' })
+      : await execLocalPreflightCommand(finder, [command])
     return stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -198,9 +240,7 @@ async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolea
   try {
     await (wslTarget
       ? execCommandInWsl(wslTarget, `${shellQuote('gh')} auth status`)
-      : execFileAsync('gh', ['auth', 'status'], {
-          encoding: 'utf-8'
-        }))
+      : execLocalPreflightCommand('gh', ['auth', 'status']))
     // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
     // authentication issues for the checked hosts/accounts.
     return true
@@ -221,7 +261,7 @@ async function isGlabAuthenticated(wslTarget?: WslPreflightTarget): Promise<bool
   try {
     await (wslTarget
       ? execCommandInWsl(wslTarget, `${shellQuote('glab')} auth status`)
-      : execFileAsync('glab', ['auth', 'status'], { encoding: 'utf-8' }))
+      : execLocalPreflightCommand('glab', ['auth', 'status']))
     return true
   } catch (error) {
     const stdout = (error as { stdout?: string }).stdout ?? ''

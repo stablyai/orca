@@ -58,6 +58,7 @@ import type {
   GitLabWorkItem,
   LinearIssue
 } from '../../../../shared/types'
+import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
 
 // Why: GitLab MR list filter — Open / Merged / Closed / All — replaces
 // GitHub's search-DSL on the GitLab tab per the agreed scope.
@@ -194,11 +195,10 @@ export default function SmartWorkspaceNameField({
   const [linearLoading, setLinearLoading] = useState(false)
   const [commandValue, setCommandValue] = useState('')
   const localInputRef = useRef<HTMLInputElement | null>(null)
-  const selectedSourceRef = useRef<HTMLDivElement | null>(null)
+  const focusedSelectedSourceKeyRef = useRef<string | null>(null)
   const tabsListRef = useRef<HTMLDivElement | null>(null)
   const repoSlugCacheRef = useRef<Map<string, RepoSlug | null>>(new Map())
   const handledCrossRepoUrlRef = useRef<string | null>(null)
-  const selectedSourceFocusFrameRef = useRef<number | null>(null)
   const localInputFocusFrameRef = useRef<number | null>(null)
   const [crossRepoPrompt, setCrossRepoPrompt] = useState<{
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
@@ -231,23 +231,28 @@ export default function SmartWorkspaceNameField({
     [gitlabAvailable, linearAvailable, textOnly]
   )
 
-  const setInputNode = useCallback(
-    (node: HTMLInputElement | null) => {
-      localInputRef.current = node
-      if (inputRef) {
-        inputRef.current = node
+  const selectedSourceFocusKey = selectedSource
+    ? `${selectedSource.kind}:${selectedSource.label}:${selectedSource.url ?? ''}`
+    : null
+  const setSelectedSourceNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) {
+        focusedSelectedSourceKeyRef.current = null
+        return
       }
+      if (
+        !selectedSourceFocusKey ||
+        focusedSelectedSourceKeyRef.current === selectedSourceFocusKey
+      ) {
+        return
+      }
+      focusedSelectedSourceKeyRef.current = selectedSourceFocusKey
+      // Why: after Enter accepts a source row, the input unmounts. Move focus
+      // to the pill immediately so the next Enter advances to Agent.
+      node.focus({ preventScroll: true })
     },
-    [inputRef]
+    [selectedSourceFocusKey]
   )
-
-  const cancelSelectedSourceFocusFrame = useCallback((): void => {
-    if (selectedSourceFocusFrameRef.current === null) {
-      return
-    }
-    cancelAnimationFrame(selectedSourceFocusFrameRef.current)
-    selectedSourceFocusFrameRef.current = null
-  }, [])
 
   const cancelLocalInputFocusFrame = useCallback((): void => {
     if (localInputFocusFrameRef.current === null) {
@@ -257,12 +262,17 @@ export default function SmartWorkspaceNameField({
     localInputFocusFrameRef.current = null
   }, [])
 
-  useEffect(
-    () => () => {
-      cancelSelectedSourceFocusFrame()
-      cancelLocalInputFocusFrame()
+  const setInputNode = useCallback(
+    (node: HTMLInputElement | null) => {
+      if (node === null) {
+        cancelLocalInputFocusFrame()
+      }
+      localInputRef.current = node
+      if (inputRef) {
+        inputRef.current = node
+      }
     },
-    [cancelLocalInputFocusFrame, cancelSelectedSourceFocusFrame]
+    [cancelLocalInputFocusFrame, inputRef]
   )
 
   useEffect(() => {
@@ -328,20 +338,6 @@ export default function SmartWorkspaceNameField({
     const timer = window.setTimeout(() => setDebouncedQuery(value), SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [value])
-
-  useEffect(() => {
-    if (selectedSource) {
-      setOpen(false)
-      // Why: after Enter accepts a PR/issue row, the input unmounts. Keep the
-      // keyboard flow on the source field so the next Enter advances to Agent.
-      cancelSelectedSourceFocusFrame()
-      selectedSourceFocusFrameRef.current = requestAnimationFrame(() => {
-        selectedSourceFocusFrameRef.current = null
-        selectedSourceRef.current?.focus({ preventScroll: true })
-      })
-    }
-    return cancelSelectedSourceFocusFrame
-  }, [cancelSelectedSourceFocusFrame, selectedSource])
 
   const normalizedGhQuery = useMemo(
     () => normalizeGitHubLinkQuery(debouncedQuery),
@@ -780,36 +776,12 @@ export default function SmartWorkspaceNameField({
     return null
   }, [linearAvailable, value])
 
-  useEffect(() => {
-    if (rows.length === 0) {
-      return
-    }
-    if (isQueryStale) {
-      const typedTextRow = rows.find(
-        (row) => row.kind === 'use-name' || row.kind === 'create-branch'
-      )
-      // No typed-text fallback in this mode (GitHub/Linear): clear the
-      // highlight so cmdk doesn't auto-select a stale source on Enter.
-      setCommandValue(typedTextRow ? typedTextRow.value : '')
-      return
-    }
-    if (sourceIntent === 'github') {
-      const githubRow = rows.find((row) => row.kind === 'github')
-      if (githubRow) {
-        setCommandValue(githubRow.value)
-        return
-      }
-    } else if (sourceIntent === 'linear') {
-      const linearRow = rows.find((row) => row.kind === 'linear')
-      if (linearRow) {
-        setCommandValue(linearRow.value)
-        return
-      }
-    }
-    setCommandValue((current) =>
-      rows.some((row) => row.value === current) ? current : rows[0].value
-    )
-  }, [isQueryStale, rows, sourceIntent])
+  const resolvedCommandValue = resolveSmartWorkspaceCommandValue({
+    currentValue: commandValue,
+    rows,
+    isQueryStale,
+    sourceIntent
+  })
 
   const loading = githubLoading || gitlabLoading || branchesLoading || linearLoading
   const ActiveInputIcon = mode === 'text' ? CaseSensitive : loading ? LoaderCircle : Search
@@ -916,7 +888,7 @@ export default function SmartWorkspaceNameField({
         onValueChange={(next) => {
           const nextMode = next as SmartNameMode
           setMode(nextMode)
-          setOpen(!disabled && nextMode !== 'text')
+          setOpen(!disabled && nextMode !== 'text' && selectedSource === null)
           cancelLocalInputFocusFrame()
           localInputFocusFrameRef.current = requestAnimationFrame(() => {
             localInputFocusFrameRef.current = null
@@ -966,11 +938,11 @@ export default function SmartWorkspaceNameField({
       </Tabs>
 
       <Popover
-        open={!disabled && open && mode !== 'text'}
-        onOpenChange={(next) => setOpen(disabled ? false : next)}
+        open={!disabled && open && mode !== 'text' && selectedSource === null}
+        onOpenChange={(next) => setOpen(disabled || selectedSource ? false : next)}
       >
         <Command
-          value={commandValue}
+          value={resolvedCommandValue}
           onValueChange={setCommandValue}
           shouldFilter={false}
           className="overflow-visible bg-transparent"
@@ -983,7 +955,7 @@ export default function SmartWorkspaceNameField({
                 // min-content (long PR title) propagates up and pushes the
                 // dialog wider than its max-w.
                 <div
-                  ref={selectedSourceRef}
+                  ref={setSelectedSourceNode}
                   tabIndex={0}
                   onKeyDown={(event) => {
                     if (
@@ -1082,7 +1054,7 @@ export default function SmartWorkspaceNameField({
                         !event.shiftKey
                       ) {
                         if (open && rows.length > 0) {
-                          const row = rows.find((entry) => entry.value === commandValue)
+                          const row = rows.find((entry) => entry.value === resolvedCommandValue)
                           if (row) {
                             event.preventDefault()
                             handleSelect(row)

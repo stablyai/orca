@@ -1,7 +1,27 @@
-import { describe, expect, it } from 'vitest'
+import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeRpcFailureError } from './runtime-client'
-import { formatCliError, formatTerminalRead, formatWorktreeList } from './format'
-import type { RuntimeWorktreeRecord } from '../shared/runtime-types'
+import {
+  formatCliError,
+  formatComputerAction,
+  formatTerminalRead,
+  formatWorktreeList,
+  printResult
+} from './format'
+import type { ComputerActionResult, RuntimeWorktreeRecord } from '../shared/runtime-types'
+
+let testScreenshotDir: string | null = null
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  delete process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR
+  if (testScreenshotDir) {
+    rmSync(testScreenshotDir, { recursive: true, force: true })
+    testScreenshotDir = null
+  }
+})
 
 function worktree(overrides: Partial<RuntimeWorktreeRecord> = {}): RuntimeWorktreeRecord {
   const base: RuntimeWorktreeRecord = {
@@ -172,5 +192,133 @@ describe('formatTerminalRead', () => {
     expect(output).toContain('warning: older output is no longer retained')
     expect(output).toContain('old server output')
     expect(output).not.toContain('undefined')
+  })
+})
+
+describe('formatComputerAction', () => {
+  it('includes routed worktree and explicit window target in the suggested follow-up command', () => {
+    const result: ComputerActionResult = {
+      snapshot: {
+        id: 'snap-1',
+        app: { name: 'Text Editor', bundleId: null, pid: 100 },
+        window: { title: 'Document', id: 42, width: 800, height: 600 },
+        coordinateSpace: 'window',
+        treeText: 'tree',
+        elementCount: 5,
+        focusedElementId: null
+      },
+      screenshot: null,
+      screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' },
+      action: {
+        path: 'accessibility',
+        targetWindowId: 41
+      }
+    }
+
+    const output = formatComputerAction('click', result, {
+      worktree: 'id:repo::/tmp/repo',
+      windowId: 99
+    })
+
+    expect(output).toContain(
+      "Use `orca computer get-app-state --app 'Text Editor' --worktree id:repo::/tmp/repo --window-id 99`"
+    )
+  })
+
+  it('preserves explicit window-index targeting in the suggested follow-up command', () => {
+    const result: ComputerActionResult = {
+      snapshot: {
+        id: 'snap-1',
+        app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
+        window: { title: 'Document', id: 42, width: 800, height: 600 },
+        coordinateSpace: 'window',
+        treeText: 'tree',
+        elementCount: 5,
+        focusedElementId: null
+      },
+      screenshot: null,
+      screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' }
+    }
+
+    const output = formatComputerAction('click', result, {
+      session: 'manual',
+      windowIndex: 1
+    })
+
+    expect(output).toContain(
+      'Use `orca computer get-app-state --app com.apple.finder --session manual --window-index 1`'
+    )
+  })
+})
+
+describe('printResult computer screenshots', () => {
+  it('removes expired screenshot temp files when cleanup is due', () => {
+    testScreenshotDir = mkdtempSync(join(tmpdir(), 'orca-format-test-'))
+    process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR = testScreenshotDir
+    const expiredPath = join(testScreenshotDir, 'old-screenshot.png')
+    writeFileSync(expiredPath, 'old')
+    const expired = new Date(Date.now() - 48 * 60 * 60 * 1000)
+    utimesSync(expiredPath, expired, expired)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    printResult(
+      {
+        id: 'req-cleanup',
+        ok: true,
+        result: {
+          screenshot: {
+            data: Buffer.from('png-data').toString('base64'),
+            format: 'png',
+            width: 1,
+            height: 1,
+            scale: 1
+          }
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      },
+      true,
+      () => 'unused'
+    )
+
+    expect(existsSync(expiredPath)).toBe(false)
+    expect(existsSync(join(testScreenshotDir, '.last-cleanup'))).toBe(true)
+    expect(logSpy).toHaveBeenCalled()
+  })
+
+  it('skips screenshot temp cleanup when the cleanup marker is fresh', () => {
+    testScreenshotDir = mkdtempSync(join(tmpdir(), 'orca-format-test-'))
+    const expiredPath = join(testScreenshotDir, 'old-screenshot.png')
+    writeFileSync(expiredPath, 'old')
+    const expired = new Date(Date.now() - 48 * 60 * 60 * 1000)
+    utimesSync(expiredPath, expired, expired)
+    writeFileSync(join(testScreenshotDir, '.last-cleanup'), 'recent\n')
+    process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR = testScreenshotDir
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    printResult(
+      {
+        id: 'req/1',
+        ok: true,
+        result: {
+          screenshot: {
+            data: Buffer.from('png-data').toString('base64'),
+            format: 'png',
+            width: 1,
+            height: 1,
+            scale: 1
+          }
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      },
+      true,
+      () => 'unused'
+    )
+
+    expect(existsSync(expiredPath)).toBe(true)
+    const output = JSON.parse(logSpy.mock.calls[0][0]) as {
+      result: { screenshot: { dataOmitted: boolean; path: string } }
+    }
+    expect(output.result.screenshot.dataOmitted).toBe(true)
+    expect(output.result.screenshot.path).toContain('req_1-screenshot.png')
   })
 })

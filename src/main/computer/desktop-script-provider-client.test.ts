@@ -1,14 +1,40 @@
 /* eslint-disable max-lines -- Why: desktop provider contract coverage shares one mocked bridge harness. */
 import { execFile } from 'child_process'
-import { readFileSync } from 'fs'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DesktopScriptProviderClient } from './desktop-script-provider-client'
+
+const { operationFiles, mkdtempMock, rmMock, writeFileMock } = vi.hoisted(() => {
+  const files = new Map<string, string>()
+  return {
+    operationFiles: files,
+    mkdtempMock: vi.fn(async (prefix: string) => `${prefix}${files.size}`),
+    rmMock: vi.fn(async () => undefined),
+    writeFileMock: vi.fn(async (filePath: string, data: string | Buffer) => {
+      files.set(filePath, Buffer.isBuffer(data) ? data.toString('utf8') : data)
+    })
+  }
+})
 
 vi.mock('child_process', () => ({
   execFile: vi.fn()
 }))
 
+vi.mock('fs/promises', () => ({
+  mkdtemp: mkdtempMock,
+  rm: rmMock,
+  writeFile: writeFileMock
+}))
+
 describe('DesktopScriptProviderClient', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.mocked(execFile).mockReset()
+    operationFiles.clear()
+    mkdtempMock.mockClear()
+    rmMock.mockClear()
+    writeFileMock.mockClear()
+  })
+
   it('normalizes list-apps responses', async () => {
     mockBridgeResponse({
       ok: true,
@@ -79,6 +105,34 @@ describe('DesktopScriptProviderClient', () => {
     const secondCall = vi.mocked(execFile).mock.calls[1]
     const operationPath = secondCall[1]?.at(-1)
     expect(typeof operationPath).toBe('string')
+  })
+
+  it('uses bridge screenshot dimensions when the native payload is downscaled', async () => {
+    mockBridgeResponse({
+      ok: true,
+      snapshot: {
+        ...sampleBridgeSnapshot('Text Editor', 'initial'),
+        screenshotWidth: 150,
+        screenshotHeight: 100,
+        screenshotScale: 0.5
+      }
+    })
+
+    const client = new DesktopScriptProviderClient('linux', '/tmp/runtime.py')
+
+    const result = await client.snapshot({ app: 'Text Editor' })
+
+    expect(result.screenshot).toEqual({
+      data: 'iVBORw0KGgo=',
+      format: 'png',
+      width: 150,
+      height: 100,
+      scale: 0.5
+    })
+    expect(result.snapshot.window).toMatchObject({
+      width: 300,
+      height: 200
+    })
   })
 
   it('targets cached elements by session and explicit window id', async () => {
@@ -179,6 +233,48 @@ describe('DesktopScriptProviderClient', () => {
         elementIndex: 0
       })
     ).rejects.toMatchObject({ code: 'element_not_found' })
+  })
+
+  it('bounds cached desktop snapshots while keeping recent aliases usable', async () => {
+    const snapshotCount = 40
+    for (let index = 0; index < snapshotCount; index++) {
+      mockBridgeResponse({
+        ok: true,
+        snapshot: {
+          ...sampleBridgeSnapshot(`App ${index}`, `value ${index}`),
+          snapshotId: `snap-${index}`,
+          app: { name: `App ${index}`, bundleIdentifier: `bundle.${index}`, pid: 100 + index },
+          windowId: 1_000 + index,
+          windowTitle: `Window ${index}`
+        }
+      })
+    }
+    mockBridgeResponse(
+      {
+        ok: true,
+        snapshot: sampleBridgeSnapshot('App 39', 'clicked')
+      },
+      (operation) => {
+        expect(operation).toMatchObject({
+          tool: 'click',
+          app: 'App 39',
+          element: expect.objectContaining({ index: 0 })
+        })
+      }
+    )
+
+    const client = new DesktopScriptProviderClient('linux', '/tmp/runtime.py')
+
+    for (let index = 0; index < snapshotCount; index++) {
+      await client.snapshot({ app: `App ${index}` })
+    }
+
+    await expect(client.action('click', { app: 'App 0', elementIndex: 0 })).rejects.toMatchObject({
+      code: 'element_not_found'
+    })
+    await expect(
+      client.action('click', { app: 'App 39', elementIndex: 0, noScreenshot: true })
+    ).resolves.toMatchObject({ snapshot: { app: { name: 'App 39' } } })
   })
 
   it('explains screenshot capture failures while keeping accessibility state usable', async () => {
@@ -291,6 +387,27 @@ describe('DesktopScriptProviderClient', () => {
     })
   })
 
+  it('rejects when the desktop provider subprocess ignores the exec timeout', async () => {
+    vi.useFakeTimers()
+    const kill = vi.fn()
+    vi.mocked(execFile).mockImplementationOnce(() => ({ kill }) as never)
+
+    const client = new DesktopScriptProviderClient('linux', '/tmp/runtime.py')
+    const promise = client.listApps()
+    let settled = false
+    void promise.catch(() => {
+      settled = true
+    })
+
+    await vi.waitFor(() => expect(execFile).toHaveBeenCalled(), { timeout: 1_000 })
+    await vi.advanceTimersByTimeAsync(30_001)
+    await vi.runOnlyPendingTimersAsync()
+
+    expect(settled).toBe(true)
+    expect(kill).toHaveBeenCalled()
+    await expect(promise).rejects.toMatchObject({ code: 'action_timeout' })
+  })
+
   it('maps action-specific bridge errors to actionable codes', async () => {
     mockBridgeResponse({ ok: false, error: 'element value is not settable' })
     mockBridgeResponse({ ok: false, error: 'Raise is not a valid secondary action' })
@@ -375,7 +492,11 @@ function mockBridgeResponse(
   vi.mocked(execFile).mockImplementationOnce((_command, _args, _options, callback) => {
     const operationPath = _args?.at(-1)
     if (inspectOperation && typeof operationPath === 'string') {
-      inspectOperation(JSON.parse(readFileSync(operationPath, 'utf8')) as Record<string, unknown>)
+      const operation = operationFiles.get(operationPath)
+      if (!operation) {
+        throw new Error(`Missing mocked operation file: ${operationPath}`)
+      }
+      inspectOperation(JSON.parse(operation) as Record<string, unknown>)
     }
     const done = callback as (error: Error | null, stdout: string, stderr: string) => void
     done(null, JSON.stringify(response), '')

@@ -6,6 +6,7 @@ import { ipcMain, webContents } from 'electron'
 import { resolve } from 'path'
 import type {
   Repo,
+  GitHubCreateIssueFields,
   GitHubIssueUpdate,
   GitHubOwnerRepo,
   GitHubPullRequestStateUpdate,
@@ -48,6 +49,7 @@ import {
   starOrca
 } from '../github/client'
 import {
+  clearVisiblePRRefreshWindow,
   enqueuePRRefresh,
   refreshPRNow,
   reportVisiblePRRefreshCandidates,
@@ -96,6 +98,8 @@ import type {
 import { appStarSourceSchema } from '../../shared/gh-star-source'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
+
+const prRefreshVisibilityCleanupRegistered = new Set<number>()
 
 // Why: notify every renderer (each window has its own SWR cache instance)
 // that a work item was mutated locally so they can drop their cached entry
@@ -247,6 +251,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   ipcMain.handle(
     'gh:reportVisiblePRRefreshCandidates',
     (event, args: { candidates: GitHubPRRefreshCandidate[]; generation: number }) => {
+      const senderId = event.sender.id
+      if (!prRefreshVisibilityCleanupRegistered.has(senderId)) {
+        prRefreshVisibilityCleanupRegistered.add(senderId)
+        event.sender.once('destroyed', () => {
+          prRefreshVisibilityCleanupRegistered.delete(senderId)
+          clearVisiblePRRefreshWindow(senderId)
+        })
+      }
       const candidates = args.candidates.map((candidate) => {
         const repo = assertRegisteredRepo(candidate.repoPath, store)
         return {
@@ -257,7 +269,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
           connectionState: repo.connectionId ? 'connected' : candidate.connectionState
         }
       })
-      reportVisiblePRRefreshCandidates(candidates, args.generation, event.sender.id)
+      reportVisiblePRRefreshCandidates(candidates, args.generation, senderId)
       return true
     }
   )
@@ -282,14 +294,19 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:createIssue',
-    (_event, args: { repoPath: string; title: string; body: string }) => {
+    (_event, args: { repoPath: string; title: string; body: string } & GitHubCreateIssueFields) => {
       const repo = assertRegisteredRepo(args, store)
+      const fields =
+        args.labels !== undefined || args.assignees !== undefined
+          ? { labels: args.labels, assignees: args.assignees }
+          : undefined
       return createIssue(
         repo.path,
         args.title,
         args.body,
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        fields
       )
     }
   )
@@ -522,12 +539,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       event,
       args: {
         repoPath: string
+        repoId?: string
         prNumber: number
         commentId: number
         body: string
         threadId?: string
         path?: string
         line?: number
+        prRepo?: GitHubOwnerRepo | null
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
@@ -556,7 +575,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.threadId,
         args.path,
         args.line,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        args.prRepo ?? null
       )
       if (result.ok) {
         broadcastWorkItemMutated(
@@ -834,7 +854,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:addIssueComment',
     async (
       event,
-      args: { repoPath: string; number: number; body: string; type?: 'issue' | 'pr' }
+      args: {
+        repoPath: string
+        repoId?: string
+        number: number
+        body: string
+        type?: 'issue' | 'pr'
+        prRepo?: GitHubOwnerRepo | null
+      }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
@@ -847,7 +874,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.number,
         args.body.trim(),
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        args.prRepo ?? null
       )
       if (result.ok) {
         // Why: PR conversation comments hit `/issues/N/comments` too, but the

@@ -32,6 +32,7 @@ export type DaemonPtyAdapterOptions = {
 }
 
 const MAX_TOMBSTONES = 1000
+const MAX_CONCURRENT_CHECKPOINTS = 4
 
 export class TerminalKilledError extends Error {
   constructor(sessionId: string) {
@@ -257,6 +258,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     await this.client.request('kill', { sessionId: id })
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
+    this.coldRestoreCache.delete(id)
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     // Why: history removal is for the "user explicitly closed this terminal"
@@ -429,6 +431,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.dirtySessionVersions.clear()
     this.stopCheckpointTimer()
     for (const id of ids) {
+      this.coldRestoreCache.delete(id)
       // Why: listener throws are intentionally *not* caught — matches the
       // natural onExit fanout in setupEventRouting, so synthetic exits don't
       // diverge in error semantics from real ones. A throwing listener is a
@@ -485,6 +488,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   dispose(): void {
     this.stopCheckpointTimer()
     this.dirtySessionVersions.clear()
+    this.coldRestoreCache.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     // Why: final checkpoints are written daemon-side in TerminalHost.dispose()
@@ -519,6 +523,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // and the pending getSnapshot RPCs would be rejected.
     await this.checkpointAllSessions()
     this.dirtySessionVersions.clear()
+    this.coldRestoreCache.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     this.client.disconnect()
@@ -621,10 +626,18 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (!this.historyManager) {
       return completed
     }
-    const promises: Promise<void>[] = []
-    for (const sessionId of sessionIds) {
-      promises.push(
-        this.client
+    const ids = Array.from(sessionIds)
+    let nextIndex = 0
+
+    const checkpointNext = async (): Promise<void> => {
+      for (;;) {
+        const index = nextIndex
+        nextIndex++
+        if (index >= ids.length) {
+          return
+        }
+        const sessionId = ids[index]
+        await this.client
           .request<GetSnapshotResult>('getSnapshot', { sessionId })
           .then((result) => {
             if (result.snapshot && this.historyManager) {
@@ -636,9 +649,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
             return undefined
           })
           .catch((err) => console.warn('[history] checkpoint failed:', sessionId, err))
-      )
+      }
     }
-    await Promise.all(promises)
+    // Why: snapshot serialization and checkpoint writes are CPU/disk heavy.
+    // Dirty-session filtering keeps idle terminals out; this cap prevents one
+    // tick from snapshotting every active dirty terminal at once.
+    const workers = Array.from({ length: Math.min(MAX_CONCURRENT_CHECKPOINTS, ids.length) }, () =>
+      checkpointNext()
+    )
+    await Promise.all(workers)
     return completed
   }
 
@@ -741,6 +760,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       } else if (event.event === 'exit') {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
+        this.coldRestoreCache.delete(event.sessionId)
         this.stopCheckpointTimerIfIdle()
         if (this.historyManager) {
           void this.historyManager

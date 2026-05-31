@@ -17,7 +17,10 @@ function quotePosixSingle(value: string): string {
 
 function hasOverlayRestoreEnv(env: Record<string, string>): boolean {
   return Boolean(
-    env.ORCA_OPENCODE_CONFIG_DIR || env.ORCA_PI_CODING_AGENT_DIR || env.ORCA_OMP_CODING_AGENT_DIR
+    env.ORCA_OPENCODE_CONFIG_DIR ||
+    env.ORCA_PI_CODING_AGENT_DIR ||
+    env.ORCA_OMP_CODING_AGENT_DIR ||
+    env.ORCA_REMOTE_CLI_BIN_DIR
   )
 }
 
@@ -84,6 +87,7 @@ if [[ ! -o login ]]; then
   if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
     export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
   fi
+  [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
   ${getPosixOmpShellWrapper()}
 fi
 `
@@ -101,6 +105,7 @@ fi
 if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
   export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
 fi
+[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
 `
   const bashRc = `# Orca relay bash overlay wrapper
@@ -118,6 +123,7 @@ fi
 if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
   export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
 fi
+[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
 # Why: SSH bash sessions need the same command lifecycle markers as local
 # bash so agent rows stop showing "working" when the foreground command exits.

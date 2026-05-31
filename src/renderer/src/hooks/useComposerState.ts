@@ -21,6 +21,7 @@ import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type {
   GitHubWorkItem,
+  GitHubPrStartPoint,
   GitPushTarget,
   GitLabWorkItem,
   LinearIssue,
@@ -49,6 +50,11 @@ import {
   type LinkedWorkItemSummary,
   type SetupConfig
 } from '@/lib/new-workspace'
+import {
+  getLinkedWorkItemPromptContext,
+  resolveQuickCreateLinkedWorkItemPrompt
+} from '@/lib/linked-work-item-context'
+import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import {
   getFullComposerCreateDisabled,
   getQuickComposerCreateDisabled
@@ -81,7 +87,10 @@ import {
   type WorkspaceCreateErrorDisplay
 } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
-import { resolveComposerBranchSelection } from './composer-branch-selection'
+import {
+  resolveComposerBranchNameOverrideForCreate,
+  resolveComposerBranchSelection
+} from './composer-branch-selection'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -174,7 +183,8 @@ export type ComposerCardProps = {
   onBaseBranchPrSelect: (
     baseBranch: string,
     item: GitHubWorkItem,
-    pushTarget?: GitPushTarget
+    pushTarget?: GitPushTarget,
+    branchNameOverride?: string
   ) => void
   /** PR number selected via the Start-from picker (when applicable). Used so the
    *  field can render "PR #N" copy. */
@@ -212,6 +222,7 @@ export type UseComposerStateResult = {
   /** Ref the consumer should attach to the composer wrapper so the global
    *  Enter-to-submit handler can scope its behavior to the visible composer. */
   composerRef: React.RefObject<HTMLDivElement | null>
+  onComposerNodeChange: (node: HTMLDivElement | null) => void
   promptTextareaRef: React.RefObject<HTMLTextAreaElement | null>
   nameInputRef: React.RefObject<HTMLInputElement | null>
   submit: () => Promise<void>
@@ -388,6 +399,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
   const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(undefined)
+  const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] =
+    useState(false)
   const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>(undefined)
   // Why: when a repo switch wipes a prior Start-from selection, surface the
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually
@@ -473,9 +486,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Why: read the latest note inside handleBaseBranchPrSelect without adding
   // `note` to its deps (which would rebuild the callback on every keystroke).
   const noteRef = useRef<string>(note)
-  useEffect(() => {
-    noteRef.current = note
-  }, [note])
+  noteRef.current = note
   const composerRef = useRef<HTMLDivElement | null>(null)
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const promptCaretFrameRef = useRef<number | null>(null)
@@ -514,7 +525,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     promptCaretFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelPromptCaretFrame, [cancelPromptCaretFrame])
+  const handleComposerNodeChange = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued caret restoration targets composer descendants and
+      // must be canceled as soon as the composer root leaves the DOM.
+      if (!node) {
+        cancelPromptCaretFrame()
+      }
+    },
+    [cancelPromptCaretFrame]
+  )
 
   const hookCheckRef = useRef<{
     key: string
@@ -1069,7 +1089,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [linkPopoverOpen, normalizedLinkQuery.directNumber, selectedRepo, selectedRepoIsGit])
 
   const applyLinkedWorkItem = useCallback(
-    (item: GitHubWorkItem): void => {
+    (item: GitHubWorkItem, options: { preserveBranchNameOverride?: boolean } = {}): void => {
       if (item.type === 'issue') {
         setLinkedIssue(String(item.number))
         setLinkedPR(null)
@@ -1088,7 +1108,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
-      setBranchNameOverride(undefined)
+      if (!options.preserveBranchNameOverride) {
+        setBranchNameOverride(undefined)
+      }
     },
     [name]
   )
@@ -1214,14 +1236,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       } else if (name !== lastAutoNameRef.current) {
         lastAutoNameRef.current = ''
       }
-      if (branchNameOverride && nextName !== branchAutoNameRef.current) {
+      if (
+        branchNameOverride &&
+        !branchNameOverridePreservesNameEdits &&
+        nextName !== branchAutoNameRef.current
+      ) {
         setBranchNameOverride(undefined)
         branchAutoNameRef.current = ''
       }
       setName(nextName)
       setCreateError(null)
     },
-    [branchNameOverride, name]
+    [branchNameOverride, branchNameOverridePreservesNameEdits, name]
   )
 
   const addComposerAttachments = useCallback((paths: string[]): void => {
@@ -1498,16 +1524,22 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [])
 
   const handleBaseBranchPrSelect = useCallback(
-    (nextBaseBranch: string, item: GitHubWorkItem, nextPushTarget?: GitPushTarget): void => {
+    (
+      nextBaseBranch: string,
+      item: GitHubWorkItem,
+      nextPushTarget?: GitPushTarget,
+      nextBranchNameOverride?: string
+    ): void => {
       setBaseBranch(nextBaseBranch)
       setPushTarget(nextPushTarget)
-      setBranchNameOverride(undefined)
+      setBranchNameOverride(nextBranchNameOverride)
+      setBranchNameOverridePreservesNameEdits(Boolean(nextBranchNameOverride))
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
       // Why: per spec, a PR selection in the Start-from picker is also a
       // linkedWorkItem assignment. Reuse applyLinkedWorkItem so auto-name and
       // linkedPR state stay in a single code path.
-      applyLinkedWorkItem(item)
+      applyLinkedWorkItem(item, { preserveBranchNameOverride: Boolean(nextBranchNameOverride) })
       // Why: starting a worktree from a PR is a strong hint for what the
       // worktree's comment should surface (`orca worktree current`, sidebar).
       // Prefill the note if it's empty or still equal to a prior auto-fill, so
@@ -1570,7 +1602,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ? { isCrossRepository: item.isCrossRepository }
                 : {})
             })
-          : callRuntimeRpc<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>(
+          : callRuntimeRpc<GitHubPrStartPoint | { error: string }>(
               target,
               'worktree.resolvePrBase',
               {
@@ -1591,7 +1623,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             toast.error(result.error)
             return
           }
-          handleBaseBranchPrSelect(result.baseBranch, item, result.pushTarget)
+          handleBaseBranchPrSelect(
+            result.baseBranch,
+            item,
+            result.pushTarget,
+            result.branchNameOverride
+          )
         })
         .catch((error: unknown) => {
           setBaseBranch(undefined)
@@ -1647,6 +1684,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setBaseBranch(selection.baseBranch)
       setPushTarget(undefined)
       setStartFromResetHint(null)
+      setBranchNameOverridePreservesNameEdits(false)
       if (selection.name !== undefined && selection.lastAutoName !== undefined) {
         setName(selection.name)
         lastAutoNameRef.current = selection.lastAutoName
@@ -1664,14 +1702,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     (issue: LinearIssue): void => {
       setLinkedIssue('')
       setLinkedPR(null)
-      setLinkedWorkItem({
-        type: 'issue',
-        // Why: Linear identifiers are strings (e.g. ENG-123); keep GitHub
-        // numeric metadata empty and carry the real source through the URL.
-        number: 0,
-        title: issue.title,
-        url: issue.url
-      })
+      setLinkedWorkItem(buildLinearIssueLinkedWorkItem(issue))
       const suggestedName = issue.title
       if (!name.trim() || name === lastAutoNameRef.current) {
         setName(suggestedName)
@@ -1679,11 +1710,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       setBranchNameOverride(undefined)
       branchAutoNameRef.current = ''
-      // Why: match the GitHub issue/PR flow — paste only the URL as a draft
-      // into the agent's input (no auto-submit). The launch path already
-      // drafts `linkedWorkItem.url` when the note is empty; auto-filling the
-      // note here would flip Linear into the `isLinearTypedOnly` branch and
-      // auto-submit the full details block.
+      // Why: match the GitHub issue/PR flow by drafting linked context for
+      // review instead of auto-submitting. Auto-filling the note here would
+      // turn a source selection into user-authored instructions.
     },
     [name]
   )
@@ -1797,12 +1826,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             )
           : ''
+      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem)
       const submitStartupPrompt = submitShouldApplyLinkedOnlyTemplate
-        ? buildAgentPromptWithContext(submitLinkedOnlyTemplatePrompt, attachmentPaths, [])
+        ? buildAgentPromptWithContext(
+            submitLinkedOnlyTemplatePrompt,
+            attachmentPaths,
+            [],
+            linkedPromptContext.linkedContextBlocks
+          )
         : buildAgentPromptWithContext(
             agentPrompt,
             attachmentPaths,
-            submitLinkedWorkItem?.url ? [submitLinkedWorkItem.url] : []
+            linkedPromptContext.linkedUrls,
+            linkedPromptContext.linkedContextBlocks
           )
       const submitShouldRunIssueAutomation =
         enableIssueAutomation &&
@@ -1827,10 +1863,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
 
       const linkedLinearIssue = submitLinkedWorkItem?.linearIdentifier
-      const effectiveBranchNameOverride =
-        branchNameOverride && workspaceName === branchAutoNameRef.current
-          ? branchNameOverride
-          : undefined
+      const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride,
+        branchAutoName: branchAutoNameRef.current,
+        workspaceName,
+        preserveWorkspaceNameEdits: branchNameOverridePreservesNameEdits
+      })
       const result = await createWorktree(
         repoId,
         workspaceName,
@@ -1893,6 +1931,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       activateAndRevealWorktree(worktree.id, {
         sidebarRevealBehavior: 'auto',
         setup: result.setup,
+        defaultTabs: result.defaultTabs,
         issueCommand,
         ...(startupPlan
           ? {
@@ -1935,6 +1974,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     attachmentPaths,
     baseBranch,
     branchNameOverride,
+    branchNameOverridePreservesNameEdits,
     clearNewWorkspaceDraft,
     createWorktree,
     applyWorktreeMeta,
@@ -2046,10 +2086,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : ((submitResolvedSetupDecision ?? 'inherit') as SetupDecision)
 
         const linkedLinearIssue = submitLinkedWorkItem?.linearIdentifier
-        const effectiveBranchNameOverride =
-          branchNameOverride && workspaceName === branchAutoNameRef.current
-            ? branchNameOverride
-            : undefined
+        const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
+          branchNameOverride,
+          branchAutoName: branchAutoNameRef.current,
+          workspaceName,
+          preserveWorkspaceNameEdits: branchNameOverridePreservesNameEdits
+        })
         const result = await createWorktree(
           repoId,
           workspaceName,
@@ -2078,16 +2120,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const trimmedNote = note.trim()
         await applyWorktreeMeta(worktree.id, trimmedNote ? { comment: trimmedNote } : {})
 
-        // Why: when a linked work item is selected in the quick flow, launch
-        // the agent with a blank prompt and type the URL into its input as a
-        // draft (no trailing Enter). This lets the user review/edit before
-        // sending instead of auto-executing a "Complete <url>" template.
-        // Falls back to the trimmed note when the linked item carries no
-        // number/URL (Linear typed-only entries).
-        const isLinearTypedOnly = submitLinkedWorkItem?.number === 0 && Boolean(trimmedNote)
-        const quickPrompt = isLinearTypedOnly && trimmedNote ? trimmedNote : ''
-        const quickDraftPrompt =
-          submitLinkedWorkItem && !isLinearTypedOnly ? submitLinkedWorkItem.url : null
+        // Why: quick create should draft linked source data for review instead
+        // of auto-executing it. Rich linked context wins over URL fallback;
+        // typed-only Linear entries still use the note as the startup prompt.
+        const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
+          resolveQuickCreateLinkedWorkItemPrompt(submitLinkedWorkItem, trimmedNote)
 
         // Why: agents that gate first-launch behind a "Do you trust this
         // folder?" menu (cursor-agent, copilot) consume the bracketed paste
@@ -2161,6 +2198,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         activateAndRevealWorktree(worktree.id, {
           sidebarRevealBehavior: 'auto',
           setup: result.setup,
+          defaultTabs: result.defaultTabs,
           ...(startupPlan
             ? {
                 startup: {
@@ -2202,6 +2240,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       applyWorktreeMeta,
       baseBranch,
       branchNameOverride,
+      branchNameOverridePreservesNameEdits,
       clearNewWorkspaceDraft,
       createWorktree,
       fallbackCreatureName,
@@ -2329,6 +2368,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   return {
     cardProps,
     composerRef,
+    onComposerNodeChange: handleComposerNodeChange,
     promptTextareaRef,
     nameInputRef,
     submit,

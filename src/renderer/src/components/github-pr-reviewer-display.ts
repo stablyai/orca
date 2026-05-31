@@ -57,6 +57,8 @@ function formatReviewState(state: string | null | undefined): string {
       return 'Dismissed'
     case 'PENDING':
       return 'Pending'
+    case null:
+    case undefined:
     default:
       return 'Reviewed'
   }

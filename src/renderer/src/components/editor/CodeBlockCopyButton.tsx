@@ -11,6 +11,9 @@ export default function CodeBlockCopyButton({
 }: CodeBlockCopyButtonProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after this button unmounts; avoid starting
+  // a reset timer that will outlive the component.
+  const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
     if (copiedResetTimerRef.current !== null) {
@@ -21,6 +24,7 @@ export default function CodeBlockCopyButton({
 
   const setCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
       if (node === null) {
         clearCopiedResetTimer()
       }
@@ -45,6 +49,9 @@ export default function CodeBlockCopyButton({
     void window.api.ui
       .writeClipboardText(text)
       .then(() => {
+        if (!isMountedRef.current) {
+          return
+        }
         clearCopiedResetTimer()
         setCopied(true)
         copiedResetTimerRef.current = window.setTimeout(() => {

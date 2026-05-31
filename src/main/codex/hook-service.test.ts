@@ -165,8 +165,16 @@ describe('CodexHookService', () => {
       const prodHooks = JSON.parse(readFileSync(prodHooksPath, 'utf-8')) as {
         hooks: Record<string, { hooks?: { command?: string }[] }[]>
       }
-      expect(devHooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toBe('user-hook')
-      expect(prodHooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toBe('user-hook')
+      expect(
+        devHooks.hooks.Stop?.some((definition) =>
+          definition.hooks?.some((hook) => hook.command === 'user-hook')
+        )
+      ).toBe(true)
+      expect(
+        prodHooks.hooks.Stop?.some((definition) =>
+          definition.hooks?.some((hook) => hook.command === 'user-hook')
+        )
+      ).toBe(true)
       expect(
         devHooks.hooks.Stop?.some((definition) =>
           definition.hooks?.[0]?.command?.includes('codex-hook')
@@ -243,13 +251,60 @@ describe('CodexHookService', () => {
         { matcher?: string; hooks?: { command?: string; statusMessage?: string }[] }[]
       >
     }
-    expect(runtimeHooks.hooks.Stop?.[0]?.matcher).toBe('*')
-    expect(runtimeHooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toBe('user-hook')
-    expect(runtimeHooks.hooks.Stop?.[0]?.hooks?.[0]?.statusMessage).toBe('Running user hook')
+    expect(runtimeHooks.hooks.Stop?.[1]?.matcher).toBe('*')
+    expect(runtimeHooks.hooks.Stop?.[1]?.hooks?.[0]?.command).toBe('user-hook')
+    expect(runtimeHooks.hooks.Stop?.[1]?.hooks?.[0]?.statusMessage).toBe('Running user hook')
 
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`))
+  })
+
+  it('runs managed PostToolUse status before mirrored user hooks', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify({
+        hooks: {
+          PostToolUse: [{ hooks: [{ type: 'command', command: 'slow-user-post-tool-hook' }] }]
+        }
+      })}\n`,
+      'utf-8'
+    )
+    writeFileSync(
+      join(systemCodexHome, 'config.toml'),
+      upsertHookTrustEntriesInContent('model = "system-model"\n', [
+        {
+          sourcePath: systemHooksPath,
+          eventLabel: 'post_tool_use',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'slow-user-post-tool-hook'
+        }
+      ]),
+      'utf-8'
+    )
+
+    expect(new CodexHookService().install().state).toBe('installed')
+
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
+      hooks: Record<string, { hooks?: { command?: string }[] }[]>
+    }
+
+    expect(runtimeHooks.hooks.PostToolUse?.[0]?.hooks?.[0]?.command).toContain('codex-hook')
+    expect(runtimeHooks.hooks.PostToolUse?.[1]?.hooks?.[0]?.command).toBe(
+      'slow-user-post-tool-hook'
+    )
+
+    const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:post_tool_use:0:0`))
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:post_tool_use:1:0`))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:post_tool_use:0:0`))
   })
 
   it('mirrors system user hook approvals when the system trust indices are stale', () => {
@@ -300,6 +355,7 @@ describe('CodexHookService', () => {
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:2:0`))
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`))
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:1:0`))
   })
@@ -382,6 +438,7 @@ describe('CodexHookService', () => {
 
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
     for (const command of pluginCommands) {
       expect(runtimeToml).not.toContain(command)
     }
@@ -481,7 +538,7 @@ describe('CodexHookService', () => {
 
     const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
-    const runtimeUserTrustHeader = hookTrustHeader(`${managedHooksPath}:stop:0:0`)
+    const runtimeUserTrustHeader = hookTrustHeader(`${managedHooksPath}:stop:1:0`)
     expect(readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')).toContain(
       runtimeUserTrustHeader
     )
@@ -491,7 +548,7 @@ describe('CodexHookService', () => {
 
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).not.toContain(runtimeUserTrustHeader)
-    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
+    expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
   })
 
   it('refreshes mirrored system user hooks when the system hooks file changes', () => {
@@ -558,13 +615,31 @@ describe('CodexHookService', () => {
 
     const service = new CodexHookService()
     expect(service.install().state).toBe('installed')
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    const runtimeTomlPath = join(managedCodexHome, 'config.toml')
+    const permissionRequestHeader = hookTrustHeader(`${managedHooksPath}:permission_request:0:0`)
+    const installedToml = readFileSync(runtimeTomlPath, 'utf-8')
+    const permissionRequestIndex = installedToml.indexOf(permissionRequestHeader)
+    expect(permissionRequestIndex).not.toBe(-1)
+    const nextHeaderIndex = installedToml.indexOf(
+      '\n[',
+      permissionRequestIndex + permissionRequestHeader.length
+    )
+    const permissionRequestBlock = installedToml.slice(
+      permissionRequestIndex,
+      nextHeaderIndex === -1 ? installedToml.length : nextHeaderIndex
+    )
+    writeFileSync(
+      runtimeTomlPath,
+      `${installedToml.trimEnd()}\n\n${permissionRequestBlock.trimEnd()}\n`,
+      'utf-8'
+    )
 
     const status = service.refreshRuntimeUserHooks()
 
     expect(status.state).toBe('not_installed')
     expect(status.managedHooksPresent).toBe(false)
-    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
-    const managedHooksPath = join(managedCodexHome, 'hooks.json')
     const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
@@ -574,7 +649,7 @@ describe('CodexHookService', () => {
     expect(runtimeCommands).toEqual(['user-stop-hook'])
     expect(runtimeCommands.some((command) => command.includes('codex-hook'))).toBe(false)
 
-    const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
+    const runtimeToml = readFileSync(runtimeTomlPath, 'utf-8')
     expect(runtimeToml).toContain(
       `${hookTrustHeader(`${managedHooksPath}:stop:0:0`)}\nenabled = false`
     )
@@ -642,6 +717,47 @@ describe('CodexHookService', () => {
     expect(systemToml).toContain('model = "system-model"')
     expect(systemToml).not.toContain(':stop:1:0')
     expect(systemToml).not.toContain(':session_start:0:0')
+  })
+
+  it('removes very large legacy Orca-managed hook lists from system ~/.codex', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    const legacyScriptPath = join(
+      tmpHome,
+      '.orca',
+      'agent-hooks',
+      process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
+    )
+    const legacyCommand =
+      process.platform === 'win32' ? legacyScriptPath : wrapPosixHookCommand(legacyScriptPath)
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify({
+        hooks: {
+          Stop: Array.from({ length: 130_000 }, () => ({
+            hooks: [{ type: 'command', command: legacyCommand }]
+          }))
+        }
+      })}\n`,
+      'utf-8'
+    )
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      expect(new CodexHookService().install().state).toBe('installed')
+
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        '[codex-hook-service] failed to clean legacy Codex hooks',
+        expect.anything()
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
+    const systemHooks = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
+      hooks: Record<string, unknown>
+    }
+    expect(systemHooks.hooks.Stop).toBeUndefined()
   })
 
   it('removes the legacy Orca Codex profile file when it only contains managed hooks', () => {
@@ -879,7 +995,7 @@ describe('CodexHookService', () => {
     expect(runtimeToml).not.toContain(':stop:0:0')
   })
 
-  it('mirrors system Codex config while preserving runtime hook trust on hook install', () => {
+  it('preserves runtime Codex prefs and hook trust on hook install without a sync baseline', () => {
     const systemCodexHome = join(tmpHome, '.codex')
     mkdirSync(systemCodexHome, { recursive: true })
     writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "system-model"\n', 'utf-8')
@@ -903,12 +1019,65 @@ describe('CodexHookService', () => {
 
     expect(status.state).toBe('installed')
     const trustConfig = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
-    expect(trustConfig).toContain('model = "system-model"')
+    expect(trustConfig).toContain('model = "runtime-model"')
     expect(trustConfig).toContain('[hooks.state."runtime-hook"]')
     expect(trustConfig).toContain('enabled = false')
     expect(trustConfig).toContain('trusted_hash = "sha256:runtime"')
     expect(trustConfig).toContain(':permission_request:0:0')
-    expect(trustConfig).not.toContain('model = "runtime-model"')
+    expect(trustConfig).not.toContain('model = "system-model"')
+  })
+
+  it('repairs duplicate managed SessionStart trust tables on restart install', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "system-model"\n', 'utf-8')
+
+    const service = new CodexHookService()
+    expect(service.install().state).toBe('installed')
+
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    const runtimeTomlPath = join(managedCodexHome, 'config.toml')
+    const sessionStartHeader = hookTrustHeader(`${managedHooksPath}:session_start:0:0`)
+    const installedToml = readFileSync(runtimeTomlPath, 'utf-8')
+    const sessionStartIndex = installedToml.indexOf(sessionStartHeader)
+    expect(sessionStartIndex).not.toBe(-1)
+    const nextHeaderIndex = installedToml.indexOf(
+      '\n[',
+      sessionStartIndex + sessionStartHeader.length
+    )
+    const sessionStartBlock = installedToml
+      .slice(sessionStartIndex, nextHeaderIndex === -1 ? installedToml.length : nextHeaderIndex)
+      .trimEnd()
+    const staleDisabledBlock = sessionStartBlock
+      .replace('enabled = true', 'enabled = false')
+      .replace(/trusted_hash = "[^"]+"/, 'trusted_hash = "sha256:STALE_DISABLED"')
+    const staleEnabledBlock = sessionStartBlock.replace(
+      /trusted_hash = "[^"]+"/,
+      'trusted_hash = "sha256:STALE_ENABLED"'
+    )
+    writeFileSync(
+      runtimeTomlPath,
+      `${installedToml.slice(
+        0,
+        sessionStartIndex
+      )}${staleDisabledBlock}\n\n${staleEnabledBlock}${installedToml.slice(
+        nextHeaderIndex === -1 ? installedToml.length : nextHeaderIndex
+      )}`,
+      'utf-8'
+    )
+    expect(readFileSync(runtimeTomlPath, 'utf-8').split(sessionStartHeader)).toHaveLength(3)
+
+    // Why: preserving `enabled = false` is the repair contract; status can be
+    // partial because the user-disabled managed hook remains disabled.
+    expect(['installed', 'partial']).toContain(service.install().state)
+
+    const repairedToml = readFileSync(runtimeTomlPath, 'utf-8')
+    expect(repairedToml.split(sessionStartHeader)).toHaveLength(2)
+    expect(repairedToml).toContain('enabled = false')
+    expect(repairedToml).not.toContain('STALE_DISABLED')
+    expect(repairedToml).not.toContain('STALE_ENABLED')
+    expect(repairedToml).toContain('model = "system-model"')
   })
 
   it('preserves runtime-only project trust while honoring system project untrust', () => {
@@ -943,9 +1112,9 @@ describe('CodexHookService', () => {
 
     expect(status.state).toBe('installed')
     const trustConfig = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
-    expect(trustConfig).toContain('model = "system-model"')
+    expect(trustConfig).toContain('model = "runtime-model"')
     expect(trustConfig).toContain('[projects."/repo"]\ntrust_level = "untrusted"')
     expect(trustConfig).toContain('[projects."/runtime-only"]\ntrust_level = "trusted"')
-    expect(trustConfig).not.toContain('model = "runtime-model"')
+    expect(trustConfig).not.toContain('model = "system-model"')
   })
 })

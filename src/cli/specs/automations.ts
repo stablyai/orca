@@ -3,6 +3,7 @@ import { GLOBAL_FLAGS } from '../args'
 
 const AUTOMATION_TARGET_FLAGS = ['repo', 'workspace', 'workspace-mode', 'base-branch']
 const AUTOMATION_SCHEDULE_FLAGS = ['trigger', 'schedule', 'time', 'day', 'timezone']
+const AUTOMATION_PRECHECK_FLAGS = ['precheck', 'precheck-timeout']
 const AUTOMATION_STATE_FLAGS = [
   'enabled',
   'disabled',
@@ -31,12 +32,13 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['automations', 'create'],
     summary: 'Create a scheduled Orca automation',
     usage:
-      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--repo <selector>|--workspace <selector>] [--json]',
+      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--precheck <command>] [--repo <selector>|--workspace <selector>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'name',
       'prompt',
       'provider',
+      ...AUTOMATION_PRECHECK_FLAGS,
       ...AUTOMATION_TARGET_FLAGS,
       ...AUTOMATION_SCHEDULE_FLAGS,
       ...AUTOMATION_STATE_FLAGS
@@ -45,11 +47,13 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Trigger accepts hourly, daily, weekdays, weekly, a 5-field cron expression, or an RRULE string.',
       'When --repo is omitted, the CLI uses the enclosing Orca worktree when one can be resolved from cwd.',
       'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
+      'Use --precheck to run a bounded command before scheduled runs; exit code 0 continues, anything else records a skipped run.',
       'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.'
     ],
     examples: [
       'orca automations create --name "Daily review" --trigger daily --prompt "Review open changes" --provider codex',
-      'orca automations create --name "Weekday triage" --trigger "0 9 * * 1-5" --prompt "Triage issues" --provider claude --repo my-repo'
+      'orca automations create --name "Weekday triage" --trigger "0 9 * * 1-5" --prompt "Triage issues" --provider claude --repo my-repo',
+      'orca automations create --name "PR review" --trigger hourly --precheck "gh pr list --json number -q .[0].number" --prompt "Review requested PRs" --provider codex'
     ]
   },
   {
@@ -62,6 +66,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'name',
       'prompt',
       'provider',
+      ...AUTOMATION_PRECHECK_FLAGS,
       ...AUTOMATION_TARGET_FLAGS,
       ...AUTOMATION_SCHEDULE_FLAGS,
       ...AUTOMATION_STATE_FLAGS

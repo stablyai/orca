@@ -45,6 +45,7 @@ describe('Claude Keychain credentials', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
@@ -173,6 +174,36 @@ describe('Claude Keychain credentials', () => {
       process.env.USER || process.env.USERNAME || 'user',
       '-w'
     ])
+  })
+
+  it('rejects when a keychain read never reports completion', async () => {
+    vi.useFakeTimers()
+    const configDir = '/tmp/orca-claude-login-test'
+    const killMock = vi.fn()
+    execFileMock.mockImplementationOnce(() => ({ kill: killMock }) as never)
+
+    let settled = false
+    let rejected: unknown
+    const readPromise = readActiveClaudeKeychainCredentialsStrict(configDir).then(
+      (credentials) => {
+        settled = true
+        return credentials
+      },
+      (error: unknown) => {
+        settled = true
+        rejected = error
+        return null
+      }
+    )
+
+    await vi.advanceTimersByTimeAsync(3000)
+
+    expect(settled).toBe(true)
+    await readPromise
+    expect(rejected).toEqual(
+      expect.objectContaining({ message: 'security timed out after 3000ms' })
+    )
+    expect(killMock).toHaveBeenCalled()
   })
 
   it('deletes both scoped and legacy active credentials for config-dir cleanup', async () => {

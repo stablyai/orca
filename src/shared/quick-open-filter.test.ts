@@ -35,6 +35,11 @@ describe('shouldIncludeQuickOpenPath', () => {
   it('hides GNOME virtual FS runtime mount from Quick Open', () => {
     expect(shouldIncludeQuickOpenPath('.gvfs/mount/file')).toBe(false)
   })
+  it('hides local share runtime state without hiding all .local files', () => {
+    expect(shouldIncludeQuickOpenPath('.local/share/app/state.db')).toBe(false)
+    expect(shouldIncludeQuickOpenPath('nested/.local/share/app/state.db')).toBe(false)
+    expect(shouldIncludeQuickOpenPath('.local/bin/tool')).toBe(true)
+  })
 
   it('does NOT blocklist user-authored dirs like .config, .ssh, .github', () => {
     expect(HIDDEN_DIR_BLOCKLIST.has('.config')).toBe(false)
@@ -66,6 +71,16 @@ describe('buildExcludePathPrefixes', () => {
     expect(buildExcludePathPrefixes('/home/u/repo', ['/home/u/other'])).toEqual([])
   })
 
+  it('keeps dot-dot-prefixed names inside the root while rejecting parent escapes', () => {
+    expect(
+      buildExcludePathPrefixes('/home/u/repo', [
+        '/home/u/repo/..env',
+        '/home/u/repo/..workspace/app',
+        '/home/u/repo/../outside'
+      ])
+    ).toEqual(['..env', '..workspace/app'])
+  })
+
   it('handles Windows-style roots and paths', () => {
     expect(buildExcludePathPrefixes('C:\\repo', ['C:\\repo\\packages\\app'])).toEqual([
       'packages/app'
@@ -74,6 +89,12 @@ describe('buildExcludePathPrefixes', () => {
 
   it('strips trailing slashes', () => {
     expect(buildExcludePathPrefixes('/r', ['/r/a/', '/r/b///'])).toEqual(['a', 'b'])
+  })
+
+  it('keeps valid child prefixes whose segment starts with dotdot characters', () => {
+    expect(buildExcludePathPrefixes('/home/u/repo', ['/home/u/repo/..fixtures'])).toEqual([
+      '..fixtures'
+    ])
   })
 })
 
@@ -95,6 +116,7 @@ describe('buildHiddenDirExcludeGlobs', () => {
     expect(globs).toContain('!**/node_modules')
     expect(globs).toContain('!**/.git')
     expect(globs).toContain('!**/.cache')
+    expect(globs).toContain('!**/.local/share')
     // Directory-match form (not contents form) — contents form lets rg still
     // descend into the directory.
     expect(globs).not.toContain('!**/node_modules/**')
@@ -179,6 +201,18 @@ describe('normalizeQuickOpenRgLine', () => {
     expect(normalizeQuickOpenRgLine('./src/a.ts', { kind: 'cwd-relative' })).toBe('src/a.ts')
   })
 
+  it('keeps cwd-relative dot-dot-prefixed names but rejects parent escapes', () => {
+    expect(normalizeQuickOpenRgLine('./..fixtures/a.ts', { kind: 'cwd-relative' })).toBe(
+      '..fixtures/a.ts'
+    )
+    expect(normalizeQuickOpenRgLine('..env', { kind: 'cwd-relative' })).toBe('..env')
+    expect(normalizeQuickOpenRgLine('..workspace/file.ts', { kind: 'cwd-relative' })).toBe(
+      '..workspace/file.ts'
+    )
+    expect(normalizeQuickOpenRgLine('../outside.ts', { kind: 'cwd-relative' })).toBeNull()
+    expect(normalizeQuickOpenRgLine('..', { kind: 'cwd-relative' })).toBeNull()
+  })
+
   it('strips CRLF', () => {
     expect(normalizeQuickOpenRgLine('/root/a.ts\r', { kind: 'absolute', rootPath: '/root' })).toBe(
       'a.ts'
@@ -195,17 +229,22 @@ describe('normalizeQuickOpenRgLine', () => {
     expect(normalizeQuickOpenRgLine('', { kind: 'cwd-relative' })).toBeNull()
     expect(normalizeQuickOpenRgLine('.', { kind: 'cwd-relative' })).toBeNull()
   })
+
+  it('returns null for cwd-relative parent-directory escapes', () => {
+    expect(normalizeQuickOpenRgLine('../outside/a.ts', { kind: 'cwd-relative' })).toBeNull()
+    expect(normalizeQuickOpenRgLine('./../outside/a.ts', { kind: 'cwd-relative' })).toBeNull()
+  })
 })
 
 describe('buildGitLsFilesArgsForQuickOpen', () => {
   it('primary pass is --cached --others --exclude-standard', () => {
     const { primary } = buildGitLsFilesArgsForQuickOpen()
-    expect(primary).toEqual(['--cached', '--others', '--exclude-standard'])
+    expect(primary).toEqual(['-z', '--cached', '--others', '--exclude-standard'])
   })
 
   it('ignored pass surfaces ignored files without .env* pathspec whitelist', () => {
     const { ignoredPass } = buildGitLsFilesArgsForQuickOpen()
-    expect(ignoredPass).toEqual(['--others', '--ignored', '--exclude-standard'])
+    expect(ignoredPass).toEqual(['-z', '--others', '--ignored', '--exclude-standard'])
     expect(ignoredPass).not.toContain('.env*')
     expect(ignoredPass).not.toContain(':(glob)**/.env*')
   })

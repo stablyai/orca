@@ -32,6 +32,7 @@ import {
   getDaemonLaunchIdentity,
   getProcessStartedAtMs,
   healthCheckDaemon,
+  isDaemonOlderThanPathMtime,
   killStaleDaemon
 } from './daemon-health'
 import {
@@ -83,19 +84,35 @@ function probeSocket(socketPath: string): Promise<boolean> {
       return
     }
     const sock = connect({ path: socketPath })
-    const timer = setTimeout(() => {
-      sock.destroy()
-      resolve(false)
+    let settled = false
+    let timer: ReturnType<typeof setTimeout>
+    function finish(alive: boolean, options?: { destroy?: boolean }): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      sock.removeListener('connect', onConnect)
+      sock.removeListener('error', onError)
+      if (options?.destroy) {
+        sock.destroy()
+      }
+      resolve(alive)
+    }
+
+    function onConnect(): void {
+      finish(true, { destroy: true })
+    }
+
+    function onError(): void {
+      finish(false)
+    }
+
+    timer = setTimeout(() => {
+      finish(false, { destroy: true })
     }, 1000)
-    sock.on('connect', () => {
-      clearTimeout(timer)
-      sock.destroy()
-      resolve(true)
-    })
-    sock.on('error', () => {
-      clearTimeout(timer)
-      resolve(false)
-    })
+    sock.on('connect', onConnect)
+    sock.on('error', onError)
   })
 }
 
@@ -146,15 +163,19 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
         await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
       } else {
-        // Why: dev worktrees share the same orca-dev userData, so a daemon from
-        // a deleted sibling checkout can pass protocol health checks while still
-        // pointing at missing native modules. Packaged app paths are stable and
-        // should preserve existing warm daemon reuse semantics.
-        const identity = app.isPackaged
-          ? 'match'
-          : getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
-        if (identity === 'mismatch') {
-          console.warn('[daemon] Replacing daemon launched from a different app path')
+        // Why: a protocol-healthy daemon can outlive the app bundle that
+        // launched it. In dev this happens after deleting/rebuilding a
+        // worktree; in packaged apps it happens when the stable
+        // /Applications/Orca.app path is replaced during update.
+        const identity = getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
+        const stalePackagedBundle =
+          app.isPackaged && isDaemonOlderThanPathMtime(runtimeDir, socketPath, tokenPath, entryPath)
+        if (identity === 'mismatch' || stalePackagedBundle) {
+          console.warn(
+            stalePackagedBundle
+              ? '[daemon] Replacing daemon launched before the current app bundle was installed'
+              : '[daemon] Replacing daemon launched from a different app path'
+          )
           await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
         } else {
           // Why: daemon is already running from a previous app session and

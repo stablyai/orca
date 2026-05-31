@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { getRelativePathInsideRoot } from '@/lib/path'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 type UntitledFileRenameDialogProps = {
   open: boolean
@@ -38,6 +39,7 @@ export function UntitledFileRenameDialog({
   const nameInputRef = useRef<HTMLInputElement>(null)
   const focusFrameRef = useRef<number | null>(null)
   const seededOpenStateRef = useRef({ open: false, baseName, worktreePath })
+  const mountedRef = useMountedRef()
 
   const displayError = externalError ?? error
 
@@ -47,8 +49,6 @@ export function UntitledFileRenameDialog({
       focusFrameRef.current = null
     }
   }, [])
-
-  useEffect(() => cancelFocusFrame, [cancelFocusFrame])
 
   const setNameInputNode = useCallback(
     (node: HTMLInputElement | null): void => {
@@ -81,9 +81,12 @@ export function UntitledFileRenameDialog({
     if (!picked) {
       return
     }
+    if (!mountedRef.current) {
+      return
+    }
     setDir(picked)
     setError(null)
-  }, [dir, worktreePath])
+  }, [dir, mountedRef, worktreePath])
 
   const handleSubmit = useCallback(() => {
     const trimmedName = name.trim().replace(/\.md$/, '')

@@ -25,6 +25,7 @@ const WorktreeCardProperty = z.enum([
   'ports',
   'inline-agents'
 ])
+const AgentActivityDisplayMode = z.enum(['compact', 'full'])
 const StatusBarItem = z.enum(['claude', 'codex', 'gemini', 'opencode-go', 'ssh', 'resource-usage'])
 const WorkspaceStatusDefinition = z.object({
   id: z.string(),
@@ -142,9 +143,10 @@ const UiUpdate = z
     uiZoomLevel: z.number().finite().optional(),
     editorFontZoomLevel: z.number().finite().optional(),
     worktreeCardProperties: z.array(WorktreeCardProperty).optional(),
+    agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
-    workspaceBoardCompact: z.boolean().optional(),
+    workspaceBoardColumnLayout: z.enum(['full', 'fit']).optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),
     _workspaceStatusesDefaultOrderMigrated: z.boolean().optional(),
     _workspaceStatusesDefaultWorkflowMigrated: z.boolean().optional(),

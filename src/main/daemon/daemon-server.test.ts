@@ -91,6 +91,50 @@ describe('DaemonServer', () => {
     return client
   }
 
+  async function connectRawHello(role: 'control' | 'stream', clientId: string): Promise<Socket> {
+    const socket = connect(socketPath)
+    await new Promise<void>((resolve) => socket.once('connect', resolve))
+    socket.write(
+      encodeNdjson({
+        type: 'hello',
+        version: PROTOCOL_VERSION,
+        token: readFileSync(tokenPath, 'utf-8').trim(),
+        clientId,
+        role
+      })
+    )
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = (): void => {
+        socket.off('data', onData)
+        socket.off('error', onError)
+      }
+      const onData = (data: Buffer): void => {
+        cleanup()
+        const parsed = JSON.parse(data.toString().trim()) as { ok?: boolean; error?: string }
+        if (parsed.ok) {
+          resolve()
+          return
+        }
+        reject(new Error(parsed.error ?? 'hello rejected'))
+      }
+      const onError = (error: Error): void => {
+        cleanup()
+        reject(error)
+      }
+      socket.on('data', onData)
+      socket.on('error', onError)
+    })
+    return socket
+  }
+
+  async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
+    const startedAt = Date.now()
+    while (!predicate() && Date.now() - startedAt < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    expect(predicate()).toBe(true)
+  }
+
   describe('startup', () => {
     it('creates token file and starts listening', async () => {
       await startServer()
@@ -377,6 +421,75 @@ describe('DaemonServer', () => {
       const parsed = JSON.parse(response.trim())
       expect(parsed.ok).toBe(false)
       socket.destroy()
+    })
+  })
+
+  describe('stream socket lifecycle', () => {
+    it('clears the tracked stream socket when it closes', async () => {
+      await startServer()
+      const daemon = server as unknown as DaemonServerPrivate
+      const control = await connectRawHello('control', 'raw-client')
+      const stream = await connectRawHello('stream', 'raw-client')
+
+      expect(daemon.clients.get('raw-client')?.streamSocket).toBeTruthy()
+
+      stream.destroy()
+
+      await waitFor(() => daemon.clients.get('raw-client')?.streamSocket === null)
+      control.destroy()
+    })
+
+    it('destroys a replaced stream socket for the same client', async () => {
+      await startServer()
+      const daemon = server as unknown as DaemonServerPrivate
+      const control = await connectRawHello('control', 'raw-client')
+      const firstStream = await connectRawHello('stream', 'raw-client')
+      let firstClosed = false
+      firstStream.once('close', () => {
+        firstClosed = true
+      })
+
+      const secondStream = await connectRawHello('stream', 'raw-client')
+
+      await waitFor(() => firstClosed)
+      expect(daemon.clients.get('raw-client')?.streamSocket).toBeTruthy()
+      secondStream.destroy()
+      control.destroy()
+    })
+
+    it('destroys previous sockets when a control client id reconnects', async () => {
+      await startServer()
+      const daemon = server as unknown as DaemonServerPrivate
+      const firstControl = await connectRawHello('control', 'raw-client')
+      const firstStream = await connectRawHello('stream', 'raw-client')
+      let firstControlClosed = false
+      let firstStreamClosed = false
+      firstControl.once('close', () => {
+        firstControlClosed = true
+      })
+      firstStream.once('close', () => {
+        firstStreamClosed = true
+      })
+
+      const secondControl = await connectRawHello('control', 'raw-client')
+
+      await waitFor(() => firstControlClosed && firstStreamClosed)
+      expect(daemon.clients.get('raw-client')?.controlSocket).toBeTruthy()
+      expect(daemon.clients.get('raw-client')?.streamSocket).toBeNull()
+      secondControl.destroy()
+    })
+
+    it('destroys orphan stream sockets without a control client', async () => {
+      await startServer()
+      const daemon = server as unknown as DaemonServerPrivate
+      const stream = await connectRawHello('stream', 'missing-client')
+      let closed = false
+      stream.once('close', () => {
+        closed = true
+      })
+
+      await waitFor(() => closed || stream.destroyed)
+      expect(daemon.clients.has('missing-client')).toBe(false)
     })
   })
 

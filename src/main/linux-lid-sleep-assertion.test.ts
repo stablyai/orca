@@ -90,6 +90,24 @@ describe('LinuxLidSleepAssertion', () => {
     expect(child.kill).toHaveBeenCalledTimes(1)
   })
 
+  it('removes child listeners when stopped intentionally', () => {
+    const child = new FakeSystemdInhibitProcess()
+    const assertion = new LinuxLidSleepAssertion({
+      logger: createLogger(),
+      platform: 'linux',
+      spawn: vi.fn(() => child)
+    })
+
+    assertion.start('status-change')
+    expect(child.listenerCount('error')).toBe(1)
+    expect(child.listenerCount('exit')).toBe(1)
+
+    assertion.stop('settings-change')
+
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('exit')).toBe(0)
+  })
+
   it('does not report an intentional stop as a failed inhibitor', () => {
     const logger = createLogger()
     const child = new FakeSystemdInhibitProcess()
@@ -153,6 +171,8 @@ describe('LinuxLidSleepAssertion', () => {
     expect(onUnexpectedFailure).toHaveBeenCalledWith('linux-lid-assertion-failure')
     expect(spawn).toHaveBeenCalledTimes(2)
     expect(logger.warn).toHaveBeenCalledTimes(1)
+    expect(firstChild.listenerCount('error')).toBe(0)
+    expect(firstChild.listenerCount('exit')).toBe(0)
   })
 
   it('suppresses retry attempts until the shared retry gate expires', () => {

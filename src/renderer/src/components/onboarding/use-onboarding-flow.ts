@@ -45,6 +45,7 @@ import {
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -55,6 +56,33 @@ type TaskSourcesSnapshotProps = EventProps<'onboarding_task_sources_snapshot'>
 type TaskSourcesGithubStatus = TaskSourcesSnapshotProps['github_status']
 type TaskSourcesLinearStatus = TaskSourcesSnapshotProps['linear_status']
 type TaskSourcesExitAction = TaskSourcesSnapshotProps['exit_action']
+
+function shouldSkipIntegrationsStep(
+  status: ReturnType<typeof useAppStore.getState>['preflightStatus']
+): boolean {
+  return status?.gh.installed === true
+}
+
+function isSkippedStepIndex(index: number, skipIntegrations: boolean): boolean {
+  return skipIntegrations && STEPS[index]?.id === 'integrations'
+}
+
+function resolveStepIndex(
+  index: number,
+  skipIntegrations: boolean,
+  direction: 'forward' | 'backward'
+): number {
+  const lastIndex = STEPS.length - 1
+  let nextIndex = Math.min(Math.max(index, 0), lastIndex)
+  while (isSkippedStepIndex(nextIndex, skipIntegrations)) {
+    const candidate = nextIndex + (direction === 'forward' ? 1 : -1)
+    if (candidate < 0 || candidate > lastIndex) {
+      return direction === 'forward' ? lastIndex : 0
+    }
+    nextIndex = candidate
+  }
+  return nextIndex
+}
 
 function defaultProjectGroupNameForPath(path: string): string {
   return (
@@ -89,6 +117,54 @@ function getLinearTaskSourceStatus(
   return checked ? 'not_connected' : 'checking'
 }
 
+type OnboardingStepId = (typeof STEPS)[number]['id']
+
+type SkippedOnboardingPreferenceOptions = {
+  currentStepId: OnboardingStepId
+  themeBeforePreview: GlobalSettings['theme'] | null
+  settingsTheme: GlobalSettings['theme'] | undefined
+  selectedAgent: TuiAgent | null
+  setTheme: (theme: GlobalSettings['theme']) => void
+  applyTheme: (theme: GlobalSettings['theme']) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
+  setError: (message: string | null) => void
+}
+
+export async function prepareSkippedOnboardingPreferences({
+  currentStepId,
+  themeBeforePreview,
+  settingsTheme,
+  selectedAgent,
+  setTheme,
+  applyTheme,
+  updateSettings,
+  setError
+}: SkippedOnboardingPreferenceOptions): Promise<boolean> {
+  try {
+    // Why: theme tiles save immediately for a stable preview, but skip still
+    // means "do not keep this step's choice."
+    if (currentStepId === 'theme') {
+      const themeToRestore = themeBeforePreview ?? settingsTheme
+      if (themeToRestore) {
+        setTheme(themeToRestore)
+        applyTheme(themeToRestore)
+        await updateSettings({ theme: themeToRestore })
+      }
+    }
+    // Why: the repo step seeds folder terminals from saved settings. Preserve
+    // the visible agent choice when optional preferences are skipped.
+    if (currentStepId === 'agent' && selectedAgent) {
+      await updateSettings({ defaultTuiAgent: selectedAgent })
+    }
+    return true
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    setError(message)
+    toast.error('Could not save progress', { description: message })
+    return false
+  }
+}
+
 export function useOnboardingFlow(
   onboarding: OnboardingState,
   onOnboardingChange: (state: OnboardingState) => void,
@@ -111,14 +187,24 @@ export function useOnboardingFlow(
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
+  const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
+  const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   // Why: App hydrates repos before mounting onboarding. Reading the store
   // synchronously lets the final step render its already-added state without a flash.
   const repos = useAppStore((s) => s.repos)
+  // Why: renderToStaticMarkup uses Zustand's initial server snapshot. The
+  // synchronous read keeps tests and the first client render aligned.
+  const effectivePreflightStatus = preflightStatus ?? useAppStore.getState().preflightStatus
 
-  const initialStep = Math.min(Math.max(onboarding.lastCompletedStep, 0), STEPS.length - 1)
+  const skipIntegrations = shouldSkipIntegrationsStep(effectivePreflightStatus)
+  const initialStep = resolveStepIndex(
+    Math.min(Math.max(onboarding.lastCompletedStep, 0), STEPS.length - 1),
+    skipIntegrations,
+    'forward'
+  )
   const [stepIndex, setStepIndex] = useState(initialStep)
   const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(
     settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
@@ -153,29 +239,28 @@ export function useOnboardingFlow(
   const tourOutcomeTrackerRef = useRef(createOnboardingTourOutcomeTracker())
 
   // Why: settings load async; the lazy useState initializers above run before
-  // settings hydrates. Re-sync once when settings transitions to non-null,
-  // unless the user has already interacted with that field.
+  // settings hydrates. Re-sync once before commit so children never paint the
+  // fallback defaults, unless the user already interacted with that field.
   const themeInteractedRef = useRef(false)
   const agentInteractedRef = useRef(false)
-  const settingsHydratedRef = useRef(false)
-  useEffect(() => {
-    if (!settings || settingsHydratedRef.current) {
-      return
+  const [settingsHydrated, setSettingsHydrated] = useState(settings != null)
+  const settingsHydration = resolveOnboardingSettingsHydration({
+    settings,
+    settingsHydrated,
+    themeInteracted: themeInteractedRef.current,
+    agentInteracted: agentInteractedRef.current,
+    currentTheme: theme,
+    currentAgent: selectedAgent
+  })
+  if (settingsHydration) {
+    setSettingsHydrated(settingsHydration.settingsHydrated)
+    if (settingsHydration.theme !== undefined) {
+      setTheme(settingsHydration.theme)
     }
-    settingsHydratedRef.current = true
-    if (!themeInteractedRef.current) {
-      setTheme(settings.theme)
+    if (settingsHydration.selectedAgent !== undefined) {
+      setSelectedAgent(settingsHydration.selectedAgent)
     }
-    if (!agentInteractedRef.current) {
-      const fromSettings =
-        settings.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
-          ? settings.defaultTuiAgent
-          : null
-      if (fromSettings !== null) {
-        setSelectedAgent(fromSettings)
-      }
-    }
-  }, [settings])
+  }
 
   // Why: track user interaction so async settings hydration above doesn't
   // overwrite a value the user explicitly chose.
@@ -233,6 +318,17 @@ export function useOnboardingFlow(
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
+  const visibleSteps = useMemo(
+    () =>
+      STEPS.map((step, index) => ({ step, index })).filter(
+        ({ index }) => !isSkippedStepIndex(index, skipIntegrations)
+      ),
+    [skipIntegrations]
+  )
+  const visibleStepIndex = Math.max(
+    0,
+    visibleSteps.findIndex(({ index }) => index === stepIndex)
+  )
   const hasExistingProject = repos.length > 0
 
   // Why: pin start time once so onboarding_completed reports a real funnel duration.
@@ -263,15 +359,42 @@ export function useOnboardingFlow(
     applyDocumentTheme(theme)
   }, [theme])
 
-  // Why: the theme step previews on the document before persistence. Revert to
-  // the persisted theme only on wizard unmount so saving (which updates
-  // settings.theme) doesn't trigger a one-frame revert/reapply flicker.
   useEffect(() => {
-    return () => {
-      applyDocumentTheme(persistedThemeRef.current)
+    void refreshPreflightStatus()
+  }, [refreshPreflightStatus])
+
+  const getNextStepIndex = useCallback(
+    (idx: number): number => resolveStepIndex(idx + 1, skipIntegrations, 'forward'),
+    [skipIntegrations]
+  )
+
+  const getPreviousStepIndex = useCallback(
+    (idx: number): number => resolveStepIndex(idx - 1, skipIntegrations, 'backward'),
+    [skipIntegrations]
+  )
+
+  useEffect(() => {
+    if (currentStep.id !== 'integrations' || !preflightStatusChecked || !skipIntegrations) {
+      return
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    const nextIndex = getNextStepIndex(stepIndex)
+    setStepIndex(nextIndex)
+    // Why: users with gh already on PATH don't need this setup page, but
+    // persistence must still resume them at the tour instead of bouncing back.
+    void persistStep(currentStep.stepNumber).then(onOnboardingChange, (err) => {
+      toast.error('Could not save progress', {
+        description: err instanceof Error ? err.message : String(err)
+      })
+    })
+  }, [
+    currentStep.id,
+    currentStep.stepNumber,
+    getNextStepIndex,
+    onOnboardingChange,
+    preflightStatusChecked,
+    skipIntegrations,
+    stepIndex
+  ])
 
   // Why: ref guard prevents StrictMode's double-invoke from emitting
   // `onboarding_started` twice on mount.
@@ -343,11 +466,18 @@ export function useOnboardingFlow(
     recordOnboardingTourDepthSummary(tourOutcomeTrackerRef.current, summary)
   }, [])
 
-  useEffect(() => {
-    return () => {
+  const setLifecycleRootRef = useCallback(
+    (node: HTMLElement | null): void => {
+      if (node !== null) {
+        return
+      }
+      // Why: onboarding previews theme/tour state outside this component; tie
+      // final cleanup to the modal root detaching instead of passive Effects.
+      applyDocumentTheme(persistedThemeRef.current)
       emitPendingTourOutcome()
-    }
-  }, [emitPendingTourOutcome])
+    },
+    [emitPendingTourOutcome]
+  )
 
   const trackTaskSourcesSnapshot = useCallback(
     (
@@ -520,7 +650,7 @@ export function useOnboardingFlow(
         return
       }
       if (currentStep.id === 'agentSetup' && featureSetupTerminalCommand) {
-        setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
+        setStepIndex(getNextStepIndex)
         return
       }
       nextInFlightRef.current = true
@@ -535,7 +665,7 @@ export function useOnboardingFlow(
         }
         if (result.ok) {
           trackCurrentStepCompleted(advancedVia)
-          setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
+          setStepIndex(getNextStepIndex)
         }
       } finally {
         nextInFlightRef.current = false
@@ -546,6 +676,7 @@ export function useOnboardingFlow(
       currentStep.id,
       featureSetupSelection,
       featureSetupTerminalCommand,
+      getNextStepIndex,
       persistCurrentStep,
       trackCurrentStepCompleted
     ]
@@ -933,20 +1064,18 @@ export function useOnboardingFlow(
       return
     }
     const durationMs = consumeStepDurationMs()
-    // Why: theme tiles save immediately for a stable preview, but skip still
-    // means "do not keep this step's choice."
-    if (currentStep.id === 'theme') {
-      const themeBeforePreview = themeStepEntryThemeRef.current ?? settings?.theme
-      if (themeBeforePreview) {
-        setTheme(themeBeforePreview)
-        applyDocumentTheme(themeBeforePreview)
-        await updateSettings({ theme: themeBeforePreview })
-      }
-    }
-    // Why: the repo step seeds folder terminals from saved settings. Preserve
-    // the visible agent choice when optional preferences are skipped.
-    if (currentStep.id === 'agent' && selectedAgent) {
-      await updateSettings({ defaultTuiAgent: selectedAgent })
+    const preferencesSaved = await prepareSkippedOnboardingPreferences({
+      currentStepId: currentStep.id,
+      themeBeforePreview: themeStepEntryThemeRef.current,
+      settingsTheme: settings?.theme,
+      selectedAgent,
+      setTheme,
+      applyTheme: applyDocumentTheme,
+      updateSettings,
+      setError
+    })
+    if (!preferencesSaved) {
+      return
     }
     const stepId = currentStep.id
     const stepNumber = currentStep.stepNumber
@@ -1138,7 +1267,7 @@ export function useOnboardingFlow(
       })
       setFeatureSetupTerminalCommand(null)
       setFeatureSetupTerminalSelection(null)
-      setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
+      setStepIndex(getNextStepIndex)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message)
@@ -1150,6 +1279,7 @@ export function useOnboardingFlow(
     currentStep.id,
     currentStep.stepNumber,
     currentStep.valueKind,
+    getNextStepIndex,
     onOnboardingChange
   ])
 
@@ -1190,8 +1320,8 @@ export function useOnboardingFlow(
       return
     }
     setTourStarted(false)
-    setStepIndex((idx) => Math.max(idx - 1, 0))
-  }, [nestedScan, trackNestedBackAndClear])
+    setStepIndex(getPreviousStepIndex)
+  }, [getPreviousStepIndex, nestedScan, trackNestedBackAndClear])
 
   // Why: returns the user to the "Take the tour" intro without leaving the
   // tour step. Don't emit the tour outcome here — re-entry must still let
@@ -1207,15 +1337,19 @@ export function useOnboardingFlow(
         trackNestedBackAndClear()
       }
       setTourStarted(false)
-      setStepIndex(Math.min(Math.max(idx, 0), STEPS.length - 1))
+      setStepIndex(
+        resolveStepIndex(idx, skipIntegrations, idx < stepIndex ? 'backward' : 'forward')
+      )
     },
-    [nestedScan, stepIndex, trackNestedBackAndClear]
+    [nestedScan, skipIntegrations, stepIndex, trackNestedBackAndClear]
   )
 
   return {
     settings,
     updateSettings,
     stepIndex,
+    visibleSteps,
+    visibleStepIndex,
     currentStep,
     selectedAgent,
     setSelectedAgent: setSelectedAgentInteractive,
@@ -1258,6 +1392,7 @@ export function useOnboardingFlow(
     recordTourDepthSummary,
     back,
     jumpToStep,
+    setLifecycleRootRef,
     openFolder,
     continueWithExistingProject,
     openSshSettings,

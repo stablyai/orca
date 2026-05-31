@@ -5,14 +5,59 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
+import type { AppState } from '../types'
 import type { RetainedAgentEntry } from './agent-status'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, makeTab, makeWorktree } from './store-test-helpers'
 
 // Why: queueMicrotask is used by the agent-status slice to schedule the
 // freshness timer after state updates. In tests we need to flush microtasks
 // before advancing fake timers so the setTimeout gets registered.
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => queueMicrotask(resolve))
+}
+
+function stubGitHubPRRefreshApi() {
+  const enqueuePRRefresh = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('window', {
+    api: {
+      gh: { enqueuePRRefresh }
+    }
+  })
+  return enqueuePRRefresh
+}
+
+function seedAgentPRRefreshFixture(
+  store: ReturnType<typeof createTestStore>,
+  worktreeCardProperties: AppState['worktreeCardProperties']
+): void {
+  store.setState({
+    repos: [
+      {
+        id: 'repo-1',
+        path: '/repo',
+        displayName: 'Repo',
+        badgeColor: '#999999',
+        addedAt: 1,
+        kind: 'git'
+      }
+    ],
+    groupBy: 'repo',
+    rightSidebarOpen: false,
+    worktreeCardProperties,
+    worktreesByRepo: {
+      'repo-1': [
+        makeWorktree({
+          id: 'wt-1',
+          repoId: 'repo-1',
+          path: '/repo/worktrees/pr-from-agent',
+          branch: 'feature/pr-from-agent'
+        })
+      ]
+    },
+    tabsByWorktree: {
+      'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+    }
+  } as Partial<AppState>)
 }
 
 describe('agent status freshness expiry', () => {
@@ -136,16 +181,94 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
   })
 
-  it('overwrites prior agentType when payload sends a different known value', () => {
+  it('preserves active pane agentType when a nested hook sends a different known value', () => {
     vi.useFakeTimers()
     const store = createTestStore()
     store
       .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'claude' })
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'codex' })
     store
       .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'cursor' })
-    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('cursor')
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'claude' })
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('codex')
+  })
+
+  it('ignores nested done while the parent pane agent is still active', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const setGeneratedTabTitleFromAgentPrompt = vi.fn()
+    store.setState({ setGeneratedTabTitleFromAgentPrompt } as Partial<AppState>)
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'parent codex', agentType: 'codex' },
+        'codex',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstEpoch = store.getState().agentStatusEpoch
+
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'done',
+        prompt: 'nested claude',
+        agentType: 'claude',
+        toolName: 'Read',
+        toolInput: '00-review-context.md',
+        lastAssistantMessage: 'child finished'
+      },
+      'claude',
+      { updatedAt: 1_100, stateStartedAt: 1_100 }
+    )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry).toMatchObject({
+      state: 'working',
+      prompt: 'parent codex',
+      agentType: 'codex',
+      updatedAt: 1_000,
+      stateStartedAt: 1_000
+    })
+    expect(entry.toolName).toBeUndefined()
+    expect(entry.toolInput).toBeUndefined()
+    expect(entry.lastAssistantMessage).toBeUndefined()
+    expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
+    expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenCalledTimes(1)
+    expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenLastCalledWith('tab-1:1', 'parent codex')
+  })
+
+  it('allows pane agentType to change after the prior turn is done', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'codex' })
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'claude' })
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
+  })
+
+  it('allows stale active pane agentType to change', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'codex' }, 'codex', {
+        updatedAt: 1_000,
+        stateStartedAt: 1_000
+      })
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p2', agentType: 'claude' },
+        'claude',
+        {
+          updatedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1,
+          stateStartedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1
+        }
+      )
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
   })
 
   it('keeps global epochs stable for fresh same-state working pings while updating the entry', () => {
@@ -257,6 +380,82 @@ describe('agent status tool + assistant fields', () => {
     // smart-sort attention class, so both freshness and sort epochs must tick.
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
     expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
+})
+
+describe('agent status PR refresh handoff', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('enqueues an active PR refresh for the owning worktree when an agent completes', async () => {
+    vi.useFakeTimers()
+    const enqueuePRRefresh = stubGitHubPRRefreshApi()
+    const store = createTestStore()
+    seedAgentPRRefreshFixture(store, ['pr'])
+
+    store
+      .getState()
+      .setAgentStatus('tab-1:0', { state: 'working', prompt: 'create a PR', agentType: 'codex' })
+    store
+      .getState()
+      .setAgentStatus('tab-1:0', { state: 'done', prompt: 'create a PR', agentType: 'codex' })
+
+    await flushMicrotasks()
+
+    expect(enqueuePRRefresh).toHaveBeenCalledWith({
+      candidate: expect.objectContaining({
+        repoPath: '/repo',
+        branch: 'feature/pr-from-agent',
+        worktreeId: 'wt-1',
+        linkedPRNumber: null
+      }),
+      reason: 'active',
+      priority: 80
+    })
+  })
+
+  it('does not spend a PR refresh when no PR surface is visible', async () => {
+    vi.useFakeTimers()
+    const enqueuePRRefresh = stubGitHubPRRefreshApi()
+    const store = createTestStore()
+    seedAgentPRRefreshFixture(store, ['comment'])
+
+    store
+      .getState()
+      .setAgentStatus('tab-1:0', { state: 'working', prompt: 'create a PR', agentType: 'codex' })
+    store
+      .getState()
+      .setAgentStatus('tab-1:0', { state: 'done', prompt: 'create a PR', agentType: 'codex' })
+
+    await flushMicrotasks()
+
+    expect(enqueuePRRefresh).not.toHaveBeenCalled()
+  })
+
+  it('does not repeat the refresh for same-state done detail updates', async () => {
+    vi.useFakeTimers()
+    const enqueuePRRefresh = stubGitHubPRRefreshApi()
+    const store = createTestStore()
+    seedAgentPRRefreshFixture(store, ['pr'])
+
+    store
+      .getState()
+      .setAgentStatus('tab-1:0', { state: 'working', prompt: 'create a PR', agentType: 'codex' })
+    store
+      .getState()
+      .setAgentStatus('tab-1:0', { state: 'done', prompt: 'create a PR', agentType: 'codex' })
+    store.getState().setAgentStatus('tab-1:0', {
+      state: 'done',
+      prompt: 'create a PR',
+      agentType: 'codex',
+      lastAssistantMessage: 'Opened https://github.com/acme/orca/pull/42'
+    })
+
+    await flushMicrotasks()
+
+    expect(enqueuePRRefresh).toHaveBeenCalledTimes(1)
   })
 })
 

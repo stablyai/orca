@@ -52,14 +52,22 @@ vi.mock('./project-header-drag', () => ({
 vi.mock('./WorktreeCard', () => ({
   default: ({
     worktree,
+    contentIndent,
+    flushSurface,
     lineageChildren
   }: {
     worktree: Worktree
+    contentIndent?: number
+    flushSurface?: boolean
     lineageChildren?: React.ReactNode
   }) =>
     React.createElement(
       'section',
-      { 'data-worktree-card-id': worktree.id },
+      {
+        'data-worktree-card-id': worktree.id,
+        'data-content-indent': contentIndent,
+        'data-flush-surface': flushSurface ? 'true' : undefined
+      },
       React.createElement('h2', null, worktree.displayName),
       lineageChildren
     )
@@ -83,6 +91,26 @@ vi.mock('./WorktreeContextMenu', () => ({
     React.createElement(React.Fragment, null, children),
   CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
+}))
+
+vi.mock('./SshDisconnectedDialog', () => ({
+  SshDisconnectedDialog: ({
+    open,
+    status,
+    targetId,
+    targetLabel
+  }: {
+    open: boolean
+    status: string
+    targetId: string
+    targetLabel: string
+  }) =>
+    React.createElement('aside', {
+      'data-lineage-ssh-dialog': open ? 'open' : 'closed',
+      'data-ssh-status': status,
+      'data-ssh-target-id': targetId,
+      'data-ssh-target-label': targetLabel
+    })
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -191,6 +219,7 @@ function setLineageFixtureState(groupBy: 'none' | 'repo' = 'none'): void {
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
+    agentStatusEpoch: 0,
     agentStatusByPaneKey: {},
     browserTabsByWorktree: {},
     clearPendingRevealWorktreeId: vi.fn(),
@@ -207,6 +236,7 @@ function setLineageFixtureState(groupBy: 'none' | 'repo' = 'none'): void {
     ptyIdsByTabId: {},
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
+    retainedAgentsByPaneKey: {},
     repos: [repo],
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),
@@ -259,6 +289,7 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
+    agentStatusEpoch: 0,
     agentStatusByPaneKey: {},
     browserTabsByWorktree: {},
     clearPendingRevealWorktreeId: vi.fn(),
@@ -276,6 +307,7 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
     ptyIdsByTabId: {},
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
+    retainedAgentsByPaneKey: {},
     repos: [repo],
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),
@@ -346,6 +378,22 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(agentRowIndex).toBeLessThan(childToggleIndex)
   })
 
+  it('opens the reconnect dialog for an active disconnected lineage child during render', async () => {
+    setLineageFixtureState()
+    const repo = (mockStore.state.repos as Repo[])[0]!
+    repo.connectionId = 'ssh-target-1'
+    mockStore.state.activeWorktreeId = 'child'
+    mockStore.state.sshConnectionStates = new Map([['ssh-target-1', { status: 'disconnected' }]])
+    mockStore.state.sshTargetLabels = new Map([['ssh-target-1', 'Remote target']])
+
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('data-lineage-ssh-dialog="open"')
+    expect(markup).toContain('data-ssh-status="disconnected"')
+    expect(markup).toContain('data-ssh-target-id="ssh-target-1"')
+    expect(markup).toContain('data-ssh-target-label="Remote target"')
+  })
+
   it('does not add group indentation when grouping is disabled', async () => {
     setLineageFixtureState('none')
     const markup = await renderWorktreeListMarkup()
@@ -356,12 +404,15 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(parentRow).not.toContain('padding-left')
   })
 
-  it('adds one group indentation step when grouped by project', async () => {
+  it('passes one group indentation step into the card when grouped by project', async () => {
     setLineageFixtureState('repo')
     const markup = await renderWorktreeListMarkup()
 
     const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
 
-    expect(parentRow).toContain('style="padding-left:18px"')
+    expect(parentRow).not.toContain('padding-left')
+    expect(markup).toContain(
+      '<section data-worktree-card-id="parent" data-content-indent="18" data-flush-surface="true">'
+    )
   })
 })

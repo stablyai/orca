@@ -103,6 +103,20 @@ function requestIpynbStructuralContentFrame(
   }
 }
 
+type NotebookExecutionTrustState = {
+  filePath: string
+  trustedForFile: boolean
+  pendingRunCellIndex: number | null
+}
+
+function createNotebookExecutionTrustState(filePath: string): NotebookExecutionTrustState {
+  return {
+    filePath,
+    trustedForFile: false,
+    pendingRunCellIndex: null
+  }
+}
+
 function valueToText(value: unknown): string {
   if (Array.isArray(value)) {
     return value.map((item) => String(item ?? '')).join('')
@@ -281,6 +295,10 @@ function CodeCell({
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const onDeactivateRef = useRef(onDeactivate)
   const onSaveRequestRef = useRef(onSaveRequest)
+  // Why: Monaco commands/listeners are installed once on mount and need the
+  // latest callbacks without rebuilding the embedded editor.
+  onDeactivateRef.current = onDeactivate
+  onSaveRequestRef.current = onSaveRequest
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
   const lineCount = Math.max(3, source.split('\n').length + 1)
   const editorHeight = Math.min(520, Math.max(96, lineCount * (fontSize + 8)))
@@ -297,19 +315,19 @@ function CodeCell({
         void onSaveRequestRef.current()
       }
     )
-    editorInstance.onDidDispose(() => cleanupSaveShortcut())
+    const blurSub = editorInstance.onDidBlurEditorWidget(() => {
+      onDeactivateRef.current()
+    })
+    editorInstance.onDidDispose(() => {
+      // Why: the inline source editor owns both the save shortcut and blur
+      // subscription for this Monaco editor instance.
+      cleanupSaveShortcut()
+      blurSub.dispose()
+    })
     editorInstance.addCommand(monacoInstance.KeyCode.Escape, () => {
       onDeactivateRef.current()
     })
-    editorInstance.onDidBlurEditorWidget(() => {
-      onDeactivateRef.current()
-    })
   }, [])
-
-  useEffect(() => {
-    onDeactivateRef.current = onDeactivate
-    onSaveRequestRef.current = onSaveRequest
-  }, [onDeactivate, onSaveRequest])
 
   useEffect(() => {
     monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
@@ -510,8 +528,9 @@ export default function IpynbViewer({
   const [runningCellIndex, setRunningCellIndex] = useState<number | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null)
-  const [executionTrustedForFile, setExecutionTrustedForFile] = useState(false)
-  const [pendingRunCellIndex, setPendingRunCellIndex] = useState<number | null>(null)
+  const [executionTrustState, setExecutionTrustState] = useState(() =>
+    createNotebookExecutionTrustState(filePath)
+  )
   const [sourceDrafts, setSourceDrafts] = useState<Record<string, string>>({})
   const sourceDraftsRef = useRef(sourceDrafts)
   const contentRef = useRef(content)
@@ -535,6 +554,31 @@ export default function IpynbViewer({
   notebookRef.current = parsed.notebook
   onContentChangeRef.current = onContentChange
   onDirtyStateHintRef.current = onDirtyStateHint
+
+  // Why: execution trust belongs to the currently rendered file; resetting
+  // during render avoids a paint with the previous file's trust prompt state.
+  if (executionTrustState.filePath !== filePath) {
+    setExecutionTrustState(createNotebookExecutionTrustState(filePath))
+  }
+  const executionTrustedForFile =
+    executionTrustState.filePath === filePath ? executionTrustState.trustedForFile : false
+  const pendingRunCellIndex =
+    executionTrustState.filePath === filePath ? executionTrustState.pendingRunCellIndex : null
+
+  const setPendingRunCellIndexForFile = (nextPendingRunCellIndex: number | null): void => {
+    setExecutionTrustState((current) => ({
+      filePath,
+      trustedForFile: current.filePath === filePath ? current.trustedForFile : false,
+      pendingRunCellIndex: nextPendingRunCellIndex
+    }))
+  }
+  const trustFileForExecution = (): void => {
+    setExecutionTrustState({
+      filePath,
+      trustedForFile: true,
+      pendingRunCellIndex: null
+    })
+  }
 
   const materializeSourceDrafts = useCallback((): string => {
     const notebook = notebookRef.current
@@ -577,17 +621,19 @@ export default function IpynbViewer({
     return registerPendingEditorFlush(fileId, flushSourceDrafts)
   }, [fileId, flushSourceDrafts])
 
-  useEffect(() => {
-    setExecutionTrustedForFile(false)
-    setPendingRunCellIndex(null)
-  }, [filePath])
-
-  useEffect(() => {
-    return () => {
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      rootRef.current = node
+      if (node !== null) {
+        return
+      }
+      // Why: pending source edits and structural mutation frames belong to the
+      // notebook scroll root; clear them when that DOM owner detaches.
       void flushSourceDrafts()
       cancelIpynbStructuralContentFrames(structuralContentFrameIdsRef)
-    }
-  }, [flushSourceDrafts])
+    },
+    [flushSourceDrafts]
+  )
 
   useEffect(() => {
     if (!parsed.notebook || Object.keys(sourceDraftsRef.current).length === 0) {
@@ -746,7 +792,7 @@ export default function IpynbViewer({
       return
     }
     if (!executionTrustedForFile && !options.skipTrustPrompt) {
-      setPendingRunCellIndex(index)
+      setPendingRunCellIndexForFile(index)
       return
     }
     setRunError(null)
@@ -770,11 +816,10 @@ export default function IpynbViewer({
       setRunningCellIndex(null)
     }
   }
-  const cancelPendingRun = (): void => setPendingRunCellIndex(null)
+  const cancelPendingRun = (): void => setPendingRunCellIndexForFile(null)
   const confirmPendingRun = (): void => {
     const index = pendingRunCellIndex
-    setPendingRunCellIndex(null)
-    setExecutionTrustedForFile(true)
+    trustFileForExecution()
     if (index !== null) {
       void runCell(index, { skipTrustPrompt: true })
     }
@@ -782,7 +827,7 @@ export default function IpynbViewer({
 
   return (
     <div
-      ref={rootRef}
+      ref={setRootRef}
       className="h-full min-h-0 overflow-auto bg-editor-surface scrollbar-editor"
       style={{ fontSize, fontFamily: settings?.terminalFontFamily || undefined }}
       onKeyDownCapture={handleNotebookKeyDownCapture}

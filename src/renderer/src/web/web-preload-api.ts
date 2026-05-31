@@ -6,22 +6,26 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   DetectedWorktreeListResult,
   DirEntry,
+  ForceDeleteWorktreeBranchResult,
   GlobalSettings,
   MemorySnapshot,
   OnboardingState,
   PersistedUIState,
   Repo,
+  RemoveWorktreeResult,
   SearchResult,
   StatsSummary,
   Worktree,
   WorktreeLineage,
+  WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../shared/types'
 import {
   getDefaultOnboardingState,
   getDefaultSettings,
   getDefaultUIState,
-  getDefaultWorkspaceSession
+  getDefaultWorkspaceSession,
+  normalizeAgentActivityDisplayMode
 } from '../../../shared/constants'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
@@ -70,6 +74,9 @@ const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
 // Why: browser-paired clients need desktop parity for large dev sessions; the
 // runtime's no-limit default remains capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
+const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = 24 * 1024 * 1024
+export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
+export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
 const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
@@ -243,31 +250,49 @@ type WebGitHubRuntimeMethod =
 type WebGitLabApi = NonNullable<PreloadApi['gl']>
 type WebGitLabResult<K extends keyof WebGitLabApi> = Awaited<ReturnType<WebGitLabApi[K]>>
 type WebGitLabRouteKey =
+  | 'diagnoseAuth'
+  | 'rateLimit'
   | 'listMRs'
   | 'listWorkItems'
   | 'listIssues'
   | 'createIssue'
   | 'updateIssue'
   | 'addIssueComment'
+  | 'listLabels'
   | 'todos'
   | 'workItemDetails'
   | 'closeMR'
   | 'reopenMR'
   | 'mergeMR'
+  | 'updateMR'
+  | 'updateMRReviewers'
   | 'addMRComment'
+  | 'addMRInlineComment'
+  | 'resolveMRDiscussion'
+  | 'jobTrace'
+  | 'retryJob'
   | 'workItemByPath'
 type WebGitLabRuntimeMethod =
+  | 'gitlab.diagnoseAuth'
+  | 'gitlab.rateLimit'
   | 'gitlab.listMRs'
   | 'gitlab.listWorkItems'
   | 'gitlab.listIssues'
   | 'gitlab.createIssue'
   | 'gitlab.updateIssue'
   | 'gitlab.addIssueComment'
+  | 'gitlab.listLabels'
   | 'gitlab.todos'
   | 'gitlab.workItemDetails'
   | 'gitlab.updateMRState'
   | 'gitlab.mergeMR'
+  | 'gitlab.updateMR'
+  | 'gitlab.updateMRReviewers'
   | 'gitlab.addMRComment'
+  | 'gitlab.addMRInlineComment'
+  | 'gitlab.resolveMRDiscussion'
+  | 'gitlab.jobTrace'
+  | 'gitlab.retryJob'
   | 'gitlab.workItemByPath'
 type WebKeybindingDocument = {
   version: 1
@@ -325,18 +350,27 @@ export const GITHUB_WEB_RPC_METHODS = {
 } as const satisfies Record<WebGitHubRouteKey, WebGitHubRuntimeMethod>
 
 export const GITLAB_WEB_RPC_METHODS = {
+  diagnoseAuth: 'gitlab.diagnoseAuth',
+  rateLimit: 'gitlab.rateLimit',
   listMRs: 'gitlab.listMRs',
   listWorkItems: 'gitlab.listWorkItems',
   listIssues: 'gitlab.listIssues',
   createIssue: 'gitlab.createIssue',
   updateIssue: 'gitlab.updateIssue',
   addIssueComment: 'gitlab.addIssueComment',
+  listLabels: 'gitlab.listLabels',
   todos: 'gitlab.todos',
   workItemDetails: 'gitlab.workItemDetails',
   closeMR: 'gitlab.updateMRState',
   reopenMR: 'gitlab.updateMRState',
   mergeMR: 'gitlab.mergeMR',
+  updateMR: 'gitlab.updateMR',
+  updateMRReviewers: 'gitlab.updateMRReviewers',
   addMRComment: 'gitlab.addMRComment',
+  addMRInlineComment: 'gitlab.addMRInlineComment',
+  resolveMRDiscussion: 'gitlab.resolveMRDiscussion',
+  jobTrace: 'gitlab.jobTrace',
+  retryJob: 'gitlab.retryJob',
   workItemByPath: 'gitlab.workItemByPath'
 } as const satisfies Record<WebGitLabRouteKey, WebGitLabRuntimeMethod>
 
@@ -397,6 +431,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getLatestPending: () => Promise.resolve(null),
       getLatestReport: () => Promise.resolve(null),
       dismiss: () => Promise.resolve(null),
+      recordRendererError: () => Promise.resolve({ ok: true, report: null, deduped: true }),
+      recordBreadcrumb: () => {},
       submit: () =>
         Promise.resolve({
           ok: false,
@@ -428,6 +464,15 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       get: () => Promise.resolve(getStoredWorkspaceSession()),
       set: async (session) => {
         writeJson(SESSION_STORAGE_KEY, sanitizeWebRuntimeWorkspaceSession(session))
+      },
+      patch: async (patch: WorkspaceSessionPatch) => {
+        writeJson(
+          SESSION_STORAGE_KEY,
+          sanitizeWebRuntimeWorkspaceSession({
+            ...getStoredWorkspaceSession(),
+            ...patch
+          })
+        )
       },
       setSync: (session) => {
         writeJson(SESSION_STORAGE_KEY, sanitizeWebRuntimeWorkspaceSession(session))
@@ -507,6 +552,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     pwsh: {
       isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)
+    },
+    gitBash: {
+      isAvailable: () => callRuntimeResult<boolean>('host.gitBash.isAvailable').catch(() => false)
     },
     agentStatus: {
       onSet: () => noopUnsubscribe,
@@ -975,8 +1023,14 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
       }),
     remove: async ({ worktreeId, force }) => {
       invalidateRuntimeWorktreeCaches()
-      await callRuntimeResult('worktree.rm', { worktree: worktreeId, force })
+      return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', { worktree: worktreeId, force })
     },
+    forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead }) =>
+      callRuntimeResult<ForceDeleteWorktreeBranchResult>('worktree.forceDeleteBranch', {
+        worktree: worktreeId,
+        branchName,
+        expectedHead
+      }),
     updateMeta: async ({ worktreeId, updates }) =>
       (
         await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {
@@ -1476,6 +1530,9 @@ function createGitLabApi(): WebGitLabApi {
 
   const gitLabApi = {
     viewer: () => Promise.resolve(null),
+    diagnoseAuth: () => route<WebGitLabResult<'diagnoseAuth'>>(GITLAB_WEB_RPC_METHODS.diagnoseAuth),
+    rateLimit: (args) =>
+      route<WebGitLabResult<'rateLimit'>>(GITLAB_WEB_RPC_METHODS.rateLimit, args),
     projectSlug: () => Promise.resolve(null),
     mrForBranch: () => Promise.resolve(null),
     mr: () => Promise.resolve(null),
@@ -1491,7 +1548,8 @@ function createGitLabApi(): WebGitLabApi {
       route<WebGitLabResult<'updateIssue'>>(GITLAB_WEB_RPC_METHODS.updateIssue, args),
     addIssueComment: (args) =>
       route<WebGitLabResult<'addIssueComment'>>(GITLAB_WEB_RPC_METHODS.addIssueComment, args),
-    listLabels: () => Promise.resolve([]),
+    listLabels: (args) =>
+      route<WebGitLabResult<'listLabels'>>(GITLAB_WEB_RPC_METHODS.listLabels, args),
     listAssignableUsers: () => Promise.resolve([]),
     todos: (args) => route<WebGitLabResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
     workItemDetails: (args) =>
@@ -1507,8 +1565,20 @@ function createGitLabApi(): WebGitLabApi {
         state: 'opened'
       }),
     mergeMR: (args) => route<WebGitLabResult<'mergeMR'>>(GITLAB_WEB_RPC_METHODS.mergeMR, args),
+    updateMR: (args) => route<WebGitLabResult<'updateMR'>>(GITLAB_WEB_RPC_METHODS.updateMR, args),
+    updateMRReviewers: (args) =>
+      route<WebGitLabResult<'updateMRReviewers'>>(GITLAB_WEB_RPC_METHODS.updateMRReviewers, args),
     addMRComment: (args) =>
       route<WebGitLabResult<'addMRComment'>>(GITLAB_WEB_RPC_METHODS.addMRComment, args),
+    addMRInlineComment: (args) =>
+      route<WebGitLabResult<'addMRInlineComment'>>(GITLAB_WEB_RPC_METHODS.addMRInlineComment, args),
+    resolveMRDiscussion: (args) =>
+      route<WebGitLabResult<'resolveMRDiscussion'>>(
+        GITLAB_WEB_RPC_METHODS.resolveMRDiscussion,
+        args
+      ),
+    jobTrace: (args) => route<WebGitLabResult<'jobTrace'>>(GITLAB_WEB_RPC_METHODS.jobTrace, args),
+    retryJob: (args) => route<WebGitLabResult<'retryJob'>>(GITLAB_WEB_RPC_METHODS.retryJob, args),
     workItemByPath: (args) =>
       route<WebGitLabResult<'workItemByPath'>>(GITLAB_WEB_RPC_METHODS.workItemByPath, args)
   } satisfies WebGitLabApi
@@ -1618,14 +1688,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       if (!contentBase64) {
         return null
       }
-      return callRuntimeResult<string>(
-        'clipboard.saveImageAsTempFile',
-        {
-          contentBase64,
-          connectionId: args?.connectionId ?? null
-        },
-        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
-      )
+      return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
     writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
     writeSelectionClipboardText: () =>
@@ -1647,9 +1710,12 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenQuickOpen: () => noopUnsubscribe,
     onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
+    onDeleteCurrentWorkspace: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,
+    onJumpToTabIndex: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
     onNewBrowserTab: () => noopUnsubscribe,
+    onNewMarkdownTab: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,
@@ -1789,6 +1855,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
   const status = (
     agent:
       | 'claude'
+      | 'openclaude'
       | 'codex'
       | 'gemini'
       | 'antigravity'
@@ -1809,6 +1876,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     } as const)
   return {
     claudeStatus: () => status('claude'),
+    openClaudeStatus: () => status('openclaude'),
     codexStatus: () => status('codex'),
     geminiStatus: () => status('gemini'),
     antigravityStatus: () => status('antigravity'),
@@ -1932,7 +2000,7 @@ function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
     openInFileManager: () => Promise.resolve(openResult),
     openInExternalEditor: () => Promise.resolve(openResult),
     openUrl: (url) => Promise.resolve(window.open(url, '_blank', 'noopener,noreferrer') as never),
-    openFilePath: () => Promise.resolve(),
+    openFilePath: () => Promise.resolve(false),
     openFileUri: (uri) =>
       Promise.resolve(window.open(uri, '_blank', 'noopener,noreferrer') as never),
     pathExists: async (path) => {
@@ -2056,6 +2124,70 @@ async function callRuntimeResult<TResult>(
     throw new Error(response.error.message)
   }
   return response.result as TResult
+}
+
+async function saveClipboardImageAsTempFileInRuntime(
+  contentBase64: string,
+  args?: { connectionId?: string | null }
+): Promise<string> {
+  if (contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
+    throw new Error('Clipboard image is too large')
+  }
+  const connectionId = args?.connectionId ?? null
+  const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(
+    'clipboard.startImageUpload',
+    { expectedBase64Length: contentBase64.length, connectionId },
+    CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+  )
+  if (!startResponse.ok) {
+    if (
+      startResponse.error.code === 'method_not_found' &&
+      contentBase64.length <= CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
+    ) {
+      return callRuntimeResult<string>(
+        'clipboard.saveImageAsTempFile',
+        { contentBase64, connectionId },
+        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+      )
+    }
+    throw new Error(startResponse.error.message)
+  }
+
+  const { uploadId } = startResponse.result
+  try {
+    for (
+      let offset = 0;
+      offset < contentBase64.length;
+      offset += CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+    ) {
+      await callRuntimeResult(
+        'clipboard.appendImageUploadChunk',
+        {
+          uploadId,
+          offset,
+          contentBase64: contentBase64.slice(
+            offset,
+            offset + CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+          )
+        },
+        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+      )
+    }
+    return await callRuntimeResult<string>(
+      'clipboard.commitImageUpload',
+      { uploadId },
+      CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+    )
+  } catch (error) {
+    // Why: once chunked paste has created server-side state, failed append or
+    // commit must not wait for TTL cleanup before releasing the bounded slot.
+    await callRuntimeResult(
+      'clipboard.abortImageUpload',
+      { uploadId },
+      CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+    ).catch(() => {})
+    throw error
+  }
 }
 
 async function getRemoteRuntimeStatus(): Promise<RuntimeStatus> {
@@ -2202,7 +2334,10 @@ function mergeWebUIState(
 ): PersistedUIState {
   return {
     ...base,
-    ...updates
+    ...updates,
+    agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
+      updates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+    )
   }
 }
 

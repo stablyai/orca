@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- test suite covers snapshot, migration, auth materialization, and error-resilience scenarios */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import {
   chmodSync,
   existsSync,
@@ -39,6 +40,7 @@ vi.mock('node:os', async () => {
 function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   const appFontFamily = overrides.appFontFamily ?? 'Geist'
   const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
+  const tabAutoGenerateTitle = overrides.tabAutoGenerateTitle ?? false
   return {
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
@@ -132,7 +134,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     enableGitHubAttribution: true,
     ...overrides,
     appFontFamily,
-    agentStatusHooksEnabled
+    agentStatusHooksEnabled,
+    tabAutoGenerateTitle
   }
 }
 
@@ -150,6 +153,10 @@ function getRuntimeCodexHomePath(): string {
 
 function getRuntimeCodexAuthPath(): string {
   return join(getRuntimeCodexHomePath(), 'auth.json')
+}
+
+function getSystemLaunchCodexHomePath(): string {
+  return join(testState.userDataDir, 'codex-runtime-home', 'launch', 'host', 'system', 'home')
 }
 
 function normalizeLinkTarget(linkTarget: string): string {
@@ -545,14 +552,254 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(runtimeAuthPath)).toBe(false)
   })
 
-  it('returns the Orca-managed runtime home for Codex launch and rate-limit preparation', async () => {
+  it('returns the selected launch home for Codex launch and rate-limit preparation', async () => {
     const store = createStore(createSettings())
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
-    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
-    expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
+    expect(service.prepareForCodexLaunch()).toBe(getSystemLaunchCodexHomePath())
+    expect(service.prepareForRateLimitFetch()).toBe(getSystemLaunchCodexHomePath())
     expect(existsSync(getRuntimeCodexHomePath())).toBe(true)
+    expect(existsSync(getSystemLaunchCodexHomePath())).toBe(true)
+  })
+
+  it('uses separate selected host launch homes while sharing non-auth runtime state', async () => {
+    const account1Auth = createCodexAuthJson('one@example.com', 'acct-one', 'one')
+    const account2Auth = createCodexAuthJson('two@example.com', 'acct-two', 'two')
+    const managedHomePath1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+    const managedHomePath2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+    writeFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'model = "gpt-5.5"\n', 'utf-8')
+    mkdirSync(join(getRuntimeCodexHomePath(), 'sessions'), { recursive: true })
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'one@example.com',
+          managedHomePath: managedHomePath1,
+          providerAccountId: 'acct-one',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-one',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'two@example.com',
+          managedHomePath: managedHomePath2,
+          providerAccountId: 'acct-two',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-two',
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    const launchHome1 = service.prepareForCodexLaunch()
+    settings.activeCodexManagedAccountId = 'account-2'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-2', wsl: {} }
+    const launchHome2 = service.prepareForCodexLaunch()
+
+    expect(launchHome1).not.toBe(launchHome2)
+    expect(launchHome1).toContain(join('codex-runtime-home', 'launch', 'host', 'account-'))
+    expect(readFileSync(join(launchHome1!, 'auth.json'), 'utf-8')).toBe(account1Auth)
+    expect(readFileSync(join(launchHome2!, 'auth.json'), 'utf-8')).toBe(account2Auth)
+    expectResourceLinkedOrCopied(
+      join(launchHome1!, 'config.toml'),
+      join(getRuntimeCodexHomePath(), 'config.toml')
+    )
+    expectResourceLinkedOrCopied(
+      join(launchHome2!, 'sessions'),
+      join(getRuntimeCodexHomePath(), 'sessions')
+    )
+  })
+
+  it('ignores stale shared auth when preparing a different selected launch home', async () => {
+    const account1Auth = createCodexAuthJson('one@example.com', 'acct-one', 'one')
+    const account2Auth = createCodexAuthJson('two@example.com', 'acct-two', 'two')
+    const staleSharedAuth = createCodexAuthJson('one@example.com', 'acct-one', 'stale-shared')
+    const managedHomePath1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+    const managedHomePath2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'one@example.com',
+          managedHomePath: managedHomePath1,
+          providerAccountId: 'acct-one',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-one',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'two@example.com',
+          managedHomePath: managedHomePath2,
+          providerAccountId: 'acct-two',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-two',
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    service.prepareForCodexLaunch()
+    writeFileSync(getRuntimeCodexAuthPath(), staleSharedAuth, 'utf-8')
+    settings.activeCodexManagedAccountId = 'account-2'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-2', wsl: {} }
+    const launchHome2 = service.prepareForCodexLaunch()
+
+    expect(readFileSync(join(launchHome2!, 'auth.json'), 'utf-8')).toBe(account2Auth)
+    expect(readFileSync(join(managedHomePath2, 'auth.json'), 'utf-8')).toBe(account2Auth)
+  })
+
+  it('reads refreshed managed tokens back from the selected launch home', async () => {
+    const originalAuth = createCodexAuthJson('user@example.com', 'acct-1', 'original')
+    const refreshedAuth = createCodexAuthJson('user@example.com', 'acct-1', 'refreshed')
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', originalAuth)
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-1',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-1',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    const launchHome = service.prepareForCodexLaunch()
+    writeFileSync(join(launchHome!, 'auth.json'), refreshedAuth, 'utf-8')
+    service.syncForCurrentSelection()
+
+    expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(refreshedAuth)
+    expect(readFileSync(join(launchHome!, 'auth.json'), 'utf-8')).toBe(refreshedAuth)
+  })
+
+  it('reconciles launch-home config rewrites before preparing another account', async () => {
+    const account1Auth = createCodexAuthJson('one@example.com', 'acct-one', 'one')
+    const account2Auth = createCodexAuthJson('two@example.com', 'acct-two', 'two')
+    const managedHomePath1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+    const managedHomePath2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+    writeFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'model = "gpt-5"\n', 'utf-8')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'one@example.com',
+          managedHomePath: managedHomePath1,
+          providerAccountId: 'acct-one',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-one',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'two@example.com',
+          managedHomePath: managedHomePath2,
+          providerAccountId: 'acct-two',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-two',
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    const launchHome1 = service.prepareForCodexLaunch()
+    const launchConfigPath1 = join(launchHome1!, 'config.toml')
+    rmSync(launchConfigPath1, { force: true })
+    writeFileSync(launchConfigPath1, 'model = "gpt-5.5"\nfast_mode = true\n', 'utf-8')
+
+    settings.activeCodexManagedAccountId = 'account-2'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-2', wsl: {} }
+    const launchHome2 = service.prepareForCodexLaunch()
+
+    expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toBe(
+      'model = "gpt-5.5"\nfast_mode = true\n'
+    )
+    expect(readFileSync(join(launchHome2!, 'config.toml'), 'utf-8')).toBe(
+      'model = "gpt-5.5"\nfast_mode = true\n'
+    )
+  })
+
+  it('removes marked launch-home credentials when a managed account is removed', async () => {
+    const accountAuth = createCodexAuthJson('user@example.com', 'acct-1', 'token')
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', accountAuth)
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-1',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-1',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    const launchHome = service.prepareForCodexLaunch()
+    expect(readFileSync(join(launchHome!, 'auth.json'), 'utf-8')).toBe(accountAuth)
+
+    service.removeHostLaunchHomeForAccount('account-1')
+
+    expect(existsSync(launchHome!)).toBe(false)
+  })
+
+  it('does not create a launch-home directory when removing an account that never launched', async () => {
+    const store = createStore(createSettings())
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    service.removeHostLaunchHomeForAccount('never-launched')
+
+    const neverLaunchedSegment = `account-${createHash('sha256')
+      .update('never-launched')
+      .digest('hex')
+      .slice(0, 32)}`
+    expect(
+      existsSync(
+        join(testState.userDataDir, 'codex-runtime-home', 'launch', 'host', neverLaunchedSegment)
+      )
+    ).toBe(false)
   })
 
   it('mirrors later system Codex config changes before launch', async () => {
@@ -570,6 +817,28 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toBe(
       'model = "second"\n'
     )
+  })
+
+  it('keeps Codex TUI config changes across launch preparation when system config is unchanged', async () => {
+    const systemCodexHome = getSystemCodexHomePath()
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "system-model"\n', 'utf-8')
+    const store = createStore(createSettings())
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    service.prepareForCodexLaunch()
+    writeFileSync(
+      join(getRuntimeCodexHomePath(), 'config.toml'),
+      ['model = "runtime-model"', 'model_reasoning_effort = "low"', ''].join('\n'),
+      'utf-8'
+    )
+    service.prepareForCodexLaunch()
+
+    const runtimeConfig = readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')
+    expect(runtimeConfig).toContain('model = "runtime-model"')
+    expect(runtimeConfig).toContain('model_reasoning_effort = "low"')
+    expect(runtimeConfig).not.toContain('model = "system-model"')
   })
 
   it('links system Codex user resources into the managed runtime home before launch', async () => {
@@ -731,14 +1000,14 @@ describe('CodexRuntimeHomeService', () => {
       )
 
       expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"account":"host-system"}\n')
-      expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+      expect(service.prepareForCodexLaunch()).toBe(getSystemLaunchCodexHomePath())
       expect(service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
         wslRuntimeHomePath
       )
       expect(readFileSync(join(wslRuntimeHomePath, 'auth.json'), 'utf-8')).toBe(
         '{"account":"wsl"}\n'
       )
-      expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
+      expect(service.prepareForRateLimitFetch()).toBe(getSystemLaunchCodexHomePath())
       expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
         wslRuntimeHomePath
       )
@@ -1385,6 +1654,31 @@ describe('CodexRuntimeHomeService', () => {
     ).toEqual({ authJson: refreshedAuth })
   })
 
+  it('reads back system-default token refreshes from the selected launch home', async () => {
+    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-old')
+    const refreshedAuth = createCodexAuthJson(
+      'system@example.com',
+      'acct-system',
+      'system-launch-refreshed'
+    )
+    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+    const store = createStore(createSettings())
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+    const launchHome = service.prepareForCodexLaunch()
+
+    writeFileSync(join(launchHome!, 'auth.json'), refreshedAuth, 'utf-8')
+    service.syncForCurrentSelection()
+
+    expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(refreshedAuth)
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(refreshedAuth)
+    expect(readFileSync(join(getSystemLaunchCodexHomePath(), 'auth.json'), 'utf-8')).toBe(
+      refreshedAuth
+    )
+  })
+
   it('reads back system-default token refreshes after restart when the snapshot proves the baseline', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-old')
@@ -1955,13 +2249,13 @@ describe('CodexRuntimeHomeService', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
-    // An older account-1 Codex process refreshed the shared runtime file after
-    // Orca selected account-2. Persist the refresh to account-1, then restore
-    // the selected account in runtime CODEX_HOME.
+    // An older account-1 Codex process refreshed the legacy shared runtime
+    // file after Orca selected account-2. Fresh launch homes must not route
+    // that stale shared file into any managed account.
     writeFileSync(runtimeAuthPath, account1RefreshedAuth, 'utf-8')
     service.syncForCurrentSelection()
 
-    expect(readFileSync(managedAuthPath1, 'utf-8')).toBe(account1RefreshedAuth)
+    expect(readFileSync(managedAuthPath1, 'utf-8')).toBe(account1Auth)
     expect(readFileSync(managedAuthPath2, 'utf-8')).toBe(account2Auth)
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(account2Auth)
   })
@@ -2769,6 +3063,8 @@ describe('CodexRuntimeHomeService', () => {
     const runtimeSessionsDir = join(getRuntimeCodexHomePath(), 'sessions')
     mkdirSync(runtimeSessionsDir, { recursive: true })
     writeFileSync(join(runtimeSessionsDir, 'session.json'), '{"turns":[1]}', 'utf-8')
+    mkdirSync(join(runtimeSessionsDir, 'nested'), { recursive: true })
+    writeFileSync(join(runtimeSessionsDir, 'nested', 'session.json'), '{"turns":[2]}', 'utf-8')
     const managedHomePath = createManagedAuth(
       testState.userDataDir,
       'account-1',
@@ -2777,6 +3073,8 @@ describe('CodexRuntimeHomeService', () => {
     const legacySessionsDir = join(managedHomePath, 'sessions')
     mkdirSync(legacySessionsDir, { recursive: true })
     writeFileSync(join(legacySessionsDir, 'session.json'), '{"turns":[1,2]}', 'utf-8')
+    mkdirSync(join(legacySessionsDir, 'nested'), { recursive: true })
+    writeFileSync(join(legacySessionsDir, 'nested', 'session.json'), '{"turns":[2,3]}', 'utf-8')
     const store = createStore(createSettings())
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -2788,9 +3086,17 @@ describe('CodexRuntimeHomeService', () => {
     ).toBe('{"turns":[1,2]}')
     expect(
       readFileSync(
-        join(testState.userDataDir, 'codex-runtime-home', 'migration-diagnostics.jsonl'),
+        join(runtimeSessionsDir, 'nested', 'session.orca-legacy-account-1.json'),
         'utf-8'
       )
-    ).toContain('"type":"session-conflict"')
+    ).toBe('{"turns":[2,3]}')
+    const diagnostics = readFileSync(
+      join(testState.userDataDir, 'codex-runtime-home', 'migration-diagnostics.jsonl'),
+      'utf-8'
+    )
+      .trim()
+      .split('\n')
+    expect(diagnostics).toHaveLength(2)
+    expect(diagnostics[0]).toContain('"type":"session-conflict"')
   })
 })

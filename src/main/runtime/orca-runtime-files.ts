@@ -60,6 +60,7 @@ const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
 const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
 const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
+const RUNTIME_FILE_WATCH_EVENT_STAT_LIMIT = 200
 // Why: runtime files.watch subscriptions are cleaned up through synchronous RPC
 // callbacks. Track native Parcel unsubscribe work so app shutdown can drain it.
 const pendingRuntimeFileWatcherUnsubscribes = new Set<Promise<void>>()
@@ -281,6 +282,12 @@ export class RuntimeFileCommands {
       (err, events) => {
         if (err) {
           console.error('[runtime-files.watch] watcher error', { rootPath, err })
+          callback([{ kind: 'overflow', absolutePath: rootPath }])
+          return
+        }
+        // Why: large watcher batches usually mean a generated directory or
+        // branch switch. Avoid stat fanout and ask the renderer to refresh.
+        if (events.length > RUNTIME_FILE_WATCH_EVENT_STAT_LIMIT) {
           callback([{ kind: 'overflow', absolutePath: rootPath }])
           return
         }
@@ -717,8 +724,20 @@ export class RuntimeFileCommands {
         if (this.activeRuntimeTextSearches.get(searchKey) === child) {
           this.activeRuntimeTextSearches.delete(searchKey)
         }
-        clearTimeout(killTimeout)
+        cleanupListeners()
         resolvePromise(finalize(acc))
+      }
+
+      let killTimeout: ReturnType<typeof setTimeout> | null = null
+      const cleanupListeners = (): void => {
+        if (killTimeout) {
+          clearTimeout(killTimeout)
+          killTimeout = null
+        }
+        child?.stdout?.off('data', onStdoutData)
+        child?.stderr?.off('data', onStderrData)
+        child?.off('error', onError)
+        child?.off('close', onClose)
       }
 
       const processLine = (line: string): void => {
@@ -742,28 +761,34 @@ export class RuntimeFileCommands {
       this.activeRuntimeTextSearches.set(searchKey, nextChild)
 
       nextChild.stdout!.setEncoding('utf-8')
-      nextChild.stdout!.on('data', (chunk: string) => {
+      const onStdoutData = (chunk: string): void => {
         stdoutBuffer += chunk
         const lines = stdoutBuffer.split('\n')
         stdoutBuffer = lines.pop() ?? ''
         for (const line of lines) {
           processLine(line)
         }
-      })
-      nextChild.stderr!.on('data', () => {
+      }
+      const onStderrData = (): void => {
         // Drain stderr so rg cannot block on a full pipe.
-      })
-      nextChild.once('error', () => resolveOnce())
-      nextChild.once('close', () => {
+      }
+      const onError = (): void => resolveOnce()
+      const onClose = (): void => {
         if (stdoutBuffer) {
           processLine(stdoutBuffer)
         }
         resolveOnce()
-      })
+      }
 
-      const killTimeout = setTimeout(() => {
+      nextChild.stdout!.on('data', onStdoutData)
+      nextChild.stderr!.on('data', onStderrData)
+      nextChild.once('error', onError)
+      nextChild.once('close', onClose)
+
+      killTimeout = setTimeout(() => {
         acc.truncated = true
         child?.kill()
+        resolveOnce()
       }, SEARCH_TIMEOUT_MS)
     })
   }

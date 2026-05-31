@@ -33,14 +33,14 @@ import {
 } from './editor/editor-autosave'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
-import type { TabGroupLayoutNode } from '../../../shared/types'
+import type { Tab, TabContentType, TabGroupLayoutNode } from '../../../shared/types'
 import BrowserPane from './browser-pane/BrowserPane'
-import { destroyPersistentWebview } from './browser-pane/webview-registry'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
 import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
   collectBrowserWebviewIds,
+  destroyRemovedBrowserWebview,
   destroyWorkspaceWebviews
 } from '../store/slices/browser-webview-cleanup'
 import {
@@ -74,6 +74,8 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import {
+  createFloatingWorkspaceBrowserTab,
+  createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isFloatingWorkspacePanelFocused,
@@ -96,6 +98,78 @@ const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 // feel responsive on a deliberate follow-up click; long enough to absorb the
 // trailing edge of a physical double-click (~150 ms on most hardware).
 const CLOSE_DIALOG_DEBOUNCE_MS = 200
+const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>(['editor', 'diff', 'conflict-review'])
+
+type TerminalStoreSnapshot = ReturnType<typeof useAppStore.getState>
+
+function findUnifiedTabByVisibleId(
+  state: TerminalStoreSnapshot,
+  worktreeId: string,
+  visibleId: string
+): Tab | null {
+  return (
+    (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+      (tab) => tab.id === visibleId || tab.entityId === visibleId
+    ) ?? null
+  )
+}
+
+function findActiveUnifiedTab(state: TerminalStoreSnapshot, worktreeId: string): Tab | null {
+  const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+  const group =
+    (state.groupsByWorktree[worktreeId] ?? []).find(
+      (candidate) => candidate.id === activeGroupId
+    ) ?? null
+  if (!group?.activeTabId) {
+    return null
+  }
+  return (
+    (state.unifiedTabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === group.activeTabId) ??
+    null
+  )
+}
+
+function isPinnedVisibleTab(
+  state: TerminalStoreSnapshot,
+  worktreeId: string,
+  visibleId: string
+): boolean {
+  return findUnifiedTabByVisibleId(state, worktreeId, visibleId)?.isPinned === true
+}
+
+function isPinnedActiveEditorTab(
+  state: TerminalStoreSnapshot,
+  worktreeId: string,
+  fileId: string
+): boolean {
+  const activeTab = findActiveUnifiedTab(state, worktreeId)
+  if (activeTab) {
+    return (
+      activeTab.entityId === fileId &&
+      EDITOR_TAB_CONTENT_TYPES.has(activeTab.contentType) &&
+      activeTab.isPinned === true
+    )
+  }
+  return (
+    (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+      (tab) =>
+        tab.entityId === fileId &&
+        EDITOR_TAB_CONTENT_TYPES.has(tab.contentType) &&
+        tab.isPinned === true
+    ) ?? false
+  )
+}
+
+function isPinnedEditorFileTab(
+  state: TerminalStoreSnapshot,
+  worktreeId: string,
+  fileId: string
+): boolean {
+  return (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+    (tab) =>
+      tab.entityId === fileId && EDITOR_TAB_CONTENT_TYPES.has(tab.contentType) && tab.isPinned
+  )
+}
 
 function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -234,16 +308,6 @@ function Terminal(): React.JSX.Element | null {
       isClosingRef.current = false
     }, CLOSE_DIALOG_DEBOUNCE_MS)
     closeDialogDebounceTimersRef.current.add(timer)
-  }, [])
-
-  useEffect(() => {
-    const timers = closeDialogDebounceTimersRef.current
-    return () => {
-      for (const timer of timers) {
-        window.clearTimeout(timer)
-      }
-      timers.clear()
-    }
   }, [])
 
   // Window close confirmation dialog — shown for local terminals with running
@@ -392,14 +456,18 @@ function Terminal(): React.JSX.Element | null {
 
   const handleCloseFile = useCallback(
     (fileId: string) => {
-      const file = useAppStore.getState().openFiles.find((f) => f.id === fileId)
+      const state = useAppStore.getState()
+      if (activeWorktreeId && isPinnedActiveEditorTab(state, activeWorktreeId, fileId)) {
+        return
+      }
+      const file = state.openFiles.find((f) => f.id === fileId)
       if (file?.isDirty) {
         queueEditorCloseRequests([fileId])
         return
       }
       closeFile(fileId)
     },
-    [closeFile, queueEditorCloseRequests]
+    [activeWorktreeId, closeFile, queueEditorCloseRequests]
   )
 
   const handleSaveDialogSave = useCallback(async () => {
@@ -569,6 +637,7 @@ function Terminal(): React.JSX.Element | null {
   const [, setBackgroundMountRevision] = useState(0)
   useEffect(() => {
     const timers = measurableBackgroundWorktreeTimersRef.current
+    const closeDialogDebounceTimers = closeDialogDebounceTimersRef.current
     const onBackgroundMountTerminalWorktree = (event: Event): void => {
       const customEvent = event as CustomEvent<BackgroundMountTerminalWorktreeDetail>
       const worktreeId = customEvent.detail?.worktreeId
@@ -607,6 +676,12 @@ function Terminal(): React.JSX.Element | null {
         window.clearTimeout(timer)
       }
       timers.clear()
+      // Why: close-dialog debounce timers are Terminal-owned and only need
+      // unmount cleanup; keep them with the existing Terminal lifetime cleanup.
+      for (const timer of closeDialogDebounceTimers) {
+        window.clearTimeout(timer)
+      }
+      closeDialogDebounceTimers.clear()
     }
   }, [])
   // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting
@@ -815,6 +890,9 @@ function Terminal(): React.JSX.Element | null {
       if (!owningWorktreeId) {
         return
       }
+      if (isPinnedVisibleTab(state, owningWorktreeId, tabId)) {
+        return
+      }
 
       if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
         void closeWebRuntimeSessionTab({
@@ -878,6 +956,9 @@ function Terminal(): React.JSX.Element | null {
       )
       const owningWorktreeId = owningWorktreeEntry?.[0] ?? null
       if (!owningWorktreeId) {
+        return
+      }
+      if (isPinnedVisibleTab(state, owningWorktreeId, tabId)) {
         return
       }
       if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
@@ -955,6 +1036,9 @@ function Terminal(): React.JSX.Element | null {
         const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
           (candidate) => candidate.id === id || candidate.entityId === id
         )
+        if (unifiedTab?.isPinned) {
+          continue
+        }
         if (
           isWebRuntimeSessionActive(activeRuntimeEnvironmentId) &&
           (unifiedTab?.contentType === 'terminal' || unifiedTab?.contentType === 'browser')
@@ -1015,6 +1099,9 @@ function Terminal(): React.JSX.Element | null {
         const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
           (candidate) => candidate.id === id || candidate.entityId === id
         )
+        if (unifiedTab?.isPinned) {
+          continue
+        }
         if (
           isWebRuntimeSessionActive(activeRuntimeEnvironmentId) &&
           (unifiedTab?.contentType === 'terminal' || unifiedTab?.contentType === 'browser')
@@ -1064,8 +1151,11 @@ function Terminal(): React.JSX.Element | null {
     }
     const state = useAppStore.getState()
     const filesInWorktree = state.openFiles.filter((file) => file.worktreeId === activeWorktreeId)
-    const dirtyFileIds = filesInWorktree.filter((file) => file.isDirty).map((file) => file.id)
-    for (const file of filesInWorktree) {
+    const closableFiles = filesInWorktree.filter(
+      (file) => !isPinnedEditorFileTab(state, activeWorktreeId, file.id)
+    )
+    const dirtyFileIds = closableFiles.filter((file) => file.isDirty).map((file) => file.id)
+    for (const file of closableFiles) {
       if (!file.isDirty) {
         closeFile(file.id)
       }
@@ -1185,6 +1275,10 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && matchShortcut('tab.newBrowser')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newBrowser')
+        if (floatingWorkspaceFocused) {
+          void createFloatingWorkspaceBrowserTab(useAppStore.getState())
+          return
+        }
         handleNewBrowserTab()
         return
       }
@@ -1213,6 +1307,14 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && matchShortcut('tab.newMarkdown')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newMarkdown')
+        if (floatingWorkspaceFocused) {
+          void createFloatingWorkspaceMarkdownTab(useAppStore.getState()).catch((err) => {
+            toast.error(
+              err instanceof Error ? err.message : 'Failed to create untitled markdown file.'
+            )
+          })
+          return
+        }
         void handleNewFile()
         return
       }
@@ -1431,7 +1533,7 @@ function Terminal(): React.JSX.Element | null {
       )
       for (const prevId of prevBrowserWebviewIdsRef.current) {
         if (!currentIds.has(prevId)) {
-          destroyPersistentWebview(prevId)
+          destroyRemovedBrowserWebview(prevId)
         }
       }
       prevBrowserWebviewIdsRef.current = currentIds

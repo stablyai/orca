@@ -9,10 +9,12 @@ import { FilePlus, FileText, Globe, Plus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
   BrowserTab as BrowserTabState,
+  Tab,
   TerminalTab,
   TuiAgent,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
+import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { useAppStore } from '../../store'
 import { buildStatusMap } from '../right-sidebar/status-display'
 import type { OpenFile } from '../../store/slices/editor'
@@ -31,8 +33,15 @@ import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import {
+  getWindowsTerminalCapabilityOwnerKey,
+  useWindowsTerminalCapabilities
+} from '@/lib/windows-terminal-capabilities'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import {
+  type BuiltInWindowsTerminalShell,
+  WINDOWS_GIT_BASH_SHELL
+} from '../../../../shared/windows-terminal-shell'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +59,7 @@ const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
 type GitStatusEntries = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree'][string]
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
+const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 
 type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -70,6 +80,7 @@ type TabBarProps = {
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
   onOpenFileTab?: () => void
+  newTabMenuOrder?: 'default' | 'markdown-first'
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
@@ -98,24 +109,46 @@ type TabItem =
       type: 'terminal'
       id: string
       unifiedTabId: string
+      isPinned: boolean
       data: TerminalTab & { unifiedTabId?: string }
     }
-  | { type: 'editor'; id: string; unifiedTabId: string; data: OpenFile & { tabId?: string } }
+  | {
+      type: 'editor'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: OpenFile & { tabId?: string }
+    }
   | {
       type: 'browser'
       id: string
       unifiedTabId: string
+      isPinned: boolean
       data: BrowserTabState & { tabId?: string }
     }
 
-function getTabDragLabel(item: TabItem): string {
+function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string {
   if (item.type === 'terminal') {
-    return item.data.customTitle ?? item.data.title
+    return resolveTerminalTabTitle(item.data, generatedTitlesEnabled, item.data.title)
   }
   if (item.type === 'browser') {
     return getBrowserTabLabel(item.data)
   }
   return getEditorDisplayLabel(item.data)
+}
+
+function createUnifiedTabLookup(tabs: readonly Tab[], groupId: string): Map<string, Tab> {
+  const lookup = new Map<string, Tab>()
+  for (const tab of tabs) {
+    if (tab.groupId !== groupId) {
+      continue
+    }
+    lookup.set(tab.id, tab)
+    if (tab.contentType === 'terminal' || tab.contentType === 'browser') {
+      lookup.set(tab.entityId, tab)
+    }
+  }
+  return lookup
 }
 
 function TabBarInner({
@@ -136,6 +169,7 @@ function TabBarInner({
   showAgentLaunchItems = true,
   onNewFileTab,
   onOpenFileTab,
+  newTabMenuOrder = 'default',
   onSetCustomTitle,
   onSetTabColor,
   onTogglePaneExpand,
@@ -158,9 +192,14 @@ function TabBarInner({
   const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
   const newBrowserShortcut = useShortcutLabel('tab.newBrowser')
   const newFileShortcut = useShortcutLabel('tab.newMarkdown')
+  const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
+  const unifiedTabs = useAppStore((s) => s.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS)
+  const pinTab = useAppStore((s) => s.pinTab)
+  const unpinTab = useAppStore((s) => s.unpinTab)
+  const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
   )
@@ -170,6 +209,13 @@ function TabBarInner({
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => s.settings?.activeRuntimeEnvironmentId?.trim() || null
   )
+  const worktreeHasRemoteConnection = useAppStore((s) => {
+    const worktree = Object.values(s.worktreesByRepo ?? {})
+      .flat()
+      .find((entry) => entry.id === worktreeId)
+    const repo = worktree ? s.repos?.find((entry) => entry.id === worktree.repoId) : null
+    return Boolean(repo?.connectionId)
+  })
   const unifiedNewTabLauncherEnabled = useAppStore(
     (s) => s.settings?.experimentalUnifiedNewTabLauncher === true
   )
@@ -198,37 +244,30 @@ function TabBarInner({
       ),
     [agentCmdOverrides, defaultAgent, detectedIds]
   )
-  const [runtimeHostPlatform, setRuntimeHostPlatform] = useState<NodeJS.Platform | null>(null)
-  useEffect(() => {
-    if (
-      !(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ ||
-      !activeRuntimeEnvironmentId
-    ) {
-      setRuntimeHostPlatform(null)
-      return
-    }
-    let cancelled = false
-    void window.api.runtime
-      .getStatus()
-      .then((status) => {
-        if (!cancelled) {
-          setRuntimeHostPlatform(status.hostPlatform ?? null)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRuntimeHostPlatform(null)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [activeRuntimeEnvironmentId])
-  const shouldShowWindowsShellMenu = isWindows || runtimeHostPlatform === 'win32'
-  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(shouldShowWindowsShellMenu)
-  const resolvedGroupId = groupId ?? worktreeId
+  const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
+  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
+    activeRuntimeEnvironmentId
+  )
+  const shouldProbeWindowsShellCapabilities =
+    (isWindows || (isWebClient && activeRuntimeEnvironmentId !== null)) &&
+    !worktreeHasRemoteConnection
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
+    shouldProbeWindowsShellCapabilities,
+    false,
+    windowsTerminalCapabilityOwnerKey
+  )
+  // Why: SSH-backed PTYs ignore local Windows shell overrides; showing these
+  // entries there promises PowerShell/CMD/Git Bash but opens the remote shell.
+  const shouldShowWindowsShellMenu =
+    (isWindows || windowsTerminalCapabilities.hostPlatform === 'win32') &&
+    !worktreeHasRemoteConnection
+  const resolvedGroupId = groupId ?? activeGroupIdForWorktree ?? worktreeId
 
   const statusByRelativePath = useMemo(() => buildStatusMap(gitStatusEntries), [gitStatusEntries])
+  const unifiedTabByVisibleId = useMemo(
+    () => createUnifiedTabLookup(unifiedTabs, resolvedGroupId),
+    [resolvedGroupId, unifiedTabs]
+  )
 
   // Why: Electron <webview> elements run in a separate process, so clicking
   // inside one never dispatches a pointerdown on the renderer document.
@@ -315,13 +354,148 @@ function TabBarInner({
       })
     }
   }
-  useEffect(
-    () => () => {
+
+  const clearPendingNewTabMenuFocusOnUnmountRef = useRef<
+    ((node: HTMLDivElement | null) => void) | null
+  >(null)
+  if (clearPendingNewTabMenuFocusOnUnmountRef.current === null) {
+    clearPendingNewTabMenuFocusOnUnmountRef.current = (node: HTMLDivElement | null): void => {
+      if (node !== null) {
+        return
+      }
+      // Why: the delayed focus handoff is scoped to this tab bar instance.
+      // A root ref cleanup cancels it at the DOM owner boundary without an
+      // otherwise cleanup-only React Effect.
       clearPendingNewTabMenuFocusAnimation()
       clearPendingNewTabMenuFocusRetry()
-    },
-    []
-  )
+    }
+  }
+  const clearPendingNewTabMenuFocusOnUnmount = clearPendingNewTabMenuFocusOnUnmountRef.current
+
+  const defaultTerminalMenuItems =
+    shouldShowWindowsShellMenu && onNewTerminalWithShell ? (
+      // Why: previously the Windows path nested shell choices under a
+      // Radix submenu. In practice the submenu frequently failed to open
+      // on hover/click, and even when it worked the two-step expansion
+      // hid the fact that multiple shells were available. Inlining all
+      // shells as flat items — default pinned to the top with the
+      // Ctrl+T hint — matches the "no popouts, show all options at
+      // once" rec. Each entry uses a shell-specific icon (ShellIcon)
+      // so PowerShell / CMD / Git Bash / WSL are distinguishable at a glance.
+      // Labels use "CMD Prompt" instead of "Command Prompt" to keep
+      // each row narrow enough that the shortcut hint fits without
+      // wrapping.
+      (() => {
+        const allShells: {
+          label: string
+          shell: BuiltInWindowsTerminalShell
+        }[] = [
+          { label: 'PowerShell', shell: 'powershell.exe' },
+          { label: 'CMD Prompt', shell: 'cmd.exe' },
+          ...(windowsTerminalCapabilities.gitBashAvailable
+            ? ([{ label: 'Git Bash', shell: WINDOWS_GIT_BASH_SHELL }] as const)
+            : []),
+          ...(windowsTerminalCapabilities.wslAvailable
+            ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const)
+            : [])
+        ]
+        const defaultEntry = allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
+        const orderedShells = [
+          defaultEntry,
+          ...allShells.filter((s) => s.shell !== defaultEntry.shell)
+        ]
+        return orderedShells.map((entry, idx) => {
+          const isDefault = idx === 0
+          return (
+            <DropdownMenuItem
+              key={entry.shell}
+              onSelect={() => {
+                // Why: the top-level Windows shell menu models shell
+                // categories, not concrete executables. When the user
+                // picked PowerShell 7+ in advanced settings, launching the
+                // "PowerShell" menu item must preserve that implementation
+                // instead of forcing inbox powershell.exe.
+                queueNewActiveTerminalFocusAfterNewTabMenuClose()
+                onNewTerminalWithShell(
+                  resolveWindowsShellLaunchTarget(
+                    entry.shell,
+                    defaultWindowsPowerShellImplementation,
+                    windowsTerminalCapabilities.pwshAvailable
+                  )
+                )
+              }}
+              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+            >
+              <ShellIcon shell={entry.shell} size={14} />
+              <span className="flex-1">New Terminal: {entry.label}</span>
+              {isDefault ? (
+                <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
+              ) : null}
+            </DropdownMenuItem>
+          )
+        })
+      })()
+    ) : (
+      <DropdownMenuItem
+        onSelect={() => {
+          queueNewActiveTerminalFocusAfterNewTabMenuClose()
+          onNewTerminalTab()
+        }}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <TerminalSquare className="size-4 text-muted-foreground" />
+        New Terminal
+        <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+    )
+  const newBrowserMenuItem = !terminalOnly ? (
+    <DropdownMenuItem
+      onSelect={onNewBrowserTab}
+      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+    >
+      <Globe className="size-4 text-muted-foreground" />
+      New Browser Tab
+      <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
+    </DropdownMenuItem>
+  ) : null
+  const newMarkdownMenuItem =
+    !terminalOnly && onNewFileTab ? (
+      <DropdownMenuItem
+        onSelect={onNewFileTab}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <FilePlus className="size-4 text-muted-foreground" />
+        New Markdown
+        <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+    ) : null
+  const openMarkdownMenuItem =
+    !terminalOnly && onOpenFileTab ? (
+      <DropdownMenuItem
+        onSelect={onOpenFileTab}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <FileText className="size-4 text-muted-foreground" />
+        Open Markdown...
+      </DropdownMenuItem>
+    ) : null
+  const standardCreateMenuItems =
+    newTabMenuOrder === 'markdown-first' ? (
+      <>
+        {newMarkdownMenuItem}
+        {openMarkdownMenuItem}
+        {defaultTerminalMenuItems}
+        {newBrowserMenuItem}
+      </>
+    ) : (
+      <>
+        {defaultTerminalMenuItems}
+        {newBrowserMenuItem}
+        {newMarkdownMenuItem}
+        {openMarkdownMenuItem}
+      </>
+    )
+
   useEffect(() => {
     if (!newTabMenuOpen) {
       return
@@ -352,32 +526,52 @@ function TabBarInner({
     for (const id of ids) {
       const terminal = terminalMap.get(id)
       if (terminal) {
+        const unifiedTab = unifiedTabByVisibleId.get(id)
         items.push({
           type: 'terminal',
           id,
-          unifiedTabId: terminal.unifiedTabId ?? terminal.id,
+          unifiedTabId: terminal.unifiedTabId ?? unifiedTab?.id ?? terminal.id,
+          isPinned: unifiedTab?.isPinned === true,
           data: terminal
         })
         continue
       }
       const file = editorMap.get(id)
       if (file) {
-        items.push({ type: 'editor', id, unifiedTabId: file.tabId ?? file.id, data: file })
+        const unifiedTab = unifiedTabByVisibleId.get(id) ?? unifiedTabByVisibleId.get(file.id)
+        items.push({
+          type: 'editor',
+          id,
+          unifiedTabId: file.tabId ?? unifiedTab?.id ?? file.id,
+          isPinned: unifiedTab?.isPinned === true,
+          data: file
+        })
         continue
       }
       const browserTab = browserMap.get(id)
       if (browserTab) {
+        const unifiedTab = unifiedTabByVisibleId.get(id)
         items.push({
           type: 'browser',
           id,
-          unifiedTabId: browserTab.tabId ?? browserTab.id,
+          unifiedTabId: browserTab.tabId ?? unifiedTab?.id ?? browserTab.id,
+          isPinned: unifiedTab?.isPinned === true,
           data: browserTab
         })
         continue
       }
     }
     return items
-  }, [tabBarOrder, terminalIds, editorFileIds, browserTabIds, terminalMap, editorMap, browserMap])
+  }, [
+    tabBarOrder,
+    terminalIds,
+    editorFileIds,
+    browserTabIds,
+    terminalMap,
+    editorMap,
+    browserMap,
+    unifiedTabByVisibleId
+  ])
 
   const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
 
@@ -393,6 +587,18 @@ function TabBarInner({
     }
     return indicators
   }, [activeIndicator, orderedItems])
+
+  const togglePinned = (item: TabItem): void => {
+    if (item.isPinned) {
+      unpinTab(item.unifiedTabId)
+      return
+    }
+    if (item.type === 'editor' && onPinFile) {
+      onPinFile(item.data.id, item.unifiedTabId)
+      return
+    }
+    pinTab(item.unifiedTabId)
+  }
 
   // Horizontal wheel scrolling for the tab strip
   const tabStripRef = useRef<HTMLDivElement>(null)
@@ -494,6 +700,7 @@ function TabBarInner({
 
   return (
     <div
+      ref={clearPendingNewTabMenuFocusOnUnmount}
       className="flex items-stretch h-full overflow-hidden flex-1 min-w-0"
       // Why: only drops aimed at the top tab/session strip should open files in
       // Orca's editor. Terminal-pane drops need to keep inserting file paths
@@ -530,18 +737,27 @@ function TabBarInner({
               unifiedTabId: item.unifiedTabId,
               visibleTabId: item.id,
               tabType: item.type,
-              label: getTabDragLabel(item),
+              label: getTabDragLabel(item, generatedTabTitlesEnabled),
               iconPath: item.type === 'editor' ? item.data.filePath : undefined,
               color: item.type === 'terminal' ? (item.data.color ?? null) : null
             }
             if (item.type === 'terminal') {
+              const terminalTab = {
+                ...item.data,
+                title: resolveTerminalTabTitle(
+                  item.data,
+                  generatedTabTitlesEnabled,
+                  item.data.title
+                )
+              }
               return (
                 <SortableTab
                   key={item.id}
-                  tab={item.data}
+                  tab={terminalTab}
                   tabCount={orderedItems.length}
                   hasTabsToRight={index < orderedItems.length - 1}
                   isActive={activeTabType === 'terminal' && item.id === activeTabId}
+                  isPinned={item.isPinned}
                   isExpanded={expandedPaneByTabId[item.id] === true}
                   onActivate={onActivate}
                   onClose={onClose}
@@ -549,6 +765,7 @@ function TabBarInner({
                   onCloseToRight={onCloseToRight}
                   onSetCustomTitle={onSetCustomTitle}
                   onSetTabColor={onSetTabColor}
+                  onTogglePin={() => togglePinned(item)}
                   onToggleExpand={onTogglePaneExpand}
                   onSplitGroup={(direction, sourceVisibleTabId) =>
                     onCreateSplitGroup?.(direction, sourceVisibleTabId)
@@ -564,6 +781,7 @@ function TabBarInner({
                   key={item.id}
                   tab={item.data}
                   isActive={activeTabType === 'browser' && activeBrowserTabId === item.id}
+                  isPinned={item.isPinned}
                   hasTabsToRight={index < orderedItems.length - 1}
                   onActivate={() => onActivateBrowserTab?.(item.id)}
                   onClose={() => onCloseBrowserTab?.(item.id)}
@@ -572,6 +790,7 @@ function TabBarInner({
                     onCreateSplitGroup?.(direction, sourceVisibleTabId)
                   }
                   onDuplicate={() => onDuplicateBrowserTab?.(item.id)}
+                  onTogglePin={() => togglePinned(item)}
                   dragData={dragData}
                   dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
                 />
@@ -582,6 +801,7 @@ function TabBarInner({
                 key={item.id}
                 file={item.data}
                 isActive={activeTabType === 'editor' && activeFileId === item.id}
+                isPinned={item.isPinned}
                 hasTabsToRight={index < orderedItems.length - 1}
                 statusByRelativePath={statusByRelativePath}
                 onActivate={() => onActivateFile?.(item.id)}
@@ -589,6 +809,7 @@ function TabBarInner({
                 onCloseToRight={() => onCloseToRight(item.id)}
                 onCloseAll={() => onCloseAllFiles?.()}
                 onPin={() => onPinFile?.(item.data.id, item.data.tabId)}
+                onTogglePin={() => togglePinned(item)}
                 onSplitGroup={(direction, sourceVisibleTabId) =>
                   onCreateSplitGroup?.(direction, sourceVisibleTabId)
                 }
@@ -644,108 +865,7 @@ function TabBarInner({
               <DropdownMenuSeparator />
             </>
           ) : null}
-          {shouldShowWindowsShellMenu && onNewTerminalWithShell ? (
-            // Why: previously the Windows path nested shell choices under a
-            // Radix submenu. In practice the submenu frequently failed to open
-            // on hover/click, and even when it worked the two-step expansion
-            // hid the fact that multiple shells were available. Inlining all
-            // shells as flat items — default pinned to the top with the
-            // Ctrl+T hint — matches the "no popouts, show all options at
-            // once" rec. Each entry uses a shell-specific icon (ShellIcon)
-            // so PowerShell / CMD / WSL are distinguishable at a glance.
-            // Labels use "CMD Prompt" instead of "Command Prompt" to keep
-            // each row narrow enough that the shortcut hint fits without
-            // wrapping.
-            (() => {
-              const allShells: {
-                label: string
-                shell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
-              }[] = [
-                { label: 'PowerShell', shell: 'powershell.exe' },
-                { label: 'CMD Prompt', shell: 'cmd.exe' },
-                ...(windowsTerminalCapabilities.wslAvailable
-                  ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const)
-                  : [])
-              ]
-              const defaultEntry =
-                allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
-              const orderedShells = [
-                defaultEntry,
-                ...allShells.filter((s) => s.shell !== defaultEntry.shell)
-              ]
-              return orderedShells.map((entry, idx) => {
-                const isDefault = idx === 0
-                return (
-                  <DropdownMenuItem
-                    key={entry.shell}
-                    onSelect={() => {
-                      // Why: the top-level Windows shell menu models shell
-                      // categories, not concrete executables. When the user
-                      // picked PowerShell 7+ in advanced settings, launching the
-                      // "PowerShell" menu item must preserve that implementation
-                      // instead of forcing inbox powershell.exe.
-                      queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                      onNewTerminalWithShell(
-                        resolveWindowsShellLaunchTarget(
-                          entry.shell,
-                          defaultWindowsPowerShellImplementation,
-                          windowsTerminalCapabilities.pwshAvailable
-                        )
-                      )
-                    }}
-                    className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-                  >
-                    <ShellIcon shell={entry.shell} size={14} />
-                    <span className="flex-1">New Terminal: {entry.label}</span>
-                    {isDefault ? (
-                      <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
-                    ) : null}
-                  </DropdownMenuItem>
-                )
-              })
-            })()
-          ) : (
-            <DropdownMenuItem
-              onSelect={() => {
-                queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                onNewTerminalTab()
-              }}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <TerminalSquare className="size-4 text-muted-foreground" />
-              New Terminal
-              <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          )}
-          {!terminalOnly && (
-            <DropdownMenuItem
-              onSelect={onNewBrowserTab}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <Globe className="size-4 text-muted-foreground" />
-              New Browser Tab
-              <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          )}
-          {!terminalOnly && onNewFileTab && (
-            <DropdownMenuItem
-              onSelect={onNewFileTab}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <FilePlus className="size-4 text-muted-foreground" />
-              New Markdown
-              <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          )}
-          {!terminalOnly && onOpenFileTab && (
-            <DropdownMenuItem
-              onSelect={onOpenFileTab}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <FileText className="size-4 text-muted-foreground" />
-              Open Markdown...
-            </DropdownMenuItem>
-          )}
+          {standardCreateMenuItems}
           {showAgentLaunchItems ? (
             <>
               <DropdownMenuSeparator />

@@ -1,19 +1,21 @@
-import { createHash } from 'node:crypto'
 import type { Dirent } from 'node:fs'
 import { open, readdir, realpath, stat } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { basename, dirname, join, relative, sep } from 'node:path'
-import type { Repo } from '../../shared/types'
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
+import type { Repo } from '../../shared/types'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
   SkillDiscoverySource,
-  SkillProvider,
   SkillSourceKind
 } from '../../shared/skills'
+import {
+  buildSkillDiscoverySources,
+  stablePathId,
+  type SkillScanRoot
+} from './skill-discovery-sources'
 
-type SkillScanRoot = Omit<SkillDiscoverySource, 'exists' | 'skippedReason'>
+export { buildSkillDiscoverySources } from './skill-discovery-sources'
 
 const SKILL_FILE_NAME = 'SKILL.md'
 const MAX_MARKDOWN_BYTES = 256 * 1024
@@ -28,10 +30,6 @@ async function pathExists(pathValue: string): Promise<boolean> {
   }
 }
 
-function stableId(pathValue: string): string {
-  return createHash('sha1').update(pathValue).digest('hex').slice(0, 16)
-}
-
 function compareSkills(a: DiscoveredSkill, b: DiscoveredSkill): number {
   return (
     a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
@@ -42,8 +40,12 @@ function compareSkills(a: DiscoveredSkill, b: DiscoveredSkill): number {
 
 function isWithinDepth(rootPath: string, childPath: string, maxDepth: number): boolean {
   const rel = relative(rootPath, childPath)
-  if (!rel || rel.startsWith('..')) {
+  if (!rel) {
     return true
+  }
+  // Why: `..cache` is a valid child name; only a real parent traversal escapes.
+  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    return false
   }
   return rel.split(sep).length <= maxDepth
 }
@@ -210,7 +212,7 @@ async function scanRoot(root: SkillScanRoot): Promise<DiscoveredSkill[]> {
       const summary = await readSkillSummary(skillFilePath)
       const sourceKind = sourceKindForSkill(root, skillFilePath)
       return {
-        id: stableId(skillFilePath),
+        id: stablePathId(skillFilePath),
         name: summary.name ?? basename(directoryPath),
         description: summary.description,
         providers: root.providers,
@@ -226,72 +228,6 @@ async function scanRoot(root: SkillScanRoot): Promise<DiscoveredSkill[]> {
     })
   )
   return skills
-}
-
-function source(
-  id: string,
-  label: string,
-  path: string,
-  sourceKind: SkillSourceKind,
-  providers: SkillProvider[]
-): SkillScanRoot {
-  return { id, label, path, sourceKind, providers }
-}
-
-export function buildSkillDiscoverySources(
-  args: {
-    homeDir?: string
-    cwd?: string
-    repos?: Repo[]
-  } = {}
-): SkillScanRoot[] {
-  const home = args.homeDir ?? homedir()
-  const cwd = args.cwd ?? process.cwd()
-  const roots: SkillScanRoot[] = [
-    source('home-codex', 'Codex home', join(home, '.codex', 'skills'), 'home', ['codex']),
-    source('home-agents', 'Agent skills home', join(home, '.agents', 'skills'), 'home', [
-      'agent-skills'
-    ]),
-    source('home-claude', 'Claude home', join(home, '.claude', 'skills'), 'home', ['claude']),
-    source(
-      'codex-plugin-cache',
-      'Codex plugin cache',
-      join(home, '.codex', 'plugins', 'cache'),
-      'plugin',
-      ['codex', 'agent-skills']
-    )
-  ]
-
-  const projectPaths = new Set<string>()
-  for (const repo of args.repos ?? []) {
-    if (repo.connectionId) {
-      continue
-    }
-    projectPaths.add(repo.path)
-  }
-  projectPaths.add(cwd)
-
-  for (const repoPath of projectPaths) {
-    const label = `Repo ${basename(repoPath)}`
-    roots.push(
-      source(
-        `repo-agents-${stableId(repoPath)}`,
-        `${label} .agents`,
-        join(repoPath, '.agents', 'skills'),
-        'repo',
-        ['agent-skills']
-      ),
-      source(
-        `repo-claude-${stableId(repoPath)}`,
-        `${label} .claude`,
-        join(repoPath, '.claude', 'skills'),
-        'repo',
-        ['claude']
-      )
-    )
-  }
-
-  return roots
 }
 
 export async function discoverSkills(args: {

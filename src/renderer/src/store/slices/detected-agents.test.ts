@@ -2,17 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo, Worktree } from '../../../../shared/types'
-import { createDetectedAgentsSlice } from './detected-agents'
+import { _getRemoteDetectPromiseCountForTest, createDetectedAgentsSlice } from './detected-agents'
 
 const detectAgents = vi.fn()
 const refreshAgents = vi.fn()
+const detectRemoteAgents = vi.fn()
 
 globalThis.window = {
   api: {
     preflight: {
       detectAgents,
       refreshAgents,
-      detectRemoteAgents: vi.fn().mockResolvedValue([])
+      detectRemoteAgents
     }
   } as unknown as Window['api']
 } as Window & typeof globalThis
@@ -77,6 +78,7 @@ describe('createDetectedAgentsSlice WSL context', () => {
       pathSource: 'shell_hydrate',
       pathFailureReason: 'none'
     })
+    detectRemoteAgents.mockReset().mockResolvedValue([])
   })
 
   it('detects local agents inside the active WSL worktree distro', async () => {
@@ -201,5 +203,45 @@ describe('createDetectedAgentsSlice WSL context', () => {
     expect(store.getState().detectedAgentIds).toBeNull()
     await expect(detected).resolves.toEqual([])
     expect(store.getState().detectedAgentIds).toEqual([])
+  })
+})
+
+describe('createDetectedAgentsSlice remote detection', () => {
+  beforeEach(() => {
+    detectAgents.mockReset().mockResolvedValue(['claude'])
+    refreshAgents.mockReset().mockResolvedValue({
+      agents: ['codex'],
+      addedPathSegments: [],
+      shellHydrationOk: true,
+      pathSource: 'shell_hydrate',
+      pathFailureReason: 'none'
+    })
+    detectRemoteAgents.mockReset().mockResolvedValue([])
+  })
+
+  it('retains remote detection promises only while requests are in flight', async () => {
+    const store = createTestStore()
+    let resolveRemote: (ids: string[]) => void = () => {}
+    detectRemoteAgents.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        resolveRemote = resolve
+      })
+    )
+
+    const first = store.getState().ensureRemoteDetectedAgents('ssh-1')
+    const second = store.getState().ensureRemoteDetectedAgents('ssh-1')
+
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
+    expect(_getRemoteDetectPromiseCountForTest()).toBe(1)
+
+    resolveRemote(['claude'])
+
+    await expect(first).resolves.toEqual(['claude'])
+    await expect(second).resolves.toEqual(['claude'])
+    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['claude'])
+    expect(_getRemoteDetectPromiseCountForTest()).toBe(0)
+
+    await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual(['claude'])
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
   })
 })

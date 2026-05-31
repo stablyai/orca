@@ -12,8 +12,10 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
+  GitHubCommentResult,
   IssueInfo,
   PRCheckDetail,
+  PRCheckRunDetails,
   PRComment,
   Repo,
   Worktree,
@@ -200,9 +202,8 @@ function optimisticFieldValueFromMutation(
       return { kind: 'number', fieldId, number: value.number }
     case 'date':
       return { kind: 'date', fieldId, date: value.date }
-    default:
-      return null
   }
+  return null
 }
 
 function applyRowPatch(
@@ -363,6 +364,22 @@ const prRefreshStartedHostedReviewEntries = new Map<
   string,
   AppState['hostedReviewCache'][string] | undefined
 >()
+const PR_REFRESH_STARTED_HOSTED_REVIEW_ENTRY_MAX = 128
+
+/** @internal - exposed for leak-regression tests only */
+export function _getGitHubPRRequestGenerationCountForTest(): number {
+  return prRequestGenerations.size
+}
+
+/** @internal - exposed for leak-regression tests only */
+export function _getGitHubPRRefreshStartedEntryCountForTest(): number {
+  return prRefreshStartedHostedReviewEntries.size
+}
+
+/** @internal - exposed for leak-regression tests only */
+export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
+  prRefreshStartedHostedReviewEntries.clear()
+}
 
 // Why: cap in-flight cross-repo fan-out and hover-prefetches at the renderer
 // boundary — the main-side gate is behind the IPC queue, so it can't see a
@@ -487,6 +504,47 @@ export function prCommentsCacheSuffix(prNumber: number, prRepo?: GitHubOwnerRepo
   return `pr-comments::${normalizedRepoIdentity(prRepo)}::${prNumber}`
 }
 
+function commentTimestamp(comment: PRComment): number {
+  const timestamp = new Date(comment.createdAt).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+export function mergePRCommentIntoList(
+  comments: readonly PRComment[] | null | undefined,
+  incoming: PRComment
+): PRComment[] {
+  const byId = new Map<number, PRComment>()
+  for (const comment of comments ?? []) {
+    byId.set(comment.id, comment)
+  }
+  const previous = byId.get(incoming.id)
+  byId.set(incoming.id, {
+    ...previous,
+    ...incoming,
+    threadId: incoming.threadId ?? previous?.threadId,
+    path: incoming.path ?? previous?.path,
+    line: incoming.line ?? previous?.line,
+    startLine: incoming.startLine ?? previous?.startLine,
+    isResolved: incoming.isResolved ?? previous?.isResolved,
+    isOutdated: incoming.isOutdated ?? previous?.isOutdated
+  })
+  return Array.from(byId.values()).sort((a, b) => commentTimestamp(a) - commentTimestamp(b))
+}
+
+function hasUsableCommentPayload(result: GitHubCommentResult): result is {
+  ok: true
+  comment: PRComment
+} {
+  return (
+    result.ok &&
+    typeof result.comment?.id === 'number' &&
+    Number.isSafeInteger(result.comment.id) &&
+    result.comment.id > 0 &&
+    typeof result.comment.body === 'string' &&
+    typeof result.comment.createdAt === 'string'
+  )
+}
+
 // Why: 500 entries is generous enough that active developers will never hit it
 // during normal use, but prevents the cache from growing without bound across
 // many repos and branches over a long-running session.
@@ -527,6 +585,7 @@ function buildPRRefreshCandidate(
     state.settings,
     repo.connectionId
   )
+  const cachedPR = state.prCache[cacheKey]?.data ?? null
   const hostedReviewFallbackPRNumber = githubHostedReviewFallbackPRNumber(
     state,
     repoPath ?? repo.path,
@@ -534,7 +593,7 @@ function buildPRRefreshCandidate(
     branch,
     repo.connectionId
   )
-  const cachedFallbackPRNumber = state.prCache[cacheKey]?.data?.number ?? null
+  const cachedFallbackPRNumber = cachedPR?.number ?? null
   const fallbackPRNumber =
     worktree.linkedPR == null ? (cachedFallbackPRNumber ?? hostedReviewFallbackPRNumber) : null
   const fallbackPRSource: GitHubPRFallbackSource | null =
@@ -567,9 +626,11 @@ function buildPRRefreshCandidate(
         : 'disconnected'
       : 'unknown',
     cachedFetchedAt: state.prCache[cacheKey]?.fetchedAt ?? null,
-    cachedHasPR: state.prCache[cacheKey]?.data ? true : state.prCache[cacheKey] ? false : null,
-    cachedPRState: state.prCache[cacheKey]?.data?.state ?? null,
-    cachedChecksStatus: state.prCache[cacheKey]?.data?.checksStatus ?? null
+    cachedHasPR: cachedPR ? true : state.prCache[cacheKey] ? false : null,
+    cachedPRState: cachedPR?.state ?? null,
+    cachedChecksStatus: cachedPR?.checksStatus ?? null,
+    cachedMergeable: cachedPR?.mergeable ?? null,
+    cachedMergeStateStatus: cachedPR?.mergeStateStatus ?? null
   }
 }
 
@@ -766,7 +827,7 @@ function applyPRCacheResult(
     return cache
   }
   if (accepted) {
-    return { ...cache, [cacheKey]: { data: pr, fetchedAt } }
+    return withBoundedCacheEntry(cache, cacheKey, { data: pr, fetchedAt })
   }
   if (!cache[cacheKey]) {
     return cache
@@ -778,6 +839,41 @@ function applyPRCacheResult(
 
 function prRefreshStartedEntryKey(sequence: number, cacheKey: string): string {
   return `${sequence}::${cacheKey}`
+}
+
+function deletePRRefreshStartedEntry(sequence: number | undefined, cacheKey: string): void {
+  if (sequence !== undefined && sequence > 0) {
+    prRefreshStartedHostedReviewEntries.delete(prRefreshStartedEntryKey(sequence, cacheKey))
+  }
+}
+
+function setPRRefreshStartedHostedReviewEntry(
+  key: string,
+  entry: AppState['hostedReviewCache'][string] | undefined
+): void {
+  if (entry === undefined) {
+    prRefreshStartedHostedReviewEntries.delete(key)
+    return
+  }
+  prRefreshStartedHostedReviewEntries.delete(key)
+  prRefreshStartedHostedReviewEntries.set(key, entry)
+  while (prRefreshStartedHostedReviewEntries.size > PR_REFRESH_STARTED_HOSTED_REVIEW_ENTRY_MAX) {
+    const oldest = prRefreshStartedHostedReviewEntries.keys().next()
+    if (oldest.done) {
+      return
+    }
+    prRefreshStartedHostedReviewEntries.delete(oldest.value)
+  }
+}
+
+function deletePRRefreshStartedEntriesForEvent(
+  event: GitHubPRRefreshEvent,
+  sequences: AppState['prRefreshSequences']
+): void {
+  for (const alias of event.aliases) {
+    deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
+    deletePRRefreshStartedEntry(sequences[alias.cacheKey], alias.cacheKey)
+  }
 }
 
 function setGitHubPRResultCaches(
@@ -918,10 +1014,10 @@ function applyGitHubPRResultToCaches(args: {
  * Evict the oldest entries from a cache record when it exceeds the max size.
  * Returns a pruned copy, or the original reference if no eviction was needed.
  */
-function evictStaleEntries<T>(
-  cache: Record<string, CacheEntry<T>>,
+function evictStaleEntries<T extends { fetchedAt: number }>(
+  cache: Record<string, T>,
   maxEntries = MAX_CACHE_ENTRIES
-): Record<string, CacheEntry<T>> {
+): Record<string, T> {
   const keys = Object.keys(cache)
   if (keys.length <= maxEntries) {
     return cache
@@ -930,11 +1026,19 @@ function evictStaleEntries<T>(
     .map((k) => ({ key: k, fetchedAt: cache[k].fetchedAt }))
     .sort((a, b) => b.fetchedAt - a.fetchedAt)
   const keep = new Set(sorted.slice(0, maxEntries).map((e) => e.key))
-  const pruned: Record<string, CacheEntry<T>> = {}
+  const pruned: Record<string, T> = {}
   for (const k of keep) {
     pruned[k] = cache[k]
   }
   return pruned
+}
+
+function withBoundedCacheEntry<T extends { fetchedAt: number }>(
+  cache: Record<string, T>,
+  key: string,
+  entry: T
+): Record<string, T> {
+  return evictStaleEntries({ ...cache, [key]: entry })
 }
 
 function shouldRefreshIssueDecorations(state: AppState): boolean {
@@ -993,11 +1097,40 @@ export type GitHubSlice = {
     prRepo?: GitHubOwnerRepo | null,
     options?: RepoScopedFetchOptions
   ) => Promise<PRCheckDetail[]>
+  fetchPRCheckDetails: (
+    repoPath: string,
+    args: {
+      checkRunId?: number
+      workflowRunId?: number
+      checkName?: string
+      url?: string | null
+      prRepo?: GitHubOwnerRepo | null
+    },
+    options?: RepoScopedFetchOptions
+  ) => Promise<PRCheckRunDetails | null>
   fetchPRComments: (
     repoPath: string,
     prNumber: number,
     options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
   ) => Promise<PRComment[]>
+  addPRConversationComment: (
+    repoPath: string,
+    prNumber: number,
+    body: string,
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+  ) => Promise<GitHubCommentResult>
+  addPRReviewCommentReply: (
+    repoPath: string,
+    prNumber: number,
+    commentId: number,
+    body: string,
+    options?: RepoScopedFetchOptions & {
+      prRepo?: GitHubOwnerRepo | null
+      threadId?: string
+      path?: string
+      line?: number
+    }
+  ) => Promise<GitHubCommentResult>
   resolveReviewThread: (
     repoPath: string,
     prNumber: number,
@@ -1228,24 +1361,21 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             args.queryOverride
           )
           set((s) => ({
-            projectViewCache: {
-              ...s.projectViewCache,
-              [key]: { data: table, fetchedAt: Date.now() }
-            }
+            projectViewCache: withBoundedCacheEntry(s.projectViewCache, key, {
+              data: table,
+              fetchedAt: Date.now()
+            })
           }))
         } else if (maybeKnownKey) {
           // Only stamp the error onto the cache when we have a resolved key
           // (i.e. caller supplied viewId). Otherwise we have nowhere to write
           // it — the renderer classifies the error directly from the envelope.
           set((s) => ({
-            projectViewCache: {
-              ...s.projectViewCache,
-              [maybeKnownKey]: {
-                data: s.projectViewCache[maybeKnownKey]?.data ?? null,
-                fetchedAt: Date.now(),
-                error: envelope.error
-              }
-            }
+            projectViewCache: withBoundedCacheEntry(s.projectViewCache, maybeKnownKey, {
+              data: s.projectViewCache[maybeKnownKey]?.data ?? null,
+              fetchedAt: Date.now(),
+              error: envelope.error
+            })
           }))
         }
         return envelope
@@ -1693,16 +1823,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             ? { ...issuesError, source: envelope.sources.issues }
             : undefined
         set((s) => ({
-          workItemsCache: {
-            ...s.workItemsCache,
-            [key]: {
-              data: items,
-              fetchedAt: Date.now(),
-              sources: envelope.sources,
-              ...(errorForCache ? { error: errorForCache } : {}),
-              ...(envelope.issueSourceFellBack ? { issueSourceFellBack: true } : {})
-            }
-          }
+          workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
+            data: items,
+            fetchedAt: Date.now(),
+            sources: envelope.sources,
+            ...(errorForCache ? { error: errorForCache } : {}),
+            ...(envelope.issueSourceFellBack ? { issueSourceFellBack: true } : {})
+          })
         }))
         return items
       } catch (err) {
@@ -1836,8 +1963,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       const persisted = await window.api.cache.getGitHub()
       if (persisted) {
         set({
-          prCache: persisted.pr || {},
-          issueCache: persisted.issue || {}
+          prCache: evictStaleEntries(persisted.pr || {}),
+          issueCache: evictStaleEntries(persisted.issue || {})
         })
       }
     } catch (err) {
@@ -1932,7 +2059,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 fallbackPRNumber,
                 fallbackPRSource,
                 connectionId: repo?.connectionId ?? null,
-                cachedFetchedAt: cached?.fetchedAt ?? null
+                cachedFetchedAt: cached?.fetchedAt ?? null,
+                cachedHasPR: cached?.data ? true : cached ? false : null,
+                cachedPRState: cached?.data?.state ?? null,
+                cachedChecksStatus: cached?.data?.checksStatus ?? null,
+                cachedMergeable: cached?.data?.mergeable ?? null,
+                cachedMergeStateStatus: cached?.data?.mergeStateStatus ?? null
               }
               return window.api.gh.refreshPRNow
                 ? await window.api.gh.refreshPRNow({ candidate })
@@ -1988,6 +2120,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         const activeRequest = inflightPRRequests.get(cacheKey)
         if (activeRequest?.generation === generation) {
           inflightPRRequests.delete(cacheKey)
+          if (prRequestGenerations.get(cacheKey) === generation) {
+            prRequestGenerations.delete(cacheKey)
+          }
         }
       }
     })()
@@ -2018,14 +2153,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       try {
         const issue = await window.api.gh.issue({ repoPath, repoId, number })
         set((s) => ({
-          issueCache: { ...s.issueCache, [cacheKey]: { data: issue, fetchedAt: Date.now() } }
+          issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
+            data: issue,
+            fetchedAt: Date.now()
+          })
         }))
         debouncedSaveCache(get())
         return issue
       } catch (err) {
         console.error('Failed to fetch issue:', err)
         set((s) => ({
-          issueCache: { ...s.issueCache, [cacheKey]: { data: null, fetchedAt: Date.now() } }
+          issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
+            data: null,
+            fetchedAt: Date.now()
+          })
         }))
         debouncedSaveCache(get())
         return null
@@ -2124,10 +2265,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             })) as PRCheckDetail[])
         set((s) => {
           const nextState: Partial<AppState> = {
-            checksCache: {
-              ...s.checksCache,
-              [cacheKey]: { data: checks, fetchedAt: Date.now(), headSha }
-            }
+            checksCache: withBoundedCacheEntry(s.checksCache, cacheKey, {
+              data: checks,
+              fetchedAt: Date.now(),
+              headSha
+            })
           }
 
           const prStatusUpdate = syncPRChecksStatus(
@@ -2163,6 +2305,38 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     inflightChecksRequests.set(inflightKey, request)
     return request
+  },
+
+  fetchPRCheckDetails: async (repoPath, args, options): Promise<PRCheckRunDetails | null> => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = get().settings
+    const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+    return runtimeRepo
+      ? await callRuntimeRpc<PRCheckRunDetails | null>(
+          runtimeRepo.target,
+          'github.prCheckDetails',
+          {
+            repo: runtimeRepo.repo.id,
+            checkRunId: args.checkRunId,
+            workflowRunId: args.workflowRunId,
+            checkName: args.checkName,
+            url: args.url,
+            prRepo: args.prRepo ?? null
+          },
+          { timeoutMs: 30_000 }
+        )
+      : ((await window.api.gh.prCheckDetails({
+          repoPath,
+          repoId,
+          checkRunId: args.checkRunId,
+          workflowRunId: args.workflowRunId,
+          checkName: args.checkName,
+          url: args.url,
+          prRepo: args.prRepo ?? null
+        })) as PRCheckRunDetails | null)
   },
 
   fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
@@ -2211,10 +2385,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               noCache: options?.force
             })) as PRComment[])
         set((s) => ({
-          commentsCache: {
-            ...s.commentsCache,
-            [cacheKey]: { data: comments, fetchedAt: Date.now() }
-          }
+          commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+            data: comments,
+            fetchedAt: Date.now()
+          })
         }))
         return comments
       } catch (err) {
@@ -2227,6 +2401,130 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     inflightCommentsRequests.set(cacheKey, request)
     return request
+  },
+
+  addPRConversationComment: async (repoPath, prNumber, body, options) => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = get().settings
+    const cacheKey = runtimeScopedRepoCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo),
+      requestSettings,
+      repo?.connectionId
+    )
+    const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+    let result: GitHubCommentResult
+    try {
+      result = runtimeRepo
+        ? await callRuntimeRpc<GitHubCommentResult>(
+            runtimeRepo.target,
+            'github.addIssueComment',
+            {
+              repo: runtimeRepo.repo.id,
+              number: prNumber,
+              body,
+              type: 'pr',
+              prRepo: options?.prRepo ?? null
+            },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.addIssueComment({
+            repoPath,
+            repoId,
+            number: prNumber,
+            body,
+            type: 'pr',
+            prRepo: options?.prRepo ?? null
+          })
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Failed to post comment.'
+      return { ok: false, error }
+    }
+    if (!hasUsableCommentPayload(result)) {
+      return result.ok ? { ok: false, error: 'GitHub did not return the new comment.' } : result
+    }
+    set((s) => {
+      const entry = s.commentsCache[cacheKey]
+      return {
+        commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+          data: mergePRCommentIntoList(entry?.data, result.comment),
+          fetchedAt: Date.now()
+        })
+      }
+    })
+    return result
+  },
+
+  addPRReviewCommentReply: async (repoPath, prNumber, commentId, body, options) => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = get().settings
+    const cacheKey = runtimeScopedRepoCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo),
+      requestSettings,
+      repo?.connectionId
+    )
+    const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+    let result: GitHubCommentResult
+    try {
+      result = runtimeRepo
+        ? await callRuntimeRpc<GitHubCommentResult>(
+            runtimeRepo.target,
+            'github.addPRReviewCommentReply',
+            {
+              repo: runtimeRepo.repo.id,
+              prNumber,
+              commentId,
+              body,
+              threadId: options?.threadId,
+              path: options?.path,
+              line: options?.line,
+              prRepo: options?.prRepo ?? null
+            },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.addPRReviewCommentReply({
+            repoPath,
+            repoId,
+            prNumber,
+            commentId,
+            body,
+            threadId: options?.threadId,
+            path: options?.path,
+            line: options?.line,
+            prRepo: options?.prRepo ?? null
+          })
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Failed to post reply.'
+      return { ok: false, error }
+    }
+    if (!hasUsableCommentPayload(result)) {
+      return result.ok ? { ok: false, error: 'GitHub did not return the new comment.' } : result
+    }
+    const comment: PRComment = {
+      ...result.comment,
+      threadId: result.comment.threadId ?? options?.threadId,
+      path: result.comment.path ?? options?.path,
+      line: result.comment.line ?? options?.line
+    }
+    set((s) => {
+      const entry = s.commentsCache[cacheKey]
+      return {
+        commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+          data: mergePRCommentIntoList(entry?.data, comment),
+          fetchedAt: Date.now()
+        })
+      }
+    })
+    return { ok: true, comment }
   },
 
   resolveReviewThread: async (repoPath, prNumber, threadId, resolve, options) => {
@@ -2259,14 +2557,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
 
     const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
-    const ok = runtimeRepo
-      ? await callRuntimeRpc<boolean>(
-          runtimeRepo.target,
-          'github.resolveReviewThread',
-          { repo: runtimeRepo.repo.id, threadId, resolve },
-          { timeoutMs: 30_000 }
-        )
-      : await window.api.gh.resolveReviewThread({ repoPath, repoId, threadId, resolve })
+    let ok = false
+    try {
+      ok = runtimeRepo
+        ? await callRuntimeRpc<boolean>(
+            runtimeRepo.target,
+            'github.resolveReviewThread',
+            { repo: runtimeRepo.repo.id, threadId, resolve },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.resolveReviewThread({ repoPath, repoId, threadId, resolve })
+    } catch (err) {
+      console.error('Failed to update review thread:', err)
+      ok = false
+    }
     if (!ok && prev) {
       // Revert optimistic update on failure
       set((s) => ({
@@ -2353,6 +2657,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       // Why: local main-process refresh events are keyed only by repo/branch;
       // applying them while a runtime is active can leak local PR state into SSH.
       if (getActiveRuntimeTarget(s.settings).kind === 'environment') {
+        deletePRRefreshStartedEntriesForEvent(event, s.prRefreshSequences)
         return {}
       }
       const nextSequences = { ...s.prRefreshSequences }
@@ -2366,6 +2671,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         if (
           event.outcome ? event.sequence < previousSequence : event.sequence <= previousSequence
         ) {
+          if (event.outcome || event.status !== 'in-flight') {
+            deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
+          }
           continue
         }
         nextSequences[alias.cacheKey] = event.sequence
@@ -2375,6 +2683,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           const startedEntryKey = prRefreshStartedEntryKey(event.sequence, alias.cacheKey)
           const requestStartedEntry = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
           prRefreshStartedHostedReviewEntries.delete(startedEntryKey)
+          if (previousSequence !== event.sequence) {
+            deletePRRefreshStartedEntry(previousSequence, alias.cacheKey)
+          }
           delete nextStates[alias.cacheKey]
           if (event.outcome.kind === 'upstream-error') {
             nextStates[alias.cacheKey] = {
@@ -2448,6 +2759,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
 
         if (event.status) {
+          if (previousSequence !== event.sequence) {
+            deletePRRefreshStartedEntry(previousSequence, alias.cacheKey)
+          }
           if (event.status === 'in-flight' && event.requestStartedAt !== undefined) {
             const hostedReviewCacheKey = getHostedReviewCacheKey(
               alias.repoPath,
@@ -2456,10 +2770,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               alias.repoId,
               alias.connectionId
             )
-            prRefreshStartedHostedReviewEntries.set(
+            setPRRefreshStartedHostedReviewEntry(
               prRefreshStartedEntryKey(event.sequence, alias.cacheKey),
               s.hostedReviewCache[hostedReviewCacheKey]
             )
+          } else {
+            // Why: rate-limit pauses/skips can follow an in-flight broadcast
+            // without an outcome; the cached request-start snapshot is no
+            // longer live and would otherwise accumulate per refresh sequence.
+            deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           }
           nextStates[alias.cacheKey] = {
             status: event.status,
@@ -2486,21 +2805,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   refreshAllGitHub: () => {
     // Invalidate comments cache so it refreshes on next access.
-    // Also evict old entries from prCache and issueCache to prevent unbounded
-    // growth across many repos and branches over a long-running session.
+    // Also evict old entries from retained caches to prevent unbounded growth
+    // across many repos and branches over a long-running session.
     set((s) => ({
       commentsCache: {},
       prCache: evictStaleEntries(s.prCache),
-      issueCache: evictStaleEntries(s.issueCache)
+      issueCache: evictStaleEntries(s.issueCache),
+      checksCache: evictStaleEntries(s.checksCache),
+      workItemsCache: evictStaleEntries(s.workItemsCache),
+      projectViewCache: evictStaleEntries(s.projectViewCache)
     }))
 
-    // Why: prRequestGenerations tracks generation counters for inflight
-    // fetch deduplication. Pruning keys that were just evicted from prCache
-    // would race with inflight requests — their generation check would fail
-    // and silently discard valid responses. Since each entry is just a number,
-    // the memory overhead is negligible; let it shrink naturally as keys stop
-    // being fetched. The eviction on prCache/issueCache above is sufficient
-    // to bound the dominant source of growth.
+    // Why: prRequestGenerations tracks only live inflight fetches and is
+    // cleared when the active request settles. Do not prune it here; deleting
+    // a live generation would make the corresponding response look stale.
 
     // Only re-fetch PR/issue entries that are already stale — skip fresh ones
     const state = get()

@@ -31,6 +31,7 @@ import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { cn } from '@/lib/utils'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { projectViewCacheKey } from '@/store/slices/github'
 import type {
   GetProjectViewTableResult,
@@ -47,6 +48,15 @@ import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 import { filterProjectTableRowsByOpenRepos } from './project-row-filtering'
+import {
+  resolveMissingRepoProjectDialogState,
+  resolveRepoBackedProjectDialogState
+} from './project-dialog-state'
+import {
+  getNextVisibleProjectTableCache,
+  getVisibleProjectTable,
+  type CachedVisibleProjectTable
+} from './project-visible-table-cache'
 
 type Props = Record<string, never>
 
@@ -75,6 +85,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const addRepoFromStore = useAppStore((s) => s.addRepo)
   const repos = useAppStore((s) => s.repos)
   const { lookupSlug, ready: slugIndexReady } = useRepoSlugIndex()
+  const mountedRef = useMountedRef()
 
   const activeProject = settings?.githubProjects?.activeProject ?? null
   const lastViewByProject = useMemo(
@@ -126,18 +137,21 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           },
           { force }
         )
+        if (!mountedRef.current || fetchRunIdRef.current !== runId) {
+          return
+        }
         if (!res.ok) {
           setError({ error: res.error, totalCount: res.totalCount })
         }
       } finally {
         // Why: a manual refresh can overlap with a tab/search fetch; an older
         // request finishing first must not clear the newer refresh indicator.
-        if (fetchRunIdRef.current === runId) {
+        if (mountedRef.current && fetchRunIdRef.current === runId) {
           setLoading(false)
         }
       }
     },
-    [fetchProjectViewTable]
+    [fetchProjectViewTable, mountedRef]
   )
 
   const handleSelect = useCallback(
@@ -303,27 +317,23 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     () => (table && slugIndexReady ? filterProjectTableRowsByOpenRepos(table, lookupSlug) : null),
     [table, slugIndexReady, lookupSlug]
   )
-  const [lastFilteredTable, setLastFilteredTable] = useState<{
-    cacheKey: string
-    table: GitHubProjectTable
-  } | null>(null)
-
-  useEffect(() => {
-    if (!currentCacheKey || !table) {
-      setLastFilteredTable(null)
-      return
-    }
-    if (slugIndexReady && filteredTable) {
-      setLastFilteredTable({ cacheKey: currentCacheKey, table: filteredTable })
-    }
-  }, [currentCacheKey, table, slugIndexReady, filteredTable])
-
-  const visibleTable =
-    slugIndexReady || !currentCacheKey
-      ? filteredTable
-      : lastFilteredTable?.cacheKey === currentCacheKey
-        ? lastFilteredTable.table
-        : null
+  const lastFilteredTableRef = useRef<CachedVisibleProjectTable | null>(null)
+  // Why: this cache only prevents a blank table while the repo slug index
+  // rebuilds; a ref preserves the previous render value without scheduling
+  // a second render after every filtered-table change.
+  lastFilteredTableRef.current = getNextVisibleProjectTableCache({
+    currentCacheKey,
+    sourceTable: table,
+    slugIndexReady,
+    filteredTable,
+    previous: lastFilteredTableRef.current
+  })
+  const visibleTable = getVisibleProjectTable({
+    currentCacheKey,
+    slugIndexReady,
+    filteredTable,
+    cachedTable: lastFilteredTableRef.current
+  })
 
   // Parent-dropped toast, once per table.
   useEffect(() => {
@@ -370,26 +380,27 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   } | null>(null)
   const liveRepoIds = useMemo(() => new Set(repos.map((repo) => repo.id)), [repos])
 
-  useEffect(() => {
-    if (dialogRepoItem && !liveRepoIds.has(dialogRepoItem.repoId)) {
-      setDialogRepoItem(null)
-    }
-  }, [dialogRepoItem, liveRepoIds])
+  const resolvedDialogRepoItem = resolveRepoBackedProjectDialogState(dialogRepoItem, liveRepoIds)
+  if (resolvedDialogRepoItem !== dialogRepoItem) {
+    // Why: repo-backed Project dialogs cannot edit after their repo leaves
+    // Orca; clear them before the modal tree receives stale repo ids.
+    setDialogRepoItem(resolvedDialogRepoItem)
+  }
 
-  useEffect(() => {
-    if (!slugIndexReady) {
-      return
-    }
-    if (
-      slugDialog &&
-      lookupSlug(`${slugDialog.origin.owner}/${slugDialog.origin.repo}`).length > 0
-    ) {
-      setSlugDialog(null)
-    }
-    if (repoNotInOrca && lookupSlug(`${repoNotInOrca.owner}/${repoNotInOrca.repo}`).length > 0) {
-      setRepoNotInOrca(null)
-    }
-  }, [slugIndexReady, lookupSlug, slugDialog, repoNotInOrca])
+  const resolvedMissingRepoDialogs = resolveMissingRepoProjectDialogState({
+    slugIndexReady,
+    slugDialog,
+    repoNotInOrca,
+    lookupSlug
+  })
+  if (resolvedMissingRepoDialogs.slugDialog !== slugDialog) {
+    // Why: once a previously missing repo is registered, Project rows should
+    // use the full repo-backed dialog instead of the slug fallback.
+    setSlugDialog(resolvedMissingRepoDialogs.slugDialog)
+  }
+  if (resolvedMissingRepoDialogs.repoNotInOrca !== repoNotInOrca) {
+    setRepoNotInOrca(resolvedMissingRepoDialogs.repoNotInOrca)
+  }
 
   const buildWorkItem = useCallback(
     (row: GitHubProjectRow, repoId: string): GitHubWorkItem | null => {
@@ -756,12 +767,12 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           707) so a row from another repo cannot accidentally edit the active
           workspace. */}
       <GitHubItemDialog
-        workItem={dialogRepoItem?.workItem ?? null}
-        repoPath={dialogRepoItem?.repoPath ?? null}
-        repoId={dialogRepoItem?.repoId ?? null}
-        projectOrigin={dialogRepoItem?.origin}
+        workItem={resolvedDialogRepoItem?.workItem ?? null}
+        repoPath={resolvedDialogRepoItem?.repoPath ?? null}
+        repoId={resolvedDialogRepoItem?.repoId ?? null}
+        projectOrigin={resolvedDialogRepoItem?.origin}
         onUse={(item) => {
-          const current = dialogRepoItem
+          const current = resolvedDialogRepoItem
           setDialogRepoItem(null)
           if (!current) {
             return
@@ -787,21 +798,21 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           having a duplicate (always-disabled or always-routing-to-fallback)
           button here would only confuse the user. */}
       <ProjectItemSlugDialog
-        projectOrigin={slugDialog?.origin ?? null}
+        projectOrigin={resolvedMissingRepoDialogs.slugDialog?.origin ?? null}
         onClose={() => setSlugDialog(null)}
       />
 
       {/* repo-not-in-orca prompt: see design doc Interaction States. */}
       <Dialog
-        open={repoNotInOrca !== null}
+        open={resolvedMissingRepoDialogs.repoNotInOrca !== null}
         onOpenChange={(open) => !open && setRepoNotInOrca(null)}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Repository not in Orca</DialogTitle>
             <DialogDescription>
-              {repoNotInOrca
-                ? `${repoNotInOrca.owner}/${repoNotInOrca.repo} isn't added to Orca. Add it to start work, or open in GitHub.`
+              {resolvedMissingRepoDialogs.repoNotInOrca
+                ? `${resolvedMissingRepoDialogs.repoNotInOrca.owner}/${resolvedMissingRepoDialogs.repoNotInOrca.repo} isn't added to Orca. Add it to start work, or open in GitHub.`
                 : null}
             </DialogDescription>
           </DialogHeader>
@@ -809,12 +820,12 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
             <Button variant="ghost" onClick={() => setRepoNotInOrca(null)}>
               Cancel
             </Button>
-            {repoNotInOrca?.url ? (
+            {resolvedMissingRepoDialogs.repoNotInOrca?.url ? (
               <Button
                 variant="outline"
                 onClick={() => {
-                  if (repoNotInOrca.url) {
-                    void window.api.shell.openUrl(repoNotInOrca.url)
+                  if (resolvedMissingRepoDialogs.repoNotInOrca?.url) {
+                    void window.api.shell.openUrl(resolvedMissingRepoDialogs.repoNotInOrca.url)
                   }
                   setRepoNotInOrca(null)
                 }}

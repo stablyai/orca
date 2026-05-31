@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: DB tests cover messages, tasks, dispatch contexts, decision gates, coordinator runs, and lifecycle in one suite to share the createDb() helper and afterEach cleanup. */
-import Database from 'better-sqlite3'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
+import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 import type { MessageType } from './db'
 

@@ -127,6 +127,28 @@ describe('fetchCodexRateLimits', () => {
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
+  it('removes RPC listeners when the app-server timeout settles', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      status: 'error',
+      error: 'RPC timeout'
+    })
+    expect(rpcChild.kill).toHaveBeenCalledTimes(1)
+    expect(rpcChild.stdout.listenerCount('data')).toBe(0)
+    expect(rpcChild.stderr.listenerCount('data')).toBe(0)
+    expect(rpcChild.listenerCount('error')).toBe(0)
+    expect(rpcChild.listenerCount('close')).toBe(0)
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
   it('normalizes Codex RPC remaining-minute windows to fixed display durations', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)

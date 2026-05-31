@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
 import { isShellProcess, getAgentLabel } from '../../../shared/agent-detection'
 import { worktreeUsesRemoteConnection } from '@/store/slices/terminals'
-import { hasCompletedTabAgent, resolveTabAgent } from './tab-agent'
+import { resolveCompletedTabAgent, resolveTabAgent } from './tab-agent'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
 // Maps getAgentLabel()'s product labels to TuiAgent ids — the fallback for
@@ -12,6 +12,7 @@ import type { TerminalTab, TuiAgent } from '../../../shared/types'
 // name already matches (codex, etc.) never reach this path.
 const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'Claude Code': 'claude',
+  OpenClaude: 'openclaude',
   Codex: 'codex',
   'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',
@@ -28,6 +29,13 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
 function agentFromTitle(title: string): TuiAgent | null {
   const label = getAgentLabel(title)
   return label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
+}
+
+function isGenericClaudeTitle(title: string, titleAgent: TuiAgent | null): boolean {
+  if (titleAgent !== 'claude') {
+    return false
+  }
+  return !/(?<![\w./\\-])claude(?![\w./\\-])/i.test(title)
 }
 
 function getTitleForegroundKey(title: string): string {
@@ -57,6 +65,7 @@ export function resolveTabAgentFromSignals(args: {
   title: string
   hookAgent: TuiAgent | null
   hasCompletedHook: boolean
+  completedHookAgent?: TuiAgent | null
   launchAgent?: TuiAgent
 }): TuiAgent | null {
   const titleAgent = agentFromTitle(args.title)
@@ -65,15 +74,22 @@ export function resolveTabAgentFromSignals(args: {
     args.hasCompletedHook || (titleLooksShell && args.hasObservedAgentSignal)
       ? null
       : (args.launchAgent ?? null)
-  const fallbackAgent = titleAgent ?? args.hookAgent ?? launchAgent
+  const explicitAgent = args.hookAgent ?? args.completedHookAgent ?? launchAgent
+  // Why: OpenClaude can emit Claude-style `✳ <task>` titles. Prefer explicit
+  // hook/launch identity only for those generic task-title matches.
+  const titleResolutionAgent =
+    isGenericClaudeTitle(args.title, titleAgent) && explicitAgent && explicitAgent !== 'claude'
+      ? explicitAgent
+      : titleAgent
+  const fallbackAgent = titleResolutionAgent ?? explicitAgent
   if (args.isRemote || args.foreground === undefined) {
     return fallbackAgent
   }
   if (args.foreground) {
     return args.foreground
   }
-  if (titleAgent) {
-    return titleAgent
+  if (titleResolutionAgent) {
+    return titleResolutionAgent
   }
   // Why: a freshly spawned agent tab can briefly report the shell before the
   // queued launch command owns the PTY. Only let shell clear the icon after
@@ -101,7 +117,10 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
   const hookAgent = useAppStore((s) =>
     resolveTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
   )
-  const hasCompletedHook = useAppStore((s) => hasCompletedTabAgent(s.agentStatusByPaneKey, tab.id))
+  const completedHookAgent = useAppStore((s) =>
+    resolveCompletedTabAgent(s.agentStatusByPaneKey, tab.id)
+  )
+  const hasCompletedHook = completedHookAgent !== null
   const clearTabLaunchAgent = useAppStore((s) => s.clearTabLaunchAgent)
 
   // The focused pane's PTY (single-pane tabs have exactly one leaf).
@@ -204,6 +223,7 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     title: tab.title,
     hookAgent,
     hasCompletedHook,
+    completedHookAgent,
     launchAgent: tab.launchAgent
   })
 }

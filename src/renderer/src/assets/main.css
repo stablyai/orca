@@ -76,6 +76,7 @@
   );
   --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
   --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
+  --color-ai-action-accent: var(--ai-action-accent);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -124,6 +125,7 @@
   --input: #e5e5e5;
   --ring: #a1a1a1;
   --terminal-pane-locate: var(--color-blue-600);
+  --ai-action-accent: var(--color-violet-500);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -193,6 +195,7 @@
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
   --terminal-pane-locate: var(--color-blue-400);
+  --ai-action-accent: var(--color-violet-400);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -333,10 +336,14 @@
 
 /* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
 .worktree-sidebar-scrollbar {
-  /* Why: the scrollbar itself owns the gutter; padding is only the card-to-gutter gap. */
-  padding-right: 2px;
+  /* Why: the scrollbar itself owns the gutter; avoid adding a second visual gap beside cards. */
+  padding-right: 0;
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
+}
+
+.worktree-sidebar-scrollbar::-webkit-scrollbar {
+  width: 8px;
 }
 
 .worktree-sidebar-scrollbar::-webkit-scrollbar-thumb {
@@ -404,6 +411,16 @@
   background: rgba(121, 121, 121, 0.7);
   border: 3px solid transparent;
   background-clip: padding-box;
+}
+
+.combined-diff-scroll-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.combined-diff-scroll-container::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 /* Hide tab-strip scrollbars to prevent drag-time scrollbar flashes */
@@ -829,6 +846,60 @@
   background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
+.worktree-agent-send-target-button {
+  /* Why: the row remains an ordinary agent row during send-target mode; the
+     action itself carries the AI target outline so the clickable affordance
+     is explicit without boxing the whole session. */
+  border-color: color-mix(in srgb, var(--ai-action-accent) 72%, transparent);
+  background: color-mix(in srgb, var(--ai-action-accent) 12%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ai-action-accent) 22%, transparent);
+  color: var(--foreground);
+}
+
+.worktree-agent-send-target-button:hover {
+  border-color: color-mix(in srgb, var(--ai-action-accent) 88%, transparent);
+  background: color-mix(in srgb, var(--ai-action-accent) 18%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ai-action-accent) 34%, transparent);
+}
+
+.worktree-agent-send-target-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 50%, transparent);
+}
+
+/* Why: the virtualized card row is height-measured; animating height would
+   make TanStack reposition sibling cards on every frame. */
+.compact-agent-expansion-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+}
+
+.compact-agent-expansion-grid-expanded {
+  grid-template-rows: 1fr;
+}
+
+/* Why: keyframes run when the content mounts already in its final state. */
+@keyframes compact-agent-expansion-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.compact-agent-expansion-grid-expanded .compact-agent-expansion-content {
+  animation: compact-agent-expansion-reveal 150ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compact-agent-expansion-grid-expanded .compact-agent-expansion-content {
+    animation-duration: 0ms;
+  }
+}
+
 .scroll-to-current-workspace-reveal-highlight {
   position: relative;
   isolation: isolate;
@@ -838,15 +909,22 @@
 .scroll-to-current-workspace-reveal-highlight::before {
   content: '';
   position: absolute;
-  inset: -2px;
+  inset: 0;
   z-index: 30;
   pointer-events: none;
   border: 1.5px solid color-mix(in srgb, var(--terminal-pane-locate) 68%, transparent);
-  border-radius: calc(var(--radius-md) + 2px);
+  border-radius: inherit;
   box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent),
-    0 0 18px color-mix(in srgb, var(--terminal-pane-locate) 36%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent),
+    0 0 14px color-mix(in srgb, var(--terminal-pane-locate) 36%, transparent);
   animation: scroll-to-current-workspace-reveal-glow 1.5s ease-out forwards;
+}
+
+.scroll-to-current-workspace-reveal-highlight--ai::before {
+  border-color: color-mix(in srgb, var(--ai-action-accent) 68%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ai-action-accent) 34%, transparent),
+    0 0 14px color-mix(in srgb, var(--ai-action-accent) 36%, transparent);
 }
 
 @keyframes scroll-to-current-workspace-reveal-glow {
@@ -2452,6 +2530,8 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 .orca-diff-comment-actions-pill {
   display: inline-flex;
   align-items: center;
+  gap: 2px;
+  padding: 0 2px;
   border: 1px solid color-mix(in srgb, var(--foreground) 10%, var(--border));
   border-radius: 6px;
   background: var(--background);
@@ -2468,7 +2548,8 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
+  min-width: 28px;
+  padding: 4px 7px;
   font-size: 11px;
   font-weight: 500;
   color: var(--muted-foreground);
@@ -2479,6 +2560,13 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   transition:
     background-color 100ms ease,
     color 100ms ease;
+}
+
+.orca-diff-comment-edit {
+  min-width: 28px;
+  height: 24px;
+  padding: 4px 7px;
+  border-radius: 4px;
 }
 
 .orca-diff-comment-pill-btn:hover {

@@ -21,6 +21,7 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationDispatchResult,
+  AutomationPrecheckResult,
   AutomationRunOutputSnapshot,
   AutomationRun,
   AutomationRunTrigger,
@@ -30,6 +31,7 @@ import {
   latestAutomationOccurrenceAtOrBefore,
   nextAutomationOccurrenceAfter
 } from '../shared/automation-schedules'
+import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
 import type {
   PersistedState,
   Repo,
@@ -47,6 +49,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalLayoutSnapshot,
   TerminalTab,
+  WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
@@ -61,6 +64,7 @@ import {
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
+  normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
@@ -94,7 +98,7 @@ import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
-  normalizeWorkspaceBoardCompact,
+  normalizeWorkspaceBoardColumnLayout,
   normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
@@ -187,6 +191,16 @@ function getDataFile(): string {
 // >=1-hour spacing cover recent work without churning disk on every debounce.
 const BACKUP_COUNT = 5
 const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
+const WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS = new Set<keyof WorkspaceSessionState>([
+  'tabsByWorktree',
+  'terminalLayoutsByTabId'
+])
+
+function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatch): boolean {
+  return Object.keys(patch).some((key) =>
+    WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS.has(key as keyof WorkspaceSessionState)
+  )
+}
 
 function backupPath(dataFile: string, index: number): string {
   return `${dataFile}.bak.${index}`
@@ -239,6 +253,26 @@ function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
     return 'none'
   }
   return getDefaultUIState().groupBy
+}
+
+function normalizeShowDotfilesByWorktree(value: unknown): Record<string, boolean> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const out: Record<string, boolean> = {}
+  for (const [worktreeId, showDotfiles] of Object.entries(value as Record<string, unknown>)) {
+    if (
+      !worktreeId ||
+      worktreeId === '__proto__' ||
+      worktreeId === 'constructor' ||
+      worktreeId === 'prototype' ||
+      typeof showDotfiles !== 'boolean'
+    ) {
+      continue
+    }
+    out[worktreeId] = showDotfiles
+  }
+  return out
 }
 
 function mergeFeatureInteractions(
@@ -356,9 +390,43 @@ function normalizeAutomationRunOutputSnapshot(
   }
 }
 
+function normalizeAutomationPrecheckResult(
+  value: AutomationPrecheckResult | null | undefined
+): AutomationPrecheckResult | null {
+  if (!value || typeof value.command !== 'string' || !value.command.trim()) {
+    return null
+  }
+  const startedAt =
+    typeof value.startedAt === 'number' && Number.isFinite(value.startedAt)
+      ? value.startedAt
+      : Date.now()
+  const completedAt =
+    typeof value.completedAt === 'number' && Number.isFinite(value.completedAt)
+      ? value.completedAt
+      : startedAt
+  return {
+    command: value.command.trim(),
+    exitCode:
+      typeof value.exitCode === 'number' && Number.isFinite(value.exitCode) ? value.exitCode : null,
+    timedOut: value.timedOut === true,
+    durationMs:
+      typeof value.durationMs === 'number' && Number.isFinite(value.durationMs)
+        ? Math.max(0, value.durationMs)
+        : Math.max(0, completedAt - startedAt),
+    stdout: typeof value.stdout === 'string' ? value.stdout : '',
+    stderr: typeof value.stderr === 'string' ? value.stderr : '',
+    stdoutTruncated: value.stdoutTruncated === true,
+    stderrTruncated: value.stderrTruncated === true,
+    error: typeof value.error === 'string' && value.error.trim() ? value.error : null,
+    startedAt,
+    completedAt
+  }
+}
+
 function normalizeAutomationSessionReuse(automation: Automation): Automation {
   return {
     ...automation,
+    precheck: normalizeAutomationPrecheck(automation.precheck),
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
   }
 }
@@ -380,11 +448,12 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
+  // Why: synced legacy targets ignored stale relayGracePeriodSeconds values.
+  // Prefer the synced grace so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
-    currentGracePeriodSeconds ??
-    (legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
+    legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
       ? legacyGracePeriodSeconds
-      : undefined)
+      : currentGracePeriodSeconds
   const normalized: SshTarget = {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
@@ -478,7 +547,7 @@ function readLegacySidekickFlag(parsed: PersistedState | undefined): boolean | u
 }
 
 function sanitizeRepoUpdatesForPersistence<
-  T extends Partial<Pick<Repo, 'badgeColor' | 'repoIcon'>>
+  T extends Partial<Pick<Repo, 'badgeColor' | 'repoIcon' | 'worktreeBasePath'>>
 >(updates: T): T {
   const sanitized = { ...updates }
   if ('badgeColor' in sanitized) {
@@ -495,6 +564,13 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.repoIcon
     } else {
       sanitized.repoIcon = repoIcon
+    }
+  }
+  if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
+    if (typeof sanitized.worktreeBasePath === 'string') {
+      sanitized.worktreeBasePath = sanitized.worktreeBasePath.trim() || undefined
+    } else {
+      delete sanitized.worktreeBasePath
     }
   }
   return sanitized
@@ -1013,8 +1089,14 @@ function normalizeWorkspaceSessionPaneIdentities(
       normalizedLayout: normalized.snapshot,
       leafIdByInputLeafId: normalized.leafIdByInputLeafId
     })
-    migrationUnsupportedEntries.push(...migrationEntries.migrationUnsupportedEntries)
-    legacyPaneKeyAliasEntries.push(...migrationEntries.legacyPaneKeyAliasEntries)
+    // Why: old persisted split layouts can generate enough alias rows to
+    // exceed V8's argument limit if the arrays are spread into push().
+    for (const entry of migrationEntries.migrationUnsupportedEntries) {
+      migrationUnsupportedEntries.push(entry)
+    }
+    for (const entry of migrationEntries.legacyPaneKeyAliasEntries) {
+      legacyPaneKeyAliasEntries.push(entry)
+    }
     const leafIdByPtyId = new Map<string, string>()
     const duplicatePtyIds = new Set<string>()
     for (const [leafId, ptyId] of Object.entries(normalized.snapshot.ptyIdsByLeafId ?? {})) {
@@ -1452,10 +1534,13 @@ export class Store {
         const raw = readFileSync(dataFile, 'utf-8')
         const parsed = JSON.parse(raw) as PersistedState
 
-        // Why: opencodeSessionCookie is stored encrypted on disk via safeStorage.
+        // Why: secret settings are stored encrypted on disk via safeStorage.
         // Decrypt at the load boundary so the rest of the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
+        }
+        if (parsed.settings?.httpProxyUrl) {
+          parsed.settings.httpProxyUrl = decrypt(parsed.settings.httpProxyUrl)
         }
         if (parsed.ui?.browserKagiSessionLink) {
           parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)
@@ -1765,6 +1850,9 @@ export class Store {
               rightSidebarOpen,
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               sortBy: migrate ? ('smart' as const) : sort,
+              showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
+                parsed.ui?.showDotfilesByWorktree
+              ),
               workspaceStatuses,
               _workspaceStatusesDefaultOrderMigrated: true,
               _workspaceStatusesDefaultWorkflowMigrated: true,
@@ -1984,13 +2072,14 @@ export class Store {
     await mkdir(dir, { recursive: true }).catch(() => {})
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
-    // Why: opencodeSessionCookie must be encrypted on disk. Clone state so
-    // the in-memory this.state stays plaintext for the rest of the app.
+    // Why: secrets must be encrypted on disk. Clone state so the in-memory
+    // this.state stays plaintext for the rest of the app.
     const stateToSave = {
       ...this.state,
       settings: {
         ...this.state.settings,
-        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie),
+        httpProxyUrl: encrypt(this.state.settings.httpProxyUrl ?? '')
       },
       ui: {
         ...this.state.ui,
@@ -2038,13 +2127,14 @@ export class Store {
     }
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
-    // Why: opencodeSessionCookie must be encrypted on disk. Clone state so
-    // the in-memory this.state stays plaintext for the rest of the app.
+    // Why: secrets must be encrypted on disk. Clone state so the in-memory
+    // this.state stays plaintext for the rest of the app.
     const stateToSave = {
       ...this.state,
       settings: {
         ...this.state.settings,
-        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie),
+        httpProxyUrl: encrypt(this.state.settings.httpProxyUrl ?? '')
       },
       ui: {
         ...this.state.ui,
@@ -2120,10 +2210,11 @@ export class Store {
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
-    const maxOrder = Math.max(
-      -1,
-      ...(this.state.projectGroups ?? []).map((group) => group.tabOrder)
-    )
+    let maxOrder = -1
+    // Why: persisted group lists can be large enough to exceed spread limits.
+    for (const existingGroup of this.state.projectGroups ?? []) {
+      maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
+    }
     const group = createProjectGroup({
       ...input,
       tabOrder: maxOrder + 1
@@ -2264,6 +2355,7 @@ export class Store {
         | 'repoIcon'
         | 'hookSettings'
         | 'worktreeBaseRef'
+        | 'worktreeBasePath'
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
@@ -2310,6 +2402,10 @@ export class Store {
     ) {
       delete repo.issueSourcePreference
       delete sanitizedUpdates.issueSourcePreference
+    }
+    if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
+      delete repo.worktreeBasePath
+      delete sanitizedUpdates.worktreeBasePath
     }
     if (
       'externalWorktreeVisibility' in sanitizedUpdates &&
@@ -2400,9 +2496,12 @@ export class Store {
 
   listAutomationRuns(automationId?: string): AutomationRun[] {
     const runs = this.state.automationRuns ?? []
-    return [
-      ...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)
-    ].sort((left, right) => right.createdAt - left.createdAt)
+    return [...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)]
+      .map((run) => ({
+        ...run,
+        precheckResult: normalizeAutomationPrecheckResult(run.precheckResult)
+      }))
+      .sort((left, right) => right.createdAt - left.createdAt)
   }
 
   createAutomation(input: AutomationCreateInput): Automation {
@@ -2413,6 +2512,7 @@ export class Store {
       id: randomUUID(),
       name: input.name.trim() || 'Untitled automation',
       prompt: input.prompt,
+      precheck: normalizeAutomationPrecheck(input.precheck),
       agentId: input.agentId,
       projectId: input.projectId,
       executionTargetType,
@@ -2456,6 +2556,9 @@ export class Store {
       ...updates,
       name:
         updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
+      precheck: Object.hasOwn(updates, 'precheck')
+        ? normalizeAutomationPrecheck(updates.precheck)
+        : normalizeAutomationPrecheck(current.precheck),
       projectId: repoId,
       executionTargetType,
       executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
@@ -2525,6 +2628,7 @@ export class Store {
       chatSessionId: null,
       terminalSessionId: null,
       outputSnapshot: null,
+      precheckResult: null,
       usage: null,
       error: null,
       startedAt: null,
@@ -2562,6 +2666,9 @@ export class Store {
       outputSnapshot: Object.hasOwn(result, 'outputSnapshot')
         ? normalizeAutomationRunOutputSnapshot(result.outputSnapshot)
         : normalizeAutomationRunOutputSnapshot(current.outputSnapshot),
+      precheckResult: Object.hasOwn(result, 'precheckResult')
+        ? normalizeAutomationPrecheckResult(result.precheckResult)
+        : normalizeAutomationPrecheckResult(current.precheckResult),
       usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
       error: result.error ?? null,
       startedAt: current.startedAt ?? now,
@@ -2802,11 +2909,19 @@ export class Store {
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
       ),
+      agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
+        this.state.ui?.agentActivityDisplayMode
+      ),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
-      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
+      workspaceBoardColumnLayout: normalizeWorkspaceBoardColumnLayout(
+        this.state.ui?.workspaceBoardColumnLayout
+      ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
+      ),
+      showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
+        this.state.ui?.showDotfilesByWorktree
       ),
       featureTipsSeenIds: normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
       featureInteractions: normalizeFeatureInteractions(this.state.ui?.featureInteractions)
@@ -2831,6 +2946,10 @@ export class Store {
         updates.worktreeCardProperties !== undefined
           ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)
           : normalizeWorktreeCardProperties(this.state.ui?.worktreeCardProperties),
+      agentActivityDisplayMode:
+        updates.agentActivityDisplayMode !== undefined
+          ? normalizeAgentActivityDisplayMode(updates.agentActivityDisplayMode)
+          : normalizeAgentActivityDisplayMode(this.state.ui?.agentActivityDisplayMode),
       workspaceStatuses:
         updates.workspaceStatuses !== undefined
           ? normalizeWorkspaceStatuses(updates.workspaceStatuses)
@@ -2838,12 +2957,16 @@ export class Store {
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(
         updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
       ),
-      workspaceBoardCompact: normalizeWorkspaceBoardCompact(
-        updates.workspaceBoardCompact ?? this.state.ui?.workspaceBoardCompact
+      workspaceBoardColumnLayout: normalizeWorkspaceBoardColumnLayout(
+        updates.workspaceBoardColumnLayout ?? this.state.ui?.workspaceBoardColumnLayout
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       ),
+      showDotfilesByWorktree:
+        updates.showDotfilesByWorktree !== undefined
+          ? normalizeShowDotfilesByWorktree(updates.showDotfilesByWorktree)
+          : normalizeShowDotfilesByWorktree(this.state.ui?.showDotfilesByWorktree),
       featureTipsSeenIds:
         updates.featureTipsSeenIds !== undefined
           ? normalizeFeatureTipIds(updates.featureTipsSeenIds)
@@ -3066,6 +3189,25 @@ export class Store {
       }
     }
     this.state.workspaceSession = session
+    this.scheduleSave()
+  }
+
+  patchWorkspaceSession(patch: WorkspaceSessionPatch): void {
+    // Why: the renderer's debounced hot path sends only changed top-level
+    // session slices. Scalar/UI patches avoid the terminal normalization path;
+    // terminal topology/layout patches still reuse the stale-PTY protections.
+    let next: WorkspaceSessionState = {
+      ...this.getWorkspaceSession(),
+      ...patch
+    }
+    if (workspaceSessionPatchNeedsFullNormalization(patch)) {
+      this.setWorkspaceSession(next)
+      return
+    }
+    if (Object.hasOwn(patch, 'browserUrlHistory')) {
+      next = pruneWorkspaceSessionBrowserHistory(next)
+    }
+    this.state.workspaceSession = next
     this.scheduleSave()
   }
 

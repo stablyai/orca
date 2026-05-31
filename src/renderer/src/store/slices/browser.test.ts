@@ -390,6 +390,35 @@ describe('createBrowserSlice floating tabs', () => {
   })
 })
 
+describe('createBrowserSlice closed browser workspaces', () => {
+  it('reopens duplicate-URL browser pages on the originally active page', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com/dashboard', {
+      title: 'First copy'
+    })
+    const secondPage = store.getState().createBrowserPage(tab.id, 'https://example.com/dashboard', {
+      title: 'Second copy'
+    })
+    if (!secondPage) {
+      throw new Error('Expected a second browser page')
+    }
+
+    store.getState().closeBrowserTab(tab.id)
+    const restored = store.getState().reopenClosedBrowserTab('wt-1')
+    if (!restored) {
+      throw new Error('Expected a reopened browser workspace')
+    }
+    const restoredPages = store.getState().browserPagesByWorkspace[restored.id] ?? []
+    const activePage = restoredPages.find((page) => page.id === restored.activePageId)
+
+    expect(restoredPages.map((page) => page.url)).toEqual([
+      'https://example.com/dashboard',
+      'https://example.com/dashboard'
+    ])
+    expect(activePage?.title).toBe('Second copy')
+  })
+})
+
 describe('createBrowserSlice runtime guard', () => {
   beforeEach(() => {
     vi.clearAllMocks()

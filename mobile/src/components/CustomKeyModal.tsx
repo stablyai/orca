@@ -12,7 +12,7 @@ import {
   type TerminalShortcutSpecialKey
 } from '../terminal/terminal-accessory-keys'
 
-export const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
+const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
 
 export type CustomKey = {
   id: string

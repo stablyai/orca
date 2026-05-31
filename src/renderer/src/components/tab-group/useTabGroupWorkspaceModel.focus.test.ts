@@ -77,7 +77,7 @@ vi.mock('../../store/slices/browser-webview-cleanup', () => ({
 }))
 
 vi.mock('../../lib/create-untitled-markdown', () => ({
-  createUntitledMarkdownFile: vi.fn()
+  createUntitledMarkdownFileWithTemplateSelection: vi.fn()
 }))
 
 vi.mock('../../lib/ipc-error', () => ({

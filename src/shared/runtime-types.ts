@@ -6,6 +6,7 @@ import type {
   BrowserSessionProfile,
   BrowserSessionProfileSource,
   GitWorktreeInfo,
+  RemoveWorktreeResult,
   Repo,
   TabGroupLayoutNode,
   TerminalColorOverrides,
@@ -415,6 +416,11 @@ export type RuntimeWorktreeCreateResult = {
   worktree: RuntimeWorktreeRecord
   lineage: WorktreeLineage | null
   warnings: WorktreeLineageWarning[]
+  warning?: string
+}
+
+export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {
+  removed: boolean
   warning?: string
 }
 

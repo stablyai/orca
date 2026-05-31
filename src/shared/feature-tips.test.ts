@@ -75,8 +75,8 @@ describe('feature tips', () => {
       title: 'Let agents drive Orca with the Orca CLI',
       ctaLabel: 'Install CLI & Skills'
     })
-    expect(cliTip?.description).toContain('coordinate child workspaces')
-    expect(cliTip?.description).toContain('communicate between workspaces')
+    expect(cliTip?.description).toContain('coordinate child worktrees')
+    expect(cliTip?.description).toContain('communicate between worktrees')
   })
 
   it('does not label the voice dictation tip as new', () => {

@@ -315,10 +315,17 @@ export function registerPetHandlers(): void {
     // that shape before path validation. Reject absolute paths and any resolved
     // path that escapes the bundle directory. Also reject symlinks so a
     // malicious bundle can't reach outside via a sibling link.
-    if (isAbsolute(manifest.spritesheetPath)) {
+    const normalizedSpritePath = manifest.spritesheetPath.replace(/[\\/]+/g, sep)
+    if (
+      isAbsolute(manifest.spritesheetPath) ||
+      isAbsolute(normalizedSpritePath) ||
+      /^[a-zA-Z]:/.test(manifest.spritesheetPath)
+    ) {
       throw new Error('spritesheetPath must be relative to the bundle.')
     }
-    const sheetSrc = resolve(bundleDir, manifest.spritesheetPath)
+    // Why: pet bundles may be exported on Windows and imported on macOS/Linux;
+    // normalize manifest separators before Node resolves the bundle-relative path.
+    const sheetSrc = resolve(bundleDir, normalizedSpritePath)
     const bundleResolved = resolve(bundleDir)
     if (sheetSrc === bundleResolved) {
       throw new Error('spritesheetPath must point to a file, not the bundle root.')

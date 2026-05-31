@@ -80,6 +80,17 @@ describe('hostedReviewSummaryFromGitHubPRInfo', () => {
     expect(summary.checksStatus).toBe('failure')
   })
 
+  it('treats cancelled checks as failed in hosted review summaries', () => {
+    const summary = hostedReviewSummaryFromGitHubPRInfo({
+      pr: { ...pr, checksStatus: 'success' },
+      owner: 'acme',
+      repo: 'orca',
+      checks: [{ name: 'ci', status: 'completed', conclusion: 'cancelled', url: null }]
+    })
+
+    expect(summary.checksStatus).toBe('failure')
+  })
+
   it('distinguishes loaded empty comments from unknown comments', () => {
     expect(
       hostedReviewSummaryFromGitHubPRInfo({

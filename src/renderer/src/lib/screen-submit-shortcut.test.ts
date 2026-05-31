@@ -23,6 +23,14 @@ describe('screen submit shortcut', () => {
     expect(getScreenSubmitShortcutLabel()).toBe('⌘ Enter')
   })
 
+  it('ignores extra modifiers on macOS', () => {
+    setUserAgent('Macintosh')
+
+    expect(isScreenSubmitShortcut({ key: 'Enter', metaKey: true, shiftKey: true })).toBe(false)
+    expect(isScreenSubmitShortcut({ key: 'Enter', metaKey: true, altKey: true })).toBe(false)
+    expect(isScreenSubmitShortcut({ key: 'Enter', metaKey: true, ctrlKey: true })).toBe(false)
+  })
+
   it('uses Ctrl+Enter off macOS', () => {
     setUserAgent('Linux')
 
@@ -38,6 +46,12 @@ describe('screen submit shortcut', () => {
     expect(isScreenSubmitShortcut({ key: 'Enter', ctrlKey: true, shiftKey: true })).toBe(false)
     expect(isScreenSubmitShortcut({ key: 'Enter', ctrlKey: true, altKey: true })).toBe(false)
     expect(isScreenSubmitShortcut({ key: 'Escape', ctrlKey: true })).toBe(false)
+  })
+
+  it('ignores Windows Ctrl+Alt+Enter chords', () => {
+    setUserAgent('Windows NT')
+
+    expect(isScreenSubmitShortcut({ key: 'Enter', ctrlKey: true, altKey: true })).toBe(false)
   })
 
   it('ignores composing Enter events', () => {

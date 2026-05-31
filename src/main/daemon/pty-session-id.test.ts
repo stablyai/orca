@@ -75,6 +75,10 @@ describe('isSafePtySessionId', () => {
     // validator must allow that as long as the result stays inside userData.
     expect(isSafePtySessionId('sub/path/ok@@12345678', USER_DATA)).toBe(true)
   })
+
+  it('accepts ids with path segments that merely start with dot-dot', () => {
+    expect(isSafePtySessionId('..sessions/ok@@12345678', USER_DATA)).toBe(true)
+  })
 })
 
 describe('parsePtySessionId', () => {

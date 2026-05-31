@@ -1,6 +1,4 @@
 import { readFileSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
 import {
   BaseAgent,
   createAgent,
@@ -11,15 +9,9 @@ import {
   type SignCallback,
   type SigningRequestOptions
 } from 'ssh2'
+import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
 
 type AgentPublicKey = ParsedKey | Buffer | string | PublicKeyEntry
-
-function resolveHomePath(filepath: string): string {
-  if (filepath.startsWith('~/') || filepath === '~') {
-    return join(homedir(), filepath.slice(1))
-  }
-  return filepath
-}
 
 function comparablePublicKey(key: AgentPublicKey): ParsedKey | Buffer | string {
   if (typeof key === 'object' && 'pubKey' in key) {
@@ -91,7 +83,7 @@ function parseIdentityKeyFile(filePath: string): ParsedKey | undefined {
 function readIdentityKeys(paths: string[]): ParsedKey[] {
   const keys: ParsedKey[] = []
   for (const path of paths) {
-    const identityPath = resolveHomePath(path)
+    const identityPath = resolveSshConfigHomePath(path)
     const key = parseIdentityKeyFile(`${identityPath}.pub`) ?? parseIdentityKeyFile(identityPath)
     if (key) {
       keys.push(key)

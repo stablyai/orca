@@ -97,7 +97,7 @@ function getWorktreeAgentActivitySummaries(
     }
   }
 
-  for (const retained of Object.values(state.retainedAgentsByPaneKey)) {
+  for (const retained of Object.values(state.retainedAgentsByPaneKey ?? {})) {
     summaryForWorktree(retained.worktreeId).hasRetainedDone = true
   }
 

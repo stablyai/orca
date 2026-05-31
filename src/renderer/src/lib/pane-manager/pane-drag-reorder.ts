@@ -42,11 +42,12 @@ export function attachPaneDrag(
   paneId: number,
   state: DragReorderState,
   callbacks: DragReorderCallbacks
-): void {
+): () => void {
   let dragging = false
   let startX = 0
   let startY = 0
   let activePointerId: number | null = null
+  let cleanupCurrentDrag: ((commitDrop: boolean) => void) | null = null
   const DRAG_THRESHOLD = 5
 
   const onPointerDown = (e: PointerEvent): void => {
@@ -70,7 +71,12 @@ export function attachPaneDrag(
       handle.removeEventListener('lostpointercapture', onLostPointerCaptureOuter)
       window.removeEventListener('blur', onWindowBlur, true)
       activePointerId = null
-      state.cleanupActiveDrag = null
+      if (state.cleanupActiveDrag === cleanupDrag) {
+        state.cleanupActiveDrag = null
+      }
+      if (cleanupCurrentDrag === cleanupDrag) {
+        cleanupCurrentDrag = null
+      }
       if (pointerId !== null && handle.hasPointerCapture(pointerId)) {
         handle.releasePointerCapture(pointerId)
       }
@@ -157,6 +163,7 @@ export function attachPaneDrag(
       cleanupDrag(false)
     }
 
+    cleanupCurrentDrag = cleanupDrag
     state.cleanupActiveDrag = cleanupDrag
     handle.addEventListener('pointermove', onPointerMoveOuter)
     handle.addEventListener('pointerup', onPointerUpOuter)
@@ -166,6 +173,10 @@ export function attachPaneDrag(
   }
 
   handle.addEventListener('pointerdown', onPointerDown)
+  return () => {
+    cleanupCurrentDrag?.(false)
+    handle.removeEventListener('pointerdown', onPointerDown)
+  }
 }
 
 export function cancelActivePaneDrag(state: DragReorderState): void {

@@ -77,6 +77,7 @@ async function openOrchestrationSettings(page: Page): Promise<void> {
     }
   )
   await expect(page.getByPlaceholder('Search settings')).toBeVisible({ timeout: 10_000 })
+  await page.getByRole('button', { name: 'Orchestration', exact: true }).click()
   await expect(
     page
       .locator('[data-settings-section="orchestration"]')

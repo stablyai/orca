@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ComponentProps } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
@@ -55,6 +56,27 @@ function renderRow(agent: DashboardAgentRowData): string {
         now={NOW}
         hideIdentityIcon
         hideExpand
+      />
+    </TooltipProvider>
+  )
+}
+
+function renderSendTargetRow(
+  props: Pick<
+    ComponentProps<typeof DashboardAgentRow>,
+    'sendTargetStatus' | 'sendTargetDisabledReason'
+  >
+): string {
+  return renderToStaticMarkup(
+    <TooltipProvider>
+      <DashboardAgentRow
+        agent={makeAgent()}
+        onDismiss={vi.fn()}
+        onActivate={vi.fn()}
+        now={NOW}
+        hideIdentityIcon
+        hideExpand
+        {...props}
       />
     </TooltipProvider>
   )
@@ -121,6 +143,57 @@ describe('DashboardAgentRow', () => {
 
     expect(markup).toContain('data-focused-agent-pane="true"')
     expect(classTokens(markup)).toContain('worktree-agent-row-hover')
+  })
+
+  it('marks eligible send-target rows with an inline send target button', () => {
+    const markup = renderSendTargetRow({ sendTargetStatus: 'eligible' })
+    const tokens = classTokens(markup)
+
+    expect(markup).toContain('data-agent-send-target="eligible"')
+    expect(tokens).not.toContain('worktree-agent-send-target')
+    expect(tokens).not.toContain('ring-offset-sidebar')
+    expect(tokens).toContain('worktree-agent-row-hover')
+    expect(markup).toContain('aria-label="Send to this agent"')
+    expect(tokens).toContain('worktree-agent-send-target-button')
+    expect(tokens).toContain('absolute')
+    expect(tokens).toContain('h-5')
+    expect(tokens).toContain('w-12')
+    expect(markup).toContain('lucide-send')
+    expect(markup).not.toContain('aria-label="Dismiss agent"')
+  })
+
+  it('marks disabled send-target rows as muted without an eligibility ring', () => {
+    const markup = renderSendTargetRow({
+      sendTargetStatus: 'disabled',
+      sendTargetDisabledReason: 'Terminal is no longer available'
+    })
+    const tokens = classTokens(markup)
+
+    expect(markup).toContain('data-agent-send-target="disabled"')
+    expect(markup).toContain('title="Terminal is no longer available • started 1m ago"')
+    expect(tokens).toContain('cursor-default')
+    expect(tokens).toContain('opacity-60')
+    expect(tokens).not.toContain('worktree-agent-send-target')
+    expect(tokens).not.toContain('ring-offset-sidebar')
+    expect(markup).not.toContain('aria-label="Send to this agent"')
+  })
+
+  it('marks sending rows with a non-clickable progress treatment', () => {
+    const markup = renderSendTargetRow({
+      sendTargetStatus: 'sending',
+      sendTargetDisabledReason: 'Sending...'
+    })
+    const tokens = classTokens(markup)
+
+    expect(markup).toContain('data-agent-send-target="sending"')
+    expect(markup).toContain('title="Sending... • started 1m ago"')
+    expect(tokens).not.toContain('worktree-agent-send-target')
+    expect(tokens).not.toContain('ring-offset-sidebar')
+    expect(tokens).toContain('worktree-agent-send-target-button')
+    expect(tokens).toContain('cursor-progress')
+    expect(tokens).toContain('opacity-75')
+    expect(markup).toContain('aria-label="Send to this agent"')
+    expect(markup).toContain('disabled=""')
   })
 
   it('scopes the timestamp and dismiss hover swap to the row-owned group', () => {

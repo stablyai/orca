@@ -5,9 +5,8 @@ import { existsSync } from 'fs'
 import { open, readdir, readFile, realpath, stat } from 'fs/promises'
 import { createRequire } from 'module'
 import { homedir } from 'os'
-import { isAbsolute, join, relative, resolve } from 'path'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { promisify } from 'util'
-import type Database from 'better-sqlite3'
 import type { RelayDispatcher } from './dispatcher'
 
 const execFileAsync = promisify(execFile)
@@ -23,11 +22,27 @@ const HERMES_OUTPUT_FILE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d
 const HERMES_RUN_KEY_PATTERN = /^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/
 const MAX_SESSION_OUTPUT_GAP_MS = 24 * 60 * 60 * 1000
 const MAX_REFERENCED_LOG_BYTES = 5 * 1024 * 1024
+const HERMES_RUN_COUNT_CACHE_MAX_ENTRIES = 200
 const FULL_SESSION_LOG_HEADING = '## Full session log'
 const REFERENCED_LOG_HEADING = '## Latest log file'
 const LATEST_LOG_PATH_PATTERN =
   /\bLatest log path:\s*(?<path>(?:[A-Za-z]:[\\/]|\/)[^\r\n]*?)(?=\s+Run summary:|\r?\n|$)/i
-type DatabaseConstructor = typeof Database
+type SqliteStatement = {
+  get: (...args: unknown[]) => Record<string, unknown> | undefined
+  all: (...args: unknown[]) => Record<string, unknown>[]
+}
+type SqliteDatabase = {
+  prepare: (sql: string) => SqliteStatement
+  close: () => void
+}
+type DatabaseConstructor = new (
+  path: string,
+  options?: { readonly?: boolean; fileMustExist?: boolean; timeout?: number }
+) => SqliteDatabase
+type NodeSqliteDatabaseSync = new (
+  path: string,
+  options?: { readOnly?: boolean; timeout?: number }
+) => SqliteDatabase
 let databaseConstructor: DatabaseConstructor | null | undefined
 
 type ExternalProvider = 'hermes' | 'openclaw'
@@ -232,7 +247,11 @@ export class ExternalAutomationsHandler {
       const relativeToHermesHome = relative(resolve(homeRealPath), resolve(logRealPath))
       // Why: the output body can contain agent-authored text, so only hydrate
       // referenced files that resolve inside Hermes' own data directory.
-      if (relativeToHermesHome.startsWith('..') || isAbsolute(relativeToHermesHome)) {
+      if (
+        relativeToHermesHome === '..' ||
+        relativeToHermesHome.startsWith(`..${sep}`) ||
+        isAbsolute(relativeToHermesHome)
+      ) {
         return null
       }
       const logStat = await stat(logPath)
@@ -475,10 +494,41 @@ export class ExternalAutomationsHandler {
       return databaseConstructor
     }
     try {
-      const loaded = requireOptional('better-sqlite3') as
-        | DatabaseConstructor
-        | { default?: DatabaseConstructor }
-      databaseConstructor = typeof loaded === 'function' ? loaded : (loaded.default ?? null)
+      // Why: the remote relay still targets Node 18. Hosts without node:sqlite
+      // should keep listing file-backed runs and simply omit DB transcripts.
+      const loaded = requireOptional('node:sqlite') as {
+        DatabaseSync?: NodeSqliteDatabaseSync
+      }
+      const DatabaseSync = loaded.DatabaseSync
+      if (typeof DatabaseSync !== 'function') {
+        databaseConstructor = null
+        return databaseConstructor
+      }
+      const SqliteDatabaseSync = DatabaseSync
+      databaseConstructor = class RelaySqliteDatabase {
+        private readonly db: SqliteDatabase
+
+        constructor(
+          path: string,
+          options: { readonly?: boolean; fileMustExist?: boolean; timeout?: number } = {}
+        ) {
+          if (options.fileMustExist && !existsSync(path)) {
+            throw new Error(`SQLite database does not exist: ${path}`)
+          }
+          this.db = new SqliteDatabaseSync(path, {
+            readOnly: options.readonly,
+            timeout: options.timeout
+          })
+        }
+
+        prepare(sql: string): SqliteStatement {
+          return this.db.prepare(sql)
+        }
+
+        close(): void {
+          this.db.close()
+        }
+      }
     } catch {
       databaseConstructor = null
     }
@@ -523,6 +573,12 @@ export class ExternalAutomationsHandler {
     if (cached && cached.expiresAt > now) {
       return cached.promise
     }
+    if (cached) {
+      this.hermesRunCountCache.delete(jobId)
+    }
+    // Why: remote Hermes jobs can churn independently of Orca; relay
+    // processes are long-lived, so stale job ids need both TTL and a hard cap.
+    this.pruneHermesRunCountCache(now)
     const entry: HermesRunCountCacheEntry = {
       promise: this.readHermesRunRefs(jobId).then((refs) => refs.length),
       expiresAt: Number.POSITIVE_INFINITY
@@ -537,6 +593,21 @@ export class ExternalAutomationsHandler {
         this.hermesRunCountCache.delete(jobId)
       }
       throw error
+    }
+  }
+
+  private pruneHermesRunCountCache(now: number): void {
+    for (const [jobId, entry] of this.hermesRunCountCache) {
+      if (entry.expiresAt <= now) {
+        this.hermesRunCountCache.delete(jobId)
+      }
+    }
+    while (this.hermesRunCountCache.size >= HERMES_RUN_COUNT_CACHE_MAX_ENTRIES) {
+      const oldestJobId = this.hermesRunCountCache.keys().next().value
+      if (oldestJobId === undefined) {
+        return
+      }
+      this.hermesRunCountCache.delete(oldestJobId)
     }
   }
 

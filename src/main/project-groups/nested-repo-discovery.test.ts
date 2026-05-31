@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, rm } from 'fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, symlink } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -76,4 +76,19 @@ describe('scanNestedRepos', () => {
     expect(result.selectedPathKind).toBe('git_repo')
     expect(result.repos).toEqual([])
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'does not follow symlinked directories outside the selected folder',
+    async () => {
+      const root = await tempRoot()
+      const external = await tempRoot()
+      await mkdir(join(external, 'outside-repo'), { recursive: true })
+      await makeGitRepo(join(external, 'outside-repo'))
+      await symlink(external, join(root, 'linked'), 'dir')
+
+      const result = await scanNestedRepos({ path: root })
+
+      expect(result.repos).toEqual([])
+    }
+  )
 })

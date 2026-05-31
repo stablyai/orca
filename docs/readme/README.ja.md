@@ -14,7 +14,7 @@
 
 <p align="center">
   <strong>100x ビルダーのための AI オーケストレーター。</strong><br/>
-  Claude Code、Codex、Grok、Antigravity、OpenCode をリポジトリをまたいで並行実行 — それぞれを専用のワークツリーで動かし、1 か所で追跡できます。<br/>
+  Claude Code、OpenClaude、Codex、Grok、Antigravity、OpenCode をリポジトリをまたいで並行実行 — それぞれを専用のワークツリーで動かし、1 か所で追跡できます。<br/>
   <strong>macOS、Windows、Linux</strong> で利用できます。
 </p>
 
@@ -32,6 +32,7 @@ Orca は任意の CLI エージェントに対応しています（_このリス
 
 <p>
   <a href="https://docs.anthropic.com/claude/docs/claude-code"><kbd><img src="../assets/claude-logo.svg" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
+  <a href="https://openclaude.gitlawb.com/"><kbd><img src="../../resources/openclaude-logo.png" width="16" valign="middle" /> OpenClaude</kbd></a> &nbsp;
   <a href="https://github.com/openai/codex"><kbd><img src="https://www.google.com/s2/favicons?domain=openai.com&sz=64" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
   <a href="https://x.ai/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=x.ai&sz=64" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
   <a href="https://github.com/google-gemini/gemini-cli"><kbd><img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=64" width="16" valign="middle" /> Gemini</kbd></a> &nbsp;
@@ -64,7 +65,7 @@ Orca は任意の CLI エージェントに対応しています（_このリス
 
 ## 機能
 
-- **ログイン不要** — お持ちの Claude Code、Codex、Grok、Antigravity サブスクリプションをそのまま利用できます。
+- **ログイン不要** — お持ちの Claude Code、OpenClaude、Codex、Grok、Antigravity サブスクリプションをそのまま利用できます。
 - **ワークツリーネイティブ** — 各機能は専用のワークツリーで開発できます。スタッシュやブランチ切り替えに悩まず、すぐに作成して切り替えられます。
 - **マルチエージェントターミナル** — 複数の AI エージェントをタブやペインで並行実行できます。どれがアクティブかを一目で確認できます。
 - **組み込みソース管理** — AI が生成した Diff を確認し、すばやく編集して、Orca から離れずにコミットできます。

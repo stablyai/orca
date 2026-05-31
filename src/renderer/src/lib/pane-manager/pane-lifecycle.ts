@@ -91,7 +91,7 @@ export function createPaneDOM(
   const dragHandle = document.createElement('div')
   dragHandle.className = 'pane-drag-handle'
   container.appendChild(dragHandle)
-  attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
+  const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 
   const webLinksAddon = new WebLinksAddon(
     options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
@@ -109,6 +109,16 @@ export function createPaneDOM(
   )
 
   const serializeAddon = new SerializeAddon()
+
+  const panePointerDownHandler = (event: PointerEvent): void => {
+    onPointerDown(id, {
+      focusTerminal: shouldFocusTerminalFromPanePointerDown(event.target)
+    })
+  }
+
+  const paneMouseEnterHandler = (event: MouseEvent): void => {
+    onMouseEnter(id, event)
+  }
 
   const pane: ManagedPaneInternal = {
     id,
@@ -134,6 +144,9 @@ export function createPaneDOM(
     webLinksAddon,
     webglAddon: null,
     ligaturesAddon: null,
+    panePointerDownHandler,
+    paneMouseEnterHandler,
+    paneDragCleanup,
     compositionHandler: null,
     pendingSplitScrollState: null,
     pendingSplitScrollRafIds: [],
@@ -146,19 +159,13 @@ export function createPaneDOM(
   // the terminal. We must call focus: true here because after DOM reparenting
   // (e.g. splitPane moves the original pane into a flex container), xterm.js's
   // native click-to-focus on its internal textarea may not fire reliably.
-  container.addEventListener('pointerdown', (event) => {
-    onPointerDown(id, {
-      focusTerminal: shouldFocusTerminalFromPanePointerDown(event.target)
-    })
-  })
+  container.addEventListener('pointerdown', panePointerDownHandler)
 
   // Focus-follows-mouse handler: when the setting is enabled, hovering a
   // pane makes it active. All gating (feature flag, drag-in-progress,
   // window focus, etc.) lives in the PaneManager callback — this layer
   // just forwards the event.
-  container.addEventListener('mouseenter', (event) => {
-    onMouseEnter(id, event)
-  })
+  container.addEventListener('mouseenter', paneMouseEnterHandler)
 
   return pane
 }
@@ -310,6 +317,16 @@ export function disposePane(
   }
   cancelPendingWebglRefresh(pane)
   detachPaneFitResizeObserver(pane)
+  if (pane.panePointerDownHandler) {
+    pane.container.removeEventListener('pointerdown', pane.panePointerDownHandler)
+    pane.panePointerDownHandler = null
+  }
+  if (pane.paneMouseEnterHandler) {
+    pane.container.removeEventListener('mouseenter', pane.paneMouseEnterHandler)
+    pane.paneMouseEnterHandler = null
+  }
+  pane.paneDragCleanup?.()
+  pane.paneDragCleanup = null
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null

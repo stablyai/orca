@@ -63,6 +63,7 @@ const terminalTabSchema = z.object({
   worktreeId: z.string(),
   title: z.string(),
   defaultTitle: z.string().optional(),
+  generatedTitle: z.string().nullable().optional(),
   customTitle: z.string().nullable(),
   color: z.string().nullable(),
   sortOrder: z.number(),
@@ -91,6 +92,7 @@ const tabSchema = z.object({
   worktreeId: z.string(),
   contentType: tabContentTypeSchema,
   label: z.string(),
+  generatedLabel: z.string().nullable().optional(),
   customLabel: z.string().nullable(),
   color: z.string().nullable(),
   sortOrder: z.number(),
@@ -250,7 +252,8 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
       },
       z.record(z.string(), z.number().finite().nonnegative())
     )
-    .optional()
+    .optional(),
+  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional()
 })
 
 export type ParsedWorkspaceSession =

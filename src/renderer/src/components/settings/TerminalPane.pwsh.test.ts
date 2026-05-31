@@ -1,3 +1,6 @@
+/* oxlint-disable max-lines -- Why: TerminalPane tests share a large mocked
+   settings harness; splitting the new Windows-shell cases would duplicate
+   brittle React/store mocks without improving coverage. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockStateValues: unknown[] = []
@@ -146,17 +149,6 @@ vi.mock('@/lib/terminal-theme', () => ({
   resolvePaneStyleOptions: () => ({ inactivePaneOpacity: 0.8, dividerThicknessPx: 1 })
 }))
 
-const ghosttyMock = {
-  open: false,
-  preview: null,
-  loading: false,
-  applied: false,
-  applyError: null,
-  handleClick: vi.fn(),
-  handleApply: vi.fn(),
-  handleOpenChange: vi.fn()
-}
-
 import { TerminalPane } from './TerminalPane'
 
 type ReactElementLike = {
@@ -236,13 +228,11 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: false,
-      pwshAvailable: false
+      pwshAvailable: false,
+      gitBashAvailable: false
     })
 
     expect(collectText(element)).toContain('Auto uses Windows PowerShell now')
@@ -260,14 +250,12 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
-      pwshAvailable: false
+      pwshAvailable: false,
+      gitBashAvailable: false
     })
 
     expect(collectText(element)).toContain('WSL')
@@ -282,13 +270,11 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: false,
-      pwshAvailable: false
+      pwshAvailable: false,
+      gitBashAvailable: false
     })
 
     expect(collectText(element)).not.toContain('WSL')
@@ -304,14 +290,12 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: true,
       wslDistros: ['Ubuntu', 'Debian'],
-      pwshAvailable: false
+      pwshAvailable: false,
+      gitBashAvailable: false
     })
 
     const text = collectText(element)
@@ -319,5 +303,43 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(text).toContain('Windows default')
     expect(text).toContain('Ubuntu')
     expect(text).toContain('Debian')
+  })
+
+  it('shows Git Bash as a Windows default shell option when bash.exe is detected', () => {
+    const element = TerminalPane({
+      settings: {
+        terminalScrollbackBytes: 10_000_000,
+        terminalWindowsShell: 'powershell.exe',
+        terminalWindowsPowerShellImplementation: 'auto',
+        terminalWordSeparator: ''
+      } as never,
+      updateSettings: () => {},
+      scrollbackMode: 'preset',
+      setScrollbackMode: () => {},
+      wslAvailable: false,
+      pwshAvailable: false,
+      gitBashAvailable: true
+    })
+
+    expect(collectText(element)).toContain('Git Bash')
+  })
+
+  it('hides Git Bash as a Windows default shell option when not detected', () => {
+    const element = TerminalPane({
+      settings: {
+        terminalScrollbackBytes: 10_000_000,
+        terminalWindowsShell: 'powershell.exe',
+        terminalWindowsPowerShellImplementation: 'auto',
+        terminalWordSeparator: ''
+      } as never,
+      updateSettings: () => {},
+      scrollbackMode: 'preset',
+      setScrollbackMode: () => {},
+      wslAvailable: false,
+      pwshAvailable: false,
+      gitBashAvailable: false
+    })
+
+    expect(collectText(element)).not.toContain('Git Bash')
   })
 })

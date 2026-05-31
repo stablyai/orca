@@ -146,6 +146,24 @@ describe('shouldRecordProcessGoneCrash', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'child',
+        processType: 'GPU',
+        reason: 'abnormal-exit',
+        exitCode: 512,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'GPU',
+        reason: 'abnormal-exit',
+        exitCode: 8704,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
         processType: 'Utility',
         serviceName: 'network.mojom.NetworkService',
         reason: 'killed',
@@ -158,6 +176,26 @@ describe('shouldRecordProcessGoneCrash', () => {
         source: 'child',
         processType: 'Utility',
         serviceName: 'network.mojom.NetworkService',
+        reason: 'crashed',
+        exitCode: -1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'audio.mojom.AudioService',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'audio.mojom.AudioService',
         reason: 'crashed',
         exitCode: -1,
         expectedTeardown: 'none'

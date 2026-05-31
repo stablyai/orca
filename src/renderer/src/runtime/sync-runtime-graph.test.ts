@@ -126,6 +126,68 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     )
   })
 
+  it('changes when generated terminal title metadata changes', () => {
+    const shared = makeSharedOverrides()
+    const base = makeState({
+      ...shared,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Codex working', customTitle: null, ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree']
+    })
+    const before = getRuntimeMobileSessionSyncKey(base)
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...base,
+        tabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'term-1',
+              title: 'Codex working',
+              generatedTitle: 'Fix remote tabs',
+              customTitle: null,
+              ptyId: 'pty-1'
+            }
+          ]
+        } as unknown as AppState['tabsByWorktree']
+      }),
+      base,
+      before
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
+  it('changes when generated terminal titles are toggled', () => {
+    const shared = makeSharedOverrides()
+    const tabsByWorktree = {
+      'wt-1': [
+        {
+          id: 'term-1',
+          title: 'Codex working',
+          generatedTitle: 'Fix remote tabs',
+          customTitle: null,
+          ptyId: 'pty-1'
+        }
+      ]
+    } as unknown as AppState['tabsByWorktree']
+    const base = makeState({
+      ...shared,
+      tabsByWorktree,
+      settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: false }
+    })
+    const before = getRuntimeMobileSessionSyncKey(base)
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...base,
+        settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true }
+      }),
+      base,
+      before
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
   it('changes when terminal split-pane layout changes', () => {
     const base = makeState({
       terminalLayoutsByTabId: {
@@ -609,6 +671,47 @@ describe('buildMobileSessionTabSnapshots', () => {
         }
       }
     ])
+  })
+
+  it('publishes generated terminal titles to mobile snapshots only when enabled', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const base = makeState({
+      settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: false },
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'term-1',
+            title: 'Codex working',
+            generatedTitle: 'Fix remote tabs',
+            customTitle: null,
+            ptyId: 'pty-1'
+          }
+        ]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId']
+    })
+
+    expect(buildMobileSessionTabSnapshots(base)[0]?.tabs[0]).toMatchObject({
+      type: 'terminal',
+      title: 'Codex working'
+    })
+    expect(
+      buildMobileSessionTabSnapshots({
+        ...base,
+        settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true }
+      })[0]?.tabs[0]
+    ).toMatchObject({
+      type: 'terminal',
+      title: 'Fix remote tabs'
+    })
   })
 
   it('publishes the desktop-resolved terminal theme for mobile terminal tabs', () => {

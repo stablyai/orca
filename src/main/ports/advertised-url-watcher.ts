@@ -82,9 +82,13 @@ class PtyBuffer {
    *  and including the last newline). Whatever follows the last newline stays
    *  buffered so that a URL or ANSI sequence split across chunks survives. */
   ingest(chunk: string): string {
+    const chunkHasLineBreak = chunk.includes('\n') || chunk.includes('\r')
     this.raw += chunk
     if (this.raw.length > PER_PTY_BUFFER_LIMIT) {
       this.raw = this.raw.slice(-PER_PTY_BUFFER_LIMIT)
+    }
+    if (!chunkHasLineBreak) {
+      return ''
     }
     const lastNewline = lastLineBreak(this.raw)
     if (lastNewline === -1) {
@@ -281,8 +285,11 @@ export class AdvertisedUrlWatcher {
   }
 
   bindPty(ptyId: string, worktreeId: string): void {
-    this.ptyToWorktree.set(ptyId, worktreeId)
     const pending = this.pending.get(ptyId)
+    if (this.ptyToWorktree.get(ptyId) === worktreeId && pending === undefined) {
+      return
+    }
+    this.ptyToWorktree.set(ptyId, worktreeId)
     if (pending !== undefined) {
       this.pending.delete(ptyId)
       this.ingest(ptyId, pending)
@@ -307,6 +314,34 @@ export class AdvertisedUrlWatcher {
       removedEvents.push({ worktreeId, port: entry.port })
     }
     for (const event of removedEvents) {
+      this.emitChange(event)
+    }
+  }
+
+  forgetWorktree(worktreeId: string): void {
+    // Why: worktree IDs are reused for the same repo/path, so removed
+    // worktrees must not leave scan baselines for a future workspace.
+    for (const [ptyId, boundWorktreeId] of this.ptyToWorktree) {
+      if (boundWorktreeId !== worktreeId) {
+        continue
+      }
+      this.ptyToWorktree.delete(ptyId)
+      this.buffers.delete(ptyId)
+    }
+
+    this.scanSnapshots.delete(worktreeId)
+    const removedEvents: AdvertisedUrlChangeEvent[] = []
+    for (const [key, entry] of this.cache) {
+      const entryWorktreeId = worktreeIdFromCacheKey(key, entry.port)
+      if (entryWorktreeId !== worktreeId) {
+        continue
+      }
+      this.cache.delete(key)
+      this.validationBaselines.delete(key)
+      this.startupAbsentAllowances.delete(key)
+      removedEvents.push({ worktreeId, port: entry.port })
+    }
+    for (const event of dedupeChangeEvents(removedEvents)) {
       this.emitChange(event)
     }
   }

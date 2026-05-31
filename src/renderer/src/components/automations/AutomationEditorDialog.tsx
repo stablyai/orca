@@ -24,6 +24,10 @@ import type {
   AutomationWorkspaceMode
 } from '../../../../shared/automations-types'
 import type { GlobalSettings, Repo, TuiAgent, Worktree } from '../../../../shared/types'
+import {
+  isValidAutomationCronSchedule,
+  isValidAutomationSchedule
+} from '../../../../shared/automation-schedules'
 import { Field } from './automation-page-parts'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
 import { AutomationSessionField } from './AutomationSessionField'
@@ -45,6 +49,8 @@ export type AutomationDraft = {
   workspaceId: string
   baseBranch: string
   reuseSession: boolean
+  precheckCommand: string
+  precheckTimeoutSeconds: string
   preset: AutomationSchedulePreset
   time: string
   dayOfWeek: string
@@ -58,6 +64,7 @@ export type AutomationCreateTarget = 'orca' | 'hermes'
 type AutomationEditorDialogProps = {
   open: boolean
   isEditing: boolean
+  isEditingExternal: boolean
   isSaving: boolean
   canSave: boolean
   createTarget: AutomationCreateTarget
@@ -99,6 +106,7 @@ function AutomationTemplateCard({
 export function AutomationEditorDialog({
   open,
   isEditing,
+  isEditingExternal,
   isSaving,
   canSave,
   createTarget,
@@ -115,7 +123,9 @@ export function AutomationEditorDialog({
   onSave
 }: AutomationEditorDialogProps): React.JSX.Element {
   const [templateOpen, setTemplateOpen] = React.useState(false)
-  const isHermesCreate = !isEditing && createTarget === 'hermes'
+  const isHermesTarget = createTarget === 'hermes'
+  const isCreateMode = !isEditing && !isEditingExternal
+  const isHermesCreate = isCreateMode && isHermesTarget
   const visibleAgents = React.useMemo(() => {
     const enabledIds = new Set(
       filterEnabledTuiAgents(
@@ -140,9 +150,11 @@ export function AutomationEditorDialog({
               <DialogTitle className="text-sm font-medium">
                 {isEditing
                   ? 'Edit automation'
-                  : isHermesCreate
-                    ? 'Create Hermes cron'
-                    : 'Create automation'}
+                  : isEditingExternal
+                    ? 'Edit Hermes automation'
+                    : isHermesCreate
+                      ? 'Create Hermes automation'
+                      : 'Create automation'}
               </DialogTitle>
               <Input
                 value={draft.name}
@@ -154,7 +166,7 @@ export function AutomationEditorDialog({
                 }
               />
             </div>
-            {!isEditing ? (
+            {isCreateMode ? (
               <div className="flex shrink-0 items-center gap-2">
                 <ToggleGroup
                   type="single"
@@ -220,13 +232,53 @@ export function AutomationEditorDialog({
               }
               className="min-h-[260px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
             />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Supports skills, file paths, and built-in commands like{' '}
+              <code className="rounded bg-muted px-1 font-mono text-[11px]">/goal</code>.
+            </p>
           </Field>
+          {isHermesCreate ? null : (
+            <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
+              <Field label="Precheck">
+                <textarea
+                  value={draft.precheckCommand}
+                  placeholder="gh pr list --json number -q '.[0].number'"
+                  onChange={(event) =>
+                    onDraftChange((current) => ({
+                      ...current,
+                      precheckCommand: event.target.value
+                    }))
+                  }
+                  className="min-h-[68px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+                />
+              </Field>
+              <Field label="Timeout">
+                <Select
+                  value={draft.precheckTimeoutSeconds}
+                  onValueChange={(precheckTimeoutSeconds) =>
+                    onDraftChange((current) => ({ ...current, precheckTimeoutSeconds }))
+                  }
+                >
+                  <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+                    <SelectItem value="30">30 sec</SelectItem>
+                    <SelectItem value="60">1 min</SelectItem>
+                    <SelectItem value="120">2 min</SelectItem>
+                    <SelectItem value="300">5 min</SelectItem>
+                    <SelectItem value="600">10 min</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          )}
         </div>
 
         <div className="border-t border-border/50 px-5 py-4">
           <div
             className={
-              isHermesCreate
+              isHermesTarget
                 ? 'grid gap-3 md:grid-cols-3'
                 : 'grid gap-3 sm:grid-cols-2 lg:grid-cols-4'
             }
@@ -262,9 +314,9 @@ export function AutomationEditorDialog({
                   </Tooltip>
                 </span>
               }
-              className={isHermesCreate ? undefined : 'sm:col-span-2 lg:col-span-3'}
+              className={isHermesTarget ? undefined : 'sm:col-span-2 lg:col-span-3'}
             >
-              {isHermesCreate ? (
+              {isHermesTarget ? (
                 <WorkspaceCombobox
                   worktrees={worktrees}
                   value={draft.workspaceId}
@@ -308,6 +360,9 @@ export function AutomationEditorDialog({
                     />
                   ) : (
                     <CreateFromPicker
+                      // Why: branch search state belongs to the selected project,
+                      // so repo switches should reset it before the next paint.
+                      key={draft.projectId}
                       repoId={draft.projectId}
                       repoMap={repoMap}
                       worktrees={worktrees}
@@ -321,7 +376,7 @@ export function AutomationEditorDialog({
                 </div>
               )}
             </Field>
-            {isHermesCreate ? null : (
+            {isHermesTarget ? null : (
               <Field label="Agent">
                 <AgentCombobox
                   agents={visibleAgents}
@@ -335,7 +390,7 @@ export function AutomationEditorDialog({
                 />
               </Field>
             )}
-            {isHermesCreate ? null : (
+            {isHermesTarget ? null : (
               <AutomationSessionField
                 draft={draft}
                 toggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
@@ -346,10 +401,13 @@ export function AutomationEditorDialog({
               <AutomationSchedulePicker
                 draft={draft}
                 triggerClassName={PICKER_TRIGGER_CLASS}
+                validateAdvancedSchedule={
+                  isHermesTarget ? isValidAutomationCronSchedule : isValidAutomationSchedule
+                }
                 onDraftChange={onDraftChange}
               />
             </Field>
-            {isHermesCreate ? null : (
+            {isHermesTarget ? null : (
               <Field
                 label={
                   <span className="inline-flex items-center gap-1">
@@ -405,8 +463,14 @@ export function AutomationEditorDialog({
               disabled={isSaving || repos.length === 0 || !canSave}
               className="border-foreground/25 bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08]"
             >
-              {isEditing || isHermesCreate || isSaving ? null : <Plus className="size-4" />}
-              {isEditing ? 'Save Changes' : isSaving || isHermesCreate ? 'Save' : 'Create'}
+              {isEditing || isEditingExternal || isHermesCreate || isSaving ? null : (
+                <Plus className="size-4" />
+              )}
+              {isEditing || isEditingExternal
+                ? 'Save Changes'
+                : isSaving || isHermesCreate
+                  ? 'Save'
+                  : 'Create'}
             </Button>
           </div>
         </div>

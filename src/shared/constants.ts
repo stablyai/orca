@@ -7,13 +7,17 @@ import type {
   PersistedState,
   PersistedUIState,
   RepoHookSettings,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  AgentActivityDisplayMode
 } from './types'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import type { VoiceSettings } from './speech-types'
-import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
+import {
+  WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT,
+  cloneDefaultWorkspaceStatuses
+} from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
 import { getDefaultSourceControlAiSettings } from './source-control-ai'
@@ -28,6 +32,11 @@ export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
 export const DEFAULT_SHOW_SLEEPING_WORKSPACES = true
 export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
+export const DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE: AgentActivityDisplayMode = 'compact'
+
+export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
+  return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
+}
 
 // Why: the onboarding wizard's last step index. Centralized so backfill,
 // clamps, and UI step references all agree on the same upper bound.
@@ -148,9 +157,15 @@ export function getDefaultOnboardingState(): OnboardingState {
   }
 }
 
+function getDefaultWorkspaceDir(homeDir: string): string {
+  const separator = homeDir.includes('\\') ? '\\' : '/'
+  const trimmedHomeDir = homeDir.replace(/[\\/]+$/, '')
+  return [trimmedHomeDir, 'orca', 'workspaces'].join(separator)
+}
+
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
-    workspaceDir: `${homedir}/orca/workspaces`,
+    workspaceDir: getDefaultWorkspaceDir(homedir),
     nestWorkspaces: true,
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
@@ -215,6 +230,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalAllowOsc52Clipboard: false,
     setupScriptLaunchMode: 'new-tab',
     terminalScrollbackBytes: 10_000_000,
+    httpProxyUrl: '',
+    httpProxyBypassRules: '',
     openLinksInApp: true,
     openInApplications: [],
     rightSidebarOpenByDefault: true,
@@ -258,6 +275,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     agentStatusHooksEnabled: true,
+    tabAutoGenerateTitle: false,
     keepComputerAwakeWhileAgentsRun: false,
     // Why: 'auto' runs a layout-aware probe at boot (see
     // src/renderer/src/lib/keyboard-layout/*) that picks 'true' for US and
@@ -374,14 +392,16 @@ export function getDefaultUIState(): PersistedUIState {
     hideSleepingWorkspaces: DEFAULT_HIDE_SLEEPING_WORKSPACES,
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
     hideDefaultBranchWorkspace: false,
+    showDotfilesByWorktree: {},
     filterRepoIds: [],
     collapsedGroups: [],
     uiZoomLevel: 0,
     editorFontZoomLevel: 0,
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+    agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
-    workspaceBoardCompact: false,
+    workspaceBoardColumnLayout: WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT,
     workspaceBoardColumnWidth: 308,
     _workspaceStatusesDefaultOrderMigrated: true,
     _workspaceStatusesDefaultWorkflowMigrated: true,
@@ -412,6 +432,7 @@ export function getDefaultWorkspaceSession(): WorkspaceSessionState {
     activeBrowserTabIdByWorktree: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
-    browserUrlHistory: []
+    browserUrlHistory: [],
+    defaultTerminalTabsAppliedByWorktreeId: {}
   }
 }

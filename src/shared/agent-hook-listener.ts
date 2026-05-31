@@ -198,68 +198,83 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
     const chunks: Buffer[] = []
     let byteLength = 0
     let settled = false
-    req.on('data', (chunk: Buffer) => {
+    const cleanup = (): void => {
+      req.off('data', onData)
+      req.off('end', onEnd)
+      req.off('error', onError)
+      req.off('close', onClose)
+      // Why: detached parser closures release body chunks; keep a neutral
+      // error sink so a late IncomingMessage error cannot become unhandled.
+      req.on('error', ignoreSettledRequestError)
+    }
+    const settleResolve = (value: unknown): void => {
       if (settled) {
         return
       }
+      settled = true
+      cleanup()
+      resolve(value)
+    }
+    const settleReject = (error: unknown): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      reject(error)
+    }
+    const onData = (chunk: Buffer): void => {
       // Why: check size in bytes (not UTF-16 code units) and stop accumulating
       // after rejection so a malicious client cannot push memory past the cap.
       if (byteLength + chunk.length > HOOK_REQUEST_MAX_BYTES) {
-        settled = true
-        reject(new Error('payload too large'))
+        settleReject(new Error('payload too large'))
         req.destroy()
         return
       }
       byteLength += chunk.length
       chunks.push(chunk)
-    })
-    req.on('end', () => {
-      if (settled) {
-        return
-      }
-      settled = true
+    }
+    const onEnd = (): void => {
       try {
         // Why: decode once via Buffer.concat so multi-byte UTF-8 characters
         // that straddle a chunk boundary are reassembled correctly.
         const body = chunks.length > 0 ? Buffer.concat(chunks).toString('utf8') : ''
         const contentType = req.headers['content-type'] ?? ''
         if (typeof contentType === 'string' && contentType.includes('application/json')) {
-          resolve(body ? JSON.parse(body) : {})
+          settleResolve(body ? JSON.parse(body) : {})
           return
         }
         if (
           typeof contentType === 'string' &&
           contentType.includes('application/x-www-form-urlencoded')
         ) {
-          resolve(parseFormEncodedBody(body))
+          settleResolve(parseFormEncodedBody(body))
           return
         }
         // Why: existing managed scripts POST JSON; updated POSIX scripts POST
         // form-encoded. Default to JSON for unknown content types.
-        resolve(body ? JSON.parse(body) : {})
+        settleResolve(body ? JSON.parse(body) : {})
       } catch (error) {
-        reject(error)
+        settleReject(error)
       }
-    })
-    req.on('error', (err) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      reject(err)
-    })
+    }
+    const onError = (err: Error): void => {
+      settleReject(err)
+    }
     // Why: req.destroy() (called by the slowloris timer) emits 'close' but
     // not 'end'/'error'. Without this handler the promise would never settle
     // and the chunk buffers would be retained for the process lifetime.
-    req.on('close', () => {
-      if (settled) {
-        return
-      }
-      settled = true
-      reject(new Error('aborted'))
-    })
+    const onClose = (): void => {
+      settleReject(new Error('aborted'))
+    }
+    req.on('data', onData)
+    req.on('end', onEnd)
+    req.on('error', onError)
+    req.on('close', onClose)
   })
 }
+
+function ignoreSettledRequestError(): void {}
 
 // ─── Per-pane field caches + extractors ─────────────────────────────
 
@@ -593,6 +608,7 @@ function extractToolResponseText(toolResponse: unknown): string | undefined {
 const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
 const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
 const AMP_THREAD_ID_MAX_LENGTH = 256
+const AMP_MAX_SCOPED_THREAD_CACHE_KEYS = 32
 const GROK_SESSION_ID_MAX_LENGTH = 128
 const GROK_SESSION_CWD_MAX_LENGTH = 4096
 
@@ -1797,11 +1813,6 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     }
     case 'hermes':
       return eventName === 'pre_llm_call' || eventName === 'on_session_start'
-    default: {
-      const _exhaustive: never = source
-      void _exhaustive
-      return false
-    }
   }
 }
 
@@ -1886,11 +1897,6 @@ function extractToolFields(
       return extractCopilotToolFields(normalizeCopilotEventName(eventName), hookPayload)
     case 'hermes':
       return extractHermesToolFields(eventName, hookPayload)
-    default: {
-      const _exhaustive: never = source
-      void _exhaustive
-      return {}
-    }
   }
 }
 
@@ -1909,7 +1915,7 @@ function normalizeClaudeEvent(
       ? 'working'
       : eventName === 'PermissionRequest'
         ? 'waiting'
-        : eventName === 'Stop'
+        : eventName === 'Stop' || eventName === 'StopFailure'
           ? 'done'
           : null
 
@@ -2146,6 +2152,9 @@ function normalizeAmpEvent(
   if (normalized && eventName === 'agent.end') {
     state.ampCompletedCacheKeys.add(ampCacheKey)
   }
+  if (normalized) {
+    pruneAmpThreadCacheKeys(state, paneKey, ampCacheKey)
+  }
   return normalized
 }
 
@@ -2158,6 +2167,55 @@ function getAmpCacheKey(paneKey: string, hookPayload: Record<string, unknown>): 
   // Why: Amp plugin processes can emit events for multiple threads in one
   // pane. Cache by thread internally while keeping the visible paneKey stable.
   return threadId ? `${paneKey}\0amp:${threadId}` : paneKey
+}
+
+function pruneAmpThreadCacheKeys(
+  state: HookListenerState,
+  paneKey: string,
+  currentCacheKey: string
+): void {
+  const scopedPrefix = `${paneKey}\0amp:`
+  if (!currentCacheKey.startsWith(scopedPrefix)) {
+    return
+  }
+
+  const scopedKeys = new Set<string>()
+  for (const key of state.lastPromptByPaneKey.keys()) {
+    if (key.startsWith(scopedPrefix)) {
+      scopedKeys.add(key)
+    }
+  }
+  for (const key of state.lastToolByPaneKey.keys()) {
+    if (key.startsWith(scopedPrefix)) {
+      scopedKeys.add(key)
+    }
+  }
+  for (const key of state.ampCompletedCacheKeys) {
+    if (key.startsWith(scopedPrefix)) {
+      scopedKeys.add(key)
+    }
+  }
+
+  let overflow = scopedKeys.size - AMP_MAX_SCOPED_THREAD_CACHE_KEYS
+  if (overflow <= 0) {
+    return
+  }
+
+  // Why: Amp can multiplex many thread IDs through one pane. Keep the current
+  // thread plus the most recent cache entries instead of retaining every
+  // completed thread until pane teardown.
+  for (const key of scopedKeys) {
+    if (overflow <= 0) {
+      break
+    }
+    if (key === currentCacheKey) {
+      continue
+    }
+    state.lastPromptByPaneKey.delete(key)
+    state.lastToolByPaneKey.delete(key)
+    state.ampCompletedCacheKeys.delete(key)
+    overflow--
+  }
 }
 
 function hasExplicitPromptForSource(
@@ -2824,11 +2882,6 @@ export function normalizeHookPayload(
     case 'hermes':
       payload = normalizeHermesEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
-    default: {
-      const _exhaustive: never = source
-      void _exhaustive
-      payload = null
-    }
   }
 
   // Why: connectionId stays null at the listener layer. The local server keeps

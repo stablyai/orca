@@ -34,7 +34,6 @@ export default function ImageViewer({
   mimeType = FALLBACK_IMAGE_MIME_TYPE,
   layout = 'fill'
 }: ImageViewerProps): JSX.Element {
-  const [imageError, setImageError] = useState(false)
   const [isPopupOpen, setIsPopupOpen] = useState(false)
   const [inlineZoom, setInlineZoom] = useState(1)
   const [popupZoom, setPopupZoom] = useState(1)
@@ -43,12 +42,17 @@ export default function ImageViewer({
   const [inlineSurfaceSize, setInlineSurfaceSize] = useState<ImageViewerSurfaceSize | null>(null)
   const [popupSurfaceSize, setPopupSurfaceSize] = useState<ImageViewerSurfaceSize | null>(null)
   const [imageDimensions, setImageDimensions] = useState<ImageViewerImageDimensions | null>(null)
+  const [failedPreviewSrc, setFailedPreviewSrc] = useState<string | null>(null)
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
   const isPdf = mimeType === 'application/pdf'
   const isIntrinsicLayout = layout === 'intrinsic'
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const previewSrc = useMemo(
+    () => (cleanedContent && !isPdf ? `data:${mimeType};base64,${cleanedContent}` : null),
+    [cleanedContent, isPdf, mimeType]
+  )
+  const imageError = previewSrc !== null && failedPreviewSrc === previewSrc
   const estimatedSize = useMemo(() => {
     const bytes = Math.floor((cleanedContent.length * 3) / 4)
     if (bytes < 1024) {
@@ -168,7 +172,7 @@ export default function ImageViewer({
     const observer = new ResizeObserver(updateSize)
     observer.observe(surface)
     return () => observer.disconnect()
-  }, [previewUrl])
+  }, [previewSrc])
 
   useEffect(() => {
     if (!isPopupOpen) {
@@ -195,30 +199,8 @@ export default function ImageViewer({
   useEffect(() => {
     setInlineZoom(1)
     setPopupZoom(1)
-  }, [filePath, mimeType, cleanedContent])
-
-  useEffect(() => {
-    setImageError(false)
     setImageDimensions(null)
-    if (!cleanedContent || isPdf) {
-      setPreviewUrl(null)
-      return
-    }
-    let binary: string
-    try {
-      binary = window.atob(cleanedContent)
-    } catch {
-      setImageError(true)
-      return
-    }
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i += 1) {
-      bytes[i] = binary.charCodeAt(i)
-    }
-    const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }))
-    setPreviewUrl(objectUrl)
-    return () => URL.revokeObjectURL(objectUrl)
-  }, [cleanedContent, mimeType, isPdf])
+  }, [filePath, mimeType, cleanedContent])
 
   if (isPdf) {
     return <PdfViewer content={cleanedContent} filePath={filePath} />
@@ -239,7 +221,7 @@ export default function ImageViewer({
     )
   }
 
-  if (!previewUrl) {
+  if (!previewSrc) {
     return (
       <div
         className={cn(
@@ -283,7 +265,7 @@ export default function ImageViewer({
               }
             >
               <img
-                src={previewUrl}
+                src={previewSrc}
                 alt={filename}
                 className={cn(
                   'object-contain',
@@ -296,8 +278,11 @@ export default function ImageViewer({
                 onLoad={(event) => {
                   const img = event.currentTarget
                   setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight })
+                  setFailedPreviewSrc(null)
                 }}
-                onError={() => setImageError(true)}
+                // Why: track the failed source identity, not a boolean, so a new
+                // image retries immediately without waiting for an Effect reset.
+                onError={() => setFailedPreviewSrc(previewSrc)}
               />
             </div>
           </div>
@@ -354,7 +339,7 @@ export default function ImageViewer({
         imageLayoutStyle={popupImageLayoutStyle}
         isOpen={isPopupOpen}
         onOpenChange={handlePopupOpenChange}
-        previewUrl={previewUrl}
+        previewUrl={previewSrc}
         setSurfaceRef={setPopupSurfaceRef}
         zoomPercent={Math.round(popupZoom * 100)}
       />

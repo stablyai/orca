@@ -23,6 +23,7 @@ vi.mock('os', async () => {
 
 const originalEnv = { ...process.env }
 const tempDirs: string[] = []
+const LARGE_INCLUDE_LINE_COUNT = 150_000
 
 afterEach(() => {
   for (const key of Object.keys(process.env)) {
@@ -155,6 +156,23 @@ describe('loadUserSshConfig', () => {
       'inner',
       'matched',
       'after'
+    ])
+  })
+
+  it('continues parsing after a large included file', () => {
+    const home = makeHome()
+    writeFile(
+      home,
+      '.ssh/config',
+      ['Include large.conf', 'Host after', '  HostName after.example.com'].join('\n')
+    )
+    writeFile(home, '.ssh/large.conf', '\n'.repeat(LARGE_INCLUDE_LINE_COUNT))
+
+    expect(loadUserSshConfig()).toEqual([
+      {
+        host: 'after',
+        hostname: 'after.example.com'
+      }
     ])
   })
 

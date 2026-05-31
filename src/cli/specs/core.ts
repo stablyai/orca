@@ -123,15 +123,19 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'set'],
     summary: 'Update Orca metadata for a worktree',
     usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--parent-worktree <selector>|--no-parent] [--json]',
+      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'worktree',
       'display-name',
       'issue',
       'comment',
+      'workspace-status',
       'parent-worktree',
       'no-parent'
+    ],
+    notes: [
+      'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.'
     ]
   },
   {

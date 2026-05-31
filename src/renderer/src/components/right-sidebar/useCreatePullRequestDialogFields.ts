@@ -10,7 +10,7 @@ import {
 } from '@/runtime/runtime-git-client'
 import {
   getRuntimeRepoBaseRefDefault,
-  searchRuntimeRepoBaseRefs
+  searchRuntimeRepoBaseRefDetails
 } from '@/runtime/runtime-repo-client'
 import {
   isCustomAgentId,
@@ -18,6 +18,7 @@ import {
 } from '../../../../shared/commit-message-agent-spec'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import { normalizeHostedReviewBaseRef } from '../../../../shared/hosted-review-refs'
+import type { BaseRefSearchResult } from '../../../../shared/types'
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
   normalizeSourceControlAiSettings
@@ -69,6 +70,24 @@ function createInitialPullRequestFieldRevisions(): PullRequestFieldRevisions {
 
 export function stripBaseRef(ref: string): string {
   return normalizeHostedReviewBaseRef(ref)
+}
+
+export function normalizeCreateReviewBaseSearchResults(
+  results: readonly BaseRefSearchResult[]
+): string[] {
+  const seen = new Set<string>()
+  const branches: string[] = []
+  for (const result of results) {
+    // Why: hosted review APIs take branch names, while base search displays
+    // remote-qualified refs. Detailed search already resolves slashy remotes.
+    const branch = stripBaseRef((result.localBranchName || result.refName).trim())
+    if (!branch || seen.has(branch)) {
+      continue
+    }
+    seen.add(branch)
+    branches.push(branch)
+  }
+  return branches
 }
 
 export function useCreatePullRequestDialogFields({
@@ -266,10 +285,10 @@ export function useCreatePullRequestDialogFields({
     }
     let stale = false
     const timer = window.setTimeout(() => {
-      void searchRuntimeRepoBaseRefs(settings, repoId, baseQuery.trim(), 20)
+      void searchRuntimeRepoBaseRefDetails(settings, repoId, baseQuery.trim(), 20)
         .then((results) => {
           if (!stale) {
-            setBaseResults(results.map(stripBaseRef))
+            setBaseResults(normalizeCreateReviewBaseSearchResults(results))
             setBaseSearchError(null)
           }
         })

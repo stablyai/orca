@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveTabAgent } from './tab-agent'
+import { hasCompletedTabAgent, resolveCompletedTabAgent, resolveTabAgent } from './tab-agent'
 import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../shared/types'
 
@@ -64,6 +64,17 @@ describe('resolveTabAgent', () => {
       }
     }
     expect(resolveTabAgent(map, layout(LEAF_A), 'tab-1')).toBeNull()
+  })
+
+  it('exposes the completed hook agent for title disambiguation', () => {
+    const map = {
+      [`tab-1:${LEAF_A}`]: {
+        ...entry(`tab-1:${LEAF_A}`, 'openclaude'),
+        state: 'done' as const
+      }
+    }
+    expect(hasCompletedTabAgent(map, 'tab-1')).toBe(true)
+    expect(resolveCompletedTabAgent(map, 'tab-1')).toBe('openclaude')
   })
 
   it('keeps the terminal glyph for an agent Orca has no icon for', () => {

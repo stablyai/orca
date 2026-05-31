@@ -35,7 +35,10 @@ vi.mock('./remote-workspace-events', () => ({
   registerRemoteWorkspaceNotificationHandler: registerRemoteWorkspaceNotificationHandlerMock
 }))
 
-import { registerRemoteWorkspaceHandlers } from './remote-workspace'
+import {
+  _resetRemoteWorkspaceCachesForTests,
+  registerRemoteWorkspaceHandlers
+} from './remote-workspace'
 
 function snapshot(session: RemoteWorkspaceSession, revision = 7): RemoteWorkspaceSnapshot {
   return {
@@ -80,6 +83,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
   }
 
   beforeEach(() => {
+    _resetRemoteWorkspaceCachesForTests()
     handlers.clear()
     muxByTargetId.clear()
     vi.mocked(ipcMain.handle).mockReset()
@@ -177,6 +181,115 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       [{ targetId: 'target-1', result: { ok: true } }]
     ])
     expect(patchBaseRevisions).toEqual([7, 8])
+  })
+
+  it('patches independent hydrated targets concurrently', async () => {
+    const secondTarget: SshTarget = {
+      id: 'target-2',
+      label: 'Target 2',
+      host: 'two.example.com',
+      port: 22,
+      username: 'alice'
+    }
+    getSshConnectionStoreMock.mockReturnValue({
+      listTargets: () => [target, secondTarget]
+    })
+    getRepoMock.mockImplementation((repoId: string) => {
+      if (repoId === 'repo-target-1') {
+        return {
+          id: 'repo-target-1',
+          path: '/remote/repo-a',
+          displayName: 'Repo A',
+          badgeColor: 'blue',
+          addedAt: 1,
+          connectionId: 'target-1'
+        } as never
+      }
+      if (repoId === 'repo-target-2') {
+        return {
+          id: 'repo-target-2',
+          path: '/remote/repo-b',
+          displayName: 'Repo B',
+          badgeColor: 'green',
+          addedAt: 1,
+          connectionId: 'target-2'
+        } as never
+      }
+      return undefined
+    })
+
+    let releaseFirstPatch!: () => void
+    const firstPatchCanFinish = new Promise<void>((resolve) => {
+      releaseFirstPatch = resolve
+    })
+    const previousSnapshot = snapshot(
+      {
+        activeWorktreePath: '/previous',
+        activeTabId: null,
+        tabsByWorktreePath: {},
+        terminalLayoutsByTabId: {}
+      },
+      7
+    )
+    const slowRequest = vi.fn(async (method: string, params: Record<string, unknown>) => {
+      if (method === 'workspace.get') {
+        return previousSnapshot
+      }
+      if (method === 'workspace.patch') {
+        await firstPatchCanFinish
+        return { ok: true, snapshot: snapshot(patchSession(params), 8) }
+      }
+      throw new Error(`Unexpected method ${method}`)
+    })
+    const fastRequest = vi.fn(async (method: string, params: Record<string, unknown>) => {
+      if (method === 'workspace.get') {
+        return previousSnapshot
+      }
+      if (method === 'workspace.patch') {
+        return { ok: true, snapshot: snapshot(patchSession(params), 8) }
+      }
+      throw new Error(`Unexpected method ${method}`)
+    })
+    muxByTargetId.set('target-1', { request: slowRequest })
+    muxByTargetId.set('target-2', { request: fastRequest })
+
+    const resultPromise = callSetForConnectedTargets({
+      session: {
+        ...sessionWithTab('repo-target-1::/remote/workspace-a', 'tab-a'),
+        tabsByWorktree: {
+          'repo-target-1::/remote/workspace-a': [
+            {
+              id: 'tab-a',
+              type: 'terminal',
+              title: 'Shell A',
+              worktreeId: 'repo-target-1::/remote/workspace-a'
+            } as never
+          ],
+          'repo-target-2::/remote/workspace-b': [
+            {
+              id: 'tab-b',
+              type: 'terminal',
+              title: 'Shell B',
+              worktreeId: 'repo-target-2::/remote/workspace-b'
+            } as never
+          ]
+        }
+      },
+      hydratedTargetIds: ['target-1', 'target-2']
+    })
+
+    await vi.waitFor(() =>
+      expect(slowRequest.mock.calls.some(([method]) => method === 'workspace.patch')).toBe(true)
+    )
+    await vi.waitFor(() =>
+      expect(fastRequest.mock.calls.some(([method]) => method === 'workspace.patch')).toBe(true)
+    )
+
+    releaseFirstPatch()
+    await expect(resultPromise).resolves.toMatchObject([
+      { targetId: 'target-1', result: { ok: true } },
+      { targetId: 'target-2', result: { ok: true } }
+    ])
   })
 
   it('retries once when a reset relay reports a lower revision than the cached base', async () => {

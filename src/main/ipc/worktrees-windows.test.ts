@@ -11,6 +11,8 @@ const {
   getBranchConflictKindMock,
   getPRForBranchMock,
   getEffectiveHooksMock,
+  getEffectiveHooksFromConfigMock,
+  getDefaultTabsLaunchMock,
   createIssueCommandRunnerScriptMock,
   createSetupRunnerScriptMock,
   shouldRunSetupForCreateMock,
@@ -30,6 +32,8 @@ const {
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
   getEffectiveHooksMock: vi.fn(),
+  getEffectiveHooksFromConfigMock: vi.fn(),
+  getDefaultTabsLaunchMock: vi.fn(),
   createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
   shouldRunSetupForCreateMock: vi.fn(),
@@ -75,6 +79,8 @@ vi.mock('../hooks', () => ({
   createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
   createSetupRunnerScript: createSetupRunnerScriptMock,
   getEffectiveHooks: getEffectiveHooksMock,
+  getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
+  getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   loadHooks: loadHooksMock,
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock,
@@ -122,6 +128,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getBranchConflictKindMock.mockReset()
     getPRForBranchMock.mockReset()
     getEffectiveHooksMock.mockReset()
+    getEffectiveHooksFromConfigMock.mockReset()
+    getDefaultTabsLaunchMock.mockReset()
     createIssueCommandRunnerScriptMock.mockReset()
     createSetupRunnerScriptMock.mockReset()
     shouldRunSetupForCreateMock.mockReset()
@@ -176,6 +184,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
     getEffectiveHooksMock.mockReturnValue(null)
+    getEffectiveHooksFromConfigMock.mockReturnValue(null)
+    getDefaultTabsLaunchMock.mockReturnValue(undefined)
     shouldRunSetupForCreateMock.mockReturnValue(false)
     computeWorktreePathMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')

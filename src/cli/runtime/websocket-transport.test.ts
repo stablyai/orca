@@ -74,6 +74,7 @@ describe('CLI remote WebSocket transport', () => {
     const client = new RuntimeClient('/tmp/unused', 5_000, barePayload)
     const status = await client.getCliStatus()
 
+    expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
   })
@@ -95,6 +96,7 @@ describe('CLI remote WebSocket transport', () => {
     const client = new RuntimeClient(userDataPath, 5_000, null, 'remote-dev')
     const status = await client.getCliStatus()
 
+    expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-env-1')
   })

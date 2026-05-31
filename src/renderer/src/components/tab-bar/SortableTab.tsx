@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, Minimize2, Columns2, Rows2 } from 'lucide-react'
+import { X, Minimize2, Columns2, Rows2, Pin, PinOff } from 'lucide-react'
 import { ShellIcon } from './shell-icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { stripLeadingAgentTitleDecoration } from '@/lib/agent-title-decoration'
@@ -30,6 +30,7 @@ type SortableTabProps = {
   tabCount: number
   hasTabsToRight: boolean
   isActive: boolean
+  isPinned: boolean
   isExpanded: boolean
   onActivate: (tabId: string) => void
   onClose: (tabId: string) => void
@@ -37,6 +38,7 @@ type SortableTabProps = {
   onCloseToRight: (tabId: string) => void
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
+  onTogglePin: () => void
   onToggleExpand: (tabId: string) => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
@@ -63,6 +65,7 @@ export default function SortableTab({
   tabCount,
   hasTabsToRight,
   isActive,
+  isPinned,
   isExpanded,
   onActivate,
   onClose,
@@ -70,6 +73,7 @@ export default function SortableTab({
   onCloseToRight,
   onSetCustomTitle,
   onSetTabColor,
+  onTogglePin,
   onToggleExpand,
   onSplitGroup,
   dragData,
@@ -115,7 +119,7 @@ export default function SortableTab({
   // (e.g. showing the bell without the wash, or vice versa).
   const showActivityAffordance = hasUnreadActivity && !isEditing
   const [renameValue, setRenameValue] = useState('')
-  const renameInputRef = useRef<HTMLInputElement>(null)
+  const renameFocusFrameRef = useRef<number | null>(null)
   // Why: React's synthetic onBlur fires during the Input's unmount when isEditing flips
   // to false. Without this guard, pressing Escape (or committing via Enter) would cause
   // the blur handler to run commitRename a second time and overwrite the title with the
@@ -148,21 +152,22 @@ export default function SortableTab({
     setIsEditing(false)
   }, [])
 
-  // Why: rAF defers focus()+select() until after the Input mounts so the text
-  // is pre-selected (overwriting the old title is the common case). Deps are
-  // intentionally just [isEditing] — we do NOT re-run when tab.title or
-  // tab.customTitle change mid-edit, so external title updates cannot
-  // re-focus/re-select and disrupt the user's typing.
-  useEffect(() => {
-    if (!isEditing) {
+  const setRenameInputElement = useCallback((input: HTMLInputElement | null) => {
+    if (renameFocusFrameRef.current !== null) {
+      cancelAnimationFrame(renameFocusFrameRef.current)
+      renameFocusFrameRef.current = null
+    }
+    if (!input) {
       return
     }
-    const frame = requestAnimationFrame(() => {
-      renameInputRef.current?.focus()
-      renameInputRef.current?.select()
+    // Why: defer past Radix menu teardown/focus restore while still keying off
+    // input mount only; terminal title updates must not re-select in-progress text.
+    renameFocusFrameRef.current = requestAnimationFrame(() => {
+      renameFocusFrameRef.current = null
+      input.focus()
+      input.select()
     })
-    return () => cancelAnimationFrame(frame)
-  }, [isEditing])
+  }, [])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -197,6 +202,7 @@ export default function SortableTab({
       data-testid="sortable-tab"
       data-tab-id={tab.id}
       data-tab-title={tabTitle}
+      data-pinned={isPinned ? 'true' : 'false'}
       // Why: expose the active/inactive flag as a DOM attribute so E2E specs
       // can assert on user-observable selection state without reading the
       // Zustand store. A store-only "is this tab active?" round-trip would
@@ -246,6 +252,9 @@ export default function SortableTab({
         if (e.button === 1) {
           e.preventDefault()
           e.stopPropagation()
+          if (isPinned) {
+            return
+          }
           onClose(tab.id)
         }
       }}
@@ -280,7 +289,7 @@ export default function SortableTab({
         </span>
       ) : (
         // Why: ShellIcon renders a colored brand-style tile for PowerShell,
-        // CMD, and WSL so Windows users can distinguish shells at a glance.
+        // CMD, Git Bash, and WSL so Windows users can distinguish shells at a glance.
         // On mac/linux (or Windows tabs without a resolved shell) it falls
         // back to a matching colored generic-terminal tile — keeping every
         // tab's leading glyph in the same visual idiom instead of mixing a
@@ -295,9 +304,12 @@ export default function SortableTab({
           <ShellIcon shell={shellForIcon} size={12} />
         </span>
       )}
+      {isPinned && !isEditing && (
+        <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
+      )}
       {isEditing ? (
         <Input
-          ref={renameInputRef}
+          ref={setRenameInputElement}
           data-tab-rename-input="true"
           value={renameValue}
           aria-label={`Rename tab ${tabTitle}`}
@@ -363,7 +375,7 @@ export default function SortableTab({
           <Minimize2 className="w-3 h-3" />
         </button>
       )}
-      {!isEditing && (
+      {!isEditing && !isPinned && (
         <button
           className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
             isActive
@@ -441,7 +453,18 @@ export default function SortableTab({
             Split Right
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => onClose(tab.id)}>Close</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onTogglePin}>
+            {isPinned ? (
+              <PinOff className="mr-1.5 size-3.5" />
+            ) : (
+              <Pin className="mr-1.5 size-3.5" />
+            )}
+            {isPinned ? 'Unpin Tab' : 'Pin Tab'}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
+            Close
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
             Close Others
           </DropdownMenuItem>

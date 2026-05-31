@@ -42,7 +42,7 @@ export function useFileExplorerReveal({
   setFlashingPath,
   flashTimeoutRef,
   virtualizer
-}: UseFileExplorerRevealParams): void {
+}: UseFileExplorerRevealParams): () => void {
   const revealScrollFrameRef = useRef<number | null>(null)
   const revealScrollTimeoutRef = useRef<number | null>(null)
 
@@ -57,7 +57,13 @@ export function useFileExplorerReveal({
     }
   }, [])
 
-  useEffect(() => cancelRevealScroll, [cancelRevealScroll])
+  const cancelRevealTimers = useCallback((): void => {
+    cancelRevealScroll()
+    if (flashTimeoutRef.current !== null) {
+      window.clearTimeout(flashTimeoutRef.current)
+      flashTimeoutRef.current = null
+    }
+  }, [cancelRevealScroll, flashTimeoutRef])
 
   const pendingRevealAncestorDirs = useMemo(() => {
     if (
@@ -214,4 +220,6 @@ export function useFileExplorerReveal({
     virtualizer,
     worktreePath
   ])
+
+  return cancelRevealTimers
 }

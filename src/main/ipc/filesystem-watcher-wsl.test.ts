@@ -143,6 +143,40 @@ describe('createWslWatcher', () => {
     await root.subscription.unsubscribe()
   })
 
+  it('limits concurrent child directory reads during WSL snapshots', async () => {
+    const scheduleBatchFlush = vi.fn()
+    const childDirs = Array.from({ length: 40 }, (_, index) => dirent(`dir-${index}`, 'dir'))
+    let activeChildReads = 0
+    let maxActiveChildReads = 0
+
+    readdirMock.mockImplementation((dirPath: string) => {
+      if (dirPath === rootPath) {
+        return Promise.resolve(childDirs)
+      }
+      activeChildReads += 1
+      maxActiveChildReads = Math.max(maxActiveChildReads, activeChildReads)
+      return new Promise<ReturnType<typeof dirent>[]>((resolve) => {
+        setTimeout(() => {
+          activeChildReads -= 1
+          resolve([])
+        }, 1)
+      })
+    })
+
+    const rootPromise = createWslWatcher(rootKey, rootPath, deps(scheduleBatchFlush))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(maxActiveChildReads).toBeLessThanOrEqual(8)
+    for (let i = 0; i < childDirs.length; i += 1) {
+      await vi.advanceTimersByTimeAsync(1)
+    }
+
+    const root = await rootPromise
+    expect(maxActiveChildReads).toBeLessThanOrEqual(8)
+    await root.subscription.unsubscribe()
+  })
+
   it('marks a large WSL poll event batch for overflow without retaining every event', async () => {
     const scheduleBatchFlush = vi.fn()
     const initialEntries = Array.from({ length: 200_000 }, (_, index) => dirent(`file-${index}.ts`))

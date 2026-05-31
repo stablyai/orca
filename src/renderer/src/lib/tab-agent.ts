@@ -48,12 +48,20 @@ export function hasCompletedTabAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   tabId: string
 ): boolean {
+  return resolveCompletedTabAgent(agentStatusByPaneKey, tabId) !== null
+}
+
+export function resolveCompletedTabAgent(
+  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  tabId: string
+): TuiAgent | null {
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
     if (entry.state === 'done' && parsePaneKey(paneKey)?.tabId === tabId) {
-      if (agentTypeToIconAgent(entry.agentType)) {
-        return true
+      const agent = agentTypeToIconAgent(entry.agentType)
+      if (agent) {
+        return agent
       }
     }
   }
-  return false
+  return null
 }

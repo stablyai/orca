@@ -168,10 +168,16 @@ describe('rich markdown round trip', () => {
     )
   })
 
+  it('preserves aliased doc links', () => {
+    expect(roundTripMarkdown('Link to [[docs/setup-guide.md|Setup Guide]]\n')).toBe(
+      'Link to [[docs/setup-guide.md|Setup Guide]]'
+    )
+  })
+
   it('does not encode invalid doc links', () => {
-    const result = roundTripMarkdown('Empty [[]] and piped [[a|b]]\n')
+    const result = roundTripMarkdown('Empty [[]] and blank alias [[a|]]\n')
     expect(result).toContain('[[]]')
-    expect(result).toContain('[[a|b]]')
+    expect(result).toContain('[[a|]]')
   })
 
   it('preserves doc links inside fenced code blocks as plain text', () => {

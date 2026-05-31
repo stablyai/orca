@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Worktree } from '../../../shared/types'
+import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { getConnectionId } from '@/lib/connection-context'
 import { listRuntimeFiles } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
@@ -17,7 +18,7 @@ export function cleanRuntimeFileListError(error: unknown): string {
 }
 
 export function isNestedWorktreePath(parentPath: string, childPath: string): boolean {
-  const windowsPath = /^[a-zA-Z]:[\\/]/.test(parentPath) || parentPath.startsWith('\\\\')
+  const windowsPath = isWindowsAbsolutePathLike(parentPath)
   const parent = parentPath.replace(/[\\/]+$/, '').replace(/\\/g, '/')
   const child = childPath.replace(/\\/g, '/')
   // Why: Windows paths are case-insensitive and can arrive with mixed slash
@@ -41,6 +42,25 @@ export function getNestedWorktreeExcludePaths(
     .sort()
 }
 
+export type NestedWorktreeExcludeRequest = {
+  paths: string[]
+  key: string
+}
+
+export function getNestedWorktreeExcludeRequest(
+  worktreeId: string | null,
+  worktreePath: string | null,
+  repoWorktrees: readonly Worktree[]
+): NestedWorktreeExcludeRequest {
+  if (!worktreeId || !worktreePath || repoWorktrees.length === 0) {
+    return { paths: [], key: '[]' }
+  }
+  const paths = getNestedWorktreeExcludePaths(worktreeId, worktreePath, repoWorktrees)
+  // Why: worktree paths can contain newlines. Use JSON as a stable dependency
+  // key while passing the original array to IPC so paths stay lossless.
+  return { paths, key: JSON.stringify(paths) }
+}
+
 export function useRuntimeFileListForWorktree({
   enabled,
   worktreeId
@@ -56,12 +76,10 @@ export function useRuntimeFileListForWorktree({
   const lastRequestKeyRef = useRef('')
 
   const worktreePath = worktree?.path ?? null
-  const excludePathsKey = useMemo(() => {
-    if (!worktreeId || !worktreePath || repoWorktrees.length === 0) {
-      return ''
-    }
-    return getNestedWorktreeExcludePaths(worktreeId, worktreePath, repoWorktrees).join('\n')
-  }, [repoWorktrees, worktreeId, worktreePath])
+  const excludeRequest = useMemo(
+    () => getNestedWorktreeExcludeRequest(worktreeId, worktreePath, repoWorktrees),
+    [repoWorktrees, worktreeId, worktreePath]
+  )
 
   const connectionId = useMemo(() => getConnectionId(worktreeId) ?? undefined, [worktreeId])
   const activeTargetStatus = useAppStore((state) =>
@@ -73,8 +91,8 @@ export function useRuntimeFileListForWorktree({
     activeTargetStatus === 'reconnecting'
   const requestKey = useMemo(
     () =>
-      `${worktreePath ?? ''}\n${connectionId ?? ''}\n${excludePathsKey}\n${activeTargetStatus ?? ''}`,
-    [activeTargetStatus, connectionId, excludePathsKey, worktreePath]
+      `${worktreePath ?? ''}\n${connectionId ?? ''}\n${excludeRequest.key}\n${activeTargetStatus ?? ''}`,
+    [activeTargetStatus, connectionId, excludeRequest.key, worktreePath]
   )
 
   useEffect(() => {
@@ -99,7 +117,7 @@ export function useRuntimeFileListForWorktree({
     setLoadError(null)
     setLoading(true)
 
-    const excludePaths = excludePathsKey ? excludePathsKey.split('\n') : undefined
+    const excludePaths = excludeRequest.paths.length > 0 ? excludeRequest.paths : undefined
 
     void listRuntimeFiles(
       {
@@ -133,7 +151,7 @@ export function useRuntimeFileListForWorktree({
     return () => {
       cancelled = true
     }
-  }, [connectionId, enabled, excludePathsKey, requestKey, worktreeId, worktreePath])
+  }, [connectionId, enabled, excludeRequest, requestKey, worktreeId, worktreePath])
 
   return { files, loading: loading || connectionPending, loadError }
 }

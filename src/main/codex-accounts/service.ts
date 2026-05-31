@@ -229,6 +229,7 @@ export class CodexAccountService {
     })
     this.runtimeHome.syncForCurrentSelection()
 
+    this.runtimeHome.removeHostLaunchHomeForAccount?.(accountId)
     this.safeRemoveManagedHome(account.managedHomePath)
     // Why: a removed account can no longer appear in the switcher dropdown,
     // so purge its cached usage to avoid stale entries.
@@ -495,7 +496,16 @@ export class CodexAccountService {
   }
 
   private writeManagedConfig(managedHomePath: string, contents: string): void {
-    writeFileAtomically(join(managedHomePath, 'config.toml'), contents)
+    const configPath = join(managedHomePath, 'config.toml')
+    try {
+      if (existsSync(configPath) && readFileSync(configPath, 'utf-8') === contents) {
+        return
+      }
+    } catch {
+      // Why: read errors should not make a stale config look current; the
+      // atomic write path owns Windows ACL repair and persistent error surfacing.
+    }
+    writeFileAtomically(configPath, contents)
   }
 
   private getManagedAccountsRoot(): string {
@@ -734,26 +744,36 @@ export class CodexAccountService {
         }
       }
 
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      const cleanupListeners = (): void => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        child.stdout.off('data', appendOutput)
+        child.stderr.off('data', appendOutput)
+        child.off('error', onError)
+        child.off('close', onClose)
+      }
+
       const settle = (callback: () => void): void => {
         if (settled) {
           return
         }
         settled = true
-        clearTimeout(timeout)
+        cleanupListeners()
         callback()
       }
 
-      const timeout = setTimeout(() => {
+      const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
+      timeout = setTimeout(() => {
         child.kill()
         settle(() => {
-          rejectPromise(new Error('Codex sign-in took too long to finish. Please try again.'))
+          rejectPromise(timeoutError)
         })
       }, LOGIN_TIMEOUT_MS)
 
-      child.stdout.on('data', appendOutput)
-      child.stderr.on('data', appendOutput)
-
-      child.on('error', (error) => {
+      const onError = (error: Error): void => {
         settle(() => {
           const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
           // Why: ENOENT can mean either the codex binary doesn't exist OR the
@@ -767,9 +787,9 @@ export class CodexAccountService {
             : error.message
           rejectPromise(new Error(message))
         })
-      })
+      }
 
-      child.on('close', (code) => {
+      const onClose = (code: number | null): void => {
         settle(() => {
           if (code === 0) {
             resolvePromise()
@@ -784,7 +804,12 @@ export class CodexAccountService {
             )
           )
         })
-      })
+      }
+
+      child.stdout.on('data', appendOutput)
+      child.stderr.on('data', appendOutput)
+      child.on('error', onError)
+      child.on('close', onClose)
     })
   }
 

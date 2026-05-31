@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveComposerBranchSelection } from './composer-branch-selection'
+import {
+  resolveComposerBranchNameOverrideForCreate,
+  resolveComposerBranchSelection
+} from './composer-branch-selection'
 
 describe('resolveComposerBranchSelection', () => {
   it('keeps selected remote ref as base while using the local branch name for create', () => {
@@ -49,5 +52,27 @@ describe('resolveComposerBranchSelection', () => {
       name: 'fix/bug-0',
       lastAutoName: 'fix/bug-0'
     })
+  })
+
+  it('keeps resolver-provided PR branch overrides when the workspace name changes', () => {
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: 'feature/fix',
+        branchAutoName: '',
+        workspaceName: 'edited display name',
+        preserveWorkspaceNameEdits: true
+      })
+    ).toBe('feature/fix')
+  })
+
+  it('keeps existing branch picker override behavior tied to the auto-name', () => {
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: 'feature/fix',
+        branchAutoName: 'feature/fix',
+        workspaceName: 'edited display name',
+        preserveWorkspaceNameEdits: false
+      })
+    ).toBeUndefined()
   })
 })

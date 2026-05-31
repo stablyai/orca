@@ -85,6 +85,7 @@ import {
   main,
   normalizeWorktreeSelector
 } from './index'
+import { GLOBAL_FLAGS } from './args'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 
 describe('COMMAND_SPECS collision check', () => {
@@ -94,6 +95,20 @@ describe('COMMAND_SPECS collision check', () => {
       const key = spec.path.join(' ')
       expect(seen.has(key), `Duplicate COMMAND_SPECS path: "${key}"`).toBe(false)
       seen.add(key)
+    }
+  })
+
+  it('allows every flag documented in command usage strings', () => {
+    const flagPattern = /--([a-zA-Z0-9-]+)/g
+    for (const spec of COMMAND_SPECS) {
+      const allowed = new Set([...GLOBAL_FLAGS, ...spec.allowedFlags])
+      for (const match of spec.usage.matchAll(flagPattern)) {
+        const flag = match[1]
+        expect(
+          allowed.has(flag),
+          `Documented flag --${flag} is not allowed for command: ${spec.path.join(' ')}`
+        ).toBe(true)
+      }
     }
   })
 })
@@ -183,6 +198,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([
+        buildWorktree('/tmp/repo', 'main'),
         buildWorktree('/tmp/repo/feature', 'feature/foo'),
         buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'duplicate-repo')
       ]),
@@ -411,8 +427,45 @@ describe('orca cli worktree awareness', () => {
       displayName: undefined,
       linkedIssue: undefined,
       comment: undefined,
+      workspaceStatus: undefined,
       parentWorktree: undefined,
       noParent: true
+    })
+  })
+
+  it('passes workspace status through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_status', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          workspaceStatus: 'in-review'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--workspace-status',
+        'in-review',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/child',
+      displayName: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      workspaceStatus: 'in-review',
+      parentWorktree: undefined,
+      noParent: false
     })
   })
 
@@ -736,6 +789,22 @@ describe('orca cli worktree awareness', () => {
     expect(serveOrcaAppMock).not.toHaveBeenCalled()
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
       'Invalid --port value: not-a-port'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects value-less serve ports before launching the app', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['serve', '--port', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --port.'
     )
     expect(process.exitCode).toBe(1)
 

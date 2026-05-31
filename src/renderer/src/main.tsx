@@ -3,8 +3,16 @@ import './assets/main.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
+import {
+  installRendererCrashDiagnostics,
+  recordRendererCrashBreadcrumb
+} from './lib/crash-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
+
+recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
+installRendererCrashDiagnostics()
 
 if (
   import.meta.env.DEV &&
@@ -19,8 +27,22 @@ if (
 
 applyDocumentTheme('system', { disableTransitions: false })
 
-createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root')
+if (!rootElement) {
+  recordRendererCrashBreadcrumb('renderer_root_missing')
+  throw new Error('Renderer root element not found.')
+}
+
+createRoot(rootElement).render(
   <StrictMode>
-    <App />
+    <RecoverableRenderErrorBoundary
+      boundaryId="app.root"
+      surface="app-root"
+      title="Orca hit a renderer error."
+      description="The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists."
+    >
+      <App />
+    </RecoverableRenderErrorBoundary>
   </StrictMode>
 )
+recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')

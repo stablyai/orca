@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { existsSync, readFileSync } from 'node:fs'
 import { release } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,7 +12,7 @@ const scriptPath = fileURLToPath(import.meta.url)
 const projectDir = resolve(dirname(scriptPath), '../..')
 const runtime = readRuntimeArg()
 
-const NATIVE_MODULES = ['better-sqlite3', 'node-pty']
+const NATIVE_MODULES = ['node-pty']
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
@@ -106,14 +107,12 @@ function runNodeCheck() {
 }
 
 function runElectronCheck() {
-  let electronExecutable
-  try {
-    electronExecutable = require('electron')
-  } catch (error) {
-    return { ok: false, error }
+  const electronExecutable = resolveInstalledElectronExecutable()
+  if (!electronExecutable.ok) {
+    return { ok: false, error: electronExecutable.error }
   }
 
-  const result = spawnSync(electronExecutable, [scriptPath, CHILD_CHECK_FLAG], {
+  const result = spawnSync(electronExecutable.path, [scriptPath, CHILD_CHECK_FLAG], {
     cwd: projectDir,
     env: {
       ...process.env,
@@ -124,6 +123,63 @@ function runElectronCheck() {
   })
 
   return parseChildCheckResult(result)
+}
+
+function resolveInstalledElectronExecutable() {
+  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+  try {
+    const electronVersion = JSON.parse(
+      readFileSync(resolve(electronPackageDir, 'package.json'), 'utf8')
+    ).version
+    const platformPath = getElectronPlatformPath()
+    const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
+      .trim()
+      .replace(/^v/, '')
+    if (installedVersion !== electronVersion) {
+      return {
+        ok: false,
+        error: new Error(
+          `Electron package binary version ${installedVersion} does not match ${electronVersion}.`
+        )
+      }
+    }
+    const installedPlatformPath = readFileSync(resolve(electronPackageDir, 'path.txt'), 'utf8')
+    if (installedPlatformPath !== platformPath) {
+      return {
+        ok: false,
+        error: new Error(
+          `Electron package path.txt points at ${installedPlatformPath}, expected ${platformPath}.`
+        )
+      }
+    }
+    const electronPath = process.env.ELECTRON_OVERRIDE_DIST_PATH
+      ? resolve(process.env.ELECTRON_OVERRIDE_DIST_PATH, platformPath)
+      : resolve(electronPackageDir, 'dist', platformPath)
+    if (!existsSync(electronPath)) {
+      return { ok: false, error: new Error(`Electron executable is missing at ${electronPath}.`) }
+    }
+    return { ok: true, path: electronPath }
+  } catch (error) {
+    return { ok: false, error }
+  }
+}
+
+function getElectronPlatformPath() {
+  const targetPlatform =
+    process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || process.platform
+  switch (targetPlatform) {
+    case 'mas':
+    case 'darwin':
+      return 'Electron.app/Contents/MacOS/Electron'
+    case 'freebsd':
+    case 'openbsd':
+    case 'linux':
+      return 'electron'
+    case 'win32':
+      return 'electron.exe'
+    default:
+      throw new Error(`Electron builds are not available on platform: ${targetPlatform}`)
+  }
 }
 
 function parseChildCheckResult(result) {
@@ -163,15 +219,6 @@ function collectNativeModuleFailures() {
 }
 
 function loadNativeModule(moduleName) {
-  if (moduleName === 'better-sqlite3') {
-    const Database = require(moduleName)
-    // Why: better-sqlite3 defers loading its .node binding until Database is
-    // constructed, so a plain require() misses Node ABI mismatches.
-    const db = new Database(':memory:')
-    db.close()
-    return
-  }
-
   if (moduleName === 'node-pty') {
     loadNodePtyNativeModule()
     return

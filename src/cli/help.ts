@@ -169,7 +169,7 @@ Common Commands:
   orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
   orca worktree current [--json]
-  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--parent-worktree <selector>|--no-parent] [--json]
+  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
   orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]
   orca worktree ps [--limit <n>] [--json]
   orca file open <path> [--worktree <selector>] [--json]
@@ -388,6 +388,8 @@ export function formatFlagHelp(flag: string): string {
     worktree:
       '--worktree <selector>  Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     workspace: '--workspace <selector> Existing worktree selector for automation runs',
+    'workspace-status':
+      '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',
     prompt: '--prompt <text>        Automation prompt to pass to the agent',
     staged: '--staged               Open staged source-control changes',
     provider: '--provider <agent>     Agent id such as codex, claude, or gemini',

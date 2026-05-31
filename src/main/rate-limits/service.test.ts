@@ -3,6 +3,7 @@ stale-data handling, account-switch generation, and OpenCode config-change
 semantics covered in service.ts, which already carries the same pragma.
 Keeping them in one file makes the ordering contract reviewable as a unit. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'events'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
@@ -78,6 +79,34 @@ function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<
   return service as unknown as { fetchAll: () => Promise<void> }
 }
 
+type RateLimitWindow = Parameters<RateLimitService['attach']>[0]
+
+class FakeRateLimitWindow extends EventEmitter {
+  webContents = {
+    send: vi.fn()
+  }
+
+  isDestroyed(): boolean {
+    return false
+  }
+
+  isVisible(): boolean {
+    return true
+  }
+
+  isMinimized(): boolean {
+    return false
+  }
+
+  isFocused(): boolean {
+    return true
+  }
+}
+
+function asRateLimitWindow(window: FakeRateLimitWindow): RateLimitWindow {
+  return window as unknown as RateLimitWindow
+}
+
 describe('RateLimitService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -109,6 +138,61 @@ describe('RateLimitService', () => {
 
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+  })
+
+  it('removes all window listeners when replacing the attached window', () => {
+    const service = new RateLimitService()
+    const firstWindow = new FakeRateLimitWindow()
+    const secondWindow = new FakeRateLimitWindow()
+
+    service.attach(asRateLimitWindow(firstWindow))
+    expect(firstWindow.listenerCount('focus')).toBe(1)
+    expect(firstWindow.listenerCount('show')).toBe(1)
+    expect(firstWindow.listenerCount('restore')).toBe(1)
+    expect(firstWindow.listenerCount('closed')).toBe(1)
+
+    service.attach(asRateLimitWindow(secondWindow))
+
+    expect(firstWindow.listenerCount('focus')).toBe(0)
+    expect(firstWindow.listenerCount('show')).toBe(0)
+    expect(firstWindow.listenerCount('restore')).toBe(0)
+    expect(firstWindow.listenerCount('closed')).toBe(0)
+    expect(secondWindow.listenerCount('focus')).toBe(1)
+    expect(secondWindow.listenerCount('show')).toBe(1)
+    expect(secondWindow.listenerCount('restore')).toBe(1)
+    expect(secondWindow.listenerCount('closed')).toBe(1)
+
+    service.stop()
+
+    expect(secondWindow.listenerCount('focus')).toBe(0)
+    expect(secondWindow.listenerCount('show')).toBe(0)
+    expect(secondWindow.listenerCount('restore')).toBe(0)
+    expect(secondWindow.listenerCount('closed')).toBe(0)
+  })
+
+  it('sanitizes renderer-provided polling intervals before scheduling timers', () => {
+    vi.useFakeTimers()
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval')
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+      const service = new RateLimitService()
+
+      service.setPollingInterval(Number.NaN)
+      service.start()
+      expect(intervalSpy).toHaveBeenLastCalledWith(expect.any(Function), 15 * 60 * 1000)
+
+      service.setPollingInterval(Number.MAX_SAFE_INTEGER)
+      expect(intervalSpy).toHaveBeenLastCalledWith(expect.any(Function), 2_147_483_647)
+
+      service.setPollingInterval(10)
+      expect(intervalSpy).toHaveBeenLastCalledWith(expect.any(Function), 30_000)
+
+      service.stop()
+    } finally {
+      intervalSpy.mockRestore()
+      vi.useRealTimers()
+    }
   })
 
   it('keeps recent stale data across repeated failures', async () => {
@@ -398,7 +482,8 @@ describe('RateLimitService', () => {
     expect(service.getState().inactiveCodexAccounts).toEqual([
       {
         accountId: 'account-1',
-        claude: expect.objectContaining({
+        rateLimits: expect.objectContaining({
+          provider: 'codex',
           session: expect.objectContaining({ usedPercent: 33 })
         }),
         updatedAt: expect.any(Number),
@@ -423,6 +508,66 @@ describe('RateLimitService', () => {
 
     accountFetch.resolve(okProvider('codex', 50, Date.now()))
     await firstFetch
+  })
+
+  it('keeps sibling inactive Codex preview fetches alive when one account is evicted', async () => {
+    const service = new RateLimitService()
+    const accountFetch = deferred<ProviderRateLimits>()
+    let inactiveAccounts = [
+      { id: 'account-a', managedHomePath: '/tmp/account-a/home' },
+      { id: 'account-b', managedHomePath: '/tmp/account-b/home' }
+    ]
+    service.setInactiveCodexAccountsResolver(() => inactiveAccounts)
+    vi.mocked(fetchCodexRateLimits).mockReturnValueOnce(accountFetch.promise)
+
+    const fetchOnOpen = service.fetchInactiveCodexAccountsOnOpen()
+    await Promise.resolve()
+    expect(service.getState().inactiveCodexAccounts).toEqual([
+      { accountId: 'account-a', rateLimits: null, updatedAt: 0, isFetching: true },
+      { accountId: 'account-b', rateLimits: null, updatedAt: 0, isFetching: true }
+    ])
+
+    inactiveAccounts = [{ id: 'account-a', managedHomePath: '/tmp/account-a/home' }]
+    service.evictInactiveCodexCache('account-b')
+    accountFetch.resolve(okProvider('codex', 64, Date.now()))
+    await fetchOnOpen
+
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+    expect(service.getState().inactiveCodexAccounts).toEqual([
+      {
+        accountId: 'account-a',
+        rateLimits: expect.objectContaining({
+          provider: 'codex',
+          session: expect.objectContaining({ usedPercent: 64 })
+        }),
+        updatedAt: expect.any(Number),
+        isFetching: false
+      }
+    ])
+  })
+
+  it('does not recache an inactive Codex account that becomes active during fetch-on-open', async () => {
+    const service = new RateLimitService()
+    const accountFetch = deferred<ProviderRateLimits>()
+    let inactiveAccounts = [{ id: 'account-b', managedHomePath: '/tmp/account-b/home' }]
+    service.setInactiveCodexAccountsResolver(() => inactiveAccounts)
+    service.setCodexHomePathResolver(() => '/tmp/account-b/home')
+    vi.mocked(fetchCodexRateLimits)
+      .mockReturnValueOnce(accountFetch.promise)
+      .mockResolvedValueOnce(okProvider('codex', 7, Date.now()))
+
+    const fetchOnOpen = service.fetchInactiveCodexAccountsOnOpen()
+    await Promise.resolve()
+    expect(service.getState().inactiveCodexAccounts).toEqual([
+      { accountId: 'account-b', rateLimits: null, updatedAt: 0, isFetching: true }
+    ])
+
+    inactiveAccounts = []
+    await service.refreshForCodexAccountChange('account-a')
+    accountFetch.resolve(okProvider('codex', 42, Date.now()))
+    await fetchOnOpen
+
+    expect(service.getState().inactiveCodexAccounts).toEqual([])
   })
 
   it('preserves Gemini buckets through getState after fetch', async () => {
@@ -586,7 +731,7 @@ describe('RateLimitService', () => {
     const fetchOnOpen = service.fetchInactiveClaudeAccountsOnOpen()
     await Promise.resolve()
     expect(service.getState().inactiveClaudeAccounts).toEqual([
-      { accountId: 'account-1', claude: null, updatedAt: 0, isFetching: true }
+      { accountId: 'account-1', rateLimits: null, updatedAt: 0, isFetching: true }
     ])
 
     service.evictInactiveClaudeCache('account-1')
@@ -628,7 +773,8 @@ describe('RateLimitService', () => {
     expect(service.getState().inactiveClaudeAccounts).toEqual([
       {
         accountId: 'account-1',
-        claude: expect.objectContaining({
+        rateLimits: expect.objectContaining({
+          provider: 'claude',
           session: expect.objectContaining({ usedPercent: 7 })
         }),
         updatedAt: expect.any(Number),

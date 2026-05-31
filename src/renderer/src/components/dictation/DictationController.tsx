@@ -10,7 +10,7 @@ import {
 } from './dictation-insertion-target'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { formatFinalTranscriptSegment } from './dictation-final-segments'
-import { waitForStoppedSession } from './dictation-stopped-sessions'
+import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 
 export function DictationController() {
@@ -40,6 +40,10 @@ export function DictationController() {
   const finalTranscriptReceivedRef = useRef(false)
   const intentionalTargetCancellationRef = useRef(false)
   const insertedFinalTranscriptRef = useRef('')
+
+  const drainStoppedSession = useCallback((sessionId: string) => {
+    void waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
+  }, [])
 
   const finishDictationSession = useCallback(
     async (sessionId: string) => {
@@ -132,6 +136,7 @@ export function DictationController() {
         insertionTargetRef.current = null
         stopCapture()
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
+        drainStoppedSession(sessionId)
         return
       }
 
@@ -141,6 +146,7 @@ export function DictationController() {
         insertionTargetRef.current = null
         stopCapture()
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
+        drainStoppedSession(sessionId)
         return
       }
       if (stopRequestedDuringStartRef.current) {
@@ -156,6 +162,7 @@ export function DictationController() {
         return
       }
       await window.api.speech.stopDictation(sessionId).catch(() => undefined)
+      drainStoppedSession(sessionId)
       if (captureStarted) {
         stopCapture()
       }
@@ -203,6 +210,7 @@ export function DictationController() {
     discardBufferedAudio,
     stopCapture,
     finishDictationSession,
+    drainStoppedSession,
     setPartialTranscript,
     recordFeatureInteraction
   ])
@@ -365,13 +373,7 @@ export function DictationController() {
     })
 
     const cleanupStopped = window.api.speech.onStopped((data) => {
-      const resolver = stoppedResolversRef.current.get(data.sessionId)
-      if (resolver) {
-        stoppedResolversRef.current.delete(data.sessionId)
-        resolver()
-        return
-      }
-      stoppedSessionIdsRef.current.add(data.sessionId)
+      recordStoppedSession(data.sessionId, stoppedSessionIdsRef, stoppedResolversRef)
     })
 
     const cleanupError = window.api.speech.onError((data) => {

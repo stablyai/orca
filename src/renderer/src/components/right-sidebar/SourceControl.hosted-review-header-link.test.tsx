@@ -22,10 +22,10 @@ type MinimalClickEvent = Pick<React.MouseEvent, 'stopPropagation'>
 
 describe('HostedReviewHeaderLink', () => {
   it('opens GitHub PRs in the Checks tab instead of rendering an external link', () => {
-    const onOpenGitHubPRInChecks = vi.fn()
+    const onOpenHostedReviewInChecks = vi.fn()
     const element = HostedReviewHeaderLink({
       review: makeReview(),
-      onOpenGitHubPRInChecks
+      onOpenHostedReviewInChecks
     })
     const markup = renderToStaticMarkup(element)
 
@@ -37,24 +37,46 @@ describe('HostedReviewHeaderLink', () => {
     const stopPropagation = vi.fn()
     ;(element.props.onClick as (event: MinimalClickEvent) => void)({ stopPropagation })
     expect(stopPropagation).toHaveBeenCalledTimes(1)
-    expect(onOpenGitHubPRInChecks).toHaveBeenCalledTimes(1)
+    expect(onOpenHostedReviewInChecks).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps non-GitHub reviews as external hosted-review links', () => {
+  it('opens GitLab MRs in the Checks tab instead of rendering an external link', () => {
+    const onOpenHostedReviewInChecks = vi.fn()
+    const element = HostedReviewHeaderLink({
+      review: makeReview({
+        provider: 'gitlab',
+        number: 31,
+        url: 'https://gitlab.com/acme/widgets/-/merge_requests/31'
+      }),
+      onOpenHostedReviewInChecks
+    })
+    const markup = renderToStaticMarkup(element)
+
+    expect(markup).toContain('<button')
+    expect(markup).not.toContain('href=')
+    expect(markup).toContain('MR #31')
+
+    const stopPropagation = vi.fn()
+    ;(element.props.onClick as (event: MinimalClickEvent) => void)({ stopPropagation })
+    expect(stopPropagation).toHaveBeenCalledTimes(1)
+    expect(onOpenHostedReviewInChecks).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps other provider reviews as external hosted-review links', () => {
     const markup = renderToStaticMarkup(
       <HostedReviewHeaderLink
         review={makeReview({
-          provider: 'gitlab',
+          provider: 'bitbucket',
           number: 31,
-          url: 'https://gitlab.com/acme/widgets/-/merge_requests/31'
+          url: 'https://bitbucket.org/acme/widgets/pull-requests/31'
         })}
-        onOpenGitHubPRInChecks={vi.fn()}
+        onOpenHostedReviewInChecks={vi.fn()}
       />
     )
 
     expect(markup).toContain('<a')
-    expect(markup).toContain('href="https://gitlab.com/acme/widgets/-/merge_requests/31"')
+    expect(markup).toContain('href="https://bitbucket.org/acme/widgets/pull-requests/31"')
     expect(markup).toContain('target="_blank"')
-    expect(markup).toContain('MR #31')
+    expect(markup).toContain('PR #31')
   })
 })

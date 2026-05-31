@@ -49,8 +49,21 @@ describe('terminalOutputPrefersDomRenderer', () => {
     expect(terminalOutputPrefersDomRenderer(low)).toBe(true)
   })
 
+  it('detects ASCII ANSI background SGR output before the non-ASCII fast path', () => {
+    expect(terminalOutputPrefersDomRenderer('\x1b[48;2;12;34;56m codex input \x1b[0m')).toBe(true)
+    expect(terminalOutputPrefersDomRenderer('\x1b[48:2::12:34:56m codex input \x1b[0m')).toBe(true)
+    expect(terminalOutputPrefersDomRenderer('\x1b[44m selected block \x1b[0m')).toBe(true)
+    expect(terminalOutputPrefersDomRenderer('\x1b[104m bright selected block \x1b[0m')).toBe(true)
+  })
+
   it('does not disable WebGL for ordinary terminal output or ANSI controls alone', () => {
     expect(terminalOutputPrefersDomRenderer('abc 123 ✓')).toBe(false)
     expect(terminalOutputPrefersDomRenderer('\x1b[32mplain green\x1b[0m')).toBe(false)
+    expect(terminalOutputPrefersDomRenderer('\x1b[38;2;48;34;56m foreground only\x1b[0m')).toBe(
+      false
+    )
+    expect(terminalOutputPrefersDomRenderer('\x1b[38:2::48:34:56m foreground only\x1b[0m')).toBe(
+      false
+    )
   })
 })

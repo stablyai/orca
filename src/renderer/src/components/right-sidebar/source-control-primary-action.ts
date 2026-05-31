@@ -79,6 +79,15 @@ const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string
   create_pr: 'Create PR'
 }
 
+function reviewCopy(provider: HostedReviewCreationEligibility['provider'] | undefined): {
+  shortLabel: 'PR' | 'MR'
+  reviewLabel: 'pull request' | 'merge request'
+} {
+  return provider === 'gitlab'
+    ? { shortLabel: 'MR', reviewLabel: 'merge request' }
+    : { shortLabel: 'PR', reviewLabel: 'pull request' }
+}
+
 function describePushCount(ahead: number): string {
   return `Push ${ahead} commit${ahead === 1 ? '' : 's'}`
 }
@@ -333,10 +342,11 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   }
 
   if (hostedReviewCreation?.canCreate) {
+    const copy = reviewCopy(hostedReviewCreation.provider)
     return {
       kind: 'create_pr',
-      label: 'Create PR',
-      title: 'Create a pull request for this branch',
+      label: `Create ${copy.shortLabel}`,
+      title: `Create a ${copy.reviewLabel} for this branch`,
       disabled: false
     }
   }

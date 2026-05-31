@@ -1,13 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildAutomationCronSchedule,
   buildAutomationRrule,
+  classifyAutomationCronSchedule,
   formatAutomationSchedule,
+  isValidAutomationCronSchedule,
   isValidAutomationSchedule,
   latestAutomationOccurrenceAtOrBefore,
   nextAutomationOccurrenceAfter,
   parseAutomationRrule,
   tryParseAutomationRrule
 } from './automation-schedules'
+
+function formatTimeForTest(hour: number, minute: number): string {
+  const date = new Date()
+  date.setHours(hour, minute, 0, 0)
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(date)
+}
 
 describe('automation schedules', () => {
   it('uses the latest overdue hourly occurrence for missed-run grace decisions', () => {
@@ -18,6 +30,16 @@ describe('automation schedules', () => {
       new Date('2026-05-13T14:20:00').getTime()
     )
     expect(latest).toBe(new Date('2026-05-13T14:00:00').getTime())
+  })
+
+  it('does not return a future hourly dtstart that is off the scheduled minute', () => {
+    const rrule = buildAutomationRrule({ preset: 'hourly', hour: 9, minute: 0 })
+    const next = nextAutomationOccurrenceAfter(
+      rrule,
+      new Date('2026-05-13T10:30:00').getTime(),
+      new Date('2026-05-13T09:00:00').getTime()
+    )
+    expect(next).toBe(new Date('2026-05-13T11:00:00').getTime())
   })
 
   it('computes weekday schedules without returning weekend candidates', () => {
@@ -59,6 +81,19 @@ describe('automation schedules', () => {
     expect(tryParseAutomationRrule('FREQ=WEEKLY;BYDAY=MO,NO;BYHOUR=10;BYMINUTE=15')).toBeNull()
   })
 
+  it('rejects weekly RRULE schedules that cannot match any day', () => {
+    const rrule = 'FREQ=WEEKLY;BYHOUR=9;BYMINUTE=0'
+
+    expect(isValidAutomationSchedule(rrule)).toBe(false)
+    expect(() =>
+      nextAutomationOccurrenceAfter(
+        rrule,
+        new Date('2026-05-01T00:00:00').getTime(),
+        new Date('2026-05-02T00:00:00').getTime()
+      )
+    ).toThrow('Invalid recurrence day.')
+  })
+
   it('formats invalid schedules with a safe fallback label', () => {
     expect(formatAutomationSchedule('FREQ=YEARLY')).toBe('Invalid schedule')
   })
@@ -83,10 +118,47 @@ describe('automation schedules', () => {
     expect(latest).toBe(new Date('2026-05-15T10:15:00').getTime())
   })
 
-  it('labels valid custom cron schedules without treating them as invalid', () => {
-    expect(formatAutomationSchedule('*/30 9-17 * * MON-FRI')).toBe(
-      'Custom cron: */30 9-17 * * MON-FRI'
+  it('builds cron schedules from simple automation presets', () => {
+    expect(buildAutomationCronSchedule({ preset: 'hourly', hour: 9, minute: 15 })).toBe(
+      '15 * * * *'
     )
+    expect(buildAutomationCronSchedule({ preset: 'daily', hour: 9, minute: 15 })).toBe('15 9 * * *')
+    expect(buildAutomationCronSchedule({ preset: 'weekdays', hour: 9, minute: 15 })).toBe(
+      '15 9 * * 1-5'
+    )
+    expect(
+      buildAutomationCronSchedule({ preset: 'weekly', hour: 9, minute: 15, dayOfWeek: 0 })
+    ).toBe('15 9 * * 0')
+  })
+
+  it('formats simple cron schedules with friendly labels', () => {
+    expect(formatAutomationSchedule('5 * * * *')).toBe('Hourly at :05')
+    expect(formatAutomationSchedule('15 10 * * *')).toBe(`Daily at ${formatTimeForTest(10, 15)}`)
+    expect(formatAutomationSchedule('15 10 * * MON-FRI')).toBe(
+      `Weekdays at ${formatTimeForTest(10, 15)}`
+    )
+    expect(formatAutomationSchedule('30 12 * * 7')).toBe(`Sundays at ${formatTimeForTest(12, 30)}`)
+  })
+
+  it('classifies simple cron schedules for provider edit flows', () => {
+    expect(classifyAutomationCronSchedule('15 10 * * MON-FRI')).toMatchObject({
+      kind: 'weekdays',
+      hour: 10,
+      minute: 15
+    })
+    expect(classifyAutomationCronSchedule('30 12 * * 7')).toMatchObject({
+      kind: 'weekly',
+      hour: 12,
+      minute: 30,
+      dayOfWeek: 0
+    })
+  })
+
+  it('labels valid unsupported cron schedules as custom schedules', () => {
+    expect(formatAutomationSchedule('*/30 9-17 * * MON-FRI')).toBe('Custom schedule')
+    expect(formatAutomationSchedule('0 9 1 * *')).toBe('Custom schedule')
+    expect(formatAutomationSchedule('0 9 1 * MON')).toBe('Custom schedule')
+    expect(formatAutomationSchedule('0 9,17 * * MON-FRI')).toBe('Custom schedule')
   })
 
   it('treats all-value cron day fields as unrestricted for DOM/DOW matching', () => {
@@ -107,6 +179,13 @@ describe('automation schedules', () => {
 
   it('rejects syntactically valid cron schedules with no possible run', () => {
     expect(isValidAutomationSchedule('0 0 31 2 *')).toBe(false)
+    expect(formatAutomationSchedule('0 0 31 2 *')).toBe('Invalid schedule')
+  })
+
+  it('rejects RRULE input with the cron-only validator', () => {
+    const rrule = buildAutomationRrule({ preset: 'daily', hour: 9, minute: 0 })
+    expect(isValidAutomationSchedule(rrule)).toBe(true)
+    expect(isValidAutomationCronSchedule(rrule)).toBe(false)
   })
 
   it('finds rare but valid leap-day custom cron schedules', () => {

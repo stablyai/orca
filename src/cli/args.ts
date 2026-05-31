@@ -174,7 +174,9 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
   }
 
   for (const flag of parsed.flags.keys()) {
+    const isGlobalFlag = GLOBAL_FLAGS.includes(flag)
     if (
+      !isGlobalFlag &&
       !spec.allowedFlags.includes(flag) &&
       !(flag === 'page' && supportsBrowserPageFlag(spec.path))
     ) {

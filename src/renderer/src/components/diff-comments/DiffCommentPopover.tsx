@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { CornerDownLeft, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 // Why: rendered as a DOM sibling overlay inside the editor container rather
 // than as a Monaco content widget because it owns a React textarea with
@@ -43,7 +44,7 @@ export function DiffCommentPopover({
   // fresh id/createdAt. Tracked in React state (not a ref) so the button can
   // reflect the in-flight status to the user.
   const [submitting, setSubmitting] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const mountedRef = useMountedRef()
   const popoverRef = useRef<HTMLDivElement | null>(null)
   // Why: stash onCancel in a ref so the document mousedown listener below can
   // read the freshest callback without listing `onCancel` in its dependency
@@ -59,8 +60,10 @@ export function DiffCommentPopover({
   // "Line N" label as the dialog's accessible name.
   const labelId = useId()
 
-  useEffect(() => {
-    textareaRef.current?.focus()
+  const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
+    // Why: the draft field should receive focus as soon as the popover mounts;
+    // no external system needs a post-render Effect for this.
+    textarea?.focus()
   }, [])
 
   // Why: Monaco's editor area does not bubble a synthetic React click up to
@@ -104,7 +107,9 @@ export function DiffCommentPopover({
     try {
       await onSubmit(trimmed)
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
@@ -125,7 +130,6 @@ export function DiffCommentPopover({
           <User className="size-3" />
         </span>
       </div>
-
       {/* Right Column: Content */}
       <div className="orca-diff-comment-content-col" style={{ gap: '8px' }}>
         <div id={labelId} className="orca-diff-comment-popover-label">
@@ -135,7 +139,7 @@ export function DiffCommentPopover({
               : `Line ${lineNumber}`)}
         </div>
         <textarea
-          ref={textareaRef}
+          ref={focusTextareaRef}
           className="orca-diff-comment-popover-textarea"
           placeholder={placeholder}
           value={body}

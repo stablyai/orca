@@ -21,6 +21,7 @@ import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 
 type FloatingTerminalOrchestrationDialogProps = {
@@ -40,17 +41,31 @@ export function FloatingTerminalOrchestrationDialog({
   const [cliLoading, setCliLoading] = useState(false)
   const [cliBusy, setCliBusy] = useState(false)
   const [skillBusy, setSkillBusy] = useState(false)
+  const mountedRef = useMountedRef()
+
+  const setCliStatusIfMounted = useCallback(
+    (status: CliInstallStatus | null): void => {
+      if (mountedRef.current) {
+        setCliStatus(status)
+      }
+    },
+    [mountedRef]
+  )
 
   const refreshCliStatus = useCallback(async (): Promise<void> => {
     setCliLoading(true)
     try {
-      setCliStatus(await window.api.cli.getInstallStatus())
+      setCliStatusIfMounted(await window.api.cli.getInstallStatus())
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to load CLI status.')
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to load CLI status.')
+      }
     } finally {
-      setCliLoading(false)
+      if (mountedRef.current) {
+        setCliLoading(false)
+      }
     }
-  }, [])
+  }, [mountedRef, setCliStatusIfMounted])
 
   useEffect(() => {
     if (open) {
@@ -70,8 +85,11 @@ export function FloatingTerminalOrchestrationDialog({
     setCliBusy(true)
     try {
       const next = await ensureOrcaCliAvailableForAgentSkillTerminal({
-        onStatusChange: setCliStatus
+        onStatusChange: setCliStatusIfMounted
       })
+      if (!mountedRef.current) {
+        return
+      }
       if (next) {
         notifyOrchestrationSetupStateChanged()
         onSetupStateChange()
@@ -80,7 +98,9 @@ export function FloatingTerminalOrchestrationDialog({
         toast.success('Registered the Orca CLI in PATH.')
       }
     } finally {
-      setCliBusy(false)
+      if (mountedRef.current) {
+        setCliBusy(false)
+      }
     }
   }
 
@@ -88,8 +108,11 @@ export function FloatingTerminalOrchestrationDialog({
     setSkillBusy(true)
     try {
       const nextCliStatus = await ensureOrcaCliAvailableForAgentSkillTerminal({
-        onStatusChange: setCliStatus
+        onStatusChange: setCliStatusIfMounted
       })
+      if (!mountedRef.current) {
+        return
+      }
       localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
       localStorage.removeItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
       notifyOrchestrationSetupStateChanged()
@@ -112,9 +135,13 @@ export function FloatingTerminalOrchestrationDialog({
         onOpenChange(false)
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to copy skill command.')
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to copy skill command.')
+      }
     } finally {
-      setSkillBusy(false)
+      if (mountedRef.current) {
+        setSkillBusy(false)
+      }
     }
   }
 
