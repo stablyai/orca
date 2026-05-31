@@ -217,6 +217,11 @@ function createMockGuest(id: number, url: string, title: string) {
       for (const handler of debuggerListeners.get(event) ?? []) {
         handler(...args)
       }
+    },
+    emitDebuggerMessage(method: string, params?: Record<string, unknown>) {
+      for (const handler of debuggerListeners.get('message') ?? []) {
+        handler({}, method, params)
+      }
     }
   }
 }
@@ -256,6 +261,7 @@ describe('Browser automation pipeline (integration)', () => {
   let authToken: string
   let activeGuest: ReturnType<typeof createMockGuest>['guest']
   let activeGuestHarness: ReturnType<typeof createMockGuest>
+  let cdpBridge: CdpBridge
 
   const GUEST_WC_ID = 5001
   const RENDERER_WC_ID = 1
@@ -280,7 +286,7 @@ describe('Browser automation pipeline (integration)', () => {
       rendererWebContentsId: RENDERER_WC_ID
     })
 
-    const cdpBridge = new CdpBridge(browserManager)
+    cdpBridge = new CdpBridge(browserManager)
     cdpBridge.setActiveTab(GUEST_WC_ID)
 
     const userDataPath = mkdtempSync(join(tmpdir(), 'browser-e2e-'))
@@ -466,6 +472,47 @@ describe('Browser automation pipeline (integration)', () => {
     const result = res.result as { data: string; format: string }
     expect(result.format).toBe('png')
     expect(result.data.length).toBeGreaterThan(0)
+  })
+
+  it('bounds capture request bookkeeping when network entries are evicted or fail', async () => {
+    const startRes = await rpc('browser.capture.start')
+    expect(startRes.ok).toBe(true)
+
+    for (let i = 0; i <= 1000; i++) {
+      activeGuestHarness.emitDebuggerMessage('Network.responseReceived', {
+        requestId: `req-${i}`,
+        response: {
+          url: `https://example.com/${i}`,
+          status: 200,
+          mimeType: 'text/plain'
+        },
+        timestamp: i
+      })
+    }
+
+    const state = (
+      cdpBridge as unknown as {
+        tabState: Map<
+          string,
+          {
+            networkLog: unknown[]
+            networkRequestMap: Map<string, unknown>
+          }
+        >
+      }
+    ).tabState.get('page-1')
+
+    expect(state?.networkLog).toHaveLength(1000)
+    expect(state?.networkRequestMap.has('req-0')).toBe(false)
+    expect(state?.networkRequestMap.size).toBe(1000)
+
+    activeGuestHarness.emitDebuggerMessage('Network.loadingFailed', { requestId: 'req-1' })
+    expect(state?.networkRequestMap.has('req-1')).toBe(false)
+    expect(state?.networkRequestMap.size).toBe(999)
+
+    const stopRes = await rpc('browser.capture.stop')
+    expect(stopRes.ok).toBe(true)
+    expect(state?.networkRequestMap.size).toBe(0)
   })
 
   // ── Eval ──

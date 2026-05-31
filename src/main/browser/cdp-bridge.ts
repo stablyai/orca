@@ -48,6 +48,8 @@ import {
 import type { BrowserManager } from './browser-manager'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 
+const CAPTURE_LOG_LIMIT = 1000
+
 export class BrowserError extends Error {
   constructor(
     readonly code: string,
@@ -868,6 +870,7 @@ export class CdpBridge {
       state.capturing = true
       state.consoleLog = []
       state.networkLog = []
+      state.networkRequestMap.clear()
 
       return { capturing: true }
     })
@@ -880,6 +883,7 @@ export class CdpBridge {
       const state = this.getOrCreateTabState(tabId)
 
       state.capturing = false
+      state.networkRequestMap.clear()
 
       return { stopped: true }
     })
@@ -1280,7 +1284,7 @@ export class CdpBridge {
               url: p.stackTrace?.callFrames?.[0]?.url,
               line: p.stackTrace?.callFrames?.[0]?.lineNumber
             })
-            if (state.consoleLog.length > 1000) {
+            if (state.consoleLog.length > CAPTURE_LOG_LIMIT) {
               state.consoleLog.shift()
             }
           }
@@ -1314,19 +1318,27 @@ export class CdpBridge {
             if (p.requestId) {
               state.networkRequestMap.set(p.requestId, entry)
             }
-            if (state.networkLog.length > 1000) {
-              state.networkLog.shift()
+            if (state.networkLog.length > CAPTURE_LOG_LIMIT) {
+              const evicted = state.networkLog.shift()
+              if (evicted) {
+                for (const [requestId, requestEntry] of state.networkRequestMap) {
+                  if (requestEntry === evicted) {
+                    state.networkRequestMap.delete(requestId)
+                    break
+                  }
+                }
+              }
             }
           }
         }
-        if (method === 'Network.loadingFinished') {
+        if (method === 'Network.loadingFinished' || method === 'Network.loadingFailed') {
           const p = params as { requestId?: string; encodedDataLength?: number } | undefined
-          if (p?.requestId && p.encodedDataLength) {
+          if (p?.requestId) {
             const entry = state.networkRequestMap.get(p.requestId)
-            if (entry) {
+            if (entry && method === 'Network.loadingFinished' && p.encodedDataLength) {
               entry.size = p.encodedDataLength
-              state.networkRequestMap.delete(p.requestId)
             }
+            state.networkRequestMap.delete(p.requestId)
           }
         }
       }
