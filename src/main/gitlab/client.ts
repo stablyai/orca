@@ -677,14 +677,13 @@ export async function listTodos(
   }
   await acquire()
   try {
-    // Why: per_page=50 keeps the first-page round-trip small. Pagination
-    // is left for a follow-up — most users have <50 pending todos in
-    // practice and the UI shows the highest-priority ones first.
+    // Why: per_page=50 keeps this user-scoped cross-project view cheap. The UI
+    // shows the highest-priority todos first, so avoid walking every pending
+    // todo page from large GitLab accounts.
     const { stdout } = await glabExecFileAsync(
       [
         'api',
         ...(projectRef ? glabHostnameArgs(projectRef, connectionId) : []),
-        '--paginate',
         'todos?state=pending&per_page=50'
       ],
       glabRepoExecOptions(repoPath, connectionId)
@@ -704,9 +703,6 @@ export async function listTodos(
       updated_at?: string
       state?: string
     }
-    // Why: --paginate concatenates JSON arrays (one per page) into a
-    // single stream. glab's behavior is to emit them as one JSON array
-    // when the endpoint returns arrays — we trust that contract here.
     const data = JSON.parse(stdout) as RESTTodo[]
     return data.map<GitLabTodo>((t) => ({
       id: t.id ?? 0,
