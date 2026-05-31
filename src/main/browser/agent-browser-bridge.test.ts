@@ -438,6 +438,19 @@ describe('AgentBrowserBridge', () => {
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 10, y: 20 })
   })
 
+  it('drops empty command queues after direct CDP commands finish', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.mouseClick(10, 20, 'right', undefined, 'tab-1')
+
+    expect(
+      (bridge as unknown as { commandQueues: Map<string, unknown[]> }).commandQueues.size
+    ).toBe(0)
+    expect((bridge as unknown as { processingQueues: Set<string> }).processingQueues.size).toBe(0)
+  })
+
   // ── Command queue serialization ──
 
   it('serializes concurrent commands per session', async () => {
@@ -526,9 +539,9 @@ describe('AgentBrowserBridge', () => {
         expect(wc.on).toHaveBeenCalledWith('did-finish-load', expect.any(Function))
       })
 
-      const finishListener = wc.on.mock.calls.find(([event]) => event === 'did-finish-load')?.[1] as
-        | (() => void)
-        | undefined
+      const finishListener = wc.on.mock.calls.find(
+        ([event]) => event === 'did-finish-load'
+      )?.[1] as (() => void) | undefined
       const failListener = wc.on.mock.calls.find(([event]) => event === 'did-fail-load')?.[1] as
         | (() => void)
         | undefined
