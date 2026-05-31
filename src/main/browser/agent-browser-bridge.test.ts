@@ -935,6 +935,33 @@ describe('AgentBrowserBridge', () => {
     expect(routeCalls[0]).toContain('--cdp')
   })
 
+  it('clears pending intercept restore state when a swapped tab closes before reuse', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const mgr = mockBrowserManager(tabs)
+    const b = new AgentBrowserBridge(mgr)
+    b.setActiveTab(100)
+
+    succeedWith({ ok: true })
+    await b.interceptEnable(['https://old.example/**'])
+
+    tabs.set('tab-1', 200)
+    webContentsFromIdMock.mockReturnValue(mockWebContents(200))
+    succeedWith(null)
+    await b.onProcessSwap('tab-1', 200)
+
+    expect(
+      (b as unknown as { pendingInterceptRestore: Map<string, string[]> }).pendingInterceptRestore
+        .size
+    ).toBe(1)
+
+    await b.onTabClosed(200)
+
+    expect(
+      (b as unknown as { pendingInterceptRestore: Map<string, string[]> }).pendingInterceptRestore
+        .size
+    ).toBe(0)
+  })
+
   // ── Tab close clears active ──
 
   it('clears activeWebContentsId on tab close', async () => {

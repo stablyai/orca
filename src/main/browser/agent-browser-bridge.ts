@@ -514,7 +514,9 @@ export class AgentBrowserBridge {
       this.activeWebContentsId = nextWorktreeActiveWebContentsId
     }
     if (browserPageId) {
-      await this.destroySession(`orca-tab-${browserPageId}`)
+      const sessionName = `orca-tab-${browserPageId}`
+      await this.destroySession(sessionName)
+      this.pendingInterceptRestore.delete(sessionName)
     }
     this.options.onTabsChanged?.(owningWorktreeId)
   }
@@ -1726,6 +1728,7 @@ export class AgentBrowserBridge {
       promises.push(this.destroySession(sessionName))
     }
     await Promise.allSettled(promises)
+    this.pendingInterceptRestore.clear()
   }
 
   // ── Internal ──
