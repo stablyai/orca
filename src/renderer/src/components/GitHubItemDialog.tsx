@@ -94,6 +94,12 @@ import {
   type CheckDetailsLoadState
 } from '@/components/github-checks-tab-state'
 import {
+  clearGitHubLinkCopied,
+  createGitHubLinkCopyState,
+  markGitHubLinkCopied,
+  resolveGitHubLinkCopyState
+} from '@/components/github-link-copy-state'
+import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   getPRCommentAudienceEmptyLabel,
@@ -5105,11 +5111,18 @@ export default function GitHubItemDialog({
   onReviewRequestsChange,
   onClose
 }: GitHubItemDialogProps): React.JSX.Element {
+  const workItemId = workItem?.id
   const [tab, setTab] = useState<ItemDialogTab>(() => normalizeItemDialogTab(workItem, initialTab))
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
-  const [linkCopied, setLinkCopied] = useState(false)
-  const workItemId = workItem?.id
+  const [linkCopyState, setLinkCopyState] = useState(() => createGitHubLinkCopyState(workItemId))
+  const resolvedLinkCopyState = resolveGitHubLinkCopyState(linkCopyState, workItemId)
+  if (resolvedLinkCopyState !== linkCopyState) {
+    // Why: switching GitHub items should not paint a stale copied indicator
+    // from the previous item while waiting for a passive Effect pass.
+    setLinkCopyState(resolvedLinkCopyState)
+  }
+  const linkCopied = resolvedLinkCopyState.copied
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
   const effectiveRepoId = repoId ?? workItem?.repoId ?? null
@@ -5434,11 +5447,6 @@ export default function GitHubItemDialog({
     [clearLinkCopiedResetTimer]
   )
 
-  useEffect(() => {
-    clearLinkCopiedResetTimer()
-    setLinkCopied(false)
-  }, [clearLinkCopiedResetTimer, workItemId])
-
   const handleCopyWorkItemLink = useCallback(async (): Promise<void> => {
     if (!workItem) {
       return
@@ -5451,10 +5459,11 @@ export default function GitHubItemDialog({
         return
       }
       clearLinkCopiedResetTimer()
-      setLinkCopied(true)
+      const copiedWorkItemId = workItem.id
+      setLinkCopyState(markGitHubLinkCopied(copiedWorkItemId))
       linkCopiedResetTimerRef.current = window.setTimeout(() => {
         linkCopiedResetTimerRef.current = null
-        setLinkCopied(false)
+        setLinkCopyState((current) => clearGitHubLinkCopied(current, copiedWorkItemId))
       }, 1500)
       toast.success('GitHub link copied')
     } catch {
