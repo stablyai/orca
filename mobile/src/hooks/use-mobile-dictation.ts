@@ -11,6 +11,11 @@ import {
   toggleRecording
 } from '@orca/expo-two-way-audio'
 import type { RpcClient } from '../transport/rpc-client'
+import {
+  MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE,
+  MOBILE_DICTATION_PCM_SAMPLE_RATE,
+  MobileDictationPendingAudioBudget
+} from './mobile-dictation-pending-audio-budget'
 
 type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'
 
@@ -32,7 +37,6 @@ export type UseMobileDictationResult = {
   cancel: () => Promise<void>
 }
 
-const MOBILE_PCM_SAMPLE_RATE = 16000
 const DICTATION_FINISH_TIMEOUT_MS = 75_000
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -53,6 +57,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const onTranscriptRef = useRef(onTranscript)
   const onErrorRef = useRef(onError)
   const pendingChunksRef = useRef<Set<Promise<void>>>(new Set())
+  const pendingAudioBudgetRef = useRef(new MobileDictationPendingAudioBudget())
   const acceptingChunksRef = useRef(false)
   const generationRef = useRef(0)
   const finishingIdRef = useRef<string | null>(null)
@@ -82,6 +87,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       activeIdRef.current = null
       acceptingChunksRef.current = false
       pendingChunksRef.current.clear()
+      pendingAudioBudgetRef.current.reset()
       toggleRecording(false)
       if (client && dictationId) {
         void client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
@@ -100,11 +106,16 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       }
       const raw = event.data
       const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
+      const byteLength = bytes.byteLength
+      if (!pendingAudioBudgetRef.current.tryReserve(byteLength)) {
+        failActiveDictation(dictationId, new Error(MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE))
+        return
+      }
       const sendChunk = client
         .sendRequest('speech.dictation.chunk', {
           dictationId,
           audioBase64: bytesToBase64(bytes),
-          sampleRate: MOBILE_PCM_SAMPLE_RATE
+          sampleRate: MOBILE_DICTATION_PCM_SAMPLE_RATE
         })
         .then((response) => {
           if (!response.ok) {
@@ -113,6 +124,9 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         })
         .catch((err) => failActiveDictation(dictationId, err))
         .finally(() => {
+          if (activeIdRef.current === dictationId || finishingIdRef.current === dictationId) {
+            pendingAudioBudgetRef.current.release(byteLength)
+          }
           pendingChunksRef.current.delete(sendChunk)
         })
       pendingChunksRef.current.add(sendChunk)
@@ -185,6 +199,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
 
     acceptingChunksRef.current = true
     pendingChunksRef.current.clear()
+    pendingAudioBudgetRef.current.reset()
     toggleRecording(true)
     setStatus('recording')
   }, [])
@@ -233,6 +248,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       activeIdRef.current = null
       finishingIdRef.current = null
       pendingChunksRef.current.clear()
+      pendingAudioBudgetRef.current.reset()
       setStatus('idle')
       if (text) {
         onTranscriptRef.current(text)
@@ -256,6 +272,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     finishingIdRef.current = null
     acceptingChunksRef.current = false
     pendingChunksRef.current.clear()
+    pendingAudioBudgetRef.current.reset()
     toggleRecording(false)
     if (client && dictationId) {
       await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
@@ -287,6 +304,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       finishingIdRef.current = null
       acceptingChunksRef.current = false
       pendingChunksRef.current.clear()
+      pendingAudioBudgetRef.current.reset()
       toggleRecording(false)
       void tearDown()
       if (clientRef.current && dictationId) {
