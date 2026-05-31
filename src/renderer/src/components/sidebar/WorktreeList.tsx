@@ -720,21 +720,28 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const worktreeNativeLatestPointRef = useRef<WorktreeSidebarDragPoint | null>(null)
   const pendingRevealRetryRef = useRef<{ worktreeId: string; count: number } | null>(null)
   const revealHighlightTimeoutRef = useRef<number | null>(null)
-  const flashRevealedWorktree = useCallback((worktreeId: string) => {
+  const clearRevealHighlightTimeout = useCallback(() => {
     if (revealHighlightTimeoutRef.current !== null) {
       window.clearTimeout(revealHighlightTimeoutRef.current)
+      revealHighlightTimeoutRef.current = null
     }
-    // Why: remove before add restarts the CSS glow when the user repeatedly
-    // asks to reveal the same active workspace.
-    setHighlightedRevealWorktreeId(null)
-    window.requestAnimationFrame(() => {
-      setHighlightedRevealWorktreeId(worktreeId)
-      revealHighlightTimeoutRef.current = window.setTimeout(() => {
-        revealHighlightTimeoutRef.current = null
-        setHighlightedRevealWorktreeId(null)
-      }, 1500)
-    })
   }, [])
+  const flashRevealedWorktree = useCallback(
+    (worktreeId: string) => {
+      clearRevealHighlightTimeout()
+      // Why: remove before add restarts the CSS glow when the user repeatedly
+      // asks to reveal the same active workspace.
+      setHighlightedRevealWorktreeId(null)
+      window.requestAnimationFrame(() => {
+        setHighlightedRevealWorktreeId(worktreeId)
+        revealHighlightTimeoutRef.current = window.setTimeout(() => {
+          revealHighlightTimeoutRef.current = null
+          setHighlightedRevealWorktreeId(null)
+        }, 1500)
+      })
+    },
+    [clearRevealHighlightTimeout]
+  )
   const suppressWorktreeClickUntilRef = useRef(0)
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders =
@@ -1445,14 +1452,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     markScrollMovement()
   }, [markScrollMovement])
 
-  useEffect(() => {
-    return () => {
-      if (revealHighlightTimeoutRef.current !== null) {
-        window.clearTimeout(revealHighlightTimeoutRef.current)
-      }
-    }
-  }, [])
-
   const cancelWorktreePointerAutoscroll = useCallback(() => {
     if (worktreePointerAutoscrollFrameIdRef.current !== null) {
       window.cancelAnimationFrame(worktreePointerAutoscrollFrameIdRef.current)
@@ -1497,13 +1496,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const setScrollRootRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (node === null && scrollRef.current !== null) {
-        // Why: sidebar drag previews and autoscroll frames are tied to the
-        // scroll root surface; clear them before that DOM owner disappears.
+        // Why: sidebar drag previews, autoscroll frames, and reveal glow timers
+        // are tied to the scroll root surface; clear them before it disappears.
+        clearRevealHighlightTimeout()
         clearWorktreeDrag()
       }
       scrollRef.current = node
     },
-    [clearWorktreeDrag]
+    [clearRevealHighlightTimeout, clearWorktreeDrag]
   )
 
   const flushWorktreePointerDrag = useCallback(() => {
