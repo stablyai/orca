@@ -1,4 +1,5 @@
 import { filesystemPathToFileUri, fileUriToFilesystemPath } from '../../../../shared/file-uri-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 
 // Pure classifier for markdown link targets. Called by the link-activation
 // dispatcher (activateMarkdownLink slice action) from three call sites —
@@ -108,6 +109,11 @@ function extractHashLineCol(hash: string): { line?: number; column?: number } {
 
 function resolveRelativeToSource(rawHref: string, sourceFilePath: string): URL | null {
   try {
+    if (isWindowsAbsolutePathLike(rawHref)) {
+      // Why: URL treats `C:\...` as a custom `c:` scheme unless the Windows
+      // absolute path is first converted to the file URL form used downstream.
+      return new URL(filesystemPathToFileUri(rawHref))
+    }
     return new URL(rawHref, toFileUrl(sourceFilePath))
   } catch {
     return null

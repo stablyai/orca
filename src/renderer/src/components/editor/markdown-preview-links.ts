@@ -1,4 +1,5 @@
 import { filesystemPathToFileUri, fileUriToFilesystemPath } from '../../../../shared/file-uri-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 
 function toFileUrl(filePath: string): string {
   return filesystemPathToFileUri(filePath)
@@ -10,6 +11,11 @@ export function resolveMarkdownPreviewHref(rawUrl: string, filePath: string): UR
   }
 
   try {
+    if (isWindowsAbsolutePathLike(rawUrl)) {
+      // Why: URL treats `C:\...` as a custom `c:` scheme unless we first
+      // normalize the drive path into the file URL form markdown previews use.
+      return new URL(filesystemPathToFileUri(rawUrl))
+    }
     return new URL(rawUrl, toFileUrl(filePath))
   } catch {
     return null

@@ -48,6 +48,12 @@ describe('getMarkdownPreviewImageSrc', () => {
     )
   })
 
+  it('resolves Windows drive-letter absolute image paths', () => {
+    expect(
+      getMarkdownPreviewImageSrc('C:\\repo\\assets\\diagram.png', '/repo/docs/README.md')
+    ).toBe('file:///C:/repo/assets/diagram.png')
+  })
+
   it('resolves relative paths for Windows UNC markdown files', () => {
     expect(
       getMarkdownPreviewImageSrc('./diagram.png', '\\\\server\\share\\repo\\docs\\README.md')
@@ -110,6 +116,12 @@ describe('resolveImageAbsolutePath', () => {
   it('resolves Windows paths', () => {
     expect(resolveImageAbsolutePath('./diagram.png', 'C:\\repo\\docs\\README.md')).toBe(
       'C:/repo/docs/diagram.png'
+    )
+  })
+
+  it('resolves Windows drive-letter absolute image paths to filesystem paths', () => {
+    expect(resolveImageAbsolutePath('C:\\repo\\assets\\diagram.png', '/repo/docs/README.md')).toBe(
+      'C:/repo/assets/diagram.png'
     )
   })
 
