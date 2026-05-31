@@ -24,4 +24,9 @@ describe('web pairing input', () => {
   it('still parses legacy hash-form pairing URLs', () => {
     expect(parseWebPairingInput(`orca://pair#${encodeOffer()}`)).toEqual(offer)
   })
+
+  it('rejects orca URLs outside the exact pairing route', () => {
+    expect(parseWebPairingInput(`orca://pairing?code=${encodeOffer()}`)).toBeNull()
+    expect(parseWebPairingInput(`orca://pair-extra?code=${encodeOffer()}`)).toBeNull()
+  })
 })
