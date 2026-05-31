@@ -57,7 +57,7 @@ export function FeatureWallRail(props: {
       className="scrollbar-sleek h-full max-h-72 overflow-y-auto border-b border-border bg-card p-2 md:max-h-none md:border-b-0"
       aria-label="Workflows"
     >
-      <div role="tablist" aria-orientation="vertical" className="flex flex-col gap-0.5 pt-1.5">
+      <div role="tablist" aria-orientation="vertical" className="flex flex-col gap-1.5 pt-1.5">
         {FEATURE_WALL_WORKFLOWS.map((workflow, index) => {
           const isSelected = workflow.id === selectedId
           const isDone = workflowDone[workflow.id] === true
@@ -128,7 +128,7 @@ export function FeatureWallRail(props: {
                   )}
                 >
                   <div className="min-h-0">
-                    <div className="mt-0.5 flex flex-col gap-0.5 pl-7">
+                    <div className="mt-1 flex flex-col gap-1 pl-7">
                       {subSteps.steps.map((step, stepIdx) => {
                         const isStepActive = step.id === subSteps.activeId
                         const isStepDone = subSteps.done[step.id] === true
