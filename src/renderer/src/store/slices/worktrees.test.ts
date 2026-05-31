@@ -1921,26 +1921,6 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
   })
 
-  it('marks a workspace done by persisting workspace status metadata only', async () => {
-    const store = createTestStore()
-    const wt = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/path/wt1',
-      workspaceStatus: 'in-progress'
-    })
-    store.setState({ worktreesByRepo: { repo1: [wt] } } as Partial<AppState>)
-
-    await store.getState().updateWorktreeMeta(wt.id, { workspaceStatus: 'completed' })
-
-    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
-      worktreeId: wt.id,
-      updates: { workspaceStatus: 'completed' }
-    })
-    expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo.repo1[0]?.workspaceStatus).toBe('completed')
-  })
-
   it('resolves and persists a push target when manually linking a GitHub PR', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'origin', branchName: 'bot/pr-bug-scan-2504' }

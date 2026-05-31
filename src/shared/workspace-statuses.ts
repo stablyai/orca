@@ -16,7 +16,6 @@ type WorkspaceStatusNormalizationOptions = {
 }
 
 export const DEFAULT_WORKSPACE_STATUS_ID: WorkspaceStatus = 'in-progress'
-export const DONE_WORKSPACE_STATUS_ID: WorkspaceStatus = 'completed'
 export const DEFAULT_WORKSPACE_STATUS_COLOR_ID = 'neutral'
 export const DEFAULT_WORKSPACE_STATUS_ICON_ID = 'circle-dot'
 export const WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT = 308

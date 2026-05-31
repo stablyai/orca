@@ -1845,19 +1845,6 @@ describe('Store', () => {
     expect(updated.comment).toBe('updated')
   })
 
-  it('setWorktreeMeta persists workspace status without deleting worktree metadata', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta('wt1', { displayName: 'first', workspaceStatus: 'in-progress' })
-    const updated = store.setWorktreeMeta('wt1', { workspaceStatus: 'completed' })
-    store.flush()
-
-    const persisted = readDataFile() as PersistedState
-    expect(updated.displayName).toBe('first')
-    expect(store.getWorktreeMeta('wt1')?.workspaceStatus).toBe('completed')
-    expect(persisted.worktreeMeta['wt1']?.workspaceStatus).toBe('completed')
-    expect(persisted.worktreeMeta['wt1']?.displayName).toBe('first')
-  })
-
   // ── 9. Settings: get/update ────────────────────────────────────────
 
   it('updateSettings merges partial updates', async () => {
