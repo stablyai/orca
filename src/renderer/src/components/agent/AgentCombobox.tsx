@@ -146,7 +146,15 @@ export default function AgentCombobox({
     }
   }, [])
 
-  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+  const setInputNode = useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
 
   React.useEffect(() => {
     if (!open) {
@@ -284,7 +292,7 @@ export default function AgentCombobox({
         >
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
-              ref={inputRef}
+              ref={setInputNode}
               placeholder="Search agents..."
               value={query}
               onValueChange={setQuery}
