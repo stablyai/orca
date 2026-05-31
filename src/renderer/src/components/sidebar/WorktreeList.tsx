@@ -832,7 +832,28 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const worktreeNativeAutoscrollLastFrameTimeRef = useRef<number | null>(null)
   const worktreeNativeLatestPointRef = useRef<WorktreeSidebarDragPoint | null>(null)
   const pendingRevealRetryRef = useRef<{ worktreeId: string; count: number } | null>(null)
+  const pendingRevealFrameIdsRef = useRef<Set<number>>(new Set())
+  const revealHighlightFrameIdRef = useRef<number | null>(null)
   const revealHighlightTimeoutRef = useRef<number | null>(null)
+  const cancelPendingRevealFrames = useCallback(() => {
+    for (const frameId of pendingRevealFrameIdsRef.current) {
+      window.cancelAnimationFrame(frameId)
+    }
+    pendingRevealFrameIdsRef.current.clear()
+  }, [])
+  const schedulePendingRevealFrame = useCallback((callback: FrameRequestCallback) => {
+    const frameId = window.requestAnimationFrame((time) => {
+      pendingRevealFrameIdsRef.current.delete(frameId)
+      callback(time)
+    })
+    pendingRevealFrameIdsRef.current.add(frameId)
+  }, [])
+  const clearRevealHighlightFrame = useCallback(() => {
+    if (revealHighlightFrameIdRef.current !== null) {
+      window.cancelAnimationFrame(revealHighlightFrameIdRef.current)
+      revealHighlightFrameIdRef.current = null
+    }
+  }, [])
   const clearRevealHighlightTimeout = useCallback(() => {
     if (revealHighlightTimeoutRef.current !== null) {
       window.clearTimeout(revealHighlightTimeoutRef.current)
@@ -842,10 +863,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const flashRevealedWorktree = useCallback(
     (worktreeId: string) => {
       clearRevealHighlightTimeout()
+      clearRevealHighlightFrame()
       // Why: remove before add restarts the CSS glow when the user repeatedly
       // asks to reveal the same active workspace.
       setHighlightedRevealWorktreeId(null)
-      window.requestAnimationFrame(() => {
+      revealHighlightFrameIdRef.current = window.requestAnimationFrame(() => {
+        revealHighlightFrameIdRef.current = null
         setHighlightedRevealWorktreeId(worktreeId)
         revealHighlightTimeoutRef.current = window.setTimeout(() => {
           revealHighlightTimeoutRef.current = null
@@ -853,7 +876,17 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         }, 1500)
       })
     },
-    [clearRevealHighlightTimeout]
+    [clearRevealHighlightFrame, clearRevealHighlightTimeout]
+  )
+  // Why: reveal frames capture virtualized row snapshots and set state later;
+  // cancel them when the list goes away so stale reveal work cannot survive teardown.
+  useEffect(
+    () => () => {
+      cancelPendingRevealFrames()
+      clearRevealHighlightFrame()
+      clearRevealHighlightTimeout()
+    },
+    [cancelPendingRevealFrames, clearRevealHighlightFrame, clearRevealHighlightTimeout]
   )
   const suppressWorktreeClickUntilRef = useRef(0)
   const hasProjectGroups = projectGroups.length > 0
@@ -1249,7 +1282,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       }
     }
 
-    requestAnimationFrame(() => {
+    let cancelled = false
+    schedulePendingRevealFrame(() => {
+      if (cancelled) {
+        return
+      }
       const targetWorktreeStillExists = worktrees.some(
         (worktree) => worktree.id === pendingRevealWorktree.worktreeId
       )
@@ -1271,7 +1308,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             count: nextRetryCount
           }
           if (nextRetryCount <= 8) {
-            requestAnimationFrame(() => setPendingRevealRetryTick((tick) => tick + 1))
+            schedulePendingRevealFrame(() => {
+              if (!cancelled) {
+                setPendingRevealRetryTick((tick) => tick + 1)
+              }
+            })
           } else {
             pendingRevealRetryRef.current = null
             clearPendingRevealWorktreeId()
@@ -1320,6 +1361,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         clearPendingRevealWorktreeId()
       }
     })
+    return () => {
+      cancelled = true
+      cancelPendingRevealFrames()
+    }
   }, [
     pendingRevealWorktree,
     agentSendTargetWorktreeId,
@@ -1338,7 +1383,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     settings,
     projectGroups,
     pendingRevealRetryTick,
-    flashRevealedWorktree
+    flashRevealedWorktree,
+    schedulePendingRevealFrame,
+    cancelPendingRevealFrames
   ])
 
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
