@@ -4,8 +4,7 @@ const { join, resolve } = require('node:path')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
 const {
   createPackagedRuntimeNodeModuleResources,
-  isPackagedExternalSpecifier,
-  packageNameFromSpecifier
+  verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
 
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
@@ -272,39 +271,6 @@ module.exports = {
     owner: 'stablyai',
     repo: 'orca',
     releaseType: 'release'
-  }
-}
-
-function verifyPackagedMainRuntimeDeps(resourcesDir) {
-  const asarPath = join(resourcesDir, 'app.asar')
-  if (!existsSync(asarPath)) {
-    return
-  }
-
-  const { extractFile } = require('@electron/asar')
-  const mainFiles = ['out/main/index.js', 'out/main/agent-hooks/managed-agent-hook-controls.js']
-  const missing = new Set()
-
-  for (const file of mainFiles) {
-    const source = extractFile(asarPath, file).toString('utf8')
-    for (const match of source.matchAll(/require\(["']([^"']+)["']\)/g)) {
-      const specifier = match[1]
-      if (!isPackagedExternalSpecifier(specifier)) {
-        continue
-      }
-      const packageName = packageNameFromSpecifier(specifier)
-      if (!existsSync(join(resourcesDir, 'node_modules', ...packageName.split('/')))) {
-        missing.add(packageName)
-      }
-    }
-  }
-
-  if (missing.size > 0) {
-    throw new Error(
-      `Packaged main bundle has bare runtime imports without copied node_modules: ${[
-        ...missing
-      ].join(', ')}`
-    )
   }
 }
 

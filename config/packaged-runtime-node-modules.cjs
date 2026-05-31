@@ -101,9 +101,60 @@ function createPackagedRuntimeNodeModuleResources() {
   }))
 }
 
+function normalizeAsarEntryPath(entry) {
+  return entry.replace(/\\/g, '/').replace(/^\/+/, '')
+}
+
+function findAsarEntry(entries, expectedPath) {
+  return entries.find((entry) => normalizeAsarEntryPath(entry) === expectedPath)
+}
+
+function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/asar')) {
+  const asarPath = join(resourcesDir, 'app.asar')
+  if (!existsSync(asarPath)) {
+    return
+  }
+
+  const mainFiles = ['out/main/index.js', 'out/main/agent-hooks/managed-agent-hook-controls.js']
+  const entries = asar.listPackage(asarPath)
+  const missing = new Set()
+
+  for (const file of mainFiles) {
+    const entry = findAsarEntry(entries, file)
+    if (!entry) {
+      throw new Error(`Packaged main file ${file} was not found in ${asarPath}`)
+    }
+
+    // Why: @electron/asar lists entries with host separators; Windows returns
+    // backslashes, and extractFile expects that same host-style path.
+    const internalPath = entry.replace(/^[\\/]+/, '')
+    const source = asar.extractFile(asarPath, internalPath).toString('utf8')
+    for (const match of source.matchAll(/require\(["']([^"']+)["']\)/g)) {
+      const specifier = match[1]
+      if (!isPackagedExternalSpecifier(specifier)) {
+        continue
+      }
+      const packageName = packageNameFromSpecifier(specifier)
+      if (!existsSync(join(resourcesDir, 'node_modules', ...packageName.split('/')))) {
+        missing.add(packageName)
+      }
+    }
+  }
+
+  if (missing.size > 0) {
+    throw new Error(
+      `Packaged main bundle has bare runtime imports without copied node_modules: ${[
+        ...missing
+      ].join(', ')}`
+    )
+  }
+}
+
 module.exports = {
   PACKAGED_RUNTIME_PACKAGE_ROOTS,
   createPackagedRuntimeNodeModuleResources,
+  findAsarEntry,
   isPackagedExternalSpecifier,
-  packageNameFromSpecifier
+  packageNameFromSpecifier,
+  verifyPackagedMainRuntimeDeps
 }
