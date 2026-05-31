@@ -167,6 +167,9 @@ const ZOOM_STEP = 0.5
 const PENDING_AGENT_STATUS_RETRY_MS = 100
 const PENDING_AGENT_STATUS_TTL_MS = 15_000
 const MAX_PENDING_AGENT_STATUS_EVENTS = 100
+// Why: mobile driver hydration is async; cap transient replay so a stuck IPC
+// snapshot cannot retain an unbounded startup buffer.
+const MAX_PENDING_MOBILE_STATE_EVENTS = 300
 let remoteWorkspaceSnapshotApplyDepth = 0
 let remoteWorkspaceSnapshotWriteSuppressUntil = 0
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
@@ -2404,6 +2407,7 @@ export function useIpcEvents(): void {
           }
         }
     const pendingMobileStateEvents: PendingMobileStateEvent[] = []
+    let mobileStateHydrationDisposed = false
 
     const applyPendingMobileStateEvents = (): void => {
       for (const pending of pendingMobileStateEvents) {
@@ -2419,13 +2423,20 @@ export function useIpcEvents(): void {
       pendingMobileStateEvents.length = 0
     }
 
+    const enqueuePendingMobileStateEvent = (event: PendingMobileStateEvent): void => {
+      pendingMobileStateEvents.push(event)
+      while (pendingMobileStateEvents.length > MAX_PENDING_MOBILE_STATE_EVENTS) {
+        pendingMobileStateEvents.shift()
+      }
+    }
+
     unsubs.push(
       window.api.runtime.onTerminalFitOverrideChanged((event) => {
         if (isRuntimeEnvironmentActive()) {
           return
         }
         if (!mobileStateHydrated) {
-          pendingMobileStateEvents.push({ kind: 'fit', event })
+          enqueuePendingMobileStateEvent({ kind: 'fit', event })
           return
         }
         setFitOverride(event.ptyId, event.mode, event.cols, event.rows)
@@ -2442,7 +2453,7 @@ export function useIpcEvents(): void {
           return
         }
         if (!mobileStateHydrated) {
-          pendingMobileStateEvents.push({ kind: 'driver', event })
+          enqueuePendingMobileStateEvent({ kind: 'driver', event })
           return
         }
         setDriverForPty(event.ptyId, event.driver)
@@ -2455,7 +2466,7 @@ export function useIpcEvents(): void {
           return
         }
         if (!mobileStateHydrated) {
-          pendingMobileStateEvents.push({ kind: 'browser-driver', event })
+          enqueuePendingMobileStateEvent({ kind: 'browser-driver', event })
           return
         }
         setDriverForBrowserPage(event.browserPageId, event.driver)
@@ -2472,6 +2483,9 @@ export function useIpcEvents(): void {
         window.api.runtime.getBrowserDrivers()
       ])
         .then(([overrides, drivers, browserDrivers]) => {
+          if (mobileStateHydrationDisposed) {
+            return
+          }
           hydrateOverrides(overrides)
           hydrateDrivers(drivers)
           hydrateBrowserDrivers(browserDrivers)
@@ -2479,6 +2493,9 @@ export function useIpcEvents(): void {
           applyPendingMobileStateEvents()
         })
         .catch((error: unknown) => {
+          if (mobileStateHydrationDisposed) {
+            return
+          }
           console.error('Failed to hydrate mobile terminal state:', error)
           mobileStateHydrated = true
           applyPendingMobileStateEvents()
@@ -2490,6 +2507,8 @@ export function useIpcEvents(): void {
         globalThis.clearTimeout(pendingAgentStatusRetryTimer)
       }
       pendingAgentStatusEvents.length = 0
+      mobileStateHydrationDisposed = true
+      pendingMobileStateEvents.length = 0
       unsubs.forEach((fn) => fn())
       resetAgentHookCompletionNotificationCoordinators()
     }
