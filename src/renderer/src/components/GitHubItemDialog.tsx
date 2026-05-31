@@ -100,6 +100,10 @@ import {
   resolveGitHubLinkCopyState
 } from '@/components/github-link-copy-state'
 import {
+  resolveGitHubBodyDraft,
+  shouldSyncGitHubBodyDraft
+} from '@/components/github-body-draft-state'
+import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   getPRCommentAudienceEmptyLabel,
@@ -2402,11 +2406,12 @@ function ConversationTab({
     setReplyingTo(resolvedReplyingTo)
   }
 
-  useEffect(() => {
-    if (!bodyEditing) {
-      setBodyDraft(body)
-    }
-  }, [body, bodyEditing, item.id])
+  const resolvedBodyDraft = resolveGitHubBodyDraft(bodyDraft, body, bodyEditing)
+  if (shouldSyncGitHubBodyDraft(bodyDraft, body, bodyEditing)) {
+    // Why: background detail refreshes can change the body while the editor is
+    // closed; reconcile before paint so reopening never sees a stale draft.
+    setBodyDraft(resolvedBodyDraft)
+  }
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const markdownGitHubRepo = useMemo(
@@ -2415,7 +2420,7 @@ function ConversationTab({
   )
   const canEditBody =
     item.type === 'pr' ? Boolean(projectOrigin || bodySlug) : Boolean(projectOrigin || repoPath)
-  const bodyChanged = bodyDraft !== body
+  const bodyChanged = resolvedBodyDraft !== body
 
   const handleSaveBody = useCallback(async (): Promise<void> => {
     if (bodySaving || !bodyChanged) {
@@ -2428,10 +2433,10 @@ function ConversationTab({
         item,
         repoPath,
         projectOrigin,
-        body: bodyDraft,
+        body: resolvedBodyDraft,
         parsedSlug: bodySlug
       })
-      onBodyUpdated(bodyDraft)
+      onBodyUpdated(resolvedBodyDraft)
       setBodyEditing(false)
       toast.success('Description updated.')
     } catch (err) {
@@ -2439,7 +2444,16 @@ function ConversationTab({
     } finally {
       setBodySaving(false)
     }
-  }, [bodyChanged, bodyDraft, bodySaving, bodySlug, item, onBodyUpdated, projectOrigin, repoPath])
+  }, [
+    bodyChanged,
+    resolvedBodyDraft,
+    bodySaving,
+    bodySlug,
+    item,
+    onBodyUpdated,
+    projectOrigin,
+    repoPath
+  ])
 
   const handleReply = useCallback(
     async (comment: PRComment, replyBody: string): Promise<boolean> => {
@@ -2734,7 +2748,7 @@ function ConversationTab({
               </div>
             ) : bodyEditing ? (
               <GitHubMarkdownComposer
-                value={bodyDraft}
+                value={resolvedBodyDraft}
                 onChange={setBodyDraft}
                 placeholder="Description"
                 disabled={bodySaving}
