@@ -1,11 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   attributePortToWorkspace,
   isContainerProcess,
   parseLsofListeningOutput,
   parseNetstatListeningOutput,
-  parseProcNetTcp
+  parseProcNetTcp,
+  scanWorkspacePorts
 } from './local-workspace-port-scanner'
+
+const execFileMock = vi.hoisted(() => vi.fn())
+
+vi.mock('child_process', () => ({
+  execFile: execFileMock
+}))
 
 const worktrees = [
   {
@@ -132,5 +139,39 @@ describe('container process classification', () => {
       true
     )
     expect(isContainerProcess({ processName: 'node', commandLine: 'node server.js' })).toBe(false)
+  })
+})
+
+describe('scanWorkspacePorts command timeout', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+    execFileMock.mockReset()
+  })
+
+  it('returns an unavailable scan when lsof never reports completion', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const killMock = vi.fn()
+    execFileMock.mockImplementation(() => ({ kill: killMock }))
+
+    let settled = false
+    const scanPromise = scanWorkspacePorts([], {
+      lookup: () => undefined,
+      reconcileScan: vi.fn()
+    }).then((scan) => {
+      settled = true
+      return scan
+    })
+
+    await vi.advanceTimersByTimeAsync(4_000)
+
+    expect(settled).toBe(true)
+    await expect(scanPromise).resolves.toMatchObject({
+      platform: 'darwin',
+      ports: [],
+      unavailableReason: 'Port scanning is unavailable on darwin.'
+    })
+    expect(killMock).toHaveBeenCalled()
   })
 })

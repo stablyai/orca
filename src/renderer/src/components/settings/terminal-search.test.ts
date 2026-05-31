@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getTerminalPaneSearchEntries } from './terminal-search'
+import { APPEARANCE_PANE_SEARCH_ENTRIES } from './appearance-search'
 
 describe('getTerminalPaneSearchEntries', () => {
   it('includes the Windows right-click setting on Windows', () => {
@@ -66,12 +67,18 @@ describe('getTerminalPaneSearchEntries', () => {
     ).toBe(true)
   })
 
-  it('includes the Ghostty import setting on all platforms', () => {
+  it('keeps terminal appearance settings in the Appearance search index', () => {
     const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
     const entriesLinux = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
-    expect(entriesWindows.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
-    expect(entriesMac.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
-    expect(entriesLinux.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
+
+    expect(entriesWindows.some((entry) => entry.title === 'Import from Ghostty')).toBe(false)
+    expect(entriesMac.some((entry) => entry.title === 'Font Size')).toBe(false)
+    expect(entriesLinux.some((entry) => entry.title === 'Dark Theme')).toBe(false)
+    expect(
+      APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Import from Ghostty')
+    ).toBe(true)
+    expect(APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Font Size')).toBe(true)
+    expect(APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Dark Theme')).toBe(true)
   })
 })

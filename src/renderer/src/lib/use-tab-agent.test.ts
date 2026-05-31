@@ -93,6 +93,21 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('openclaude')
   })
 
+  it("uses Codex hook identity over Claude's generic task-title heuristic", () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: true,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
+        title: '✳ improve-pr-actions-customization',
+        hookAgent: 'codex',
+        hasCompletedHook: false,
+        launchAgent: 'codex'
+      })
+    ).toBe('codex')
+  })
+
   it('keeps explicit Claude Code titles authoritative over stale OpenClaude launch intent', () => {
     expect(
       resolveTabAgentFromSignals({

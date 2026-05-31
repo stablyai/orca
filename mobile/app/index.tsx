@@ -305,12 +305,12 @@ export default function HomeScreen() {
     if (hosts.length > 0) primeHosts(hosts)
   }, [hosts, primeHosts])
   const allClientsRef = useRef<Array<{ hostId: string; client: RpcClient }>>([])
-  useEffect(() => {
-    allClientsRef.current = allClients.map((entry) => ({
-      hostId: entry.hostId,
-      client: entry.client
-    }))
-  }, [allClients])
+  // Why: the focus callback stays stable to avoid refetching on every
+  // client-store render, but it still needs the latest host clients.
+  allClientsRef.current = allClients.map((entry) => ({
+    hostId: entry.hostId,
+    client: entry.client
+  }))
 
   // Why: hydrate the home page from a persisted snapshot on cold-start so
   // Resume + Account-usage cards paint immediately with last-known data

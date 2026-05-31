@@ -16,7 +16,6 @@ type WorkspaceKanbanStatusLaneProps = {
   items: readonly Worktree[]
   repoMap: Map<string, Repo>
   activeWorktreeId: string | null
-  compact: boolean
   columnWidth: number
   isResizingColumn: boolean
   isDragTarget: boolean
@@ -43,7 +42,6 @@ export default function WorkspaceKanbanStatusLane({
   items,
   repoMap,
   activeWorktreeId,
-  compact,
   columnWidth,
   isResizingColumn,
   isDragTarget,
@@ -158,7 +156,6 @@ export default function WorkspaceKanbanStatusLane({
                   selectedWorktrees={
                     isSelected && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
                   }
-                  compact={compact}
                   onActivate={onActivate}
                   onSelectionGesture={onSelectionGesture}
                   onContextMenuSelect={onContextMenuSelect}

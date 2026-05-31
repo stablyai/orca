@@ -1,4 +1,4 @@
-import { normalizeAbsolutePath } from '@/components/right-sidebar/file-explorer-paths'
+import { normalizeAbsolutePathForComparison } from '@/components/right-sidebar/file-explorer-paths'
 
 // Why: the editor's own save path writes to disk, which fans out as an
 // fs:changed event back to useEditorExternalWatch a few ms later. Treating
@@ -24,18 +24,18 @@ type SelfWriteStamp = RecentSelfWrite & {
 const stamps = new Map<string, SelfWriteStamp>()
 
 export function recordSelfWrite(absolutePath: string, content?: string): void {
-  stamps.set(normalizeAbsolutePath(absolutePath), {
+  stamps.set(normalizeAbsolutePathForComparison(absolutePath), {
     content: content ?? null,
     expiresAt: Date.now() + SELF_WRITE_TTL_MS
   })
 }
 
 export function clearSelfWrite(absolutePath: string): void {
-  stamps.delete(normalizeAbsolutePath(absolutePath))
+  stamps.delete(normalizeAbsolutePathForComparison(absolutePath))
 }
 
 export function getRecentSelfWrite(absolutePath: string): RecentSelfWrite | null {
-  const key = normalizeAbsolutePath(absolutePath)
+  const key = normalizeAbsolutePathForComparison(absolutePath)
   const stamp = stamps.get(key)
   if (!stamp) {
     return null

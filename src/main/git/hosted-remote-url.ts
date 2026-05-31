@@ -117,7 +117,7 @@ export function buildHostedRemoteFileUrl(
     return `${baseUrl}/blob/${encodedBranch}${filePathSuffix}#L${line}`
   }
   if (remote.provider === 'gitlab') {
-    return `${baseUrl}/tree/${encodedBranch}${filePathSuffix}#L${line}`
+    return `${baseUrl}/-/blob/${encodedBranch}${filePathSuffix}#L${line}`
   }
   return `${baseUrl}/src/${encodedBranch}${filePathSuffix}#L${line}`
 }

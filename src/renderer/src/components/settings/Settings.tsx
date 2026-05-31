@@ -2,7 +2,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import { Info } from 'lucide-react'
-import type { OrcaHooks } from '../../../../shared/types'
+import type { GlobalSettings, OrcaHooks } from '../../../../shared/types'
+import type {
+  SourceControlAiSettings,
+  SourceControlAiSettingsPatch
+} from '../../../../shared/source-control-ai-types'
+import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { useAppStore } from '../../store'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
@@ -19,9 +24,7 @@ import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
 import { useGhosttyImport } from './useGhosttyImport'
-import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
-import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { RepositoryPane } from './RepositoryPane'
 import { GitPane } from './GitPane'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
@@ -47,7 +50,10 @@ import { matchesSettingsSearch } from './settings-search'
 import { cn } from '@/lib/utils'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
-import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import {
+  getWindowsTerminalCapabilityOwnerKey,
+  useWindowsTerminalCapabilities
+} from '@/lib/windows-terminal-capabilities'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import {
@@ -72,7 +78,7 @@ const SETTINGS_NAV_GROUPS = [
   { id: 'workflows', title: 'Workflows' },
   { id: 'interface', title: 'Interface' },
   { id: 'remote', title: 'Remote Access' },
-  { id: 'safety', title: 'Safety' },
+  { id: 'security', title: 'Privacy & Security' },
   { id: 'experimental', title: 'Experimental' }
 ] as const
 
@@ -130,6 +136,10 @@ function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | nu
   container.scrollTo({ top: Math.min(Math.max(0, targetTop - 16), maxScrollTop) })
 }
 
+function readSourceControlAiSettings(settings: GlobalSettings): SourceControlAiSettings {
+  return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
+}
+
 function cancelPendingSettingsSubsectionScrollFrame(
   frameRef: MutableRefObject<number | null>
 ): void {
@@ -182,9 +192,8 @@ function Settings(): React.JSX.Element {
   // reveals controls that the renderer will intentionally hide.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
   const [prevScrollbackBytes, setPrevScrollbackBytes] = useState(settings?.terminalScrollbackBytes)
-  // Why: lifted out of TerminalPane so the Terminal section header can render
-  // the import trigger as a headerAction. The modal itself still lives inside
-  // TerminalPane, driven by this shared state.
+  // Why: Appearance owns terminal visual controls, but the Ghostty import flow
+  // still needs Settings-level state so the modal survives section remounts.
   const ghostty = useGhosttyImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
@@ -196,7 +205,8 @@ function Settings(): React.JSX.Element {
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
-  const [commitPromptDiscardSignal, setCommitPromptDiscardSignal] = useState(0)
+  const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
+  const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
   const confirm = useConfirmationDialog()
   // Why: the hidden-experimental group is an unlock — Shift-clicking the
   // Experimental sidebar entry reveals it for the remainder of the session.
@@ -212,6 +222,29 @@ function Settings(): React.JSX.Element {
   const repoHooksRequestSeqRef = useRef(0)
   const repoHooksRuntimeIdentityRef = useRef<string>('local')
   const shortcutsEscapeConfirmUntilRef = useRef(0)
+  const sourceControlAiWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
+
+  const hasUnsavedSourceControlAiPromptChanges =
+    hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges
+
+  const writeSourceControlAiSettings = useCallback(
+    (patch: SourceControlAiSettingsPatch): Promise<void> => {
+      const next = sourceControlAiWriteQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          const latestSettings = useAppStore.getState().settings ?? settings
+          if (!latestSettings) {
+            return
+          }
+          const latestConfig = readSourceControlAiSettings(latestSettings)
+          const resolvedPatch = typeof patch === 'function' ? patch(latestConfig) : patch
+          await updateSettings({ sourceControlAi: { ...latestConfig, ...resolvedPatch } })
+        })
+      sourceControlAiWriteQueueRef.current = next
+      return next
+    },
+    [settings, updateSettings]
+  )
 
   const setSettingsRootNode = useCallback(
     (node: HTMLDivElement | null): void => {
@@ -225,8 +258,8 @@ function Settings(): React.JSX.Element {
     [setSettingsSearchQuery]
   )
 
-  const confirmDiscardCommitPromptChanges = useCallback(async (): Promise<boolean> => {
-    if (!hasUnsavedCommitPromptChanges) {
+  const confirmDiscardSourceControlAiPromptChanges = useCallback(async (): Promise<boolean> => {
+    if (!hasUnsavedSourceControlAiPromptChanges) {
       return true
     }
     const shouldDiscard = await confirm({
@@ -236,18 +269,19 @@ function Settings(): React.JSX.Element {
       confirmVariant: 'destructive'
     })
     if (shouldDiscard) {
-      setCommitPromptDiscardSignal((signal) => signal + 1)
+      setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
       setHasUnsavedCommitPromptChanges(false)
+      setHasUnsavedBranchPromptChanges(false)
     }
     return shouldDiscard
-  }, [confirm, hasUnsavedCommitPromptChanges])
+  }, [confirm, hasUnsavedSourceControlAiPromptChanges])
 
   const closeSettingsPageWithPromptGuard = useCallback(async (): Promise<void> => {
-    if (!(await confirmDiscardCommitPromptChanges())) {
+    if (!(await confirmDiscardSourceControlAiPromptChanges())) {
       return
     }
     closeSettingsPage()
-  }, [closeSettingsPage, confirmDiscardCommitPromptChanges])
+  }, [closeSettingsPage, confirmDiscardSourceControlAiPromptChanges])
 
   useEffect(() => {
     fetchSettings()
@@ -321,14 +355,14 @@ function Settings(): React.JSX.Element {
       if (isIntentionalAppRestartInProgress()) {
         return
       }
-      if (!hasUnsavedCommitPromptChanges) {
+      if (!hasUnsavedSourceControlAiPromptChanges) {
         return
       }
       event.preventDefault()
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [hasUnsavedCommitPromptChanges])
+  }, [hasUnsavedSourceControlAiPromptChanges])
 
   useEffect(() => {
     const handleFindShortcut = (event: KeyboardEvent): void => {
@@ -407,14 +441,14 @@ function Settings(): React.JSX.Element {
   const visibleNavSections = useMemo(
     () =>
       navSections.filter((section) =>
-        section.id === 'git' && hasUnsavedCommitPromptChanges
+        section.id === 'git' && hasUnsavedSourceControlAiPromptChanges
           ? true
           : matchesSettingsSearch(settingsSearchQuery, [
               { title: section.title, description: section.description },
               ...section.searchEntries
             ])
       ),
-    [hasUnsavedCommitPromptChanges, navSections, settingsSearchQuery]
+    [hasUnsavedSourceControlAiPromptChanges, navSections, settingsSearchQuery]
   )
   const visibleSectionIds = useMemo(
     () => new Set(visibleNavSections.map((section) => section.id)),
@@ -432,27 +466,23 @@ function Settings(): React.JSX.Element {
       }),
     [activeSectionId, mountedSectionIds, navSections, settingsSearchQuery, visibleSectionIds]
   )
+  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
+    settings?.activeRuntimeEnvironmentId
+  )
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     isWindows &&
       (neededSectionIds.has('terminal') ||
         neededSectionIds.has('accounts') ||
         neededSectionIds.has('agents')),
-    true
+    true,
+    windowsTerminalCapabilityOwnerKey
   )
 
-  useEffect(() => {
-    setMountedSectionIds((previous) => {
-      let changed = false
-      const next = new Set(previous)
-      for (const id of neededSectionIds) {
-        if (!next.has(id)) {
-          next.add(id)
-          changed = true
-        }
-      }
-      return changed ? next : previous
-    })
-  }, [neededSectionIds])
+  if ([...neededSectionIds].some((id) => !mountedSectionIds.has(id))) {
+    // Why: lazy Settings sections are remembered for the session; record newly
+    // needed sections during render so panes do not wait for a follow-up Effect.
+    setMountedSectionIds(neededSectionIds)
+  }
 
   useEffect(() => {
     if (!neededSectionIds.has('appearance') && !neededSectionIds.has('terminal')) {
@@ -649,7 +679,7 @@ function Settings(): React.JSX.Element {
       sectionId: string,
       modifiers?: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }
     ): Promise<void> => {
-      if (sectionId !== activeSectionId && !(await confirmDiscardCommitPromptChanges())) {
+      if (sectionId !== activeSectionId && !(await confirmDiscardSourceControlAiPromptChanges())) {
         return
       }
       // Why: Shift-clicking the Experimental sidebar entry unlocks a hidden
@@ -674,14 +704,14 @@ function Settings(): React.JSX.Element {
     },
     [
       activeSectionId,
-      confirmDiscardCommitPromptChanges,
+      confirmDiscardSourceControlAiPromptChanges,
       setSettingsSearchQuery,
       settingsSearchQuery
     ]
   )
 
   const openComputerUseFromBrowser = useCallback(async () => {
-    if (!(await confirmDiscardCommitPromptChanges())) {
+    if (!(await confirmDiscardSourceControlAiPromptChanges())) {
       return
     }
     pendingNavSectionRef.current = 'computer-use'
@@ -693,7 +723,7 @@ function Settings(): React.JSX.Element {
     // Why: the pending section refs do not schedule a render by themselves.
     // When search is already clear, this reruns the centralized jump effect.
     setPendingNavRequestTick((tick) => tick + 1)
-  }, [confirmDiscardCommitPromptChanges, setSettingsSearchQuery, settingsSearchQuery])
+  }, [confirmDiscardSourceControlAiPromptChanges, setSettingsSearchQuery, settingsSearchQuery])
 
   if (!settings) {
     return (
@@ -883,20 +913,25 @@ function Settings(): React.JSX.Element {
                   title="Git & Source Control"
                   description="Branch naming, base refs, attribution, and Source Control AI."
                   searchEntries={getSectionSearchEntries('git')}
-                  forceVisible={hasUnsavedCommitPromptChanges}
+                  forceVisible={hasUnsavedSourceControlAiPromptChanges}
                 >
                   {isSectionMounted('git') ? (
                     <>
                       <GitPane
                         settings={settings}
                         updateSettings={updateSettings}
+                        writeSourceControlAiSettings={writeSourceControlAiSettings}
                         displayedGitUsername={displayedGitUsername}
+                        hasUnsavedBranchPromptChanges={hasUnsavedBranchPromptChanges}
+                        onBranchPromptDirtyChange={setHasUnsavedBranchPromptChanges}
+                        branchPromptDiscardSignal={sourceControlAiPromptDiscardSignal}
                       />
                       <CommitMessageAiPane
                         settings={settings}
                         updateSettings={updateSettings}
+                        writeSourceControlAiSettings={writeSourceControlAiSettings}
                         onCustomPromptDirtyChange={setHasUnsavedCommitPromptChanges}
-                        customPromptDiscardSignal={commitPromptDiscardSignal}
+                        customPromptDiscardSignal={sourceControlAiPromptDiscardSignal}
                       />
                     </>
                   ) : null}
@@ -914,48 +949,22 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
-                  id="floating-workspace"
-                  title="Floating Workspace"
-                  description="Global terminal, browser, and markdown tabs."
-                  searchEntries={getSectionSearchEntries('floating-workspace')}
-                >
-                  {isSectionMounted('floating-workspace') ? (
-                    <FloatingWorkspacePane settings={settings} updateSettings={updateSettings} />
-                  ) : null}
-                </SettingsSection>
-
-                <SettingsSection
                   id="terminal"
                   title="Terminal"
-                  description="Shells, terminal appearance, and pane behavior."
+                  description="Shells, renderer, sessions, and terminal behavior."
                   searchEntries={getSectionSearchEntries('terminal')}
-                  headerAction={
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={() => void ghostty.handleClick()}
-                    >
-                      <img src={ghosttyIcon} alt="" aria-hidden="true" className="size-4" />
-                      Import from Ghostty
-                    </Button>
-                  }
                 >
                   {isSectionMounted('terminal') ? (
                     <TerminalPane
                       settings={settings}
                       updateSettings={updateSettings}
-                      systemPrefersDark={systemPrefersDark}
-                      terminalFontSuggestions={fontSuggestions.filter(
-                        (font) => font !== DEFAULT_APP_FONT_FAMILY
-                      )}
                       scrollbackMode={scrollbackMode}
                       setScrollbackMode={setScrollbackMode}
-                      ghostty={ghostty}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
                       pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
+                      gitBashAvailable={windowsTerminalCapabilities.gitBashAvailable}
                     />
                   ) : null}
                 </SettingsSection>
@@ -993,9 +1002,20 @@ function Settings(): React.JSX.Element {
                 ) : null}
 
                 <SettingsSection
+                  id="floating-workspace"
+                  title="Floating Workspace"
+                  description="Global terminal, browser, and markdown tabs."
+                  searchEntries={getSectionSearchEntries('floating-workspace')}
+                >
+                  {isSectionMounted('floating-workspace') ? (
+                    <FloatingWorkspacePane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
                   id="appearance"
                   title="Appearance"
-                  description="Theme, zoom, app font, sidebars, and status bar."
+                  description="Theme, zoom, app and terminal appearance, sidebars, and status bar."
                   searchEntries={getSectionSearchEntries('appearance')}
                 >
                   {isSectionMounted('appearance') ? (
@@ -1004,6 +1024,11 @@ function Settings(): React.JSX.Element {
                       updateSettings={updateSettings}
                       applyTheme={applyTheme}
                       fontSuggestions={fontSuggestions}
+                      terminalFontSuggestions={fontSuggestions.filter(
+                        (font) => font !== DEFAULT_APP_FONT_FAMILY
+                      )}
+                      systemPrefersDark={systemPrefersDark}
+                      ghostty={ghostty}
                     />
                   ) : null}
                 </SettingsSection>

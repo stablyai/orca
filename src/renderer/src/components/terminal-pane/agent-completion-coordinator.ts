@@ -83,6 +83,7 @@ export function createAgentCompletionCoordinator(
   function establishAgentEvidence(): void {
     agentIdentityEstablished = true
     hasAgentRunEvidence = true
+    scheduleNextPoll()
   }
 
   function clearAgentRunEvidence(): void {
@@ -218,6 +219,9 @@ export function createAgentCompletionCoordinator(
     if (disposed || inspectionInFlight || !options.isLive()) {
       return
     }
+    if (priority === 'cadence' && !shouldRunCadenceInspection()) {
+      return
+    }
     const ptyId = options.getPtyId()
     if (!ptyId) {
       return
@@ -276,6 +280,17 @@ export function createAgentCompletionCoordinator(
     })
   }
 
+  function shouldRunCadenceInspection(): boolean {
+    // Why: hidden idle terminals should not join the global process-inspection
+    // cadence. Once a pane has agent evidence, keep the backstop alive so an
+    // unannounced process exit can still produce/clear completion state.
+    return (
+      hasAgentRunEvidence ||
+      lastForegroundAgent !== null ||
+      options.shouldPollProcessCadence?.() !== false
+    )
+  }
+
   function nextPollInterval(): number {
     const base = lastForegroundAgent ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS
     const backoff =
@@ -288,6 +303,9 @@ export function createAgentCompletionCoordinator(
 
   function scheduleNextPoll(): void {
     if (disposed || !options.isLive() || pollTimer !== null || pendingTitle) {
+      return
+    }
+    if (!shouldRunCadenceInspection()) {
       return
     }
     const ptyId = options.getPtyId()

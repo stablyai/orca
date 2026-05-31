@@ -8,9 +8,9 @@ const LOCAL_ADDRESS_PATTERN =
 // A single-word input containing a dot with a valid TLD-like suffix is treated as
 // a URL attempt, not a search query.
 const LOOKS_LIKE_URL_PATTERN = /^[^\s]+\.[a-z]{2,}(\/.*)?$/i
-const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/][^\s]*$/
+const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/].*$/
 const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\s\\/]+[\\/][^\\/]+(?:[\\/].*)?$/
-const UNIX_ABSOLUTE_PATH_PATTERN = /^\/[^\s]*$/
+const UNIX_ABSOLUTE_PATH_PATTERN = /^\/.*$/
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing' | 'kagi'
 

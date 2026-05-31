@@ -29,6 +29,7 @@ type PRRefreshOutcomeObserver = (
 ) => void
 
 const MIN_BACKGROUND_REFRESH_AGE_MS = 60_000
+const MERGEABILITY_PENDING_REFRESH_MS = 10_000
 const BACKGROUND_BUDGET_WINDOW_MS = 5 * 60_000
 const MIN_BACKGROUND_SPACING_MS = 10_000
 const BACKGROUND_BUDGET_MAX = 20
@@ -183,7 +184,9 @@ function visibleCandidateAfterOutcome(
     cachedFetchedAt: outcome.fetchedAt,
     cachedHasPR: outcome.kind === 'found',
     cachedPRState: outcome.kind === 'found' ? outcome.pr.state : null,
-    cachedChecksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null
+    cachedChecksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null,
+    cachedMergeable: outcome.kind === 'found' ? outcome.pr.mergeable : null,
+    cachedMergeStateStatus: outcome.kind === 'found' ? (outcome.pr.mergeStateStatus ?? null) : null
   }
 }
 
@@ -295,6 +298,16 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
   if (candidate.cachedHasPR === false) {
     return 15 * 60_000
   }
+  if (
+    candidate.cachedHasPR === true &&
+    candidate.cachedPRState === 'open' &&
+    candidate.cachedMergeable === 'UNKNOWN' &&
+    !hasResolvedMergeStateStatus(candidate.cachedMergeStateStatus)
+  ) {
+    // Why: GitHub can return transient UNKNOWN mergeability while it computes
+    // the PR test merge; visible merge buttons need a prompt follow-up.
+    return MERGEABILITY_PENDING_REFRESH_MS
+  }
   if (candidate.cachedChecksStatus === 'success') {
     return 10 * 60_000
   }
@@ -305,6 +318,10 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
     return 90_000
   }
   return MIN_BACKGROUND_REFRESH_AGE_MS
+}
+
+function hasResolvedMergeStateStatus(status: string | null | undefined): boolean {
+  return status === 'CLEAN' || status === 'BEHIND' || status === 'BLOCKED'
 }
 
 function backgroundRefreshBuckets(): ('core' | 'graphql')[] {

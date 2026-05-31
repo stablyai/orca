@@ -59,6 +59,34 @@
   color: var(--foreground);
 }
 
+.github-markdown-composer .rich-markdown-editor-toolbar {
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+}
+
+.github-markdown-composer-editor {
+  min-height: 8rem;
+  padding: 12px 14px 18px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.github-markdown-composer-editor p,
+.github-markdown-composer-editor ul,
+.github-markdown-composer-editor ol,
+.github-markdown-composer-editor blockquote {
+  margin: 0.55em 0;
+}
+
+.github-markdown-composer-image-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--muted) 38%, var(--background));
+}
+
 .orca-diff-comment-add-btn.rich-markdown-comment-add-btn {
   display: flex;
   width: 22px;
@@ -811,6 +839,131 @@
 .rich-markdown-editor .ProseMirror-selectednode {
   outline: 2px solid color-mix(in srgb, var(--ring) 78%, transparent);
   outline-offset: 2px;
+}
+
+/* ── Linear Issue Markdown Editor ────────────────────── */
+
+.linear-issue-markdown-editor {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--foreground);
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.linear-issue-markdown-editor-page {
+  margin-top: 1.75rem;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.linear-issue-markdown-editor-drawer {
+  font-size: 14px;
+  line-height: 1.625;
+}
+
+.linear-issue-markdown-editor:hover {
+  border-color: color-mix(in srgb, var(--border) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.linear-issue-markdown-editor:focus-within {
+  border-color: var(--border);
+  background: var(--background);
+  box-shadow: 0 0 0 1px var(--ring);
+}
+
+.linear-issue-markdown-editor.is-disabled {
+  opacity: 0.8;
+}
+
+.linear-issue-markdown-toolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 4px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  background: color-mix(in srgb, var(--background) 72%, transparent);
+}
+
+.linear-issue-markdown-toolbar-button {
+  display: inline-flex;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.linear-issue-markdown-toolbar-button:hover:not(:disabled),
+.linear-issue-markdown-toolbar-button.is-active {
+  border-color: color-mix(in srgb, var(--border) 78%, transparent);
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.linear-issue-markdown-toolbar-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.linear-issue-markdown-toolbar-separator {
+  width: 1px;
+  min-width: 1px;
+  height: 16px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.linear-issue-markdown-scroll {
+  min-width: 0;
+}
+
+.linear-issue-markdown-editor .rich-markdown-editor {
+  min-height: 96px;
+  padding: 10px 12px 26px;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.linear-issue-markdown-editor-page .rich-markdown-editor {
+  min-height: 132px;
+  padding: 12px 12px 28px;
+}
+
+.linear-issue-markdown-editor .rich-markdown-editor p,
+.linear-issue-markdown-editor .rich-markdown-editor ul,
+.linear-issue-markdown-editor .rich-markdown-editor ol,
+.linear-issue-markdown-editor .rich-markdown-editor blockquote {
+  margin: 0.55em 0;
+}
+
+.linear-issue-markdown-editor .rich-markdown-editor p.is-editor-empty:first-child::before {
+  font-style: italic;
+}
+
+.linear-issue-markdown-save-hint {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.linear-issue-markdown-editor:focus-within .linear-issue-markdown-save-hint {
+  opacity: 1;
 }
 
 .rich-markdown-slash-menu {

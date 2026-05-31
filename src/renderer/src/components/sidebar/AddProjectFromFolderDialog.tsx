@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import {
@@ -45,6 +45,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   const mountedRef = useMountedRef()
 
   const isOpen = activeModal === 'confirm-add-project-from-folder'
+  const [previousOpen, setPreviousOpen] = useState(isOpen)
   const folderPath = typeof modalData.folderPath === 'string' ? modalData.folderPath : ''
   const connectionId = typeof modalData.connectionId === 'string' ? modalData.connectionId : ''
   const repoId = addedRepo?.id ?? ''
@@ -79,13 +80,16 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   )
   const primaryBranchName = getProjectAddedPrimaryBranchName(primaryWorktree)
 
-  useEffect(() => {
+  if (isOpen !== previousOpen) {
+    setPreviousOpen(isOpen)
     if (!isOpen) {
+      // Why: closed modal state is fully local; clear it before commit so the
+      // next open never paints stale progress or errors.
       setAddedRepo(null)
       setIsAdding(false)
       setError(null)
     }
-  }, [isOpen])
+  }
 
   const openNonGitConfirmation = useCallback(() => {
     closeModal()

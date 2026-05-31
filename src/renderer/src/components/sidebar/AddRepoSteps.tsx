@@ -19,7 +19,7 @@ import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-re
 // ── Remote project hook ─────────────────────────────────────────────
 
 export function useRemoteRepo(
-  fetchWorktrees: (repoId: string) => Promise<void>,
+  fetchWorktrees: (repoId: string) => Promise<unknown>,
   setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup') => void,
   setAddedRepo: (repo: Repo | null) => void,
   closeModal: () => void,

@@ -198,6 +198,10 @@ export type ClosedEditorTabSnapshot = Omit<OpenFile, 'id' | 'isDirty'>
 
 const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 
+type EditorOpenTargetOptions = {
+  targetGroupId?: string
+}
+
 export type PendingEditorReveal = {
   filePath: string
   fileId?: string
@@ -359,21 +363,24 @@ export type EditorSlice = {
     filePath: string,
     relativePath: string,
     language: string,
-    staged: boolean
+    staged: boolean,
+    options?: EditorOpenTargetOptions
   ) => void
   openBranchDiff: (
     worktreeId: string,
     worktreePath: string,
     entry: GitBranchChangeEntry,
     compare: BranchCompareLike,
-    language: string
+    language: string,
+    options?: EditorOpenTargetOptions
   ) => void
   openCommitDiff: (
     worktreeId: string,
     worktreePath: string,
     entry: GitBranchChangeEntry,
     compare: CommitCompareLike,
-    language: string
+    language: string,
+    options?: EditorOpenTargetOptions
   ) => void
   openAllDiffs: (
     worktreeId: string,
@@ -385,7 +392,8 @@ export type EditorSlice = {
     worktreeId: string,
     worktreePath: string,
     entry: GitStatusEntry,
-    language: string
+    language: string,
+    options?: EditorOpenTargetOptions
   ) => void
   openConflictReviewFile: (
     reviewFileId: string,
@@ -545,10 +553,7 @@ function openWorkspaceEditorItem(
   isPreview?: boolean,
   targetGroupId?: string
 ): string {
-  const resolvedGroupId =
-    targetGroupId ??
-    state.activeGroupIdByWorktree?.[worktreeId] ??
-    state.groupsByWorktree?.[worktreeId]?.[0]?.id
+  const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
   if (resolvedGroupId) {
     const existing = state.findTabForEntityInGroup?.(
       worktreeId,
@@ -568,6 +573,82 @@ function openWorkspaceEditorItem(
     ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {})
   })
   return created?.id ?? fileId
+}
+
+function isEditorTabContentType(contentType: Tab['contentType']): boolean {
+  return contentType === 'editor' || contentType === 'diff' || contentType === 'conflict-review'
+}
+
+function getGroupActiveTab(group: TabGroup, tabsById: Map<string, Tab>): Tab | null {
+  return group.activeTabId ? (tabsById.get(group.activeTabId) ?? null) : null
+}
+
+function getMostRecentEditorTabForGroup(group: TabGroup, tabsById: Map<string, Tab>): Tab | null {
+  const seen = new Set<string>()
+  const candidateIdLists = [group.recentTabIds ?? [], group.tabOrder]
+  for (const candidateIds of candidateIdLists) {
+    for (let index = candidateIds.length - 1; index >= 0; index -= 1) {
+      const tabId = candidateIds[index]
+      if (!tabId || seen.has(tabId)) {
+        continue
+      }
+      seen.add(tabId)
+      const tab = tabsById.get(tabId)
+      if (tab?.groupId === group.id && isEditorTabContentType(tab.contentType)) {
+        return tab
+      }
+    }
+  }
+  return null
+}
+
+function resolveEditorOpenTargetGroupId(
+  state: Pick<AppState, 'activeGroupIdByWorktree' | 'groupsByWorktree' | 'unifiedTabsByWorktree'>,
+  worktreeId: string,
+  explicitTargetGroupId?: string
+): string | undefined {
+  if (explicitTargetGroupId) {
+    return explicitTargetGroupId
+  }
+
+  const groups = state.groupsByWorktree?.[worktreeId] ?? []
+  if (groups.length === 0) {
+    return undefined
+  }
+
+  const fallbackGroup = groups[0]
+  if (!fallbackGroup) {
+    return undefined
+  }
+  const tabsById = new Map(
+    (state.unifiedTabsByWorktree?.[worktreeId] ?? []).map((tab) => [tab.id, tab])
+  )
+  const activeGroup =
+    groups.find((group) => group.id === state.activeGroupIdByWorktree?.[worktreeId]) ??
+    fallbackGroup
+  const activeTab = getGroupActiveTab(activeGroup, tabsById)
+  if (!activeTab || isEditorTabContentType(activeTab.contentType)) {
+    return activeGroup.id
+  }
+
+  // Why: file explorer opens should reuse an existing editor pane when the
+  // focused pane is an agent terminal, instead of turning that terminal pane
+  // into an editor tab.
+  const visibleEditorGroup = groups.find((group) => {
+    if (group.id === activeGroup.id) {
+      return false
+    }
+    const groupActiveTab = getGroupActiveTab(group, tabsById)
+    return groupActiveTab ? isEditorTabContentType(groupActiveTab.contentType) : false
+  })
+  if (visibleEditorGroup) {
+    return visibleEditorGroup.id
+  }
+
+  const recentEditorGroup = groups.find(
+    (group) => group.id !== activeGroup.id && getMostRecentEditorTabForGroup(group, tabsById)
+  )
+  return recentEditorGroup?.id ?? activeGroup.id
 }
 
 function buildEditorActiveResult(
@@ -1232,10 +1313,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // scoped to that group. Opening as preview in group B must not evict a
       // preview tab belonging to group A (split tab groups).
       const targetGroupId =
-        options?.targetGroupId ??
-        s.activeGroupIdByWorktree?.[worktreeId] ??
-        s.groupsByWorktree?.[worktreeId]?.[0]?.id ??
-        undefined
+        resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+      editorItemTargetGroupId = targetGroupId
       const previewTabByEntity = new Map<string, string>()
       if (targetGroupId) {
         const tabsForWorktree = s.unifiedTabsByWorktree?.[worktreeId] ?? []
@@ -2007,7 +2086,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       openFiles: s.openFiles.map((f) => (f.id === fileId ? { ...f, isUntitled: undefined } : f))
     })),
 
-  openDiff: (worktreeId, filePath, relativePath, language, staged) => {
+  openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
     set((s) => {
       const diffSource: DiffSource = staged ? 'staged' : 'unstaged'
       const id = `${worktreeId}::diff::${diffSource}::${relativePath}`
@@ -2061,11 +2140,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       `${worktreeId}::diff::${staged ? 'staged' : 'unstaged'}::${relativePath}`,
       worktreeId,
       relativePath,
-      'diff'
+      'diff',
+      undefined,
+      options?.targetGroupId
     )
   },
 
-  openBranchDiff: (worktreeId, worktreePath, entry, compare, language) => {
+  openBranchDiff: (worktreeId, worktreePath, entry, compare, language, options) => {
     const branchCompare = toBranchCompareSnapshot(compare)
     const id = `${worktreeId}::diff::branch::${compare.baseRef}::${branchCompare.compareVersion}::${entry.path}`
     set((s) => {
@@ -2115,10 +2196,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
       }
     })
-    void openWorkspaceEditorItem(get(), id, worktreeId, entry.path, 'diff')
+    void openWorkspaceEditorItem(
+      get(),
+      id,
+      worktreeId,
+      entry.path,
+      'diff',
+      undefined,
+      options?.targetGroupId
+    )
   },
 
-  openCommitDiff: (worktreeId, worktreePath, entry, compare, language) => {
+  openCommitDiff: (worktreeId, worktreePath, entry, compare, language, options) => {
     const commitCompare = toCommitCompareSnapshot(compare)
     const id = `${worktreeId}::diff::commit::${commitCompare.compareVersion}::${entry.path}`
     set((s) => {
@@ -2168,7 +2257,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
       }
     })
-    void openWorkspaceEditorItem(get(), id, worktreeId, entry.path, 'diff')
+    void openWorkspaceEditorItem(
+      get(),
+      id,
+      worktreeId,
+      entry.path,
+      'diff',
+      undefined,
+      options?.targetGroupId
+    )
   },
 
   openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter) => {
@@ -2251,7 +2348,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     void openWorkspaceEditorItem(get(), id, worktreeId, label, 'diff')
   },
 
-  openConflictFile: (worktreeId, worktreePath, entry, language) => {
+  openConflictFile: (worktreeId, worktreePath, entry, language, options) => {
     const absolutePath = joinPath(worktreePath, entry.path)
     set((s) => {
       const id = absolutePath
@@ -2320,7 +2417,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             : { ...s.trackedConflictPathsByWorktree, [worktreeId]: nextTracked }
       }
     })
-    void openWorkspaceEditorItem(get(), absolutePath, worktreeId, entry.path, 'editor')
+    void openWorkspaceEditorItem(
+      get(),
+      absolutePath,
+      worktreeId,
+      entry.path,
+      'editor',
+      undefined,
+      options?.targetGroupId
+    )
   },
 
   openConflictReviewFile: (reviewFileId, worktreeId, worktreePath, entry, language) => {

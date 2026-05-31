@@ -1,6 +1,6 @@
 export type TaskProvider = 'github' | 'gitlab' | 'linear'
 
-export const MOBILE_TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear']
+const MOBILE_TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear']
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(MOBILE_TASK_PROVIDERS)
 

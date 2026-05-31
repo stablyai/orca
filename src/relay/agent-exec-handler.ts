@@ -199,11 +199,18 @@ export class AgentExecHandler {
       let settled = false
       const laneKey = typeof cwd === 'string' ? this.laneKey(cwd, params.operation) : ''
       let entry: InFlightExec | null = null
+      let timer: ReturnType<typeof setTimeout> | null = null
+      let detachChildListeners = (): void => {}
       const finish = (result: ExecResult): void => {
         if (settled) {
           return
         }
         settled = true
+        if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
+        detachChildListeners()
         if (laneKey && entry && this.inFlightByLane.get(laneKey) === entry) {
           this.inFlightByLane.delete(laneKey)
         }
@@ -219,32 +226,32 @@ export class AgentExecHandler {
         this.inFlightByLane.set(laneKey, entry)
       }
 
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         timedOut = true
         // Why: tree-kill because some CLIs trap SIGTERM and continue streaming;
         // also Windows wraps `.cmd` shims in cmd.exe, so the immediate child
         // is not the real node.exe process.
         killProcessTree(child)
+        finish({ stdout, stderr, exitCode: null, timedOut, canceled })
       }, timeoutMs)
 
-      child.stdout?.on('data', (chunk: Buffer) => {
+      const onStdoutData = (chunk: Buffer): void => {
         stdoutBytes += chunk.byteLength
         if (stdoutBytes > MAX_OUTPUT_BYTES) {
           killProcessTree(child)
           return
         }
         stdout += chunk.toString('utf-8')
-      })
-      child.stderr?.on('data', (chunk: Buffer) => {
+      }
+      const onStderrData = (chunk: Buffer): void => {
         stderrBytes += chunk.byteLength
         if (stderrBytes > MAX_OUTPUT_BYTES) {
           killProcessTree(child)
           return
         }
         stderr += chunk.toString('utf-8')
-      })
-      child.on('error', (error) => {
-        clearTimeout(timer)
+      }
+      const onError = (error: Error): void => {
         finish({
           stdout,
           stderr,
@@ -252,11 +259,20 @@ export class AgentExecHandler {
           timedOut,
           spawnError: error.message
         })
-      })
-      child.on('close', (code) => {
-        clearTimeout(timer)
+      }
+      const onClose = (code: number | null): void => {
         finish({ stdout, stderr, exitCode: code, timedOut, canceled })
-      })
+      }
+      child.stdout?.on('data', onStdoutData)
+      child.stderr?.on('data', onStderrData)
+      child.on('error', onError)
+      child.on('close', onClose)
+      detachChildListeners = () => {
+        child.stdout?.off('data', onStdoutData)
+        child.stderr?.off('data', onStderrData)
+        child.off('error', onError)
+        child.off('close', onClose)
+      }
 
       if (stdinPayload !== null) {
         child.stdin?.end(stdinPayload)

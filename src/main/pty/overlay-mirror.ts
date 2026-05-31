@@ -8,7 +8,7 @@
 // consumer cannot accidentally diverge from the audited cleanup behavior.
 
 import { cpSync, linkSync, lstatSync, readdirSync, rmdirSync, symlinkSync, unlinkSync } from 'fs'
-import { join, relative, resolve, sep } from 'path'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 
 export function mirrorEntry(sourcePath: string, targetPath: string): void {
   // Why: lstatSync (not statSync) so that if the user's source dir contains
@@ -118,7 +118,7 @@ export function safeRemoveOverlay(overlayDir: string, overlayRoot: string): void
   const resolvedRoot = resolve(overlayRoot)
   const resolvedTarget = resolve(overlayDir)
   const rel = relative(resolvedRoot, resolvedTarget)
-  if (rel === '' || rel.startsWith('..') || rel.includes(`..${sep}`)) {
+  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     console.warn(
       `[overlay-mirror] refusing to remove overlay outside root: target=${resolvedTarget} root=${resolvedRoot}`
     )

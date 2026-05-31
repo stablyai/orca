@@ -4,7 +4,6 @@ import { Plus, Upload } from 'lucide-react'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
   type SshTarget
 } from '../../../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../../../shared/constants'
@@ -15,6 +14,11 @@ import { removeSshTargetWithBestEffortCleanup } from './ssh-target-remove'
 import { SshTargetCard } from './SshTargetCard'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
+import {
+  getSshTargetDraftConnectionFields,
+  isRelayGracePeriodValid,
+  parseRelayGracePeriodSeconds
+} from './ssh-target-draft'
 export { SSH_PANE_SEARCH_ENTRIES } from './ssh-search'
 
 type SshPaneProps = Record<string, never>
@@ -60,26 +64,19 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   }, [loadTargets])
 
   const handleSave = async (): Promise<void> => {
-    if (!form.host.trim() || !form.username.trim()) {
-      toast.error('Host and username are required')
+    const { host, configHost, username, port } = getSshTargetDraftConnectionFields(form)
+    if (!host) {
+      toast.error('Host or SSH config alias is required')
       return
     }
 
-    const port = parseInt(form.port, 10)
     if (isNaN(port) || port < 1 || port > 65535) {
       toast.error('Port must be between 1 and 65535')
       return
     }
 
-    const graceSeconds = form.relayKeepAliveUntilReset
-      ? 0
-      : parseInt(form.relayGracePeriodSeconds, 10)
-    if (
-      !form.relayKeepAliveUntilReset &&
-      (isNaN(graceSeconds) ||
-        graceSeconds < MIN_SSH_RELAY_GRACE_PERIOD_SECONDS ||
-        graceSeconds > MAX_SSH_RELAY_GRACE_PERIOD_SECONDS)
-    ) {
+    const graceSeconds = parseRelayGracePeriodSeconds(form)
+    if (!isRelayGracePeriodValid(form, graceSeconds)) {
       toast.error(
         `Relay grace period must be between 60 and ${MAX_SSH_RELAY_GRACE_PERIOD_SECONDS} seconds, or choose keep alive until reset`
       )
@@ -87,11 +84,11 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     }
 
     const target = {
-      label: form.label.trim() || `${form.username}@${form.host}`,
-      configHost: form.configHost.trim() || form.host.trim(),
-      host: form.host.trim(),
+      label: form.label.trim() || (username ? `${username}@${host}` : configHost),
+      configHost,
+      host,
       port,
-      username: form.username.trim(),
+      username,
       relayGracePeriodSeconds: graceSeconds,
       ...(form.identityFile.trim() ? { identityFile: form.identityFile.trim() } : {}),
       ...(form.proxyCommand.trim() ? { proxyCommand: form.proxyCommand.trim() } : {}),

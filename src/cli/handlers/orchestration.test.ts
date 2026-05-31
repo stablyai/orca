@@ -1,11 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 
 // Why: isolate the handler's flag-to-param mapping; printResult only writes output.
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
+
+afterEach(() => {
+  if (originalTerminalHandle === undefined) {
+    delete process.env.ORCA_TERMINAL_HANDLE
+  } else {
+    process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
+  }
+})
 
 describe('orchestration reset CLI handler', () => {
   beforeEach(() => {
@@ -44,5 +53,112 @@ describe('orchestration reset CLI handler', () => {
       tasks: undefined,
       messages: undefined
     })
+  })
+})
+
+describe('orchestration timeout flag validation', () => {
+  const invalidTimeoutValues: [string, string | boolean][] = [
+    ['missing', true],
+    ['empty', ''],
+    ['non-numeric', 'not-a-number'],
+    ['zero', '0'],
+    ['negative', '-1']
+  ]
+
+  beforeEach(() => {
+    callMock.mockReset()
+    delete process.env.ORCA_TERMINAL_HANDLE
+  })
+
+  const invokeCheck = (flags: Map<string, string | boolean>) =>
+    ORCHESTRATION_HANDLERS['orchestration check']({
+      flags,
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+  const invokeAsk = (flags: Map<string, string | boolean>) =>
+    ORCHESTRATION_HANDLERS['orchestration ask']({
+      flags,
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+  it.each(invalidTimeoutValues)('rejects invalid check --timeout-ms: %s', async (_label, value) => {
+    const flags = new Map<string, string | boolean>([
+      ['wait', true],
+      ['timeout-ms', value]
+    ])
+
+    await expect(invokeCheck(flags)).rejects.toThrow(/--timeout-ms/)
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('passes a parsed check timeout into the RPC payload', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    callMock.mockResolvedValue({ result: { messages: [], count: 0 } })
+
+    await invokeCheck(
+      new Map<string, string | boolean>([
+        ['wait', true],
+        ['timeout-ms', '250']
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.check', {
+      terminal: 'term_worker',
+      unread: undefined,
+      all: undefined,
+      types: undefined,
+      inject: undefined,
+      wait: true,
+      timeoutMs: 250
+    })
+  })
+
+  it.each(invalidTimeoutValues)('rejects invalid ask --timeout-ms: %s', async (_label, value) => {
+    const flags = new Map<string, string | boolean>([
+      ['to', 'term_coord'],
+      ['question', 'Proceed?'],
+      ['timeout-ms', value]
+    ])
+
+    await expect(invokeAsk(flags)).rejects.toThrow(/--timeout-ms/)
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('uses the parsed ask timeout for both runtime wait and client timeout', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    callMock.mockResolvedValue({
+      result: {
+        answer: 'yes',
+        messageId: 'msg_1',
+        threadId: 'thread_1',
+        timedOut: false
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invokeAsk(
+      new Map<string, string | boolean>([
+        ['to', 'term_coord'],
+        ['question', 'Proceed?'],
+        ['timeout-ms', '123']
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.ask',
+      {
+        to: 'term_coord',
+        question: 'Proceed?',
+        options: undefined,
+        timeoutMs: 123,
+        from: 'term_worker'
+      },
+      { timeoutMs: 5_123 }
+    )
   })
 })

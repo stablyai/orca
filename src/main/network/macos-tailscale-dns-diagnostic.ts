@@ -52,7 +52,7 @@ function readMacTailscaleDnsDiagnostic(now = Date.now()): DnsDiagnostic | null {
 
   let diagnostic: DnsDiagnostic | null = null
   try {
-    const output = execFileSync('scutil', ['--dns'], {
+    const output = execFileSync('/usr/sbin/scutil', ['--dns'], {
       encoding: 'utf8',
       timeout: 1500,
       stdio: ['ignore', 'pipe', 'ignore']

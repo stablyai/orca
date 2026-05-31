@@ -160,7 +160,11 @@ function normalizeWorkspace(input: unknown): LinearWorkspace | null {
     organizationUrlKey:
       typeof record.organizationUrlKey === 'string' ? record.organizationUrlKey : undefined,
     displayName: record.displayName,
-    email: typeof record.email === 'string' ? record.email : null
+    email: typeof record.email === 'string' ? record.email : null,
+    credentialRevision:
+      typeof record.credentialRevision === 'number' && Number.isFinite(record.credentialRevision)
+        ? record.credentialRevision
+        : undefined
   }
 }
 
@@ -431,8 +435,11 @@ function workspaceFromLinearData(
 
 function upsertWorkspace(workspace: LinearWorkspace, options: { select?: boolean } = {}): void {
   const file = getWorkspaceFile()
+  const current = file.workspaces.find((entry) => entry.id === workspace.id)
+  const credentialRevision = (current?.credentialRevision ?? 0) + 1
+  const workspaceWithRevision = { ...workspace, credentialRevision }
   const withoutCurrent = file.workspaces.filter((entry) => entry.id !== workspace.id)
-  const workspaces = [...withoutCurrent, workspace].sort((a, b) =>
+  const workspaces = [...withoutCurrent, workspaceWithRevision].sort((a, b) =>
     a.organizationName.localeCompare(b.organizationName)
   )
   const selectedWorkspaceId = options.select

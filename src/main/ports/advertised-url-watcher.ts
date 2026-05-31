@@ -82,9 +82,13 @@ class PtyBuffer {
    *  and including the last newline). Whatever follows the last newline stays
    *  buffered so that a URL or ANSI sequence split across chunks survives. */
   ingest(chunk: string): string {
+    const chunkHasLineBreak = chunk.includes('\n') || chunk.includes('\r')
     this.raw += chunk
     if (this.raw.length > PER_PTY_BUFFER_LIMIT) {
       this.raw = this.raw.slice(-PER_PTY_BUFFER_LIMIT)
+    }
+    if (!chunkHasLineBreak) {
+      return ''
     }
     const lastNewline = lastLineBreak(this.raw)
     if (lastNewline === -1) {
@@ -281,8 +285,11 @@ export class AdvertisedUrlWatcher {
   }
 
   bindPty(ptyId: string, worktreeId: string): void {
-    this.ptyToWorktree.set(ptyId, worktreeId)
     const pending = this.pending.get(ptyId)
+    if (this.ptyToWorktree.get(ptyId) === worktreeId && pending === undefined) {
+      return
+    }
+    this.ptyToWorktree.set(ptyId, worktreeId)
     if (pending !== undefined) {
       this.pending.delete(ptyId)
       this.ingest(ptyId, pending)

@@ -1,21 +1,80 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
-export function useSystemPrefersDark(): boolean {
-  const [systemPrefersDark, setSystemPrefersDark] = useState(() =>
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches
-      : true
-  )
+const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)'
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+// Why: terminal panes can number in the hundreds, but OS color-scheme is one
+// browser signal. Share a single media listener instead of one per pane.
+const subscribers = new Set<() => void>()
+let mediaQueryList: MediaQueryList | null = null
+let unsubscribeMediaQuery: (() => void) | null = null
+let hasSnapshot = false
+let snapshot = true
+
+function readMediaQueryList(): MediaQueryList | null {
+  if (mediaQueryList) {
+    return mediaQueryList
+  }
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return null
+  }
+  mediaQueryList = window.matchMedia(SYSTEM_DARK_QUERY)
+  return mediaQueryList
+}
+
+function refreshSnapshot(): void {
+  snapshot = readMediaQueryList()?.matches ?? true
+  hasSnapshot = true
+}
+
+export function getSystemPrefersDarkSnapshot(): boolean {
+  if (!hasSnapshot) {
+    refreshSnapshot()
+  }
+  return snapshot
+}
+
+export function subscribeToSystemPrefersDarkChange(onChange: () => void): () => void {
+  subscribers.add(onChange)
+  if (!unsubscribeMediaQuery) {
+    const media = readMediaQueryList()
+    if (media) {
+      snapshot = media.matches
+      hasSnapshot = true
+      const handleChange = (event: MediaQueryListEvent): void => {
+        snapshot = event.matches
+        for (const subscriber of subscribers) {
+          subscriber()
+        }
+      }
+      media.addEventListener('change', handleChange)
+      unsubscribeMediaQuery = () => media.removeEventListener('change', handleChange)
+    }
+  }
+  return () => {
+    subscribers.delete(onChange)
+    if (subscribers.size > 0) {
       return
     }
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (event: MediaQueryListEvent): void => setSystemPrefersDark(event.matches)
-    media.addEventListener('change', handleChange)
-    return () => media.removeEventListener('change', handleChange)
-  }, [])
+    unsubscribeMediaQuery?.()
+    unsubscribeMediaQuery = null
+    mediaQueryList = null
+    hasSnapshot = false
+  }
+}
 
-  return systemPrefersDark
+export function useSystemPrefersDark(): boolean {
+  return useSyncExternalStore(
+    subscribeToSystemPrefersDarkChange,
+    getSystemPrefersDarkSnapshot,
+    () => true
+  )
+}
+
+export function resetSystemPrefersDarkSubscriptionForTests(): void {
+  unsubscribeMediaQuery?.()
+  subscribers.clear()
+  mediaQueryList = null
+  unsubscribeMediaQuery = null
+  hasSnapshot = false
+  snapshot = true
 }

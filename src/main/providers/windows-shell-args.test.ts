@@ -65,6 +65,30 @@ describe('resolveWindowsShellLaunchArgs', () => {
     ])
   })
 
+  it('starts Git Bash as an interactive login shell without changing cwd', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Users\\alice\\code',
+      'C:\\Users\\alice'
+    )
+
+    expect(result.shellArgs).toEqual(['--login', '-i'])
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice\\code')
+    expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
+  })
+
+  it('does not apply Git Bash launch args to unrelated bash.exe paths', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'C:\\msys64\\usr\\bin\\bash.exe',
+      'C:\\Users\\alice\\code',
+      'C:\\Users\\alice'
+    )
+
+    expect(result.shellArgs).toEqual([])
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice\\code')
+    expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
+  })
+
   it('translates Windows cwd to /mnt/<drive>/... for wsl.exe', () => {
     const result = resolveWindowsShellLaunchArgs(
       'wsl.exe',

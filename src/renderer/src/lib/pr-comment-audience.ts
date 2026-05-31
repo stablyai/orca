@@ -88,7 +88,7 @@ export function getPRCommentAudienceEmptyLabel(filter: PRCommentAudienceFilter):
       return 'No bot comments.'
     case 'human':
       return 'No human comments.'
-    default:
+    case 'all':
       return 'No comments yet.'
   }
 }

@@ -6,6 +6,8 @@ export type RemoteDirEntry = {
   isDirectory: boolean
 }
 
+const SSH_BROWSE_TIMEOUT_MS = 15_000
+
 // Why: the relay's fs.readDir enforces workspace root ACLs, which aren't
 // registered until a repo is added. This handler uses a raw SSH exec channel
 // to list directories, allowing the user to browse the remote filesystem
@@ -45,8 +47,13 @@ export function registerSshBrowseHandler(
         let stderr = ''
         let exitCode: number | null = null
         let settled = false
+        let timeout: ReturnType<typeof setTimeout> | null = null
 
         const cleanup = (): void => {
+          if (timeout) {
+            clearTimeout(timeout)
+            timeout = null
+          }
           channel.off('data', onStdoutData)
           channel.stderr.off('data', onStderrData)
           channel.off('exit', onExit)
@@ -61,6 +68,25 @@ export function registerSshBrowseHandler(
           settled = true
           cleanup()
           reject(error)
+        }
+        const closeChannel = (): void => {
+          const closable = channel as { close?: () => void; destroy?: () => void }
+          try {
+            if (typeof closable.close === 'function') {
+              closable.close()
+            } else if (typeof closable.destroy === 'function') {
+              closable.destroy()
+            }
+          } catch {
+            /* best effort */
+          }
+        }
+        const onTimeout = (): void => {
+          // Why: remote browsing runs before a relay workspace root exists, so
+          // it cannot rely on relay request deadlines. Bound this raw exec
+          // channel directly to keep Add Remote Project from hanging forever.
+          rejectOnce(new Error('Remote directory listing timed out'))
+          closeChannel()
         }
         const resolveOnce = (result: { entries: RemoteDirEntry[]; resolvedPath: string }): void => {
           if (settled) {
@@ -147,6 +173,10 @@ export function registerSshBrowseHandler(
         // scoped listener, a disappearing remote can become process-fatal.
         channel.on('error', onError)
         channel.stderr.on('error', onError)
+        timeout = setTimeout(onTimeout, SSH_BROWSE_TIMEOUT_MS)
+        if (typeof timeout.unref === 'function') {
+          timeout.unref()
+        }
       })
     }
   )

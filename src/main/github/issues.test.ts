@@ -126,6 +126,46 @@ describe('issue source operations', () => {
     )
   })
 
+  it('creates issues with labels and assignees', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 925,
+        html_url: 'https://github.com/stablyai/orca/issues/925'
+      })
+    })
+
+    await expect(
+      createIssue('/repo-root', 'New issue', 'Body', undefined, undefined, {
+        labels: ['bug', 'frontend'],
+        assignees: ['octo']
+      })
+    ).resolves.toEqual({
+      ok: true,
+      number: 925,
+      url: 'https://github.com/stablyai/orca/issues/925'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'api',
+        '-X',
+        'POST',
+        'repos/stablyai/orca/issues',
+        '--raw-field',
+        'title=New issue',
+        '--raw-field',
+        'body=Body',
+        '--raw-field',
+        'labels[]=bug',
+        '--raw-field',
+        'labels[]=frontend',
+        '--raw-field',
+        'assignees[]=octo'
+      ],
+      { cwd: '/repo-root' }
+    )
+  })
+
   it('updates issue body through the REST issue endpoint', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })

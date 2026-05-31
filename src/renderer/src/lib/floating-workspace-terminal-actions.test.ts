@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { Tab, TerminalTab } from '../../../shared/types'
 import {
+  createFloatingWorkspaceBrowserTab,
+  createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isEmptyFloatingWorkspacePanelVisible,
@@ -17,14 +19,25 @@ import {
 } from './floating-workspace-terminal-actions'
 
 const activateWebRuntimeSessionTabMock = vi.hoisted(() => vi.fn())
+const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
+const createUntitledMarkdownFileMock = vi.hoisted(() => vi.fn())
 const focusTerminalTabSurfaceMock = vi.hoisted(() => vi.fn())
 const isWebRuntimeSessionActiveMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   activateWebRuntimeSessionTab: activateWebRuntimeSessionTabMock,
+  createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock,
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock,
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
+}))
+
+vi.mock('./create-untitled-markdown', () => ({
+  createUntitledMarkdownFile: createUntitledMarkdownFileMock
+}))
+
+vi.mock('./connection-context', () => ({
+  getConnectionId: vi.fn(() => null)
 }))
 
 vi.mock('./focus-terminal-tab-surface', () => ({
@@ -369,6 +382,78 @@ describe('createFloatingWorkspaceTerminalTab', () => {
     expect(store.createTab).not.toHaveBeenCalled()
     expect(store.activateTab).not.toHaveBeenCalled()
     expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('createFloatingWorkspaceBrowserTab', () => {
+  beforeEach(() => {
+    createWebRuntimeSessionBrowserTabMock.mockReset()
+  })
+
+  it('creates floating browser tabs in the active floating group', async () => {
+    const browserTab = { id: 'browser-1' }
+    const store = {
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
+      browserDefaultUrl: 'about:blank',
+      settings: { activeRuntimeEnvironmentId: null },
+      createBrowserTab: vi.fn().mockReturnValue(browserTab)
+    }
+    createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
+
+    await expect(createFloatingWorkspaceBrowserTab(store as never)).resolves.toBe(browserTab)
+
+    expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      environmentId: undefined,
+      url: 'about:blank',
+      targetGroupId: 'floating-group',
+      selectWorktree: false
+    })
+    expect(store.createBrowserTab).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'about:blank',
+      {
+        title: 'New Browser Tab',
+        focusAddressBar: true,
+        targetGroupId: 'floating-group'
+      }
+    )
+  })
+})
+
+describe('createFloatingWorkspaceMarkdownTab', () => {
+  beforeEach(() => {
+    createUntitledMarkdownFileMock.mockReset()
+  })
+
+  it('creates floating markdown tabs without activating the main workspace', async () => {
+    const fileInfo = {
+      filePath: '/tmp/orca/floating-workspace/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    }
+    const store = {
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
+      openFile: vi.fn()
+    }
+    createUntitledMarkdownFileMock.mockResolvedValue(fileInfo)
+
+    await createFloatingWorkspaceMarkdownTab(store as never, '/tmp/orca/floating-workspace')
+
+    expect(createUntitledMarkdownFileMock).toHaveBeenCalledWith(
+      '/tmp/orca/floating-workspace',
+      FLOATING_TERMINAL_WORKTREE_ID,
+      undefined,
+      { activeRuntimeEnvironmentId: null }
+    )
+    expect(store.openFile).toHaveBeenCalledWith(fileInfo, {
+      preview: false,
+      targetGroupId: 'floating-group',
+      suppressActiveRuntimeFallback: true
+    })
   })
 })
 

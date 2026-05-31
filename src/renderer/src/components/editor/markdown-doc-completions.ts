@@ -17,7 +17,7 @@ export function getMarkdownDocCompletionContext(
   }
 
   const partial = linePrefix.slice(start + 2)
-  if (partial.includes('[') || partial.includes(']')) {
+  if (partial.includes('[') || partial.includes(']') || partial.includes('|')) {
     return null
   }
 

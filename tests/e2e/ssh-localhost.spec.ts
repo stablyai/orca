@@ -108,6 +108,9 @@ async function postCodexHook(
   markerName: string
 ): Promise<void> {
   const hookPostedMarker = marker(markerName)
+  // Why: a foreground curl command emits the shell's command-finished marker
+  // immediately after the hook, which correctly clears a same-turn agent row.
+  // Post from a delayed background subshell so this test observes hook routing.
   await execInTerminal(
     page,
     ptyId,
@@ -116,17 +119,20 @@ async function postCodexHook(
       '  echo __ORCA_AGENT_HOOK_ENV_MISSING__',
       'else',
       `  hook_payload=${shellQuote(JSON.stringify(payload))}`,
-      '  if curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
-      '    -H "Content-Type: application/x-www-form-urlencoded" \\',
-      '    -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-      '    --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-      '    --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-      '    --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-      '    --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-      '    --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-      '    --data-urlencode "payload=${hook_payload}" >/dev/null; then',
-      `    ${emitMarkerCommand(hookPostedMarker)}`,
-      '  fi',
+      '  (',
+      '    sleep 0.1',
+      '    if curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
+      '      -H "Content-Type: application/x-www-form-urlencoded" \\',
+      '      -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
+      '      --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
+      '      --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+      '      --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
+      '      --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
+      '      --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+      '      --data-urlencode "payload=${hook_payload}" >/dev/null; then',
+      `      ${emitMarkerCommand(hookPostedMarker)}`,
+      '    fi',
+      '  ) &',
       'fi'
     ].join('\n')
   )

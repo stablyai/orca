@@ -792,6 +792,37 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('launches Git Bash with login args and CHERE_INVOKING on Windows', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo',
+        shellOverride: 'C:\\PortableGit\\bin\\bash.exe'
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'C:\\PortableGit\\bin\\bash.exe',
+      ['--login', '-i'],
+      expect.objectContaining({
+        cwd: 'C:\\Users\\jin\\repo',
+        env: expect.objectContaining({ CHERE_INVOKING: '1' })
+      })
+    )
+  })
+
   it('rejects a missing explicit native Windows cwd before node-pty spawn', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })

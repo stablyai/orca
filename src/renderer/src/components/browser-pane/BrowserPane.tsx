@@ -2520,6 +2520,20 @@ function RemoteBrowserPagePane({
   )
 }
 
+function preventAgentSendTargetOutsideDismiss(event: CustomEvent<{ originalEvent: Event }>) {
+  const target = event.detail.originalEvent.target
+  if (!(target instanceof Element)) {
+    return
+  }
+  if (
+    target.closest(
+      '[data-agent-send-target="eligible"], [data-agent-send-target="disabled"], [data-agent-send-target="sending"]'
+    )
+  ) {
+    event.preventDefault()
+  }
+}
+
 function BrowserPagePane({
   browserTab,
   workspaceId,
@@ -2617,6 +2631,13 @@ function BrowserPagePane({
     () => formatBrowserAnnotationsAsMarkdown(browserAnnotations),
     [browserAnnotations]
   )
+  const openAgentSendPopoverTargetMode = useAppStore((s) => s.openAgentSendPopoverTargetMode)
+  const closeAgentSendPopoverTargetMode = useAppStore((s) => s.closeAgentSendPopoverTargetMode)
+  const activeAgentSendTargetModeId = useAppStore((s) => s.agentSendPopoverTargetMode?.id ?? null)
+  const annotationBannerSendModeId = `browser-annotations:${browserTab.id}:banner`
+  const annotationTraySendModeId = `browser-annotations:${browserTab.id}:tray`
+  const [annotationBannerSendOpen, setAnnotationBannerSendOpen] = useState(false)
+  const [annotationTraySendOpen, setAnnotationTraySendOpen] = useState(false)
   const addBrowserPageAnnotation = useAppStore((s) => s.addBrowserPageAnnotation)
   const deleteBrowserPageAnnotation = useAppStore((s) => s.deleteBrowserPageAnnotation)
   const clearBrowserPageAnnotations = useAppStore((s) => s.clearBrowserPageAnnotations)
@@ -4013,6 +4034,79 @@ function BrowserPagePane({
     annotationCopyTimerRef.current = setTimeout(() => setBrowserAnnotationsCopied(false), 1400)
   }, [browserAnnotationsPrompt, recordFeatureInteraction])
 
+  const handleAnnotationBannerSendOpenChange = useCallback(
+    (open: boolean): void => {
+      setAnnotationBannerSendOpen(open)
+      if (open) {
+        openAgentSendPopoverTargetMode({
+          id: annotationBannerSendModeId,
+          worktreeId,
+          source: 'browser-annotations',
+          prompt: browserAnnotationsPrompt,
+          label: 'Browser annotations',
+          launchSource: 'notes_send'
+        })
+      } else {
+        closeAgentSendPopoverTargetMode(annotationBannerSendModeId)
+      }
+    },
+    [
+      annotationBannerSendModeId,
+      browserAnnotationsPrompt,
+      closeAgentSendPopoverTargetMode,
+      openAgentSendPopoverTargetMode,
+      worktreeId
+    ]
+  )
+
+  const handleAnnotationTraySendOpenChange = useCallback(
+    (open: boolean): void => {
+      setAnnotationTraySendOpen(open)
+      if (open) {
+        openAgentSendPopoverTargetMode({
+          id: annotationTraySendModeId,
+          worktreeId,
+          source: 'browser-annotations',
+          prompt: browserAnnotationsPrompt,
+          label: 'Browser annotations',
+          launchSource: 'notes_send'
+        })
+      } else {
+        closeAgentSendPopoverTargetMode(annotationTraySendModeId)
+      }
+    },
+    [
+      annotationTraySendModeId,
+      browserAnnotationsPrompt,
+      closeAgentSendPopoverTargetMode,
+      openAgentSendPopoverTargetMode,
+      worktreeId
+    ]
+  )
+
+  useEffect(() => {
+    if (annotationBannerSendOpen && activeAgentSendTargetModeId !== annotationBannerSendModeId) {
+      setAnnotationBannerSendOpen(false)
+    }
+    if (annotationTraySendOpen && activeAgentSendTargetModeId !== annotationTraySendModeId) {
+      setAnnotationTraySendOpen(false)
+    }
+  }, [
+    activeAgentSendTargetModeId,
+    annotationBannerSendModeId,
+    annotationBannerSendOpen,
+    annotationTraySendModeId,
+    annotationTraySendOpen
+  ])
+
+  useEffect(
+    () => () => {
+      closeAgentSendPopoverTargetMode(annotationBannerSendModeId)
+      closeAgentSendPopoverTargetMode(annotationTraySendModeId)
+    },
+    [annotationBannerSendModeId, annotationTraySendModeId, closeAgentSendPopoverTargetMode]
+  )
+
   const handleClearBrowserAnnotations = useCallback((): void => {
     if (browserAnnotationsRef.current.length === 0) {
       return
@@ -4596,7 +4690,11 @@ function BrowserPagePane({
           </span>
           {grabIntent === 'annotate' && browserAnnotations.length > 0 ? (
             <>
-              <DropdownMenu>
+              <DropdownMenu
+                modal={false}
+                open={annotationBannerSendOpen}
+                onOpenChange={handleAnnotationBannerSendOpenChange}
+              >
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
@@ -4610,7 +4708,12 @@ function BrowserPagePane({
                     Send feedback to a new agent
                   </TooltipContent>
                 </Tooltip>
-                <DropdownMenuContent align="end" className="min-w-[180px]">
+                <DropdownMenuContent
+                  align="end"
+                  className="min-w-[180px]"
+                  onInteractOutside={preventAgentSendTargetOutsideDismiss}
+                  onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+                >
                   <QuickLaunchAgentMenuItems
                     worktreeId={worktreeId}
                     groupId={activeGroupId ?? worktreeId}
@@ -4782,7 +4885,11 @@ function BrowserPagePane({
               <div className="min-w-0 flex-1 text-sm font-medium">
                 {browserAnnotations.length} annotation{browserAnnotations.length === 1 ? '' : 's'}
               </div>
-              <DropdownMenu>
+              <DropdownMenu
+                modal={false}
+                open={annotationTraySendOpen}
+                onOpenChange={handleAnnotationTraySendOpenChange}
+              >
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
@@ -4796,7 +4903,12 @@ function BrowserPagePane({
                     Send feedback to a new agent
                   </TooltipContent>
                 </Tooltip>
-                <DropdownMenuContent align="end" className="min-w-[180px]">
+                <DropdownMenuContent
+                  align="end"
+                  className="min-w-[180px]"
+                  onInteractOutside={preventAgentSendTargetOutsideDismiss}
+                  onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+                >
                   <QuickLaunchAgentMenuItems
                     worktreeId={worktreeId}
                     groupId={activeGroupId ?? worktreeId}

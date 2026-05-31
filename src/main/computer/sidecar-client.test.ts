@@ -61,6 +61,9 @@ describe('computer sidecar client', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     await firstRejection
     expect(firstChild.killed).toBe(true)
+    expect(firstChild.listenerCount('message')).toBe(0)
+    expect(firstChild.listenerCount('exit')).toBe(0)
+    expect(firstChild.listenerCount('error')).toBe(1)
 
     const secondCall = callComputerSidecarCapabilities()
     const secondChild = children[1]!
@@ -68,8 +71,40 @@ describe('computer sidecar client', () => {
 
     // Why: OS process events from a timed-out child can arrive after restart.
     // They must not clear/reject the replacement child's active request.
-    firstChild.emit('error', new Error('old sidecar failed late'))
+    firstChild.emit('message', {
+      id: secondRequest.id,
+      ok: false,
+      error: { code: 'old', message: 'old sidecar replied late' }
+    })
+    expect(() => firstChild.emit('error', new Error('old sidecar failed late'))).not.toThrow()
     firstChild.emit('exit', 1, null)
+
+    secondChild.emit('message', {
+      id: secondRequest.id,
+      ok: true,
+      result: { supports: { screenshots: true } }
+    })
+
+    await expect(secondCall).resolves.toEqual({ supports: { screenshots: true } })
+  })
+
+  it('starts a replacement sidecar after the active child errors', async () => {
+    const firstCall = callComputerSidecarCapabilities()
+    const firstRejection = expect(firstCall).rejects.toThrow('active sidecar failed')
+    const firstChild = children[0]!
+
+    firstChild.emit('error', new Error('active sidecar failed'))
+    await firstRejection
+    expect(firstChild.killed).toBe(true)
+    expect(firstChild.listenerCount('message')).toBe(0)
+    expect(firstChild.listenerCount('exit')).toBe(0)
+    expect(firstChild.listenerCount('error')).toBe(1)
+
+    const secondCall = callComputerSidecarCapabilities()
+    void secondCall.catch(() => undefined)
+    expect(children).toHaveLength(2)
+    const secondChild = children[1]!
+    const secondRequest = secondChild.sent[0]!
 
     secondChild.emit('message', {
       id: secondRequest.id,

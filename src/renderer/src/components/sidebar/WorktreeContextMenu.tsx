@@ -33,7 +33,6 @@ import { useAppStore } from '@/store'
 import { useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -107,11 +106,11 @@ function hasSleepableWorkspaceActivity(
   return hasLiveTerminal || hasBrowser
 }
 
-function shouldRemoveFolderProjectFromContextMenu(
-  isFolder: boolean,
+function shouldRemoveProjectFromContextMenu(
+  repo: Pick<Repo, 'id'> | null | undefined,
   worktree: Pick<Worktree, 'isMainWorktree'>
 ): boolean {
-  return isFolder && worktree.isMainWorktree
+  return repo != null && worktree.isMainWorktree
 }
 
 function isContextWorktreeDeletable(
@@ -221,7 +220,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(selectedWorktrees)
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
   const isDeleting = deleteState?.isDeleting ?? false
-  const isFolder = repo ? isFolderRepo(repo) : false
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
@@ -263,7 +261,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       }),
     [activeContextWorktrees, repoMap]
   )
-  const removesFolderProject = shouldRemoveFolderProjectFromContextMenu(isFolder, worktree)
+  const removesProject = shouldRemoveProjectFromContextMenu(repo, worktree)
   const sleepLabel =
     isMultiContext && sleepableWorktrees.length > 0
       ? `Sleep ${sleepableWorktrees.length} Workspace${sleepableWorktrees.length === 1 ? '' : 's'}`
@@ -404,34 +402,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         restoreSidebarPosition()
         return
       }
-      if (removesFolderProject) {
-        // Why: folder mode reuses the worktree row UI for the root entry,
-        // but users still expect "remove" to disconnect the folder from Orca,
-        // not to delete the selected logical workspace metadata.
-        openModal('confirm-remove-folder', {
-          repoId: worktree.repoId,
-          displayName: worktree.displayName
-        })
-        restoreSidebarPosition()
-        return
-      }
-      // Why delegate to runWorktreeDelete: keeps the skip-confirm vs. modal
-      // decision tree (and its rationale) in one place shared with the memory
-      // popover's inline Delete action. Folder mode short-circuits above
-      // because the confirm-remove-folder modal is unique to this caller.
+      // Why delegate to runWorktreeDelete: keeps the delete-vs-project-removal
+      // decision tree (and its rationale) in one place shared with command
+      // surfaces and the memory popover's inline Delete action.
       runWorktreeDelete(worktree.id)
       restoreSidebarPosition()
     }, 50)
-  }, [
-    batchDeleteWorktrees,
-    isMultiContext,
-    openModal,
-    removesFolderProject,
-    setMenuOpenState,
-    worktree.displayName,
-    worktree.id,
-    worktree.repoId
-  ])
+  }, [batchDeleteWorktrees, isMultiContext, setMenuOpenState, worktree.id])
 
   const handleOpenParent = useCallback(() => {
     if (validParentWorktreeId) {
@@ -655,21 +632,21 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 : 'Close all active panels in this workspace to free up memory and CPU.'}
             </TooltipContent>
           </Tooltip>
-          {/* Why: `git worktree remove` always rejects the main worktree, so we
-             disable the item upfront. Radix forwards unknown props to the DOM
-             element, so `title` works directly without a wrapper span — this
-             preserves Radix's flat roving-tabindex keyboard navigation. */}
+          {/* Why: primary checkout rows remove the project from Orca instead of
+             invoking git worktree deletion. Radix forwards unknown props to the
+             DOM element, so `title` works directly without a wrapper span —
+             this preserves Radix's flat roving-tabindex keyboard navigation. */}
           <DropdownMenuItem
             variant="destructive"
             onSelect={handleDelete}
             disabled={
               deletingContext ||
-              (!isMultiContext && !isFolder && worktree.isMainWorktree) ||
+              (!isMultiContext && worktree.isMainWorktree && !removesProject) ||
               (isMultiContext && batchDeleteWorktrees.length === 0)
             }
             title={
-              !isMultiContext && !isFolder && worktree.isMainWorktree
-                ? 'The main worktree cannot be deleted'
+              !isMultiContext && worktree.isMainWorktree && !removesProject
+                ? 'The project could not be found'
                 : undefined
             }
           >
@@ -678,8 +655,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               ? 'Deleting…'
               : isMultiContext
                 ? deleteLabel
-                : removesFolderProject
-                  ? 'Remove Folder from Orca'
+                : removesProject
+                  ? 'Remove Project from Orca'
                   : 'Delete'}
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -704,7 +681,7 @@ export {
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
   hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
-  shouldRemoveFolderProjectFromContextMenu,
+  shouldRemoveProjectFromContextMenu,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldIgnoreNestedWorktreeContextMenuScope

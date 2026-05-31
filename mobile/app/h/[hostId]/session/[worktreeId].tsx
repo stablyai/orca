@@ -27,6 +27,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
+  Copy,
   Eraser,
   Folder,
   File,
@@ -34,10 +35,12 @@ import {
   GitBranch,
   Globe,
   Keyboard as KeyboardIcon,
+  MessageSquare,
   Mic,
   Monitor,
   Plus,
   RefreshCw,
+  Send,
   Smartphone,
   SquareTerminal,
   X
@@ -89,6 +92,13 @@ import {
   type MobileDiffLine
 } from '../../../../src/session/mobile-diff-lines'
 import {
+  addMobileDiffComment,
+  formatDiffComments,
+  normalizeMobileDiffComments,
+  removeDeliveredMobileDiffComments,
+  removeMobileDiffComments
+} from '../../../../src/session/mobile-diff-comments'
+import {
   buildPlainMobileDiffSyntaxLines,
   highlightMobileCode,
   highlightMobileDiffLines,
@@ -110,6 +120,7 @@ import {
   type MobileNewTabAgentSettings
 } from '../../../../src/session/mobile-new-tab-agent-options'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
+import type { DiffComment } from '../../../../../src/shared/types'
 
 type Terminal = TerminalRecord
 
@@ -187,6 +198,20 @@ type FileDocState =
   | { status: 'error'; message: string }
 
 type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>
+
+type DiffCommentActions = {
+  comments: DiffComment[]
+  busy: boolean
+  onAdd: (filePath: string, lineNumber: number, body: string) => Promise<boolean>
+  onDelete: (commentId: string) => Promise<void>
+  onCopyAll: () => Promise<void>
+  onSendAll: () => void
+}
+
+type DiffNotesDelivery = {
+  prompt: string
+  comments: DiffComment[]
+}
 
 type ReadyFileDocState = Extract<FileDocState, { status: 'ready' }>
 
@@ -543,37 +568,136 @@ function SyntaxSegments({ segments }: { segments: MobileSyntaxSegment[] }) {
 function DiffLineRow({
   line,
   title,
-  index
+  index,
+  comments,
+  activeCommentLine,
+  commentDraft,
+  commentsBusy,
+  onStartComment,
+  onCancelComment,
+  onDraftChange,
+  onSubmitComment,
+  onDeleteComment
 }: {
   line: RenderableDiffLine
   title: string
   index: number
+  comments: DiffComment[]
+  activeCommentLine: number | null
+  commentDraft: string
+  commentsBusy: boolean
+  onStartComment: (lineNumber: number) => void
+  onCancelComment: () => void
+  onDraftChange: (value: string) => void
+  onSubmitComment: (lineNumber: number) => void
+  onDeleteComment: (commentId: string) => void
 }) {
+  const commentLine = line.newLineNumber
+  const isCommenting = commentLine !== undefined && activeCommentLine === commentLine
+  const canComment = commentLine !== undefined
+  // Why: review notes are anchored to the modified side, so the single mobile
+  // gutter should show the same line number the note will reference.
+  const gutterLineNumber = line.newLineNumber ?? line.oldLineNumber ?? ''
   return (
-    <View
-      style={[
-        styles.diffLine,
-        line.kind === 'add' && styles.diffLineAdded,
-        line.kind === 'delete' && styles.diffLineDeleted
-      ]}
-    >
-      <Text style={styles.diffGutter}>{line.oldLineNumber ?? line.newLineNumber ?? ''}</Text>
-      <Text
-        selectable
-        style={styles.diffText}
-        accessibilityLabel={`${title} diff line ${index + 1}`}
+    <View style={styles.diffLineBlock}>
+      <View
+        style={[
+          styles.diffLine,
+          line.kind === 'add' && styles.diffLineAdded,
+          line.kind === 'delete' && styles.diffLineDeleted
+        ]}
       >
+        <Text style={styles.diffGutter}>{gutterLineNumber}</Text>
         <Text
-          style={[
-            styles.diffPrefix,
-            line.kind === 'add' && styles.diffPrefixAdded,
-            line.kind === 'delete' && styles.diffPrefixDeleted
-          ]}
+          selectable
+          style={styles.diffText}
+          accessibilityLabel={`${title} diff line ${index + 1}`}
         >
-          {line.kind === 'add' ? '+ ' : line.kind === 'delete' ? '- ' : '  '}
+          <Text
+            style={[
+              styles.diffPrefix,
+              line.kind === 'add' && styles.diffPrefixAdded,
+              line.kind === 'delete' && styles.diffPrefixDeleted
+            ]}
+          >
+            {line.kind === 'add' ? '+ ' : line.kind === 'delete' ? '- ' : '  '}
+          </Text>
+          <SyntaxSegments segments={line.segments} />
         </Text>
-        <SyntaxSegments segments={line.segments} />
-      </Text>
+        {canComment ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.diffCommentAddButton,
+              pressed && styles.diffCommentAddButtonPressed,
+              commentsBusy && styles.diffCommentButtonDisabled
+            ]}
+            disabled={commentsBusy}
+            onPress={() => {
+              if (commentLine !== undefined) onStartComment(commentLine)
+            }}
+            accessibilityLabel={`Add note on line ${commentLine}`}
+          >
+            <Plus size={12} color={colors.textSecondary} strokeWidth={2.3} />
+          </Pressable>
+        ) : null}
+      </View>
+      {comments.length > 0 ? (
+        <View style={styles.diffCommentList}>
+          {comments.map((comment) => (
+            <View key={comment.id} style={styles.diffCommentCard}>
+              <View style={styles.diffCommentHeader}>
+                <MessageSquare size={12} color={colors.textMuted} strokeWidth={2.2} />
+                <Text style={styles.diffCommentMeta}>Line {comment.lineNumber}</Text>
+                <Pressable
+                  style={styles.diffCommentDeleteButton}
+                  disabled={commentsBusy}
+                  onPress={() => onDeleteComment(comment.id)}
+                  accessibilityLabel={`Delete note on line ${comment.lineNumber}`}
+                >
+                  <X size={12} color={colors.textMuted} strokeWidth={2.2} />
+                </Pressable>
+              </View>
+              <Text style={styles.diffCommentBody}>{comment.body}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {isCommenting ? (
+        <View style={styles.diffCommentComposer}>
+          <TextInput
+            style={[styles.textInput, styles.diffCommentInput]}
+            value={commentDraft}
+            onChangeText={onDraftChange}
+            placeholder="Add review note"
+            placeholderTextColor={colors.textMuted}
+            editable={!commentsBusy}
+            multiline
+            textAlignVertical="top"
+            autoFocus
+          />
+          <View style={styles.diffCommentComposerActions}>
+            <Pressable
+              style={styles.diffCommentSecondaryAction}
+              disabled={commentsBusy}
+              onPress={onCancelComment}
+            >
+              <Text style={styles.diffCommentSecondaryText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.diffCommentPrimaryAction,
+                (!commentDraft.trim() || commentsBusy) && styles.diffCommentButtonDisabled
+              ]}
+              disabled={!commentDraft.trim() || commentsBusy}
+              onPress={() => {
+                if (commentLine !== undefined) onSubmitComment(commentLine)
+              }}
+            >
+              <Text style={styles.diffCommentPrimaryText}>Save note</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -582,12 +706,14 @@ function FileReader({
   doc,
   title,
   relativePath,
-  language
+  language,
+  diffCommentActions
 }: {
   doc: FileDocState | undefined
   title: string
   relativePath: string
   language?: string
+  diffCommentActions?: DiffCommentActions
 }) {
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
@@ -595,6 +721,8 @@ function FileReader({
   )
   const [fileSyntax, setFileSyntax] = useState<FileSyntaxState | null>(null)
   const [diffSyntax, setDiffSyntax] = useState<DiffSyntaxState | null>(null)
+  const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null)
+  const [commentDraft, setCommentDraft] = useState('')
   const plainDiffLines = useMemo(
     () =>
       doc?.status === 'ready' && doc.kind === 'diff'
@@ -602,9 +730,80 @@ function FileReader({
         : [],
     [doc]
   )
+  const diffCommentsForFile = useMemo(
+    () =>
+      diffCommentActions?.comments.filter(
+        (comment) => comment.filePath === relativePath && comment.source !== 'markdown'
+      ) ?? [],
+    [diffCommentActions?.comments, relativePath]
+  )
+  const diffCommentsByLine = useMemo(() => {
+    const map = new Map<number, DiffComment[]>()
+    for (const comment of diffCommentsForFile) {
+      const list = map.get(comment.lineNumber) ?? []
+      list.push(comment)
+      map.set(comment.lineNumber, list)
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.createdAt - b.createdAt)
+    }
+    return map
+  }, [diffCommentsForFile])
+
+  const startComment = useCallback((lineNumber: number) => {
+    setActiveCommentLine(lineNumber)
+    setCommentDraft('')
+  }, [])
+
+  const cancelComment = useCallback(() => {
+    setActiveCommentLine(null)
+    setCommentDraft('')
+  }, [])
+
+  const submitComment = useCallback(
+    (lineNumber: number) => {
+      if (!diffCommentActions) return
+      void diffCommentActions.onAdd(relativePath, lineNumber, commentDraft).then((added) => {
+        if (added) {
+          setActiveCommentLine(null)
+          setCommentDraft('')
+        }
+      })
+    },
+    [commentDraft, diffCommentActions, relativePath]
+  )
+
   const renderDiffLine: ListRenderItem<RenderableDiffLine> = useCallback(
-    ({ item, index }) => <DiffLineRow line={item} title={title} index={index} />,
-    [title]
+    ({ item, index }) => (
+      <DiffLineRow
+        line={item}
+        title={title}
+        index={index}
+        comments={
+          item.newLineNumber !== undefined ? (diffCommentsByLine.get(item.newLineNumber) ?? []) : []
+        }
+        activeCommentLine={activeCommentLine}
+        commentDraft={commentDraft}
+        commentsBusy={diffCommentActions?.busy === true}
+        onStartComment={startComment}
+        onCancelComment={cancelComment}
+        onDraftChange={setCommentDraft}
+        onSubmitComment={submitComment}
+        onDeleteComment={(commentId) => {
+          if (diffCommentActions) void diffCommentActions.onDelete(commentId)
+        }}
+      />
+    ),
+    [
+      activeCommentLine,
+      cancelComment,
+      commentDraft,
+      diffCommentActions,
+      diffCommentsByLine,
+      startComment,
+      submitComment,
+      title
+    ]
   )
 
   useEffect(() => {
@@ -651,8 +850,52 @@ function FileReader({
   if (doc.kind === 'diff') {
     const activeDiffSyntax =
       diffSyntax?.doc === doc && diffSyntax.language === syntaxLanguage ? diffSyntax.lines : null
+    const commentCount = diffCommentActions?.comments.length ?? 0
+    const unsentCommentCount =
+      diffCommentActions?.comments.filter((comment) => !comment.sentAt).length ?? 0
+    const commentsBusy = diffCommentActions?.busy === true
+    const canCopyNotes = commentCount > 0 && !commentsBusy
+    const canSendNotes = unsentCommentCount > 0 && !commentsBusy
     return (
       <View style={styles.markdownEditor}>
+        {diffCommentActions ? (
+          <View style={styles.diffNotesToolbar}>
+            <View style={styles.diffNotesTitleRow}>
+              <MessageSquare size={14} color={colors.textSecondary} strokeWidth={2.2} />
+              <Text style={styles.diffNotesTitle}>
+                {commentCount === 0
+                  ? 'No review notes'
+                  : `${commentCount} review ${commentCount === 1 ? 'note' : 'notes'}`}
+              </Text>
+            </View>
+            <View style={styles.diffNotesActions}>
+              <Pressable
+                style={[
+                  styles.diffNotesActionButton,
+                  !canCopyNotes && styles.diffCommentButtonDisabled
+                ]}
+                disabled={!canCopyNotes}
+                onPress={() => void diffCommentActions.onCopyAll()}
+                accessibilityLabel="Copy review notes"
+              >
+                <Copy size={13} color={colors.textSecondary} strokeWidth={2.2} />
+                <Text style={styles.diffNotesActionText}>Copy</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.diffNotesActionButton,
+                  !canSendNotes && styles.diffCommentButtonDisabled
+                ]}
+                disabled={!canSendNotes}
+                onPress={diffCommentActions.onSendAll}
+                accessibilityLabel="Send review notes to AI"
+              >
+                <Send size={13} color={colors.textSecondary} strokeWidth={2.2} />
+                <Text style={styles.diffNotesActionText}>Send</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
         <FlatList
           data={activeDiffSyntax ?? plainDiffLines}
           style={styles.filePreviewScroll}
@@ -665,6 +908,7 @@ function FileReader({
           maxToRenderPerBatch={48}
           windowSize={7}
           removeClippedSubviews={Platform.OS !== 'web'}
+          keyboardShouldPersistTaps="handled"
         />
       </View>
     )
@@ -726,6 +970,11 @@ export default function SessionScreen() {
   const [markdownDocs, setMarkdownDocs] = useState<Map<string, MarkdownDocState>>(new Map())
   const markdownDocsRef = useRef<Map<string, MarkdownDocState>>(new Map())
   const [fileDocs, setFileDocs] = useState<Map<string, FileDocState>>(new Map())
+  const [diffComments, setDiffComments] = useState<DiffComment[]>([])
+  const diffCommentsRef = useRef<DiffComment[]>([])
+  const [diffCommentBusy, setDiffCommentBusy] = useState(false)
+  const [pendingDiffNotesDelivery, setPendingDiffNotesDelivery] =
+    useState<DiffNotesDelivery | null>(null)
   const [creating, setCreating] = useState(false)
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [creatingMarkdown, setCreatingMarkdown] = useState(false)
@@ -890,6 +1139,10 @@ export default function SessionScreen() {
   useEffect(() => {
     markdownDocsRef.current = markdownDocs
   }, [markdownDocs])
+
+  useEffect(() => {
+    diffCommentsRef.current = diffComments
+  }, [diffComments])
 
   const getTerminalRef = useCallback((handle: string | null) => {
     return handle ? terminalRefs.current.get(handle) : undefined
@@ -1507,6 +1760,138 @@ export default function SessionScreen() {
       }
     },
     [client, worktreeId]
+  )
+
+  const loadDiffComments = useCallback(async (): Promise<void> => {
+    if (!client || connState !== 'connected' || !worktreeId) {
+      setDiffComments([])
+      return
+    }
+    const response = await client.sendRequest('worktree.show', {
+      worktree: `id:${worktreeId}`
+    })
+    if (!response.ok) {
+      return
+    }
+    const result = (response as RpcSuccess).result as {
+      worktree?: { diffComments?: unknown }
+    }
+    setDiffComments(normalizeMobileDiffComments(result.worktree?.diffComments, worktreeId))
+  }, [client, connState, worktreeId])
+
+  const persistDiffComments = useCallback(
+    async (comments: readonly DiffComment[]): Promise<void> => {
+      if (!client || connState !== 'connected') {
+        throw new Error('Waiting for desktop...')
+      }
+      const response = await client.sendRequest('worktree.set', {
+        worktree: `id:${worktreeId}`,
+        diffComments: comments
+      })
+      if (!response.ok) {
+        throw new Error((response as RpcFailure).error.message || 'Failed to save review notes')
+      }
+    },
+    [client, connState, worktreeId]
+  )
+
+  useEffect(() => {
+    void loadDiffComments()
+  }, [loadDiffComments])
+
+  const addDiffCommentForFile = useCallback(
+    async (filePath: string, lineNumber: number, body: string): Promise<boolean> => {
+      if (diffCommentBusy) return false
+      const nextId = `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+      const result = addMobileDiffComment(diffCommentsRef.current, {
+        id: nextId,
+        worktreeId,
+        filePath,
+        lineNumber,
+        body,
+        createdAt: Date.now()
+      })
+      if (!result.comment) return false
+      const previous = diffCommentsRef.current
+      setDiffCommentBusy(true)
+      setDiffComments(result.comments)
+      try {
+        await persistDiffComments(result.comments)
+        triggerSuccess()
+        showToast('Note added')
+        return true
+      } catch (err) {
+        setDiffComments(previous)
+        triggerError()
+        showToast(err instanceof Error ? err.message : 'Failed to save note', 1600)
+        return false
+      } finally {
+        setDiffCommentBusy(false)
+      }
+    },
+    [diffCommentBusy, persistDiffComments, showToast, worktreeId]
+  )
+
+  const deleteDiffCommentForFile = useCallback(
+    async (commentId: string): Promise<void> => {
+      if (diffCommentBusy) return
+      const previous = diffCommentsRef.current
+      const next = removeMobileDiffComments(previous, new Set([commentId]))
+      if (next.length === previous.length) return
+      setDiffCommentBusy(true)
+      setDiffComments(next)
+      try {
+        await persistDiffComments(next)
+        triggerSelection()
+      } catch (err) {
+        setDiffComments(previous)
+        triggerError()
+        showToast(err instanceof Error ? err.message : 'Failed to delete note', 1600)
+      } finally {
+        setDiffCommentBusy(false)
+      }
+    },
+    [diffCommentBusy, persistDiffComments, showToast]
+  )
+
+  const copyDiffCommentsToClipboard = useCallback(async (): Promise<void> => {
+    const comments = diffCommentsRef.current
+    if (comments.length === 0) return
+    try {
+      await Clipboard.setStringAsync(formatDiffComments(comments))
+      triggerSuccess()
+      showToast('Notes copied')
+    } catch {
+      triggerError()
+      showToast("Couldn't copy notes", 1600)
+    }
+  }, [showToast])
+
+  const sendDiffCommentsToAgent = useCallback((): void => {
+    const comments = diffCommentsRef.current.filter((comment) => !comment.sentAt)
+    if (comments.length === 0) return
+    setPendingDiffNotesDelivery({
+      comments: [...comments],
+      prompt: formatDiffComments(comments)
+    })
+  }, [])
+
+  const clearDeliveredDiffComments = useCallback(
+    async (delivered: readonly DiffComment[]): Promise<void> => {
+      const previous = diffCommentsRef.current
+      const next = removeDeliveredMobileDiffComments(previous, delivered)
+      if (next.length === previous.length) return
+      setDiffCommentBusy(true)
+      setDiffComments(next)
+      try {
+        await persistDiffComments(next)
+      } catch {
+        setDiffComments(previous)
+      } finally {
+        setDiffCommentBusy(false)
+      }
+    },
+    [persistDiffComments]
   )
 
   const updateMarkdownLocalContent = useCallback((tabId: string, content: string) => {
@@ -2683,7 +3068,8 @@ export default function SessionScreen() {
   }, [selectModeActive])
 
   useEffect(() => {
-    if (!showCreateTabDrawer) {
+    const shouldLoadAgentOptions = showCreateTabDrawer || pendingDiffNotesDelivery !== null
+    if (!shouldLoadAgentOptions) {
       setCreateTabAgentLoadState('idle')
       setCreateTabAgentOptions([])
       return
@@ -2704,7 +3090,7 @@ export default function SessionScreen() {
         client.sendRequest('repo.list')
       ])
       if (!settingsResponse.ok) {
-        throw new Error(settingsResponse.error.message)
+        throw new Error((settingsResponse as RpcFailure).error.message)
       }
       const settings = (
         (settingsResponse as RpcSuccess).result as {
@@ -2712,7 +3098,7 @@ export default function SessionScreen() {
         }
       ).settings
       if (!repoResponse.ok) {
-        throw new Error(repoResponse.error.message)
+        throw new Error((repoResponse as RpcFailure).error.message)
       }
       const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
       if (!repoId) {
@@ -2729,7 +3115,7 @@ export default function SessionScreen() {
         ? await client.sendRequest('preflight.detectRemoteAgents', { connectionId })
         : await client.sendRequest('preflight.detectAgents')
       if (!detectedResponse.ok) {
-        throw new Error(detectedResponse.error.message)
+        throw new Error((detectedResponse as RpcFailure).error.message)
       }
       if (stale) {
         return
@@ -2747,9 +3133,12 @@ export default function SessionScreen() {
     return () => {
       stale = true
     }
-  }, [client, connState, showCreateTabDrawer, worktreeId])
+  }, [client, connState, pendingDiffNotesDelivery, showCreateTabDrawer, worktreeId])
 
-  async function handleCreateTerminal(agent?: MobileNewTabAgentOption['agent']) {
+  async function handleCreateTerminal(
+    agent?: MobileNewTabAgentOption['agent'],
+    options?: { initialPrompt?: string; onPromptSent?: () => void }
+  ) {
     if (!client || creating) return
 
     setCreating(true)
@@ -2805,6 +3194,37 @@ export default function SessionScreen() {
             return next
           })
           subscribeToTerminal(createdHandle)
+          if (options?.initialPrompt?.trim()) {
+            void client
+              .sendRequest('terminal.send', {
+                terminal: createdHandle,
+                text: options.initialPrompt,
+                enter: true,
+                ...(deviceTokenRef.current
+                  ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+                  : {})
+              })
+              .then((sendResponse) => {
+                if (!sendResponse.ok) {
+                  throw new Error(
+                    (sendResponse as RpcFailure).error.message || 'Failed to send notes'
+                  )
+                }
+                const result = (sendResponse as RpcSuccess).result as {
+                  send?: { accepted?: boolean }
+                }
+                if (result.send?.accepted === false) {
+                  throw new Error('Terminal input is locked by another client.')
+                }
+                triggerSuccess()
+                showToast('Notes sent')
+                options.onPromptSent?.()
+              })
+              .catch((err) => {
+                triggerError()
+                showToast(err instanceof Error ? err.message : "Couldn't send notes", 1800)
+              })
+          }
         } else {
           activeHandleRef.current = null
           setActiveHandle(null)
@@ -3132,6 +3552,54 @@ export default function SessionScreen() {
                 }
               ]
             : []
+  const sendDiffNotesAgentActions =
+    pendingDiffNotesDelivery === null
+      ? []
+      : createTabAgentLoadState === 'loading'
+        ? [
+            {
+              label: 'Detecting Agents',
+              icon: Bot,
+              disabled: true,
+              loading: true,
+              onPress: () => {}
+            }
+          ]
+        : createTabAgentOptions.length > 0
+          ? createTabAgentOptions.map((option) => ({
+              label: option.label,
+              hint: 'New agent session',
+              icon: Bot,
+              onPress: () => {
+                const delivery = pendingDiffNotesDelivery
+                setPendingDiffNotesDelivery(null)
+                if (!delivery) return
+                void handleCreateTerminal(option.agent, {
+                  initialPrompt: delivery.prompt,
+                  onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
+                })
+              }
+            }))
+          : createTabAgentLoadState === 'loaded'
+            ? [
+                {
+                  label: 'No Enabled Agents',
+                  icon: Bot,
+                  disabled: true,
+                  onPress: () => {}
+                }
+              ]
+            : createTabAgentLoadState === 'error'
+              ? [
+                  {
+                    label: 'Agent Presets Unavailable',
+                    hint: 'Copy notes instead',
+                    icon: Bot,
+                    disabled: true,
+                    onPress: () => {}
+                  }
+                ]
+              : []
 
   return (
     <View style={styles.container}>
@@ -3336,6 +3804,18 @@ export default function SessionScreen() {
               title={activeFileTab.title || 'File'}
               relativePath={activeFileTab.relativePath}
               language={activeFileTab.language}
+              diffCommentActions={
+                activeFileTab.diffSource === 'staged' || activeFileTab.diffSource === 'unstaged'
+                  ? {
+                      comments: diffComments,
+                      busy: diffCommentBusy,
+                      onAdd: addDiffCommentForFile,
+                      onDelete: deleteDiffCommentForFile,
+                      onCopyAll: copyDiffCommentsToClipboard,
+                      onSendAll: sendDiffCommentsToAgent
+                    }
+                  : undefined
+              }
             />
             {toastMessage && (
               <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
@@ -3695,6 +4175,34 @@ export default function SessionScreen() {
           ...createTabAgentActions
         ]}
         onClose={() => setShowCreateTabDrawer(false)}
+      />
+
+      <ActionSheetModal
+        visible={pendingDiffNotesDelivery !== null}
+        title="Send Review Notes"
+        message="Choose an agent session for the current notes."
+        actions={[
+          ...sendDiffNotesAgentActions,
+          {
+            label: 'Copy Notes',
+            icon: Copy,
+            onPress: () => {
+              const delivery = pendingDiffNotesDelivery
+              setPendingDiffNotesDelivery(null)
+              if (!delivery) return
+              void Clipboard.setStringAsync(delivery.prompt)
+                .then(() => {
+                  triggerSuccess()
+                  showToast('Notes copied')
+                })
+                .catch(() => {
+                  triggerError()
+                  showToast("Couldn't copy notes", 1500)
+                })
+            }
+          }
+        ]}
+        onClose={() => setPendingDiffNotesDelivery(null)}
       />
 
       <ActionSheetModal
@@ -4164,8 +4672,56 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
   },
+  diffNotesToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+    backgroundColor: colors.bgPanel
+  },
+  diffNotesTitleRow: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  diffNotesTitle: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  diffNotesActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  diffNotesActionButton: {
+    minHeight: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.button,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.bgRaised
+  },
+  diffNotesActionText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  diffLineBlock: {
+    marginBottom: spacing.xs
+  },
   diffLine: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     borderLeftWidth: 2,
     borderLeftColor: colors.editorSurface,
     paddingRight: spacing.sm
@@ -4202,6 +4758,103 @@ const styles = StyleSheet.create({
   },
   diffPrefixDeleted: {
     color: colors.gitDecorationDeleted
+  },
+  diffCommentAddButton: {
+    width: 26,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.button
+  },
+  diffCommentAddButtonPressed: {
+    backgroundColor: colors.bgPanel
+  },
+  diffCommentButtonDisabled: {
+    opacity: 0.45
+  },
+  diffCommentList: {
+    gap: spacing.xs,
+    marginLeft: 44,
+    marginRight: spacing.sm,
+    marginTop: spacing.xs
+  },
+  diffCommentCard: {
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgPanel,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  diffCommentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: 2
+  },
+  diffCommentMeta: {
+    flex: 1,
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  diffCommentDeleteButton: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11
+  },
+  diffCommentBody: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    lineHeight: 17
+  },
+  diffCommentComposer: {
+    gap: spacing.xs,
+    marginLeft: 44,
+    marginRight: spacing.sm,
+    marginTop: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgPanel,
+    padding: spacing.sm
+  },
+  diffCommentInput: {
+    minHeight: 70,
+    height: 70,
+    marginRight: 0,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm
+  },
+  diffCommentComposerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.xs
+  },
+  diffCommentSecondaryAction: {
+    minHeight: 30,
+    justifyContent: 'center',
+    borderRadius: radii.button,
+    paddingHorizontal: spacing.md
+  },
+  diffCommentSecondaryText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  diffCommentPrimaryAction: {
+    minHeight: 30,
+    justifyContent: 'center',
+    borderRadius: radii.button,
+    backgroundColor: colors.bgRaised,
+    paddingHorizontal: spacing.md
+  },
+  diffCommentPrimaryText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '700'
   },
   markdownRefreshButton: {
     alignSelf: 'flex-start',

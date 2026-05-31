@@ -54,6 +54,7 @@ import type {
 const EXEC_TIMEOUT_MS = 90_000
 const CONSECUTIVE_TIMEOUT_LIMIT = 3
 const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
+const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
 
 type SessionState = {
   proxy: CdpWsProxy
@@ -168,6 +169,22 @@ function parseShellArgs(input: string): string[] {
     args.push(current)
   }
   return args
+}
+
+function stripAgentBrowserTargetArgs(args: string[]): string[] {
+  const stripped: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === '--cdp' || arg === '--session') {
+      index++
+      continue
+    }
+    if (arg.startsWith('--cdp=') || arg.startsWith('--session=')) {
+      continue
+    }
+    stripped.push(arg)
+  }
+  return stripped
 }
 
 // Why: agent-browser returns generic error messages for stale/unknown refs.
@@ -689,10 +706,10 @@ export class AgentBrowserBridge {
     // directly via JS and dispatch input/change events for React/framework compat.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       await this.execAgentBrowser(sessionName, ['focus', element])
-      const escaped = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+      const serializedValue = JSON.stringify(value)
       await this.execAgentBrowser(sessionName, [
         'eval',
-        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, '${escaped}'); } else { el.value = '${escaped}'; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
+        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, ${serializedValue}); } else { el.value = ${serializedValue}; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
       ])
       return { filled: element } as BrowserFillResult
     })
@@ -1694,12 +1711,9 @@ export class AgentBrowserBridge {
 
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: strip --cdp and --session from raw command to prevent session/target injection
-      const sanitized = command
-        .replace(/--cdp\s+\S+/g, '')
-        .replace(/--session\s+\S+/g, '')
-        .trim()
-      const args = parseShellArgs(sanitized)
+      // Why: strip target/session flags from raw passthrough commands so a
+      // caller cannot override Orca's selected browser page or CDP proxy.
+      const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
       return await this.execAgentBrowser(sessionName, args)
     })
   }
@@ -1917,11 +1931,7 @@ export class AgentBrowserBridge {
       // across Orca restarts. A stale session ignores --cdp (already initialized) and
       // connects to the dead port. Must await close so the daemon forgets the session
       // before we pass --cdp with the new port.
-      await new Promise<void>((resolve) => {
-        execFile(this.agentBrowserBin, ['--session', sessionName, 'close'], { timeout: 3000 }, () =>
-          resolve()
-        )
-      })
+      await this.closeStaleAgentBrowserSession(sessionName)
 
       const proxy = new CdpWsProxy(wc)
       const cdpEndpoint = await proxy.start()
@@ -2045,7 +2055,12 @@ export class AgentBrowserBridge {
       args.push('--cdp', String(port))
     }
 
-    args.push(...commandArgs, '--json')
+    // Why: exec passthrough can produce a large argv array; spreading it into
+    // push risks V8 argument limits before execFile receives the command.
+    for (const commandArg of commandArgs) {
+      args.push(commandArg)
+    }
+    args.push('--json')
 
     const stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
     const translated = translateResult(stdout)
@@ -2095,6 +2110,40 @@ export class AgentBrowserBridge {
 
   private createPageUnavailableError(sessionName: string): BrowserError {
     return new BrowserError('browser_tab_not_found', pageUnavailableMessageForSession(sessionName))
+  }
+
+  private closeStaleAgentBrowserSession(sessionName: string): Promise<void> {
+    return new Promise((resolve) => {
+      let child: ReturnType<typeof execFile> | null = null
+      let settled = false
+
+      const finish = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timeout)
+        resolve()
+      }
+
+      // Why: this is best-effort daemon cleanup before creating a fresh session;
+      // a wedged close command must not block the real browser action.
+      const timeout = setTimeout(() => {
+        child?.kill()
+        finish()
+      }, STALE_SESSION_CLOSE_TIMEOUT_MS)
+
+      try {
+        child = execFile(
+          this.agentBrowserBin,
+          ['--session', sessionName, 'close'],
+          { timeout: STALE_SESSION_CLOSE_TIMEOUT_MS },
+          finish
+        )
+      } catch {
+        finish()
+      }
+    })
   }
 
   private createCommandError(

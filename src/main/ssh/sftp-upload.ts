@@ -1,7 +1,7 @@
 import { constants } from 'fs'
 import type { ReadStream } from 'fs'
 import { lstat, open, readdir, realpath } from 'fs/promises'
-import { isAbsolute, join as pathJoin, relative } from 'path'
+import { isAbsolute, join as pathJoin, relative, sep } from 'path'
 import type { SFTPWrapper } from 'ssh2'
 
 export function mkdirSftp(
@@ -36,16 +36,25 @@ export function uploadFile(
     let fileHandle: Awaited<ReturnType<typeof open>> | null = null
     let writeStream: ReturnType<SFTPWrapper['createWriteStream']> | null = null
 
+    const cleanupListeners = (): void => {
+      writeStream?.off('close', onWriteClose)
+      writeStream?.off('error', onWriteError)
+      readStream?.off('error', onReadError)
+    }
     const settle = (fn: typeof resolve | typeof reject, val?: unknown): void => {
       if (settled) {
         return
       }
       settled = true
+      cleanupListeners()
       readStream?.destroy()
       writeStream?.destroy()
       void fileHandle?.close().catch(() => {})
       fn(val as never)
     }
+    const onWriteClose = (): void => settle(resolve)
+    const onWriteError = (err: Error): void => settle(reject, err)
+    const onReadError = (err: Error): void => settle(reject, err)
 
     void open(localPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
       .then(async (handle) => {
@@ -72,10 +81,10 @@ export function uploadFile(
         writeStream = sftp.createWriteStream(remotePath, {
           flags: options?.exclusive ? 'wx' : 'w'
         })
-        writeStream.on('close', () => settle(resolve))
-        writeStream.on('error', (err) => settle(reject, err))
+        writeStream.on('close', onWriteClose)
+        writeStream.on('error', onWriteError)
         readStream = handle.createReadStream()
-        readStream.on('error', (err) => settle(reject, err))
+        readStream.on('error', onReadError)
         readStream.pipe(writeStream)
       })
       .catch((err: unknown) => settle(reject, err))
@@ -94,17 +103,24 @@ export function uploadBuffer(
       flags: options?.append ? 'a' : options?.exclusive ? 'wx' : 'w'
     })
 
+    const cleanupListeners = (): void => {
+      writeStream.off('close', onClose)
+      writeStream.off('error', onError)
+    }
     const settle = (fn: typeof resolve | typeof reject, val?: unknown): void => {
       if (settled) {
         return
       }
       settled = true
+      cleanupListeners()
       writeStream.destroy()
       fn(val as never)
     }
+    const onClose = (): void => settle(resolve)
+    const onError = (err: Error): void => settle(reject, err)
 
-    writeStream.on('close', () => settle(resolve))
-    writeStream.on('error', (err) => settle(reject, err))
+    writeStream.on('close', onClose)
+    writeStream.on('error', onError)
     writeStream.end(buffer)
   })
 }
@@ -147,7 +163,10 @@ async function assertLocalUploadPathInsideRoot(
 ): Promise<void> {
   const candidateRealPath = await realpath(candidatePath)
   const relativeToRoot = relative(rootRealPath, candidateRealPath)
-  if (relativeToRoot !== '' && (relativeToRoot.startsWith('..') || isAbsolute(relativeToRoot))) {
+  if (
+    relativeToRoot !== '' &&
+    (relativeToRoot === '..' || relativeToRoot.startsWith(`..${sep}`) || isAbsolute(relativeToRoot))
+  ) {
     throw new Error(`Path escaped upload root: ${candidatePath}`)
   }
 }

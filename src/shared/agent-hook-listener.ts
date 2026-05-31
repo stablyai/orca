@@ -198,68 +198,83 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
     const chunks: Buffer[] = []
     let byteLength = 0
     let settled = false
-    req.on('data', (chunk: Buffer) => {
+    const cleanup = (): void => {
+      req.off('data', onData)
+      req.off('end', onEnd)
+      req.off('error', onError)
+      req.off('close', onClose)
+      // Why: detached parser closures release body chunks; keep a neutral
+      // error sink so a late IncomingMessage error cannot become unhandled.
+      req.on('error', ignoreSettledRequestError)
+    }
+    const settleResolve = (value: unknown): void => {
       if (settled) {
         return
       }
+      settled = true
+      cleanup()
+      resolve(value)
+    }
+    const settleReject = (error: unknown): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      reject(error)
+    }
+    const onData = (chunk: Buffer): void => {
       // Why: check size in bytes (not UTF-16 code units) and stop accumulating
       // after rejection so a malicious client cannot push memory past the cap.
       if (byteLength + chunk.length > HOOK_REQUEST_MAX_BYTES) {
-        settled = true
-        reject(new Error('payload too large'))
+        settleReject(new Error('payload too large'))
         req.destroy()
         return
       }
       byteLength += chunk.length
       chunks.push(chunk)
-    })
-    req.on('end', () => {
-      if (settled) {
-        return
-      }
-      settled = true
+    }
+    const onEnd = (): void => {
       try {
         // Why: decode once via Buffer.concat so multi-byte UTF-8 characters
         // that straddle a chunk boundary are reassembled correctly.
         const body = chunks.length > 0 ? Buffer.concat(chunks).toString('utf8') : ''
         const contentType = req.headers['content-type'] ?? ''
         if (typeof contentType === 'string' && contentType.includes('application/json')) {
-          resolve(body ? JSON.parse(body) : {})
+          settleResolve(body ? JSON.parse(body) : {})
           return
         }
         if (
           typeof contentType === 'string' &&
           contentType.includes('application/x-www-form-urlencoded')
         ) {
-          resolve(parseFormEncodedBody(body))
+          settleResolve(parseFormEncodedBody(body))
           return
         }
         // Why: existing managed scripts POST JSON; updated POSIX scripts POST
         // form-encoded. Default to JSON for unknown content types.
-        resolve(body ? JSON.parse(body) : {})
+        settleResolve(body ? JSON.parse(body) : {})
       } catch (error) {
-        reject(error)
+        settleReject(error)
       }
-    })
-    req.on('error', (err) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      reject(err)
-    })
+    }
+    const onError = (err: Error): void => {
+      settleReject(err)
+    }
     // Why: req.destroy() (called by the slowloris timer) emits 'close' but
     // not 'end'/'error'. Without this handler the promise would never settle
     // and the chunk buffers would be retained for the process lifetime.
-    req.on('close', () => {
-      if (settled) {
-        return
-      }
-      settled = true
-      reject(new Error('aborted'))
-    })
+    const onClose = (): void => {
+      settleReject(new Error('aborted'))
+    }
+    req.on('data', onData)
+    req.on('end', onEnd)
+    req.on('error', onError)
+    req.on('close', onClose)
   })
 }
+
+function ignoreSettledRequestError(): void {}
 
 // ─── Per-pane field caches + extractors ─────────────────────────────
 
@@ -1797,11 +1812,6 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     }
     case 'hermes':
       return eventName === 'pre_llm_call' || eventName === 'on_session_start'
-    default: {
-      const _exhaustive: never = source
-      void _exhaustive
-      return false
-    }
   }
 }
 
@@ -1886,11 +1896,6 @@ function extractToolFields(
       return extractCopilotToolFields(normalizeCopilotEventName(eventName), hookPayload)
     case 'hermes':
       return extractHermesToolFields(eventName, hookPayload)
-    default: {
-      const _exhaustive: never = source
-      void _exhaustive
-      return {}
-    }
   }
 }
 
@@ -2824,11 +2829,6 @@ export function normalizeHookPayload(
     case 'hermes':
       payload = normalizeHermesEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
-    default: {
-      const _exhaustive: never = source
-      void _exhaustive
-      payload = null
-    }
   }
 
   // Why: connectionId stays null at the listener layer. The local server keeps

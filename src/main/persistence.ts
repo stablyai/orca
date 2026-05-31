@@ -47,6 +47,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalLayoutSnapshot,
   TerminalTab,
+  WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
@@ -61,6 +62,7 @@ import {
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
+  normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
@@ -94,7 +96,7 @@ import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
-  normalizeWorkspaceBoardCompact,
+  normalizeWorkspaceBoardColumnLayout,
   normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
@@ -187,6 +189,16 @@ function getDataFile(): string {
 // >=1-hour spacing cover recent work without churning disk on every debounce.
 const BACKUP_COUNT = 5
 const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
+const WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS = new Set<keyof WorkspaceSessionState>([
+  'tabsByWorktree',
+  'terminalLayoutsByTabId'
+])
+
+function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatch): boolean {
+  return Object.keys(patch).some((key) =>
+    WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS.has(key as keyof WorkspaceSessionState)
+  )
+}
 
 function backupPath(dataFile: string, index: number): string {
   return `${dataFile}.bak.${index}`
@@ -380,11 +392,12 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
+  // Why: synced legacy targets ignored stale relayGracePeriodSeconds values.
+  // Prefer the synced grace so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
-    currentGracePeriodSeconds ??
-    (legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
+    legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
       ? legacyGracePeriodSeconds
-      : undefined)
+      : currentGracePeriodSeconds
   const normalized: SshTarget = {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
@@ -1013,8 +1026,14 @@ function normalizeWorkspaceSessionPaneIdentities(
       normalizedLayout: normalized.snapshot,
       leafIdByInputLeafId: normalized.leafIdByInputLeafId
     })
-    migrationUnsupportedEntries.push(...migrationEntries.migrationUnsupportedEntries)
-    legacyPaneKeyAliasEntries.push(...migrationEntries.legacyPaneKeyAliasEntries)
+    // Why: old persisted split layouts can generate enough alias rows to
+    // exceed V8's argument limit if the arrays are spread into push().
+    for (const entry of migrationEntries.migrationUnsupportedEntries) {
+      migrationUnsupportedEntries.push(entry)
+    }
+    for (const entry of migrationEntries.legacyPaneKeyAliasEntries) {
+      legacyPaneKeyAliasEntries.push(entry)
+    }
     const leafIdByPtyId = new Map<string, string>()
     const duplicatePtyIds = new Set<string>()
     for (const [leafId, ptyId] of Object.entries(normalized.snapshot.ptyIdsByLeafId ?? {})) {
@@ -2120,10 +2139,11 @@ export class Store {
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
-    const maxOrder = Math.max(
-      -1,
-      ...(this.state.projectGroups ?? []).map((group) => group.tabOrder)
-    )
+    let maxOrder = -1
+    // Why: persisted group lists can be large enough to exceed spread limits.
+    for (const existingGroup of this.state.projectGroups ?? []) {
+      maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
+    }
     const group = createProjectGroup({
       ...input,
       tabOrder: maxOrder + 1
@@ -2802,9 +2822,14 @@ export class Store {
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
       ),
+      agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
+        this.state.ui?.agentActivityDisplayMode
+      ),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
-      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
+      workspaceBoardColumnLayout: normalizeWorkspaceBoardColumnLayout(
+        this.state.ui?.workspaceBoardColumnLayout
+      ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
       ),
@@ -2831,6 +2856,10 @@ export class Store {
         updates.worktreeCardProperties !== undefined
           ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)
           : normalizeWorktreeCardProperties(this.state.ui?.worktreeCardProperties),
+      agentActivityDisplayMode:
+        updates.agentActivityDisplayMode !== undefined
+          ? normalizeAgentActivityDisplayMode(updates.agentActivityDisplayMode)
+          : normalizeAgentActivityDisplayMode(this.state.ui?.agentActivityDisplayMode),
       workspaceStatuses:
         updates.workspaceStatuses !== undefined
           ? normalizeWorkspaceStatuses(updates.workspaceStatuses)
@@ -2838,8 +2867,8 @@ export class Store {
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(
         updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
       ),
-      workspaceBoardCompact: normalizeWorkspaceBoardCompact(
-        updates.workspaceBoardCompact ?? this.state.ui?.workspaceBoardCompact
+      workspaceBoardColumnLayout: normalizeWorkspaceBoardColumnLayout(
+        updates.workspaceBoardColumnLayout ?? this.state.ui?.workspaceBoardColumnLayout
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
@@ -3066,6 +3095,25 @@ export class Store {
       }
     }
     this.state.workspaceSession = session
+    this.scheduleSave()
+  }
+
+  patchWorkspaceSession(patch: WorkspaceSessionPatch): void {
+    // Why: the renderer's debounced hot path sends only changed top-level
+    // session slices. Scalar/UI patches avoid the terminal normalization path;
+    // terminal topology/layout patches still reuse the stale-PTY protections.
+    let next: WorkspaceSessionState = {
+      ...this.getWorkspaceSession(),
+      ...patch
+    }
+    if (workspaceSessionPatchNeedsFullNormalization(patch)) {
+      this.setWorkspaceSession(next)
+      return
+    }
+    if (Object.hasOwn(patch, 'browserUrlHistory')) {
+      next = pruneWorkspaceSessionBrowserHistory(next)
+    }
+    this.state.workspaceSession = next
     this.scheduleSave()
   }
 

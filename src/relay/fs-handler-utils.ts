@@ -186,24 +186,41 @@ export function searchWithRg(
 // was uninstalled or broken mid-session. The `settled` flag below closes
 // the original race between 'error' and 'close' that the cache was added
 // to paper over, so re-checking per call is both simpler and safer.
+const RG_AVAILABILITY_TIMEOUT_MS = 5000
+
 export function checkRgAvailable(): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false
     const child = execFile('rg', ['--version'])
-    child.once('error', () => {
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const cleanup = (): void => {
+      if (timeout) {
+        clearTimeout(timeout)
+        timeout = null
+      }
+      child.off('error', onError)
+      child.off('close', onClose)
+    }
+    const settle = (available: boolean, options?: { kill?: boolean }): void => {
       if (settled) {
         return
       }
       settled = true
-      resolve(false)
-    })
-    child.once('close', (code) => {
-      if (settled) {
-        return
+      cleanup()
+      if (options?.kill) {
+        child.kill()
       }
-      settled = true
-      resolve(code === 0)
-    })
+      resolve(available)
+    }
+    const onError = (): void => settle(false)
+    const onClose = (code: number | null): void => settle(code === 0)
+
+    child.once('error', onError)
+    child.once('close', onClose)
+    timeout = setTimeout(() => settle(false, { kill: true }), RG_AVAILABILITY_TIMEOUT_MS)
+    if (typeof timeout.unref === 'function') {
+      timeout.unref()
+    }
   })
 }
 

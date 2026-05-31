@@ -2,7 +2,7 @@
 injection, fallback patching, WSL translation, cleanup, and GC with a TOCTOU age
 guard — covering each path in one test file keeps assertions co-located with the
 shared mock harness rather than splitting across files. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   existsSyncMock,
@@ -57,10 +57,15 @@ import {
   injectHistoryEnv,
   updateHistFileForFallback,
   deleteWorktreeHistoryDir,
-  runHistoryGc
+  runHistoryGc,
+  scheduleHistoryGc
 } from './terminal-history'
 
 describe('terminal-history', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     getPathMock.mockReturnValue('/fake/userData')
@@ -274,6 +279,19 @@ describe('terminal-history', () => {
   })
 
   describe('runHistoryGc', () => {
+    it('coalesces duplicate scheduled startup GC calls', async () => {
+      vi.useFakeTimers()
+      existsSyncMock.mockReturnValue(false)
+      const getLiveWorktreeIds = vi.fn().mockResolvedValue(new Set<string>())
+
+      scheduleHistoryGc(getLiveWorktreeIds)
+      scheduleHistoryGc(getLiveWorktreeIds)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(getLiveWorktreeIds).toHaveBeenCalledTimes(1)
+    })
+
     it('prunes orphaned directories', () => {
       existsSyncMock.mockImplementation((p: string) => {
         // WSL root doesn't exist, so GC skips it

@@ -152,32 +152,35 @@ export async function getHostedReviewForBranch(input: {
     return pr ? mapGitHubReview(pr) : null
   }
 
-  const bitbucketRepo = await getBitbucketRepoSlug(input.repoPath)
+  const bitbucketRepo = await getBitbucketRepoSlug(input.repoPath, input.connectionId)
   if (bitbucketRepo) {
     const pr = await getBitbucketPullRequestForBranch(
       input.repoPath,
       branchName,
-      input.linkedBitbucketPR ?? null
+      input.linkedBitbucketPR ?? null,
+      input.connectionId
     )
     return pr ? mapBitbucketReview(pr) : null
   }
 
-  const azureDevOpsRepo = await getAzureDevOpsRepoSlug(input.repoPath)
+  const azureDevOpsRepo = await getAzureDevOpsRepoSlug(input.repoPath, input.connectionId)
   if (azureDevOpsRepo) {
     const pr = await getAzureDevOpsPullRequestForBranch(
       input.repoPath,
       branchName,
-      input.linkedAzureDevOpsPR ?? null
+      input.linkedAzureDevOpsPR ?? null,
+      input.connectionId
     )
     return pr ? mapAzureDevOpsReview(pr) : null
   }
 
-  const giteaRepo = await getGiteaRepoSlug(input.repoPath)
+  const giteaRepo = await getGiteaRepoSlug(input.repoPath, input.connectionId)
   if (giteaRepo) {
     const pr = await getGiteaPullRequestForBranch(
       input.repoPath,
       branchName,
-      input.linkedGiteaPR ?? null
+      input.linkedGiteaPR ?? null,
+      input.connectionId
     )
     return pr ? mapGiteaReview(pr) : null
   }
