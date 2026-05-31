@@ -358,9 +358,11 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
         <span className="size-2.5 rounded-full bg-emerald-400/70" />
       </div>
 
+      {/* Why: onboarding previews can flip theme without remounting this visual;
+          token-backed terminal chrome follows explicit and system theme changes. */}
       <div
         className={cn(
-          'grid bg-[#fafafa] font-mono text-[11px] transition-[grid-template-columns] duration-[600ms] ease-[cubic-bezier(.2,.8,.2,1)]',
+          'grid bg-[var(--editor-surface)] font-mono text-[11px] transition-[grid-template-columns] duration-[600ms] ease-[cubic-bezier(.2,.8,.2,1)]',
           splitOpen ? 'grid-cols-[1fr_1fr]' : 'grid-cols-[1fr_0fr]'
         )}
         style={{ minHeight: 230 }}
@@ -389,7 +391,7 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
             <PwName> {running.desc}</PwName>
           </TermLine>
 
-          {/* Right-click context menu — light card, skeleton bars for the
+          {/* Right-click context menu — theme card, skeleton bars for the
               other items, real labels only for the two split actions. */}
           <ContextMenu
             shown={menuShown}
@@ -592,8 +594,8 @@ function RightPaneScrollback(props: { lines: readonly RightLine[] }): JSX.Elemen
           <TermLine key={i}>
             {line.withGlyph ? <span className="mr-1.5 text-amber-600">●</span> : null}
             <span
-              className="inline-block h-[7px] rounded-[3px] align-[1px]"
-              style={{ width: `${line.widthPct}%`, background: 'rgba(24,24,27,0.18)' }}
+              className="inline-block h-[7px] rounded-[3px] bg-foreground/[0.18] align-[1px]"
+              style={{ width: `${line.widthPct}%` }}
             />
           </TermLine>
         )
