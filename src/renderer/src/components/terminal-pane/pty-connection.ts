@@ -642,6 +642,17 @@ export function connectPanePty(
     terminalKeyTarget.addEventListener('keydown', onTerminalKeyDown, { capture: true })
   }
 
+  const setPanePtyFitBinding = (ptyId: string): void => {
+    bindPanePtyId(pane.id, ptyId, deps.tabId)
+    pane.container.dataset.ptyId = ptyId
+  }
+  const clearPanePtyFitBinding = (): void => {
+    // Why: fit bindings live in a module-level map, so pane teardown must
+    // clear them explicitly instead of relying on DOM removal.
+    bindPanePtyId(pane.id, null, deps.tabId)
+    delete pane.container.dataset.ptyId
+  }
+
   const agentCompletionCoordinator = createAgentCompletionCoordinator({
     paneKey: cacheKey,
     getPtyId: () => transport.getPtyId(),
@@ -663,6 +674,7 @@ export function connectPanePty(
 
   const onExit = (ptyId: string): void => {
     agentCompletionCoordinator.dispose()
+    clearPanePtyFitBinding()
     deps.syncPanePtyLayoutBinding(pane.id, null)
     deps.clearRuntimePaneTitle(deps.tabId, pane.id)
     deps.clearTabPtyId(deps.tabId, ptyId)
@@ -823,8 +835,7 @@ export function connectPanePty(
   const observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
 
   const onPtySpawn = (ptyId: string): void => {
-    bindPanePtyId(pane.id, ptyId, deps.tabId)
-    pane.container.dataset.ptyId = ptyId
+    setPanePtyFitBinding(ptyId)
     deps.syncPanePtyLayoutBinding(pane.id, ptyId)
     deps.updateTabPtyId(deps.tabId, ptyId)
     // Why: Command Code has no prompt-start hook. Seed the visible working row
@@ -2128,8 +2139,7 @@ export function connectPanePty(
         startFreshSpawn()
         return
       }
-      bindPanePtyId(pane.id, ptyId, deps.tabId)
-      pane.container.dataset.ptyId = ptyId
+      setPanePtyFitBinding(ptyId)
       deps.syncPanePtyLayoutBinding(pane.id, ptyId)
       deps.updateTabPtyId(deps.tabId, ptyId)
       agentCompletionCoordinator.startProcessTracking()
@@ -2712,6 +2722,7 @@ export function connectPanePty(
         window.api.pty.pauseOutput(rendererOutputPausedPtyId, false)
         rendererOutputPausedPtyId = null
       }
+      clearPanePtyFitBinding()
       discardTerminalOutput(pane.terminal)
       if (agentTaskCompleteSettingsUnsubscribe !== null) {
         agentTaskCompleteSettingsUnsubscribe()
