@@ -2530,6 +2530,46 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it('destroys active Unix socket connections when the runtime stops', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 1000,
+        longPollCap: 1
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const endpoint = metadata!.transports[0]!.endpoint
+
+        const session = openFramedSession(endpoint, {
+          id: 'req_stop',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: { terminal: 'term_stop', wait: true, timeoutMs: 10_000 }
+        })
+        await waitFor(() => server['activeLongPolls'] === 1)
+
+        const stopResult = await Promise.race([
+          server.stop().then(() => 'stopped'),
+          sleep(500).then(() => 'timeout')
+        ])
+
+        expect(stopResult).toBe('stopped')
+        await session.done
+        await waitFor(() => server['activeLongPolls'] === 0)
+        expect(session.socket.destroyed).toBe(true)
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
     it('responds runtime_busy once the long-poll cap is saturated', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()
