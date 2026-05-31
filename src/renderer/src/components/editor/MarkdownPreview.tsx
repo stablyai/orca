@@ -597,16 +597,6 @@ export default function MarkdownPreview({
     markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null
   )
 
-  useEffect(() => {
-    return () => {
-      // Why: review-note reveal/copy timers are event-owned, but the final
-      // cancellation belongs to the preview surface unmount.
-      cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
-      clearMarkdownPreviewTimeout(attentionReviewCommentTimeoutRef)
-      clearMarkdownPreviewTimeout(reviewNotesCopiedResetTimerRef)
-    }
-  }, [])
-
   // Why: each split pane needs its own markdown preview viewport even when the
   // underlying file is shared. The caller passes a pane-scoped cache key so
   // duplicate tabs do not overwrite each other's preview scroll state.
@@ -715,15 +705,23 @@ export default function MarkdownPreview({
     }
   }, [])
 
+  const cleanupPreviewSurfaceTimers = useCallback((): void => {
+    // Why: reveal/copy timers are event-owned, but the final cancellation
+    // belongs to the preview surface unmount.
+    cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
+    clearMarkdownPreviewTimeout(attentionReviewCommentTimeoutRef)
+    clearReviewNotesCopiedResetTimer()
+  }, [clearReviewNotesCopiedResetTimer])
+
   const setRootRef = useCallback(
     (node: HTMLDivElement | null) => {
       rootRef.current = node
       reviewNotesCopyMountedRef.current = node !== null
       if (node === null) {
-        clearReviewNotesCopiedResetTimer()
+        cleanupPreviewSurfaceTimers()
       }
     },
-    [clearReviewNotesCopiedResetTimer]
+    [cleanupPreviewSurfaceTimers]
   )
 
   const scrollToAnchor = useCallback((rawAnchor: string): boolean => {
