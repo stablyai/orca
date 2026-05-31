@@ -36,6 +36,7 @@ vi.mock('./gl-utils', async () => {
 })
 
 import {
+  _getGitLabRateLimitCacheSize,
   _resetGitLabRateLimitCache,
   getMergeRequest,
   getMergeRequestForBranch,
@@ -185,6 +186,16 @@ describe('gitlab client — MR operations', () => {
         ok: true,
         snapshot: { host: null, rest: null }
       })
+    })
+
+    it('bounds cached rate-limit snapshots across many hosts', async () => {
+      glabApiWithHeadersMock.mockResolvedValue({ body: '{}', headers: {} })
+
+      for (let i = 0; i < 70; i++) {
+        await getRateLimit({ host: `gitlab-${i}.example.com`, force: true })
+      }
+
+      expect(_getGitLabRateLimitCacheSize()).toBe(64)
     })
   })
 

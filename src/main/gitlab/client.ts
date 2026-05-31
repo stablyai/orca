@@ -49,6 +49,7 @@ function encodedProject(projectPath: string): string {
 }
 
 const GITLAB_RATE_LIMIT_CACHE_TTL_MS = 30_000
+const GITLAB_RATE_LIMIT_CACHE_MAX_ENTRIES = 64
 const gitLabRateLimitCache = new Map<string, GitLabRateLimitSnapshot>()
 
 /**
@@ -159,12 +160,45 @@ export function _resetGitLabRateLimitCache(): void {
   gitLabRateLimitCache.clear()
 }
 
+/** @internal — test-only */
+export function _getGitLabRateLimitCacheSize(): number {
+  return gitLabRateLimitCache.size
+}
+
+function pruneGitLabRateLimitCache(now = Date.now()): void {
+  for (const [cacheKey, snapshot] of gitLabRateLimitCache) {
+    if (now - snapshot.fetchedAt >= GITLAB_RATE_LIMIT_CACHE_TTL_MS) {
+      gitLabRateLimitCache.delete(cacheKey)
+    }
+  }
+  while (gitLabRateLimitCache.size > GITLAB_RATE_LIMIT_CACHE_MAX_ENTRIES) {
+    const oldestKey = gitLabRateLimitCache.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    gitLabRateLimitCache.delete(oldestKey)
+  }
+}
+
+function rememberGitLabRateLimitSnapshot(
+  cacheKey: string,
+  snapshot: GitLabRateLimitSnapshot
+): void {
+  pruneGitLabRateLimitCache()
+  // Why: self-managed GitLab hostnames come from repo config; keep this
+  // process cache bounded even across many transient hosts.
+  gitLabRateLimitCache.delete(cacheKey)
+  gitLabRateLimitCache.set(cacheKey, snapshot)
+  pruneGitLabRateLimitCache()
+}
+
 export async function getRateLimit(options?: {
   force?: boolean
   host?: string | null
 }): Promise<GetGitLabRateLimitResult> {
   const host = options?.host?.trim() || null
   const cacheKey = host ?? 'default'
+  pruneGitLabRateLimitCache()
   const cached = gitLabRateLimitCache.get(cacheKey)
   if (!options?.force && cached && Date.now() - cached.fetchedAt < GITLAB_RATE_LIMIT_CACHE_TTL_MS) {
     return { ok: true, snapshot: cached }
@@ -178,7 +212,7 @@ export async function getRateLimit(options?: {
     const args = host ? ['--hostname', host, 'user'] : ['user']
     const { headers } = await glabApiWithHeaders(args)
     const snapshot = parseGitLabRateLimitSnapshot(headers, host)
-    gitLabRateLimitCache.set(cacheKey, snapshot)
+    rememberGitLabRateLimitSnapshot(cacheKey, snapshot)
     return { ok: true, snapshot }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
