@@ -1,6 +1,9 @@
 import React, { isValidElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import type { WorkspaceStatusDefinition } from '../../../../shared/types'
+import type {
+  WorkspaceBoardColumnLayout,
+  WorkspaceStatusDefinition
+} from '../../../../shared/types'
 import WorkspaceKanbanDrawerHeader from './WorkspaceKanbanDrawerHeader'
 
 type InspectableProps = {
@@ -34,9 +37,9 @@ function findElement(
 function renderHeader(onClose: () => void): React.ReactElement {
   return WorkspaceKanbanDrawerHeader({
     selectedCount: 0,
-    compact: false,
+    columnLayout: 'fit' satisfies WorkspaceBoardColumnLayout,
     workspaceStatuses: statuses,
-    onCompactChange: vi.fn(),
+    onColumnLayoutChange: vi.fn(),
     onRenameStatus: vi.fn(),
     onChangeStatusColor: vi.fn(),
     onChangeStatusIcon: vi.fn(),
