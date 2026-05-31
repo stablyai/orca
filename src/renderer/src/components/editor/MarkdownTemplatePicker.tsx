@@ -17,10 +17,7 @@ import { subscribeMarkdownTemplatePicker } from '@/lib/markdown-template-picker-
 export function MarkdownTemplatePicker(): JSX.Element {
   const [activeRequest, setActiveRequest] = useState<MarkdownTemplatePickerRequest | null>(null)
   const activeRequestRef = useRef<MarkdownTemplatePickerRequest | null>(null)
-
-  useEffect(() => {
-    activeRequestRef.current = activeRequest
-  }, [activeRequest])
+  activeRequestRef.current = activeRequest
 
   const resolveRequest = useCallback((selection: MarkdownTemplateSelection): void => {
     const request = activeRequestRef.current
