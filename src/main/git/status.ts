@@ -219,7 +219,15 @@ async function runNumstat(
 ): Promise<Map<string, GitLineStats>> {
   try {
     const { stdout } = await gitExecFileAsync(
-      ['-c', 'core.quotePath=false', 'diff', ...(cached ? ['--cached'] : []), '--numstat', '-M'],
+      [
+        '-c',
+        'core.quotePath=false',
+        'diff',
+        '-z',
+        ...(cached ? ['--cached'] : []),
+        '--numstat',
+        '-M'
+      ],
       { cwd: worktreePath, env: gitOptionalLocksDisabledEnv() }
     )
     return parseNumstat(stdout)

@@ -45,6 +45,10 @@ function normalizeNumstatPath(rawPath: string): string {
 }
 
 export function parseNumstat(stdout: string): Map<string, GitLineStats> {
+  if (stdout.includes('\0')) {
+    return parseNulDelimitedNumstat(stdout)
+  }
+
   const stats = new Map<string, GitLineStats>()
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
@@ -56,6 +60,34 @@ export function parseNumstat(stdout: string): Map<string, GitLineStats> {
       continue
     }
     stats.set(normalizeNumstatPath(rawPath), {
+      added: parseNumstatCount(parts[0] ?? ''),
+      removed: parseNumstatCount(parts[1] ?? '')
+    })
+  }
+  return stats
+}
+
+function parseNulDelimitedNumstat(stdout: string): Map<string, GitLineStats> {
+  const stats = new Map<string, GitLineStats>()
+  const records = stdout.split('\0')
+  for (let i = 0; i < records.length; i += 1) {
+    const record = records[i]
+    if (!record) {
+      continue
+    }
+    const parts = record.split('\t')
+    const rawPath = parts.slice(2).join('\t')
+    let path = rawPath
+    if (!path) {
+      // Git -z emits rename paths as: "added<TAB>removed<TAB>\0old\0new\0".
+      // The split record has an empty path in the header; the postimage is next.
+      i += 2
+      path = records[i] ?? ''
+    }
+    if (!path) {
+      continue
+    }
+    stats.set(path, {
       added: parseNumstatCount(parts[0] ?? ''),
       removed: parseNumstatCount(parts[1] ?? '')
     })

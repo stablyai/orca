@@ -609,6 +609,32 @@ describe('getStatus', () => {
     ])
   })
 
+  it('attaches numstat counts for literal paths containing rename markers', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        return Promise.resolve({
+          stdout: '1 .M N... 100644 100644 100644 aaaa aaaa docs/a => b.txt\n'
+        })
+      }
+      if (args.includes('--numstat')) {
+        return Promise.resolve({ stdout: '1\t0\tdocs/a => b.txt\0' })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M'],
+      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
+    )
+    expect(result.entries).toEqual([
+      { path: 'docs/a => b.txt', status: 'modified', area: 'unstaged', added: 1, removed: 0 }
+    ])
+  })
+
   it('attaches staged rename counts to the new path', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
