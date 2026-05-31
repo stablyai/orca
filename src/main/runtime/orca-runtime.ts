@@ -61,6 +61,7 @@ import type {
 } from '../../shared/types'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
+import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { getNextProjectGroupOrder } from '../../shared/project-groups'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -5297,9 +5298,18 @@ export class OrcaRuntimeService {
         })
       }
     }
-    const importedCount = results.filter((entry) => entry.status === 'imported').length
-    const alreadyKnownCount = results.filter((entry) => entry.status === 'already-known').length
-    const failedCount = results.filter((entry) => entry.status === 'failed').length
+    let importedCount = 0
+    let alreadyKnownCount = 0
+    let failedCount = 0
+    for (const entry of results) {
+      if (entry.status === 'imported') {
+        importedCount += 1
+      } else if (entry.status === 'already-known') {
+        alreadyKnownCount += 1
+      } else if (entry.status === 'failed') {
+        failedCount += 1
+      }
+    }
     if (importedCount + alreadyKnownCount === 0) {
       for (const group of groupResolver.getCreatedGroups().reverse()) {
         this.store.deleteProjectGroup?.(group.id)
@@ -5421,13 +5431,14 @@ export class OrcaRuntimeService {
 
     let createdDir = false
     try {
-      const existingStat = await stat(targetPath).catch((error: unknown) => {
-        if (isENOENT(error)) {
-          return null
+      try {
+        await mkdir(targetPath, { recursive: false })
+        createdDir = true
+      } catch (error) {
+        if (!isEEXIST(error)) {
+          throw error
         }
-        throw error
-      })
-      if (existingStat) {
+        const existingStat = await stat(targetPath)
         if (!existingStat.isDirectory()) {
           return { error: `"${trimmedName}" already exists at this location and is not a folder.` }
         }
@@ -5435,9 +5446,6 @@ export class OrcaRuntimeService {
         if (entries.length > 0) {
           return { error: `"${trimmedName}" already exists at this location and is not empty.` }
         }
-      } else {
-        await mkdir(targetPath, { recursive: false })
-        createdDir = true
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -11774,7 +11782,12 @@ export class OrcaRuntimeService {
   // handler, works even for daemon terminals), and (2) the PTY foreground process
   // + output quiescence. The poll self-cancels when the primary OSC path fires.
   private startTuiIdleFallbackPoll(waiter: TerminalWaiter, leaf: RuntimeLeafRecord): void {
+    let pollInFlight = false
     waiter.pollInterval = setInterval(async () => {
+      if (pollInFlight || !waiter.pollInterval) {
+        return
+      }
+      pollInFlight = true
       try {
         if (leaf.lastAgentStatus === 'idle') {
           if (waiter.pollInterval) {
@@ -11840,12 +11853,19 @@ export class OrcaRuntimeService {
         }
       } catch {
         // Swallow transient PTY inspection errors and keep polling.
+      } finally {
+        pollInFlight = false
       }
     }, TUI_IDLE_POLL_INTERVAL_MS)
   }
 
   private startPtyTuiIdleFallbackPoll(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord): void {
+    let pollInFlight = false
     waiter.pollInterval = setInterval(async () => {
+      if (pollInFlight || !waiter.pollInterval) {
+        return
+      }
+      pollInFlight = true
       try {
         if (pty.lastAgentStatus === 'idle') {
           if (waiter.pollInterval) {
@@ -11896,6 +11916,8 @@ export class OrcaRuntimeService {
         }
       } catch {
         // Swallow transient PTY inspection errors and keep polling.
+      } finally {
+        pollInFlight = false
       }
     }, TUI_IDLE_POLL_INTERVAL_MS)
   }
@@ -12632,6 +12654,15 @@ function getExplicitWorktreeIdSelector(selector: string | undefined): string | n
   return id.length > 0 ? id : null
 }
 
+function isEEXIST(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'EEXIST'
+  )
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | null = null
   return new Promise<T>((resolve) => {
@@ -12651,18 +12682,13 @@ function withTimeoutResult<T>(
   promise: Promise<T>,
   timeoutMs: number
 ): Promise<{ ok: true; value: T } | { ok: false }> {
-  let timeout: ReturnType<typeof setTimeout> | null = null
-  return new Promise<{ ok: true; value: T } | { ok: false }>((resolve) => {
-    timeout = setTimeout(() => resolve({ ok: false }), timeoutMs)
-    promise.then(
-      (value) => resolve({ ok: true, value }),
-      () => resolve({ ok: false })
-    )
-  }).finally(() => {
-    if (timeout) {
-      clearTimeout(timeout)
+  return withTimeout(
+    promise.then((value) => ({ ok: true, value }) as const),
+    timeoutMs,
+    {
+      ok: false
     }
-  })
+  )
 }
 
 export function appendRecentPtyOutput(previous: string | undefined, data: string): string {
@@ -13131,13 +13157,7 @@ function buildTerminalWaitResult(
   condition: RuntimeTerminalWaitCondition,
   leaf: RuntimeLeafRecord
 ): RuntimeTerminalWait {
-  return {
-    handle,
-    condition,
-    satisfied: true,
-    status: getTerminalState(leaf),
-    exitCode: leaf.lastExitCode
-  }
+  return buildTerminalWait(handle, condition, getTerminalState(leaf), leaf.lastExitCode)
 }
 
 function buildTerminalWaitBlockedResult(
@@ -13146,14 +13166,13 @@ function buildTerminalWaitBlockedResult(
   leaf: RuntimeLeafRecord,
   blockedReason: RuntimeTerminalWaitBlockedReason
 ): RuntimeTerminalWait {
-  return {
+  return buildTerminalWait(
     handle,
     condition,
-    satisfied: false,
-    status: getTerminalState(leaf),
-    exitCode: leaf.lastExitCode,
+    getTerminalState(leaf),
+    leaf.lastExitCode,
     blockedReason
-  }
+  )
 }
 
 function buildPtyTerminalWaitResult(
@@ -13161,13 +13180,7 @@ function buildPtyTerminalWaitResult(
   condition: RuntimeTerminalWaitCondition,
   pty: RuntimePtyWorktreeRecord
 ): RuntimeTerminalWait {
-  return {
-    handle,
-    condition,
-    satisfied: true,
-    status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
-    exitCode: pty.lastExitCode
-  }
+  return buildTerminalWait(handle, condition, getPtyTerminalState(pty), pty.lastExitCode)
 }
 
 function buildPtyTerminalWaitBlockedResult(
@@ -13176,14 +13189,34 @@ function buildPtyTerminalWaitBlockedResult(
   pty: RuntimePtyWorktreeRecord,
   blockedReason: RuntimeTerminalWaitBlockedReason
 ): RuntimeTerminalWait {
+  return buildTerminalWait(
+    handle,
+    condition,
+    getPtyTerminalState(pty),
+    pty.lastExitCode,
+    blockedReason
+  )
+}
+
+function buildTerminalWait(
+  handle: string,
+  condition: RuntimeTerminalWaitCondition,
+  status: RuntimeTerminalState,
+  exitCode: number | null,
+  blockedReason?: RuntimeTerminalWaitBlockedReason
+): RuntimeTerminalWait {
   return {
     handle,
     condition,
-    satisfied: false,
-    status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
-    exitCode: pty.lastExitCode,
-    blockedReason
+    satisfied: blockedReason === undefined,
+    status,
+    exitCode,
+    ...(blockedReason ? { blockedReason } : {})
   }
+}
+
+function getPtyTerminalState(pty: RuntimePtyWorktreeRecord): RuntimeTerminalState {
+  return pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown'
 }
 
 function branchSelectorMatches(branch: string, selector: string): boolean {
@@ -13203,12 +13236,7 @@ function normalizeBranchRef(branch: string): string {
 }
 
 function inferWorktreeIdFromPtyId(ptyId: string): string | null {
-  const separatorIndex = ptyId.lastIndexOf('@@')
-  if (separatorIndex <= 0) {
-    return null
-  }
-  const worktreeId = ptyId.slice(0, separatorIndex)
-  return parseRuntimeWorktreeId(worktreeId) ? worktreeId : null
+  return parsePtySessionId(ptyId).worktreeId
 }
 
 function parseRuntimeWorktreeId(
@@ -13249,17 +13277,17 @@ function getLeafWorktreeStatus(
   // signal for very fresh leaves before any title has been observed.
   const liveTitle = leaf.lastOscTitle ?? leaf.title ?? tabTitle ?? ''
   const detected = liveTitle ? detectAgentStatusFromTitle(liveTitle) : leaf.lastAgentStatus
-  if (detected === 'permission') {
-    return 'permission'
-  }
-  if (detected === 'working') {
-    return 'working'
-  }
-  return leaf.ptyId ? 'active' : 'inactive'
+  return getDetectedWorktreeStatus(detected, leaf.ptyId !== null)
 }
 
 function getSavedTabWorktreeStatus(title: string, hasPty: boolean): RuntimeWorktreeStatus {
-  const detected = detectAgentStatusFromTitle(title)
+  return getDetectedWorktreeStatus(detectAgentStatusFromTitle(title), hasPty)
+}
+
+function getDetectedWorktreeStatus(
+  detected: AgentStatus | null,
+  hasPty: boolean
+): RuntimeWorktreeStatus {
   if (detected === 'permission') {
     return 'permission'
   }
