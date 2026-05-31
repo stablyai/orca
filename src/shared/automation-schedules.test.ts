@@ -32,6 +32,16 @@ describe('automation schedules', () => {
     expect(latest).toBe(new Date('2026-05-13T14:00:00').getTime())
   })
 
+  it('does not return a future hourly dtstart that is off the scheduled minute', () => {
+    const rrule = buildAutomationRrule({ preset: 'hourly', hour: 9, minute: 0 })
+    const next = nextAutomationOccurrenceAfter(
+      rrule,
+      new Date('2026-05-13T10:30:00').getTime(),
+      new Date('2026-05-13T09:00:00').getTime()
+    )
+    expect(next).toBe(new Date('2026-05-13T11:00:00').getTime())
+  })
+
   it('computes weekday schedules without returning weekend candidates', () => {
     const rrule = buildAutomationRrule({ preset: 'weekdays', hour: 9, minute: 30 })
     const next = nextAutomationOccurrenceAfter(

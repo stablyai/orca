@@ -541,10 +541,10 @@ export function nextAutomationOccurrenceAfter(
     const base = new Date(start)
     base.setMinutes(rule.byMinute, 0, 0)
     let candidate = base.getTime()
-    if (candidate <= after) {
+    if (candidate <= after || candidate < dtstart) {
       candidate += HOUR_MS
     }
-    return Math.max(candidate, dtstart)
+    return candidate
   }
   const candidate = scanDayCandidates(rule, Math.max(dtstart - 1, after), 1)
   if (candidate === null) {
