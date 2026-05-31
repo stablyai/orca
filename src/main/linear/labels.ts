@@ -229,14 +229,11 @@ export async function listIssueLabels(
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
-          if (shouldThrowAuthError(options.workspaceId)) {
-            throw error
-          }
         } else {
           console.warn('[linear] listIssueLabels failed:', error)
-          if (shouldThrowAuthError(options.workspaceId)) {
-            throw error
-          }
+        }
+        if (shouldThrowAuthError(options.workspaceId)) {
+          throw error
         }
         return []
       } finally {

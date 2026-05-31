@@ -62,18 +62,28 @@ export type LabelFormState = {
 
 type LabelsWorkspaceViewState = 'loading' | 'error' | 'empty' | 'ready'
 
-export function getLinearLabelsWorkspaceViewState(args: {
+type LinearLabelsWorkspaceProps = {
+  settings: RuntimeLinearSettings
+  workspaceId: LinearWorkspaceSelection | null
+  teams: LinearTeam[]
+}
+
+export function getLinearLabelsWorkspaceViewState({
+  loading,
+  error,
+  labels
+}: {
   loading: boolean
   error: string | null
   labels: LinearIssueLabel[]
 }): LabelsWorkspaceViewState {
-  if (args.loading && args.labels.length === 0) {
+  if (loading && labels.length === 0) {
     return 'loading'
   }
-  if (args.error) {
+  if (error) {
     return 'error'
   }
-  if (args.labels.length === 0) {
+  if (labels.length === 0) {
     return 'empty'
   }
   return 'ready'
@@ -171,19 +181,30 @@ export async function saveLinearLabelForm(
   if (!form.name.trim()) {
     return { ok: false, error: 'Label name is required.' }
   }
-  const result = form.id
-    ? await deps.updateIssueLabel(
-        settings,
-        form.id,
-        compactLinearLabelUpdateInput(form),
-        workspaceId
-      )
-    : await deps.createIssueLabel(settings, compactLinearLabelCreateInput(form), workspaceId)
+  if (form.id) {
+    const result = await deps.updateIssueLabel(
+      settings,
+      form.id,
+      compactLinearLabelUpdateInput(form),
+      workspaceId
+    )
+    if (!result.ok) {
+      return result
+    }
+    deps.clearMetadataCache()
+    return { ok: true, message: 'Linear label updated.' }
+  }
+
+  const result = await deps.createIssueLabel(
+    settings,
+    compactLinearLabelCreateInput(form),
+    workspaceId
+  )
   if (!result.ok) {
     return result
   }
   deps.clearMetadataCache()
-  return { ok: true, message: form.id ? 'Linear label updated.' : 'Linear label created.' }
+  return { ok: true, message: 'Linear label created.' }
 }
 
 export async function mutateLinearLabelArchiveState(
@@ -196,29 +217,28 @@ export async function mutateLinearLabelArchiveState(
   if (!selectedWorkspaceCanMutate(workspaceId)) {
     return { ok: false, error: 'Select one Linear workspace before editing labels.' }
   }
-  const result =
-    action === 'retire'
-      ? await deps.retireIssueLabel(settings, label.id, workspaceId)
-      : await deps.restoreIssueLabel(settings, label.id, workspaceId)
+  if (action === 'retire') {
+    const result = await deps.retireIssueLabel(settings, label.id, workspaceId)
+    if (!result.ok) {
+      return result
+    }
+    deps.clearMetadataCache()
+    return { ok: true, message: 'Linear label retired.' }
+  }
+
+  const result = await deps.restoreIssueLabel(settings, label.id, workspaceId)
   if (!result.ok) {
     return result
   }
   deps.clearMetadataCache()
-  return {
-    ok: true,
-    message: action === 'retire' ? 'Linear label retired.' : 'Linear label restored.'
-  }
+  return { ok: true, message: 'Linear label restored.' }
 }
 
 export default function LinearLabelsWorkspace({
   settings,
   workspaceId,
   teams
-}: {
-  settings: RuntimeLinearSettings
-  workspaceId: LinearWorkspaceSelection | null
-  teams: LinearTeam[]
-}): React.JSX.Element {
+}: LinearLabelsWorkspaceProps): React.JSX.Element {
   const confirm = useConfirmationDialog()
   const [labels, setLabels] = useState<LinearIssueLabel[]>([])
   const [loading, setLoading] = useState(false)

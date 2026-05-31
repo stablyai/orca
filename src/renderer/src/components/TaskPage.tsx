@@ -406,6 +406,9 @@ const LINEAR_PRIORITY_LABELS: Record<number, string> = {
 }
 
 type LinearSubView = 'issues' | 'labels'
+
+const LINEAR_SUB_VIEWS: readonly LinearSubView[] = ['issues', 'labels']
+
 type LinearViewMode = 'list' | 'board'
 type LinearMode = 'issues' | 'projects' | 'views'
 type LinearProjectTab = 'overview' | 'issues'
@@ -5218,7 +5221,7 @@ export default function TaskPage(): React.JSX.Element {
                   {taskSource === 'linear' && linearStatus.connected ? (
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1 text-xs">
-                        {(['issues', 'labels'] as const).map((view) => (
+                        {LINEAR_SUB_VIEWS.map((view) => (
                           <button
                             key={view}
                             type="button"
