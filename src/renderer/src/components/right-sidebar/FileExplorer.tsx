@@ -120,7 +120,7 @@ function FileExplorerInner(): React.JSX.Element {
   const [bgMenuPoint, setBgMenuPoint] = useState({ x: 0, y: 0 })
   const scrollRef = useRef<HTMLDivElement>(null)
   /** Includes Radix scroll viewport + scrollbar (scrollbar is not a child of the viewport). */
-  const explorerShellRef = useRef<HTMLDivElement>(null)
+  const explorerShellRef = useRef<HTMLDivElement | null>(null)
   const flashTimeoutRef = useRef<number | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const isWindows = useMemo(() => navigator.userAgent.includes('Windows'), [])
@@ -280,7 +280,7 @@ function FileExplorerInner(): React.JSX.Element {
     }
   })
 
-  useFileExplorerReveal({
+  const cancelRevealTimers = useFileExplorerReveal({
     activeWorktreeId,
     worktreePath,
     pendingExplorerReveal,
@@ -296,6 +296,18 @@ function FileExplorerInner(): React.JSX.Element {
     flashTimeoutRef,
     virtualizer
   })
+  const setExplorerShellRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      explorerShellRef.current = node
+      if (node !== null) {
+        return
+      }
+      // Why: reveal flash/scroll timers target the explorer shell; clear them
+      // when that owner detaches instead of keeping a passive unmount Effect.
+      cancelRevealTimers()
+    },
+    [cancelRevealTimers]
+  )
 
   useFileExplorerAutoReveal({
     activeFileId,
@@ -424,7 +436,7 @@ function FileExplorerInner(): React.JSX.Element {
   return (
     <>
       <div
-        ref={explorerShellRef}
+        ref={setExplorerShellRef}
         data-orca-explorer-shell
         data-selected-folder-relative-path={
           selectedNode?.isDirectory ? selectedNode.relativePath : undefined
