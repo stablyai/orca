@@ -630,6 +630,9 @@ async function doInstallRemoteWatcher(
         } satisfies FsChangedPayload)
       }
     })
+  } catch (err) {
+    console.warn(`[filesystem-watcher] SSH watcher unavailable for ${key}:`, err)
+    return 'unavailable'
   } finally {
     if (inFlightRemoteInstalls.get(key) === cancelToken) {
       inFlightRemoteInstalls.delete(key)
