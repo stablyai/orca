@@ -448,6 +448,70 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     markUsedSpy.mockRestore()
   })
 
+  it('closes streaming subscriptions when their saved runtime is removed', async () => {
+    registerRuntimeEnvironmentHandlers()
+    const close = vi.fn()
+    const sendBinary = vi.fn()
+    subscribeRemoteRuntimeRequestMock.mockResolvedValue({
+      requestId: 'stream-remove',
+      close,
+      sendBinary
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const destroyedListenerRemoved = vi.fn()
+    const subscribe = handler<
+      {
+        selector: string
+        method: string
+        params?: unknown
+        subscriptionId?: string
+      },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const result = await subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: vi.fn(),
+          once: vi.fn(),
+          removeListener: destroyedListenerRemoved
+        }
+      },
+      {
+        selector: 'desk',
+        method: 'terminal.subscribe',
+        params: { terminal: 't1' },
+        subscriptionId: 'removed-env-sub'
+      }
+    )
+
+    const remove = handler<{ selector: string }, { removed: { id: string; name: string } }>(
+      'runtimeEnvironments:remove'
+    )
+    expect(remove(null, { selector: added.environment.id })).toMatchObject({
+      removed: { id: added.environment.id, name: 'desk' }
+    })
+
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(destroyedListenerRemoved).toHaveBeenCalledWith('destroyed', expect.any(Function))
+
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    expect(
+      await unsubscribe({ sender: { id: 1 } }, { subscriptionId: result.subscriptionId })
+    ).toEqual({
+      unsubscribed: false
+    })
+  })
+
   it('rejects cross-window streaming subscription control', async () => {
     registerRuntimeEnvironmentHandlers()
     const close = vi.fn()
