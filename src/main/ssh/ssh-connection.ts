@@ -95,8 +95,10 @@ export class SshConnection {
       throw new Error('Not connected')
     }
     const client = this.client
-    return this.waitForSshCallback('SSH exec channel timed out', (callback) =>
-      client.exec(wrapRemoteCommandForPosixShell(cmd), callback)
+    return this.waitForSshCallback(
+      'SSH exec channel timed out',
+      (callback) => client.exec(wrapRemoteCommandForPosixShell(cmd), callback),
+      (channel) => channel.close()
     )
   }
 
@@ -108,14 +110,17 @@ export class SshConnection {
       throw new Error('Not connected')
     }
     const client = this.client
-    return this.waitForSshCallback('SSH SFTP channel timed out', (callback) =>
-      client.sftp(callback)
+    return this.waitForSshCallback(
+      'SSH SFTP channel timed out',
+      (callback) => client.sftp(callback),
+      (sftp) => sftp.end()
     )
   }
 
   private waitForSshCallback<T>(
     timeoutMessage: string,
-    register: (callback: (error: Error | undefined, value: T) => void) => void
+    register: (callback: (error: Error | undefined, value: T) => void) => void,
+    cleanupLateValue?: (value: T) => void
   ): Promise<T> {
     return new Promise((resolve, reject) => {
       let settled = false
@@ -125,6 +130,16 @@ export class SshConnection {
       }, CONNECT_TIMEOUT_MS)
       const finish = (error: Error | undefined, value?: T): void => {
         if (settled) {
+          // Why: ssh2 can invoke the open callback after our timeout has
+          // rejected. Close that late resource so the remote channel is not
+          // left open with no owner.
+          if (!error && value !== undefined) {
+            try {
+              cleanupLateValue?.(value)
+            } catch {
+              /* best effort */
+            }
+          }
           return
         }
         settled = true
