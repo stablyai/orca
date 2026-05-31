@@ -93,7 +93,8 @@ async function fetchDiscussions(
     [
       'api',
       ...glabHostnameArgs(projectRef, connectionId),
-      '--paginate',
+      // Why: detail drawers need a bounded recent conversation snapshot.
+      // Walking every historic discussion can retain and render huge note sets.
       `projects/${encodedProject(projectRef.path)}/${resource}/${iid}/discussions?per_page=100`
     ],
     glabRepoExecOptions(repoPath, connectionId)
@@ -155,7 +156,8 @@ async function fetchPipelineJobs(
     [
       'api',
       ...glabHostnameArgs(projectRef, connectionId),
-      '--paginate',
+      // Why: one MR details load should not fetch every job page from very
+      // large pipelines; the first 100 jobs match the visible summary budget.
       `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/jobs?per_page=100`
     ],
     glabRepoExecOptions(repoPath, connectionId)
@@ -220,14 +222,14 @@ async function fetchMRFiles(
     [
       'api',
       ...glabHostnameArgs(projectRef, connectionId),
-      `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/changes`
+      // Why: GitLab deprecated the all-in-one `changes` endpoint in favor of
+      // the paginated diffs endpoint; cap the file snapshot at one visible page.
+      `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/diffs?per_page=100`
     ],
     glabRepoExecOptions(repoPath, connectionId)
   )
-  const data = JSON.parse(stdout) as {
-    changes?: Parameters<typeof mapMRFile>[0][]
-  }
-  return (data.changes ?? []).map(mapMRFile).filter((file) => file.path)
+  const data = JSON.parse(stdout) as Parameters<typeof mapMRFile>[0][]
+  return data.map(mapMRFile).filter((file) => file.path)
 }
 
 // ── Top-level aggregator ───────────────────────────────────────────
