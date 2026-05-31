@@ -29,8 +29,12 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
   // within a single repo's array. Deduplicating here prevents React from
   // seeing duplicate keys, which can corrupt terminal DOM containers.
   const worktreeMap = new Map<string, Worktree>()
-  for (const worktree of Object.values(worktreesByRepo).flat()) {
-    worktreeMap.set(worktree.id, worktree)
+  // Why: this selector sits on hot Zustand subscription paths; avoid building
+  // a transient flattened array just to populate the snapshot cache.
+  for (const worktrees of Object.values(worktreesByRepo)) {
+    for (const worktree of worktrees) {
+      worktreeMap.set(worktree.id, worktree)
+    }
   }
   const allWorktrees = Array.from(worktreeMap.values())
 
