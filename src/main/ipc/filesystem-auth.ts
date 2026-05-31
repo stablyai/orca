@@ -16,6 +16,7 @@ const registeredWorktreeRootsByRepo = new Map<string, Set<string>>()
 const registeredWorktreeRootRepoIds = new Set<string>()
 let registeredWorktreeRootsDirty = true
 let registeredWorktreeRootsRefresh: Promise<void> | null = null
+const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8
 
 export function authorizeExternalPath(targetPath: string): void {
   const resolvedTarget = resolve(targetPath)
@@ -91,11 +92,8 @@ export function isPathAllowed(targetPath: string, store: Store): boolean {
 }
 
 export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
-  // Why: repos are processed in parallel so the cache rebuild completes in
-  // wall-clock time proportional to the slowest single repo, not the sum of
-  // all repos.  The previous sequential loop was the main bottleneck on
-  // Windows where each `git worktree list` + realpath chain takes 500 ms+
-  // due to slower process creation and antivirus I/O scanning.
+  // Why: repos are processed with bounded parallelism so the cache rebuild
+  // keeps the Windows speedup without spawning one git process per repo.
   //
   // Why no realpath() here: this rebuild runs on repo/worktree invalidation,
   // so canonicalizing every repo root would repeatedly touch TCC-protected
@@ -104,8 +102,10 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
   // destructive or read/write operation, so the security boundary remains
   // enforced where it matters.
   const repos = getLocalRepos(store)
-  const perProjectResults = await Promise.all(
-    repos.map(async (repo) => {
+  const perProjectResults = await mapWithConcurrency(
+    repos,
+    AUTHORIZED_ROOTS_REBUILD_CONCURRENCY,
+    async (repo) => {
       const roots: string[] = []
       try {
         roots.push(resolve(repo.path))
@@ -121,7 +121,7 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
         console.warn(`[filesystem-auth] skipping repo ${repo.path} during cache rebuild:`, error)
       }
       return { repoId: repo.id, roots }
-    })
+    }
   )
 
   registeredWorktreeRoots.clear()
@@ -137,6 +137,26 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
     registeredWorktreeRootRepoIds.add(repoId)
   }
   registeredWorktreeRootsDirty = false
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  maxConcurrent: number,
+  mapper: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = []
+  let nextIndex = 0
+  const workerCount = Math.min(maxConcurrent, items.length)
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex
+        nextIndex += 1
+        results[index] = await mapper(items[index])
+      }
+    })
+  )
+  return results
 }
 
 export function registerWorktreeRootsForRepo(

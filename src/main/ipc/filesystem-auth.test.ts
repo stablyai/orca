@@ -32,9 +32,9 @@ const repo: Repo = {
   kind: 'git'
 }
 
-function makeStore(): Store {
+function makeStore(repos: Repo[] = [repo]): Store {
   return {
-    getRepos: () => [repo],
+    getRepos: () => repos,
     getSettings: () => ({})
   } as unknown as Store
 }
@@ -66,6 +66,28 @@ describe('filesystem auth worktree roots', () => {
       resolve(lastWorktreePath)
     )
     expect(listRepoWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds concurrent repo probes while rebuilding authorized roots', async () => {
+    const repos = Array.from({ length: 20 }, (_, index) => ({
+      ...repo,
+      id: `repo-${index}`,
+      path: `/repos/app-${index}`
+    }))
+    let active = 0
+    let maxActive = 0
+    vi.mocked(listRepoWorktrees).mockImplementation(async () => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      await new Promise((resolve) => setTimeout(resolve, 1))
+      active -= 1
+      return []
+    })
+
+    await rebuildAuthorizedRootsCache(makeStore(repos))
+
+    expect(listRepoWorktrees).toHaveBeenCalledTimes(repos.length)
+    expect(maxActive).toBeLessThanOrEqual(8)
   })
 })
 
