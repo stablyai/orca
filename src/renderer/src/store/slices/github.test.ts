@@ -4,6 +4,8 @@ GitHub slice's cross-cutting invariants verifiable in one place. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import {
+  _clearGitHubPRRefreshStartedEntriesForTest,
+  _getGitHubPRRefreshStartedEntryCountForTest,
   _getGitHubPRRequestGenerationCountForTest,
   createGitHubSlice,
   mergePRCommentIntoList,
@@ -1030,6 +1032,11 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     mockApi.gh.refreshPRNow.mockReset()
     mockApi.gh.refreshPRNow.mockResolvedValue({ kind: 'no-pr', fetchedAt: Date.now() })
     mockApi.hostedReview.forBranch.mockResolvedValue(null)
+    _clearGitHubPRRefreshStartedEntriesForTest()
+  })
+
+  afterEach(() => {
+    _clearGitHubPRRefreshStartedEntriesForTest()
   })
 
   it('lets a forced refresh bypass a non-forced inflight request and keeps the newer result', async () => {
@@ -1943,6 +1950,74 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('drops request-start hosted-review snapshots when refreshes pause before outcomes', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/rate-limit-pause'
+    const cacheKey = `${repoId}::${branch}`
+    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
+    store.setState({
+      hostedReviewCache: {
+        [hostedReviewCacheKey]: {
+          data: {
+            provider: 'github',
+            number: 12,
+            title: 'Existing PR',
+            state: 'open',
+            url: 'https://github.com/acme/orca/pull/12',
+            status: 'pending',
+            updatedAt: '2026-03-28T00:00:00Z',
+            mergeable: 'UNKNOWN'
+          },
+          fetchedAt: 100,
+          linkedReviewHintKey: 'github:12'
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    for (let i = 0; i < 40; i += 1) {
+      const inFlightSequence = i * 2 + 1
+      store.getState().applyGitHubPRRefreshEvent({
+        sequence: inFlightSequence,
+        aliases: [{ cacheKey, repoId, repoPath, branch }],
+        reason: 'visible',
+        requestStartedAt: Date.now(),
+        status: 'in-flight'
+      })
+      expect(_getGitHubPRRefreshStartedEntryCountForTest()).toBe(1)
+
+      store.getState().applyGitHubPRRefreshEvent({
+        sequence: inFlightSequence + 1,
+        aliases: [{ cacheKey, repoId, repoPath, branch }],
+        reason: 'visible',
+        status: 'paused',
+        pausedUntil: Date.now() + 60_000,
+        skippedReason: 'rate-limit'
+      })
+      expect(_getGitHubPRRefreshStartedEntryCountForTest()).toBe(0)
+    }
+  })
+
+  it('does not retain empty request-start entries for PR refreshes without a hosted-review cache entry', () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/no-hosted-review'
+    const cacheKey = `${repoId}::${branch}`
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoId, repoPath, branch }],
+      reason: 'visible',
+      requestStartedAt: Date.now(),
+      status: 'in-flight'
+    })
+
+    expect(_getGitHubPRRefreshStartedEntryCountForTest()).toBe(0)
   })
 
   it('does not overwrite a non-GitHub hosted review from GitHub PR refresh events', () => {

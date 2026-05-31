@@ -364,10 +364,21 @@ const prRefreshStartedHostedReviewEntries = new Map<
   string,
   AppState['hostedReviewCache'][string] | undefined
 >()
+const PR_REFRESH_STARTED_HOSTED_REVIEW_ENTRY_MAX = 128
 
 /** @internal - exposed for leak-regression tests only */
 export function _getGitHubPRRequestGenerationCountForTest(): number {
   return prRequestGenerations.size
+}
+
+/** @internal - exposed for leak-regression tests only */
+export function _getGitHubPRRefreshStartedEntryCountForTest(): number {
+  return prRefreshStartedHostedReviewEntries.size
+}
+
+/** @internal - exposed for leak-regression tests only */
+export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
+  prRefreshStartedHostedReviewEntries.clear()
 }
 
 // Why: cap in-flight cross-repo fan-out and hover-prefetches at the renderer
@@ -828,6 +839,41 @@ function applyPRCacheResult(
 
 function prRefreshStartedEntryKey(sequence: number, cacheKey: string): string {
   return `${sequence}::${cacheKey}`
+}
+
+function deletePRRefreshStartedEntry(sequence: number | undefined, cacheKey: string): void {
+  if (sequence !== undefined && sequence > 0) {
+    prRefreshStartedHostedReviewEntries.delete(prRefreshStartedEntryKey(sequence, cacheKey))
+  }
+}
+
+function setPRRefreshStartedHostedReviewEntry(
+  key: string,
+  entry: AppState['hostedReviewCache'][string] | undefined
+): void {
+  if (entry === undefined) {
+    prRefreshStartedHostedReviewEntries.delete(key)
+    return
+  }
+  prRefreshStartedHostedReviewEntries.delete(key)
+  prRefreshStartedHostedReviewEntries.set(key, entry)
+  while (prRefreshStartedHostedReviewEntries.size > PR_REFRESH_STARTED_HOSTED_REVIEW_ENTRY_MAX) {
+    const oldest = prRefreshStartedHostedReviewEntries.keys().next()
+    if (oldest.done) {
+      return
+    }
+    prRefreshStartedHostedReviewEntries.delete(oldest.value)
+  }
+}
+
+function deletePRRefreshStartedEntriesForEvent(
+  event: GitHubPRRefreshEvent,
+  sequences: AppState['prRefreshSequences']
+): void {
+  for (const alias of event.aliases) {
+    deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
+    deletePRRefreshStartedEntry(sequences[alias.cacheKey], alias.cacheKey)
+  }
 }
 
 function setGitHubPRResultCaches(
@@ -2605,6 +2651,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       // Why: local main-process refresh events are keyed only by repo/branch;
       // applying them while a runtime is active can leak local PR state into SSH.
       if (getActiveRuntimeTarget(s.settings).kind === 'environment') {
+        deletePRRefreshStartedEntriesForEvent(event, s.prRefreshSequences)
         return {}
       }
       const nextSequences = { ...s.prRefreshSequences }
@@ -2618,6 +2665,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         if (
           event.outcome ? event.sequence < previousSequence : event.sequence <= previousSequence
         ) {
+          if (event.outcome || event.status !== 'in-flight') {
+            deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
+          }
           continue
         }
         nextSequences[alias.cacheKey] = event.sequence
@@ -2627,6 +2677,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           const startedEntryKey = prRefreshStartedEntryKey(event.sequence, alias.cacheKey)
           const requestStartedEntry = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
           prRefreshStartedHostedReviewEntries.delete(startedEntryKey)
+          if (previousSequence !== event.sequence) {
+            deletePRRefreshStartedEntry(previousSequence, alias.cacheKey)
+          }
           delete nextStates[alias.cacheKey]
           if (event.outcome.kind === 'upstream-error') {
             nextStates[alias.cacheKey] = {
@@ -2700,6 +2753,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
 
         if (event.status) {
+          if (previousSequence !== event.sequence) {
+            deletePRRefreshStartedEntry(previousSequence, alias.cacheKey)
+          }
           if (event.status === 'in-flight' && event.requestStartedAt !== undefined) {
             const hostedReviewCacheKey = getHostedReviewCacheKey(
               alias.repoPath,
@@ -2708,10 +2764,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               alias.repoId,
               alias.connectionId
             )
-            prRefreshStartedHostedReviewEntries.set(
+            setPRRefreshStartedHostedReviewEntry(
               prRefreshStartedEntryKey(event.sequence, alias.cacheKey),
               s.hostedReviewCache[hostedReviewCacheKey]
             )
+          } else {
+            // Why: rate-limit pauses/skips can follow an in-flight broadcast
+            // without an outcome; the cached request-start snapshot is no
+            // longer live and would otherwise accumulate per refresh sequence.
+            deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           }
           nextStates[alias.cacheKey] = {
             status: event.status,
