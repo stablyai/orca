@@ -181,6 +181,24 @@ function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeI
   }
 }
 
+export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
+  const trimmedEnvironmentId = environmentId.trim()
+  if (!trimmedEnvironmentId) {
+    return
+  }
+  const keyPrefix = `${trimmedEnvironmentId}:`
+  for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      latestSessionTabsSnapshotByWorktree.delete(key)
+    }
+  }
+  for (const key of hostSessionTabIdByLocalKey.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      hostSessionTabIdByLocalKey.delete(key)
+    }
+  }
+}
+
 function hostSessionTabMappingKey(args: {
   environmentId: string
   worktreeId: string
@@ -2121,6 +2139,9 @@ export function useWebSessionTabsSync(): void {
     return () => {
       disposed = true
       unsubscribe?.()
+      // Why: environment ids can churn as paired runtimes reconnect or switch;
+      // stale freshness/mapping entries should not live for the renderer lifetime.
+      clearWebSessionTabsTrackingForEnvironment(environmentId)
     }
   }, [activeRuntimeEnvironmentId, workspaceSessionReady])
 

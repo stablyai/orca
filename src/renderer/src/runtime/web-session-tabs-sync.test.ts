@@ -10,6 +10,7 @@ import {
   applyFreshWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
+  clearWebSessionTabsTrackingForEnvironment,
   resolveHostSessionTabIdForWebSessionTab,
   resetWebSessionTabsSnapshotFreshnessForTests,
   type WebSessionTabsSyncState
@@ -205,6 +206,69 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
       freshness: 0,
       hostMappings: 0
+    })
+  })
+
+  it('clears web session tracking maps for one runtime environment on teardown', () => {
+    applyFreshWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(
+        [
+          {
+            type: 'browser',
+            id: 'host-browser-unified',
+            title: 'Example Domain',
+            browserWorkspaceId: 'host-browser-workspace',
+            browserPageId: 'host-browser-page',
+            url: 'https://example.com/',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isActive: true
+          }
+        ],
+        { activeTabId: 'host-browser-unified', activeTabType: 'browser' }
+      ),
+      ENV,
+      NOW
+    )
+    applyFreshWebSessionTabsSnapshot(
+      makeState({ activeWorktreeId: 'repo::/other-worktree' }),
+      makeSnapshot(
+        [
+          {
+            type: 'browser',
+            id: 'other-host-browser-unified',
+            title: 'Example Domain',
+            browserWorkspaceId: 'other-host-browser-workspace',
+            browserPageId: 'other-host-browser-page',
+            url: 'https://example.com/',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isActive: true
+          }
+        ],
+        {
+          worktree: 'repo::/other-worktree',
+          activeTabId: 'other-host-browser-unified',
+          activeTabType: 'browser'
+        }
+      ),
+      'web-env-2',
+      NOW
+    )
+
+    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
+      freshness: 2,
+      hostMappings: 2
+    })
+
+    clearWebSessionTabsTrackingForEnvironment(ENV)
+
+    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
+      freshness: 1,
+      hostMappings: 1
     })
   })
 
