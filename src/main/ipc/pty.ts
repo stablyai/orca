@@ -946,11 +946,22 @@ export function registerPtyHandlers(
   // large output and non-interactive output must still use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
+  const INTERACTIVE_REDRAW_MAX_CHARS = PTY_BATCH_FLUSH_CHUNK_CHARS
   const BACKGROUND_OUTPUT_INPUT_QUIET_MS = 50
   const BACKGROUND_OUTPUT_MAX_INPUT_HOLD_MS = 250
   let lastRendererInputAt = Number.NEGATIVE_INFINITY
   let lastRendererInputPtyId: string | null = null
   let backgroundFlushHeldSince: number | null = null
+
+  function isLikelyInteractiveRedraw(data: string): boolean {
+    if (data.length <= INTERACTIVE_OUTPUT_MAX_CHARS) {
+      return true
+    }
+    // Why: Codex-style TUIs can repaint more than 1 KB per keypress. ANSI
+    // control redraws are still latency-sensitive, while plain command output
+    // should stay on the throughput batch path.
+    return data.length <= INTERACTIVE_REDRAW_MAX_CHARS && data.includes('\x1b[')
+  }
 
   function getChunkStartSeq(endSeq: number | undefined, data: string): number | undefined {
     return typeof endSeq === 'number' ? Math.max(0, endSeq - data.length) : undefined
@@ -1176,7 +1187,7 @@ export function registerPtyHandlers(
       const nextData = pending.data
       const lastInputAt = lastInputAtByPty.get(payload.id)
       const isInteractiveOutput =
-        nextData.length <= INTERACTIVE_OUTPUT_MAX_CHARS &&
+        isLikelyInteractiveRedraw(nextData) &&
         lastInputAt !== undefined &&
         performance.now() - lastInputAt <= INTERACTIVE_OUTPUT_WINDOW_MS
       if (isInteractiveOutput) {
