@@ -300,6 +300,9 @@ export const FILE_METHODS: RpcAnyMethod[] = [
           if (unwatch) {
             cleanup()
           } else {
+            // Why: watch setup may have queued events before resolving its
+            // unwatch callback. Dispose that transient batcher on early abort.
+            eventBatcher.dispose()
             finish()
           }
         }
@@ -313,6 +316,7 @@ export const FILE_METHODS: RpcAnyMethod[] = [
               // Why: the connection can close while watch setup is still
               // resolving. Tear down the late watcher immediately instead of
               // registering cleanup on a connection that was already reaped.
+              eventBatcher.dispose()
               nextUnwatch()
               return
             }
