@@ -1491,8 +1491,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     setActivityTerminalPortals(portalDescriptors)
   }, [portalDescriptors])
 
-  useLayoutEffect(() => {
-    return () => {
+  const setActivityPageRef = useCallback((node: HTMLDivElement | null): void => {
+    if (!node) {
+      // Why: portal cleanup must only happen when the page unmounts; clearing on
+      // descriptor changes flashes the workspace pane behind the activity slot.
       setActivityTerminalPortals([])
     }
   }, [])
@@ -1590,7 +1592,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   // breathing-room band above; the right pane's title row supplies its own
   // top padding (pt-2) so the heading isn't pinned to the titlebar.
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background pb-3">
+    <div ref={setActivityPageRef} className="flex h-full min-h-0 flex-col bg-background pb-3">
       <main className="flex min-h-0 flex-1 overflow-hidden">
         <aside
           ref={threadListRef}
