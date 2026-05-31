@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import path from 'path'
 import {
   attributePortToWorkspace,
   isContainerProcess,
@@ -139,6 +140,62 @@ describe('container process classification', () => {
       true
     )
     expect(isContainerProcess({ processName: 'node', commandLine: 'node server.js' })).toBe(false)
+  })
+})
+
+describe('scanWorkspacePorts attribution work', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    execFileMock.mockReset()
+  })
+
+  it('normalizes worktree paths once per scan instead of once per port phase', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const resolveSpy = vi.spyOn(path, 'resolve')
+    const invokeCallback = (callback: unknown, stdout: string): void => {
+      if (typeof callback !== 'function') {
+        throw new Error('missing execFile callback')
+      }
+      const execCallback = callback as (error: Error | null, stdout: string) => void
+      execCallback(null, stdout)
+    }
+    execFileMock.mockImplementation(
+      (command: string, args: string[], _options: unknown, callback: unknown) => {
+        if (command === 'lsof' && args.includes('-iTCP')) {
+          invokeCallback(
+            callback,
+            ['p123', 'cnode', 'n127.0.0.1:3000', 'p124', 'cnode', 'n127.0.0.1:3001'].join('\n')
+          )
+        } else if (command === 'lsof') {
+          invokeCallback(
+            callback,
+            ['p123', 'n/repo/service', 'p124', 'n/repo/worktrees/feature/app'].join('\n')
+          )
+        } else if (command === 'ps') {
+          invokeCallback(
+            callback,
+            [
+              '123 node /repo/service/server.js',
+              '124 node /repo/worktrees/feature/app/server.js'
+            ].join('\n')
+          )
+        } else {
+          invokeCallback(callback, '')
+        }
+        return { kill: vi.fn() }
+      }
+    )
+
+    const scan = await scanWorkspacePorts(worktrees, {
+      lookup: () => undefined,
+      reconcileScan: vi.fn()
+    })
+
+    expect(scan.ports.filter((port) => port.kind === 'workspace')).toHaveLength(2)
+    const worktreePathResolveCalls = resolveSpy.mock.calls.filter(
+      ([input]) => input === '/repo' || input === '/repo/worktrees/feature'
+    )
+    expect(worktreePathResolveCalls).toHaveLength(worktrees.length)
   })
 })
 

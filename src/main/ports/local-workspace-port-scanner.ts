@@ -31,15 +31,21 @@ type ProcessMetadata = {
   cwd?: string
 }
 
+type NormalizedWorkspacePortProbe = {
+  worktree: WorkspacePortProbe
+  normalizedPath: string
+}
+
 export async function scanWorkspacePorts(
   worktrees: WorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher
 ): Promise<WorkspacePortScanResult> {
   try {
     const rawPorts = await scanPlatformListeningPorts()
-    reconcileAdvertisedUrls(rawPorts, worktrees, urlWatcher)
+    const normalizedWorktrees = normalizeWorkspacePortProbes(worktrees)
+    reconcileAdvertisedUrls(rawPorts, normalizedWorktrees, urlWatcher)
     const ports = rawPorts
-      .map((port) => enrichPort(port, worktrees, urlWatcher))
+      .map((port) => enrichPort(port, normalizedWorktrees, urlWatcher))
       .sort(compareWorkspacePorts)
       .slice(0, MAX_PORTS)
     return { platform: process.platform, scannedAt: Date.now(), ports }
@@ -58,16 +64,30 @@ export function attributePortToWorkspace(
   port: Pick<RawListeningPort, 'cwd' | 'commandLine'>,
   worktrees: WorkspacePortProbe[]
 ): WorkspacePortOwner | undefined {
+  return attributePortToNormalizedWorkspaces(port, normalizeWorkspacePortProbes(worktrees))
+}
+
+function normalizeWorkspacePortProbes(
+  worktrees: readonly WorkspacePortProbe[]
+): NormalizedWorkspacePortProbe[] {
+  return worktrees.map((worktree) => ({
+    worktree,
+    normalizedPath: normalizeComparablePath(worktree.path)
+  }))
+}
+
+function attributePortToNormalizedWorkspaces(
+  port: Pick<RawListeningPort, 'cwd' | 'commandLine'>,
+  worktrees: readonly NormalizedWorkspacePortProbe[]
+): WorkspacePortOwner | undefined {
   const cwd = port.cwd ? normalizeComparablePath(port.cwd) : null
   const commandLine = port.commandLine ? normalizeComparableText(port.commandLine) : null
 
-  const cwdMatches = cwd
-    ? worktrees
-        .map((worktree) => ({ worktree, normalizedPath: normalizeComparablePath(worktree.path) }))
-        .filter(({ normalizedPath }) => isSameOrDescendant(cwd, normalizedPath))
-    : []
-
-  const cwdMatch = pickDeepestMatch(cwdMatches)
+  const cwdMatch = cwd
+    ? pickDeepestMatching(worktrees, ({ normalizedPath }) =>
+        isSameOrDescendant(cwd, normalizedPath)
+      )
+    : undefined
   if (cwdMatch) {
     return toOwner(cwdMatch.worktree, 'cwd')
   }
@@ -76,10 +96,9 @@ export function attributePortToWorkspace(
     return undefined
   }
 
-  const commandMatches = worktrees
-    .map((worktree) => ({ worktree, normalizedPath: normalizeComparablePath(worktree.path) }))
-    .filter(({ normalizedPath }) => includesPathBoundary(commandLine, normalizedPath))
-  const commandMatch = pickDeepestMatch(commandMatches)
+  const commandMatch = pickDeepestMatching(worktrees, ({ normalizedPath }) =>
+    includesPathBoundary(commandLine, normalizedPath)
+  )
   return commandMatch ? toOwner(commandMatch.worktree, 'command') : undefined
 }
 
@@ -220,6 +239,9 @@ async function readProcNet(
 
 async function mapLinuxInodesToPids(inodes: Set<number>): Promise<Map<number, number>> {
   const result = new Map<number, number>()
+  if (inodes.size === 0) {
+    return result
+  }
   let pids: string[]
   try {
     pids = (await readdir('/proc')).filter((entry) => /^\d+$/.test(entry))
@@ -393,10 +415,10 @@ async function readTextIfAvailable(filePath: string): Promise<string | undefined
 
 function enrichPort(
   port: RawListeningPort,
-  worktrees: WorkspacePortProbe[],
+  worktrees: readonly NormalizedWorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup'>
 ): WorkspacePort {
-  const owner = attributePortToWorkspace(port, worktrees)
+  const owner = attributePortToNormalizedWorkspaces(port, worktrees)
   const base = {
     id: `${port.host}:${port.port}:${port.pid ?? 'unknown'}`,
     bindHost: port.host,
@@ -428,15 +450,15 @@ function enrichPort(
 
 function reconcileAdvertisedUrls(
   ports: RawListeningPort[],
-  worktrees: WorkspacePortProbe[],
+  worktrees: readonly NormalizedWorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileScan'>
 ): void {
   const observationsByWorktree = new Map<string, { port: number; pid?: number }[]>()
   for (const worktree of worktrees) {
-    observationsByWorktree.set(worktree.id, [])
+    observationsByWorktree.set(worktree.worktree.id, [])
   }
   for (const port of ports) {
-    const owner = attributePortToWorkspace(port, worktrees)
+    const owner = attributePortToNormalizedWorkspaces(port, worktrees)
     if (!owner) {
       continue
     }
@@ -485,8 +507,20 @@ function toOwner(
   }
 }
 
-function pickDeepestMatch<T extends { normalizedPath: string }>(matches: T[]): T | undefined {
-  return matches.sort((a, b) => b.normalizedPath.length - a.normalizedPath.length)[0]
+function pickDeepestMatching<T extends { normalizedPath: string }>(
+  candidates: readonly T[],
+  predicate: (candidate: T) => boolean
+): T | undefined {
+  let best: T | undefined
+  for (const candidate of candidates) {
+    if (!predicate(candidate)) {
+      continue
+    }
+    if (!best || candidate.normalizedPath.length > best.normalizedPath.length) {
+      best = candidate
+    }
+  }
+  return best
 }
 
 function isSameOrDescendant(candidate: string, parent: string): boolean {
