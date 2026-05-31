@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { LinearIssueMarkdownDescriptionEditor } from '@/components/LinearIssueMarkdownDescriptionEditor'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
@@ -44,7 +45,6 @@ export function LinearIssueTextEditor({
   const [savingField, setSavingField] = useState<'title' | 'description' | null>(null)
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const titleRef = useAutosizeTextArea(titleDraft)
-  const descriptionRef = useAutosizeTextArea(descriptionDraft)
   const lastIssueIdRef = useRef(issue.id)
   const mountedRef = useMountedRef()
   const lastSyncedTitleRef = useRef(issue.title)
@@ -79,9 +79,9 @@ export function LinearIssueTextEditor({
   }, [descriptionDraft, issue.description, issue.id, issue.title, titleDraft])
 
   const saveField = useCallback(
-    async (field: 'title' | 'description') => {
+    async (field: 'title' | 'description', descriptionOverride?: string) => {
       const nextTitle = titleDraft.trim()
-      const nextDescription = descriptionDraft.trimEnd()
+      const nextDescription = (descriptionOverride ?? descriptionDraft).trimEnd()
       if (field === 'title' && !nextTitle) {
         setTitleDraft(issue.title)
         toast.error('Title is required')
@@ -155,6 +155,14 @@ export function LinearIssueTextEditor({
     []
   )
 
+  const saveDescriptionValue = useCallback(
+    (value: string) => {
+      setDescriptionDraft(value)
+      void saveField('description', value)
+    },
+    [saveField]
+  )
+
   const handleTitleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (event.key === 'Enter') {
@@ -171,9 +179,6 @@ export function LinearIssueTextEditor({
     density === 'page'
       ? 'text-[28px] font-semibold leading-tight'
       : 'text-[15px] font-semibold leading-tight'
-  const descriptionClass =
-    density === 'page' ? 'mt-7 px-3 text-[15px] leading-7' : 'px-3 text-[14px] leading-relaxed'
-
   return (
     <div className="min-w-0">
       {fields !== 'description' ? (
@@ -206,37 +211,14 @@ export function LinearIssueTextEditor({
 
       {fields !== 'title' ? (
         <div className="relative">
-          <textarea
-            ref={descriptionRef}
+          <LinearIssueMarkdownDescriptionEditor
             value={descriptionDraft}
-            onChange={(event) => setDescriptionDraft(event.target.value)}
-            onBlur={() => void saveField('description')}
-            onKeyDown={handleDescriptionKeyDown}
+            onChange={setDescriptionDraft}
+            onSave={saveDescriptionValue}
+            density={density}
             disabled={savingField === 'description'}
-            rows={descriptionDraft.trim() ? 3 : 1}
-            placeholder="No description provided."
-            aria-label="Issue description"
-            className={cn(
-              'peer scrollbar-sleek block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent py-1 text-foreground outline-none transition placeholder:italic placeholder:text-muted-foreground hover:border-border/50 hover:bg-accent/40 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-80',
-              descriptionClass
-            )}
+            submitShortcutLabel={submitShortcutLabel}
           />
-          <div className="pointer-events-none absolute bottom-1.5 right-2 z-10 flex items-center gap-1.5 text-[10px] text-muted-foreground/75 opacity-0 transition-opacity peer-focus:opacity-100">
-            <span className="flex items-center gap-1">
-              <span>{submitShortcutLabel}</span>
-              <span>save</span>
-            </span>
-            <span className="text-muted-foreground/35">·</span>
-            <span className="flex items-center gap-1">
-              <kbd className="inline-flex h-4 min-w-4 select-none items-center justify-center rounded border border-border bg-muted/70 px-1 font-mono text-[9px] font-medium shadow-xs">
-                ↵
-              </kbd>
-              <span>newline</span>
-            </span>
-          </div>
-          {savingField === 'description' ? (
-            <LoaderCircle className="absolute right-2 top-2 size-4 animate-spin text-muted-foreground" />
-          ) : null}
         </div>
       ) : null}
     </div>
