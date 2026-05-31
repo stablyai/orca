@@ -1,12 +1,23 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getVersionManagerBinPaths, resolveClaudeCommand, resolveCodexCommand } from './command'
 
 function makeExecutable(path: string): void {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, '')
+  if (process.platform !== 'win32') {
+    chmodSync(path, 0o755)
+  }
+}
+
+function makeNonExecutableFile(path: string): void {
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, '')
+  if (process.platform !== 'win32') {
+    chmodSync(path, 0o644)
+  }
 }
 
 describe('resolveCodexCommand', () => {
@@ -24,6 +35,44 @@ describe('resolveCodexCommand', () => {
     expect(resolveCodexCommand({ platform: 'darwin', pathEnv: pathDir, homePath: root })).toBe(
       commandPath
     )
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'skips non-runnable PATH entries and keeps scanning',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-codex-command-'))
+      const badDir = join(root, 'bad-bin')
+      const goodDir = join(root, 'good-bin')
+      const badCommandPath = join(badDir, 'codex')
+      const goodCommandPath = join(goodDir, 'codex')
+      makeNonExecutableFile(badCommandPath)
+      makeExecutable(goodCommandPath)
+
+      expect(
+        resolveCodexCommand({
+          platform: 'linux',
+          pathEnv: [badDir, goodDir].join(delimiter),
+          homePath: root
+        })
+      ).toBe(goodCommandPath)
+    }
+  )
+
+  it('skips PATH directories named like the command', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-codex-command-'))
+    const badDir = join(root, 'bad-bin')
+    const goodDir = join(root, 'good-bin')
+    mkdirSync(join(badDir, 'codex'), { recursive: true })
+    const goodCommandPath = join(goodDir, 'codex')
+    makeExecutable(goodCommandPath)
+
+    expect(
+      resolveCodexCommand({
+        platform: 'linux',
+        pathEnv: [badDir, goodDir].join(delimiter),
+        homePath: root
+      })
+    ).toBe(goodCommandPath)
   })
 
   it('falls back to the newest nvm-installed Codex when PATH misses it', () => {

@@ -212,6 +212,32 @@ describe('orca computer CLI handlers', () => {
     })
   })
 
+  it('prints session and window context in action follow-up commands', async () => {
+    queueFixtures(callMock, okFixture('req_click', sampleSnapshot()))
+
+    await main(
+      [
+        'computer',
+        'click',
+        '--session',
+        'manual',
+        '--app',
+        'Finder',
+        '--element-index',
+        '3',
+        '--window-index',
+        '1',
+        '--restore-window'
+      ],
+      '/tmp/repo/src'
+    )
+
+    const output = vi.mocked(console.log).mock.calls[0][0]
+    expect(output).toContain(
+      'Use `orca computer get-app-state --app com.apple.finder --session manual --window-index 1 --restore-window`'
+    )
+  })
+
   it('maps action command flags to RPC payloads', async () => {
     queueFixtures(
       callMock,

@@ -5,12 +5,14 @@ import { fitPanes } from './pane-helpers'
 
 type UseTerminalContainerFitSyncArgs = {
   isVisible: boolean
+  isSyncFitEnabled: boolean
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
 }
 
 export function useTerminalContainerFitSync({
   isVisible,
+  isSyncFitEnabled,
   managerRef,
   containerRef
 }: UseTerminalContainerFitSyncArgs): void {
@@ -21,10 +23,12 @@ export function useTerminalContainerFitSync({
   // ResizeObserver rAF would otherwise produce. The subsequent per-pane
   // ResizeObserver rAF and the 150ms debounced global fit become no-ops
   // because proposeDimensions() will match current cols/rows (early-return
-  // branch in safeFit). Listener is global (not gated on isVisible/isActive)
-  // so background tabs also fit, keeping their scroll position intact for
-  // when the user switches back.
+  // branch in safeFit). Hidden display:none panes cannot be measured
+  // accurately, so they skip this global path and refit on visibility resume.
   useEffect(() => {
+    if (!isSyncFitEnabled) {
+      return
+    }
     const onSyncFit = (): void => {
       managerRef.current?.fitAllPanes()
     }
@@ -32,7 +36,7 @@ export function useTerminalContainerFitSync({
     return () => {
       window.removeEventListener(SYNC_FIT_PANES_EVENT, onSyncFit)
     }
-  }, [managerRef])
+  }, [isSyncFitEnabled, managerRef])
 
   useEffect(() => {
     if (!isVisible) {

@@ -1140,7 +1140,12 @@ export class CdpBridge {
     }
 
     try {
-      guest.debugger.attach('1.3')
+      // Why: browser tabs are already debugger-attached by BrowserManager's
+      // anti-detection injection. Reusing that attachment lets CDP commands
+      // run instead of failing with "another debugger is already attached."
+      if (!guest.debugger.isAttached()) {
+        guest.debugger.attach('1.3')
+      }
     } catch {
       throw new BrowserError(
         'browser_cdp_error',

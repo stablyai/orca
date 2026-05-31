@@ -38,6 +38,7 @@ async function installMainProcessPtyWriteSpy(app: ElectronApplication): Promise<
     const g = globalThis as unknown as {
       __ptyWriteLog?: { id: string; data: string }[]
       __ptyWriteSpyInstalled?: boolean
+      __ptyWriteAcceptedSpyInstalled?: boolean
     }
     if (g.__ptyWriteSpyInstalled) {
       return
@@ -47,6 +48,22 @@ async function installMainProcessPtyWriteSpy(app: ElectronApplication): Promise<
     ipcMain.prependListener('pty:write', (_event: unknown, args: { id: string; data: string }) => {
       g.__ptyWriteLog!.push({ id: args.id, data: args.data })
     })
+    const invokeHandlers = (
+      ipcMain as unknown as {
+        _invokeHandlers?: Map<
+          string,
+          (event: unknown, args: { id: string; data: string }) => unknown
+        >
+      }
+    )._invokeHandlers
+    const writeAcceptedHandler = invokeHandlers?.get('pty:writeAccepted')
+    if (writeAcceptedHandler && !g.__ptyWriteAcceptedSpyInstalled) {
+      g.__ptyWriteAcceptedSpyInstalled = true
+      invokeHandlers?.set('pty:writeAccepted', (event, args) => {
+        g.__ptyWriteLog!.push({ id: args.id, data: args.data })
+        return writeAcceptedHandler(event, args)
+      })
+    }
   })
 }
 
@@ -74,6 +91,60 @@ async function focusActiveTerminal(page: Page): Promise<void> {
     const textarea = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
     textarea?.focus()
   })
+}
+
+async function dispatchCtrlCToActiveTerminalTextarea(
+  page: Page,
+  options: { keyupCtrlKey?: boolean } = {}
+): Promise<{
+  keydownDefaultPrevented: boolean
+  keyupDefaultPrevented: boolean
+}> {
+  return page.evaluate((dispatchOptions) => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    const textarea = pane?.container.querySelector(
+      '.xterm-helper-textarea'
+    ) as HTMLTextAreaElement | null
+    if (!pane || !textarea) {
+      throw new Error('No active terminal textarea for Ctrl+C dispatch')
+    }
+    pane.terminal.clearSelection()
+    pane.terminal.focus()
+    textarea.focus()
+
+    const createEvent = (type: 'keydown' | 'keyup', ctrlKey: boolean): KeyboardEvent => {
+      const event = new KeyboardEvent(type, {
+        key: 'c',
+        code: 'KeyC',
+        ctrlKey,
+        bubbles: true,
+        cancelable: true
+      })
+      Object.defineProperty(event, 'keyCode', { get: () => 67 })
+      Object.defineProperty(event, 'which', { get: () => 67 })
+      return event
+    }
+
+    // Why: Electron headless consumes real Ctrl+C before xterm in automation;
+    // synthetic DOM events still exercise Orca's installed xterm boundary.
+    const keydown = createEvent('keydown', true)
+    textarea.dispatchEvent(keydown)
+    const keyup = createEvent('keyup', dispatchOptions.keyupCtrlKey !== false)
+    textarea.dispatchEvent(keyup)
+    return {
+      keydownDefaultPrevented: keydown.defaultPrevented,
+      keyupDefaultPrevented: keyup.defaultPrevented
+    }
+  }, options)
 }
 
 async function focusFloatingTerminal(page: Page): Promise<void> {
@@ -178,6 +249,32 @@ async function enableKittyKeyboardReporting(page: Page, flags: number): Promise<
       pane.terminal.write(`\x1b[=${flags}u`, resolve)
     })
   }, flags)
+}
+
+async function getKittyKeyboardFlags(page: Page): Promise<number | null> {
+  return page.evaluate(() => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    const terminal = pane?.terminal as
+      | {
+          core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
+          _core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
+        }
+      | undefined
+    return (
+      terminal?.core?.coreService?.kittyKeyboard?.flags ??
+      terminal?._core?.coreService?.kittyKeyboard?.flags ??
+      null
+    )
+  })
 }
 
 async function pressShiftedRussianLayoutKey(page: Page): Promise<{
@@ -371,6 +468,138 @@ test.describe('Terminal Shortcuts', () => {
       'Shift+Enter',
       process.platform === 'win32' ? '\x1b\r' : '\x1b[13;2u'
     )
+  })
+
+  test('plain Ctrl+C sends ETX under kitty keyboard reporting', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    await installMainProcessPtyWriteSpy(electronApp)
+    await waitForActivePanePtyId(orcaPage)
+    await enableKittyKeyboardReporting(orcaPage, 31)
+    await clearPtyWriteLog(electronApp)
+    await focusActiveTerminal(orcaPage)
+    await orcaPage.keyboard.down('Control')
+    await orcaPage.keyboard.up('Control')
+    expect((await getPtyWrites(electronApp)).join('')).toBe('')
+    await clearPtyWriteLog(electronApp)
+
+    expect(await dispatchCtrlCToActiveTerminalTextarea(orcaPage, { keyupCtrlKey: false })).toEqual({
+      keydownDefaultPrevented: false,
+      keyupDefaultPrevented: false
+    })
+
+    await expect
+      .poll(async () => (await getPtyWrites(electronApp)).some((write) => write.includes('\x03')), {
+        timeout: 5_000,
+        message: 'Ctrl+C did not reach the PTY as ETX'
+      })
+      .toBe(true)
+    const writes = (await getPtyWrites(electronApp)).join('')
+    expect(writes).not.toContain('\x1b[99;5u')
+    expect(writes).not.toContain('\x1b[99')
+
+    await expect
+      .poll(async () => await getKittyKeyboardFlags(orcaPage), {
+        timeout: 5_000,
+        message: 'Ctrl+C did not clear stale Kitty keyboard flags'
+      })
+      .toBe(0)
+
+    await clearPtyWriteLog(electronApp)
+    await focusActiveTerminal(orcaPage)
+    await orcaPage.keyboard.type('x')
+    await expect
+      .poll(async () => (await getPtyWrites(electronApp)).some((write) => write === 'x'), {
+        timeout: 5_000,
+        message: 'Post-interrupt keyboard input stayed in Kitty CSI-u mode'
+      })
+      .toBe(true)
+    const postInterruptWrites = (await getPtyWrites(electronApp)).join('')
+    expect(postInterruptWrites).not.toContain('\x1b[')
+    await orcaPage.keyboard.press('Backspace')
+  })
+
+  test('@headful Codex-like background output falls back to DOM rendering in auto mode', async ({
+    orcaPage
+  }) => {
+    const hasPane = await orcaPage.evaluate(() => {
+      const state = window.__store?.getState()
+      const worktreeId = state?.activeWorktreeId
+      const tabId =
+        state?.activeTabType === 'terminal'
+          ? state.activeTabId
+          : worktreeId
+            ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+            : null
+      const manager = tabId ? window.__paneManagers?.get(tabId) : null
+      manager?.setTerminalGpuAcceleration('auto')
+      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+      return Boolean(pane)
+    })
+    test.skip(!hasPane, 'No active terminal pane for renderer validation')
+    const webglActive = await orcaPage
+      .waitForFunction(
+        () => {
+          const state = window.__store?.getState()
+          const worktreeId = state?.activeWorktreeId
+          const tabId =
+            state?.activeTabType === 'terminal'
+              ? state.activeTabId
+              : worktreeId
+                ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+                : null
+          const manager = tabId ? window.__paneManagers?.get(tabId) : null
+          const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+          return Boolean(pane?.webglAddon)
+        },
+        null,
+        { timeout: 5_000 }
+      )
+      .then(() => true)
+      .catch(() => false)
+    test.skip(!webglActive, 'WebGL was not active in this headful environment')
+
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const marker = `CODEX_BG_${Date.now()}`
+    await execInTerminal(orcaPage, ptyId, `printf '\\033[48;2;52;52;52m  ${marker}  \\033[0m\\n'`)
+    await waitForTerminalOutput(orcaPage, marker)
+
+    await expect
+      .poll(
+        () =>
+          orcaPage.evaluate((expectedMarker) => {
+            const state = window.__store?.getState()
+            const worktreeId = state?.activeWorktreeId
+            const tabId =
+              state?.activeTabType === 'terminal'
+                ? state.activeTabId
+                : worktreeId
+                  ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+                  : null
+            const manager = tabId ? window.__paneManagers?.get(tabId) : null
+            const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+            const terminalText = pane?.terminal.buffer.active
+              .translateBufferLineToString(pane.terminal.buffer.active.cursorY, true)
+              .trim()
+            const visibleText = pane?.container.textContent ?? ''
+            return {
+              markerVisible:
+                visibleText.includes(expectedMarker) || terminalText === expectedMarker,
+              hasComplexScriptOutput: pane?.hasComplexScriptOutput === true,
+              hasWebgl: Boolean(pane?.webglAddon)
+            }
+          }, marker),
+        {
+          timeout: 5_000,
+          message: 'Background SGR output did not switch auto mode to DOM rendering'
+        }
+      )
+      .toEqual({
+        markerVisible: true,
+        hasComplexScriptOutput: true,
+        hasWebgl: false
+      })
   })
 
   test('floating terminal owns tab switch shortcuts while focused', async ({ orcaPage }) => {

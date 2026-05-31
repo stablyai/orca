@@ -2,7 +2,11 @@
 import { stat } from 'fs/promises'
 import { join, posix, win32 } from 'path'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
-import type { GitWorktreeInfo, LocalBaseRefRefreshResult } from '../../shared/types'
+import type {
+  GitWorktreeInfo,
+  LocalBaseRefRefreshResult,
+  RemoveWorktreeResult
+} from '../../shared/types'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
@@ -37,6 +41,12 @@ function getErrorText(error: unknown): string {
 
 function isNotGitRepositoryError(error: unknown): boolean {
   return /not a git repository/i.test(getErrorText(error))
+}
+
+function isUnsupportedWorktreeListZError(error: unknown): boolean {
+  return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
+    getErrorText(error)
+  )
 }
 
 function normalizeLocalBranchRef(branch: string): string {
@@ -102,12 +112,12 @@ function looksLikeWindowsPath(pathValue: string): boolean {
 /**
  * Parse the porcelain output of `git worktree list --porcelain`.
  */
-export function parseWorktreeList(output: string): GitWorktreeInfo[] {
+export function parseWorktreeList(
+  output: string,
+  options: { nulDelimited?: boolean } = {}
+): GitWorktreeInfo[] {
   const worktrees: GitWorktreeInfo[] = []
-  const blocks = output
-    .trim()
-    .split(/\r?\n\r?\n/)
-    .map((block) => block.trim().split(/\r?\n/))
+  const blocks = options.nulDelimited ? splitNulWorktreeList(output) : splitLineWorktreeList(output)
 
   for (const lines of blocks) {
     if (lines.length === 0) {
@@ -150,18 +160,65 @@ export function parseWorktreeList(output: string): GitWorktreeInfo[] {
   return worktrees
 }
 
+function splitLineWorktreeList(output: string): string[][] {
+  return output
+    .trim()
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.trim().split(/\r?\n/))
+}
+
+function splitNulWorktreeList(output: string): string[][] {
+  if (!output.includes('\0')) {
+    return splitLineWorktreeList(output)
+  }
+
+  const blocks: string[][] = []
+  let currentBlock: string[] = []
+
+  for (const field of output.split('\0')) {
+    if (field) {
+      currentBlock.push(field)
+      continue
+    }
+    if (currentBlock.length > 0) {
+      blocks.push(currentBlock)
+      currentBlock = []
+    }
+  }
+
+  if (currentBlock.length > 0) {
+    blocks.push(currentBlock)
+  }
+
+  return blocks
+}
+
+async function readWorktreeList(repoPath: string): Promise<GitWorktreeInfo[]> {
+  try {
+    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
+      cwd: repoPath
+    })
+    return parseWorktreeList(stdout, { nulDelimited: true })
+  } catch (error) {
+    if (!isUnsupportedWorktreeListZError(error)) {
+      throw error
+    }
+  }
+
+  // Why: `-z` is required to preserve worktree paths containing newlines, but
+  // Git <2.36 rejects it. Keep the old parser as a compatibility fallback.
+  const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
+    cwd: repoPath
+  })
+  return parseWorktreeList(stdout)
+}
+
 /**
  * List all worktrees for a git repo at the given path.
  */
 export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
   try {
-    // Why: do not pass `-z` here. `-z` requires Git ≥ 2.36; older Git rejects
-    // it, listWorktrees returns [], and every create flow throws "Worktree
-    // created but not found in listing" (issue #1453).
-    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
-      cwd: repoPath
-    })
-    const worktrees = parseWorktreeList(stdout).map((worktree) => {
+    const worktrees = (await readWorktreeList(repoPath)).map((worktree) => {
       const translatedPath = translateWorktreePath(worktree.path, repoPath)
       return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
     })
@@ -188,8 +245,8 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
     if (isNotGitRepositoryError(err)) {
       return []
     }
-    // Why: a silent catch turned issue #1453's underlying
-    // "git: unknown switch -z" into the opaque "not found in listing" toast.
+    // Why: a silent catch turns git compatibility or repo-state failures into
+    // opaque downstream errors like "Worktree created but not found in listing".
     // Surface the cause so future regressions show up immediately.
     console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
     return []
@@ -460,12 +517,13 @@ export async function removeWorktree(
   // and must be removed outright. User-initiated deletes leave it false so unmerged
   // commits are preserved.
   options: { deleteBranch?: boolean; forceBranchDelete?: boolean } = {}
-): Promise<void> {
+): Promise<RemoveWorktreeResult> {
   const worktreesBeforeRemoval = await listWorktrees(repoPath)
   const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
     areWorktreePathsEqual(worktree.path, worktreePath)
   )
   const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
+  const branchHead = removedWorktree?.head ?? ''
 
   const args = ['worktree', 'remove']
   if (force) {
@@ -476,10 +534,10 @@ export async function removeWorktree(
   await gitExecFileAsync(['worktree', 'prune'], { cwd: repoPath })
 
   if (!branchName) {
-    return
+    return {}
   }
   if (options.deleteBranch === false) {
-    return
+    return {}
   }
 
   // Why: `git worktree list` can still include stale sibling records until
@@ -490,7 +548,7 @@ export async function removeWorktree(
     (worktree) => normalizeLocalBranchRef(worktree.branch) === branchName
   )
   if (branchStillInUse) {
-    return
+    return {}
   }
 
   try {
@@ -502,7 +560,8 @@ export async function removeWorktree(
     // force-deleted. forceBranchDelete opts into `-D` for failed-creation rollback,
     // where the fresh branch has no user work to protect.
     const deleteFlag = options.forceBranchDelete ? '-D' : '-d'
-    await gitExecFileAsync(['branch', deleteFlag, branchName], { cwd: repoPath })
+    await gitExecFileAsync(['branch', deleteFlag, '--', branchName], { cwd: repoPath })
+    return {}
   } catch (error) {
     // Expected when the branch still has unmerged/unpublished commits: keep it.
     // Deleting a worktree must never silently discard commits.
@@ -510,7 +569,67 @@ export async function removeWorktree(
       `[git] Preserved local branch "${branchName}" after removing worktree (not fully merged)`,
       error
     )
+    return { preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}) } }
   }
+}
+
+export async function forceDeleteLocalBranch(
+  repoPath: string,
+  branchName: string,
+  expectedHead: string,
+  runGit: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }> = (
+    args,
+    cwd
+  ) => gitExecFileAsync(args, { cwd })
+): Promise<void> {
+  if (!branchName || branchName.includes('\0')) {
+    throw new Error('Invalid branch name')
+  }
+  if (!expectedHead) {
+    throw new Error(
+      `Cannot force-delete local branch "${branchName}" without the commit Git preserved.`
+    )
+  }
+  if (await isLocalBranchCheckedOut(repoPath, branchName, runGit)) {
+    throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
+  }
+  // Why: stale toast actions must not delete a branch that moved after Git
+  // preserved it. `update-ref` deletes only if the ref still has expectedHead.
+  try {
+    await runGit(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
+  } catch {
+    throw new Error(
+      `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
+    )
+  }
+  if (await isLocalBranchCheckedOut(repoPath, branchName, runGit)) {
+    try {
+      await runGit(['update-ref', `refs/heads/${branchName}`, expectedHead, ''], repoPath)
+    } catch (restoreError) {
+      console.warn(
+        `[git] Failed to restore local branch "${branchName}" after concurrent checkout`,
+        restoreError
+      )
+    }
+    throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
+  }
+  try {
+    await runGit(['config', '--remove-section', `branch.${branchName}`], repoPath)
+  } catch {
+    // Best-effort parity with `git branch -D`; stale config is harmless and
+    // should not make the already-deleted ref look like a failed delete.
+  }
+}
+
+async function isLocalBranchCheckedOut(
+  repoPath: string,
+  branchName: string,
+  runGit: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>
+): Promise<boolean> {
+  const { stdout } = await runGit(['worktree', 'list', '--porcelain'], repoPath)
+  return parseWorktreeList(stdout).some(
+    (worktree) => normalizeLocalBranchRef(worktree.branch) === branchName
+  )
 }
 
 /**

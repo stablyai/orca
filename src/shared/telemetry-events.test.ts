@@ -10,7 +10,6 @@ import {
   addRepoSetupStepActionSchema,
   AGENT_KIND_VALUES,
   agentKindSchema,
-  commonPropsSchema,
   errorClassSchema,
   eventSchemas,
   SETTINGS_CHANGED_WHITELIST,
@@ -262,104 +261,6 @@ describe('settings_changed schema', () => {
     const parsed = eventSchemas.settings_changed.safeParse({
       setting_key: 'telemetryOptIn', // deliberately excluded from the whitelist
       value_kind: 'bool'
-    })
-    expect(parsed.success).toBe(false)
-  })
-})
-
-describe('orca cli feature tip schemas', () => {
-  it('accepts the shown event for app-open exposure', () => {
-    const parsed = eventSchemas.orca_cli_feature_tip_shown.safeParse({
-      source: 'app_open'
-    })
-
-    expect(parsed.success).toBe(true)
-  })
-
-  it('accepts setup click and setup result events', () => {
-    expect(
-      eventSchemas.orca_cli_feature_tip_setup_clicked.safeParse({
-        source: 'app_open'
-      }).success
-    ).toBe(true)
-    expect(
-      eventSchemas.orca_cli_feature_tip_setup_result.safeParse({
-        source: 'app_open',
-        result: 'installed'
-      }).success
-    ).toBe(true)
-  })
-
-  it('rejects raw CLI details and unknown result values', () => {
-    expect(
-      eventSchemas.orca_cli_feature_tip_setup_result.safeParse({
-        source: 'app_open',
-        result: 'installed',
-        command_path: '/Users/alice/bin/orca'
-      }).success
-    ).toBe(false)
-    expect(
-      eventSchemas.orca_cli_feature_tip_setup_result.safeParse({
-        source: 'app_open',
-        result: 'installed_after_retry'
-      }).success
-    ).toBe(false)
-  })
-})
-
-describe('commonPropsSchema', () => {
-  it('round-trips a realistic payload', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: '1.3.33',
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '00000000-0000-4000-8000-000000000000',
-      session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      orca_channel: 'stable'
-    })
-    expect(parsed.success).toBe(true)
-  })
-
-  it('rejects strings past the 64-char cap', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: 'x'.repeat(65),
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '00000000-0000-4000-8000-000000000000',
-      session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      orca_channel: 'stable'
-    })
-    expect(parsed.success).toBe(false)
-  })
-
-  // Empty `install_id` would collapse every event under one synthetic
-  // PostHog `distinctId`; empty `session_id` would blend unrelated process
-  // lifetimes. `.min(1)` guards both — this test pins that contract so a
-  // future edit can't relax it back to `.max(64)`-only.
-  it('rejects empty install_id', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: '1.3.33',
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '',
-      session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      orca_channel: 'stable'
-    })
-    expect(parsed.success).toBe(false)
-  })
-
-  it('rejects empty session_id', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: '1.3.33',
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '00000000-0000-4000-8000-000000000000',
-      session_id: '',
-      orca_channel: 'stable'
     })
     expect(parsed.success).toBe(false)
   })

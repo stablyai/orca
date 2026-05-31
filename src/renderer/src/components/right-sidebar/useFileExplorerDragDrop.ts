@@ -123,8 +123,6 @@ export function useFileExplorerDragDrop({
     }
   }, [])
 
-  useEffect(() => () => stopDragEdgeScroll(), [stopDragEdgeScroll])
-
   const clearDragState = useCallback(() => {
     rootDragCounterRef.current = 0
     nativeRootDragCounterRef.current = 0
@@ -153,11 +151,12 @@ export function useFileExplorerDragDrop({
     window.addEventListener('blur', handleGlobalDragFinish)
 
     return () => {
+      stopDragEdgeScroll()
       document.removeEventListener('drop', handleGlobalDragFinish, true)
       document.removeEventListener('dragend', handleGlobalDragFinish, true)
       window.removeEventListener('blur', handleGlobalDragFinish)
     }
-  }, [stopAndClearDragState])
+  }, [stopAndClearDragState, stopDragEdgeScroll])
 
   // requestAnimationFrame + small per-frame deltas avoids choppy jumps from irregular dragover events
   const tickDragEdgeScroll = useCallback(() => {

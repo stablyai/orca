@@ -13,13 +13,17 @@ vi.mock('./remote-runtime-request-websocket', () => ({
   ) => {
     const socket = createFakeOpenedSocket(callbacks)
     opens.push(socket)
-    return { ok: true, socket: { ws: socket.ws, sharedKey: socket.sharedKey } }
+    return {
+      ok: true,
+      socket: { ws: socket.ws, sharedKey: socket.sharedKey, cleanup: socket.cleanup }
+    }
   }
 }))
 
 type FakeOpenedSocket = {
   ws: WebSocket
   sharedKey: Uint8Array
+  cleanup: ReturnType<typeof vi.fn>
   sent: string[]
   callbacks: RemoteRuntimeWebSocketCallbacks
 }
@@ -36,6 +40,7 @@ function createFakeOpenedSocket(callbacks: RemoteRuntimeWebSocketCallbacks): Fak
   return {
     ws,
     sharedKey: new Uint8Array(32).fill(opens.length + 1),
+    cleanup: vi.fn(),
     sent,
     callbacks
   }
@@ -60,6 +65,26 @@ function latestRequestId(socket: FakeOpenedSocket): string {
 describe('RemoteRuntimeRequestConnection stale socket callbacks', () => {
   beforeEach(() => {
     opens.splice(0)
+  })
+
+  it('runs socket cleanup when the cached connection closes', async () => {
+    const { RemoteRuntimeRequestConnection } =
+      await import('./remote-runtime-request-connection.js')
+    const connection = new RemoteRuntimeRequestConnection({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'device-token',
+      publicKeyB64: Buffer.from(new Uint8Array(32).fill(9)).toString('base64')
+    })
+
+    const request = connection.request('status.get', undefined, 1000)
+    const socket = opens[0]!
+    connection.close()
+    connection.close()
+
+    await expect(request).rejects.toThrow('Remote Orca runtime closed the connection.')
+    expect(socket.cleanup).toHaveBeenCalledTimes(1)
+    expect(socket.ws.close).toHaveBeenCalledTimes(1)
   })
 
   it('ignores stale socket errors and text frames after a replacement socket opens', async () => {

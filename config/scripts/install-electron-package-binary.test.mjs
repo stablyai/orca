@@ -49,6 +49,50 @@ describe('install-electron-package-binary', () => {
     }
   })
 
+  it('uses Electron 42 install env vars before npm config platform flags', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir)
+      writeFakeExtractor(projectDir, { createExecutable: true })
+
+      const result = runInstallScript(projectDir, {
+        ELECTRON_INSTALL_PLATFORM: 'win32',
+        ELECTRON_INSTALL_ARCH: 'arm64',
+        npm_config_platform: 'linux',
+        npm_config_arch: 'x64'
+      })
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toContain(
+        'platform=win32 arch=arm64'
+      )
+      expect(readFileSync(join(projectDir, 'node_modules', 'electron', 'path.txt'), 'utf8')).toBe(
+        'electron.exe'
+      )
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not trigger Electron 42 lazy require downloads while checking install state', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeElectronPackage(projectDir, { lazyRequireMarker: 'lazy-require.marker' })
+      writeFakeElectronGet(projectDir)
+      writeFakeExtractor(projectDir, { createExecutable: true })
+
+      const result = runInstallScript(projectDir)
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(existsSync(join(projectDir, 'lazy-require.marker'))).toBe(false)
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
+
   it('fails instead of silently accepting a partial Electron extract', () => {
     const projectDir = mkTempProject()
 
@@ -100,7 +144,7 @@ function mkTempProject() {
   return projectDir
 }
 
-function runInstallScript(projectDir) {
+function runInstallScript(projectDir, extraEnv = {}) {
   return spawnSync(process.execPath, ['config/scripts/install-electron-package-binary.mjs'], {
     cwd: projectDir,
     encoding: 'utf8',
@@ -108,12 +152,13 @@ function runInstallScript(projectDir) {
       ...process.env,
       npm_config_platform: 'linux',
       npm_config_arch: 'x64',
-      ORCA_ELECTRON_PACKAGE_EXTRACTOR: join(projectDir, 'fake-extractor.cjs')
+      ORCA_ELECTRON_PACKAGE_EXTRACTOR: join(projectDir, 'fake-extractor.cjs'),
+      ...extraEnv
     }
   })
 }
 
-function writeFakeElectronPackage(projectDir) {
+function writeFakeElectronPackage(projectDir, { lazyRequireMarker = null } = {}) {
   const electronDir = join(projectDir, 'node_modules', 'electron')
   mkdirSync(electronDir, { recursive: true })
   writeFileSync(
@@ -126,6 +171,7 @@ function writeFakeElectronPackage(projectDir) {
     `
 const fs = require('node:fs')
 const path = require('node:path')
+${lazyRequireMarker ? `fs.writeFileSync(${JSON.stringify(lazyRequireMarker)}, 'required')` : ''}
 const pathFile = path.join(__dirname, 'path.txt')
 if (!fs.existsSync(pathFile)) {
   throw new Error('Electron failed to install correctly, please delete node_modules/electron and try installing again')
@@ -144,7 +190,10 @@ function writeFakeElectronGet(projectDir, { downloadNeverSettles = false } = {})
 const { mkdirSync, writeFileSync, appendFileSync } = require('node:fs')
 const { join } = require('node:path')
 exports.downloadArtifact = async function downloadArtifact(details) {
-  appendFileSync('electron-get.log', 'cacheRoot=' + details.cacheRoot + '\\n')
+  appendFileSync(
+    'electron-get.log',
+    'cacheRoot=' + details.cacheRoot + ' platform=' + details.platform + ' arch=' + details.arch + '\\n'
+  )
   if (${JSON.stringify(downloadNeverSettles)}) {
     return new Promise(() => {})
   }
@@ -167,6 +216,7 @@ const extractDir = process.argv[3]
 mkdirSync(join(extractDir, 'locales'), { recursive: true })
 if (${JSON.stringify(createExecutable)}) {
   writeFileSync(join(extractDir, 'electron'), '')
+  writeFileSync(join(extractDir, 'electron.exe'), '')
   writeFileSync(join(extractDir, 'version'), 'v41.5.0')
   if (process.platform !== 'win32') {
     symlinkSync('version', join(extractDir, 'version-link'))

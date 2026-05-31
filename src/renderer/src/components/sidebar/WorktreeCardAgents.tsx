@@ -4,6 +4,7 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
+import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -143,6 +144,12 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
+  const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
+  const sendPromptToSidebarAgentTarget = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
 
@@ -168,6 +175,50 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       dismissRetainedAgent(paneKey)
     },
     [dropAgentStatus, dismissRetainedAgent]
+  )
+
+  const isAgentSendTargetModeActive = agentSendPopoverTargetMode?.worktreeId === worktreeId
+  const sendTargetsByPaneKey = useMemo(() => {
+    void agentStatusEpoch
+    if (!isAgentSendTargetModeActive) {
+      return new Map<
+        string,
+        { status: 'eligible' | 'disabled' | 'sending'; disabledReason?: string }
+      >()
+    }
+
+    return new Map(
+      deriveRunningAgentSendTargets(
+        { agentStatusByPaneKey, tabsByWorktree, terminalLayoutsByTabId },
+        worktreeId
+      ).map((target) => [
+        target.paneKey,
+        agentSendPopoverTargetMode?.status === 'sending' &&
+        agentSendPopoverTargetMode.sendingPaneKey === target.paneKey
+          ? { status: 'sending' as const, disabledReason: 'Sending...' }
+          : target.disabledReason
+            ? { status: target.status, disabledReason: target.disabledReason }
+            : { status: target.status }
+      ])
+    )
+  }, [
+    // Why: stale-boundary timers bump this epoch without replacing the status
+    // map, so target eligibility must derive again when freshness flips.
+    agentStatusEpoch,
+    agentSendPopoverTargetMode?.sendingPaneKey,
+    agentSendPopoverTargetMode?.status,
+    agentStatusByPaneKey,
+    isAgentSendTargetModeActive,
+    tabsByWorktree,
+    terminalLayoutsByTabId,
+    worktreeId
+  ])
+
+  const handleSendTargetClick = useCallback(
+    (paneKey: string) => {
+      void sendPromptToSidebarAgentTarget(paneKey)
+    },
+    [sendPromptToSidebarAgentTarget]
   )
 
   const handleActivateAgentTab = useCallback(
@@ -270,6 +321,12 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
     const expanded = expandedLineageParents.has(agent.paneKey)
+    const sendTarget = isAgentSendTargetModeActive
+      ? (sendTargetsByPaneKey.get(agent.paneKey) ?? {
+          status: 'disabled' as const,
+          disabledReason: 'Agent is not available'
+        })
+      : undefined
     const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
     descendantAncestorPaneKeys.add(agent.paneKey)
     return (
@@ -305,6 +362,9 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           // see anyRootHasChildren above.
           reserveDisclosureGutter={anyRootHasChildren && !hasChildAgents}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          sendTargetStatus={sendTarget?.status}
+          sendTargetDisabledReason={sendTarget?.disabledReason}
+          onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
           // Why: the disclosure variant uses chevron + indentation to show
           // hierarchy. The legacy L-connector / vertical-trunk decorations
           // are pinned to a fixed left offset that doesn't match the
@@ -358,8 +418,10 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   }
 
   if (agentActivityDisplayMode === 'compact') {
-    const shouldUseSummaryRow = agents.length > 1
     const summaryAgents = hasLineage ? rootAgents : agents
+    // Why: compact worktree cards keep multiple active agents to a single
+    // predictable status line, even when there are only two agents.
+    const shouldUseSummaryRow = summaryAgents.length > 1
     const subjectLabel = hasLineage
       ? `${rootAgents.length} ${rootAgents.length === 1 ? 'parent' : 'parents'}`
       : `${agents.length} agents`
@@ -367,7 +429,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     return (
       <div
         ref={compactAgentListRootRef}
-        className={cn('flex flex-col mt-1 mb-1 gap-0.5', className)}
+        className={cn('flex flex-col mt-1 gap-0.5', className)}
         onClick={stopBubble}
         onDoubleClick={stopBubble}
         onMouseDown={stopBubble}
@@ -387,12 +449,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           />
         )}
         {!shouldUseSummaryRow ? (
-          <CompactAgentRow
-            agent={agents[0]}
-            now={now}
-            onActivate={handleActivateAgentTab}
-            isFocusedPane={agents[0].paneKey === focusedAgentPaneKey}
-          />
+          rootAgents.map((rootAgent) => renderCompactAgentBranch(rootAgent))
         ) : shouldUseSummaryRow ? (
           <CompactAgentExpansion expanded={compactRootListExpanded}>
             {rootAgents.map((rootAgent) => renderCompactAgentBranch(rootAgent))}
@@ -406,7 +463,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     // Why: swallow bubbling so clicks on the gutter around the agent rows
     // don't reach WorktreeCard's activate / edit-meta handlers.
     <div
-      className={cn('flex flex-col mt-1 mb-1', className)}
+      className={cn('flex flex-col mt-1', className)}
       onClick={stopBubble}
       onDoubleClick={stopBubble}
       onMouseDown={stopBubble}

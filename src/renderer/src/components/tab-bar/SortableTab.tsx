@@ -115,7 +115,7 @@ export default function SortableTab({
   // (e.g. showing the bell without the wash, or vice versa).
   const showActivityAffordance = hasUnreadActivity && !isEditing
   const [renameValue, setRenameValue] = useState('')
-  const renameInputRef = useRef<HTMLInputElement>(null)
+  const renameFocusFrameRef = useRef<number | null>(null)
   // Why: React's synthetic onBlur fires during the Input's unmount when isEditing flips
   // to false. Without this guard, pressing Escape (or committing via Enter) would cause
   // the blur handler to run commitRename a second time and overwrite the title with the
@@ -148,21 +148,22 @@ export default function SortableTab({
     setIsEditing(false)
   }, [])
 
-  // Why: rAF defers focus()+select() until after the Input mounts so the text
-  // is pre-selected (overwriting the old title is the common case). Deps are
-  // intentionally just [isEditing] — we do NOT re-run when tab.title or
-  // tab.customTitle change mid-edit, so external title updates cannot
-  // re-focus/re-select and disrupt the user's typing.
-  useEffect(() => {
-    if (!isEditing) {
+  const setRenameInputElement = useCallback((input: HTMLInputElement | null) => {
+    if (renameFocusFrameRef.current !== null) {
+      cancelAnimationFrame(renameFocusFrameRef.current)
+      renameFocusFrameRef.current = null
+    }
+    if (!input) {
       return
     }
-    const frame = requestAnimationFrame(() => {
-      renameInputRef.current?.focus()
-      renameInputRef.current?.select()
+    // Why: defer past Radix menu teardown/focus restore while still keying off
+    // input mount only; terminal title updates must not re-select in-progress text.
+    renameFocusFrameRef.current = requestAnimationFrame(() => {
+      renameFocusFrameRef.current = null
+      input.focus()
+      input.select()
     })
-    return () => cancelAnimationFrame(frame)
-  }, [isEditing])
+  }, [])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -280,7 +281,7 @@ export default function SortableTab({
         </span>
       ) : (
         // Why: ShellIcon renders a colored brand-style tile for PowerShell,
-        // CMD, and WSL so Windows users can distinguish shells at a glance.
+        // CMD, Git Bash, and WSL so Windows users can distinguish shells at a glance.
         // On mac/linux (or Windows tabs without a resolved shell) it falls
         // back to a matching colored generic-terminal tile — keeping every
         // tab's leading glyph in the same visual idiom instead of mixing a
@@ -297,7 +298,7 @@ export default function SortableTab({
       )}
       {isEditing ? (
         <Input
-          ref={renameInputRef}
+          ref={setRenameInputElement}
           data-tab-rename-input="true"
           value={renameValue}
           aria-label={`Rename tab ${tabTitle}`}

@@ -277,11 +277,48 @@ export class WebSocketTransport implements RpcTransport {
   // and dispatch logic to the message handler set by OrcaRuntimeRpcServer.
   private handleConnection(ws: WebSocket): void {
     let finalized = false
+    const onPong = (): void => {
+      this.wsAlive.add(ws)
+    }
+    const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
+      // Why: any inbound traffic counts as proof of life, not just pongs.
+      // RN's WebSocket runtime auto-pongs server pings transparently, but
+      // app-level frames also count toward liveness so an actively-talking
+      // client doesn't get terminated mid-request.
+      this.wsAlive.add(ws)
+      const msg =
+        typeof data === 'string'
+          ? data
+          : isBinary
+            ? new Uint8Array(data as Buffer)
+            : data.toString()
+      this.messageHandler?.(
+        msg,
+        (response) => {
+          // Why: mobile clients disconnect frequently (backgrounding, network
+          // switch, phone locked). Guard writes to avoid errors on dead sockets.
+          if (ws.readyState === ws.OPEN) {
+            ws.send(response)
+          }
+        },
+        ws
+      )
+    }
+    const onError = (): void => {
+      // Why: close is not guaranteed after every ws error path; finalize here
+      // too so pre-auth E2EE channels and connection ids cannot leak.
+      finalizeConnection()
+      ws.close()
+    }
     const finalizeConnection = (): void => {
       if (finalized) {
         return
       }
       finalized = true
+      ws.off('pong', onPong)
+      ws.off('message', onMessage)
+      ws.off('close', finalizeConnection)
+      ws.off('error', onError)
       this.clearPreAuthTimer(ws)
       const clientId = this.wsClientIds.get(ws) ?? null
       this.wsClientIds.delete(ws)
@@ -308,46 +345,14 @@ export class WebSocketTransport implements RpcTransport {
     // re-arm it.
     this.wsAlive.add(ws)
 
-    ws.on('pong', () => {
-      this.wsAlive.add(ws)
-    })
-
-    ws.on('message', (data, isBinary) => {
-      // Why: any inbound traffic counts as proof of life, not just pongs.
-      // RN's WebSocket runtime auto-pongs server pings transparently, but
-      // app-level frames also count toward liveness so an actively-talking
-      // client doesn't get terminated mid-request.
-      this.wsAlive.add(ws)
-      const msg =
-        typeof data === 'string'
-          ? data
-          : isBinary
-            ? new Uint8Array(data as Buffer)
-            : data.toString()
-      this.messageHandler?.(
-        msg,
-        (response) => {
-          // Why: mobile clients disconnect frequently (backgrounding, network
-          // switch, phone locked). Guard writes to avoid errors on dead sockets.
-          if (ws.readyState === ws.OPEN) {
-            ws.send(response)
-          }
-        },
-        ws
-      )
-    })
+    ws.on('pong', onPong)
+    ws.on('message', onMessage)
 
     // Why: mobile clients disconnect when the phone locks, loses wifi, or
     // backgrounds the app. The runtime must clean up connection-scoped state
     // (e.g., mobile-fit overrides) to prevent orphaned phone-fit on desktop.
     ws.on('close', finalizeConnection)
-
-    ws.on('error', () => {
-      // Why: close is not guaranteed after every ws error path; finalize here
-      // too so pre-auth E2EE channels and connection ids cannot leak.
-      finalizeConnection()
-      ws.close()
-    })
+    ws.on('error', onError)
   }
 
   private clearPreAuthTimer(ws: WebSocket): void {

@@ -17,8 +17,8 @@ describe('ExperimentalPane', () => {
 
     expect(markup).toContain('Compact worktree cards')
     expect(markup).toContain('aria-checked="false"')
-    expect(markup).toContain('Collapses a card only when its second line would be empty or repeat')
-    expect(markup).toContain('different branch')
+    expect(markup).toContain('single title row')
+    expect(markup).toContain('selected properties on a second row')
     expect(EXPERIMENTAL_SEARCH_ENTRY.compactWorktreeCards.keywords).toContain('metadata')
   })
 })

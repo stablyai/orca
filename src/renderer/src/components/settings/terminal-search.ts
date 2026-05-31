@@ -79,7 +79,7 @@ export const TERMINAL_CURSOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
-export const TERMINAL_PANE_STYLE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+export const TERMINAL_PANE_APPEARANCE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Inactive Pane Opacity',
     description: 'Opacity applied to panes that are not currently active.',
@@ -89,7 +89,10 @@ export const TERMINAL_PANE_STYLE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Divider Thickness',
     description: 'Thickness of the pane divider line.',
     keywords: ['pane', 'divider', 'thickness']
-  },
+  }
+]
+
+export const TERMINAL_PANE_INTERACTION_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Focus Follows Mouse',
     description:
@@ -269,6 +272,16 @@ export const TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const TERMINAL_APPEARANCE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  ...TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
+  ...TERMINAL_CURSOR_SEARCH_ENTRIES,
+  ...TERMINAL_PANE_APPEARANCE_SEARCH_ENTRIES,
+  ...TERMINAL_DARK_THEME_SEARCH_ENTRIES,
+  ...TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
+  ...TERMINAL_WINDOW_SEARCH_ENTRIES,
+  ...TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES
+]
+
 export function getTerminalPaneSearchEntries(platform: {
   isWindows: boolean
   isMac: boolean
@@ -277,16 +290,10 @@ export function getTerminalPaneSearchEntries(platform: {
   // platform-only controls out of other platforms' search results prevents
   // users from landing on an option the UI intentionally hides.
   return [
-    ...TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
     ...TERMINAL_RENDERING_SEARCH_ENTRIES,
-    ...TERMINAL_CURSOR_SEARCH_ENTRIES,
-    ...TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
+    ...TERMINAL_PANE_INTERACTION_SEARCH_ENTRIES,
     ...(platform.isWindows ? TERMINAL_WINDOWS_SEARCH_ENTRIES : []),
-    ...TERMINAL_DARK_THEME_SEARCH_ENTRIES,
-    ...TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
-    ...TERMINAL_WINDOW_SEARCH_ENTRIES,
     ...TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
-    ...TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES,
     ...MANAGE_SESSIONS_SEARCH_ENTRIES,
     ...TERMINAL_ADVANCED_SEARCH_ENTRIES,
     ...(platform.isMac

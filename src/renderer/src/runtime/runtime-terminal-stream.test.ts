@@ -27,6 +27,13 @@ describe('remote runtime terminal ids', () => {
     expect(getRemoteRuntimePtyEnvironmentId('remote:terminal-1')).toBeNull()
     expect(getRemoteRuntimeTerminalHandle('remote:terminal-1')).toBe('terminal-1')
   })
+
+  it('treats malformed encoded ids as invalid instead of throwing', () => {
+    const malformed = 'remote:%E0%A4%A@@terminal-1'
+
+    expect(getRemoteRuntimePtyEnvironmentId(malformed)).toBeNull()
+    expect(getRemoteRuntimeTerminalHandle(malformed)).toBeNull()
+  })
 })
 
 describe('remote runtime terminal data subscriptions', () => {

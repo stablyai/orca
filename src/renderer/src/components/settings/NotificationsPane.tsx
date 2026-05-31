@@ -42,6 +42,29 @@ type SystemNotificationSettingsCopy = {
   failureDescription: string
 }
 
+type NotificationVolumeDraftState = {
+  sourceVolume: number
+  draft: number
+}
+
+export function createNotificationVolumeDraftState(
+  sourceVolume: number
+): NotificationVolumeDraftState {
+  return {
+    sourceVolume,
+    draft: sourceVolume
+  }
+}
+
+export function resolveNotificationVolumeDraftState(
+  state: NotificationVolumeDraftState,
+  sourceVolume: number
+): NotificationVolumeDraftState {
+  return state.sourceVolume === sourceVolume
+    ? state
+    : createNotificationVolumeDraftState(sourceVolume)
+}
+
 function getSystemNotificationSettingsCopy(
   platform: NodeJS.Platform
 ): SystemNotificationSettingsCopy | null {
@@ -161,14 +184,31 @@ export function NotificationsPane({
     })
   }
 
-  // Why: keep dragging local and persist only on Radix's commit event. That
-  // avoids IPC on every tick without a debounce timer that can race settings updates.
-  const [volumeDraft, setVolumeDraft] = useState(notificationSettings.customSoundVolume)
-
   useEffect(() => {
     notificationSettingsRef.current = notificationSettings
-    setVolumeDraft(notificationSettings.customSoundVolume)
   }, [notificationSettings])
+
+  // Why: keep dragging local and persist only on Radix's commit event. That
+  // avoids IPC on every tick without a debounce timer that can race settings updates.
+  const [volumeDraftState, setVolumeDraftState] = useState(() =>
+    createNotificationVolumeDraftState(notificationSettings.customSoundVolume)
+  )
+  const resolvedVolumeDraftState = resolveNotificationVolumeDraftState(
+    volumeDraftState,
+    notificationSettings.customSoundVolume
+  )
+  if (resolvedVolumeDraftState !== volumeDraftState) {
+    // Why: external settings writes should update the slider before paint, but
+    // unrelated notification toggles should not restart an in-progress drag.
+    setVolumeDraftState(resolvedVolumeDraftState)
+  }
+  const volumeDraft = resolvedVolumeDraftState.draft
+  const setVolumeDraft = (value: number): void => {
+    setVolumeDraftState((current) => ({
+      ...resolveNotificationVolumeDraftState(current, notificationSettings.customSoundVolume),
+      draft: value
+    }))
+  }
 
   const handleVolumeCommit = (value: number): void => {
     if (notificationSettingsRef.current.customSoundVolume !== value) {

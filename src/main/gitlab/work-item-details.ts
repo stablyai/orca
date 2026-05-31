@@ -1,8 +1,12 @@
+/* eslint-disable max-lines -- Why: aggregated detail-fetch for GitLabItemDialog spans issues, MRs, comments, pipelines, reviewers, approvals, and changed files; splitting would obscure the shared fetch context. */
 // Why: aggregated detail-fetch for GitLabItemDialog. Parallel of
 // src/main/github/work-item-details.ts but scoped to v1 surface —
-// description body, flattened discussion notes, MR pipeline jobs.
-// Files / inline review-comment positioning / approvals are deferred.
+// description body, flattened discussion notes, MR pipeline jobs/reviewers.
+// Files / inline review-comment positioning are deferred.
 import type {
+  GitLabAssignableUser,
+  GitLabMRApprovalState,
+  GitLabMRFile,
   GitLabPipelineJob,
   GitLabWorkItem,
   GitLabWorkItemDetails,
@@ -108,9 +112,31 @@ type GitLabRawJob = {
   duration?: number | null
 }
 
-function mapPipelineJob(raw: GitLabRawJob): GitLabPipelineJob {
+type GitLabRawUser = {
+  id?: number
+  username?: string | null
+  name?: string | null
+  avatar_url?: string | null
+  state?: string | null
+}
+
+function mapGitLabUser(raw: GitLabRawUser | null | undefined): GitLabAssignableUser | null {
+  if (!raw?.username) {
+    return null
+  }
+  return {
+    ...(typeof raw.id === 'number' ? { id: raw.id } : {}),
+    username: raw.username,
+    name: raw.name ?? null,
+    avatarUrl: raw.avatar_url ?? '',
+    ...(raw.state !== undefined ? { state: raw.state } : {})
+  }
+}
+
+function mapPipelineJob(raw: GitLabRawJob, pipelineId: number): GitLabPipelineJob {
   return {
     id: raw.id ?? 0,
+    pipelineId,
     name: raw.name ?? '',
     stage: raw.stage ?? '',
     status: raw.status ?? '',
@@ -135,7 +161,73 @@ async function fetchPipelineJobs(
     glabRepoExecOptions(repoPath, connectionId)
   )
   const data = JSON.parse(stdout) as GitLabRawJob[]
-  return data.map(mapPipelineJob)
+  return data.map((job) => mapPipelineJob(job, pipelineId))
+}
+
+function countDiffLines(diff: string): { additions: number; deletions: number } {
+  let additions = 0
+  let deletions = 0
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) {
+      continue
+    }
+    if (line.startsWith('+')) {
+      additions += 1
+    } else if (line.startsWith('-')) {
+      deletions += 1
+    }
+  }
+  return { additions, deletions }
+}
+
+function mapMRFile(raw: {
+  new_path?: string
+  old_path?: string
+  diff?: string
+  new_file?: boolean
+  deleted_file?: boolean
+  renamed_file?: boolean
+  binary?: boolean
+  too_large?: boolean
+}): GitLabMRFile {
+  const diff = raw.diff ?? ''
+  const counts = countDiffLines(diff)
+  const status = raw.new_file
+    ? 'added'
+    : raw.deleted_file
+      ? 'removed'
+      : raw.renamed_file
+        ? 'renamed'
+        : 'modified'
+  return {
+    path: raw.new_path ?? raw.old_path ?? '',
+    ...(raw.old_path && raw.old_path !== raw.new_path ? { oldPath: raw.old_path } : {}),
+    status,
+    additions: counts.additions,
+    deletions: counts.deletions,
+    isBinary: Boolean(raw.binary || raw.too_large || !diff),
+    ...(diff ? { diff } : {})
+  }
+}
+
+async function fetchMRFiles(
+  repoPath: string,
+  projectRef: ProjectRef,
+  iid: number,
+  connectionId?: string | null
+): Promise<GitLabMRFile[]> {
+  const { stdout } = await glabExecFileAsync(
+    [
+      'api',
+      ...glabHostnameArgs(projectRef, connectionId),
+      `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/changes`
+    ],
+    glabRepoExecOptions(repoPath, connectionId)
+  )
+  const data = JSON.parse(stdout) as {
+    changes?: Parameters<typeof mapMRFile>[0][]
+  }
+  return (data.changes ?? []).map(mapMRFile).filter((file) => file.path)
 }
 
 // ── Top-level aggregator ───────────────────────────────────────────
@@ -150,6 +242,89 @@ type GitLabRawMR = Parameters<typeof mapMRToWorkItem>[0] & {
   sha?: string
   diff_refs?: { base_sha?: string; head_sha?: string; start_sha?: string } | null
   head_pipeline?: { id?: number } | null
+  reviewers?: GitLabRawUser[] | null
+}
+
+async function fetchMRReviewers(
+  repoPath: string,
+  projectRef: ProjectRef,
+  iid: number,
+  connectionId?: string | null
+): Promise<GitLabAssignableUser[]> {
+  const { stdout } = await glabExecFileAsync(
+    [
+      'api',
+      ...glabHostnameArgs(projectRef, connectionId),
+      `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/reviewers`
+    ],
+    glabRepoExecOptions(repoPath, connectionId)
+  )
+  const data = JSON.parse(stdout) as { user?: GitLabRawUser | null }[]
+  return data
+    .map((entry) => mapGitLabUser(entry.user))
+    .filter((u): u is GitLabAssignableUser => !!u)
+}
+
+async function fetchMRApprovalState(
+  repoPath: string,
+  projectRef: ProjectRef,
+  iid: number,
+  connectionId?: string | null
+): Promise<GitLabMRApprovalState | undefined> {
+  const [approvalsRes, stateRes] = await Promise.allSettled([
+    glabExecFileAsync(
+      [
+        'api',
+        ...glabHostnameArgs(projectRef, connectionId),
+        `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/approvals`
+      ],
+      glabRepoExecOptions(repoPath, connectionId)
+    ),
+    glabExecFileAsync(
+      [
+        'api',
+        ...glabHostnameArgs(projectRef, connectionId),
+        `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/approval_state`
+      ],
+      glabRepoExecOptions(repoPath, connectionId)
+    )
+  ])
+  if (approvalsRes.status === 'rejected' && stateRes.status === 'rejected') {
+    return undefined
+  }
+  const approvals =
+    approvalsRes.status === 'fulfilled'
+      ? (JSON.parse(approvalsRes.value.stdout) as {
+          approvals_required?: number | null
+          approvals_left?: number | null
+          approved_by?: { user?: GitLabRawUser | null }[]
+        })
+      : null
+  const state =
+    stateRes.status === 'fulfilled'
+      ? (JSON.parse(stateRes.value.stdout) as {
+          rules?: {
+            id?: number
+            name?: string
+            approvals_required?: number
+            approved?: boolean
+          }[]
+        })
+      : null
+  return {
+    approvalsRequired:
+      typeof approvals?.approvals_required === 'number' ? approvals.approvals_required : null,
+    approvalsLeft: typeof approvals?.approvals_left === 'number' ? approvals.approvals_left : null,
+    approvedBy: (approvals?.approved_by ?? [])
+      .map((entry) => mapGitLabUser(entry.user))
+      .filter((u): u is GitLabAssignableUser => !!u),
+    rules: (state?.rules ?? []).map((rule) => ({
+      id: rule.id ?? 0,
+      name: rule.name ?? 'Approval rule',
+      approvalsRequired: rule.approvals_required ?? 0,
+      approved: Boolean(rule.approved)
+    }))
+  }
 }
 
 /**
@@ -259,12 +434,23 @@ async function fetchMRDetails(
     typeof pipelineId === 'number'
       ? await fetchPipelineJobs(repoPath, projectRef, pipelineId, connectionId).catch(() => [])
       : undefined
+  const [reviewers, approvalState, files] = await Promise.all([
+    fetchMRReviewers(repoPath, projectRef, iid, connectionId).catch(() =>
+      (mrRaw.reviewers ?? []).map(mapGitLabUser).filter((u): u is GitLabAssignableUser => !!u)
+    ),
+    fetchMRApprovalState(repoPath, projectRef, iid, connectionId).catch(() => undefined),
+    fetchMRFiles(repoPath, projectRef, iid, connectionId).catch(() => [])
+  ])
   return {
     item,
     body: mrRaw.description ?? '',
     comments: flattenDiscussions(discussions),
     headSha: mrRaw.sha,
     baseSha: mrRaw.diff_refs?.base_sha,
-    ...(pipelineJobs !== undefined ? { pipelineJobs } : {})
+    startSha: mrRaw.diff_refs?.start_sha,
+    files,
+    ...(pipelineJobs !== undefined ? { pipelineJobs } : {}),
+    reviewers,
+    ...(approvalState ? { approvalState } : {})
   }
 }

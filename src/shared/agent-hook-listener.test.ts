@@ -1,4 +1,6 @@
 /* eslint-disable max-lines -- Why: this fixture keeps cross-agent hook normalization and cache behavior together so regressions in shared listener state are visible. */
+import { EventEmitter } from 'node:events'
+import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
@@ -7,9 +9,11 @@ import {
   createHookListenerState,
   getEndpointFileName,
   hasPendingAgentResultText,
+  HOOK_REQUEST_MAX_BYTES,
   isShellSafeEndpointValue,
   normalizeHookPayload,
   parseFormEncodedBody,
+  readRequestBody,
   resolveHookSource,
   writeEndpointFile,
   type HookListenerState
@@ -18,6 +22,26 @@ import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+
+type FakeIncomingMessage = EventEmitter & {
+  headers: IncomingHttpHeaders
+  destroy: ReturnType<typeof vi.fn>
+}
+
+function createReadableRequest(headers: IncomingHttpHeaders = {}): FakeIncomingMessage {
+  const req = new EventEmitter() as FakeIncomingMessage
+  req.headers = headers
+  req.destroy = vi.fn(() => req.emit('close'))
+  return req
+}
+
+function expectRequestParserListenersReleased(req: FakeIncomingMessage): void {
+  expect(req.listenerCount('data')).toBe(0)
+  expect(req.listenerCount('end')).toBe(0)
+  expect(req.listenerCount('close')).toBe(0)
+  expect(req.listenerCount('error')).toBe(1)
+  expect(() => req.emit('error', new Error('late request error'))).not.toThrow()
+}
 
 describe('shared agent-hook-listener', () => {
   let state: HookListenerState
@@ -34,6 +58,28 @@ describe('shared agent-hook-listener', () => {
     const decoded = parseFormEncodedBody('paneKey=tab-1%3A0&worktreeId=foo')
     expect(decoded.paneKey).toBe('tab-1:0')
     expect(decoded.worktreeId).toBe('foo')
+  })
+
+  it('releases request parser listeners after reading a JSON body', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+
+    req.emit('data', Buffer.from('{"ok":true}'))
+    req.emit('end')
+
+    await expect(body).resolves.toEqual({ ok: true })
+    expectRequestParserListenersReleased(req)
+  })
+
+  it('releases request parser listeners after rejecting an oversized body', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+
+    req.emit('data', Buffer.alloc(HOOK_REQUEST_MAX_BYTES + 1))
+
+    await expect(body).rejects.toThrow('payload too large')
+    expect(req.destroy).toHaveBeenCalledTimes(1)
+    expectRequestParserListenersReleased(req)
   })
 
   it('routes pathnames to a known source or null', () => {

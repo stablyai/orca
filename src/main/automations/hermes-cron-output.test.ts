@@ -34,7 +34,7 @@ const fakeDatabase = vi.hoisted(() =>
   })
 )
 
-vi.mock('better-sqlite3', () => ({
+vi.mock('../sqlite/sync-database', () => ({
   default: fakeDatabase
 }))
 
@@ -171,6 +171,36 @@ Run summary: monitor automation completed successfully.
     )
     expect((page.runs[0] as { output_content?: string }).output_content).not.toContain(
       'do not expose this'
+    )
+  })
+
+  it('hydrates referenced logs in valid dot-dot-prefixed Hermes subdirectories', async () => {
+    const home = await createHermesHome()
+    const outputDir = join(home, 'cron', 'output', 'job-1')
+    const scriptLogPath = join(home, '..logs', 'x-monitor.log')
+    await mkdir(outputDir, { recursive: true })
+    await mkdir(dirname(scriptLogPath), { recursive: true })
+    await writeFile(scriptLogPath, 'dot-dot-prefixed log line\n', 'utf-8')
+    await writeFile(
+      join(outputDir, '2026-05-15_09-02-00.md'),
+      `# Cron Job: Monitor automation
+
+## Response
+
+Latest log path: ${scriptLogPath}
+Run summary: monitor automation completed successfully.
+`,
+      'utf-8'
+    )
+
+    const { readHermesCronOutputRunsPage } = await loadReader()
+    const page = await readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 25 })
+
+    expect((page.runs[0] as { output_content?: string }).output_content).toContain(
+      '## Latest log file'
+    )
+    expect((page.runs[0] as { output_content?: string }).output_content).toContain(
+      'dot-dot-prefixed log line'
     )
   })
 

@@ -43,6 +43,14 @@ const CLI_AGENT_COMMANDS = [
   'orca orchestration dispatch --task pr2 --to w2'
 ]
 
+function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
+  return (
+    <span className="rounded-sm bg-foreground/10 px-1 py-0.5 font-medium text-foreground">
+      {children}
+    </span>
+  )
+}
+
 function CliFeatureTipVisual(): JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
   const [visibleCommandCount, setVisibleCommandCount] = useState(
@@ -345,8 +353,14 @@ export default function FeatureTipsModal(): JSX.Element | null {
                 {skillTerminalOpen ? null : (
                   <div className="max-w-sm space-y-2 rounded-md border border-border/70 bg-muted/35 p-3 text-sm leading-relaxed text-muted-foreground">
                     <p className="font-medium text-foreground">Try asking:</p>
-                    <p>“Split this PR into two workspaces and create PRs for each.”</p>
-                    <p>“When the agent in workspace X finishes, send it the review task.”</p>
+                    <p>
+                      “Split this PR into two <WorktreePromptTerm>worktrees</WorktreePromptTerm> and
+                      create PRs for each.”
+                    </p>
+                    <p>
+                      “When the agent in <WorktreePromptTerm>worktree</WorktreePromptTerm> X
+                      finishes, send it the review task.”
+                    </p>
                   </div>
                 )}
               </div>

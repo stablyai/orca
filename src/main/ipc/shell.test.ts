@@ -312,7 +312,7 @@ describe('registerShellHandlers', () => {
     it('does not open relative file paths', async () => {
       const handler = getHandler('shell:openFilePath')
 
-      await expect(handler({}, 'relative/file.md')).resolves.toBeUndefined()
+      await expect(handler({}, 'relative/file.md')).resolves.toBe(false)
       expect(openPathMock).not.toHaveBeenCalled()
     })
 
@@ -320,16 +320,33 @@ describe('registerShellHandlers', () => {
       statMock.mockRejectedValueOnce(new Error('missing'))
       const handler = getHandler('shell:openFilePath')
 
-      await expect(handler({}, resolve('missing.md'))).resolves.toBeUndefined()
+      await expect(handler({}, resolve('missing.md'))).resolves.toBe(false)
       expect(openPathMock).not.toHaveBeenCalled()
     })
 
-    it('swallows host launcher failures for file paths', async () => {
+    it('returns true when the host launcher accepts file paths', async () => {
+      const filePath = resolve('note.md')
+      const handler = getHandler('shell:openFilePath')
+
+      await expect(handler({}, filePath)).resolves.toBe(true)
+      expect(openPathMock).toHaveBeenCalledWith(normalize(filePath))
+    })
+
+    it('returns false for host launcher failures for file paths', async () => {
       openPathMock.mockRejectedValueOnce(new Error('launcher unavailable'))
       const filePath = resolve('note.md')
       const handler = getHandler('shell:openFilePath')
 
-      await expect(handler({}, filePath)).resolves.toBeUndefined()
+      await expect(handler({}, filePath)).resolves.toBe(false)
+      expect(openPathMock).toHaveBeenCalledWith(normalize(filePath))
+    })
+
+    it('returns false when the host launcher reports file path errors', async () => {
+      openPathMock.mockResolvedValueOnce('no default app')
+      const filePath = resolve('note.md')
+      const handler = getHandler('shell:openFilePath')
+
+      await expect(handler({}, filePath)).resolves.toBe(false)
       expect(openPathMock).toHaveBeenCalledWith(normalize(filePath))
     })
 

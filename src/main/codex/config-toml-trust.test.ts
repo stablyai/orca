@@ -627,7 +627,7 @@ describe('upsertHookTrustEntries', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
       'note = "\\"\\"\\""',
-      "literal_note = '\"\"\"'",
+      'literal_note = \'"""\'',
       `[hooks.state."${key}"]`,
       'enabled = true',
       'trusted_hash = "sha256:STALE"',
@@ -647,7 +647,7 @@ describe('upsertHookTrustEntries', () => {
 
     const written = readFileSync(configPath, 'utf-8')
     expect(written).toContain('note = "\\"\\"\\""')
-    expect(written).toContain("literal_note = '\"\"\"'")
+    expect(written).toContain('literal_note = \'"""\'')
     expect(written.match(/\[hooks\.state\."/g)).toHaveLength(1)
     expect(written).not.toContain('sha256:STALE')
   })
@@ -1102,7 +1102,7 @@ describe('readHookTrustEntries', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
       'note = "\\"\\"\\""',
-      "literal_note = '\"\"\"'",
+      'literal_note = \'"""\'',
       `[hooks.state."${key}"]`,
       'enabled = true',
       'trusted_hash = "sha256:AAA"',

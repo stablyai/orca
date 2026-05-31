@@ -139,14 +139,14 @@ describe('bulk git helpers', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(3)
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['add', '--', ...filePaths.slice(0, 100)],
+      ['add', '--', ...filePaths.slice(0, 100).map((filePath) => `:(literal)${filePath}`)],
       {
         cwd: '/repo'
       }
     )
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       3,
-      ['add', '--', ...filePaths.slice(200)],
+      ['add', '--', ...filePaths.slice(200).map((filePath) => `:(literal)${filePath}`)],
       {
         cwd: '/repo'
       }
@@ -162,7 +162,12 @@ describe('bulk git helpers', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--staged', '--', ...filePaths.slice(100)],
+      [
+        'restore',
+        '--staged',
+        '--',
+        ...filePaths.slice(100).map((filePath) => `:(literal)${filePath}`)
+      ],
       {
         cwd: '/repo'
       }

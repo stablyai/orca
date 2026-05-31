@@ -73,7 +73,7 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Thinking effort')
     expect(markup).toContain('Commit message model')
     expect(markup).toContain('PR details model')
-    expect(markup).toContain('Branch name model')
+    expect(markup).not.toContain('Branch name model')
     expect(markup).toContain('Higher effort produces more careful messages')
     expect(markup).toContain('Use Conventional Commits.')
     expect(markup).toContain('Save')

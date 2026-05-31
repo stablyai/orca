@@ -4,7 +4,7 @@
 import { mkdtempSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { describe, expect, it, afterEach } from 'vitest'
+import { describe, expect, it, afterEach, vi } from 'vitest'
 import WebSocket from 'ws'
 import { WebSocketTransport } from './ws-transport'
 import { loadOrCreateTlsCertificate } from '../tls-certificate'
@@ -239,6 +239,34 @@ describe('WebSocketTransport', () => {
     }
 
     expect(calls).toEqual([{ clientId: null, hasOtherConnections: false }])
+  })
+
+  it('detaches server socket listeners after client close', async () => {
+    const { transport } = await createTransport()
+    let cleanupSeen = false
+    transport.onConnectionClose(() => {
+      cleanupSeen = true
+    })
+
+    await transport.start()
+
+    const client = await connectWs(transport)
+    const wss = (transport as unknown as { wss: { clients: Set<WebSocket> } }).wss
+    const serverSocket = Array.from(wss.clients)[0]
+    expect(serverSocket).toBeDefined()
+    const offSpy = vi.spyOn(serverSocket!, 'off')
+
+    client.close()
+
+    const start = Date.now()
+    while (!cleanupSeen && Date.now() - start < 2_000) {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+
+    expect(cleanupSeen).toBe(true)
+    const removedEvents = offSpy.mock.calls.map(([event]) => event)
+    expect(removedEvents).toEqual(expect.arrayContaining(['pong', 'message', 'close', 'error']))
+    offSpy.mockRestore()
   })
 
   it('terminates every active connection for a revoked client id', async () => {

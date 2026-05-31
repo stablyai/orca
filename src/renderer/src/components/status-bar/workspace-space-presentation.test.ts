@@ -9,6 +9,9 @@ import {
   getVisibleDeletableWorkspaceIds,
   getWorkspaceSpaceGitStatusRefreshCandidates,
   isWorkspaceSpaceRowReadyToDelete,
+  pruneWorkspaceSpaceSelectedIds,
+  resolveWorkspaceSpaceInspectedWorktreeId,
+  resolveWorkspaceSpaceTreemapZoomWorktreeId,
   sortWorkspaceSpaceRows
 } from './workspace-space-presentation'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
@@ -238,5 +241,38 @@ describe('workspace space presentation helpers', () => {
     expect(
       getWorkspaceSpaceGitStatusRefreshCandidates(rows).map((item) => item.worktreeId)
     ).toEqual(rows.map((item) => item.worktreeId))
+  })
+
+  it('resolves inspected worktree ids from the current scan rows', () => {
+    const rows = [
+      row({ worktreeId: 'errored', status: 'error' }),
+      row({ worktreeId: 'ready', status: 'ok' })
+    ]
+
+    expect(resolveWorkspaceSpaceInspectedWorktreeId(rows, 'errored')).toBe('errored')
+    expect(resolveWorkspaceSpaceInspectedWorktreeId(rows, 'missing')).toBe('ready')
+    expect(resolveWorkspaceSpaceInspectedWorktreeId([], 'missing')).toBeNull()
+  })
+
+  it('keeps treemap zoom only for ready current scan rows', () => {
+    const rows = [
+      row({ worktreeId: 'ready', status: 'ok' }),
+      row({ worktreeId: 'errored', status: 'error' })
+    ]
+
+    expect(resolveWorkspaceSpaceTreemapZoomWorktreeId(rows, 'ready')).toBe('ready')
+    expect(resolveWorkspaceSpaceTreemapZoomWorktreeId(rows, 'errored')).toBeNull()
+    expect(resolveWorkspaceSpaceTreemapZoomWorktreeId(rows, 'missing')).toBeNull()
+  })
+
+  it('prunes selected workspace ids that are absent from the current scan', () => {
+    const selectedIds = new Set(['ready', 'missing'])
+    const pruned = pruneWorkspaceSpaceSelectedIds([row({ worktreeId: 'ready' })], selectedIds)
+
+    expect([...pruned]).toEqual(['ready'])
+    expect(pruned).not.toBe(selectedIds)
+
+    const unchanged = pruneWorkspaceSpaceSelectedIds([row({ worktreeId: 'ready' })], pruned)
+    expect(unchanged).toBe(pruned)
   })
 })

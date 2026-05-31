@@ -158,7 +158,7 @@ export function ExperimentalPane({
       {showCompactWorktreeCards ? (
         <SearchableSetting
           title="Compact worktree cards"
-          description="Hide redundant second lines in the worktree sidebar."
+          description="Use one-line worktree cards instead of the detailed metadata row."
           keywords={EXPERIMENTAL_SEARCH_ENTRY.compactWorktreeCards.keywords}
           className="space-y-3 py-2"
         >
@@ -166,9 +166,8 @@ export function ExperimentalPane({
             <div className="min-w-0 shrink space-y-0.5">
               <Label>Compact worktree cards</Label>
               <p className="text-xs text-muted-foreground">
-                Collapses a card only when its second line would be empty or repeat the title. Cards
-                with a different branch, repo badge, folder badge, cache timer, or conflict state
-                keep the second line.
+                Keeps workspace cards to a single title row. The detailed layout restores the
+                branch, project, cache timer, and selected properties on a second row.
               </p>
             </div>
             <button

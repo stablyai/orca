@@ -76,6 +76,65 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
 
 export { GENERAL_PANE_SEARCH_ENTRIES }
 
+export type AutoSaveDelayDraftState = {
+  sourceDelayMs: number
+  draft: string
+}
+
+export function createAutoSaveDelayDraftState(
+  editorAutoSaveDelayMs: number
+): AutoSaveDelayDraftState {
+  return {
+    sourceDelayMs: editorAutoSaveDelayMs,
+    draft: String(editorAutoSaveDelayMs)
+  }
+}
+
+function resolveAutoSaveDelayDraftState(
+  state: AutoSaveDelayDraftState,
+  editorAutoSaveDelayMs: number
+): AutoSaveDelayDraftState {
+  return state.sourceDelayMs === editorAutoSaveDelayMs
+    ? state
+    : createAutoSaveDelayDraftState(editorAutoSaveDelayMs)
+}
+
+export function updateAutoSaveDelayDraftState(
+  state: AutoSaveDelayDraftState,
+  editorAutoSaveDelayMs: number,
+  draft: string
+): AutoSaveDelayDraftState {
+  return {
+    // Why: settings persistence is async, so a committed draft must stay tied
+    // to the current source until the persisted value reloads.
+    ...resolveAutoSaveDelayDraftState(state, editorAutoSaveDelayMs),
+    draft
+  }
+}
+
+type OpenInApplicationsDraftState = {
+  sourceApplications: OpenInApplication[] | undefined
+  draft: OpenInApplication[]
+}
+
+function createOpenInApplicationsDraftState(
+  openInApplications: OpenInApplication[] | undefined
+): OpenInApplicationsDraftState {
+  return {
+    sourceApplications: openInApplications,
+    draft: openInApplications ?? []
+  }
+}
+
+function resolveOpenInApplicationsDraftState(
+  state: OpenInApplicationsDraftState,
+  openInApplications: OpenInApplication[] | undefined
+): OpenInApplicationsDraftState {
+  return state.sourceApplications === openInApplications
+    ? state
+    : createOpenInApplicationsDraftState(openInApplications)
+}
+
 type GeneralPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
@@ -110,11 +169,11 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
     updateVersionRef.current = null
   }
   const [appVersion, setAppVersion] = useState<string | null>(null)
-  const [autoSaveDelayDraft, setAutoSaveDelayDraft] = useState(
-    String(settings.editorAutoSaveDelayMs)
+  const [autoSaveDelayDraftState, setAutoSaveDelayDraftState] = useState(() =>
+    createAutoSaveDelayDraftState(settings.editorAutoSaveDelayMs)
   )
-  const [openInApplicationsDraft, setOpenInApplicationsDraft] = useState<OpenInApplication[]>(
-    settings.openInApplications ?? []
+  const [openInApplicationsDraftState, setOpenInApplicationsDraftState] = useState(() =>
+    createOpenInApplicationsDraftState(settings.openInApplications)
   )
   // Why: the star state is derived from gh, not from settings, so it does not
   // live in the global settings store. 'hidden' covers the gh-unavailable and
@@ -178,13 +237,38 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
     await window.api.starNag.complete()
   }
 
-  useEffect(() => {
-    setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
-  }, [settings.editorAutoSaveDelayMs])
+  const resolvedAutoSaveDelayDraftState = resolveAutoSaveDelayDraftState(
+    autoSaveDelayDraftState,
+    settings.editorAutoSaveDelayMs
+  )
+  if (resolvedAutoSaveDelayDraftState !== autoSaveDelayDraftState) {
+    // Why: Settings can be updated outside this pane; reconcile drafts before
+    // paint so the visible input never lags behind the persisted value.
+    setAutoSaveDelayDraftState(resolvedAutoSaveDelayDraftState)
+  }
+  const autoSaveDelayDraft = resolvedAutoSaveDelayDraftState.draft
+  const updateAutoSaveDelayDraft = (draft: string): void => {
+    setAutoSaveDelayDraftState((current) =>
+      updateAutoSaveDelayDraftState(current, settings.editorAutoSaveDelayMs, draft)
+    )
+  }
 
-  useEffect(() => {
-    setOpenInApplicationsDraft(settings.openInApplications ?? [])
-  }, [settings.openInApplications])
+  const resolvedOpenInApplicationsDraftState = resolveOpenInApplicationsDraftState(
+    openInApplicationsDraftState,
+    settings.openInApplications
+  )
+  if (resolvedOpenInApplicationsDraftState !== openInApplicationsDraftState) {
+    // Why: the Open In rows are a local draft, but Settings can reload them
+    // externally; sync before paint instead of after an Effect pass.
+    setOpenInApplicationsDraftState(resolvedOpenInApplicationsDraftState)
+  }
+  const openInApplicationsDraft = resolvedOpenInApplicationsDraftState.draft
+  const updateOpenInApplicationsDraft = (draft: OpenInApplication[]): void => {
+    setOpenInApplicationsDraftState((current) => ({
+      ...resolveOpenInApplicationsDraftState(current, settings.openInApplications),
+      draft
+    }))
+  }
 
   const commitOpenInApplications = (applications: OpenInApplication[]): void => {
     if (!shouldCommitOpenInApplicationsDraft(applications)) {
@@ -194,7 +278,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   }
 
   const applyOpenInApplicationsDraft = (applications: OpenInApplication[]): void => {
-    setOpenInApplicationsDraft(applications)
+    updateOpenInApplicationsDraft(applications)
     commitOpenInApplications(applications)
   }
 
@@ -208,13 +292,13 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   const commitAutoSaveDelay = (): void => {
     const trimmed = autoSaveDelayDraft.trim()
     if (trimmed === '') {
-      setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
+      setAutoSaveDelayDraftState(createAutoSaveDelayDraftState(settings.editorAutoSaveDelayMs))
       return
     }
 
     const value = Number(trimmed)
     if (!Number.isFinite(value)) {
-      setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
+      setAutoSaveDelayDraftState(createAutoSaveDelayDraftState(settings.editorAutoSaveDelayMs))
       return
     }
 
@@ -224,7 +308,9 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
       MAX_EDITOR_AUTO_SAVE_DELAY_MS
     )
     updateSettings({ editorAutoSaveDelayMs: next })
-    setAutoSaveDelayDraft(String(next))
+    setAutoSaveDelayDraftState((current) =>
+      updateAutoSaveDelayDraftState(current, settings.editorAutoSaveDelayMs, String(next))
+    )
   }
 
   const handleRestartToUpdate = (): void => {
@@ -391,7 +477,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                   onChange={(event) => {
                     const next = [...openInApplicationsDraft]
                     next[index] = { ...app, label: event.target.value }
-                    setOpenInApplicationsDraft(next)
+                    updateOpenInApplicationsDraft(next)
                   }}
                   onBlur={() => commitOpenInApplications(openInApplicationsDraft)}
                   onKeyDown={(event) => {
@@ -406,7 +492,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                   onChange={(event) => {
                     const next = [...openInApplicationsDraft]
                     next[index] = { ...app, command: event.target.value }
-                    setOpenInApplicationsDraft(next)
+                    updateOpenInApplicationsDraft(next)
                   }}
                   onBlur={() => commitOpenInApplications(openInApplicationsDraft)}
                   onKeyDown={(event) => {
@@ -420,7 +506,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                   size="sm"
                   onClick={() => {
                     const next = openInApplicationsDraft.filter((entry) => entry.id !== app.id)
-                    setOpenInApplicationsDraft(next)
+                    updateOpenInApplicationsDraft(next)
                     commitOpenInApplications(next)
                   }}
                 >
@@ -433,7 +519,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             variant="outline"
             size="sm"
             onClick={() =>
-              setOpenInApplicationsDraft([...openInApplicationsDraft, createOpenInApplication()])
+              updateOpenInApplicationsDraft([...openInApplicationsDraft, createOpenInApplication()])
             }
             disabled={openInApplicationsDraft.length >= OPEN_IN_APPLICATIONS_MAX}
           >
@@ -482,7 +568,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
               max={MAX_EDITOR_AUTO_SAVE_DELAY_MS}
               step={250}
               value={autoSaveDelayDraft}
-              onChange={(e) => setAutoSaveDelayDraft(e.target.value)}
+              onChange={(e) => updateAutoSaveDelayDraft(e.target.value)}
               onBlur={commitAutoSaveDelay}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {

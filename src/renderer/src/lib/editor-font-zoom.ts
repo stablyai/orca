@@ -24,3 +24,9 @@ export function computeEditorFontSize(baseFontSize: number, zoomLevel: number): 
   // within the same safe range regardless of their own default base size.
   return Math.max(8, Math.min(32, baseFontSize + zoomLevel))
 }
+
+export function computeDiffEditorFontSize(baseFontSize: number, zoomLevel: number): number {
+  // Why: diff editors have denser gutters and inline decorations, so matching
+  // terminal font size makes review views feel oversized relative to app chrome.
+  return computeEditorFontSize(baseFontSize - 0.5, zoomLevel)
+}

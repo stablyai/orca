@@ -49,7 +49,7 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Compact worktree cards',
-    description: 'Hide redundant second lines in the worktree sidebar.',
+    description: 'Use one-line worktree cards instead of the detailed metadata row.',
     keywords: [
       'experimental',
       'worktree',

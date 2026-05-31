@@ -26,7 +26,7 @@
 
 ## Supported Agents
 
-Orca supports any CLI agent (*not just this list*).
+Orca supports any CLI agent (_not just this list_).
 
 <p>
   <a href="https://docs.anthropic.com/claude/docs/claude-code"><kbd><img src="docs/assets/claude-logo.svg" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
@@ -80,7 +80,7 @@ Orca supports any CLI agent (*not just this list*).
 - **[Download from onOrca.dev](https://onOrca.dev)**
 - Or via **[GitHub Releases page](https://github.com/stablyai/orca/releases/latest)**
 
-*Alternatively, install from a package manager:*
+_Alternatively, install from a package manager:_
 
 ### macOS (Homebrew)
 
@@ -109,7 +109,7 @@ Control your agents from your phone.
 </p>
 
 - **iOS:** [Download from App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Download from GH release](https://github.com/stablyai/orca/releases/tag/mobile-v0.0.10)
+- **Android:** [Download APK from GitHub Releases](https://github.com/stablyai/orca/releases/download/mobile-v0.0.10/app-release.apk)
 
 ---
 

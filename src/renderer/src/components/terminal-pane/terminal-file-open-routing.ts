@@ -15,6 +15,7 @@ type TerminalFileOpenDeps = {
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId?: string | null
+  openWithSystemDefault?: boolean
 }
 
 export function isHtmlFilePath(filePath: string): boolean {
@@ -45,6 +46,13 @@ export function getTerminalFileContext(
     worktreePath,
     connectionId: getConnectionId(worktreeId || null) ?? undefined
   }
+}
+
+export function shouldOpenTerminalFileWithSystemDefault(
+  fileContext: RuntimeFileOperationArgs,
+  filePath: string
+): boolean {
+  return !fileContext.connectionId && !isRemoteRuntimeFileOperation(fileContext, filePath)
 }
 
 let latestOpenDetectedFilePathRequestId = 0
@@ -82,17 +90,17 @@ export function openDetectedFilePath(
   column: number | null,
   deps: TerminalFileOpenDeps
 ): void {
-  const { runtimeEnvironmentId, worktreeId, worktreePath } = deps
+  const { openWithSystemDefault = false, runtimeEnvironmentId, worktreeId, worktreePath } = deps
   const requestId = ++latestOpenDetectedFilePathRequestId
   cancelPendingEditorRevealFrames()
 
   void (async () => {
     let statResult
+    const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, filePath)
     try {
-      const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
-      const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, filePath)
       // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
-      if (!fileContext.connectionId && !isRemoteRuntimePath) {
+      if (canOpenWithSystemDefault) {
         await window.api.fs.authorizeExternalPath({ targetPath: filePath })
       }
       statResult = await statRuntimePath(fileContext, filePath)
@@ -104,24 +112,27 @@ export function openDetectedFilePath(
       return
     }
 
-    if (statResult.isDirectory) {
-      const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
-      if (fileContext.connectionId || isRemoteRuntimeFileOperation(fileContext, filePath)) {
+    if (openWithSystemDefault && canOpenWithSystemDefault) {
+      // Why: Shift+Cmd/Ctrl mirrors URL links by escaping Orca and honoring the
+      // user's OS file associations without adding editor-specific settings.
+      const openedWithSystemDefault = await window.api.shell.openFilePath(filePath)
+      if (openedWithSystemDefault || statResult.isDirectory) {
         return
       }
-      await window.api.shell.openFilePath(filePath)
+    }
+
+    if (statResult.isDirectory) {
+      if (canOpenWithSystemDefault) {
+        await window.api.shell.openFilePath(filePath)
+      }
       return
     }
 
-    // Why: .html/.htm files render in Orca's embedded browser instead of opening
-    // as source in Monaco — ⌘/Ctrl+click on an HTML path in the terminal should
-    // feel like clicking an http link and render the page, not dump HTML source.
-    // Mirrors the editor's "Open Preview to the Side" action.
-    const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,
+    // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
     if (
       isHtmlFilePath(filePath) &&
-      !fileContext.connectionId &&
-      !isRemoteRuntimeFileOperation(fileContext, filePath)
+      shouldOpenTerminalFileWithSystemDefault(fileContext, filePath)
     ) {
       openHtmlFileInBrowser(filePath, worktreeId)
       return

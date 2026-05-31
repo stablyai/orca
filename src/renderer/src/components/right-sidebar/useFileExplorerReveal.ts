@@ -57,7 +57,18 @@ export function useFileExplorerReveal({
     }
   }, [])
 
-  useEffect(() => cancelRevealScroll, [cancelRevealScroll])
+  // Why: reveal owns the flash and scroll timers it schedules; keep cleanup on
+  // hook unmount so no-worktree renders preserve the existing timeout behavior.
+  useEffect(
+    () => () => {
+      cancelRevealScroll()
+      if (flashTimeoutRef.current !== null) {
+        window.clearTimeout(flashTimeoutRef.current)
+        flashTimeoutRef.current = null
+      }
+    },
+    [cancelRevealScroll, flashTimeoutRef]
+  )
 
   const pendingRevealAncestorDirs = useMemo(() => {
     if (

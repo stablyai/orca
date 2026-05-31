@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EventBus } from 'pdfjs-dist/web/pdf_viewer.mjs'
@@ -14,7 +14,6 @@ export default function PdfFind({
   onClose,
   eventBusRef
 }: PdfFindProps): React.JSX.Element | null {
-  const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [activeMatch, setActiveMatch] = useState(0)
   const [totalMatches, setTotalMatches] = useState(0)
@@ -50,21 +49,18 @@ export default function PdfFind({
     }
   }, [query, dispatchFind])
 
-  useEffect(() => {
-    if (isOpen) {
-      inputRef.current?.focus()
-      inputRef.current?.select()
-    } else {
-      const eventBus = eventBusRef.current
-      if (eventBus) {
-        eventBus.dispatch('findbarclose', { source: null })
-      }
-      setActiveMatch(0)
-      setTotalMatches(0)
+  const handleInputRef = useCallback((input: HTMLInputElement | null) => {
+    if (!input) {
+      return
     }
-  }, [isOpen, eventBusRef])
+    input.focus()
+    input.select()
+  }, [])
 
   useEffect(() => {
+    if (!isOpen) {
+      return
+    }
     if (!query) {
       const eventBus = eventBusRef.current
       if (eventBus) {
@@ -74,9 +70,7 @@ export default function PdfFind({
       setTotalMatches(0)
       return
     }
-    if (isOpen) {
-      dispatchFind('')
-    }
+    dispatchFind('')
   }, [query, isOpen, dispatchFind, eventBusRef])
 
   useEffect(() => {
@@ -110,6 +104,13 @@ export default function PdfFind({
     [onClose, findNext, findPrevious]
   )
 
+  // Why: close hides the bar immediately; reset counters before the next commit
+  // so reopening with the same query never paints stale match totals.
+  if (!isOpen && (activeMatch !== 0 || totalMatches !== 0)) {
+    setActiveMatch(0)
+    setTotalMatches(0)
+  }
+
   if (!isOpen) {
     return null
   }
@@ -121,7 +122,7 @@ export default function PdfFind({
       onKeyDown={handleKeyDown}
     >
       <input
-        ref={inputRef}
+        ref={handleInputRef}
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}

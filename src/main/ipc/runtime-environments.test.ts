@@ -10,6 +10,8 @@ import * as environmentStore from '../../shared/runtime-environment-store'
 const {
   handleMock,
   onMock,
+  removeHandlerMock,
+  removeAllListenersMock,
   getPathMock,
   sendRemoteRuntimeRequestMock,
   subscribeRemoteRuntimeRequestMock,
@@ -18,6 +20,8 @@ const {
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   onMock: vi.fn(),
+  removeHandlerMock: vi.fn(),
+  removeAllListenersMock: vi.fn(),
   getPathMock: vi.fn(),
   sendRemoteRuntimeRequestMock: vi.fn(),
   subscribeRemoteRuntimeRequestMock: vi.fn(),
@@ -27,7 +31,12 @@ const {
 
 vi.mock('electron', () => ({
   app: { getPath: getPathMock },
-  ipcMain: { handle: handleMock, on: onMock }
+  ipcMain: {
+    handle: handleMock,
+    on: onMock,
+    removeHandler: removeHandlerMock,
+    removeAllListeners: removeAllListenersMock
+  }
 }))
 
 vi.mock('../../shared/remote-runtime-client', () => ({
@@ -68,6 +77,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     getPathMock.mockReturnValue(userDataPath)
     handleMock.mockReset()
     onMock.mockReset()
+    removeHandlerMock.mockReset()
+    removeAllListenersMock.mockReset()
     sendRemoteRuntimeRequestMock.mockReset()
     subscribeRemoteRuntimeRequestMock.mockReset()
     sendRemoteRuntimeConnectionRequestMock.mockReset()
@@ -94,6 +105,22 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(onMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:subscriptionBinary'
     ])
+  })
+
+  it('clears stale IPC registrations before registering runtime environment handlers', () => {
+    registerRuntimeEnvironmentHandlers()
+
+    expect(removeHandlerMock.mock.calls.map((call) => call[0])).toEqual([
+      'runtimeEnvironments:list',
+      'runtimeEnvironments:addFromPairingCode',
+      'runtimeEnvironments:resolve',
+      'runtimeEnvironments:remove',
+      'runtimeEnvironments:getStatus',
+      'runtimeEnvironments:call',
+      'runtimeEnvironments:subscribe',
+      'runtimeEnvironments:unsubscribe'
+    ])
+    expect(removeAllListenersMock).toHaveBeenCalledWith('runtimeEnvironments:subscriptionBinary')
   })
 
   it('stores, resolves, lists, and removes environments under Electron userData', async () => {

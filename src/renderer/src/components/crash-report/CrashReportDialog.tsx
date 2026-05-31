@@ -3,6 +3,10 @@ import { AlertTriangle, Clipboard, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
+  REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT,
+  takePendingReactErrorBoundaryReport
+} from '@/lib/react-error-boundary-reporting'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -11,13 +15,39 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { formatCrashReportText, type CrashReportRecord } from '../../../../shared/crash-reporting'
+import {
+  formatCrashReportText,
+  isReactErrorBoundaryReport,
+  type CrashReportRecord
+} from '../../../../shared/crash-reporting'
 import type { GitHubViewer } from '../../../../shared/types'
 
 function formatSummary(report: CrashReportRecord): string {
+  if (isReactErrorBoundaryReport(report)) {
+    const surface = typeof report.details.surface === 'string' ? report.details.surface : null
+    return surface ? `React render error in ${surface}` : 'React render error'
+  }
   return `${report.processType} ${report.reason}${
     report.exitCode === null ? '' : ` (exit ${report.exitCode})`
   }`
+}
+
+function getDialogTitle(report: CrashReportRecord | null): string {
+  return report && isReactErrorBoundaryReport(report)
+    ? 'Orca hit a recoverable UI error'
+    : 'Orca closed unexpectedly'
+}
+
+function getDialogDescription(report: CrashReportRecord | null): string {
+  return report && isReactErrorBoundaryReport(report)
+    ? 'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
+    : 'Send a privacy-safe diagnostic report to help us understand what happened.'
+}
+
+function getNotesPlaceholder(report: CrashReportRecord | null): string {
+  return report && isReactErrorBoundaryReport(report)
+    ? 'Optional: what were you doing before this UI error?'
+    : 'Optional: what were you doing before Orca closed?'
 }
 
 export function CrashReportDialog(): React.JSX.Element {
@@ -36,6 +66,11 @@ export function CrashReportDialog(): React.JSX.Element {
     () => (report ? formatCrashReportText(report, deferredNotes) : ''),
     [deferredNotes, report]
   )
+
+  const openCrashReport = useCallback((nextReport: CrashReportRecord): void => {
+    setReport(nextReport)
+    setOpen(true)
+  }, [])
 
   const loadCrashReport = useCallback(
     async (promptIfPresent: boolean): Promise<void> => {
@@ -91,6 +126,28 @@ export function CrashReportDialog(): React.JSX.Element {
       })
     })
   }, [loadCrashReport, mountedRef])
+
+  useEffect(() => {
+    const pendingReport = takePendingReactErrorBoundaryReport()
+    if (pendingReport) {
+      openCrashReport(pendingReport)
+    }
+
+    const onReactErrorBoundaryReport = (): void => {
+      const nextReport = takePendingReactErrorBoundaryReport()
+      if (nextReport) {
+        openCrashReport(nextReport)
+      }
+    }
+
+    window.addEventListener(REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT, onReactErrorBoundaryReport)
+    return () => {
+      window.removeEventListener(
+        REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT,
+        onReactErrorBoundaryReport
+      )
+    }
+  }, [openCrashReport])
 
   useEffect(() => {
     if (!open) {
@@ -202,11 +259,9 @@ export function CrashReportDialog(): React.JSX.Element {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <AlertTriangle className="size-4 text-destructive" />
-            Orca closed unexpectedly
+            {getDialogTitle(report)}
           </DialogTitle>
-          <DialogDescription className="text-xs">
-            Send a privacy-safe diagnostic report to help us understand what happened.
-          </DialogDescription>
+          <DialogDescription className="text-xs">{getDialogDescription(report)}</DialogDescription>
         </DialogHeader>
 
         {report ? (
@@ -222,7 +277,7 @@ export function CrashReportDialog(): React.JSX.Element {
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               rows={4}
-              placeholder="Optional: what were you doing before Orca closed?"
+              placeholder={getNotesPlaceholder(report)}
               className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
             <div className="space-y-1.5">

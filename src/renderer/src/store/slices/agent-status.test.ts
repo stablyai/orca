@@ -181,16 +181,94 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
   })
 
-  it('overwrites prior agentType when payload sends a different known value', () => {
+  it('preserves active pane agentType when a nested hook sends a different known value', () => {
     vi.useFakeTimers()
     const store = createTestStore()
     store
       .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'claude' })
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'codex' })
     store
       .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'cursor' })
-    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('cursor')
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'claude' })
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('codex')
+  })
+
+  it('ignores nested done while the parent pane agent is still active', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const setGeneratedTabTitleFromAgentPrompt = vi.fn()
+    store.setState({ setGeneratedTabTitleFromAgentPrompt } as Partial<AppState>)
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'parent codex', agentType: 'codex' },
+        'codex',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstEpoch = store.getState().agentStatusEpoch
+
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'done',
+        prompt: 'nested claude',
+        agentType: 'claude',
+        toolName: 'Read',
+        toolInput: '00-review-context.md',
+        lastAssistantMessage: 'child finished'
+      },
+      'claude',
+      { updatedAt: 1_100, stateStartedAt: 1_100 }
+    )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry).toMatchObject({
+      state: 'working',
+      prompt: 'parent codex',
+      agentType: 'codex',
+      updatedAt: 1_000,
+      stateStartedAt: 1_000
+    })
+    expect(entry.toolName).toBeUndefined()
+    expect(entry.toolInput).toBeUndefined()
+    expect(entry.lastAssistantMessage).toBeUndefined()
+    expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
+    expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenCalledTimes(1)
+    expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenLastCalledWith('tab-1:1', 'parent codex')
+  })
+
+  it('allows pane agentType to change after the prior turn is done', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'codex' })
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'claude' })
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
+  })
+
+  it('allows stale active pane agentType to change', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'codex' }, 'codex', {
+        updatedAt: 1_000,
+        stateStartedAt: 1_000
+      })
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p2', agentType: 'claude' },
+        'claude',
+        {
+          updatedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1,
+          stateStartedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1
+        }
+      )
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
   })
 
   it('keeps global epochs stable for fresh same-state working pings while updating the entry', () => {

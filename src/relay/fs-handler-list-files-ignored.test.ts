@@ -154,6 +154,14 @@ describe('relay quick open ignored file listing', () => {
       expect(outcome).toContain('git ls-files timed out')
       expect(primaryProc.kill).toHaveBeenCalled()
       expect(ignoredProc.kill).toHaveBeenCalled()
+      expect((primaryProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((primaryProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(primaryProc.listenerCount('error')).toBe(0)
+      expect(primaryProc.listenerCount('close')).toBe(0)
+      expect((ignoredProc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((ignoredProc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(ignoredProc.listenerCount('error')).toBe(0)
+      expect(ignoredProc.listenerCount('close')).toBe(0)
     } finally {
       vi.useRealTimers()
     }

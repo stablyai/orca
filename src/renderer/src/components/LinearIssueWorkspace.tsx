@@ -35,11 +35,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { buildLinearIssueContextSnapshot } from '@/lib/linear-issue-context-snapshot'
+import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import {
   buildLinearIssueBranchName,
-  buildLinearIssuePrompt,
   formatLinearIssueRelativeTime
 } from '@/components/linear-issue-workspace-text'
 import {
@@ -58,7 +59,7 @@ import type {
 
 type LinearIssueWorkspaceProps = {
   issue: LinearIssue | null
-  onUse: (issue: LinearIssue) => void
+  onUse: (issue: LinearIssue, renderedText?: string) => void
   onOpenIssue: (issue: LinearIssue) => void
   onClose: () => void
   variant?: 'sheet' | 'page'
@@ -109,14 +110,26 @@ function LinearIssueSubIssueButton({
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
-  const [subIssues, setSubIssues] = useState<LinearIssueChildSummary[]>(issue.subIssues ?? [])
+  const [optimisticSubIssues, setOptimisticSubIssues] = useState<{
+    issueId: string
+    subIssues: LinearIssueChildSummary[]
+  }>(() => ({
+    issueId: issue.id,
+    subIssues: []
+  }))
   const [submitting, setSubmitting] = useState(false)
   const [openingSubIssueId, setOpeningSubIssueId] = useState<string | null>(null)
   const mountedRef = useMountedRef()
 
-  useEffect(() => {
-    setSubIssues(issue.subIssues ?? [])
-  }, [issue.id, issue.subIssues])
+  const subIssues = useMemo(() => {
+    const baseSubIssues = issue.subIssues ?? []
+    if (optimisticSubIssues.issueId !== issue.id || optimisticSubIssues.subIssues.length === 0) {
+      return baseSubIssues
+    }
+    const baseIds = new Set(baseSubIssues.map((subIssue) => subIssue.id))
+    const additions = optimisticSubIssues.subIssues.filter((subIssue) => !baseIds.has(subIssue.id))
+    return additions.length === 0 ? baseSubIssues : [...baseSubIssues, ...additions]
+  }, [issue.id, issue.subIssues, optimisticSubIssues])
 
   const handleOpenSubIssue = useCallback(
     async (subIssue: LinearIssueChildSummary) => {
@@ -165,9 +178,16 @@ function LinearIssueSubIssueButton({
           title: result.title || trimmed,
           url: result.url
         }
-        setSubIssues((prev) =>
-          prev.some((subIssue) => subIssue.id === child.id) ? prev : [...prev, child]
-        )
+        setOptimisticSubIssues((current) => {
+          const currentSubIssues = current.issueId === issue.id ? current.subIssues : []
+          if (
+            currentSubIssues.some((subIssue) => subIssue.id === child.id) ||
+            issue.subIssues?.some((subIssue) => subIssue.id === child.id)
+          ) {
+            return current
+          }
+          return { issueId: issue.id, subIssues: [...currentSubIssues, child] }
+        })
         toast.success(`Created ${result.identifier}`)
         setTitle('')
         setOpen(false)
@@ -179,7 +199,15 @@ function LinearIssueSubIssueButton({
     } finally {
       setSubmitting(false)
     }
-  }, [issue.id, issue.project?.id, issue.team.id, issue.workspaceId, settings, title])
+  }, [
+    issue.id,
+    issue.project?.id,
+    issue.subIssues,
+    issue.team.id,
+    issue.workspaceId,
+    settings,
+    title
+  ])
 
   return (
     <section className="mt-10 max-w-[820px]">
@@ -271,7 +299,7 @@ function LinearIssueSidebarProjectCard({
       void linearListProjects(settings, query, 20, issue.workspaceId)
         .then((result) => {
           if (!cancelled) {
-            setProjects(result)
+            setProjects(result.items)
           }
         })
         .catch((error) => {
@@ -529,6 +557,13 @@ export default function LinearIssueWorkspace({
 
   const displayed = fullIssue ?? issue
 
+  const handleUseIssue = useCallback((): void => {
+    if (!displayed) {
+      return
+    }
+    onUse(displayed, buildLinearIssueContextSnapshot(displayed, comments))
+  }, [comments, displayed, onUse])
+
   const handleCommentAdded = useCallback((comment: LinearLocalComment) => {
     const newComment: LinearComment = {
       id: comment.id || createBrowserUuid(),
@@ -568,10 +603,19 @@ export default function LinearIssueWorkspace({
       {
         label: 'Copy prompt',
         icon: Clipboard,
-        action: () => void copyTextToClipboard(buildLinearIssuePrompt(displayed), 'Prompt')
+        action: () => {
+          const renderedText = buildLinearIssueContextSnapshot(displayed, comments)
+          const prompt =
+            buildContainedLinkedContextBlock({
+              provider: 'linear',
+              version: 1,
+              renderedText
+            }) ?? renderedText
+          void copyTextToClipboard(prompt, 'Prompt')
+        }
       }
     ]
-  }, [displayed])
+  }, [comments, displayed])
 
   const content = displayed ? (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
@@ -638,7 +682,7 @@ export default function LinearIssueWorkspace({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => onUse(displayed)}
+                onClick={handleUseIssue}
                 aria-label="Start workspace from issue"
               >
                 <ArrowRight className="size-4" />

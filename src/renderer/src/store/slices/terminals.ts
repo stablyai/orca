@@ -11,6 +11,8 @@ import type {
   WorkspaceSessionState
 } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
@@ -119,6 +121,26 @@ function updateUnifiedTerminalLabel(
     return null
   }
   return unifiedTabs.map((entry, index) => (index === unifiedIndex ? { ...entry, label } : entry))
+}
+
+function updateUnifiedTerminalGeneratedLabel(
+  unifiedTabs: Tab[],
+  terminalTabId: string,
+  generatedLabel: string
+): Tab[] | null {
+  const unifiedIndex = unifiedTabs.findIndex(
+    (entry) => entry.contentType === 'terminal' && entry.entityId === terminalTabId
+  )
+  if (unifiedIndex === -1 || unifiedTabs[unifiedIndex]?.generatedLabel === generatedLabel) {
+    return null
+  }
+  return unifiedTabs.map((entry, index) =>
+    index === unifiedIndex ? { ...entry, generatedLabel } : entry
+  )
+}
+
+function getTabIdFromPaneKey(paneKey: string): string | null {
+  return parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null
 }
 
 function isWindowsRendererRuntime(): boolean {
@@ -299,6 +321,7 @@ export type TerminalSlice = {
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
+  setGeneratedTabTitleFromAgentPrompt: (paneKey: string, prompt: string) => void
   clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
@@ -1026,6 +1049,54 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
       return nextState
+    })
+  },
+
+  setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt) => {
+    const tabId = getTabIdFromPaneKey(paneKey)
+    if (!tabId || !prompt.trim()) {
+      return
+    }
+    set((s) => {
+      if (s.settings?.tabAutoGenerateTitle !== true) {
+        return s
+      }
+      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+      if (!ownerWorktreeId) {
+        return s
+      }
+      const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
+      const tabIndex = tabs.findIndex((tab) => tab.id === tabId)
+      const currentTab = tabs[tabIndex]
+      if (!currentTab || currentTab.customTitle?.trim() || currentTab.generatedTitle?.trim()) {
+        return s
+      }
+      const generatedTitle = deriveGeneratedTabTitle(prompt)
+      if (!generatedTitle) {
+        return s
+      }
+      const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, generatedTitle } : tab))
+      const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
+      const unifiedTabsWithGeneratedLabel = updateUnifiedTerminalGeneratedLabel(
+        currentUnifiedTabs,
+        tabId,
+        generatedTitle
+      )
+      scheduleRuntimeGraphSync()
+      return {
+        tabsByWorktree: {
+          ...s.tabsByWorktree,
+          [ownerWorktreeId]: ownerTabs
+        },
+        ...(unifiedTabsWithGeneratedLabel
+          ? {
+              unifiedTabsByWorktree: {
+                ...s.unifiedTabsByWorktree,
+                [ownerWorktreeId]: unifiedTabsWithGeneratedLabel
+              }
+            }
+          : {})
+      }
     })
   },
 

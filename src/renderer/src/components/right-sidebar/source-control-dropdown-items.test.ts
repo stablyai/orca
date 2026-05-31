@@ -289,7 +289,7 @@ describe('resolveDropdownItems', () => {
     })
   })
 
-  it('locks every item while a pull request operation is running', () => {
+  it('locks every item while a hosted review operation is running', () => {
     const items = resolveDropdownItems(
       inputs({
         isPullRequestOperationActive: true,
@@ -307,7 +307,7 @@ describe('resolveDropdownItems', () => {
     for (const entry of items) {
       if (entry.kind !== 'separator') {
         expect(entry.disabled).toBe(true)
-        expect(entry.title).toBe('Pull request operation in progress…')
+        expect(entry.title).toBe('Hosted review operation in progress…')
       }
     }
   })
@@ -410,6 +410,22 @@ describe('resolveDropdownItems', () => {
     expect(byKind.publish.disabled).toBe(true)
   })
 
+  it('points an unpublished dirty branch with no commits at committing first', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 0
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.publish.label).toBe('Commit Changes First')
+    expect(byKind.publish.title).toBe('Commit changes before publishing the branch')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
   it('does not mention Publish Branch when the linked PR is already merged', () => {
     const items = resolveDropdownItems(
       inputs({
@@ -506,5 +522,47 @@ describe('resolveDropdownItems', () => {
     expect(byKind.create_pr.hint).toBe('Push first')
     expect(byKind.push_create_pr.label).toBe('Push before PR')
     expect(byKind.push_create_pr.disabled).toBe(false)
+  })
+
+  it('uses GitLab MR copy for create and push-before-create rows', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
+        hostedReviewCreation: {
+          provider: 'gitlab',
+          review: null,
+          canCreate: false,
+          blockedReason: 'needs_push',
+          nextAction: 'push'
+        }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.create_pr.label).toBe('Create MR')
+    expect(byKind.create_pr.hint).toBe('Push first')
+    expect(byKind.push_create_pr.label).toBe('Push before MR')
+    expect(byKind.push_create_pr.title).toBe('Push local commits before creating a merge request')
+    expect(byKind.push_create_pr.disabled).toBe(false)
+  })
+
+  it('uses GitLab auth copy when MR creation needs authentication', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+        hostedReviewCreation: {
+          provider: 'gitlab',
+          review: null,
+          canCreate: false,
+          blockedReason: 'auth_required',
+          nextAction: 'authenticate'
+        }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.create_pr.hint).toBe('Run glab auth login in this environment')
   })
 })

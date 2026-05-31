@@ -47,6 +47,7 @@ import {
   type BrowserZoomState
 } from './browser-touch-geometry'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
+import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
 
 export type MobileBrowserTab = {
   type: 'browser'
@@ -135,6 +136,10 @@ export function MobileBrowserPane({
   const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
   const [addressValue, setAddressValue] = useState(displayBrowserUrl(tab.url))
   const [addressFocused, setAddressFocused] = useState(false)
+  const [addressSyncState, setAddressSyncState] = useState({
+    focused: false,
+    url: tab.url
+  })
   const [keyboardValue, setKeyboardValue] = useState('')
   const [frameUri, setFrameUri] = useState<string | null>(cachedInitialFrame?.uri ?? null)
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(
@@ -188,6 +193,17 @@ export function MobileBrowserPane({
     }
   }, [])
 
+  const setRootViewRef = useCallback(
+    (node: View | null) => {
+      // Why: long-press right-click timers belong to this responder surface;
+      // clearing from ref cleanup preserves the same unmount boundary.
+      if (node === null) {
+        clearLongPressTimer()
+      }
+    },
+    [clearLongPressTimer]
+  )
+
   const resetBrowserZoomState = useCallback(() => {
     clearLongPressTimer()
     pinchRef.current = null
@@ -211,11 +227,18 @@ export function MobileBrowserPane({
     }
   }, [worktreeId])
 
-  useEffect(() => {
-    if (!addressFocused) {
+  const addressSync = resolveMobileBrowserAddressSync(addressSyncState, {
+    focused: addressFocused,
+    url: tab.url
+  })
+  if (addressSync.nextState !== addressSyncState) {
+    setAddressSyncState(addressSync.nextState)
+    if (addressSync.shouldSyncValue) {
+      // Why: keep browser stream/goto address updates intact, but avoid a
+      // stale post-blur paint when the tab URL is the source of truth.
       setAddressValue(displayBrowserUrl(tab.url))
     }
-  }, [addressFocused, tab.url])
+  }
 
   useLayoutEffect(() => {
     // Why: gesture and stream handlers need committed values before passive
@@ -694,8 +717,6 @@ export function MobileBrowserPane({
     [client, flushPendingWheelCommand, pageParams]
   )
 
-  useEffect(() => () => clearLongPressTimer(), [clearLongPressTimer])
-
   const mapTouchPoint = useCallback((locationX: number, locationY: number): BrowserPoint | null => {
     return mapScreenToBrowserPoint(
       locationX,
@@ -1017,7 +1038,7 @@ export function MobileBrowserPane({
   )
 
   return (
-    <View style={styles.root}>
+    <View ref={setRootViewRef} style={styles.root}>
       <View style={styles.toolbar}>
         <ToolbarIconButton
           disabled={controlsDisabled || !tab.canGoBack}

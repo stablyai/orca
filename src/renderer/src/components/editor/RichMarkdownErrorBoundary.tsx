@@ -1,4 +1,5 @@
 import React from 'react'
+import { reportReactErrorBoundaryCrash } from '@/lib/react-error-boundary-reporting'
 
 type Props = {
   fileId: string
@@ -36,6 +37,12 @@ export class RichMarkdownErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
     console.error('[RichMarkdownEditor] render crash contained by boundary', error, info)
+    void reportReactErrorBoundaryCrash({
+      boundaryId: 'editor.rich-markdown',
+      surface: 'rich-markdown-editor',
+      error,
+      errorInfo: info
+    })
   }
 
   handleReset = (): void => {

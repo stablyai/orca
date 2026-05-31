@@ -71,6 +71,9 @@ vi.mock('electron', () => ({
     isPackaged: true,
     getPath: getPathMock
   },
+  nativeTheme: {
+    shouldUseDarkColors: true
+  },
   ipcMain: {
     handle: handleMock,
     on: onMock,
@@ -2402,7 +2405,7 @@ describe('registerPtyHandlers', () => {
       expect(env.PYTHONUTF8).toBe('0')
     })
 
-    it('passes no encoding args for unrecognized shells', () => {
+    it('launches Git Bash from COMSPEC as an interactive login shell', () => {
       process.env.COMSPEC = 'C:\\Program Files\\Git\\bin\\bash.exe'
 
       registerPtyHandlers(mainWindow as never)
@@ -2410,8 +2413,10 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\Git\\bin\\bash.exe',
-        [],
-        expect.any(Object)
+        ['--login', '-i'],
+        expect.objectContaining({
+          env: expect.objectContaining({ CHERE_INVOKING: '1' })
+        })
       )
     })
 
@@ -2895,6 +2900,65 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('answers mode 2031 subscribes while renderer PTY output is paused', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    registerPtyHandlers(mainWindow as never)
+    const spawnResult = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp'
+    })) as { id: string }
+    const pauseCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:pauseOutput')
+    if (!pauseCall) {
+      throw new Error('missing pty:pauseOutput listener')
+    }
+    const pauseRendererOutput = pauseCall[1] as (
+      event: unknown,
+      args: { id: string; paused: boolean }
+    ) => void
+    mainWindow.webContents.send.mockClear()
+
+    pauseRendererOutput(null, { id: spawnResult.id, paused: true })
+    mockProc.emitData('\x1b[?2031h')
+
+    expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b[?997;1n')
+    expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+      'pty:data',
+      expect.objectContaining({ id: spawnResult.id })
+    )
+  })
+
+  it('answers split paused mode 2031 subscribes using current app color scheme', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+      theme: 'light'
+    })) as never)
+    const spawnResult = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp'
+    })) as { id: string }
+    const pauseCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:pauseOutput')
+    if (!pauseCall) {
+      throw new Error('missing pty:pauseOutput listener')
+    }
+    const pauseRendererOutput = pauseCall[1] as (
+      event: unknown,
+      args: { id: string; paused: boolean }
+    ) => void
+
+    pauseRendererOutput(null, { id: spawnResult.id, paused: true })
+    mockProc.emitData('\x1b[?20')
+    expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+    mockProc.emitData('31h')
+    expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b[?997;2n')
+  })
+
   it('keeps 250 paused background PTYs off the renderer input path', async () => {
     vi.useFakeTimers()
     const backgroundCount = 250
@@ -3197,6 +3261,40 @@ describe('registerPtyHandlers', () => {
         id: spawnResult.id,
         data: largeOutput
       })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('sends larger ANSI redraws immediately after terminal input', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+
+      writeListener(null, {
+        id: spawnResult.id,
+        data: 'a'
+      })
+      mainWindow.webContents.send.mockClear()
+
+      const redraw = `\x1b[2J\x1b[H${'codex composer redraw '.repeat(80)}`
+      mockProc.emitData(redraw)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: redraw
+      })
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
     }

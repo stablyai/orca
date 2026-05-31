@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => {
     openSettingsPage: vi.fn(),
     deleteStateByWorktreeId: {}
   }
-  return { state }
+  return { state, buttonProps: [] as Record<string, unknown>[] }
 })
 
 vi.mock('@/store', () => ({
@@ -44,9 +44,10 @@ vi.mock('@/components/ui/button', () => ({
   Button: ({
     children,
     ...props
-  }: ButtonHTMLAttributes<HTMLButtonElement> & { children: ReactNode }) => (
-    <button {...props}>{children}</button>
-  )
+  }: ButtonHTMLAttributes<HTMLButtonElement> & { children: ReactNode }) => {
+    mocks.buttonProps.push({ ...props, children })
+    return <button {...props}>{children}</button>
+  }
 }))
 
 vi.mock('@/components/ui/scroll-area', () => ({
@@ -63,6 +64,8 @@ vi.mock('sonner', () => ({
 vi.mock('./delete-worktree-flow', () => ({
   runWorktreeDeletesInParallel: vi.fn()
 }))
+
+import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
 
 function makeWorktree(id: string, path: string): Worktree {
   return {
@@ -99,6 +102,10 @@ function makeLineage(child: Worktree, parent: Worktree): WorktreeLineage {
   }
 }
 
+function buttonText(props: Record<string, unknown>): string {
+  return renderToStaticMarkup(<>{props.children as ReactNode}</>)
+}
+
 describe('DeleteWorktreeDialog lineage copy', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -108,6 +115,8 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     mocks.state.repos = []
     mocks.state.worktreeLineageById = {}
     mocks.state.deleteStateByWorktreeId = {}
+    mocks.buttonProps = []
+    vi.mocked(runWorktreeDeletesInParallel).mockResolvedValue([])
   })
 
   it('shows parent-only copy and a delete-all action when the workspace has children', async () => {
@@ -128,6 +137,14 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     expect(markup).toContain('Delete All 2')
     expect(markup).toContain('Delete Parent Only')
     expect(markup).not.toContain('Don&apos;t ask again')
+
+    const destructiveButton = mocks.buttonProps.find((props) => props.variant === 'destructive')
+    const parentOnlyButton = mocks.buttonProps.find((props) =>
+      buttonText(props).includes('Delete Parent Only')
+    )
+
+    expect(destructiveButton ? buttonText(destructiveButton) : '').toContain('Delete All 2')
+    expect(parentOnlyButton?.variant).toBe('outline')
   })
 
   it('keeps long child workspace paths constrained inside the lineage notice', async () => {
@@ -168,5 +185,31 @@ describe('DeleteWorktreeDialog lineage copy', () => {
 
     expect(markup).toContain('from Orca. The project folder on disk will not be deleted.')
     expect(markup).not.toContain('from git and delete its workspace folder.')
+  })
+
+  it('notifies the dialog caller after a toast force delete succeeds', async () => {
+    const workspace = makeWorktree('Workspace', '/workspaces/workspace')
+    const onDeleted = vi.fn()
+    mocks.state.modalData = { worktreeId: workspace.id, onDeleted }
+    mocks.state.allWorktrees.mockReturnValue([workspace])
+
+    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
+    renderToStaticMarkup(<DeleteWorktreeDialog />)
+
+    const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
+      | { onClick?: (event: never) => void }
+      | undefined
+    expect(deleteButton).toBeDefined()
+    deleteButton?.onClick?.(undefined as never)
+
+    expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([workspace], {
+      onForceDeleted: expect.any(Function)
+    })
+    const options = vi.mocked(runWorktreeDeletesInParallel).mock.calls[0]?.[1] as
+      | { onForceDeleted?: (worktreeId: string) => void }
+      | undefined
+    options?.onForceDeleted?.(workspace.id)
+
+    expect(onDeleted).toHaveBeenCalledWith([workspace.id])
   })
 })

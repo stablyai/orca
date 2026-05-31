@@ -4,6 +4,7 @@ import { join } from 'path'
 import { homedir } from 'os'
 import type { SshTarget } from '../../shared/ssh-types'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
+import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
 
 export type SshConfigHost = {
   host: string
@@ -90,12 +91,12 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'identityfile':
         for (const host of current) {
-          host.identityFile = resolveHomePath(value)
+          host.identityFile = resolveSshConfigHomePath(value)
         }
         break
       case 'identityagent':
         for (const host of current) {
-          host.identityAgent = resolveHomePath(value)
+          host.identityAgent = resolveSshConfigHomePath(value)
         }
         break
       case 'identitiesonly':
@@ -179,13 +180,6 @@ function splitHostPatterns(input: string): string[] {
   }
 
   return patterns
-}
-
-function resolveHomePath(filepath: string): string {
-  if (filepath.startsWith('~/') || filepath === '~') {
-    return join(homedir(), filepath.slice(1))
-  }
-  return filepath
 }
 
 /** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */
@@ -311,7 +305,7 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
     const key = line.substring(0, spaceIdx).toLowerCase()
     const value = line.substring(spaceIdx + 1).trim()
     if (key === 'identityfile') {
-      identityFiles.push(resolveHomePath(value))
+      identityFiles.push(resolveSshConfigHomePath(value))
     } else {
       map.set(key, value)
     }
@@ -324,7 +318,7 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
   const rawJump = map.get('proxyjump')
   const proxyJump = rawJump && rawJump !== 'none' ? rawJump : undefined
   const rawIdentityAgent = map.get('identityagent')
-  const identityAgent = rawIdentityAgent ? resolveHomePath(rawIdentityAgent) : undefined
+  const identityAgent = rawIdentityAgent ? resolveSshConfigHomePath(rawIdentityAgent) : undefined
 
   return {
     hostname: map.get('hostname') ?? '',

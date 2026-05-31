@@ -74,6 +74,8 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import {
+  createFloatingWorkspaceBrowserTab,
+  createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isFloatingWorkspacePanelFocused,
@@ -234,16 +236,6 @@ function Terminal(): React.JSX.Element | null {
       isClosingRef.current = false
     }, CLOSE_DIALOG_DEBOUNCE_MS)
     closeDialogDebounceTimersRef.current.add(timer)
-  }, [])
-
-  useEffect(() => {
-    const timers = closeDialogDebounceTimersRef.current
-    return () => {
-      for (const timer of timers) {
-        window.clearTimeout(timer)
-      }
-      timers.clear()
-    }
   }, [])
 
   // Window close confirmation dialog — shown for local terminals with running
@@ -569,6 +561,7 @@ function Terminal(): React.JSX.Element | null {
   const [, setBackgroundMountRevision] = useState(0)
   useEffect(() => {
     const timers = measurableBackgroundWorktreeTimersRef.current
+    const closeDialogDebounceTimers = closeDialogDebounceTimersRef.current
     const onBackgroundMountTerminalWorktree = (event: Event): void => {
       const customEvent = event as CustomEvent<BackgroundMountTerminalWorktreeDetail>
       const worktreeId = customEvent.detail?.worktreeId
@@ -607,6 +600,12 @@ function Terminal(): React.JSX.Element | null {
         window.clearTimeout(timer)
       }
       timers.clear()
+      // Why: close-dialog debounce timers are Terminal-owned and only need
+      // unmount cleanup; keep them with the existing Terminal lifetime cleanup.
+      for (const timer of closeDialogDebounceTimers) {
+        window.clearTimeout(timer)
+      }
+      closeDialogDebounceTimers.clear()
     }
   }, [])
   // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting
@@ -1185,6 +1184,10 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && matchShortcut('tab.newBrowser')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newBrowser')
+        if (floatingWorkspaceFocused) {
+          void createFloatingWorkspaceBrowserTab(useAppStore.getState())
+          return
+        }
         handleNewBrowserTab()
         return
       }
@@ -1213,6 +1216,14 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && matchShortcut('tab.newMarkdown')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newMarkdown')
+        if (floatingWorkspaceFocused) {
+          void createFloatingWorkspaceMarkdownTab(useAppStore.getState()).catch((err) => {
+            toast.error(
+              err instanceof Error ? err.message : 'Failed to create untitled markdown file.'
+            )
+          })
+          return
+        }
         void handleNewFile()
         return
       }

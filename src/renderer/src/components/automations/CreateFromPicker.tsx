@@ -77,7 +77,15 @@ export function CreateFromPicker({
     }
   }, [])
 
-  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+  const setInputNode = React.useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
 
   const focusSearchInput = React.useCallback(() => {
     cancelFocusFrame()
@@ -188,7 +196,7 @@ export function CreateFromPicker({
         >
           <Command>
             <CommandInput
-              ref={inputRef}
+              ref={setInputNode}
               value={query}
               onValueChange={setQuery}
               placeholder="Search repo branches..."

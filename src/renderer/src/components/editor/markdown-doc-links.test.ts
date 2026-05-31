@@ -6,6 +6,7 @@ import type { MarkdownDocument } from '../../../../shared/types'
 import {
   createMarkdownDocumentIndex,
   createMarkdownDocLinkHref,
+  getMarkdownDocLinkAnchor,
   parseMarkdownDocLinkHref,
   remarkMarkdownDocLinks,
   resolveMarkdownDocLink,
@@ -43,6 +44,14 @@ describe('splitMarkdownDocLinkText', () => {
     ])
   })
 
+  it('splits aliased doc links', () => {
+    expect(splitMarkdownDocLinkText('See [[docs/setup-guide.md|Setup Guide]].')).toEqual([
+      { type: 'text', value: 'See ' },
+      { type: 'docLink', target: 'docs/setup-guide.md', label: 'Setup Guide' },
+      { type: 'text', value: '.' }
+    ])
+  })
+
   it('splits multiple doc links', () => {
     expect(splitMarkdownDocLinkText('[[one]] and [[two]]')).toEqual([
       { type: 'docLink', target: 'one', label: 'one' },
@@ -52,9 +61,9 @@ describe('splitMarkdownDocLinkText', () => {
   })
 
   it('leaves unsupported forms as text', () => {
-    expect(splitMarkdownDocLinkText('[[]] [[doc|Label]] [[bad [target]] [[draft')).toEqual([
+    expect(splitMarkdownDocLinkText('[[]] [[doc|]] [[bad [target]] [[draft')).toEqual([
       { type: 'text', value: '[[]]' },
-      { type: 'text', value: ' [[doc|Label]]' },
+      { type: 'text', value: ' [[doc|]]' },
       { type: 'text', value: ' [[bad [target]]' },
       { type: 'text', value: ' [[draft' }
     ])
@@ -80,6 +89,15 @@ describe('resolveMarkdownDocLink', () => {
     expect(resolveMarkdownDocLink('notes/README.MDX', index)).toMatchObject({
       status: 'resolved',
       document: { relativePath: 'notes/README.MDX' }
+    })
+  })
+
+  it('resolves heading anchors against the document target', () => {
+    const index = createMarkdownDocumentIndex(documents)
+
+    expect(resolveMarkdownDocLink('docs/setup-guide#Install steps', index)).toMatchObject({
+      status: 'resolved',
+      document: { relativePath: 'docs/setup-guide.md' }
     })
   })
 
@@ -152,6 +170,15 @@ describe('doc link hrefs', () => {
   })
 })
 
+describe('getMarkdownDocLinkAnchor', () => {
+  it('extracts preview heading anchor ids from doc link targets', () => {
+    expect(getMarkdownDocLinkAnchor('docs/setup-guide#Install steps')).toBe('install-steps')
+    expect(getMarkdownDocLinkAnchor('docs/setup-guide#What is new?')).toBe('what-is-new')
+    expect(getMarkdownDocLinkAnchor('docs/setup-guide#install-steps')).toBe('install-steps')
+    expect(getMarkdownDocLinkAnchor('docs/setup-guide')).toBeNull()
+  })
+})
+
 describe('remarkMarkdownDocLinks', () => {
   it('runs as a react-markdown remark plugin', () => {
     const html = renderToStaticMarkup(
@@ -164,6 +191,19 @@ describe('remarkMarkdownDocLinks', () => {
 
     expect(html).toContain('<a href="#orca-doc-link=other.md">other.md</a>')
     expect(html).not.toContain('[[other.md]]')
+  })
+
+  it('renders aliased doc links with the alias text', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        Markdown,
+        { remarkPlugins: [remarkMarkdownDocLinks] },
+        'link to [[other.md|Other note]]'
+      )
+    )
+
+    expect(html).toContain('<a href="#orca-doc-link=other.md">Other note</a>')
+    expect(html).not.toContain('[[other.md|Other note]]')
   })
 
   it('transforms text nodes but not code, links, or images', () => {

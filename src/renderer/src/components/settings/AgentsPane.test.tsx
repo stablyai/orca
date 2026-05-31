@@ -5,12 +5,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
+import { AGENT_GENERATED_TAB_TITLES_TITLE } from './agent-generated-tab-title-copy'
 import { AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
 import { getAgentAwakeDescription } from './agent-awake-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import {
   AgentAvailabilityControl,
+  AgentGeneratedTabTitlesSetting,
   AgentStatusHooksSetting,
   AgentsPane,
   AGENTS_PANE_SEARCH_ENTRIES,
@@ -201,6 +204,27 @@ describe('AgentsPane', () => {
     })
   })
 
+  it('toggles generated tab titles with the next value', () => {
+    const updateSettings = vi.fn()
+    const element = AgentGeneratedTabTitlesSetting({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        tabAutoGenerateTitle: false
+      },
+      updateSettings
+    })
+
+    const generatedTitleSwitch = findSwitchRow(element, AGENT_GENERATED_TAB_TITLES_TITLE)
+    expect(generatedTitleSwitch.props.checked).toBe(false)
+
+    const onChange = generatedTitleSwitch.props.onChange as () => void
+    onChange()
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      tabAutoGenerateTitle: true
+    })
+  })
+
   it('includes awake and sleep search metadata for the setting', () => {
     expect(matchesSettingsSearch('awake', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
     expect(matchesSettingsSearch('sleep', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
@@ -213,9 +237,29 @@ describe('AgentsPane', () => {
     expect(matchesSettingsSearch('codex', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
   })
 
+  it('includes generated title search metadata', () => {
+    expect(matchesSettingsSearch('generated title', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('stable session', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+  })
+
   it('includes enable and hide search metadata for agent visibility', () => {
     expect(matchesSettingsSearch('disable', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
     expect(matchesSettingsSearch('hide', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+  })
+
+  it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {
+    for (const agent of AGENT_CATALOG) {
+      expect(matchesSettingsSearch(agent.id, AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+      expect(matchesSettingsSearch(agent.label, AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+      expect(matchesSettingsSearch(agent.cmd, AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    }
+
+    expect(matchesSettingsSearch('GitHub Copilot', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('open claude', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('command-code', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('command code', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('agy', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('cursor-agent', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
   })
 
   it('renders per-agent availability as labeled status choices with explicit row copy', () => {

@@ -42,6 +42,26 @@ describe('CommentMarkdown', () => {
     expect(markup).not.toContain('href="https://github.com/stablyai/orca/issues/2317"')
   })
 
+  it('keeps remote compact markdown images as links', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content="See this: ![Image #1](https://example.com/screenshot.png)" />
+    )
+
+    expect(markup).not.toContain('<img')
+    expect(markup).toContain('href="https://example.com/screenshot.png"')
+    expect(markup).toContain('>Image #1</a>')
+  })
+
+  it('renders trusted compact markdown images inline', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content="See this: ![Image #1](data:image/png;base64,abc123)" />
+    )
+
+    expect(markup).toContain('<img')
+    expect(markup).toContain('alt="Image #1"')
+    expect(markup).toContain('src="data:image/png;base64,abc123"')
+  })
+
   it('autolinks very large generated GitHub reference comments', () => {
     const referenceCount = 130_000
     const tree = {

@@ -29,6 +29,9 @@ import {
   TYPOGRAPHY_ENTRIES,
   ZOOM_ENTRIES
 } from './appearance-search'
+import { TERMINAL_APPEARANCE_SEARCH_ENTRIES } from './terminal-search'
+import { TerminalAppearanceSection } from './TerminalAppearanceSection'
+import type { UseGhosttyImportReturn } from './useGhosttyImport'
 export { APPEARANCE_PANE_SEARCH_ENTRIES }
 
 type AppearancePaneProps = {
@@ -36,6 +39,9 @@ type AppearancePaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
   fontSuggestions: string[]
+  terminalFontSuggestions: string[]
+  systemPrefersDark: boolean
+  ghostty: UseGhosttyImportReturn
 }
 
 function ShortcutHintList({ combos }: { combos: string[][] }): React.JSX.Element {
@@ -61,7 +67,10 @@ export function AppearancePane({
   settings,
   updateSettings,
   applyTheme,
-  fontSuggestions
+  fontSuggestions,
+  terminalFontSuggestions,
+  systemPrefersDark,
+  ghostty
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const zoomInKeyCombos = useShortcutKeyCombos('zoom.in')
@@ -148,6 +157,16 @@ export function AppearancePane({
           </SearchableSetting>
         ) : null}
       </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_APPEARANCE_SEARCH_ENTRIES) ? (
+      <TerminalAppearanceSection
+        key="terminal-appearance"
+        settings={settings}
+        updateSettings={updateSettings}
+        systemPrefersDark={systemPrefersDark}
+        terminalFontSuggestions={terminalFontSuggestions}
+        ghostty={ghostty}
+      />
     ) : null,
     matchesSettingsSearch(searchQuery, LAYOUT_ENTRIES) ? (
       <section key="layout" className="space-y-3">

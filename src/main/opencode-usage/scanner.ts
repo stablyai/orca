@@ -1,11 +1,11 @@
 /* eslint-disable max-lines -- Why: OpenCode usage analytics need to normalize multiple local DB schema generations, attribute worktrees, and build persisted projections in one auditable pipeline. */
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
 import { readdir, realpath, stat } from 'fs/promises'
 import { homedir } from 'os'
 import { isAbsolute, join, posix, win32 } from 'path'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
+import Database from '../sqlite/sync-database'
 import type {
   OpenCodeUsageAttributedEvent,
   OpenCodeUsageDailyAggregate,
@@ -428,7 +428,14 @@ function isContainingPath(candidatePath: string, targetPath: string): boolean {
   const isAbsoluteRelative = useWin32
     ? win32.isAbsolute(relativePath)
     : posix.isAbsolute(relativePath)
-  return !isAbsoluteRelative && !relativePath.startsWith('..') && relativePath !== '.'
+  const parentPrefix = useWin32 ? `..${win32.sep}` : `..${posix.sep}`
+  // Why: `..name` is a valid child path; only `..` and `../...` escape.
+  return (
+    !isAbsoluteRelative &&
+    relativePath !== '..' &&
+    !relativePath.startsWith(parentPrefix) &&
+    relativePath !== '.'
+  )
 }
 
 async function buildWorktreesWithCanonicalPaths(

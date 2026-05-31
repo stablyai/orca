@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/nicolo-ribaudo/oxc-project.github.io/refs/heads/json-schemas/oxlint/v0.17.0/config.json",
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "react", "react-hooks", "react-perf", "unicorn"],
   "categories": {
     "correctness": "error"
@@ -39,7 +39,10 @@
     "typescript/prefer-function-type": "error",
     "typescript/prefer-includes": "error",
     "typescript/prefer-optional-chain": "error",
-    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/switch-exhaustiveness-check": [
+      "error",
+      { "allowDefaultCaseForExhaustiveSwitch": false }
+    ],
     "curly": "error",
     "no-unneeded-ternary": "error",
     "no-useless-return": "error",

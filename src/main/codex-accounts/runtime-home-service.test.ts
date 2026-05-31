@@ -39,6 +39,7 @@ vi.mock('node:os', async () => {
 function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   const appFontFamily = overrides.appFontFamily ?? 'Geist'
   const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
+  const tabAutoGenerateTitle = overrides.tabAutoGenerateTitle ?? false
   return {
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
@@ -132,7 +133,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     enableGitHubAttribution: true,
     ...overrides,
     appFontFamily,
-    agentStatusHooksEnabled
+    agentStatusHooksEnabled,
+    tabAutoGenerateTitle
   }
 }
 

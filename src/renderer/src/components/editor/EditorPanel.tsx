@@ -21,10 +21,12 @@ import { useUntitledFileRename } from './useUntitledFileRename'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
-  activeViewStateId: activeViewStateIdProp
+  activeViewStateId: activeViewStateIdProp,
+  markdownAnnotationsEnabled = true
 }: {
   activeFileId?: string | null
   activeViewStateId?: string | null
+  markdownAnnotationsEnabled?: boolean
 } = {}): React.JSX.Element | null {
   const openFiles = useAppStore((s) => s.openFiles)
   const globalActiveFileId = useAppStore((s) => s.activeFileId)
@@ -325,6 +327,7 @@ function EditorPanelInner({
       onCloseMarkdownTableOfContents={() => setShowMarkdownTableOfContents(false)}
       onCloseRenameDialog={closeRenameDialog}
       onRenameConfirm={handleRenameConfirm}
+      markdownAnnotationsEnabled={markdownAnnotationsEnabled}
     />
   )
 }

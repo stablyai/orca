@@ -350,9 +350,7 @@ function upsertTrustBlock(content: string, key: string, hash: string): string {
 // outside TOML multi-line strings.
 function buildHeaderLinePattern(key: string): RegExp {
   const escapedKey = escapeRegex(escapeTomlString(key))
-  return new RegExp(
-    `^[ \\t]*\\[hooks\\.state\\."${escapedKey}"\\][ \\t]*(?:#[^\\r\\n]*)?$`
-  )
+  return new RegExp(`^[ \\t]*\\[hooks\\.state\\."${escapedKey}"\\][ \\t]*(?:#[^\\r\\n]*)?$`)
 }
 
 type TrustBlockRange = {

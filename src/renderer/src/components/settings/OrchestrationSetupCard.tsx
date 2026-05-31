@@ -1,34 +1,18 @@
-import { useEffect, type JSX } from 'react'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import type { JSX } from 'react'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
-import {
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
+import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 
 export function OrchestrationSetupCard(props: {
   compact?: boolean
   terminalHeightPx?: number
-  onInstalledChange?: (installed: boolean) => void
+  skill: InstalledAgentSkillState
 }): JSX.Element {
-  const { compact, terminalHeightPx, onInstalledChange } = props
-  const {
-    installed: skillInstalled,
-    loading: skillLoading,
-    error: skillError,
-    refresh: refreshSkillInstalled
-  } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-
-  useEffect(() => {
-    onInstalledChange?.(skillInstalled)
-  }, [onInstalledChange, skillInstalled])
+  const { compact, terminalHeightPx, skill } = props
 
   const setupPanel = (
     <AgentSkillSetupPanel
@@ -39,16 +23,16 @@ export function OrchestrationSetupCard(props: {
       terminalTitle="Orchestration setup"
       terminalAriaLabel="Orchestration skill install terminal"
       terminalWorktreeId="feature-wall-orchestration-skill-terminal"
-      installed={skillInstalled}
-      loading={skillLoading}
-      error={skillError}
+      installed={skill.installed}
+      loading={skill.loading}
+      error={skill.error}
       terminalHeightPx={terminalHeightPx}
       preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
       onBeforeOpenTerminal={async () => {
         await ensureOrcaCliAvailableForAgentSkillTerminal()
       }}
       showRecheckWhenInstalled={false}
-      onRecheck={refreshSkillInstalled}
+      onRecheck={skill.refresh}
     />
   )
 

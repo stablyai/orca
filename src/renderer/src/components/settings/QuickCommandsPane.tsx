@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from 'lucide-react'
 import type {
   GlobalSettings,
@@ -125,17 +125,16 @@ export function QuickCommandsPane({
     return createTerminalQuickCommandDraft({ type: 'global' })
   }, [activeRepoId, effectiveSelection, repoById, showAll])
 
-  useEffect(() => {
-    const intentSignal = addCommandIntentSignal
-    if (
-      typeof intentSignal !== 'number' ||
-      !shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignalRef.current)
-    ) {
-      return
-    }
+  const intentSignal = addCommandIntentSignal
+  if (
+    typeof intentSignal === 'number' &&
+    shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignalRef.current)
+  ) {
+    // Why: Settings deep-links use this one-shot signal to open the add dialog;
+    // consume it before paint so the pane never flashes without the editor.
     consumedAddIntentSignalRef.current = intentSignal
     setEditor({ mode: 'add', command: createDraftForCurrentFilter() })
-  }, [addCommandIntentSignal, createDraftForCurrentFilter])
+  }
 
   const toggleScope = (key: string): void => {
     const current = new Set(effectiveSelection)

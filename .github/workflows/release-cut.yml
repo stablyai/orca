@@ -252,11 +252,24 @@ jobs:
           }
 
           highest_rc_for_base() {
-            local base="$1"
-            git tag --list "v${base}-rc.*" \
-                | sed -E "s/^v${base//./\\.}-rc\.//" \
-                | sort -n \
-                | tail -n 1 || true
+            node config/scripts/release-rc-history.mjs "$1"
+          }
+
+          tag_matches_current_ref() {
+            local tag="$1"
+            local tag_commit
+            local head_commit
+            if ! tag_commit="$(git rev-parse "${tag}^{}" 2>/dev/null)"; then
+              return 1
+            fi
+            head_commit="$(git rev-parse HEAD)"
+            if [[ "$tag_commit" == "$head_commit" ]]; then
+              return 0
+            fi
+
+            local tag_parent
+            tag_parent="$(git rev-parse "${tag_commit}^" 2>/dev/null)" || return 1
+            [[ "$tag_parent" == "$head_commit" ]]
           }
 
           release_draft_state() {
@@ -280,6 +293,10 @@ jobs:
             release_state="$(release_draft_state "$tag")"
             case "$release_state" in
               missing|true)
+                if ! tag_matches_current_ref "$tag"; then
+                  echo "::warning::Tag $tag already exists but was cut from a different release ref ($reason) - cutting the next version instead of reusing stale artifacts."
+                  return 1
+                fi
                 echo "::warning::Tag $tag already exists but has no published release ($reason) - recovering by re-dispatching the release build against the existing tag."
                 echo "recovered_tag=$tag" >>"$GITHUB_OUTPUT"
                 echo "recovered=true" >>"$GITHUB_OUTPUT"
@@ -317,10 +334,11 @@ jobs:
               else
                 existing_rc_tag="v${base}-rc.${highest_rc}"
                 # Why: a failed or GitHub-stuck run can leave the highest RC
-                # tag attached to a draft/missing release. Resume that tag so
-                # retries finish the intended release instead of piling up
-                # vX.Y.Z-rc.N+1 drafts.
-                recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
+                # tag attached to a draft/missing release. Resume only when it
+                # was cut from this ref; stale attempts advance to rc.N+1.
+                if git rev-parse "$existing_rc_tag" >/dev/null 2>&1; then
+                  recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
+                fi
                 new="${base}-rc.$((highest_rc + 1))"
               fi
               ;;
@@ -363,7 +381,7 @@ jobs:
           # over a shipped version) and needs human attention.
           if git rev-parse "v$new" >/dev/null 2>&1; then
             recover_unpublished_tag "v$new" "tag collision" || {
-              echo "::error::Tag v$new already exists and has a published release. Refusing to re-cut over a shipped version." >&2
+              echo "::error::Tag v$new already exists and cannot be recovered for this ref. Refusing to re-cut over an existing version." >&2
               exit 1
             }
           fi

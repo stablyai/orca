@@ -264,6 +264,9 @@ export class DaemonServer {
         }
       }
 
+      case 'cancelCreateOrAttach':
+        return {}
+
       case 'write':
         try {
           this.lastInputAtBySessionId.set(request.payload.sessionId, performance.now())
@@ -322,7 +325,7 @@ export class DaemonServer {
         return { pong: true }
 
       case 'systemResolverHealth':
-        return { health: readCurrentProcessMacSystemResolverHealth() }
+        return { health: await readCurrentProcessMacSystemResolverHealth() }
 
       case 'shutdown':
         if (request.payload.killSessions) {
@@ -330,10 +333,8 @@ export class DaemonServer {
         }
         process.nextTick(() => this.shutdown())
         return {}
-
-      default:
-        throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
     }
+    throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
   }
 
   private sendExitEvent(

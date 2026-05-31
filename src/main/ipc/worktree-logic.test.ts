@@ -111,6 +111,12 @@ describe('ensurePathWithinWorkspace', () => {
       'Invalid worktree path'
     )
   })
+
+  it('allows workspace children whose names start with dot-dot text', () => {
+    const result = ensurePathWithinWorkspace('/workspace/..repo/feature', '/workspace')
+
+    expect(result).toBe(resolve('/workspace/..repo/feature'))
+  })
 })
 
 describe('computeBranchName', () => {

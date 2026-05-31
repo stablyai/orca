@@ -199,17 +199,19 @@ function sortPullRequestsForBranch(
   left: RawAzureDevOpsPullRequest,
   right: RawAzureDevOpsPullRequest
 ): number {
+  const leftStatus = left.status?.trim().toLowerCase()
+  const rightStatus = right.status?.trim().toLowerCase()
+  const abandonedOrder = Number(leftStatus === 'abandoned') - Number(rightStatus === 'abandoned')
+  // Why: abandoned PRs can have newer close dates, but should not hide a usable branch PR.
+  if (abandonedOrder !== 0) {
+    return abandonedOrder
+  }
   const leftTime = Date.parse(left.closedDate ?? left.creationDate ?? '') || 0
   const rightTime = Date.parse(right.closedDate ?? right.creationDate ?? '') || 0
   if (leftTime !== rightTime) {
     return rightTime - leftTime
   }
-  const leftActive = left.status?.trim().toLowerCase() === 'active'
-  const rightActive = right.status?.trim().toLowerCase() === 'active'
-  if (leftActive !== rightActive) {
-    return leftActive ? -1 : 1
-  }
-  return 0
+  return Number(rightStatus === 'active') - Number(leftStatus === 'active')
 }
 
 export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
@@ -254,14 +256,12 @@ export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus>
 
 export async function getAzureDevOpsPullRequest(
   repoPath: string,
-  prNumber: number
+  prNumber: number,
+  connectionId?: string | null
 ): Promise<AzureDevOpsPullRequestInfo | null> {
-  const repo = await getAzureDevOpsRepoRef(repoPath)
-  if (!repo) {
-    return null
-  }
-  const repository = await getRepository(repo)
-  if (!repository) {
+  const repo = await getAzureDevOpsRepoRef(repoPath, connectionId)
+  const repository = repo ? await getRepository(repo) : null
+  if (!repo || !repository) {
     return null
   }
   const raw = await requestJson<RawAzureDevOpsPullRequest>(
@@ -276,19 +276,17 @@ export async function getAzureDevOpsPullRequest(
 export async function getAzureDevOpsPullRequestForBranch(
   repoPath: string,
   branch: string,
-  linkedPRNumber?: number | null
+  linkedPRNumber?: number | null,
+  connectionId?: string | null
 ): Promise<AzureDevOpsPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
     return null
   }
 
-  const repo = await getAzureDevOpsRepoRef(repoPath)
-  if (!repo) {
-    return null
-  }
-  const repository = await getRepository(repo)
-  if (!repository) {
+  const repo = await getAzureDevOpsRepoRef(repoPath, connectionId)
+  const repository = repo ? await getRepository(repo) : null
+  if (!repo || !repository) {
     return null
   }
 
@@ -322,6 +320,9 @@ export async function getAzureDevOpsPullRequestForBranch(
   return raw ? normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw) : null
 }
 
-export async function getAzureDevOpsRepoSlug(repoPath: string): Promise<AzureDevOpsRepoRef | null> {
-  return getAzureDevOpsRepoRef(repoPath)
+export async function getAzureDevOpsRepoSlug(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<AzureDevOpsRepoRef | null> {
+  return getAzureDevOpsRepoRef(repoPath, connectionId)
 }
