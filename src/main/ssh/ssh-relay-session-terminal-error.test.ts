@@ -58,7 +58,6 @@ vi.mock('../ipc/pty', () => ({
   clearPtyOwnershipForConnection: vi.fn(),
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
-  isRendererPtyOutputPaused: vi.fn(() => false),
   setPtyOwnership: vi.fn()
 }))
 

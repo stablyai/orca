@@ -1232,13 +1232,11 @@ export function useTerminalPaneLifecycle({
     isVisibleRef.current = isVisible
     for (const panePtyBinding of panePtyBindingsRef.current.values()) {
       const bindingWithVisibility = panePtyBinding as IDisposable & {
-        syncRendererOutputVisibility?: () => void
         syncProcessTracking?: () => void
       }
-      bindingWithVisibility.syncRendererOutputVisibility?.()
       bindingWithVisibility.syncProcessTracking?.()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility flips must notify existing PTY bindings even though the ref object identity is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility flips must refresh existing PTY process tracking even though the ref object identity is stable.
   }, [isVisible, isVisibleRef, panePtyBindingsRef])
 
   useEffect(() => {

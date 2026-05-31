@@ -37,7 +37,6 @@ import {
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
-  isRendererPtyOutputPaused,
   setPtyOwnership
 } from '../ipc/pty'
 import {
@@ -906,7 +905,7 @@ export class SshRelaySession {
     ptyProvider.onData((payload) => {
       const seq = this.runtime?.onPtyData(payload.id, payload.data, Date.now())
       const win = this.getMainWindow()
-      if (win && !win.isDestroyed() && !isRendererPtyOutputPaused(payload.id)) {
+      if (win && !win.isDestroyed()) {
         win.webContents.send('pty:data', {
           ...payload,
           ...(typeof seq === 'number' ? { seq, rawLength: payload.data.length } : {})
