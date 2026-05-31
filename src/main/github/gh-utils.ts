@@ -138,6 +138,7 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
 }
 
 const OWNER_REPO_CACHE_TTL_MS = 30_000
+const OWNER_REPO_CACHE_MAX_ENTRIES = 512
 
 type OwnerRepoCacheEntry = {
   value: OwnerRepo | null
@@ -149,6 +150,26 @@ const ownerRepoCache = new Map<string, OwnerRepoCacheEntry>()
 /** @internal — exposed for tests only */
 export function _resetOwnerRepoCache(): void {
   ownerRepoCache.clear()
+}
+
+/** @internal — exposed for tests only */
+export function _getOwnerRepoCacheSize(): number {
+  return ownerRepoCache.size
+}
+
+function pruneOwnerRepoCache(now: number): void {
+  for (const [key, entry] of ownerRepoCache) {
+    if (entry.expiresAt <= now) {
+      ownerRepoCache.delete(key)
+    }
+  }
+  while (ownerRepoCache.size > OWNER_REPO_CACHE_MAX_ENTRIES) {
+    const oldestKey = ownerRepoCache.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    ownerRepoCache.delete(oldestKey)
+  }
 }
 
 export function parseGitHubOwnerRepo(remoteUrl: string): OwnerRepo | null {
@@ -222,12 +243,11 @@ export async function getOwnerRepoForRemote(
 ): Promise<OwnerRepo | null> {
   const context = githubRepoContext(repoPath, connectionId)
   const cacheKey = `${context.connectionId ?? 'local'}\0${context.repoPath}\0${remoteName}`
+  const now = Date.now()
+  pruneOwnerRepoCache(now)
   const cached = ownerRepoCache.get(cacheKey)
-  if (cached && cached.expiresAt > Date.now()) {
+  if (cached && cached.expiresAt > now) {
     return cached.value
-  }
-  if (cached) {
-    ownerRepoCache.delete(cacheKey)
   }
   try {
     const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
@@ -235,14 +255,16 @@ export async function getOwnerRepoForRemote(
     if (result) {
       ownerRepoCache.set(cacheKey, {
         value: result,
-        expiresAt: Date.now() + OWNER_REPO_CACHE_TTL_MS
+        expiresAt: now + OWNER_REPO_CACHE_TTL_MS
       })
+      pruneOwnerRepoCache(now)
       return result
     }
   } catch {
     // ignore — non-GitHub remote or no remote
   }
-  ownerRepoCache.set(cacheKey, { value: null, expiresAt: Date.now() + OWNER_REPO_CACHE_TTL_MS })
+  ownerRepoCache.set(cacheKey, { value: null, expiresAt: now + OWNER_REPO_CACHE_TTL_MS })
+  pruneOwnerRepoCache(now)
   return null
 }
 
