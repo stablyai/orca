@@ -1,5 +1,7 @@
 import type * as NodePath from 'node:path'
-import { resolve } from 'node:path'
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type * as RepoWorktrees from '../repo-worktrees'
@@ -9,6 +11,7 @@ import {
   invalidateAuthorizedRootsCache,
   isDescendantOrEqual,
   rebuildAuthorizedRootsCache,
+  resolveAuthorizedPath,
   resolveRegisteredWorktreePath,
   validateGitRelativeFilePath
 } from './filesystem-auth'
@@ -92,6 +95,43 @@ describe('filesystem auth worktree roots', () => {
 })
 
 describe('filesystem-auth path containment', () => {
+  it('authorizes missing nested descendants under an allowed repo', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-missing-'))
+    try {
+      const repoPath = join(tempRoot, 'repo')
+      await mkdir(repoPath)
+      const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }])
+      const targetPath = join(repoPath, 'new', 'nested', 'file.ts')
+
+      await expect(resolveAuthorizedPath(targetPath, store)).resolves.toBe(
+        join(await realpath(repoPath), 'new', 'nested', 'file.ts')
+      )
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects missing descendants under a symlinked ancestor outside the repo',
+    async () => {
+      const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-symlink-'))
+      try {
+        const repoPath = join(tempRoot, 'repo')
+        const outsidePath = join(tempRoot, 'outside')
+        await mkdir(repoPath)
+        await mkdir(outsidePath)
+        await symlink(outsidePath, join(repoPath, 'linked-outside'), 'dir')
+        const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }])
+
+        await expect(
+          resolveAuthorizedPath(join(repoPath, 'linked-outside', 'new', 'file.ts'), store)
+        ).rejects.toThrow('Access denied')
+      } finally {
+        await rm(tempRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('allows descendants whose path segment starts with dotdot characters', () => {
     const root = resolve('/workspace/repo')
     const child = resolve('/workspace/repo/..fixtures/file.ts')

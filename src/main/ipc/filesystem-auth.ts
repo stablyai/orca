@@ -230,7 +230,15 @@ export async function resolveAuthorizedPath(
     // Canonicalize the parent so symlinks in ancestors cannot redirect us
     // outside allowed roots, but keep the final segment untouched so callers
     // (delete/rename) act on the link itself.
-    const realParent = await realpath(dirname(resolvedTarget))
+    let realParent: string
+    try {
+      realParent = await realpath(dirname(resolvedTarget))
+    } catch (error) {
+      if (isENOENT(error)) {
+        return resolveAuthorizedMissingPath(resolvedTarget, store)
+      }
+      throw error
+    }
     const candidateTarget = resolve(realParent, basename(resolvedTarget))
     if (
       !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
@@ -256,17 +264,40 @@ export async function resolveAuthorizedPath(
     if (!isENOENT(error)) {
       throw error
     }
+    return resolveAuthorizedMissingPath(resolvedTarget, store)
+  }
+}
 
-    const realParent = await realpath(dirname(resolvedTarget))
-    const candidateTarget = resolve(realParent, basename(resolvedTarget))
-    if (
-      !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
-        canonicalSourcePath: resolvedTarget
-      }))
-    ) {
-      throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+async function resolveAuthorizedMissingPath(resolvedTarget: string, store: Store): Promise<string> {
+  let existingAncestor = resolvedTarget
+  const missingSegments: string[] = []
+
+  while (true) {
+    try {
+      const realAncestor = await realpath(existingAncestor)
+      const candidateTarget = resolve(realAncestor, ...missingSegments)
+      if (
+        !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
+          canonicalSourcePath: resolvedTarget
+        }))
+      ) {
+        throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+      }
+      return candidateTarget
+    } catch (error) {
+      if (!isENOENT(error)) {
+        throw error
+      }
+      const parent = dirname(existingAncestor)
+      if (parent === existingAncestor) {
+        throw error
+      }
+      // Why: create/copy callers intentionally create missing parents after
+      // auth. Canonicalize the nearest existing ancestor so symlink escapes are
+      // still caught without rejecting legitimate nested paths.
+      missingSegments.unshift(basename(existingAncestor))
+      existingAncestor = parent
     }
-    return candidateTarget
   }
 }
 
@@ -280,6 +311,10 @@ async function isPathAllowedIncludingRegisteredWorktrees(
   }
 
   if (isRegisteredWorktreePath(targetPath)) {
+    return true
+  }
+
+  if (await isPathAllowedByCanonicalAllowedRoot(targetPath, options.canonicalSourcePath, store)) {
     return true
   }
 
@@ -354,6 +389,29 @@ function allLocalRepoRootsRegistered(localRepoIds: Set<string>): boolean {
     }
   }
   return true
+}
+
+async function isPathAllowedByCanonicalAllowedRoot(
+  targetPath: string,
+  sourcePath: string | undefined,
+  store: Store
+): Promise<boolean> {
+  if (!sourcePath) {
+    return false
+  }
+  for (const root of getAllowedRoots(store)) {
+    const resolvedRoot = resolve(root)
+    if (!isDescendantOrEqual(sourcePath, resolvedRoot)) {
+      continue
+    }
+    // Why: active file operations may resolve `/var` to `/private/var` on
+    // macOS. Canonicalize only the matched root instead of the whole repo set.
+    const canonicalRoot = await normalizeExistingPath(resolvedRoot)
+    if (isDescendantOrEqual(targetPath, canonicalRoot)) {
+      return true
+    }
+  }
+  return false
 }
 
 function isRegisteredWorktreePath(targetPath: string): boolean {
