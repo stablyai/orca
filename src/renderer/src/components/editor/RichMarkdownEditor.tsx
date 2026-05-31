@@ -819,17 +819,42 @@ export default function RichMarkdownEditor({
     }
   }, [])
 
+  const clearAllAnnotationHighlights = useCallback((): void => {
+    const ed = editorRef.current
+    if (!ed) {
+      return
+    }
+    ed.view.dispatch(
+      ed.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
+        activeRange: null,
+        noteRanges: []
+      })
+    )
+  }, [])
+
   const setRootElement = useCallback(
     (node: HTMLDivElement | null) => {
-      // Why: review-note pulses and copy feedback are tied to this editor root;
-      // ref cleanup keeps the unmount boundary out of passive Effects.
       if (node === null) {
+        // Why: these transient editor resources are owned by this root; clearing
+        // them at detach keeps unmount cleanup out of passive Effects.
         clearAttentionTimers()
         clearReviewCopyTimers()
+        clearAllAnnotationHighlights()
+        if (annotationTargetFrameRef.current !== null) {
+          window.cancelAnimationFrame(annotationTargetFrameRef.current)
+          annotationTargetFrameRef.current = null
+        }
+        if (notePositionsFrameRef.current !== null) {
+          window.cancelAnimationFrame(notePositionsFrameRef.current)
+          notePositionsFrameRef.current = null
+        }
+        cancelAutoFocusRef.current?.()
+        cancelAutoFocusRef.current = null
+        window.api.ui.setMarkdownEditorFocused(false)
       }
       rootRef.current = node
     },
-    [clearAttentionTimers, clearReviewCopyTimers]
+    [clearAllAnnotationHighlights, clearAttentionTimers, clearReviewCopyTimers]
   )
 
   const syncAnnotationTarget = useCallback((nextEditor: Editor): void => {
@@ -1348,19 +1373,6 @@ export default function RichMarkdownEditor({
     ed.view.dispatch(ed.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, null))
   }, [])
 
-  const clearAllAnnotationHighlights = useCallback((): void => {
-    const ed = editorRef.current
-    if (!ed) {
-      return
-    }
-    ed.view.dispatch(
-      ed.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
-        activeRange: null,
-        noteRanges: []
-      })
-    )
-  }, [])
-
   useEffect(() => {
     if (canAnnotateRichMarkdown) {
       return
@@ -1369,10 +1381,6 @@ export default function RichMarkdownEditor({
     setAnnotationPopover(null)
     clearAllAnnotationHighlights()
   }, [canAnnotateRichMarkdown, clearAllAnnotationHighlights])
-
-  useEffect(() => {
-    return () => clearAllAnnotationHighlights()
-  }, [clearAllAnnotationHighlights])
 
   useEffect(() => {
     if (!editor || !canAnnotateRichMarkdown) {
@@ -1427,30 +1435,6 @@ export default function RichMarkdownEditor({
       window.removeEventListener('resize', update)
     }
   }, [requestSyncNotePositions, reviewRailVisible])
-
-  useEffect(() => {
-    return () => {
-      if (annotationTargetFrameRef.current !== null) {
-        window.cancelAnimationFrame(annotationTargetFrameRef.current)
-      }
-      if (notePositionsFrameRef.current !== null) {
-        window.cancelAnimationFrame(notePositionsFrameRef.current)
-      }
-      cancelAutoFocusRef.current?.()
-      cancelAutoFocusRef.current = null
-    }
-  }, [])
-
-  // Why: TipTap's onBlur may not fire on unmount paths (tab close, HMR,
-  // component teardown while focused), leaving the main-process flag stale at
-  // `true` and silently disabling Cmd+B sidebar-toggle until the next editor
-  // focus/blur cycle. Force a `false` on unmount as a belt-and-braces reset.
-  // See docs/markdown-cmd-b-bold-design.md "Stale-flag recovery".
-  useEffect(() => {
-    return () => {
-      window.api.ui.setMarkdownEditorFocused(false)
-    }
-  }, [])
 
   // Why: use useLayoutEffect (synchronous cleanup) so the pending serialization
   // flush runs before useEditor's cleanup destroys the editor instance on tab
