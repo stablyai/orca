@@ -84,19 +84,21 @@ describe('relay quick open ignored file listing', () => {
     const promise = listFilesWithGit('/remote/root', ['packages/other'])
 
     setTimeout(() => {
-      ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
+      ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
+      ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'tab\tfile.txt\0')
       primaryProc.emit('close', 0, null)
 
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'packages/other/src/x.ts\n')
+      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'packages/other/src/x.ts\0')
       ignoredProc.emit('close', 0, null)
     }, 10)
 
-    await expect(promise).resolves.toEqual(['src/index.ts', 'dist/generated.js'])
+    await expect(promise).resolves.toEqual(['src/index.ts', 'tab\tfile.txt', 'dist/generated.js'])
 
     const ignoredArgs = spawnMock.mock.calls[1][1] as string[]
     expect(ignoredArgs).toEqual([
       'ls-files',
+      '-z',
       '--others',
       '--ignored',
       '--exclude-standard',
@@ -120,10 +122,10 @@ describe('relay quick open ignored file listing', () => {
     const promise = listFilesWithGit('/remote/root')
 
     setTimeout(() => {
-      ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
+      ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
       primaryProc.emit('close', 0, null)
 
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
+      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
       ignoredProc.emit('close', null, 'SIGTERM')
     }, 10)
 

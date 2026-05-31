@@ -256,13 +256,13 @@ describe('filesystem-list-files', () => {
       const promise = listQuickOpenFiles('/mock/root', storeMock)
 
       setTimeout(() => {
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'package.json\n')
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'node_modules/dep/index.js\n')
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'package.json\0')
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'node_modules/dep/index.js\0')
         gitP1.emit('close', 0, null)
 
-        ;(gitP2.stdout as unknown as EventEmitter).emit('data', '.env.local\n')
-        ;(gitP2.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
+        ;(gitP2.stdout as unknown as EventEmitter).emit('data', '.env.local\0')
+        ;(gitP2.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
         gitP2.emit('close', 0, null)
       }, 10)
 
@@ -304,10 +304,10 @@ describe('filesystem-list-files', () => {
       const promise = listQuickOpenFiles('/mock/root', storeMock)
 
       setTimeout(() => {
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', '.next/cache/1.js\n')
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', '.vscode/settings.json\n')
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', '.github/workflows/ci.yml\n')
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'valid.ts\n')
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', '.next/cache/1.js\0')
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', '.vscode/settings.json\0')
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', '.github/workflows/ci.yml\0')
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'valid.ts\0')
         gitP1.emit('close', 0, null)
 
         gitP2.emit('close', 0, null)
@@ -342,7 +342,7 @@ describe('filesystem-list-files', () => {
         await Promise.resolve()
         await Promise.resolve()
 
-        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\npartial')
+        ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0partial')
 
         await vi.advanceTimersByTimeAsync(10000)
 

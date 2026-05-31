@@ -233,12 +233,12 @@ describe('normalizeQuickOpenRgLine', () => {
 describe('buildGitLsFilesArgsForQuickOpen', () => {
   it('primary pass is --cached --others --exclude-standard', () => {
     const { primary } = buildGitLsFilesArgsForQuickOpen()
-    expect(primary).toEqual(['--cached', '--others', '--exclude-standard'])
+    expect(primary).toEqual(['-z', '--cached', '--others', '--exclude-standard'])
   })
 
   it('ignored pass surfaces ignored files without .env* pathspec whitelist', () => {
     const { ignoredPass } = buildGitLsFilesArgsForQuickOpen()
-    expect(ignoredPass).toEqual(['--others', '--ignored', '--exclude-standard'])
+    expect(ignoredPass).toEqual(['-z', '--others', '--ignored', '--exclude-standard'])
     expect(ignoredPass).not.toContain('.env*')
     expect(ignoredPass).not.toContain(':(glob)**/.env*')
   })

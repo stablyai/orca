@@ -356,7 +356,9 @@ export function buildGitLsFilesArgsForQuickOpen(
   }
   const trailingPathspecs = excludeSpecs.length > 0 ? ['--', '.', ...excludeSpecs] : []
 
-  const primary = ['--cached', '--others', '--exclude-standard', ...trailingPathspecs]
-  const ignoredPass = ['--others', '--ignored', '--exclude-standard', ...trailingPathspecs]
+  // Why: newline output C-quotes tabs/newlines, which makes Quick Open return
+  // fake paths when rg is unavailable. NUL output preserves real Git paths.
+  const primary = ['-z', '--cached', '--others', '--exclude-standard', ...trailingPathspecs]
+  const ignoredPass = ['-z', '--others', '--ignored', '--exclude-standard', ...trailingPathspecs]
   return { primary, ignoredPass }
 }
