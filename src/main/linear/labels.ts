@@ -219,6 +219,9 @@ export async function listIssueLabels(
           }
         } else {
           console.warn('[linear] listIssueLabels failed:', error)
+          if (shouldThrowAuthError(options.workspaceId)) {
+            throw error
+          }
         }
         return []
       } finally {

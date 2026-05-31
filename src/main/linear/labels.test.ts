@@ -166,6 +166,20 @@ describe('Linear label catalog API', () => {
     })
   })
 
+  it('throws label list failures for a single selected workspace', async () => {
+    const apiError = new Error('Linear unavailable')
+    getClients.mockReturnValue([
+      makeEntry({
+        client: { client: { rawRequest: vi.fn().mockRejectedValue(apiError) } }
+      } as never)
+    ])
+    const { listIssueLabels } = await import('./labels')
+
+    await expect(listIssueLabels({ workspaceId: 'workspace-1' })).rejects.toThrow(
+      'Linear unavailable'
+    )
+  })
+
   it('fans out label listing across selected workspaces and clears only the failed auth workspace', async () => {
     const authError = new Error('unauthorized')
     isAuthError.mockImplementation((error) => error === authError)
