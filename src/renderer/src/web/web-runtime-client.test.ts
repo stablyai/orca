@@ -131,6 +131,33 @@ describe('WebRuntimeClient', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects pending connection waiters when the client closes', async () => {
+    vi.useFakeTimers()
+    const timerWindow = window as unknown as {
+      setTimeout: typeof setTimeout
+      clearTimeout: typeof clearTimeout
+    }
+    timerWindow.setTimeout = setTimeout
+    timerWindow.clearTimeout = clearTimeout
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+
+    try {
+      const callPromise = client.call('status.get', {}, { timeoutMs: 30_000 })
+
+      client.close()
+
+      await expect(callPromise).rejects.toThrow('Remote Orca runtime connection closed.')
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps file watches on the owning WebSocket instead of opening child clients', async () => {
     const client = new WebRuntimeClient({
       v: 2,

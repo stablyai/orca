@@ -284,6 +284,7 @@ export class WebRuntimeClient {
     this.childClients.clear()
     this.clearTimers()
     this.rejectAllPending('Remote Orca runtime connection closed.')
+    this.rejectAllWaiters(new Error('Remote Orca runtime connection closed.'))
     if (shouldNotifySubscriptions) {
       this.notifySubscriptionsClosed()
     } else {
