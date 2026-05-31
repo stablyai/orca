@@ -55,7 +55,6 @@ import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   cloneDefaultWorkspaceStatuses,
-  normalizeWorkspaceBoardCompact,
   normalizeWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
@@ -611,8 +610,6 @@ export type UISlice = {
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
   workspaceBoardOpacity: number
   setWorkspaceBoardOpacity: (opacity: number) => void
-  workspaceBoardCompact: boolean
-  setWorkspaceBoardCompact: (compact: boolean) => void
   workspaceBoardColumnWidth: number
   setWorkspaceBoardColumnWidth: (width: number) => void
   statusBarItems: StatusBarItem[]
@@ -1294,13 +1291,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceBoardOpacity: clamped })
   },
 
-  workspaceBoardCompact: false,
-  setWorkspaceBoardCompact: (compact) => {
-    const normalized = normalizeWorkspaceBoardCompact(compact)
-    window.api.ui.set({ workspaceBoardCompact: normalized }).catch(console.error)
-    set({ workspaceBoardCompact: normalized })
-  },
-
   workspaceBoardColumnWidth: WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
   setWorkspaceBoardColumnWidth: (width) => {
     const clamped = clampWorkspaceBoardColumnWidth(width)
@@ -1476,7 +1466,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
-        workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
         statusBarItems,
         statusBarVisible: ui.statusBarVisible ?? true,

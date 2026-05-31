@@ -1,14 +1,12 @@
 import React from 'react'
-import { ArrowDown, ArrowUp, LayoutList, Plus, Rows3, Settings, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Plus, Settings, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { WorkspaceStatusDefinition } from '../../../../shared/types'
@@ -16,9 +14,7 @@ import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import WorkspaceStatusAppearancePopover from './WorkspaceStatusAppearancePopover'
 
 type WorkspaceKanbanSettingsMenuProps = {
-  compact: boolean
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  onCompactChange: (compact: boolean) => void
   onRenameStatus: (statusId: string, label: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
@@ -28,9 +24,7 @@ type WorkspaceKanbanSettingsMenuProps = {
 }
 
 export default function WorkspaceKanbanSettingsMenu({
-  compact,
   workspaceStatuses,
-  onCompactChange,
   onRenameStatus,
   onChangeStatusColor,
   onChangeStatusIcon,
@@ -72,39 +66,6 @@ export default function WorkspaceKanbanSettingsMenu({
           }
         }}
       >
-        <DropdownMenuLabel>Card density</DropdownMenuLabel>
-        <div className="px-2 pb-2">
-          <ToggleGroup
-            type="single"
-            value={compact ? 'compact' : 'detailed'}
-            onValueChange={(value) => {
-              if (value) {
-                onCompactChange(value === 'compact')
-              }
-            }}
-            variant="outline"
-            size="sm"
-            className="h-7 w-full justify-stretch"
-          >
-            <ToggleGroupItem
-              value="detailed"
-              className="h-7 grow basis-0 gap-1.5 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
-              aria-label="Detailed workspace cards"
-            >
-              <LayoutList className="size-3.5" />
-              Detailed
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="compact"
-              className="h-7 grow basis-0 gap-1.5 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
-              aria-label="Compact workspace cards"
-            >
-              <Rows3 className="size-3.5" />
-              Compact
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-        <DropdownMenuSeparator />
         <DropdownMenuLabel>Statuses</DropdownMenuLabel>
         <div className="space-y-2 px-1 pb-1">
           {workspaceStatuses.map((status, index) => {

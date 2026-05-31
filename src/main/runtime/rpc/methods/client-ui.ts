@@ -146,7 +146,6 @@ const UiUpdate = z
     agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
-    workspaceBoardCompact: z.boolean().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),
     _workspaceStatusesDefaultOrderMigrated: z.boolean().optional(),
     _workspaceStatusesDefaultWorkflowMigrated: z.boolean().optional(),

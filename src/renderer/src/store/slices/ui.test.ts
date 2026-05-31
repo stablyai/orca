@@ -608,24 +608,6 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).not.toHaveBeenCalled()
   })
 
-  it('restores compact workspace board mode only from an explicit true', () => {
-    const store = createUIStore()
-
-    store.getState().hydratePersistedUI(
-      makePersistedUI({
-        workspaceBoardCompact: true
-      })
-    )
-    expect(store.getState().workspaceBoardCompact).toBe(true)
-
-    store.getState().hydratePersistedUI(
-      makePersistedUI({
-        workspaceBoardCompact: 'yes' as unknown as boolean
-      })
-    )
-    expect(store.getState().workspaceBoardCompact).toBe(false)
-  })
-
   it('clamps persisted workspace board column width', () => {
     const store = createUIStore()
 

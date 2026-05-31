@@ -96,7 +96,6 @@ import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
-  normalizeWorkspaceBoardCompact,
   normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
@@ -2826,7 +2825,6 @@ export class Store {
       ),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
-      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
       ),
@@ -2863,9 +2861,6 @@ export class Store {
           : normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(
         updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
-      ),
-      workspaceBoardCompact: normalizeWorkspaceBoardCompact(
-        updates.workspaceBoardCompact ?? this.state.ui?.workspaceBoardCompact
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
