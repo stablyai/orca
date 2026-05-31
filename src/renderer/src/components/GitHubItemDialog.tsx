@@ -5312,21 +5312,24 @@ export default function GitHubItemDialog({
   // Why: clipboard IPC can resolve after the dialog unmounts; skip copied-state
   // feedback instead of starting its reset timer on a stale surface.
   const linkCopyMountedRef = useRef(false)
+  const linkCopiedResetTimerRef = useRef<number | null>(null)
+  const clearLinkCopiedResetTimer = useCallback((): void => {
+    if (linkCopiedResetTimerRef.current === null) {
+      return
+    }
+    window.clearTimeout(linkCopiedResetTimerRef.current)
+    linkCopiedResetTimerRef.current = null
+  }, [])
   const setLinkCopyButtonRef = useCallback((node: HTMLButtonElement | null) => {
     linkCopyMountedRef.current = node !== null
   }, [])
 
   useEffect(() => {
+    clearLinkCopiedResetTimer()
     setLinkCopied(false)
-  }, [workItemId])
+  }, [clearLinkCopiedResetTimer, workItemId])
 
-  useEffect(() => {
-    if (!linkCopied) {
-      return
-    }
-    const handle = window.setTimeout(() => setLinkCopied(false), 1500)
-    return () => window.clearTimeout(handle)
-  }, [linkCopied])
+  useEffect(() => clearLinkCopiedResetTimer, [clearLinkCopiedResetTimer])
 
   const handleCopyWorkItemLink = useCallback(async (): Promise<void> => {
     if (!workItem) {
@@ -5339,12 +5342,17 @@ export default function GitHubItemDialog({
       if (!linkCopyMountedRef.current) {
         return
       }
+      clearLinkCopiedResetTimer()
       setLinkCopied(true)
+      linkCopiedResetTimerRef.current = window.setTimeout(() => {
+        linkCopiedResetTimerRef.current = null
+        setLinkCopied(false)
+      }, 1500)
       toast.success('GitHub link copied')
     } catch {
       toast.error('Failed to copy GitHub link')
     }
-  }, [workItem])
+  }, [clearLinkCopiedResetTimer, workItem])
 
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
