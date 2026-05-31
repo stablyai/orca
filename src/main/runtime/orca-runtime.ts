@@ -4382,6 +4382,9 @@ export class OrcaRuntimeService {
         this.setDriver(ptyId, { kind: 'idle' })
       }
     }, SOFT_LEAVE_GRACE_MS)
+    if (typeof softTimer.unref === 'function') {
+      softTimer.unref()
+    }
     this.pendingSoftLeavers.set(ptyId, {
       clientId,
       timer: softTimer,
@@ -4435,6 +4438,11 @@ export class OrcaRuntimeService {
             rows: restoreRows
           })
         }, autoRestoreMs)
+        // Why: a delayed mobile restore should not keep Electron main alive
+        // after the last window/runtime transport has otherwise shut down.
+        if (typeof timer.unref === 'function') {
+          timer.unref()
+        }
 
         this.pendingRestoreTimers.set(ptyId, { timer, clientId })
       }
