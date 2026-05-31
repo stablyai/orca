@@ -36,6 +36,16 @@ const inflightHostedReviewRequests = new Map<
 >()
 const requestGenerations = new Map<string, number>()
 
+/** @internal - exposed for leak-regression tests only */
+export function _getHostedReviewRequestGenerationCountForTest(): number {
+  return requestGenerations.size
+}
+
+/** @internal - exposed for leak-regression tests only */
+export function _clearHostedReviewRequestGenerationsForTest(): void {
+  requestGenerations.clear()
+}
+
 function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
   return entry !== undefined && Date.now() - entry.fetchedAt < CACHE_TTL_MS
 }
@@ -340,6 +350,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           const activeRequest = inflightHostedReviewRequests.get(cacheKey)
           if (activeRequest?.generation === generation) {
             inflightHostedReviewRequests.delete(cacheKey)
+            if (requestGenerations.get(cacheKey) === generation) {
+              requestGenerations.delete(cacheKey)
+            }
           }
         }
       })()

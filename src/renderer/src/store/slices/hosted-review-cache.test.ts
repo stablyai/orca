@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import { createHostedReviewSlice, getHostedReviewCacheKey } from './hosted-review'
+import {
+  _clearHostedReviewRequestGenerationsForTest,
+  _getHostedReviewRequestGenerationCountForTest,
+  createHostedReviewSlice,
+  getHostedReviewCacheKey
+} from './hosted-review'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
 const runtimeRpc = vi.hoisted(() => ({
@@ -63,10 +68,12 @@ describe('hosted review cache revalidation', () => {
     mockApi.hostedReview.getCreationEligibility.mockReset()
     mockApi.hostedReview.create.mockReset()
     runtimeRpc.callRuntimeRpc.mockReset()
+    _clearHostedReviewRequestGenerationsForTest()
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    _clearHostedReviewRequestGenerationsForTest()
   })
 
   it('dedupes repeated linked PR retries while a stronger lookup is in flight', async () => {
@@ -192,5 +199,6 @@ describe('hosted review cache revalidation', () => {
         ?.data
     ).toMatchObject({ title: 'feature/cache-500' })
     expect(Object.keys(store.getState().hostedReviewCache)).toHaveLength(500)
+    expect(_getHostedReviewRequestGenerationCountForTest()).toBe(0)
   })
 })
