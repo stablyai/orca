@@ -558,13 +558,31 @@ describe('CodexHookService', () => {
 
     const service = new CodexHookService()
     expect(service.install().state).toBe('installed')
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    const runtimeTomlPath = join(managedCodexHome, 'config.toml')
+    const permissionRequestHeader = hookTrustHeader(`${managedHooksPath}:permission_request:0:0`)
+    const installedToml = readFileSync(runtimeTomlPath, 'utf-8')
+    const permissionRequestIndex = installedToml.indexOf(permissionRequestHeader)
+    expect(permissionRequestIndex).not.toBe(-1)
+    const nextHeaderIndex = installedToml.indexOf(
+      '\n[',
+      permissionRequestIndex + permissionRequestHeader.length
+    )
+    const permissionRequestBlock = installedToml.slice(
+      permissionRequestIndex,
+      nextHeaderIndex === -1 ? installedToml.length : nextHeaderIndex
+    )
+    writeFileSync(
+      runtimeTomlPath,
+      `${installedToml.trimEnd()}\n\n${permissionRequestBlock.trimEnd()}\n`,
+      'utf-8'
+    )
 
     const status = service.refreshRuntimeUserHooks()
 
     expect(status.state).toBe('not_installed')
     expect(status.managedHooksPresent).toBe(false)
-    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
-    const managedHooksPath = join(managedCodexHome, 'hooks.json')
     const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
@@ -574,7 +592,7 @@ describe('CodexHookService', () => {
     expect(runtimeCommands).toEqual(['user-stop-hook'])
     expect(runtimeCommands.some((command) => command.includes('codex-hook'))).toBe(false)
 
-    const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
+    const runtimeToml = readFileSync(runtimeTomlPath, 'utf-8')
     expect(runtimeToml).toContain(
       `${hookTrustHeader(`${managedHooksPath}:stop:0:0`)}\nenabled = false`
     )
@@ -909,6 +927,59 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain('trusted_hash = "sha256:runtime"')
     expect(trustConfig).toContain(':permission_request:0:0')
     expect(trustConfig).not.toContain('model = "runtime-model"')
+  })
+
+  it('repairs duplicate managed SessionStart trust tables on restart install', () => {
+    const systemCodexHome = join(tmpHome, '.codex')
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "system-model"\n', 'utf-8')
+
+    const service = new CodexHookService()
+    expect(service.install().state).toBe('installed')
+
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    const runtimeTomlPath = join(managedCodexHome, 'config.toml')
+    const sessionStartHeader = hookTrustHeader(`${managedHooksPath}:session_start:0:0`)
+    const installedToml = readFileSync(runtimeTomlPath, 'utf-8')
+    const sessionStartIndex = installedToml.indexOf(sessionStartHeader)
+    expect(sessionStartIndex).not.toBe(-1)
+    const nextHeaderIndex = installedToml.indexOf(
+      '\n[',
+      sessionStartIndex + sessionStartHeader.length
+    )
+    const sessionStartBlock = installedToml
+      .slice(sessionStartIndex, nextHeaderIndex === -1 ? installedToml.length : nextHeaderIndex)
+      .trimEnd()
+    const staleDisabledBlock = sessionStartBlock
+      .replace('enabled = true', 'enabled = false')
+      .replace(/trusted_hash = "[^"]+"/, 'trusted_hash = "sha256:STALE_DISABLED"')
+    const staleEnabledBlock = sessionStartBlock.replace(
+      /trusted_hash = "[^"]+"/,
+      'trusted_hash = "sha256:STALE_ENABLED"'
+    )
+    writeFileSync(
+      runtimeTomlPath,
+      `${installedToml.slice(
+        0,
+        sessionStartIndex
+      )}${staleDisabledBlock}\n\n${staleEnabledBlock}${installedToml.slice(
+        nextHeaderIndex === -1 ? installedToml.length : nextHeaderIndex
+      )}`,
+      'utf-8'
+    )
+    expect(readFileSync(runtimeTomlPath, 'utf-8').split(sessionStartHeader)).toHaveLength(3)
+
+    // Why: preserving `enabled = false` is the repair contract; status can be
+    // partial because the user-disabled managed hook remains disabled.
+    expect(['installed', 'partial']).toContain(service.install().state)
+
+    const repairedToml = readFileSync(runtimeTomlPath, 'utf-8')
+    expect(repairedToml.split(sessionStartHeader)).toHaveLength(2)
+    expect(repairedToml).toContain('enabled = false')
+    expect(repairedToml).not.toContain('STALE_DISABLED')
+    expect(repairedToml).not.toContain('STALE_ENABLED')
+    expect(repairedToml).toContain('model = "system-model"')
   })
 
   it('preserves runtime-only project trust while honoring system project untrust', () => {

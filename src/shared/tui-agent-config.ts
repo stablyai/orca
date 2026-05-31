@@ -67,6 +67,13 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // See PR https://github.com/stablyai/orca/pull/926 for context.
     draftPromptFlag: '--prefill'
   },
+  openclaude: {
+    detectCmd: 'openclaude',
+    launchCmd: 'openclaude',
+    expectedProcess: 'openclaude',
+    promptInjectionMode: 'argv',
+    draftPromptFlag: '--prefill'
+  },
   codex: {
     detectCmd: 'codex',
     launchCmd: 'codex',

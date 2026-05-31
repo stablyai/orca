@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ActivityIndicator,
@@ -59,6 +59,7 @@ import {
   filterWorkspaceAgents,
   isWorkspaceAgentEnabled,
   pickWorkspaceAgent,
+  resolveWorkspaceAgentSelection,
   workspaceAgentLabel,
   type WorkspaceAgentChoice
 } from '../../../src/tasks/workspace-agent-selection'
@@ -2534,7 +2535,9 @@ export default function MobileTasksScreen() {
     return [...logins].sort().join(',')
   }, [projectRowDetail, projectRowItem?.content.assignees])
 
-  useEffect(() => {
+  // Why: task-loading effects use this as a stale-client guard, so the ref
+  // must be current before those passive effects can run after commit.
+  useLayoutEffect(() => {
     clientRef.current = client
   }, [client])
 
@@ -4996,42 +4999,22 @@ export default function MobileTasksScreen() {
     workspaceCreateTargetRepo
   ])
 
-  useEffect(() => {
-    if (!tasksSupported || !workspaceCreateDraft || workspaceAgentOverridden) return
-    setWorkspaceAgent(pickWorkspaceAgent(runtimeTaskSettings, workspaceDetectedAgentIds))
-  }, [
-    runtimeTaskSettings,
-    tasksSupported,
-    workspaceAgentOverridden,
-    workspaceCreateDraft,
-    workspaceDetectedAgentIds
-  ])
-
-  useEffect(() => {
-    if (
-      !workspaceCreateDraft ||
-      !tasksSupported ||
-      workspaceDetectedAgentIds === null ||
-      !workspaceAgent ||
-      workspaceAgent === 'blank' ||
-      (workspaceDetectedAgentIds.has(workspaceAgent) &&
-        isWorkspaceAgentEnabled(workspaceAgent, runtimeTaskSettings.disabledTuiAgents))
-    ) {
-      return
-    }
-    // Why: the drawer can open before SSH/local detection settles. If the user
-    // picked an agent that is not actually available on that host, fall back to
-    // the same detected-agent rule desktop uses instead of launching a bad CLI.
-    setWorkspaceAgent(pickWorkspaceAgent(runtimeTaskSettings, workspaceDetectedAgentIds))
-    setWorkspaceAgentOverridden(false)
-  }, [
-    runtimeTaskSettings,
-    tasksSupported,
-    workspaceAgent,
-    workspaceCreateDraft,
-    workspaceDetectedAgentIds,
-    runtimeTaskSettings.disabledTuiAgents
-  ])
+  const workspaceAgentSelection = resolveWorkspaceAgentSelection({
+    selectionActive: tasksSupported && workspaceCreateDraft !== null,
+    settings: runtimeTaskSettings,
+    detectedAgentIds: workspaceDetectedAgentIds,
+    agent: workspaceAgent,
+    overridden: workspaceAgentOverridden
+  })
+  if (
+    workspaceAgentSelection.agent !== workspaceAgent ||
+    workspaceAgentSelection.overridden !== workspaceAgentOverridden
+  ) {
+    // Why: the drawer can open before SSH/local detection settles. Resolve the
+    // visible agent before commit so users do not see an unavailable override.
+    setWorkspaceAgent(workspaceAgentSelection.agent)
+    setWorkspaceAgentOverridden(workspaceAgentSelection.overridden)
+  }
 
   const resolvedWorkspaceAgent = useMemo(
     () => workspaceAgent ?? pickWorkspaceAgent(runtimeTaskSettings, workspaceDetectedAgentIds),

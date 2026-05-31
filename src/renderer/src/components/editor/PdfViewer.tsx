@@ -139,6 +139,10 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
   }, [cleanedContent])
 
   const closeFindBar = useCallback(() => {
+    const eventBus = eventBusRef.current
+    if (eventBus) {
+      eventBus.dispatch('findbarclose', { source: null })
+    }
     setFindOpen(false)
   }, [])
 

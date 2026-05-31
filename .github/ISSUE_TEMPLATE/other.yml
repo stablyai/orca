@@ -1,6 +1,6 @@
 name: Other
 description: Report another Orca issue type
-title: "[Other]: "
+title: '[Other]: '
 body:
   - type: textarea
     id: details

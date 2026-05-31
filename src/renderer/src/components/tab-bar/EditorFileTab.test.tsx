@@ -18,6 +18,9 @@ vi.mock('react', async () => {
   return {
     ...actual,
     useEffect: () => {},
+    useCallback<T extends (...args: never[]) => unknown>(callback: T) {
+      return callback
+    },
     useRef<T>(initial: T) {
       return { current: initial }
     },
@@ -284,6 +287,11 @@ describe('EditorFileTab rename menu', () => {
     vi.clearAllMocks()
     vi.resetModules()
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
   it('turns the tab filename into an inline input from the Rename context-menu item', async () => {
@@ -304,6 +312,17 @@ describe('EditorFileTab rename menu', () => {
     expect(inputs[0].props.defaultValue).toBe('untitled-5.md')
     expect(inputs[0].props['data-tab-rename-input']).toBe('true')
     expect(onActivate).toHaveBeenCalledTimes(1)
+
+    const focus = vi.fn()
+    const select = vi.fn()
+    const setSelectionRange = vi.fn()
+    const setInputRef = inputs[0].props.ref as (input: HTMLInputElement | null) => void
+
+    setInputRef({ focus, select, setSelectionRange } as unknown as HTMLInputElement)
+
+    expect(focus).toHaveBeenCalledTimes(1)
+    expect(setSelectionRange).toHaveBeenCalledWith(0, 'untitled-5'.length)
+    expect(select).not.toHaveBeenCalled()
   })
 
   it('disables Rename for diff tabs that do not map to one writable file', async () => {

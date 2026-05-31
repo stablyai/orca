@@ -77,6 +77,7 @@ function createMockGuest(id: number, url: string, title: string) {
   let currentTitle = title
   let currentTree = EXAMPLE_COM_TREE
   let navHistoryId = 1
+  let debuggerAttached = false
 
   const sendCommandMock = vi.fn(async (method: string, params?: Record<string, unknown>) => {
     switch (method) {
@@ -181,7 +182,13 @@ function createMockGuest(id: number, url: string, title: string) {
     on: vi.fn(),
     off: vi.fn(),
     debugger: {
-      attach: vi.fn(),
+      isAttached: vi.fn(() => debuggerAttached),
+      attach: vi.fn(() => {
+        if (debuggerAttached) {
+          throw new Error('Another debugger is already attached')
+        }
+        debuggerAttached = true
+      }),
       detach: vi.fn(),
       sendCommand: sendCommandMock,
       on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
@@ -239,12 +246,14 @@ describe('Browser automation pipeline (integration)', () => {
   let server: OrcaRuntimeRpcServer
   let endpoint: string
   let authToken: string
+  let activeGuest: ReturnType<typeof createMockGuest>['guest']
 
   const GUEST_WC_ID = 5001
   const RENDERER_WC_ID = 1
 
   beforeEach(async () => {
     const { guest } = createMockGuest(GUEST_WC_ID, 'https://example.com', 'Example Domain')
+    activeGuest = guest
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === GUEST_WC_ID) {
         return guest
@@ -313,6 +322,7 @@ describe('Browser automation pipeline (integration)', () => {
       role: 'link',
       name: 'More information...'
     })
+    expect(activeGuest.debugger.attach).toHaveBeenCalledTimes(1)
   })
 
   // ── Click ──

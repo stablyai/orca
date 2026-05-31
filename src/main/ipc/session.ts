@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionPatch, WorkspaceSessionState } from '../../shared/types'
 
 export function registerSessionHandlers(store: Store): void {
   ipcMain.handle('session:get', () => {
@@ -9,6 +9,10 @@ export function registerSessionHandlers(store: Store): void {
 
   ipcMain.handle('session:set', (_event, args: WorkspaceSessionState) => {
     store.setWorkspaceSession(args)
+  })
+
+  ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch) => {
+    store.patchWorkspaceSession(args)
   })
 
   // Synchronous variant for the renderer's beforeunload handler.

@@ -15,6 +15,7 @@ type FileLinkHitTestDeps = {
   worktreePath: string
   runtimeEnvironmentId?: string | null
   pathExistsCache?: Map<string, boolean>
+  openWithSystemDefault?: boolean
 }
 
 export function openFilePathLinkAtBufferPosition(
@@ -63,7 +64,10 @@ export function openFilePathLinkAtBufferPosition(
     const uncachedMatch = matches.find((match) => match.cachedExists !== false)
     const match = cachedMatch ?? uncachedMatch
     if (match) {
-      openDetectedFilePath(match.absolutePath, match.line, match.column, deps)
+      openDetectedFilePath(match.absolutePath, match.line, match.column, {
+        ...deps,
+        openWithSystemDefault: deps.openWithSystemDefault === true
+      })
       return true
     }
   }

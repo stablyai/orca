@@ -35,10 +35,13 @@ export function WorkspaceCard(props: {
         />
         <span
           className={cn(
-            'truncate text-[14.5px] font-semibold leading-[1.2] text-foreground',
+            'truncate font-semibold leading-[1.2] text-foreground',
             dimName && 'opacity-55'
           )}
-          style={dimName ? { opacity: 0.55 } : undefined}
+          style={{
+            fontSize: 'var(--feature-wall-workspace-title-size, 14.5px)',
+            ...(dimName ? { opacity: 0.55 } : {})
+          }}
         >
           {name}
         </span>
@@ -62,20 +65,53 @@ export function AgentRow(props: {
   return (
     <div
       ref={registerRef}
-      className={cn('grid items-center gap-[9px] pl-1', spawnRow && 'feature-wall-spawn-row')}
-      style={{ gridTemplateColumns: '16px 16px minmax(0, 1fr)' }}
+      className={cn(
+        'feature-wall-agent-row grid items-center pl-1',
+        spawnRow && 'feature-wall-spawn-row'
+      )}
+      style={{
+        columnGap: 'var(--feature-wall-agent-row-gap, 9px)',
+        gridTemplateColumns:
+          'var(--feature-wall-agent-status-col, 16px) var(--feature-wall-agent-icon-col, 16px) minmax(0, 1fr)'
+      }}
       data-pending={pending ? 'true' : undefined}
     >
-      <span className="inline-flex size-4 items-center justify-center">
+      <span
+        className="feature-wall-agent-status inline-flex items-center justify-center"
+        style={{
+          height: 'var(--feature-wall-agent-status-box, 16px)',
+          width: 'var(--feature-wall-agent-status-box, 16px)'
+        }}
+      >
         {state === 'working' ? (
           <AgentStateDot state="working" size="md" />
         ) : (
-          <span className="inline-flex size-3 items-center justify-center text-emerald-500">
-            <CircleCheck className="size-3" aria-hidden />
+          <span
+            className="inline-flex items-center justify-center text-emerald-500"
+            style={{
+              height: 'var(--feature-wall-agent-status-icon, 12px)',
+              width: 'var(--feature-wall-agent-status-icon, 12px)'
+            }}
+          >
+            <CircleCheck
+              aria-hidden
+              style={{
+                height: 'var(--feature-wall-agent-status-icon, 12px)',
+                width: 'var(--feature-wall-agent-status-icon, 12px)'
+              }}
+            />
           </span>
         )}
       </span>
-      <span className="inline-flex size-4 items-center justify-center">{icon}</span>
+      <span
+        className="feature-wall-agent-icon inline-flex items-center justify-center"
+        style={{
+          height: 'var(--feature-wall-agent-icon-box, 16px)',
+          width: 'var(--feature-wall-agent-icon-box, 16px)'
+        }}
+      >
+        {icon}
+      </span>
       <span
         // Why: re-keying on flashKey forces React to remount the span so the
         // CSS `feature-wall-msg-received` animation actually replays each
@@ -83,9 +119,10 @@ export function AgentRow(props: {
         // keeps its already-finished animation and only the text changes.
         key={flashKey}
         className={cn(
-          'truncate text-[13px] leading-[1.3] text-foreground',
+          'truncate leading-[1.3] text-foreground',
           flashKey > 0 && 'feature-wall-msg-received'
         )}
+        style={{ fontSize: 'var(--feature-wall-agent-message-size, 13px)' }}
       >
         {message}
       </span>

@@ -34,7 +34,7 @@ const fakeDatabase = vi.hoisted(() =>
   })
 )
 
-vi.mock('better-sqlite3', () => ({
+vi.mock('../sqlite/sync-database', () => ({
   default: fakeDatabase
 }))
 

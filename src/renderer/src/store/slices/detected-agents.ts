@@ -1,7 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { PathSource, ShellHydrationFailureReason, TuiAgent } from '../../../../shared/types'
-import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
+import {
+  getLocalAgentPreflightContext,
+  localPreflightContextKey
+} from '@/lib/local-preflight-context'
 
 export type DetectedAgentsSlice = {
   detectedAgentIds: TuiAgent[] | null
@@ -48,7 +51,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
   pathFailureReason: null,
 
   ensureDetectedAgents: () => {
-    const context = getLocalPreflightContext(get())
+    const context = getLocalAgentPreflightContext(get())
     const contextKey = localPreflightContextKey(context)
     const existing = get().detectedAgentIds
     if (existing && detectedContextKey === contextKey) {
@@ -85,7 +88,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
   },
 
   refreshDetectedAgents: () => {
-    const context = getLocalPreflightContext(get())
+    const context = getLocalAgentPreflightContext(get())
     const contextKey = localPreflightContextKey(context)
     if (refreshPromise?.key === contextKey) {
       return refreshPromise.promise

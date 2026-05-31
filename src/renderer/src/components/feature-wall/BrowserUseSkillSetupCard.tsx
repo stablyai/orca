@@ -1,37 +1,19 @@
-import { useEffect, type JSX } from 'react'
-import {
-  ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+import type { JSX } from 'react'
+import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
-import {
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
+import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
 
 export function BrowserUseSkillSetupCard(props: {
   compact?: boolean
   terminalHeightPx?: number
-  onInstalledChange?: (installed: boolean) => void
+  skill: InstalledAgentSkillState
 }): JSX.Element {
-  const { compact, terminalHeightPx, onInstalledChange } = props
-  const {
-    installed: skillInstalled,
-    loading: skillLoading,
-    error: skillError,
-    refresh: refreshSkillInstalled
-  } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-
-  useEffect(() => {
-    onInstalledChange?.(skillInstalled)
-  }, [onInstalledChange, skillInstalled])
+  const { compact, terminalHeightPx, skill } = props
 
   const handleBeforeOpenTerminal = async (): Promise<void> => {
     await ensureOrcaCliAvailableForAgentSkillTerminal()
@@ -47,14 +29,14 @@ export function BrowserUseSkillSetupCard(props: {
       terminalTitle="Browser Use setup"
       terminalAriaLabel="Browser Use skill install terminal"
       terminalWorktreeId="feature-wall-browser-use-skill-terminal"
-      installed={skillInstalled}
-      loading={skillLoading}
-      error={skillError}
+      installed={skill.installed}
+      loading={skill.loading}
+      error={skill.error}
       terminalHeightPx={terminalHeightPx}
       preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
       onBeforeOpenTerminal={handleBeforeOpenTerminal}
       showRecheckWhenInstalled={false}
-      onRecheck={refreshSkillInstalled}
+      onRecheck={skill.refresh}
     />
   )
 

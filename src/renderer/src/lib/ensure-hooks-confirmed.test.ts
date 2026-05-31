@@ -189,6 +189,40 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
+  it('still honors local issueCommand overrides when shared inspection reports an error', async () => {
+    const { state, pending } = createTestState()
+    readIssueCommandMock.mockResolvedValue({
+      status: 'error',
+      source: 'local',
+      sharedContent: null,
+      localContent: 'user content',
+      effectiveContent: 'user content',
+      localFilePath: ''
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'issueCommand')
+
+    expect(decision).toBe('run')
+    expect(pending).toHaveLength(0)
+  })
+
+  it('fails closed when issueCommand inspection reports an error status', async () => {
+    const { state, pending } = createTestState()
+    readIssueCommandMock.mockResolvedValue({
+      status: 'error',
+      source: 'none',
+      sharedContent: null,
+      localContent: null,
+      effectiveContent: null,
+      localFilePath: ''
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'issueCommand')
+
+    expect(decision).toBe('skip')
+    expect(pending).toHaveLength(0)
+  })
+
   it('opens a modal with the computed content hash and resolves with the user decision', async () => {
     const { state, pending } = createTestState()
     hooksCheckMock.mockResolvedValue({
@@ -240,6 +274,21 @@ describe('ensureHooksConfirmed', () => {
   it('fails closed when window.api.hooks.check throws', async () => {
     const { state, pending } = createTestState()
     hooksCheckMock.mockRejectedValue(new Error('boom'))
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
+
+    expect(decision).toBe('skip')
+    expect(pending).toHaveLength(0)
+  })
+
+  it('fails closed when hook inspection reports an error status', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      status: 'error',
+      hasHooks: false,
+      hooks: null,
+      mayNeedUpdate: false
+    })
 
     const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
 

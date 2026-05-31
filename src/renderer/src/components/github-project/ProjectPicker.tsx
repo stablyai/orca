@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type {
   GitHubProjectOwnerType,
   GitHubProjectSettings,
@@ -92,6 +93,7 @@ async function resolveProjectRefForRuntime(
 export default function ProjectPicker({ activeProject, onSelect }: Props): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const mountedRef = useMountedRef()
   const projectSettings: GitHubProjectSettings = useMemo(
     () =>
       settings?.githubProjects ?? {
@@ -142,20 +144,30 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
           projects: res.projects,
           partialFailures: res.partialFailures
         }
+        if (!mountedRef.current) {
+          return
+        }
         setBrowseProjects(res.projects)
         setPartialFailures(res.partialFailures ?? [])
       } else {
+        if (!mountedRef.current) {
+          return
+        }
         setBrowseError(res.error)
       }
     } catch (err) {
-      setBrowseError({
-        type: 'unknown',
-        message: err instanceof Error ? err.message : 'Failed to list projects'
-      })
+      if (mountedRef.current) {
+        setBrowseError({
+          type: 'unknown',
+          message: err instanceof Error ? err.message : 'Failed to list projects'
+        })
+      }
     } finally {
-      setBrowseLoading(false)
+      if (mountedRef.current) {
+        setBrowseLoading(false)
+      }
     }
-  }, [settings])
+  }, [mountedRef, settings])
 
   useEffect(() => {
     if (open && !viewPickFor) {
@@ -203,13 +215,16 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
           }
         }
       })
+      if (!mountedRef.current) {
+        return
+      }
       onSelect(selection)
       setOpen(false)
       setQuery('')
       setViewPickFor(null)
       void title
     },
-    [onSelect, updateProjectSettings]
+    [mountedRef, onSelect, updateProjectSettings]
   )
 
   const handleChooseProject = useCallback(
@@ -253,6 +268,9 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
           ownerType: selection.ownerType,
           projectNumber: selection.number
         })
+        if (!mountedRef.current) {
+          return
+        }
         if (res.ok) {
           setViewList(res.views)
           if (selection.viewNumber !== undefined) {
@@ -283,13 +301,17 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         // unhandled rejections — leaving the picker stuck on the view-pick
         // step with a perpetual spinner. Treat as an empty result and toast
         // a transport-level message so the user can retry or paste again.
-        setViewList([])
-        toast.error(`Failed to load views: ${err instanceof Error ? err.message : String(err)}`)
+        if (mountedRef.current) {
+          setViewList([])
+          toast.error(`Failed to load views: ${err instanceof Error ? err.message : String(err)}`)
+        }
       } finally {
-        setViewLoading(false)
+        if (mountedRef.current) {
+          setViewLoading(false)
+        }
       }
     },
-    [commitSelection, projectSettings.lastViewByProject, settings]
+    [commitSelection, mountedRef, projectSettings.lastViewByProject, settings]
   )
 
   const handlePaste = useCallback(async () => {
@@ -302,6 +324,9 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     setPasteBusy(true)
     try {
       const res = await resolveProjectRefForRuntime(settings, pasteInput.trim())
+      if (!mountedRef.current) {
+        return
+      }
       if (!res.ok) {
         setPasteError(res.error.message)
         return
@@ -317,9 +342,11 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         ...(res.viewNumber !== undefined ? { viewNumber: res.viewNumber } : {})
       })
     } finally {
-      setPasteBusy(false)
+      if (mountedRef.current) {
+        setPasteBusy(false)
+      }
     }
-  }, [handleChooseProject, pasteInput, settings])
+  }, [handleChooseProject, mountedRef, pasteInput, settings])
 
   const filteredBrowse = useMemo(() => {
     const q = query.trim().toLowerCase()

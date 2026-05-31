@@ -7,6 +7,7 @@ import { RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import type {
   SourceControlAiOperation,
+  SourceControlAiSettingsPatch,
   SourceControlAiSettings
 } from '../../../../shared/source-control-ai-types'
 import {
@@ -46,13 +47,10 @@ import { matchesSettingsSearch } from './settings-search'
 type CommitMessageAiPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
   onCustomPromptDirtyChange?: (dirty: boolean) => void
   customPromptDiscardSignal?: number
 }
-
-type SourceControlAiConfigPatch =
-  | Partial<SourceControlAiSettings>
-  | ((current: SourceControlAiSettings) => Partial<SourceControlAiSettings>)
 
 type ModelDiscoveryState = {
   status: 'idle' | 'loading' | 'ready' | 'error'
@@ -204,6 +202,7 @@ export function getCommitMessageSettingsPaneDiscoveryHostKey(
 export function CommitMessageAiPane({
   settings,
   updateSettings,
+  writeSourceControlAiSettings,
   onCustomPromptDirtyChange,
   customPromptDiscardSignal
 }: CommitMessageAiPaneProps): React.JSX.Element {
@@ -222,66 +221,41 @@ export function CommitMessageAiPane({
   const [modelDiscoveryByAgent, setModelDiscoveryByAgent] = useState<
     Partial<Record<TuiAgent, ModelDiscoveryState>>
   >({})
-  const persistedCommitInstructions = config.instructionsByOperation.commitMessage ?? ''
-  const persistedPullRequestInstructions = config.instructionsByOperation.pullRequest ?? ''
-  const persistedBranchNameInstructions = config.instructionsByOperation.branchName ?? ''
-  const [commitInstructionsDraft, setCommitInstructionsDraft] = useState(
-    persistedCommitInstructions
-  )
-  const [pullRequestInstructionsDraft, setPullRequestInstructionsDraft] = useState(
-    persistedPullRequestInstructions
-  )
-  const [branchNameInstructionsDraft, setBranchNameInstructionsDraft] = useState(
-    persistedBranchNameInstructions
-  )
-  const [isSavingInstructions, setIsSavingInstructions] = useState(false)
-  const persistedInstructionsRef = useRef({
-    commitMessage: persistedCommitInstructions,
-    pullRequest: persistedPullRequestInstructions,
-    branchName: persistedBranchNameInstructions
+  const persistedCommitPrompt = config.instructionsByOperation.commitMessage ?? ''
+  const persistedPullRequestPrompt = config.instructionsByOperation.pullRequest ?? ''
+  const [commitPromptDraft, setCommitPromptDraft] = useState(persistedCommitPrompt)
+  const [pullRequestPromptDraft, setPullRequestPromptDraft] = useState(persistedPullRequestPrompt)
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false)
+  const persistedPromptsRef = useRef({
+    commitMessage: persistedCommitPrompt,
+    pullRequest: persistedPullRequestPrompt
   })
-  const isCommitInstructionsDirty = commitInstructionsDraft !== persistedCommitInstructions
-  const isPullRequestInstructionsDirty =
-    pullRequestInstructionsDraft !== persistedPullRequestInstructions
-  const isBranchNameInstructionsDirty =
-    branchNameInstructionsDraft !== persistedBranchNameInstructions
-  const isCustomPromptDirty =
-    isCommitInstructionsDirty || isPullRequestInstructionsDirty || isBranchNameInstructionsDirty
+  const isCommitPromptDirty = commitPromptDraft !== persistedCommitPrompt
+  const isPullRequestPromptDirty = pullRequestPromptDraft !== persistedPullRequestPrompt
+  const isCustomPromptDirty = isCommitPromptDirty || isPullRequestPromptDirty
 
   useEffect(() => {
-    persistedInstructionsRef.current = {
-      commitMessage: persistedCommitInstructions,
-      pullRequest: persistedPullRequestInstructions,
-      branchName: persistedBranchNameInstructions
+    persistedPromptsRef.current = {
+      commitMessage: persistedCommitPrompt,
+      pullRequest: persistedPullRequestPrompt
     }
-  }, [
-    persistedBranchNameInstructions,
-    persistedCommitInstructions,
-    persistedPullRequestInstructions
-  ])
+  }, [persistedCommitPrompt, persistedPullRequestPrompt])
 
   useEffect(() => {
-    if (!isCommitInstructionsDirty) {
-      setCommitInstructionsDraft(persistedCommitInstructions)
+    if (!isCommitPromptDirty) {
+      setCommitPromptDraft(persistedCommitPrompt)
     }
-  }, [isCommitInstructionsDirty, persistedCommitInstructions])
+  }, [isCommitPromptDirty, persistedCommitPrompt])
 
   useEffect(() => {
-    if (!isPullRequestInstructionsDirty) {
-      setPullRequestInstructionsDraft(persistedPullRequestInstructions)
+    if (!isPullRequestPromptDirty) {
+      setPullRequestPromptDraft(persistedPullRequestPrompt)
     }
-  }, [isPullRequestInstructionsDirty, persistedPullRequestInstructions])
+  }, [isPullRequestPromptDirty, persistedPullRequestPrompt])
 
   useEffect(() => {
-    if (!isBranchNameInstructionsDirty) {
-      setBranchNameInstructionsDraft(persistedBranchNameInstructions)
-    }
-  }, [isBranchNameInstructionsDirty, persistedBranchNameInstructions])
-
-  useEffect(() => {
-    setCommitInstructionsDraft(persistedInstructionsRef.current.commitMessage)
-    setPullRequestInstructionsDraft(persistedInstructionsRef.current.pullRequest)
-    setBranchNameInstructionsDraft(persistedInstructionsRef.current.branchName)
+    setCommitPromptDraft(persistedPromptsRef.current.commitMessage)
+    setPullRequestPromptDraft(persistedPromptsRef.current.pullRequest)
     // Why: parent navigation guards use this signal after the user confirms
     // they want to leave without saving the prompt draft.
   }, [customPromptDiscardSignal])
@@ -364,7 +338,7 @@ export function CommitMessageAiPane({
   const activeDiscovery =
     rawActiveDiscovery?.hostKey === discoveryHostKey ? rawActiveDiscovery : undefined
 
-  const writeConfig = (patch: SourceControlAiConfigPatch): Promise<void> => {
+  const localWriteConfig = (patch: SourceControlAiSettingsPatch): Promise<void> => {
     const next = settingsWriteQueueRef.current
       .catch(() => undefined)
       .then(async () => {
@@ -376,6 +350,7 @@ export function CommitMessageAiPane({
     settingsWriteQueueRef.current = next
     return next
   }
+  const writeConfig = writeSourceControlAiSettings ?? localWriteConfig
 
   const refreshModels = async (agentId: TuiAgent): Promise<void> => {
     const capability =
@@ -714,23 +689,13 @@ export function CommitMessageAiPane({
     }))
   }
 
-  const onSaveInstructions = async (operation: SourceControlAiOperation): Promise<void> => {
-    const draft =
-      operation === 'commitMessage'
-        ? commitInstructionsDraft
-        : operation === 'pullRequest'
-          ? pullRequestInstructionsDraft
-          : branchNameInstructionsDraft
-    const dirty =
-      operation === 'commitMessage'
-        ? isCommitInstructionsDirty
-        : operation === 'pullRequest'
-          ? isPullRequestInstructionsDirty
-          : isBranchNameInstructionsDirty
-    if (!dirty || isSavingInstructions) {
+  const onSavePrompt = async (operation: SourceControlAiOperation): Promise<void> => {
+    const draft = operation === 'commitMessage' ? commitPromptDraft : pullRequestPromptDraft
+    const dirty = operation === 'commitMessage' ? isCommitPromptDirty : isPullRequestPromptDirty
+    if (!dirty || isSavingPrompt) {
       return
     }
-    setIsSavingInstructions(true)
+    setIsSavingPrompt(true)
     try {
       await writeConfig((current) => ({
         instructionsByOperation: {
@@ -739,20 +704,16 @@ export function CommitMessageAiPane({
         }
       }))
     } finally {
-      setIsSavingInstructions(false)
+      setIsSavingPrompt(false)
     }
   }
 
-  const onDiscardInstructions = (operation: SourceControlAiOperation): void => {
+  const onDiscardPrompt = (operation: SourceControlAiOperation): void => {
     if (operation === 'commitMessage') {
-      setCommitInstructionsDraft(persistedCommitInstructions)
+      setCommitPromptDraft(persistedCommitPrompt)
       return
     }
-    if (operation === 'branchName') {
-      setBranchNameInstructionsDraft(persistedBranchNameInstructions)
-      return
-    }
-    setPullRequestInstructionsDraft(persistedPullRequestInstructions)
+    setPullRequestPromptDraft(persistedPullRequestPrompt)
   }
 
   const onPrDefaultChange = (
@@ -1043,8 +1004,7 @@ export function CommitMessageAiPane({
     activeModel &&
     matchesSettingsSearch(searchQuery, {
       title: 'Advanced model overrides',
-      description:
-        'Optional per-operation model choices for commit messages, PR details, and branch names.',
+      description: 'Optional per-operation model choices for commit messages and PR details.',
       keywords: ['model', 'override', 'commit', 'pull request', 'pr', 'thinking']
     })
   ) {
@@ -1062,26 +1022,21 @@ export function CommitMessageAiPane({
         operation: 'pullRequest',
         label: 'PR details model',
         description: 'Use a different model for pull request title and description generation.'
-      },
-      {
-        operation: 'branchName',
-        label: 'Branch name model',
-        description: 'Use a different model for branch name generation.'
       }
     ]
     sections.push(
       <SearchableSetting
         key="model-overrides"
         title="Advanced model overrides"
-        description="Optional per-operation model choices for commit messages, PR details, and branch names."
+        description="Optional per-operation model choices for commit messages and PR details."
         keywords={['model', 'override', 'commit', 'pull request', 'pr', 'thinking']}
         className="space-y-3 px-1 py-2"
       >
         <div className="space-y-0.5">
           <Label>Advanced model overrides</Label>
           <p className="text-xs text-muted-foreground">
-            Leave these inherited unless commit messages, PR details, or branch names need different
-            model behavior.
+            Leave these inherited unless commit messages or PR details need different model
+            behavior.
           </p>
         </div>
         <div className="space-y-3">
@@ -1161,50 +1116,50 @@ export function CommitMessageAiPane({
   }
 
   if (
-    (config.enabled || isCommitInstructionsDirty) &&
-    (isCommitInstructionsDirty ||
+    (config.enabled || isCommitPromptDirty) &&
+    (isCommitPromptDirty ||
       matchesSettingsSearch(searchQuery, {
-        title: 'Commit message instructions',
-        description: 'Optional instructions appended only to commit-message prompts.',
-        keywords: ['prompt', 'instructions', 'conventional commits', 'gitmoji', 'style']
+        title: 'Commit message prompt',
+        description: 'Additional prompt text appended only when generating commit messages.',
+        keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
       }))
   ) {
     sections.push(
       <SearchableSetting
-        key="commit-instructions"
-        title="Commit message instructions"
-        description="Optional instructions appended only to commit-message prompts."
-        keywords={['prompt', 'instructions', 'conventional commits', 'gitmoji', 'style']}
-        forceVisible={isCommitInstructionsDirty}
+        key="commit-prompt"
+        title="Commit message prompt"
+        description="Additional prompt text appended only when generating commit messages."
+        keywords={['prompt', 'conventional commits', 'gitmoji', 'style']}
+        forceVisible={isCommitPromptDirty}
         className="space-y-2 px-1 py-2"
       >
         <div className="space-y-0.5">
-          <Label htmlFor="source-control-ai-commit-instructions">Commit message instructions</Label>
+          <Label htmlFor="source-control-ai-commit-prompt">Commit message prompt</Label>
           <p className="text-xs text-muted-foreground">
-            Appended only when generating commit messages. Use this for Conventional Commits, ticket
-            prefixes, or any other commit style your team prefers.
+            This prompt is appended only when generating commit messages. Use it for Conventional
+            Commits, ticket prefixes, or any other commit style your team prefers.
           </p>
         </div>
         <textarea
-          id="source-control-ai-commit-instructions"
+          id="source-control-ai-commit-prompt"
           rows={4}
-          value={commitInstructionsDraft}
-          onChange={(e) => setCommitInstructionsDraft(e.target.value)}
+          value={commitPromptDraft}
+          onChange={(e) => setCommitPromptDraft(e.target.value)}
           placeholder="Use Conventional Commits format (feat:, fix:, ...). Reference the ticket key when present."
           className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
         />
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] text-muted-foreground">
-            {isCommitInstructionsDirty ? 'Unsaved changes' : 'Saved'}
+            {isCommitPromptDirty ? 'Unsaved changes' : 'Saved'}
           </p>
           <div className="flex items-center gap-2">
-            {isCommitInstructionsDirty ? (
+            {isCommitPromptDirty ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="xs"
-                onClick={() => onDiscardInstructions('commitMessage')}
-                disabled={isSavingInstructions}
+                onClick={() => onDiscardPrompt('commitMessage')}
+                disabled={isSavingPrompt}
               >
                 Discard
               </Button>
@@ -1213,10 +1168,10 @@ export function CommitMessageAiPane({
               type="button"
               variant="secondary"
               size="xs"
-              onClick={() => void onSaveInstructions('commitMessage')}
-              disabled={!isCommitInstructionsDirty || isSavingInstructions}
+              onClick={() => void onSavePrompt('commitMessage')}
+              disabled={!isCommitPromptDirty || isSavingPrompt}
             >
-              {isSavingInstructions ? 'Saving...' : 'Save'}
+              {isSavingPrompt ? 'Saving...' : 'Save'}
             </Button>
           </div>
         </div>
@@ -1225,50 +1180,50 @@ export function CommitMessageAiPane({
   }
 
   if (
-    (config.enabled || isPullRequestInstructionsDirty) &&
-    (isPullRequestInstructionsDirty ||
+    (config.enabled || isPullRequestPromptDirty) &&
+    (isPullRequestPromptDirty ||
       matchesSettingsSearch(searchQuery, {
-        title: 'Pull request instructions',
-        description: 'Optional instructions appended only to pull-request detail prompts.',
-        keywords: ['prompt', 'instructions', 'pull request', 'pr', 'description', 'template']
+        title: 'Pull request prompt',
+        description: 'Additional prompt text appended only when generating pull request details.',
+        keywords: ['prompt', 'pull request', 'pr', 'description', 'template']
       }))
   ) {
     sections.push(
       <SearchableSetting
-        key="pull-request-instructions"
-        title="Pull request instructions"
-        description="Optional instructions appended only to pull-request detail prompts."
-        keywords={['prompt', 'instructions', 'pull request', 'pr', 'description', 'template']}
-        forceVisible={isPullRequestInstructionsDirty}
+        key="pull-request-prompt"
+        title="Pull request prompt"
+        description="Additional prompt text appended only when generating pull request details."
+        keywords={['prompt', 'pull request', 'pr', 'description', 'template']}
+        forceVisible={isPullRequestPromptDirty}
         className="space-y-2 px-1 py-2"
       >
         <div className="space-y-0.5">
-          <Label htmlFor="source-control-ai-pr-instructions">Pull request instructions</Label>
+          <Label htmlFor="source-control-ai-pr-prompt">Pull request prompt</Label>
           <p className="text-xs text-muted-foreground">
-            Appended only when generating pull request titles, descriptions, draft state, and base
-            suggestions. These instructions never affect commit messages.
+            This prompt is appended only when generating pull request titles, descriptions, draft
+            state, and base suggestions. It never affects commit messages.
           </p>
         </div>
         <textarea
-          id="source-control-ai-pr-instructions"
+          id="source-control-ai-pr-prompt"
           rows={4}
-          value={pullRequestInstructionsDraft}
-          onChange={(e) => setPullRequestInstructionsDraft(e.target.value)}
+          value={pullRequestPromptDraft}
+          onChange={(e) => setPullRequestPromptDraft(e.target.value)}
           placeholder="Summarize user-visible changes first, then list reviewer notes and testing evidence."
           className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
         />
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] text-muted-foreground">
-            {isPullRequestInstructionsDirty ? 'Unsaved changes' : 'Saved'}
+            {isPullRequestPromptDirty ? 'Unsaved changes' : 'Saved'}
           </p>
           <div className="flex items-center gap-2">
-            {isPullRequestInstructionsDirty ? (
+            {isPullRequestPromptDirty ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="xs"
-                onClick={() => onDiscardInstructions('pullRequest')}
-                disabled={isSavingInstructions}
+                onClick={() => onDiscardPrompt('pullRequest')}
+                disabled={isSavingPrompt}
               >
                 Discard
               </Button>
@@ -1277,76 +1232,10 @@ export function CommitMessageAiPane({
               type="button"
               variant="secondary"
               size="xs"
-              onClick={() => void onSaveInstructions('pullRequest')}
-              disabled={!isPullRequestInstructionsDirty || isSavingInstructions}
+              onClick={() => void onSavePrompt('pullRequest')}
+              disabled={!isPullRequestPromptDirty || isSavingPrompt}
             >
-              {isSavingInstructions ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
-        </div>
-      </SearchableSetting>
-    )
-  }
-
-  if (
-    (config.enabled || isBranchNameInstructionsDirty) &&
-    (isBranchNameInstructionsDirty ||
-      matchesSettingsSearch(searchQuery, {
-        title: 'Branch name instructions',
-        description: 'Optional instructions appended only to auto branch-name prompts.',
-        keywords: ['prompt', 'instructions', 'branch', 'branch name', 'rename', 'slug']
-      }))
-  ) {
-    sections.push(
-      <SearchableSetting
-        key="branch-name-instructions"
-        title="Branch name instructions"
-        description="Optional instructions appended only to auto branch-name prompts."
-        keywords={['prompt', 'instructions', 'branch', 'branch name', 'rename', 'slug']}
-        forceVisible={isBranchNameInstructionsDirty}
-        className="space-y-2 px-1 py-2"
-      >
-        <div className="space-y-0.5">
-          <Label htmlFor="source-control-ai-branch-name-instructions">
-            Branch name instructions
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            Appended only when Auto-Rename Branch From Work summarizes the first agent prompt.
-            Output guardrails still force a short kebab-case branch leaf.
-          </p>
-        </div>
-        <textarea
-          id="source-control-ai-branch-name-instructions"
-          rows={4}
-          value={branchNameInstructionsDraft}
-          onChange={(e) => setBranchNameInstructionsDraft(e.target.value)}
-          placeholder="Prefer domain nouns from the task, avoid ticket IDs, and keep names reviewer-friendly."
-          className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
-        />
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] text-muted-foreground">
-            {isBranchNameInstructionsDirty ? 'Unsaved changes' : 'Saved'}
-          </p>
-          <div className="flex items-center gap-2">
-            {isBranchNameInstructionsDirty ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => onDiscardInstructions('branchName')}
-                disabled={isSavingInstructions}
-              >
-                Discard
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant="secondary"
-              size="xs"
-              onClick={() => void onSaveInstructions('branchName')}
-              disabled={!isBranchNameInstructionsDirty || isSavingInstructions}
-            >
-              {isSavingInstructions ? 'Saving...' : 'Save'}
+              {isSavingPrompt ? 'Saving...' : 'Save'}
             </Button>
           </div>
         </div>

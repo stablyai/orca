@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../shared/types'
 import { useAppStore, type AppState } from '@/store'
-import { createSessionWriteSubscriber } from './session-write-subscriber'
+import {
+  createSessionWriteSubscriber,
+  type WorkspaceSessionWrite
+} from './session-write-subscriber'
 
 // Why: useAppStore is a module-level singleton — tests must snapshot and
 // restore the full state around each case so cross-test pollution can't mask
@@ -20,7 +22,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('does not write until both workspaceSessionReady and hydrationSucceeded are true', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
     useAppStore.setState({ tabsByWorktree: { 'wt-1': [] } })
@@ -35,7 +37,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('writes exactly once after the hydration persistence gate opens', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
@@ -46,7 +48,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('re-checks the hydration gate when a pending debounce fires', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
@@ -59,7 +61,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('ignores mutations to fields outside SESSION_RELEVANT_FIELDS', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
@@ -82,7 +84,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('writes exactly once when a relevant field changes', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
@@ -112,8 +114,24 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('writes a narrow patch when only the active tab changes', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.setState({ activeTabId: 'tab-perf-1' })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch).toEqual({ activeTabId: 'tab-perf-1' })
+    cleanup()
+  })
+
   it('writes when live PTY bindings change without terminal tab changes', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
@@ -133,7 +151,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('updates its baseline without scheduling when shouldSchedulePersist returns false', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = false
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
@@ -153,7 +171,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('cancels a pending debounce when shouldSchedulePersist returns false', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = true
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
@@ -172,7 +190,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('coalesces multiple relevant mutations within a debounce window', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
@@ -191,7 +209,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('cleanup unsubscribes and cancels a pending timer', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })

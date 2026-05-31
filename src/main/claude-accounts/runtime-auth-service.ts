@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: Claude account switching has one safety
 boundary: runtime auth materialization. Keeping file, Keychain, snapshot, and
 env-patch semantics together prevents PTY launch and quota fetch paths drifting. */
+import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
@@ -13,6 +14,9 @@ import {
   resolveOwnedClaudeManagedAuthPath,
   writeClaudeManagedAuthFile
 } from './managed-auth-path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { getDefaultWslDistro, getWslHome, toWindowsWslPath } from '../wsl'
+import { buildEncodedWslBashCommand } from '../wsl-bash-command'
 import { hasLiveClaudePtys } from './live-pty-gate'
 import { ClaudeRuntimePathResolver } from './runtime-paths'
 import {
@@ -24,9 +28,19 @@ import {
   writeActiveClaudeKeychainCredentialsForRuntime,
   writeManagedClaudeKeychainCredentials
 } from './keychain'
+import {
+  getSelectedClaudeAccountIdForTarget,
+  normalizeClaudeAccountSelectionTarget,
+  normalizeClaudeRuntimeSelection,
+  setSelectedClaudeAccountIdForTarget,
+  type ClaudeAccountSelectionTarget
+} from './runtime-selection'
 
 export type ClaudeRuntimeAuthPreparation = {
   configDir: string
+  runtime?: 'host' | 'wsl'
+  wslDistro?: string | null
+  wslLinuxConfigDir?: string | null
   envPatch: ClaudeEnvPatch
   stripAuthEnv: boolean
   provenance: string
@@ -64,6 +78,10 @@ type ClaudeRefreshTokenComparison = 'same' | 'different' | 'missing'
 
 const RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR = Symbol('runtime-oauth-account-parse-error')
 
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
 export class ClaudeRuntimeAuthService {
   private readonly pathResolver = new ClaudeRuntimePathResolver()
   private mutationQueue: Promise<unknown> = Promise.resolve()
@@ -83,18 +101,22 @@ export class ClaudeRuntimeAuthService {
     void this.safeSyncForCurrentSelection()
   }
 
-  async prepareForClaudeLaunch(): Promise<ClaudeRuntimeAuthPreparation> {
-    await this.syncForCurrentSelection()
-    return this.getPreparation()
+  async prepareForClaudeLaunch(
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<ClaudeRuntimeAuthPreparation> {
+    await this.syncForCurrentSelection(target)
+    return this.getPreparation(target)
   }
 
-  async prepareForRateLimitFetch(): Promise<ClaudeRuntimeAuthPreparation> {
-    await this.syncForCurrentSelection()
-    return this.getPreparation()
+  async prepareForRateLimitFetch(
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<ClaudeRuntimeAuthPreparation> {
+    await this.syncForCurrentSelection(target)
+    return this.getPreparation(target)
   }
 
-  async syncForCurrentSelection(): Promise<void> {
-    await this.serializeMutation(() => this.doSyncForCurrentSelection())
+  async syncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
+    await this.serializeMutation(() => this.doSyncForCurrentSelection(target))
   }
 
   async forceMaterializeCurrentSelectionForRollback(): Promise<void> {
@@ -122,7 +144,7 @@ export class ClaudeRuntimeAuthService {
 
   private initializeLastSyncedState(): void {
     const settings = this.store.getSettings()
-    this.lastSyncedAccountId = settings.activeClaudeManagedAccountId
+    this.lastSyncedAccountId = getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' })
   }
 
   private async safeSyncForCurrentSelection(): Promise<void> {
@@ -139,12 +161,12 @@ export class ClaudeRuntimeAuthService {
     return next
   }
 
-  private async doSyncForCurrentSelection(): Promise<void> {
+  private async doSyncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
     const settings = this.store.getSettings()
-    const activeAccount = this.getActiveAccount(
-      settings.claudeManagedAccounts,
-      settings.activeClaudeManagedAccountId
-    )
+    const effectiveTarget = this.resolveWslDefaultTarget(target)
+    const normalizedTarget = normalizeClaudeAccountSelectionTarget(effectiveTarget)
+    const activeAccountId = getSelectedClaudeAccountIdForTarget(settings, normalizedTarget)
+    const activeAccount = this.getActiveAccount(settings.claudeManagedAccounts, activeAccountId)
     const previousAccount = this.getActiveAccount(
       settings.claudeManagedAccounts,
       this.lastSyncedAccountId
@@ -163,8 +185,20 @@ export class ClaudeRuntimeAuthService {
       }
     }
     if (!activeAccount) {
-      if (settings.activeClaudeManagedAccountId) {
-        this.store.updateSettings({ activeClaudeManagedAccountId: null })
+      if (activeAccountId) {
+        const nextSelection = setSelectedClaudeAccountIdForTarget(
+          normalizeClaudeRuntimeSelection(settings),
+          null,
+          normalizedTarget
+        )
+        this.store.updateSettings({
+          activeClaudeManagedAccountId:
+            normalizedTarget.runtime === 'host' ? null : settings.activeClaudeManagedAccountId,
+          activeClaudeManagedAccountIdsByRuntime: nextSelection
+        })
+      }
+      if (normalizedTarget.runtime === 'wsl') {
+        return
       }
       if (this.lastSyncedAccountId !== null) {
         await (previousAccount
@@ -175,6 +209,47 @@ export class ClaudeRuntimeAuthService {
           : this.restoreSystemDefaultSnapshot(this.lastWrittenCredentialsJson, undefined))
         this.lastSyncedAccountId = null
       }
+      return
+    }
+
+    if (activeAccount.managedAuthRuntime === 'wsl') {
+      if (!this.getOwnedManagedAuthPath(activeAccount)) {
+        console.warn(
+          '[claude-runtime-auth] Active WSL managed account is not owned by Orca, restoring system default'
+        )
+        const nextSelection = setSelectedClaudeAccountIdForTarget(
+          normalizeClaudeRuntimeSelection(settings),
+          null,
+          normalizedTarget
+        )
+        this.store.updateSettings({
+          activeClaudeManagedAccountId:
+            normalizedTarget.runtime === 'host' ? null : settings.activeClaudeManagedAccountId,
+          activeClaudeManagedAccountIdsByRuntime: nextSelection
+        })
+        return
+      }
+      const credentialsJson = await this.readManagedCredentials(activeAccount)
+      if (!credentialsJson || !this.isValidCredentialsJsonObject(credentialsJson)) {
+        console.warn(
+          '[claude-runtime-auth] Active WSL managed account is missing or has invalid credentials, restoring system default'
+        )
+        const nextSelection = setSelectedClaudeAccountIdForTarget(
+          normalizeClaudeRuntimeSelection(settings),
+          null,
+          normalizedTarget
+        )
+        this.store.updateSettings({
+          activeClaudeManagedAccountId:
+            normalizedTarget.runtime === 'host' ? null : settings.activeClaudeManagedAccountId,
+          activeClaudeManagedAccountIdsByRuntime: nextSelection
+        })
+        return
+      }
+      // Why: WSL managed Claude accounts are already isolated by their Linux
+      // CLAUDE_CONFIG_DIR. Materializing them into Windows ~/.claude would mix
+      // two runtime auth stores and break the Terminal-default runtime contract.
+      this.clearLastWrittenRuntimeState()
       return
     }
 
@@ -446,15 +521,74 @@ export class ClaudeRuntimeAuthService {
     return candidates
   }
 
-  private getPreparation(): ClaudeRuntimeAuthPreparation {
+  private getPreparation(target?: ClaudeAccountSelectionTarget): ClaudeRuntimeAuthPreparation {
     const settings = this.store.getSettings()
     const paths = this.pathResolver.getRuntimePaths()
-    const activeAccountId = settings.activeClaudeManagedAccountId
+    const normalizedTarget = this.resolveWslDefaultTarget(
+      target ??
+        (process.platform === 'win32' && settings.terminalWindowsShell === 'wsl.exe'
+          ? ({
+              runtime: 'wsl',
+              wslDistro: settings.terminalWindowsWslDistro ?? null
+            } satisfies ClaudeAccountSelectionTarget)
+          : ({ runtime: 'host' } satisfies ClaudeAccountSelectionTarget))
+    )
+    const activeAccountId = getSelectedClaudeAccountIdForTarget(settings, normalizedTarget)
+    const activeAccount = this.getActiveAccount(settings.claudeManagedAccounts, activeAccountId)
+    if (
+      normalizeClaudeAccountSelectionTarget(normalizedTarget).runtime === 'wsl' &&
+      activeAccount?.managedAuthRuntime === 'wsl' &&
+      activeAccount.wslLinuxAuthPath
+    ) {
+      return {
+        configDir: activeAccount.managedAuthPath,
+        runtime: 'wsl',
+        wslDistro: activeAccount.wslDistro ?? null,
+        wslLinuxConfigDir: activeAccount.wslLinuxAuthPath,
+        envPatch: { CLAUDE_CONFIG_DIR: activeAccount.wslLinuxAuthPath },
+        stripAuthEnv: true,
+        provenance: `managed:${activeAccount.id}:wsl:${activeAccount.wslDistro ?? ''}`
+      }
+    }
+    if (normalizeClaudeAccountSelectionTarget(normalizedTarget).runtime === 'wsl') {
+      const distro =
+        normalizeClaudeAccountSelectionTarget(normalizedTarget).wslDistro ?? getDefaultWslDistro()
+      const wslHome = distro ? getWslHome(distro) : null
+      const wslHomeInfo = wslHome ? parseWslUncPath(wslHome) : null
+      if (distro && wslHome && wslHomeInfo) {
+        const windowsConfigDir = join(wslHome, '.claude')
+        const linuxConfigDir = `${wslHomeInfo.linuxPath.replace(/\/$/, '')}/.claude`
+        return {
+          configDir: windowsConfigDir,
+          runtime: 'wsl',
+          wslDistro: distro,
+          wslLinuxConfigDir: linuxConfigDir,
+          envPatch: {},
+          stripAuthEnv: true,
+          provenance: `wsl:${distro}:system`
+        }
+      }
+      return {
+        configDir: paths.configDir,
+        runtime: 'wsl',
+        wslDistro: normalizeClaudeAccountSelectionTarget(normalizedTarget).wslDistro,
+        wslLinuxConfigDir: null,
+        envPatch: {},
+        stripAuthEnv: true,
+        provenance: `wsl:${normalizeClaudeAccountSelectionTarget(normalizedTarget).wslDistro ?? '__default__'}:system`
+      }
+    }
     return {
       configDir: paths.configDir,
+      runtime: 'host',
+      wslDistro: null,
+      wslLinuxConfigDir: null,
       envPatch: paths.envPatch,
-      stripAuthEnv: Boolean(activeAccountId),
-      provenance: activeAccountId ? `managed:${activeAccountId}` : 'system'
+      stripAuthEnv: Boolean(activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'),
+      provenance:
+        activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'
+          ? `managed:${activeAccountId}`
+          : 'system'
     }
   }
 
@@ -466,6 +600,16 @@ export class ClaudeRuntimeAuthService {
       return null
     }
     return accounts.find((account) => account.id === activeAccountId) ?? null
+  }
+
+  private resolveWslDefaultTarget(
+    target?: ClaudeAccountSelectionTarget
+  ): ClaudeAccountSelectionTarget {
+    if (target?.runtime !== 'wsl' || target.wslDistro?.trim()) {
+      return target ?? { runtime: 'host' }
+    }
+    const defaultDistro = getDefaultWslDistro()
+    return defaultDistro ? { runtime: 'wsl', wslDistro: defaultDistro } : target
   }
 
   private async findManagedAccountForRuntimeCredentials(
@@ -773,6 +917,46 @@ export class ClaudeRuntimeAuthService {
   }
 
   private getOwnedManagedAuthPath(account: ClaudeManagedAccount): string | null {
+    const wslInfo = parseWslUncPath(account.managedAuthPath)
+    if (wslInfo) {
+      if (
+        !wslInfo.linuxPath.includes('/.local/share/orca/claude-accounts/') ||
+        !wslInfo.linuxPath.endsWith('/auth')
+      ) {
+        return null
+      }
+      if (process.platform === 'win32') {
+        try {
+          const canonicalLinuxPath = execFileSync(
+            'wsl.exe',
+            [
+              '-d',
+              wslInfo.distro,
+              '--',
+              'bash',
+              '-lc',
+              buildEncodedWslBashCommand(
+                [
+                  'set -euo pipefail',
+                  `candidate=${shellQuote(wslInfo.linuxPath)}`,
+                  'managed_root="${HOME%/}/.local/share/orca/claude-accounts"',
+                  'candidate_real=$(readlink -f -- "$candidate")',
+                  'managed_root_real=$(readlink -f -- "$managed_root")',
+                  'test -f "$candidate_real/.orca-managed-claude-auth"',
+                  `test "$(cat "$candidate_real/.orca-managed-claude-auth")" = ${shellQuote(account.id)}`,
+                  'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
+                ].join('\n')
+              )
+            ],
+            { encoding: 'utf-8', timeout: 5000 }
+          ).trim()
+          return canonicalLinuxPath ? toWindowsWslPath(canonicalLinuxPath, wslInfo.distro) : null
+        } catch {
+          return null
+        }
+      }
+      return existsSync(account.managedAuthPath) ? account.managedAuthPath : null
+    }
     return resolveOwnedClaudeManagedAuthPath(account.id, account.managedAuthPath, {
       adoptLegacyMarker: true
     })

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { RuntimeRpcFailureError } from './runtime-client'
-import { formatCliError, formatTerminalRead, formatWorktreeList } from './format'
-import type { RuntimeWorktreeRecord } from '../shared/runtime-types'
+import {
+  formatCliError,
+  formatComputerAction,
+  formatTerminalRead,
+  formatWorktreeList
+} from './format'
+import type { ComputerActionResult, RuntimeWorktreeRecord } from '../shared/runtime-types'
 
 function worktree(overrides: Partial<RuntimeWorktreeRecord> = {}): RuntimeWorktreeRecord {
   const base: RuntimeWorktreeRecord = {
@@ -172,5 +177,61 @@ describe('formatTerminalRead', () => {
     expect(output).toContain('warning: older output is no longer retained')
     expect(output).toContain('old server output')
     expect(output).not.toContain('undefined')
+  })
+})
+
+describe('formatComputerAction', () => {
+  it('includes routed worktree and explicit window target in the suggested follow-up command', () => {
+    const result: ComputerActionResult = {
+      snapshot: {
+        id: 'snap-1',
+        app: { name: 'Text Editor', bundleId: null, pid: 100 },
+        window: { title: 'Document', id: 42, width: 800, height: 600 },
+        coordinateSpace: 'window',
+        treeText: 'tree',
+        elementCount: 5,
+        focusedElementId: null
+      },
+      screenshot: null,
+      screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' },
+      action: {
+        path: 'accessibility',
+        targetWindowId: 41
+      }
+    }
+
+    const output = formatComputerAction('click', result, {
+      worktree: 'id:repo::/tmp/repo',
+      windowId: 99
+    })
+
+    expect(output).toContain(
+      "Use `orca computer get-app-state --app 'Text Editor' --worktree id:repo::/tmp/repo --window-id 99`"
+    )
+  })
+
+  it('preserves explicit window-index targeting in the suggested follow-up command', () => {
+    const result: ComputerActionResult = {
+      snapshot: {
+        id: 'snap-1',
+        app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
+        window: { title: 'Document', id: 42, width: 800, height: 600 },
+        coordinateSpace: 'window',
+        treeText: 'tree',
+        elementCount: 5,
+        focusedElementId: null
+      },
+      screenshot: null,
+      screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' }
+    }
+
+    const output = formatComputerAction('click', result, {
+      session: 'manual',
+      windowIndex: 1
+    })
+
+    expect(output).toContain(
+      'Use `orca computer get-app-state --app com.apple.finder --session manual --window-index 1`'
+    )
   })
 })

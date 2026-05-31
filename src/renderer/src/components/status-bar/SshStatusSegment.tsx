@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
 import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
@@ -47,7 +48,7 @@ function overallDotColor(status: 'connected' | 'partial' | 'disconnected' | 'con
       return 'bg-yellow-500'
     case 'connecting':
       return 'bg-yellow-500'
-    default:
+    case 'disconnected':
       return 'bg-muted-foreground/40'
   }
 }
@@ -60,7 +61,7 @@ function overallLabel(status: 'connected' | 'partial' | 'disconnected' | 'connec
       return 'Partial'
     case 'connecting':
       return 'Connecting…'
-    default:
+    case 'disconnected':
       return 'Disconnected'
   }
 }
@@ -79,7 +80,8 @@ function syncStatusLabel(status: RemoteWorkspaceSyncStatus | undefined): string 
       return 'Sync error'
     case 'offline':
       return 'Sync unavailable'
-    default:
+    case 'idle':
+    case undefined:
       return 'Sync idle'
   }
 }
@@ -96,7 +98,8 @@ function syncStatusTone(status: RemoteWorkspaceSyncStatus | undefined): string {
       return 'text-yellow-500'
     case 'synced':
       return 'text-emerald-500'
-    default:
+    case 'idle':
+    case undefined:
       return 'text-muted-foreground'
   }
 }
@@ -113,6 +116,7 @@ function TargetRow({
   syncStatus: RemoteWorkspaceSyncStatus | undefined
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
+  const mountedRef = useMountedRef()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const handleConnect = useCallback(async () => {
@@ -123,9 +127,11 @@ function TargetRow({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Connection failed')
     } finally {
-      setBusy(false)
+      if (mountedRef.current) {
+        setBusy(false)
+      }
     }
-  }, [recordFeatureInteraction, targetId])
+  }, [mountedRef, recordFeatureInteraction, targetId])
 
   const handleDisconnect = useCallback(async () => {
     setBusy(true)
@@ -135,9 +141,11 @@ function TargetRow({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Disconnect failed')
     } finally {
-      setBusy(false)
+      if (mountedRef.current) {
+        setBusy(false)
+      }
     }
-  }, [recordFeatureInteraction, targetId])
+  }, [mountedRef, recordFeatureInteraction, targetId])
 
   return (
     <div className="flex items-center gap-2.5 px-2 py-1.5">

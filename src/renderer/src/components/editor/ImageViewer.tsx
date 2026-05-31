@@ -1,5 +1,5 @@
 import { Image as ImageIcon, RotateCcw, X, ZoomIn, ZoomOut } from 'lucide-react'
-import { type JSX, useEffect, useMemo, useState } from 'react'
+import { type JSX, useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import PdfViewer from './PdfViewer'
@@ -22,18 +22,22 @@ export default function ImageViewer({
   mimeType = FALLBACK_IMAGE_MIME_TYPE,
   layout = 'fill'
 }: ImageViewerProps): JSX.Element {
-  const [imageError, setImageError] = useState(false)
   const [isPopupOpen, setIsPopupOpen] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(
     null
   )
+  const [failedPreviewSrc, setFailedPreviewSrc] = useState<string | null>(null)
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
   const isPdf = mimeType === 'application/pdf'
   const isIntrinsicLayout = layout === 'intrinsic'
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const previewSrc = useMemo(
+    () => (cleanedContent && !isPdf ? `data:${mimeType};base64,${cleanedContent}` : null),
+    [cleanedContent, isPdf, mimeType]
+  )
+  const imageError = previewSrc !== null && failedPreviewSrc === previewSrc
   const estimatedSize = useMemo(() => {
     const bytes = Math.floor((cleanedContent.length * 3) / 4)
     if (bytes < 1024) {
@@ -45,28 +49,6 @@ export default function ImageViewer({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }, [cleanedContent])
   const zoomPercent = Math.round(zoom * 100)
-
-  useEffect(() => {
-    setImageError(false)
-    if (!cleanedContent || isPdf) {
-      setPreviewUrl(null)
-      return
-    }
-    let binary: string
-    try {
-      binary = window.atob(cleanedContent)
-    } catch {
-      setImageError(true)
-      return
-    }
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i += 1) {
-      bytes[i] = binary.charCodeAt(i)
-    }
-    const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }))
-    setPreviewUrl(objectUrl)
-    return () => URL.revokeObjectURL(objectUrl)
-  }, [cleanedContent, mimeType, isPdf])
 
   if (isPdf) {
     return <PdfViewer content={cleanedContent} filePath={filePath} />
@@ -87,7 +69,7 @@ export default function ImageViewer({
     )
   }
 
-  if (!previewUrl) {
+  if (!previewSrc) {
     return (
       <div
         className={cn(
@@ -121,7 +103,7 @@ export default function ImageViewer({
             style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
           >
             <img
-              src={previewUrl}
+              src={previewSrc}
               alt={filename}
               className={cn(
                 'max-w-full object-contain',
@@ -130,8 +112,11 @@ export default function ImageViewer({
               onLoad={(event) => {
                 const img = event.currentTarget
                 setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight })
+                setFailedPreviewSrc(null)
               }}
-              onError={() => setImageError(true)}
+              // Why: track the failed source identity, not a boolean, so a new
+              // image retries immediately without waiting for an Effect reset.
+              onError={() => setFailedPreviewSrc(previewSrc)}
             />
           </div>
         </div>
@@ -201,7 +186,7 @@ export default function ImageViewer({
               style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
             >
               <img
-                src={previewUrl}
+                src={previewSrc}
                 alt={filename}
                 className="block max-h-full max-w-full object-contain"
               />

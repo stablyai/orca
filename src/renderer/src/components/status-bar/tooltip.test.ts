@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
-import { getWindowSections } from './tooltip'
+import { formatResetCountdown, getWindowSections } from './tooltip'
+
+describe('formatResetCountdown', () => {
+  it('uses natural copy when the reset time has arrived', () => {
+    expect(formatResetCountdown(0)).toBe('Resets now')
+    expect(formatResetCountdown(-1)).toBe('Resets now')
+  })
+
+  it('keeps the "in" preposition for future reset times', () => {
+    expect(formatResetCountdown(12 * 60 * 60_000 + 41 * 60_000)).toBe('Resets in 12h 41m')
+  })
+})
 
 describe('getWindowSections', () => {
   it('returns buckets as sections when present', () => {

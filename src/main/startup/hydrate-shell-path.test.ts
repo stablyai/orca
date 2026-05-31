@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'events'
+import type { ChildProcessWithoutNullStreams } from 'child_process'
 import {
   _resetHydrateShellPathCache,
   hydrateShellPath,
@@ -6,13 +8,33 @@ import {
   type HydrationResult
 } from './hydrate-shell-path'
 
+const { spawnMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn()
+}))
+
+vi.mock('child_process', () => ({
+  spawn: spawnMock
+}))
+
 type HydrationSpawner = (shell: string) => Promise<HydrationResult>
+
+function createMockShellProcess(): ChildProcessWithoutNullStreams {
+  const proc = new EventEmitter() as ChildProcessWithoutNullStreams
+  Object.assign(proc, {
+    stdout: new EventEmitter(),
+    stderr: new EventEmitter(),
+    stdin: new EventEmitter(),
+    kill: vi.fn()
+  })
+  return proc
+}
 
 describe('hydrateShellPath', () => {
   const originalPath = process.env.PATH
 
   beforeEach(() => {
     _resetHydrateShellPathCache()
+    spawnMock.mockReset()
   })
 
   afterEach(() => {
@@ -108,6 +130,31 @@ describe('hydrateShellPath', () => {
       spawner: async () => ({ segments: [], ok: false, failureReason: 'empty_path' })
     })
     expect(result).toEqual({ segments: [], ok: false, failureReason: 'empty_path' })
+  })
+
+  it('cleans up shell listeners when hydration times out', async () => {
+    vi.useFakeTimers()
+    const proc = createMockShellProcess()
+    spawnMock.mockReturnValue(proc)
+
+    try {
+      const resultPromise = hydrateShellPath({ shellOverride: '/bin/zsh', force: true })
+      const assertion = expect(resultPromise).resolves.toEqual({
+        segments: [],
+        ok: false,
+        failureReason: 'timeout'
+      })
+
+      await vi.advanceTimersByTimeAsync(5000)
+
+      await assertion
+      expect(proc.kill).toHaveBeenCalledWith('SIGKILL')
+      expect(proc.stdout.listenerCount('data')).toBe(0)
+      expect(proc.listenerCount('error')).toBe(0)
+      expect(proc.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

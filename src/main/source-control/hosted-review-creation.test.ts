@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   createGitHubPullRequestMock,
+  createGitLabMergeRequestMock,
   getRepoSlugMock,
   getProjectSlugMock,
   getBitbucketRepoSlugMock,
@@ -10,11 +11,13 @@ const {
   getGiteaRepoSlugMock,
   getHostedReviewForBranchMock,
   ghExecFileAsyncMock,
+  glabExecFileAsyncMock,
   gitExecFileAsyncMock,
   getUpstreamStatusMock,
   getSshGitProviderMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
+  createGitLabMergeRequestMock: vi.fn(),
   getRepoSlugMock: vi.fn(),
   getProjectSlugMock: vi.fn(),
   getBitbucketRepoSlugMock: vi.fn(),
@@ -22,6 +25,7 @@ const {
   getGiteaRepoSlugMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
   ghExecFileAsyncMock: vi.fn(),
+  glabExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   getUpstreamStatusMock: vi.fn(),
   getSshGitProviderMock: vi.fn()
@@ -34,6 +38,10 @@ vi.mock('../github/client', () => ({
 
 vi.mock('../gitlab/client', () => ({
   getProjectSlug: getProjectSlugMock
+}))
+
+vi.mock('../gitlab/merge-request-creation', () => ({
+  createGitLabMergeRequest: createGitLabMergeRequestMock
 }))
 
 vi.mock('../bitbucket/client', () => ({
@@ -55,6 +63,14 @@ vi.mock('../github/gh-utils', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
+vi.mock('../gitlab/gl-utils', () => ({
+  acquire: vi.fn(),
+  release: vi.fn(),
+  glabExecFileAsync: glabExecFileAsyncMock,
+  glabRepoExecOptions: (repoPath: string, connectionId?: string | null) =>
+    connectionId ? {} : { cwd: repoPath }
+}))
+
 vi.mock('../git/upstream', () => ({
   getUpstreamStatus: getUpstreamStatusMock
 }))
@@ -72,6 +88,7 @@ import { createHostedReview, getHostedReviewCreationEligibility } from './hosted
 function resetMocks(): void {
   for (const mock of [
     createGitHubPullRequestMock,
+    createGitLabMergeRequestMock,
     getRepoSlugMock,
     getProjectSlugMock,
     getBitbucketRepoSlugMock,
@@ -79,6 +96,7 @@ function resetMocks(): void {
     getGiteaRepoSlugMock,
     getHostedReviewForBranchMock,
     ghExecFileAsyncMock,
+    glabExecFileAsyncMock,
     gitExecFileAsyncMock,
     getUpstreamStatusMock,
     getSshGitProviderMock
@@ -95,6 +113,14 @@ function mockGitHubProvider(): void {
   getGiteaRepoSlugMock.mockResolvedValue(null)
 }
 
+function mockGitLabProvider(): void {
+  getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'acme/orca' })
+  getRepoSlugMock.mockResolvedValue(null)
+  getBitbucketRepoSlugMock.mockResolvedValue(null)
+  getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
+  getGiteaRepoSlugMock.mockResolvedValue(null)
+}
+
 describe('createHostedReview', () => {
   beforeEach(() => {
     resetMocks()
@@ -102,6 +128,7 @@ describe('createHostedReview', () => {
     mockGitHubProvider()
     getHostedReviewForBranchMock.mockResolvedValue(null)
     ghExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    glabExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     getUpstreamStatusMock.mockResolvedValue({
       hasUpstream: true,
       upstreamName: 'origin/feature',
@@ -127,6 +154,11 @@ describe('createHostedReview', () => {
       ok: true,
       number: 12,
       url: 'https://github.com/acme/orca/pull/12'
+    })
+    createGitLabMergeRequestMock.mockResolvedValue({
+      ok: true,
+      number: 44,
+      url: 'https://gitlab.com/acme/orca/-/merge_requests/44'
     })
   })
 
@@ -190,6 +222,39 @@ describe('createHostedReview', () => {
       url: 'https://github.com/acme/orca/pull/12'
     })
     expect(createGitHubPullRequestMock).toHaveBeenCalledOnce()
+  })
+
+  it('creates a GitLab merge request after fresh main-process validation passes', async () => {
+    mockGitLabProvider()
+
+    await expect(
+      createHostedReview('/repo', {
+        provider: 'gitlab',
+        base: 'main',
+        head: 'feature',
+        title: 'Feature'
+      })
+    ).resolves.toEqual({
+      ok: true,
+      number: 44,
+      url: 'https://gitlab.com/acme/orca/-/merge_requests/44'
+    })
+
+    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+      ['auth', 'status', '--hostname', 'gitlab.com'],
+      { cwd: '/repo' }
+    )
+    expect(createGitLabMergeRequestMock).toHaveBeenCalledWith(
+      '/repo',
+      {
+        provider: 'gitlab',
+        base: 'main',
+        head: 'feature',
+        title: 'Feature'
+      },
+      undefined
+    )
+    expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
 
   it('uses the SSH git provider for remote hosted-review preflight', async () => {
@@ -411,9 +476,8 @@ describe('getHostedReviewCreationEligibility', () => {
     })
   })
 
-  it('blocks unsupported providers before GitHub authentication checks', async () => {
-    getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'acme/orca' })
-    getRepoSlugMock.mockResolvedValue(null)
+  it('enables creation for clean, in-sync, authenticated GitLab feature branches', async () => {
+    mockGitLabProvider()
 
     await expect(
       getHostedReviewCreationEligibility({
@@ -427,9 +491,15 @@ describe('getHostedReviewCreationEligibility', () => {
       })
     ).resolves.toMatchObject({
       provider: 'gitlab',
-      canCreate: false,
-      blockedReason: 'unsupported_provider'
+      canCreate: true,
+      blockedReason: null,
+      nextAction: null,
+      head: 'feature/gitlab'
     })
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+      ['auth', 'status', '--hostname', 'gitlab.com'],
+      { cwd: '/repo' }
+    )
   })
 })

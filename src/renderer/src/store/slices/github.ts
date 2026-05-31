@@ -12,8 +12,10 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
+  GitHubCommentResult,
   IssueInfo,
   PRCheckDetail,
+  PRCheckRunDetails,
   PRComment,
   Repo,
   Worktree,
@@ -200,9 +202,8 @@ function optimisticFieldValueFromMutation(
       return { kind: 'number', fieldId, number: value.number }
     case 'date':
       return { kind: 'date', fieldId, date: value.date }
-    default:
-      return null
   }
+  return null
 }
 
 function applyRowPatch(
@@ -364,6 +365,11 @@ const prRefreshStartedHostedReviewEntries = new Map<
   AppState['hostedReviewCache'][string] | undefined
 >()
 
+/** @internal - exposed for leak-regression tests only */
+export function _getGitHubPRRequestGenerationCountForTest(): number {
+  return prRequestGenerations.size
+}
+
 // Why: cap in-flight cross-repo fan-out and hover-prefetches at the renderer
 // boundary — the main-side gate is behind the IPC queue, so it can't see a
 // stampede until the calls are already mid-flight. 8 balances responsiveness
@@ -487,6 +493,47 @@ export function prCommentsCacheSuffix(prNumber: number, prRepo?: GitHubOwnerRepo
   return `pr-comments::${normalizedRepoIdentity(prRepo)}::${prNumber}`
 }
 
+function commentTimestamp(comment: PRComment): number {
+  const timestamp = new Date(comment.createdAt).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+export function mergePRCommentIntoList(
+  comments: readonly PRComment[] | null | undefined,
+  incoming: PRComment
+): PRComment[] {
+  const byId = new Map<number, PRComment>()
+  for (const comment of comments ?? []) {
+    byId.set(comment.id, comment)
+  }
+  const previous = byId.get(incoming.id)
+  byId.set(incoming.id, {
+    ...previous,
+    ...incoming,
+    threadId: incoming.threadId ?? previous?.threadId,
+    path: incoming.path ?? previous?.path,
+    line: incoming.line ?? previous?.line,
+    startLine: incoming.startLine ?? previous?.startLine,
+    isResolved: incoming.isResolved ?? previous?.isResolved,
+    isOutdated: incoming.isOutdated ?? previous?.isOutdated
+  })
+  return Array.from(byId.values()).sort((a, b) => commentTimestamp(a) - commentTimestamp(b))
+}
+
+function hasUsableCommentPayload(result: GitHubCommentResult): result is {
+  ok: true
+  comment: PRComment
+} {
+  return (
+    result.ok &&
+    typeof result.comment?.id === 'number' &&
+    Number.isSafeInteger(result.comment.id) &&
+    result.comment.id > 0 &&
+    typeof result.comment.body === 'string' &&
+    typeof result.comment.createdAt === 'string'
+  )
+}
+
 // Why: 500 entries is generous enough that active developers will never hit it
 // during normal use, but prevents the cache from growing without bound across
 // many repos and branches over a long-running session.
@@ -527,6 +574,7 @@ function buildPRRefreshCandidate(
     state.settings,
     repo.connectionId
   )
+  const cachedPR = state.prCache[cacheKey]?.data ?? null
   const hostedReviewFallbackPRNumber = githubHostedReviewFallbackPRNumber(
     state,
     repoPath ?? repo.path,
@@ -534,7 +582,7 @@ function buildPRRefreshCandidate(
     branch,
     repo.connectionId
   )
-  const cachedFallbackPRNumber = state.prCache[cacheKey]?.data?.number ?? null
+  const cachedFallbackPRNumber = cachedPR?.number ?? null
   const fallbackPRNumber =
     worktree.linkedPR == null ? (cachedFallbackPRNumber ?? hostedReviewFallbackPRNumber) : null
   const fallbackPRSource: GitHubPRFallbackSource | null =
@@ -567,9 +615,11 @@ function buildPRRefreshCandidate(
         : 'disconnected'
       : 'unknown',
     cachedFetchedAt: state.prCache[cacheKey]?.fetchedAt ?? null,
-    cachedHasPR: state.prCache[cacheKey]?.data ? true : state.prCache[cacheKey] ? false : null,
-    cachedPRState: state.prCache[cacheKey]?.data?.state ?? null,
-    cachedChecksStatus: state.prCache[cacheKey]?.data?.checksStatus ?? null
+    cachedHasPR: cachedPR ? true : state.prCache[cacheKey] ? false : null,
+    cachedPRState: cachedPR?.state ?? null,
+    cachedChecksStatus: cachedPR?.checksStatus ?? null,
+    cachedMergeable: cachedPR?.mergeable ?? null,
+    cachedMergeStateStatus: cachedPR?.mergeStateStatus ?? null
   }
 }
 
@@ -993,11 +1043,40 @@ export type GitHubSlice = {
     prRepo?: GitHubOwnerRepo | null,
     options?: RepoScopedFetchOptions
   ) => Promise<PRCheckDetail[]>
+  fetchPRCheckDetails: (
+    repoPath: string,
+    args: {
+      checkRunId?: number
+      workflowRunId?: number
+      checkName?: string
+      url?: string | null
+      prRepo?: GitHubOwnerRepo | null
+    },
+    options?: RepoScopedFetchOptions
+  ) => Promise<PRCheckRunDetails | null>
   fetchPRComments: (
     repoPath: string,
     prNumber: number,
     options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
   ) => Promise<PRComment[]>
+  addPRConversationComment: (
+    repoPath: string,
+    prNumber: number,
+    body: string,
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+  ) => Promise<GitHubCommentResult>
+  addPRReviewCommentReply: (
+    repoPath: string,
+    prNumber: number,
+    commentId: number,
+    body: string,
+    options?: RepoScopedFetchOptions & {
+      prRepo?: GitHubOwnerRepo | null
+      threadId?: string
+      path?: string
+      line?: number
+    }
+  ) => Promise<GitHubCommentResult>
   resolveReviewThread: (
     repoPath: string,
     prNumber: number,
@@ -1932,7 +2011,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 fallbackPRNumber,
                 fallbackPRSource,
                 connectionId: repo?.connectionId ?? null,
-                cachedFetchedAt: cached?.fetchedAt ?? null
+                cachedFetchedAt: cached?.fetchedAt ?? null,
+                cachedHasPR: cached?.data ? true : cached ? false : null,
+                cachedPRState: cached?.data?.state ?? null,
+                cachedChecksStatus: cached?.data?.checksStatus ?? null,
+                cachedMergeable: cached?.data?.mergeable ?? null,
+                cachedMergeStateStatus: cached?.data?.mergeStateStatus ?? null
               }
               return window.api.gh.refreshPRNow
                 ? await window.api.gh.refreshPRNow({ candidate })
@@ -1988,6 +2072,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         const activeRequest = inflightPRRequests.get(cacheKey)
         if (activeRequest?.generation === generation) {
           inflightPRRequests.delete(cacheKey)
+          if (prRequestGenerations.get(cacheKey) === generation) {
+            prRequestGenerations.delete(cacheKey)
+          }
         }
       }
     })()
@@ -2165,6 +2252,38 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return request
   },
 
+  fetchPRCheckDetails: async (repoPath, args, options): Promise<PRCheckRunDetails | null> => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = get().settings
+    const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+    return runtimeRepo
+      ? await callRuntimeRpc<PRCheckRunDetails | null>(
+          runtimeRepo.target,
+          'github.prCheckDetails',
+          {
+            repo: runtimeRepo.repo.id,
+            checkRunId: args.checkRunId,
+            workflowRunId: args.workflowRunId,
+            checkName: args.checkName,
+            url: args.url,
+            prRepo: args.prRepo ?? null
+          },
+          { timeoutMs: 30_000 }
+        )
+      : ((await window.api.gh.prCheckDetails({
+          repoPath,
+          repoId,
+          checkRunId: args.checkRunId,
+          workflowRunId: args.workflowRunId,
+          checkName: args.checkName,
+          url: args.url,
+          prRepo: args.prRepo ?? null
+        })) as PRCheckRunDetails | null)
+  },
+
   fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
@@ -2229,6 +2348,136 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return request
   },
 
+  addPRConversationComment: async (repoPath, prNumber, body, options) => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = get().settings
+    const cacheKey = runtimeScopedRepoCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo),
+      requestSettings,
+      repo?.connectionId
+    )
+    const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+    let result: GitHubCommentResult
+    try {
+      result = runtimeRepo
+        ? await callRuntimeRpc<GitHubCommentResult>(
+            runtimeRepo.target,
+            'github.addIssueComment',
+            {
+              repo: runtimeRepo.repo.id,
+              number: prNumber,
+              body,
+              type: 'pr',
+              prRepo: options?.prRepo ?? null
+            },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.addIssueComment({
+            repoPath,
+            repoId,
+            number: prNumber,
+            body,
+            type: 'pr',
+            prRepo: options?.prRepo ?? null
+          })
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Failed to post comment.'
+      return { ok: false, error }
+    }
+    if (!hasUsableCommentPayload(result)) {
+      return result.ok ? { ok: false, error: 'GitHub did not return the new comment.' } : result
+    }
+    set((s) => {
+      const entry = s.commentsCache[cacheKey]
+      return {
+        commentsCache: {
+          ...s.commentsCache,
+          [cacheKey]: {
+            data: mergePRCommentIntoList(entry?.data, result.comment),
+            fetchedAt: Date.now()
+          }
+        }
+      }
+    })
+    return result
+  },
+
+  addPRReviewCommentReply: async (repoPath, prNumber, commentId, body, options) => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = get().settings
+    const cacheKey = runtimeScopedRepoCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo),
+      requestSettings,
+      repo?.connectionId
+    )
+    const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+    let result: GitHubCommentResult
+    try {
+      result = runtimeRepo
+        ? await callRuntimeRpc<GitHubCommentResult>(
+            runtimeRepo.target,
+            'github.addPRReviewCommentReply',
+            {
+              repo: runtimeRepo.repo.id,
+              prNumber,
+              commentId,
+              body,
+              threadId: options?.threadId,
+              path: options?.path,
+              line: options?.line,
+              prRepo: options?.prRepo ?? null
+            },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.addPRReviewCommentReply({
+            repoPath,
+            repoId,
+            prNumber,
+            commentId,
+            body,
+            threadId: options?.threadId,
+            path: options?.path,
+            line: options?.line,
+            prRepo: options?.prRepo ?? null
+          })
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Failed to post reply.'
+      return { ok: false, error }
+    }
+    if (!hasUsableCommentPayload(result)) {
+      return result.ok ? { ok: false, error: 'GitHub did not return the new comment.' } : result
+    }
+    const comment: PRComment = {
+      ...result.comment,
+      threadId: result.comment.threadId ?? options?.threadId,
+      path: result.comment.path ?? options?.path,
+      line: result.comment.line ?? options?.line
+    }
+    set((s) => {
+      const entry = s.commentsCache[cacheKey]
+      return {
+        commentsCache: {
+          ...s.commentsCache,
+          [cacheKey]: {
+            data: mergePRCommentIntoList(entry?.data, comment),
+            fetchedAt: Date.now()
+          }
+        }
+      }
+    })
+    return { ok: true, comment }
+  },
+
   resolveReviewThread: async (repoPath, prNumber, threadId, resolve, options) => {
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
@@ -2259,14 +2508,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
 
     const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
-    const ok = runtimeRepo
-      ? await callRuntimeRpc<boolean>(
-          runtimeRepo.target,
-          'github.resolveReviewThread',
-          { repo: runtimeRepo.repo.id, threadId, resolve },
-          { timeoutMs: 30_000 }
-        )
-      : await window.api.gh.resolveReviewThread({ repoPath, repoId, threadId, resolve })
+    let ok = false
+    try {
+      ok = runtimeRepo
+        ? await callRuntimeRpc<boolean>(
+            runtimeRepo.target,
+            'github.resolveReviewThread',
+            { repo: runtimeRepo.repo.id, threadId, resolve },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.resolveReviewThread({ repoPath, repoId, threadId, resolve })
+    } catch (err) {
+      console.error('Failed to update review thread:', err)
+      ok = false
+    }
     if (!ok && prev) {
       // Revert optimistic update on failure
       set((s) => ({
@@ -2494,13 +2749,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       issueCache: evictStaleEntries(s.issueCache)
     }))
 
-    // Why: prRequestGenerations tracks generation counters for inflight
-    // fetch deduplication. Pruning keys that were just evicted from prCache
-    // would race with inflight requests — their generation check would fail
-    // and silently discard valid responses. Since each entry is just a number,
-    // the memory overhead is negligible; let it shrink naturally as keys stop
-    // being fetched. The eviction on prCache/issueCache above is sufficient
-    // to bound the dominant source of growth.
+    // Why: prRequestGenerations tracks only live inflight fetches and is
+    // cleared when the active request settles. Do not prune it here; deleting
+    // a live generation would make the corresponding response look stale.
 
     // Only re-fetch PR/issue entries that are already stale — skip fresh ones
     const state = get()

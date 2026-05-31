@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native'
+import { useCallback, useRef, useState } from 'react'
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, BackHandler } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
-import { parsePairingCode } from '../src/transport/pairing'
+import { resolvePairConfirmRouteState } from '../src/transport/pair-confirm-state'
 import { connect } from '../src/transport/rpc-client'
 import { saveHost, getNextHostName } from '../src/transport/host-store'
-import type { ConnectionLogEntry, PairingOffer, RpcResponse } from '../src/transport/types'
+import type { ConnectionLogEntry, RpcResponse } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 
@@ -23,7 +23,6 @@ export default function PairConfirmScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{ code?: string }>()
-  const [offer, setOffer] = useState<PairingOffer | null>(null)
   const [status, setStatus] = useState<Status>('awaiting-confirm')
   const [errorMessage, setErrorMessage] = useState('')
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
@@ -32,20 +31,28 @@ export default function PairConfirmScreen() {
   // batch fewer setState calls when entries arrive in bursts.
   const logsRef = useRef<ConnectionLogEntry[]>([])
 
-  useEffect(() => {
-    if (!params.code) {
-      setStatus('error')
-      setErrorMessage('Missing pairing code')
-      return
-    }
-    const parsed = parsePairingCode(params.code)
-    if (!parsed) {
-      setStatus('error')
-      setErrorMessage('Not a valid pairing code')
-      return
-    }
-    setOffer(parsed)
-  }, [params.code])
+  const routeState = resolvePairConfirmRouteState(params.code)
+  const offer = routeState.offer
+  const resolvedStatus =
+    status === 'awaiting-confirm' && routeState.kind === 'error' ? 'error' : status
+  const resolvedErrorMessage =
+    status === 'awaiting-confirm' && routeState.kind === 'error'
+      ? routeState.errorMessage
+      : errorMessage
+
+  const cancel = useCallback(() => {
+    router.replace('/')
+  }, [router])
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        cancel()
+        return true
+      })
+      return () => subscription.remove()
+    }, [cancel])
+  )
 
   async function confirm() {
     if (!offer) return
@@ -118,10 +125,6 @@ export default function PairConfirmScreen() {
     }
   }
 
-  function cancel() {
-    router.replace('/')
-  }
-
   const containerPadding = { paddingTop: insets.top + spacing.sm }
 
   return (
@@ -131,7 +134,7 @@ export default function PairConfirmScreen() {
       </Pressable>
 
       <View style={styles.content}>
-        {offer && status === 'awaiting-confirm' && (
+        {offer && resolvedStatus === 'awaiting-confirm' && (
           <>
             <Text style={styles.title}>Pair with this desktop?</Text>
             <Text style={styles.subtitle}>
@@ -146,7 +149,7 @@ export default function PairConfirmScreen() {
           </>
         )}
 
-        {status === 'connecting' && (
+        {resolvedStatus === 'connecting' && (
           <>
             <ActivityIndicator size="large" color={colors.textSecondary} />
             <Text style={styles.connectingText}>Connecting…</Text>
@@ -156,9 +159,9 @@ export default function PairConfirmScreen() {
           </>
         )}
 
-        {status === 'error' && (
+        {resolvedStatus === 'error' && (
           <>
-            <Text style={styles.errorText}>{errorMessage}</Text>
+            <Text style={styles.errorText}>{resolvedErrorMessage}</Text>
             {logs.length > 0 && (
               <View style={styles.logSlot}>
                 <ConnectionLog entries={logs} title="Pairing log" />

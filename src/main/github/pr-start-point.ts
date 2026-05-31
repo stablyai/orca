@@ -1,4 +1,4 @@
-import type { GitPushTarget } from '../../shared/types'
+import type { GitHubPrStartPoint, GitPushTarget } from '../../shared/types'
 import { isMissingRemoteRefGitError } from '../git/fetch-error-classification'
 import { getPullRequestPushTarget, getWorkItem } from './client'
 
@@ -14,9 +14,7 @@ type ResolveGitHubPrStartPointArgs = {
   resolveRemote: () => Promise<string>
 }
 
-type ResolveGitHubPrStartPointResult =
-  | { baseBranch: string; pushTarget?: GitPushTarget }
-  | { error: string }
+type ResolveGitHubPrStartPointResult = GitHubPrStartPoint | { error: string }
 
 export async function resolveGitHubPrStartPoint(
   args: ResolveGitHubPrStartPointArgs
@@ -122,14 +120,21 @@ export async function resolveGitHubPrStartPoint(
   }
 
   const remoteRef = `${remote}/${headRefName}`
+  let headSha: string
   try {
-    await args.gitExec(['rev-parse', '--verify', remoteRef])
+    const { stdout } = await args.gitExec(['rev-parse', '--verify', remoteRef])
+    headSha = stdout.trim()
   } catch {
     return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
   }
+  if (!headSha) {
+    return { error: `Empty SHA resolving PR #${args.prNumber} head.` }
+  }
 
   return {
-    baseBranch: remoteRef,
+    baseBranch: headSha,
+    headSha,
+    branchNameOverride: headRefName,
     pushTarget: { remoteName: remote, branchName: headRefName }
   }
 }

@@ -103,6 +103,7 @@ describe('applyWebSessionTabsSnapshot', () => {
           parentTabId: 'host-tab-1',
           leafId: LEAF_ID,
           isActive: true,
+          launchAgent: 'codex',
           status: 'ready',
           terminal: 'terminal-1'
         }
@@ -119,6 +120,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       {
         id: mirroredId,
         ptyId: 'remote:web-env-1@@terminal-1',
+        launchAgent: 'codex',
         title: 'host shell',
         worktreeId: WT
       }

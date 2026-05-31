@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { execFileSync } from 'node:child_process'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  __resetMacTailscaleDnsDiagnosticCacheForTests,
   parseMacTailscaleDnsDiagnostic,
+  withMacTailscaleDnsHint,
   withMacTailscaleDnsHintForDiagnostic
 } from './macos-tailscale-dns-diagnostic'
+
+vi.mock('node:child_process', () => ({
+  execFileSync: vi.fn()
+}))
 
 const MAGIC_DNS_ONLY_SCUTIL = `
 DNS configuration
@@ -78,6 +85,34 @@ describe('withMacTailscaleDnsHintForDiagnostic', () => {
 
     expect(withMacTailscaleDnsHintForDiagnostic(message, 'permission denied', diagnostic)).toBe(
       message
+    )
+  })
+})
+
+describe('withMacTailscaleDnsHint', () => {
+  const originalPlatform = process.platform
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    vi.mocked(execFileSync).mockReset()
+    __resetMacTailscaleDnsDiagnosticCacheForTests()
+  })
+
+  it('reads macOS DNS state through the system scutil path', () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    vi.mocked(execFileSync).mockReturnValue(MAGIC_DNS_ONLY_SCUTIL)
+
+    const result = withMacTailscaleDnsHint('Codex failed.', 'dns lookup failed')
+
+    expect(result).toContain('Tailscale MagicDNS (100.100.100.100)')
+    expect(execFileSync).toHaveBeenCalledWith(
+      '/usr/sbin/scutil',
+      ['--dns'],
+      expect.objectContaining({
+        encoding: 'utf8',
+        timeout: 1500,
+        stdio: ['ignore', 'pipe', 'ignore']
+      })
     )
   })
 })

@@ -13,8 +13,19 @@ export function AgentsOrchestrationVisual(props: {
   activeStepId: AgentsStepId
   widthPx?: number
   heightPx?: number
+  orchestrationCreatedChildCount?: number
+  orchestrationLoopMs?: number
+  orchestrationShowResponseBeats?: boolean
 }): JSX.Element {
-  const { reducedMotion, activeStepId, widthPx, heightPx } = props
+  const {
+    reducedMotion,
+    activeStepId,
+    widthPx,
+    heightPx,
+    orchestrationCreatedChildCount,
+    orchestrationLoopMs,
+    orchestrationShowResponseBeats
+  } = props
   return (
     <div
       className="relative flex flex-col text-foreground"
@@ -30,6 +41,9 @@ export function AgentsOrchestrationVisual(props: {
         <OrchestrationPage
           active={activeStepId === 'orchestration'}
           reducedMotion={reducedMotion}
+          controlledCreatedChildCount={orchestrationCreatedChildCount}
+          loopMs={orchestrationLoopMs}
+          showResponseBeats={orchestrationShowResponseBeats}
         />
       </Page>
     </div>
@@ -41,7 +55,7 @@ function Page(props: { active: boolean; children: JSX.Element }): JSX.Element {
     <div
       aria-hidden={!props.active}
       className={cn(
-        'absolute inset-0 transition-[opacity,transform] duration-[360ms] ease-out',
+        'absolute inset-0 overflow-hidden transition-[opacity,transform] duration-[360ms] ease-out',
         props.active
           ? 'pointer-events-auto translate-y-0 opacity-100'
           : 'pointer-events-none translate-y-1 opacity-0'

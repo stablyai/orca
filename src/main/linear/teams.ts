@@ -6,7 +6,35 @@ import type {
   LinearWorkspaceSelection
 } from '../../shared/types'
 import { buildLinearTeamUrl } from '../../shared/linear-links'
-import { acquire, release, getClients, isAuthError, clearToken } from './client'
+import {
+  acquire,
+  release,
+  getClients,
+  isAuthError,
+  clearToken,
+  type LinearClientForWorkspace
+} from './client'
+
+const TEAM_PAGE_SIZE = 100
+
+async function fetchAllTeamsForWorkspace(entry: LinearClientForWorkspace): Promise<LinearTeam[]> {
+  let page = await entry.client.teams({ first: TEAM_PAGE_SIZE })
+  while (page.pageInfo.hasNextPage) {
+    await page.fetchNext()
+  }
+  return page.nodes.map((t) => ({
+    id: t.id,
+    workspaceId: entry.workspace.id,
+    workspaceName: entry.workspace.organizationName,
+    name: t.name,
+    key: t.key,
+    url:
+      buildLinearTeamUrl({
+        organizationUrlKey: entry.workspace.organizationUrlKey,
+        teamKey: t.key
+      }) ?? undefined
+  }))
+}
 
 export async function listTeams(
   workspaceId?: LinearWorkspaceSelection | null
@@ -20,19 +48,7 @@ export async function listTeams(
     entries.map(async (entry) => {
       await acquire()
       try {
-        const teams = await entry.client.teams()
-        return teams.nodes.map((t) => ({
-          id: t.id,
-          workspaceId: entry.workspace.id,
-          workspaceName: entry.workspace.organizationName,
-          name: t.name,
-          key: t.key,
-          url:
-            buildLinearTeamUrl({
-              organizationUrlKey: entry.workspace.organizationUrlKey,
-              teamKey: t.key
-            }) ?? undefined
-        }))
+        return fetchAllTeamsForWorkspace(entry)
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)

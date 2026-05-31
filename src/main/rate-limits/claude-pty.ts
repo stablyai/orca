@@ -129,6 +129,10 @@ const STARTUP_DELAY_MS = 2_000
 const SETTLE_AFTER_STOP_MS = 2_000
 const SETTLE_AFTER_CLAUDE_21_USAGE_MS = 8_000
 
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
 function describeClaudeUsageFailure(output: string): string {
   if (RATE_LIMITED_RE.test(output)) {
     return 'Claude usage is rate limited right now.'
@@ -167,14 +171,34 @@ export async function fetchViaPty(options?: {
     // those need cmd.exe as an interpreter. Always route through cmd.exe on win32
     // and ensure the command path is properly quoted if it contains spaces.
     const isWin32 = process.platform === 'win32'
-    const spawnFile = isWin32 ? 'cmd.exe' : claudeCommand
-    const spawnArgs = isWin32 ? ['/c', `"${claudeCommand}"`] : []
-
     const spawnEnv = applyClaudeEnvPatch(
       { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
       options?.authPreparation?.envPatch ?? {},
       { stripAuthEnv: options?.authPreparation?.stripAuthEnv ?? false }
     )
+    const authPreparation = options?.authPreparation
+    const wslConfig =
+      authPreparation?.runtime === 'wsl' &&
+      authPreparation.wslDistro &&
+      authPreparation.wslLinuxConfigDir
+        ? {
+            distro: authPreparation.wslDistro,
+            linuxConfigDir: authPreparation.wslLinuxConfigDir
+          }
+        : null
+    const spawnFile = wslConfig ? 'wsl.exe' : isWin32 ? 'cmd.exe' : claudeCommand
+    const spawnArgs = wslConfig
+      ? [
+          '-d',
+          wslConfig.distro,
+          '--',
+          'bash',
+          '-lc',
+          `export CLAUDE_CONFIG_DIR=${shellQuote(wslConfig.linuxConfigDir)}; exec claude`
+        ]
+      : isWin32
+        ? ['/c', `"${claudeCommand}"`]
+        : []
 
     const term = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',

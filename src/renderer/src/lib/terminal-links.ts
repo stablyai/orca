@@ -121,6 +121,7 @@ const EXTENSIONLESS_FILENAMES = new Set([
 ])
 
 const BARE_FILENAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._+-]*$/
+const URI_PREFIX_CHAR_PATTERN = /^[A-Za-z0-9+./:-]$/
 
 // Bare words are validated against the filesystem by the provider, so this
 // filter's job is to reject tokens that are obviously not filenames before
@@ -157,8 +158,16 @@ function* detectRanges(lineText: string, regex: RegExp): Generator<DetectedRange
   }
 }
 
+function getImmediateUriPrefix(lineText: string, endIndex: number): string {
+  let start = endIndex
+  while (start > 0 && URI_PREFIX_CHAR_PATTERN.test(lineText[start - 1])) {
+    start -= 1
+  }
+  return lineText.slice(start, endIndex)
+}
+
 function isInsideUriScheme(lineText: string, range: DetectedRange): boolean {
-  const prefix = lineText.slice(0, range.startIndex)
+  const prefix = getImmediateUriPrefix(lineText, range.startIndex)
   // Why: local-path matching can start at the `//host/path` portion of a URL.
   return (
     range.text.includes('://') ||
@@ -167,8 +176,58 @@ function isInsideUriScheme(lineText: string, range: DetectedRange): boolean {
   )
 }
 
+function mergeRanges(ranges: [number, number][]): [number, number][] {
+  if (ranges.length <= 1) {
+    return ranges
+  }
+  const sorted = ranges.slice().sort((left, right) => left[0] - right[0] || left[1] - right[1])
+  const merged: [number, number][] = []
+  for (const range of sorted) {
+    const last = merged.at(-1)
+    if (!last || range[0] > last[1]) {
+      merged.push([range[0], range[1]])
+      continue
+    }
+    last[1] = Math.max(last[1], range[1])
+  }
+  return merged
+}
+
 function rangesOverlap(range: DetectedRange, claimedRanges: readonly [number, number][]): boolean {
-  return claimedRanges.some(([start, end]) => range.startIndex < end && range.endIndex > start)
+  // Why: generated terminal lines can contain thousands of file-looking tokens;
+  // overlap checks must stay logarithmic instead of scanning every prior range.
+  let low = 0
+  let high = claimedRanges.length
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2)
+    if (claimedRanges[mid][0] < range.endIndex) {
+      low = mid + 1
+    } else {
+      high = mid
+    }
+  }
+  const previous = claimedRanges[low - 1]
+  return previous !== undefined && previous[1] > range.startIndex
+}
+
+function insertClaimedRange(claimedRanges: [number, number][], range: [number, number]): void {
+  const last = claimedRanges.at(-1)
+  if (!last || last[0] <= range[0]) {
+    claimedRanges.push(range)
+    return
+  }
+
+  let low = 0
+  let high = claimedRanges.length
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2)
+    if (claimedRanges[mid][0] <= range[0]) {
+      low = mid + 1
+    } else {
+      high = mid
+    }
+  }
+  claimedRanges.splice(low, 0, range)
 }
 
 function trimSpacedPathTrailingProse(range: DetectedRange): DetectedRange {
@@ -231,11 +290,12 @@ function detectLocalPathLinks(
 ): ParsedTerminalFileLink[] {
   const links: ParsedTerminalFileLink[] = []
   const spacedLinks = detectSpacedLocalPathLinks(lineText, includeLineEndingPrefixCandidates)
-  const spacedRanges = spacedLinks.map(({ startIndex, endIndex }): [number, number] => [
-    startIndex,
-    endIndex
-  ])
-  links.push(...spacedLinks)
+  const spacedRanges = mergeRanges(
+    spacedLinks.map(({ startIndex, endIndex }): [number, number] => [startIndex, endIndex])
+  )
+  for (const link of spacedLinks) {
+    links.push(link)
+  }
   for (const range of detectRanges(lineText, LOCAL_PATH_REGEX)) {
     if (rangesOverlap(range, spacedRanges)) {
       continue
@@ -274,8 +334,10 @@ function detectSpacedLocalPathLinks(
         .filter((link): link is ParsedTerminalFileLink => link !== null)
       const link = candidateLinks[0]
       if (link) {
-        links.push(...candidateLinks)
-        claimedRanges.push([link.startIndex, link.endIndex])
+        for (const candidateLink of candidateLinks) {
+          links.push(candidateLink)
+        }
+        insertClaimedRange(claimedRanges, [link.startIndex, link.endIndex])
       }
     }
   }
@@ -292,10 +354,7 @@ function detectBareFilenameLinks(
 ): ParsedTerminalFileLink[] {
   const links: ParsedTerminalFileLink[] = []
   for (const range of detectRanges(lineText, WORD_TOKEN_REGEX)) {
-    const overlaps = claimedRanges.some(
-      ([start, end]) => range.startIndex < end && range.endIndex > start
-    )
-    if (overlaps) {
+    if (rangesOverlap(range, claimedRanges)) {
       continue
     }
     const link = toParsedLink(range)
@@ -312,22 +371,26 @@ function detectBareFilenameLinks(
 
 export function extractTerminalFileLinks(lineText: string): ParsedTerminalFileLink[] {
   const pathLinks = detectLocalPathLinks(lineText)
-  const claimed = pathLinks.map(({ startIndex, endIndex }): [number, number] => [
-    startIndex,
-    endIndex
-  ])
+  const claimed = mergeRanges(
+    pathLinks.map(({ startIndex, endIndex }): [number, number] => [startIndex, endIndex])
+  )
   const wordLinks = detectBareFilenameLinks(lineText, claimed)
-  return [...pathLinks, ...wordLinks]
+  for (const link of wordLinks) {
+    pathLinks.push(link)
+  }
+  return pathLinks
 }
 
 export function extractTerminalFileLinkCandidates(lineText: string): ParsedTerminalFileLink[] {
   const pathLinks = detectLocalPathLinks(lineText, true)
-  const claimed = pathLinks.map(({ startIndex, endIndex }): [number, number] => [
-    startIndex,
-    endIndex
-  ])
+  const claimed = mergeRanges(
+    pathLinks.map(({ startIndex, endIndex }): [number, number] => [startIndex, endIndex])
+  )
   const wordLinks = detectBareFilenameLinks(lineText, claimed)
-  return [...pathLinks, ...wordLinks]
+  for (const link of wordLinks) {
+    pathLinks.push(link)
+  }
+  return pathLinks
 }
 
 export function resolveTerminalFileLink(

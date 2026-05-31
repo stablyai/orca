@@ -1,4 +1,4 @@
-import { Suspense, type JSX, type RefObject } from 'react'
+import { Suspense, type JSX, type Ref } from 'react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
@@ -13,7 +13,7 @@ import { getUntitledFileRoot } from './untitled-file-rename-path'
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
 
 type EditorPanelShellProps = {
-  panelRef: RefObject<HTMLDivElement | null>
+  panelRef: Ref<HTMLDivElement>
   activeFile: OpenFile
   activeViewStateId: string | null | undefined
   model: EditorPanelRenderModel
@@ -46,6 +46,7 @@ type EditorPanelShellProps = {
   onCloseMarkdownTableOfContents: () => void
   onCloseRenameDialog: () => void
   onRenameConfirm: (newRelPath: string) => Promise<void>
+  markdownAnnotationsEnabled: boolean
 }
 
 export function EditorPanelShell({
@@ -81,7 +82,8 @@ export function EditorPanelShell({
   onReloadFileContent,
   onCloseMarkdownTableOfContents,
   onCloseRenameDialog,
-  onRenameConfirm
+  onRenameConfirm,
+  markdownAnnotationsEnabled
 }: EditorPanelShellProps): JSX.Element {
   return (
     <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
@@ -143,6 +145,7 @@ export function EditorPanelShell({
           reloadFileContent={onReloadFileContent}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
           onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
+          markdownAnnotationsEnabled={markdownAnnotationsEnabled}
         />
       </Suspense>
       <UntitledFileRenameDialog

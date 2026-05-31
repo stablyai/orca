@@ -55,12 +55,25 @@ import {
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
-import { acquireSingleInstanceLock } from './startup/single-instance-lock'
+import {
+  acquireSingleInstanceLock,
+  logSingleInstanceLockBypass,
+  logSingleInstanceLockFailure,
+  shouldBypassSingleInstanceLock
+} from './startup/single-instance-lock'
+import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
 import { RateLimitService } from './rate-limits/service'
+import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
+import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
+import {
+  normalizeCodexRuntimeSelection,
+  type CodexAccountSelectionTarget
+} from './codex-accounts/runtime-selection'
+import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService } from './codex/hook-service'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
@@ -72,7 +85,8 @@ import {
   getPtyIdForPaneKey,
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
-  registerHeadlessPtyRuntime
+  registerHeadlessPtyRuntime,
+  isRendererPtyOutputPaused
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
@@ -200,6 +214,17 @@ configureDevUserDataPath(is.dev)
 // Why: CLI-shared Codex helpers cannot import Electron. Seed the resolved
 // app userData path once Electron has applied dev/e2e overrides.
 process.env.ORCA_USER_DATA_PATH ??= app.getPath('userData')
+const startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
+if (startupDiagnosticsEnabled) {
+  logStartupDiagnostic('before-single-instance-lock', {
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    platform: process.platform,
+    osRelease: os.release(),
+    userData: app.getPath('userData'),
+    e2eUserData: Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
+  })
+}
 
 function focusExistingWindow(): void {
   // Why: the second-instance event fires on the *primary* Electron process
@@ -263,17 +288,32 @@ function getExpectedTeardownScope(webContentsId?: number): ExpectedTeardownScope
 // hook endpoint files are namespaced per dev instance when the hook server
 // starts below. Packaged Orca keeps the lock to protect against the corruption
 // documented in PR #1326 / issue #1312.
+const bypassSingleInstanceLock = shouldBypassSingleInstanceLock({
+  isDev: is.dev,
+  isServeMode
+})
+if (bypassSingleInstanceLock) {
+  // Why: this is an explicit diagnostic escape hatch for macOS builds where
+  // Electron reports a false lock loss before any normal app logs exist.
+  logSingleInstanceLockBypass()
+}
 const hasSingleInstanceLock =
-  is.dev && !isServeMode ? true : acquireSingleInstanceLock(app, focusExistingWindow)
+  is.dev && !isServeMode
+    ? true
+    : bypassSingleInstanceLock
+      ? true
+      : acquireSingleInstanceLock(app, focusExistingWindow)
+if (startupDiagnosticsEnabled) {
+  logStartupDiagnostic('single-instance-lock-result', {
+    acquired: hasSingleInstanceLock,
+    bypassed: bypassSingleInstanceLock,
+    skippedForDev: is.dev && !isServeMode
+  })
+}
 if (!hasSingleInstanceLock) {
-  if (is.dev) {
-    // Why: packaged runs have no attached console, but dev runs do. Emit a
-    // single line so a `pnpm dev` operator does not mistake a silent exit
-    // for a broken launcher.
-    console.log(
-      '[single-instance] Another Orca instance is already running against this userData path — focusing existing window.'
-    )
-  }
+  // Why: if Electron returns a false negative here, packaged macOS launches
+  // otherwise look like silent crashes. `open --stderr` can capture this line.
+  logSingleInstanceLockFailure()
   app.quit()
 }
 
@@ -307,8 +347,8 @@ if (hasSingleInstanceLock) {
   enableMainProcessGpuFeatures()
 }
 
-function prepareCodexRuntimeHomeForLaunch(): string {
-  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch()
+function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
+  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
   try {
     // Why: launch prep is reachable after startup via PTY/runtime paths; honor
@@ -487,7 +527,7 @@ function openMainWindow(): BrowserWindow {
     store,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
-    () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
+    (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
         if (window.webContents.id === webContentsId) {
@@ -865,6 +905,9 @@ function sendSyntheticTitle(ptyId: string, data: string, options: { force?: bool
   if (!mainWindow || mainWindow.isDestroyed()) {
     return
   }
+  if (options.force !== true && isRendererPtyOutputPaused(ptyId)) {
+    return
+  }
   // Why: repeated working-spinner frames are decorative and can arrive every
   // 80ms per agent. Final/permission frames are forced because they drive BEL.
   if (
@@ -1048,8 +1091,14 @@ app.whenReady().then(async () => {
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
-  rateLimits.setCodexHomePathResolver(() => codexRuntimeHome!.prepareForRateLimitFetch())
-  rateLimits.setClaudeAuthPreparationResolver(() => claudeRuntimeAuth!.prepareForRateLimitFetch())
+  rateLimits.setCodexHomePathResolver((target) =>
+    codexRuntimeHome!.prepareForRateLimitFetch(target)
+  )
+  rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
+  rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
+  rateLimits.setClaudeAuthPreparationResolver((target) =>
+    claudeRuntimeAuth!.prepareForRateLimitFetch(target)
+  )
   rateLimits.setSettingsResolver(() => store!.getSettings())
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
@@ -1058,14 +1107,32 @@ app.whenReady().then(async () => {
   browserManager.setSettingsResolver(() => ({ keybindings: keybindings?.getOverrides() }))
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store!.getSettings()
+    const activeIds = new Set(
+      [
+        normalizeClaudeRuntimeSelection(settings).host,
+        ...Object.values(normalizeClaudeRuntimeSelection(settings).wsl)
+      ].filter(Boolean)
+    )
     return settings.claudeManagedAccounts
-      .filter((account) => account.id !== settings.activeClaudeManagedAccountId)
-      .map((account) => ({ id: account.id, managedAuthPath: account.managedAuthPath }))
+      .filter((account) => !activeIds.has(account.id))
+      .map((account) => ({
+        id: account.id,
+        managedAuthPath: account.managedAuthPath,
+        managedAuthRuntime: account.managedAuthRuntime,
+        wslDistro: account.wslDistro,
+        wslLinuxAuthPath: account.wslLinuxAuthPath
+      }))
   })
   rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store!.getSettings()
+    const activeIds = new Set(
+      [
+        normalizeCodexRuntimeSelection(settings).host,
+        ...Object.values(normalizeCodexRuntimeSelection(settings).wsl)
+      ].filter(Boolean)
+    )
     return settings.codexManagedAccounts
-      .filter((account) => account.id !== settings.activeCodexManagedAccountId)
+      .filter((account) => !activeIds.has(account.id))
       .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
   })
   const runtimeService = new OrcaRuntimeService(store, stats, {
@@ -1249,7 +1316,7 @@ app.whenReady().then(async () => {
       runtime,
       prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
-      () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
+      (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
       store
     )
     // Why: headless servers have no renderer graph publisher. Publish an

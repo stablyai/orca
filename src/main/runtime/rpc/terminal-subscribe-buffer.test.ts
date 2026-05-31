@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Why: terminal subscribe buffering tests share a live dispatcher harness; splitting would duplicate stream setup and weaken lifecycle coverage. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
@@ -23,6 +24,56 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('terminal subscribe buffering', () => {
+  it('settles mobile subscribe waits when the stream signal aborts before PTY spawn', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const controller = new AbortController()
+      const runtime = stubRuntime({
+        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+        waitForLeafPtyId: vi.fn(
+          (_handle: string, _timeoutMs?: number, signal?: AbortSignal) =>
+            new Promise<string>((_resolve, reject) => {
+              signal?.addEventListener('abort', () => reject(new Error('request_aborted')), {
+                once: true
+              })
+            })
+        ),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false })
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.subscribe', {
+          terminal: 'terminal-1',
+          client: { id: 'phone-1', type: 'mobile' },
+          capabilities: { terminalBinaryStream: 1 }
+        }),
+        (msg) => messages.push(msg),
+        {
+          signal: controller.signal,
+          connectionId: 'conn-phone',
+          sendBinary: vi.fn(),
+          registerBinaryStreamHandler: vi.fn(() => vi.fn())
+        }
+      )
+
+      expect(runtime.waitForLeafPtyId).toHaveBeenCalled()
+      controller.abort()
+      const outcomePromise = Promise.race([
+        dispatchPromise.then(() => 'settled'),
+        new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0))
+      ])
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(await outcomePromise).toBe('settled')
+      expect(runtime.readTerminal).not.toHaveBeenCalled()
+      expect(messages).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('marks scrollback-only subscribed previews truncated when the uncursored read is limited', async () => {
     const messages: string[] = []
     const runtime = stubRuntime({
@@ -279,9 +330,12 @@ describe('terminal subscribe buffering', () => {
       )
 
       await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
+      const shiftSpy = vi.spyOn(Array.prototype, 'shift')
       for (let index = 0; index < 400; index += 1) {
         dataListenerRef.current?.(`${String(index).padStart(3, '0')}${'x'.repeat(1021)}`)
       }
+      const shiftCallCount = shiftSpy.mock.calls.length
+      shiftSpy.mockRestore()
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
       resolveSnapshot({ data: '', cols: 120, rows: 40 })
       await vi.waitFor(() =>
@@ -297,6 +351,7 @@ describe('terminal subscribe buffering', () => {
       expect(output.length).toBeLessThanOrEqual(256 * 1024)
       expect(output).not.toContain('000')
       expect(output).toContain('399')
+      expect(shiftCallCount).toBe(0)
 
       runtime.cleanupSubscription('terminal-1:desktop-1')
       await dispatchPromise

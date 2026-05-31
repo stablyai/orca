@@ -31,6 +31,7 @@ import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { cn } from '@/lib/utils'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { projectViewCacheKey } from '@/store/slices/github'
 import type {
   GetProjectViewTableResult,
@@ -47,6 +48,11 @@ import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 import { filterProjectTableRowsByOpenRepos } from './project-row-filtering'
+import {
+  getNextVisibleProjectTableCache,
+  getVisibleProjectTable,
+  type CachedVisibleProjectTable
+} from './project-visible-table-cache'
 
 type Props = Record<string, never>
 
@@ -75,6 +81,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const addRepoFromStore = useAppStore((s) => s.addRepo)
   const repos = useAppStore((s) => s.repos)
   const { lookupSlug, ready: slugIndexReady } = useRepoSlugIndex()
+  const mountedRef = useMountedRef()
 
   const activeProject = settings?.githubProjects?.activeProject ?? null
   const lastViewByProject = useMemo(
@@ -126,18 +133,21 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           },
           { force }
         )
+        if (!mountedRef.current || fetchRunIdRef.current !== runId) {
+          return
+        }
         if (!res.ok) {
           setError({ error: res.error, totalCount: res.totalCount })
         }
       } finally {
         // Why: a manual refresh can overlap with a tab/search fetch; an older
         // request finishing first must not clear the newer refresh indicator.
-        if (fetchRunIdRef.current === runId) {
+        if (mountedRef.current && fetchRunIdRef.current === runId) {
           setLoading(false)
         }
       }
     },
-    [fetchProjectViewTable]
+    [fetchProjectViewTable, mountedRef]
   )
 
   const handleSelect = useCallback(
@@ -303,27 +313,23 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     () => (table && slugIndexReady ? filterProjectTableRowsByOpenRepos(table, lookupSlug) : null),
     [table, slugIndexReady, lookupSlug]
   )
-  const [lastFilteredTable, setLastFilteredTable] = useState<{
-    cacheKey: string
-    table: GitHubProjectTable
-  } | null>(null)
-
-  useEffect(() => {
-    if (!currentCacheKey || !table) {
-      setLastFilteredTable(null)
-      return
-    }
-    if (slugIndexReady && filteredTable) {
-      setLastFilteredTable({ cacheKey: currentCacheKey, table: filteredTable })
-    }
-  }, [currentCacheKey, table, slugIndexReady, filteredTable])
-
-  const visibleTable =
-    slugIndexReady || !currentCacheKey
-      ? filteredTable
-      : lastFilteredTable?.cacheKey === currentCacheKey
-        ? lastFilteredTable.table
-        : null
+  const lastFilteredTableRef = useRef<CachedVisibleProjectTable | null>(null)
+  // Why: this cache only prevents a blank table while the repo slug index
+  // rebuilds; a ref preserves the previous render value without scheduling
+  // a second render after every filtered-table change.
+  lastFilteredTableRef.current = getNextVisibleProjectTableCache({
+    currentCacheKey,
+    sourceTable: table,
+    slugIndexReady,
+    filteredTable,
+    previous: lastFilteredTableRef.current
+  })
+  const visibleTable = getVisibleProjectTable({
+    currentCacheKey,
+    slugIndexReady,
+    filteredTable,
+    cachedTable: lastFilteredTableRef.current
+  })
 
   // Parent-dropped toast, once per table.
   useEffect(() => {

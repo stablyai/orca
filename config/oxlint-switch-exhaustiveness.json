@@ -1,0 +1,19 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript"],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "rules": {
+    "typescript/switch-exhaustiveness-check": [
+      "error",
+      { "allowDefaultCaseForExhaustiveSwitch": false }
+    ]
+  }
+}
