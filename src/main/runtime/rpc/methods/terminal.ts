@@ -1064,6 +1064,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!useBinaryStream) {
         const read = await runtime.readTerminal(params.terminal)
         const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, false)
+        // Why: legacy JSON streams register cleanup after snapshot awaits; if
+        // the socket closed meanwhile, registering now would orphan listeners.
+        if (signal?.aborted) {
+          return
+        }
         const size = runtime.getTerminalSize(ptyId)
         const displayMode = runtime.getMobileDisplayMode(ptyId)
         const seq = runtime.getLayout(ptyId)?.seq
