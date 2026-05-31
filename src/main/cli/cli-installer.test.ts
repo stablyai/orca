@@ -668,6 +668,46 @@ describe('CliInstaller', () => {
     )
   })
 
+  it('does not overwrite the packaged Windows launcher while registering PATH', async () => {
+    const fixture = await makeFixture()
+    const localAppDataPath = fixture.root
+    const resourcesPath = join(localAppDataPath, 'Programs', 'Orca', 'resources')
+    const bundledLauncher = join(resourcesPath, 'bin', 'orca.cmd')
+    const bundledContent = '@echo off\r\necho bundled-orca %*\r\n'
+    await mkdir(dirname(bundledLauncher), { recursive: true })
+    await writeFile(bundledLauncher, bundledContent, 'utf8')
+
+    let userPath: string | null = null
+    const installer = new CliInstaller({
+      platform: 'win32',
+      isPackaged: true,
+      resourcesPath,
+      localAppDataPath,
+      userDataPath: fixture.userDataPath,
+      execPath: join(localAppDataPath, 'Programs', 'Orca', 'Orca.exe'),
+      appPath: fixture.appPath,
+      userPathReader: async () => userPath,
+      userPathWriter: async (value) => {
+        userPath = value
+      }
+    })
+
+    const installed = await installer.install()
+
+    expect(installed.state).toBe('installed')
+    expect(installed.pathConfigured).toBe(true)
+    expect(installed.commandPath).toBe(bundledLauncher)
+    expect(userPath).toBe(dirname(bundledLauncher))
+    await expect(readFile(bundledLauncher, 'utf8')).resolves.toBe(bundledContent)
+
+    const removed = await installer.remove()
+
+    expect(removed.state).toBe('not_installed')
+    expect(removed.pathConfigured).toBe(false)
+    expect(userPath).toBe('')
+    await expect(readFile(bundledLauncher, 'utf8')).resolves.toBe(bundledContent)
+  })
+
   // Why: the arm64 fallback must apply for packaged builds, not just dev launchers.
   it.skipIf(process.platform === 'win32')(
     'resolves to ~/.local/bin/orca on arm64 even when isPackaged is true',

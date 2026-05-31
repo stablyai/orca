@@ -173,6 +173,9 @@ export class CliInstaller {
     } else if (this.isLinuxAppImage()) {
       await this.installAppImageWrapper(status.commandPath, status.launcherPath)
       await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
+    } else if (this.isWindowsPackagedBundledCommand(status.commandPath, status.launcherPath)) {
+      // Why: packaged Windows already ships resources/bin/orca.cmd. Registration
+      // only owns the user PATH entry; rewriting the asset makes it recurse.
     } else {
       // Why: mkdir stays here for the Windows wrapper path — the target dir is
       // user-writable (%LOCALAPPDATA%) so EACCES cannot occur. The symlink path
@@ -215,6 +218,8 @@ export class CliInstaller {
     if (status.installMethod === 'symlink') {
       await this.removeSymlink(status.commandPath)
       await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
+    } else if (this.isWindowsPackagedBundledCommand(status.commandPath, status.launcherPath)) {
+      await this.removeWindowsPathEntry(dirname(status.commandPath))
     } else {
       await unlink(status.commandPath)
       await this.removeWindowsPathEntry(dirname(status.commandPath))
@@ -571,6 +576,19 @@ export class CliInstaller {
     return this.platform === 'linux' && Boolean(this.appImagePath)
   }
 
+  private isWindowsPackagedBundledCommand(
+    commandPath: string | null,
+    launcherPath: string | null
+  ): commandPath is string {
+    return (
+      this.platform === 'win32' &&
+      this.isPackaged &&
+      commandPath !== null &&
+      launcherPath !== null &&
+      samePathEntry('win32', commandPath, launcherPath)
+    )
+  }
+
   private async inspectWindowsWrapper(
     commandPath: string,
     launcherPath: string
@@ -586,6 +604,18 @@ export class CliInstaller {
           state: 'conflict',
           currentTarget: null,
           detail: `${commandPath} exists but is not an Orca launcher script.`
+        })
+      }
+
+      if (this.isWindowsPackagedBundledCommand(commandPath, launcherPath)) {
+        return this.buildStatus({
+          commandPath,
+          launcherPath,
+          installMethod: 'wrapper',
+          supported: true,
+          state: 'installed',
+          currentTarget: launcherPath,
+          detail: `Registered at ${commandPath}.`
         })
       }
 
@@ -657,6 +687,21 @@ export class CliInstaller {
     pathDirectory: string,
     pathConfigured: boolean
   ): CliInstallStatus {
+    if (
+      this.isWindowsPackagedBundledCommand(status.commandPath, status.launcherPath) &&
+      status.state === 'installed' &&
+      !pathConfigured
+    ) {
+      return {
+        ...status,
+        pathDirectory,
+        pathConfigured,
+        state: 'not_installed',
+        currentTarget: null,
+        detail: `Register ${status.commandPath} to use Orca from Command Prompt or PowerShell.`
+      }
+    }
+
     if (status.state !== 'installed') {
       return {
         ...status,
