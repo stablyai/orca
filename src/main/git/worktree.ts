@@ -1,6 +1,10 @@
 /* eslint-disable max-lines -- Why: this file keeps git worktree create/remove behavior together so local cleanup and creation invariants stay in one place. */
 import { stat } from 'fs/promises'
 import { join, posix, win32 } from 'path'
+import {
+  branchHasNoUnmergedChangesOnAnyTarget,
+  getBranchCleanupTargetRefs
+} from '../../shared/git-branch-cleanup'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import type {
   GitWorktreeInfo,
@@ -585,6 +589,22 @@ export async function removeWorktree(
     await gitExecFileAsync(['branch', deleteFlag, '--', branchName], { cwd: repoPath })
     return {}
   } catch (error) {
+    if (!options.forceBranchDelete && branchHead) {
+      try {
+        if (
+          await deleteAlreadyMergedBranchAfterSafeDeleteFailure(repoPath, branchName, branchHead)
+        ) {
+          return {}
+        }
+      } catch (alreadyMergedDeleteError) {
+        // Why: the worktree is already gone; a raced branch cleanup should
+        // degrade to the preserved-branch recovery path instead of failing delete.
+        console.warn(
+          `[git] Failed to delete already-merged local branch "${branchName}" after removing worktree`,
+          alreadyMergedDeleteError
+        )
+      }
+    }
     // Expected when the branch still has unmerged/unpublished commits: keep it.
     // Deleting a worktree must never silently discard commits.
     console.warn(
@@ -593,6 +613,23 @@ export async function removeWorktree(
     )
     return { preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}) } }
   }
+}
+
+async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
+  repoPath: string,
+  branchName: string,
+  branchHead: string
+): Promise<boolean> {
+  const runGit = (args: string[]) => gitExecFileAsync(args, { cwd: repoPath })
+  const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
+  // Why: squash merges rewrite commit IDs, so `branch -d` can reject a branch
+  // whose changes are already on the base ref. Delete only when Git can prove
+  // the branch contributes no tree changes to that base.
+  if (!(await branchHasNoUnmergedChangesOnAnyTarget(runGit, branchName, targetRefs))) {
+    return false
+  }
+  await forceDeleteLocalBranch(repoPath, branchName, branchHead)
+  return true
 }
 
 export async function forceDeleteLocalBranch(

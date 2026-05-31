@@ -1,16 +1,9 @@
-/**
- * Worktree management and commit operations for the relay git handler.
- *
- * Why: extracted from git-handler-ops.ts to keep all relay files under
- * the oxlint max-lines (300) limit.
- */
 import * as path from 'path'
 import type { RemoveWorktreeResult } from '../shared/types'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
+import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'
 import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
-
-// ─── Worktree management ─────────────────────────────────────────────
 
 async function persistRelayWorktreeCreationBase(
   git: GitExec,
@@ -180,6 +173,26 @@ export async function removeWorktreeOp(
     await git(['branch', forceBranchDelete ? '-D' : '-d', '--', branchName], repoPath)
     return {}
   } catch (error) {
+    if (!forceBranchDelete && branchHead) {
+      try {
+        if (
+          await deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
+            git,
+            repoPath,
+            branchName,
+            branchHead
+          )
+        ) {
+          return {}
+        }
+      } catch (alreadyMergedDeleteError) {
+        // Why: worktree is gone; preserve branch recovery on cleanup races.
+        console.warn(
+          `relay removeWorktree: failed to delete already-merged local branch "${branchName}" after removing worktree`,
+          alreadyMergedDeleteError
+        )
+      }
+    }
     // Expected when the branch still has unmerged/unpublished commits: keep it.
     console.warn(
       `relay removeWorktree: preserved local branch "${branchName}" after removing worktree (not fully merged)`,
@@ -213,8 +226,7 @@ async function readRelayWorktreeList(git: GitExec, repoPath: string): Promise<Re
     }
   }
 
-  // Why: `-z` preserves remote worktree paths containing newlines, while this
-  // fallback keeps SSH worktree operations compatible with Git <2.36.
+  // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
   const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
   return normalizeRelayWorktrees(parseWorktreeList(stdout))
 }
@@ -248,8 +260,6 @@ export async function worktreeIsCleanOp(
   const clean = !stdout.trim()
   return { clean, stdout: clean ? undefined : stdout }
 }
-
-// ─── Commit ──────────────────────────────────────────────────────────
 
 export async function commitChangesRelay(
   git: GitExec,
