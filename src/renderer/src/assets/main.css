@@ -282,11 +282,124 @@
   }
 }
 
+/* Why: window blur makes the Electron window transparent so vibrancy/acrylic can
+   show; the opaque body would paint over it, so drop it here. Chrome and the
+   page region keep their own backgrounds, so only the glass surfaces reveal it. */
+html.glass body {
+  background-color: transparent;
+}
+
+/* Why: in glass mode the structural surface tokens go translucent so the blur
+   shows through the whole shell. Alphas come from App.tsx, derived from the
+   Background Opacity setting: --glass-opacity (chrome, terminal + 0.25 for
+   readability) and --glass-opacity-mid (middle view = terminal). The *-solid
+   tokens keep the opaque values for elements pinned solid below (the base tokens
+   are translucent here). Overlays use --popover, left untouched. */
+html.glass.dark {
+  --background: rgb(10 10 10 / var(--glass-opacity-mid, 0.35));
+  --card: rgb(23 23 23 / var(--glass-opacity, 0.6));
+  --sidebar: rgb(23 23 23 / var(--glass-opacity, 0.6));
+  --bg-titlebar: rgb(23 23 23 / var(--glass-opacity, 0.6));
+  --editor-surface: rgb(30 30 30 / var(--glass-opacity-mid, 0.35));
+  --background-solid: #0a0a0a;
+  --editor-surface-solid: #1e1e1e;
+}
+html.glass:not(.dark) {
+  --background: rgb(255 255 255 / var(--glass-opacity-mid, 0.35));
+  --card: rgb(255 255 255 / var(--glass-opacity, 0.6));
+  --sidebar: rgb(250 250 250 / var(--glass-opacity, 0.6));
+  --bg-titlebar: rgb(255 255 255 / var(--glass-opacity, 0.6));
+  --editor-surface: rgb(255 255 255 / var(--glass-opacity-mid, 0.35));
+  --background-solid: #ffffff;
+  --editor-surface-solid: #ffffff;
+}
+
+/* Why: these surfaces use bg-background / text-background, which is translucent
+   in glass — pin them to the solid surface token so modal content, the inverted
+   tooltip text, and the toggle knob stay legible over the blur. */
+html.glass [data-slot='dialog-content'],
+html.glass [data-slot='sheet-content'] {
+  background-color: var(--background-solid);
+}
+html.glass [data-slot='tooltip-content'] {
+  color: var(--background-solid);
+}
+html.glass [role='switch'] > span {
+  background-color: var(--background-solid);
+}
+
+/* Editor (Monaco) glass: the vs-dark / vs themes paint a hardcoded opaque
+   background that ignores our CSS variables, so the file viewer/editor stayed
+   solid. In glass mode, let the editor root carry the translucent
+   --editor-surface and clear Monaco's inner background layers, so the code area
+   reads as a single glass pane like the rest of the shell. */
+html.glass .monaco-editor {
+  background-color: var(--editor-surface) !important;
+}
+html.glass .monaco-editor-background,
+html.glass .monaco-editor .overflow-guard,
+html.glass .monaco-editor .margin,
+html.glass .monaco-editor .minimap {
+  background-color: transparent !important;
+}
+/* Sticky scroll: the pinned header sits over scrolling code, so it must be
+   opaque — a translucent header lets the code below show through and overlap its
+   text (Monaco's layered rendering also breaks backdrop-blur, so frosting isn't
+   an option). Use the solid editor-surface base color; Monaco keeps its subtle
+   bottom border as a separator. */
+html.glass .monaco-editor .sticky-widget {
+  background-color: var(--editor-surface-solid) !important;
+}
+html.glass .monaco-editor .sticky-widget .sticky-widget-lines-scrollable,
+html.glass .monaco-editor .sticky-widget .sticky-widget-line-numbers,
+html.glass .monaco-editor .sticky-widget .sticky-widget-lines,
+html.glass .monaco-editor .sticky-widget .sticky-line-content,
+html.glass .monaco-editor .sticky-widget .sticky-line-number {
+  background-color: transparent !important;
+}
+/* Current-line highlight: its border box is invisible on the opaque vs-dark
+   theme but shows as a hard outline against the transparent glass editor. */
+html.glass .monaco-editor .view-overlays .current-line,
+html.glass .monaco-editor .margin-view-overlays .current-line {
+  border-color: transparent !important;
+}
+
 /* ── Sleek scrollbar (VS Code-like) ─────────────────── */
 
 .scrollbar-sleek {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 34%, transparent) transparent;
+}
+
+/* Why: xterm's scrollbar is unstyled (native viewport → bright white bar). It
+   should match the file editor's scrollbar, but xterm owns those internal
+   elements so we can't put the `.scrollbar-editor` class on them — mirror that
+   class's exact values here instead (keep both in sync). Covers the native
+   viewport scrollbar and the VS Code overlay slider. */
+.xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(121, 121, 121, 0.4) transparent;
+}
+.xterm-viewport::-webkit-scrollbar {
+  width: 14px;
+}
+.xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(121, 121, 121, 0.4);
+  border: 3px solid transparent;
+  border-radius: 7px;
+  background-clip: padding-box;
+}
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(121, 121, 121, 0.7);
+}
+.xterm .xterm-scrollable-element .xterm-slider {
+  background: rgba(121, 121, 121, 0.4) !important;
+}
+.xterm .xterm-scrollable-element .xterm-slider:hover {
+  background: rgba(121, 121, 121, 0.7) !important;
 }
 
 .scrollbar-sleek::-webkit-scrollbar {

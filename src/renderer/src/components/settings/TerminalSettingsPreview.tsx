@@ -117,16 +117,29 @@ export function TerminalSettingsPreview({
     ]
   )
 
+  // Why: terminal opacity/transparency only applies in glass mode (blur on). With
+  // blur off the whole app — including this preview — must render the solid
+  // theme, so compose without the opacity. Otherwise a low opacity makes the
+  // preview transparent over the dark settings card and a light theme reads dark.
+  const previewBlurActive =
+    settings.windowBackgroundBlur === true &&
+    settings.terminalBackgroundOpacity !== undefined &&
+    settings.terminalBackgroundOpacity < 1
   // Why: same — list the composeActiveTerminalTheme inputs explicitly so font
   // and cursor option changes don't trigger a buffer rewrite.
   const composedTheme = useMemo(
-    () => composeActiveTerminalTheme(appearance.theme, settings),
+    () =>
+      composeActiveTerminalTheme(
+        appearance.theme,
+        previewBlurActive ? settings : { ...settings, terminalBackgroundOpacity: undefined }
+      ),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
     [
       appearance,
       settings.terminalColorOverrides,
       settings.terminalBackgroundOpacity,
-      settings.terminalCursorOpacity
+      settings.terminalCursorOpacity,
+      previewBlurActive
     ]
   )
 
@@ -162,8 +175,7 @@ export function TerminalSettingsPreview({
       fontWeightBold: weights.fontWeightBold,
       lineHeight: settings.terminalLineHeight,
       theme: composedTheme ?? undefined,
-      allowTransparency:
-        settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1,
+      allowTransparency: previewBlurActive,
       cols: PREVIEW_COLS,
       rows: PREVIEW_ROWS
     })
@@ -227,11 +239,10 @@ export function TerminalSettingsPreview({
       return
     }
     terminal.options.theme = composedTheme
-    // Why: matches the live pane policy in applyTerminalAppearance — without
-    // this, an opacity < 1 background renders opaque inside xterm even though
-    // the theme color carries an alpha channel.
-    terminal.options.allowTransparency =
-      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+    // Why: matches the live pane policy in applyTerminalAppearance — transparency
+    // only when glass is active (blur on + opacity < 1); with blur off the solid
+    // theme renders normally.
+    terminal.options.allowTransparency = previewBlurActive
     if (skipInitialThemeRewriteRef.current) {
       skipInitialThemeRewriteRef.current = false
       return
@@ -244,7 +255,7 @@ export function TerminalSettingsPreview({
     // from a clean slate.
     terminal.reset()
     terminal.write(PREVIEW_BUFFER)
-  }, [composedTheme, settings.terminalBackgroundOpacity])
+  }, [composedTheme, settings.terminalBackgroundOpacity, previewBlurActive])
 
   useEffect(() => {
     const terminal = terminalRef.current

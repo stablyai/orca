@@ -1,12 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
-import { RotateCw } from 'lucide-react'
+import { useState } from 'react'
 import type { GlobalSettings, TerminalColorOverrides } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { ColorField, NumberField } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
-import { clampNumber } from '@/lib/terminal-theme'
-import { useMountedRef } from '@/hooks/useMountedRef'
 
 type TerminalWindowSectionProps = {
   settings: GlobalSettings
@@ -78,119 +75,15 @@ export function TerminalWindowSection({
   updateSettings
 }: TerminalWindowSectionProps): React.JSX.Element {
   const [colorOverridesExpanded, setColorOverridesExpanded] = useState(false)
-  // Why: windowBackgroundBlur is only read by createMainWindow() at startup
-  // (macOS vibrancy / Windows acrylic both require window creation options),
-  // so the UI has to ask the user to restart for the change to take effect.
-  // Snapshot the value on first render and compare to the live setting to
-  // show a "Restart required" banner only when they differ.
-  const blurAtMountRef = useRef<boolean>(settings.windowBackgroundBlur ?? false)
-  const blurPendingRestart = (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
-  const [relaunchingBlur, setRelaunchingBlur] = useState(false)
-  const mountedRef = useMountedRef()
-
-  // Why: the mount-time snapshot captures local state, not main-process state.
-  // If the setting is persisted and read correctly on next boot we never need
-  // to re-snapshot, but tests mount the component with arbitrary initial
-  // values — keep `blurAtMountRef` honest if the settings load asynchronously
-  // and the value arrives after mount.
-  useEffect(() => {
-    blurAtMountRef.current = settings.windowBackgroundBlur ?? false
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const handleRelaunch = async (): Promise<void> => {
-    if (relaunchingBlur) {
-      return
-    }
-    setRelaunchingBlur(true)
-    try {
-      await window.api.app.relaunch()
-    } catch {
-      if (mountedRef.current) {
-        setRelaunchingBlur(false)
-      }
-    }
-  }
 
   return (
     <section className="space-y-4">
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">Window</h3>
-        <p className="text-xs text-muted-foreground">Window appearance and background settings.</p>
+        <p className="text-xs text-muted-foreground">
+          Terminal padding, mouse, and color settings.
+        </p>
       </div>
-
-      <SearchableSetting
-        title="Background Opacity"
-        description="Controls the transparency of the terminal background."
-        keywords={['opacity', 'transparency', 'background', 'alpha']}
-      >
-        <NumberField
-          label="Background Opacity"
-          description="Controls the transparency of the terminal background. 1 is fully opaque, 0 is fully transparent."
-          value={settings.terminalBackgroundOpacity ?? 1}
-          defaultValue={1}
-          min={0}
-          max={1}
-          step={0.05}
-          suffix="0 to 1"
-          onChange={(value) =>
-            updateSettings({ terminalBackgroundOpacity: clampNumber(value, 0, 1) })
-          }
-        />
-      </SearchableSetting>
-
-      <SearchableSetting
-        title="Window Blur"
-        description="Apply background blur to the terminal window. Requires restart."
-        keywords={['window', 'blur', 'background', 'transparency', 'vibrancy']}
-        className="space-y-3 py-2"
-      >
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <Label>Window Blur</Label>
-            <p className="text-xs text-muted-foreground">
-              Apply background blur to the terminal window. Requires restart.
-            </p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={settings.windowBackgroundBlur ?? false}
-            onClick={() => updateSettings({ windowBackgroundBlur: !settings.windowBackgroundBlur })}
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              (settings.windowBackgroundBlur ?? false) ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                (settings.windowBackgroundBlur ?? false) ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
-        </div>
-
-        {blurPendingRestart ? (
-          <div className="flex items-center justify-between gap-3 rounded-md border border-yellow-500/50 bg-yellow-500/10 px-3 py-2.5">
-            <div className="min-w-0 flex-1 space-y-0.5">
-              <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
-                Restart required
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Restart Orca to apply the window blur change.
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="default"
-              className="shrink-0 gap-1.5"
-              disabled={relaunchingBlur}
-              onClick={() => void handleRelaunch()}
-            >
-              <RotateCw className={`size-3 ${relaunchingBlur ? 'animate-spin' : ''}`} />
-              {relaunchingBlur ? 'Restarting…' : 'Restart now'}
-            </Button>
-          </div>
-        ) : null}
-      </SearchableSetting>
 
       <SearchableSetting
         title="Horizontal Padding"

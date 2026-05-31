@@ -218,16 +218,6 @@ export const MANAGE_SESSIONS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 
 export const TERMINAL_WINDOW_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'Background Opacity',
-    description: 'Controls the transparency of the terminal background.',
-    keywords: ['opacity', 'transparency', 'background', 'alpha']
-  },
-  {
-    title: 'Window Blur',
-    description: 'Apply background blur to the terminal window. Requires restart.',
-    keywords: ['window', 'blur', 'background', 'transparency', 'vibrancy']
-  },
-  {
     title: 'Horizontal Padding',
     description: 'Horizontal padding around the terminal grid in pixels.',
     keywords: ['padding', 'horizontal', 'spacing', 'margin']

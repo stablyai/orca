@@ -196,8 +196,26 @@ export function applyTerminalAppearance(
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
   const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
-  const paneBackground = theme?.background ?? '#000000'
+  const opacityActive =
+    settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+  // Why: terminal transparency only makes sense when window blur is on — there's
+  // a blurred desktop behind the window to reveal. With blur off, a transparent
+  // terminal would just composite muddily over the opaque app shell and the
+  // theme would look washed out, so compose the theme WITHOUT the opacity (solid
+  // background). When glass is active, compose WITH opacity, then clear the xterm
+  // background and ground the pane on the shared --editor-surface so the terminal
+  // matches the editor/file viewer exactly.
+  const glassActive = settings.windowBackgroundBlur === true && opacityActive
+  const composedTheme = composeActiveTerminalTheme(
+    baseTheme,
+    glassActive ? settings : { ...settings, terminalBackgroundOpacity: undefined }
+  )
+  const paneBackground = composedTheme?.background ?? '#000000'
+  const theme =
+    glassActive && composedTheme
+      ? { ...composedTheme, background: 'rgba(0, 0, 0, 0)' }
+      : composedTheme
+  const effectivePaneBackground = glassActive ? 'var(--editor-surface)' : paneBackground
 
   const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
   const ligaturesEnabled = resolveTerminalLigaturesEnabled(
@@ -209,11 +227,10 @@ export function applyTerminalAppearance(
     if (theme) {
       pane.terminal.options.theme = theme
     }
-    // Why: xterm's allowTransparency has measurable rendering cost, so clear
-    // it explicitly when opacity is at (or above) 1 to avoid a stale `true`
-    // bleeding in from a prior opacity setting that has since been reset.
-    pane.terminal.options.allowTransparency =
-      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+    // Why: only allow transparency in glass mode (blur on + opacity < 1). With
+    // blur off there is nothing behind the window to reveal, so the terminal
+    // stays fully opaque and renders its solid theme background.
+    pane.terminal.options.allowTransparency = glassActive
     const cursorStyle = settings.terminalCursorStyle ?? 'bar'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
@@ -256,8 +273,8 @@ export function applyTerminalAppearance(
   }
 
   manager.setPaneStyleOptions({
-    splitBackground: paneBackground,
-    paneBackground,
+    splitBackground: effectivePaneBackground,
+    paneBackground: effectivePaneBackground,
     inactivePaneOpacity: paneStyles.inactivePaneOpacity,
     activePaneOpacity: paneStyles.activePaneOpacity,
     opacityTransitionMs: paneStyles.opacityTransitionMs,

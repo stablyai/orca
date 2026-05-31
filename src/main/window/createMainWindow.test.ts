@@ -109,6 +109,82 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
   })
 
+  const makeWindowInstance = (): Record<string, unknown> => {
+    const webContents = {
+      id: 1,
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    return {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+  }
+
+  const storeWith = (settings: Record<string, unknown>): never =>
+    ({
+      getUI: () => ({}),
+      getSettings: () => settings,
+      updateUI: vi.fn()
+    }) as never
+
+  it('uses a transparent window background when blur is enabled so vibrancy can show', () => {
+    browserWindowMock.mockImplementation(function () {
+      return makeWindowInstance()
+    })
+
+    createMainWindow(storeWith({ windowBackgroundBlur: true }))
+
+    const options = browserWindowMock.mock.calls[0]?.[0]
+    if (process.platform === 'darwin') {
+      // Why: vibrancy provides the blur. transparent:true would suppress it,
+      // and any opaque backgroundColor would paint over it — so neither is set.
+      expect(options).toMatchObject({
+        vibrancy: 'under-window',
+        visualEffectState: 'active'
+      })
+      expect(options.transparent).toBeUndefined()
+      expect(options.backgroundColor).toBeUndefined()
+    } else if (process.platform === 'win32') {
+      expect(options).toMatchObject({ backgroundMaterial: 'acrylic' })
+      expect(options.backgroundColor).toBeUndefined()
+    } else {
+      // Linux has no native blur surface, so the window must stay opaque
+      // rather than become a clear, unblurred window.
+      expect(options.backgroundColor).toBe('#ffffff')
+      expect(options.transparent).toBeUndefined()
+    }
+  })
+
+  it('keeps an opaque window background when blur is disabled', () => {
+    browserWindowMock.mockImplementation(function () {
+      return makeWindowInstance()
+    })
+
+    createMainWindow(storeWith({ windowBackgroundBlur: false }))
+
+    const options = browserWindowMock.mock.calls[0]?.[0]
+    // nativeTheme.shouldUseDarkColors is mocked false → light opaque fill.
+    expect(options.backgroundColor).toBe('#ffffff')
+    expect(options.transparent).toBeUndefined()
+  })
+
   it('enables renderer sandboxing and opens external links safely', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {

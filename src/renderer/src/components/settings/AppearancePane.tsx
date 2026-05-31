@@ -20,6 +20,7 @@ import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
 import {
   APPEARANCE_PANE_SEARCH_ENTRIES,
+  GLASS_ENTRIES,
   LAYOUT_ENTRIES,
   SIDEBAR_ENTRIES,
   STATUS_BAR_ENTRIES,
@@ -29,6 +30,7 @@ import {
   TYPOGRAPHY_ENTRIES,
   ZOOM_ENTRIES
 } from './appearance-search'
+import { GlassAppearanceSection } from './GlassAppearanceSection'
 export { APPEARANCE_PANE_SEARCH_ENTRIES }
 
 type AppearancePaneProps = {
@@ -148,6 +150,9 @@ export function AppearancePane({
           </SearchableSetting>
         ) : null}
       </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, GLASS_ENTRIES) ? (
+      <GlassAppearanceSection key="glass" settings={settings} updateSettings={updateSettings} />
     ) : null,
     matchesSettingsSearch(searchQuery, LAYOUT_ENTRIES) ? (
       <section key="layout" className="space-y-3">
