@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { Toggle } from '@/components/ui/toggle'
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { cn } from '@/lib/utils'
 import { clearLinearMetadataCache } from '@/hooks/useIssueMetadata'
 import {
   linearCreateIssueLabel,
@@ -413,14 +415,29 @@ export default function LinearLabelsWorkspace({
               <ExternalLink className="size-3.5" />
             </Button>
           ) : null}
-          <Button
-            variant="outline"
+          <Toggle
+            pressed={includeArchived}
+            onPressedChange={setIncludeArchived}
             size="sm"
-            onClick={() => setIncludeArchived((current) => !current)}
-            className="h-8 border-border/50 bg-background/70 text-xs"
+            className="h-8 gap-2 bg-transparent px-2 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground data-[state=on]:bg-transparent data-[state=on]:text-foreground"
+            aria-label="Show retired labels"
           >
-            {includeArchived ? 'Hide retired' : 'Show retired'}
-          </Button>
+            <span>Show retired</span>
+            <span
+              aria-hidden
+              className={cn(
+                'relative inline-flex h-4 w-7 rounded-full border transition-colors',
+                includeArchived ? 'border-primary bg-primary' : 'border-border/60 bg-muted/60'
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute top-0.5 left-0.5 size-2.5 rounded-full bg-background shadow-xs transition-transform',
+                  includeArchived && 'translate-x-3'
+                )}
+              />
+            </span>
+          </Toggle>
           <Button
             variant="outline"
             size="icon"
