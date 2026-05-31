@@ -12,6 +12,7 @@ import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { DiffCommentCard } from './DiffCommentCard'
 import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
+import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
 import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
 
 // Why: Monaco glyph-margin *decorations* don't expose click events in a way
@@ -62,6 +63,7 @@ type ZoneEntry = {
   // mutating the delegate is the supported way to grow a zone in place.
   delegate: monacoEditor.IViewZone
   root: Root
+  disposeMouseDownStopper: () => void
   lastRenderSignature: string
   // Why: Monaco invokes IViewZone.onDomNodeTop on every render once the zone
   // is in the layout. The first invocation is our deterministic "this zone is
@@ -399,7 +401,10 @@ export function useDiffCommentDecorator({
       // delay. Clear `zones` synchronously so a subsequent editor mount sees
       // empty bookkeeping immediately. This matches the deferred unmount in
       // the diff-pass effect below.
-      const rootsToUnmount = Array.from(zones.values(), (z) => z.root)
+      const rootsToUnmount = Array.from(zones.values(), (z) => {
+        z.disposeMouseDownStopper()
+        return z.root
+      })
       zones.clear()
       if (rootsToUnmount.length > 0) {
         queueMicrotask(() => {
@@ -559,6 +564,7 @@ export function useDiffCommentDecorator({
       for (const [commentId, entry] of zones) {
         if (!relevantMap.has(commentId)) {
           accessor.removeZone(entry.zoneId)
+          entry.disposeMouseDownStopper()
           rootsToUnmount.push(entry.root)
           zones.delete(commentId)
           // Why: if the user requested a scroll-to-note on a comment that
@@ -581,7 +587,7 @@ export function useDiffCommentDecorator({
         // steal focus (or start a selection drag) when the user interacts
         // with anything inside the card. Delete still fires because click is
         // attached directly on the button.
-        dom.addEventListener('mousedown', (ev) => ev.stopPropagation())
+        const disposeMouseDownStopper = installDiffCommentZoneMouseDownStopper(dom)
 
         const root = createRoot(dom)
 
@@ -631,6 +637,7 @@ export function useDiffCommentDecorator({
           domNode: dom,
           delegate,
           root,
+          disposeMouseDownStopper,
           lastRenderSignature: getRenderSignature(c, formatCommentPrompt),
           laidOut: false
         })
