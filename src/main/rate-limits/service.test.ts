@@ -170,6 +170,31 @@ describe('RateLimitService', () => {
     expect(secondWindow.listenerCount('closed')).toBe(0)
   })
 
+  it('sanitizes renderer-provided polling intervals before scheduling timers', () => {
+    vi.useFakeTimers()
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval')
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+      const service = new RateLimitService()
+
+      service.setPollingInterval(Number.NaN)
+      service.start()
+      expect(intervalSpy).toHaveBeenLastCalledWith(expect.any(Function), 15 * 60 * 1000)
+
+      service.setPollingInterval(Number.MAX_SAFE_INTEGER)
+      expect(intervalSpy).toHaveBeenLastCalledWith(expect.any(Function), 2_147_483_647)
+
+      service.setPollingInterval(10)
+      expect(intervalSpy).toHaveBeenLastCalledWith(expect.any(Function), 30_000)
+
+      service.stop()
+    } finally {
+      intervalSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps recent stale data across repeated failures', async () => {
     const service = new RateLimitService()
     const internal = serviceInternals(service)

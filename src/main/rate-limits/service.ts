@@ -38,6 +38,8 @@ type ClaudeAuthPreparationResolver = (
 // state is informational, so prefer keeping a recent snapshot over polling it
 // into 429s during long focused Orca sessions.
 const DEFAULT_POLL_MS = 15 * 60 * 1000 // 15 minutes
+const MIN_POLL_MS = 30 * 1000 // 30 seconds — renderer input should never create a tight loop.
+const MAX_POLL_MS = 2_147_483_647 // Max safe setInterval delay before Node clamps back to 1ms.
 const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual refresh bursts
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
@@ -49,6 +51,13 @@ type InternalRateLimitState = {
   codex: ProviderRateLimits | null
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
+}
+
+function normalizePollingInterval(ms: number): number {
+  if (!Number.isFinite(ms)) {
+    return DEFAULT_POLL_MS
+  }
+  return Math.min(MAX_POLL_MS, Math.max(MIN_POLL_MS, ms))
 }
 
 export class RateLimitService {
@@ -498,7 +507,7 @@ export class RateLimitService {
   }
 
   setPollingInterval(ms: number): void {
-    this.pollInterval = Math.max(30_000, ms)
+    this.pollInterval = normalizePollingInterval(ms)
     if (this.timer) {
       this.stopTimer()
       this.startTimer()
