@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { Pin, Trash2 } from 'lucide-react'
+import { LoaderCircle, Pin, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -290,6 +290,14 @@ function WorkspaceKanbanCompactCard({
             aria-disabled={isDeleting ? true : undefined}
             aria-busy={isDeleting}
           >
+            {isDeleting ? (
+              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-md bg-sidebar/60 backdrop-blur-[1px]">
+                <div className="inline-flex max-w-[calc(100%-0.75rem)] items-center gap-1 rounded-full border border-border/50 bg-background px-2 py-0.5 text-[10px] font-medium text-foreground shadow-xs">
+                  <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground" />
+                  <span className="truncate">Deleting…</span>
+                </div>
+              </div>
+            ) : null}
             <WorktreeActivityStatusIndicator worktreeId={worktree.id} className="mr-1" />
             <WorktreeTitleInlineRename
               displayName={worktree.displayName}

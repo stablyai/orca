@@ -240,6 +240,25 @@ describe('removeWorktree cascade', () => {
     expect(s.activeWorktreeId).toBe(worktreeId)
   })
 
+  it('marks multiple worktrees deleting in one optimistic state update', () => {
+    const store = createTestStore()
+    const first = 'repo1::/path/wt1'
+    const second = 'repo1::/path/wt2'
+
+    seedStore(store, {
+      deleteStateByWorktreeId: {
+        [first]: { isDeleting: false, error: 'old failure', canForceDelete: true }
+      }
+    })
+
+    store.getState().markWorktreesDeleting([first, second, first])
+
+    expect(store.getState().deleteStateByWorktreeId).toMatchObject({
+      [first]: { isDeleting: true, error: null, canForceDelete: false },
+      [second]: { isDeleting: true, error: null, canForceDelete: false }
+    })
+  })
+
   it('offers force delete for Electron-wrapped local dirty preflight errors', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/workspace/feature-wt'

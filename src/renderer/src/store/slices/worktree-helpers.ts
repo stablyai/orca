@@ -105,6 +105,7 @@ export type WorktreeSlice = {
     worktreeId: string,
     force?: boolean
   ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
+  markWorktreesDeleting: (worktreeIds: readonly string[]) => void
   forceDeletePreservedBranch: (
     worktreeId: string,
     branchName: string,
