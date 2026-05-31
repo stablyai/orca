@@ -118,6 +118,7 @@ import {
   CROSS_REPO_DISPLAY_LIMIT
 } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import {
   buildTaskPageRepoSourceState,
@@ -4235,16 +4236,10 @@ export default function TaskPage(): React.JSX.Element {
   // Why: for Linear issues the "Use" flow opens the composer with the issue
   // info adapted to the LinkedWorkItemSummary shape. Linear identifiers are
   // strings (e.g. "ENG-123") so we use 0 as a placeholder number since the
-  // URL is the primary artifact the agent will act on.
+  // provider-generic work item shape still expects numeric issue metadata.
   const openComposerForLinearItem = useCallback(
-    (issue: LinearIssue): void => {
-      const linkedWorkItem: LinkedWorkItemSummary = {
-        type: 'issue',
-        number: 0,
-        title: issue.title,
-        url: issue.url,
-        linearIdentifier: issue.identifier
-      }
+    (issue: LinearIssue, renderedText?: string): void => {
+      const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue, renderedText)
       openModal('new-workspace-composer', {
         linkedWorkItem,
         prefilledName: getLinkedWorkItemSuggestedName(issue),
@@ -4255,12 +4250,12 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const handleUseLinearItem = useCallback(
-    (issue: LinearIssue): void => {
+    (issue: LinearIssue, renderedText?: string): void => {
       // Why: same rationale as handleUseWorkItem — open the New Workspace
       // dialog pre-filled rather than yolo-creating the worktree, so the
       // user can confirm name / agent / setup before the worktree lands in
       // the sidebar. Telemetry attribution flows via openComposerForLinearItem.
-      openComposerForLinearItem(issue)
+      openComposerForLinearItem(issue, renderedText)
     },
     [openComposerForLinearItem]
   )
@@ -4276,6 +4271,7 @@ export default function TaskPage(): React.JSX.Element {
           setLinearTeamRefreshNonce((n) => n + 1)
         })
         .catch(() => {
+          setLinearLoading(false)
           toast.error('Failed to switch Linear workspace.')
         })
     },
@@ -6905,7 +6901,7 @@ export default function TaskPage(): React.JSX.Element {
         open={linearConnectOpen}
         onOpenChange={setLinearConnectOpen}
         workspace={selectedLinearWorkspace}
-        connectLabel={linearStatus.connected ? 'Update access' : 'Add Linear access'}
+        connectLabel={selectedLinearWorkspace ? 'Update access' : 'Add Linear access'}
         onConnected={handleLinearAccessConnected}
       />
     </div>

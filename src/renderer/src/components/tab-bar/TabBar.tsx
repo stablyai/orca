@@ -338,13 +338,24 @@ function TabBarInner({
       })
     }
   }
-  useEffect(
-    () => () => {
+
+  const clearPendingNewTabMenuFocusOnUnmountRef = useRef<
+    ((node: HTMLDivElement | null) => void) | null
+  >(null)
+  if (clearPendingNewTabMenuFocusOnUnmountRef.current === null) {
+    clearPendingNewTabMenuFocusOnUnmountRef.current = (node: HTMLDivElement | null): void => {
+      if (node !== null) {
+        return
+      }
+      // Why: the delayed focus handoff is scoped to this tab bar instance.
+      // A root ref cleanup cancels it at the DOM owner boundary without an
+      // otherwise cleanup-only React Effect.
       clearPendingNewTabMenuFocusAnimation()
       clearPendingNewTabMenuFocusRetry()
-    },
-    []
-  )
+    }
+  }
+  const clearPendingNewTabMenuFocusOnUnmount = clearPendingNewTabMenuFocusOnUnmountRef.current
+
   useEffect(() => {
     if (!newTabMenuOpen) {
       return
@@ -517,6 +528,7 @@ function TabBarInner({
 
   return (
     <div
+      ref={clearPendingNewTabMenuFocusOnUnmount}
       className="flex items-stretch h-full overflow-hidden flex-1 min-w-0"
       // Why: only drops aimed at the top tab/session strip should open files in
       // Orca's editor. Terminal-pane drops need to keep inserting file paths

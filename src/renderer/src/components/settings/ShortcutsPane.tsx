@@ -33,6 +33,7 @@ import { ShortcutRowsList } from './ShortcutRowsList'
 import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
 import { TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY } from './shortcuts-search'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { clearRecordingActionForShortcutMutation } from './shortcut-recording-state'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
 type ShortcutGroup = {
@@ -330,6 +331,12 @@ export function ShortcutsPane(): React.JSX.Element {
     setErrors((prev) => ({ ...prev, [actionId]: undefined }))
   }
 
+  const clearRecordingForAction = (actionId: KeybindingActionId): void => {
+    // Why: disable/reset are final shortcut edits; the next keypress must not
+    // be captured into the shortcut the user just removed or restored.
+    setRecordingActionId((current) => clearRecordingActionForShortcutMutation(current, actionId))
+  }
+
   const showPolicy = matchesSettingsSearch(searchQuery, TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY)
 
   return (
@@ -378,8 +385,14 @@ export function ShortcutsPane(): React.JSX.Element {
               onCancelRecording={() => setRecordingActionId(null)}
               onCapture={(actionId, input) => void captureBinding(actionId, input)}
               onClearError={clearError}
-              onDisable={(actionId) => void disableBinding(actionId)}
-              onReset={(actionId) => void resetBinding(actionId)}
+              onDisable={(actionId) => {
+                clearRecordingForAction(actionId)
+                void disableBinding(actionId)
+              }}
+              onReset={(actionId) => {
+                clearRecordingForAction(actionId)
+                void resetBinding(actionId)
+              }}
             />
           </div>
         </div>

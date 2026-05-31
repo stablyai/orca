@@ -249,6 +249,32 @@ describe('SttService', () => {
     ).resolves.toBe(undefined)
   })
 
+  it('removes lifecycle listeners when the active worker errors', async () => {
+    const sink = vi.fn()
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', sink, undefined, 'desktop')
+    const worker = getLastWorker()
+    expect(worker).toBeDefined()
+    expect(worker!.listenerCount('message')).toBe(1)
+    expect(worker!.listenerCount('error')).toBe(1)
+    expect(worker!.listenerCount('exit')).toBe(1)
+
+    worker!.emit('error', new Error('worker failed'))
+
+    expect(service.isActive()).toBe(false)
+    expect(sink).toHaveBeenCalledWith({
+      type: 'error',
+      error: 'Error: worker failed'
+    })
+    expect(worker!.listenerCount('message')).toBe(0)
+    expect(worker!.listenerCount('error')).toBe(0)
+    expect(worker!.listenerCount('exit')).toBe(0)
+  })
+
   it('allows slow offline stop decoding before terminating the worker', async () => {
     vi.useFakeTimers()
     try {

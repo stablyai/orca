@@ -121,6 +121,17 @@ type PaletteItem =
 
 type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
 
+function appendPaletteListEntries(
+  target: PaletteListEntry[],
+  source: readonly PaletteItem[]
+): void {
+  // Why: query mode can expose generated-size workspace/tab result lists.
+  // Avoid the function argument limit from `push(...source)`.
+  for (const entry of source) {
+    target.push(entry)
+  }
+}
+
 type BrowserSelection = {
   worktree: Worktree
   workspace: BrowserWorkspace
@@ -627,7 +638,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: hasQuery ? 'Workspaces' : 'Recent Workspaces'
         })
       }
-      entries.push(...visibleWorktreeItems)
+      appendPaletteListEntries(entries, visibleWorktreeItems)
       if (showCreateAction) {
         // Why: the typed create affordance is workspace-scoped, so keep it
         // directly under workspace matches instead of after actions/tabs.
@@ -649,7 +660,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: 'Actions & Settings'
         })
       }
-      entries.push(...visibleMiddleItems)
+      appendPaletteListEntries(entries, visibleMiddleItems)
     }
     if (visibleBrowserItems.length > 0) {
       if (showBrowserHeader) {
@@ -659,7 +670,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: 'Browser Tabs'
         })
       }
-      entries.push(...visibleBrowserItems)
+      appendPaletteListEntries(entries, visibleBrowserItems)
     }
     return entries
   }, [hasQuery, paletteSections, showCreateAction, worktreeItems.length])

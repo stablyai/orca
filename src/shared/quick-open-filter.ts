@@ -321,7 +321,11 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
   // into single-slash POSIX-looking paths that no rg output can match.
   const normalizedRoot = `${outputMode.rootPath.replace(/\\/g, '/').replace(/\/+$/, '')}/`
   if (normalized.startsWith(normalizedRoot)) {
-    return normalized.substring(normalizedRoot.length)
+    const rel = normalized.substring(normalizedRoot.length)
+    if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
+      return null
+    }
+    return rel
   }
   return null
 }

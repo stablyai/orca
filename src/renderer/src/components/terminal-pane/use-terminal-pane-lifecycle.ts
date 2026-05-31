@@ -25,6 +25,7 @@ import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
   normalizeTerminalLayoutSnapshot,
+  RESET_KITTY_KEYBOARD_PROTOCOL,
   replayTerminalLayout,
   restoreScrollbackBuffers
 } from './layout-serialization'
@@ -39,7 +40,13 @@ import { handleOsc52ClipboardRequest } from './osc52-clipboard'
 import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
-import { shouldBypassXtermKeyboardEvent } from './xterm-bypass-policy'
+import {
+  shouldBypassXtermKeyboardEvent,
+  shouldHandleTerminalInterruptKeyboardEvent,
+  shouldSuppressTerminalInterruptKeyup,
+  shouldSuppressTerminalModifierKeyboardEvent,
+  TERMINAL_INTERRUPT_INPUT
+} from './xterm-bypass-policy'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
@@ -542,8 +549,38 @@ export function useTerminalPaneLifecycle({
         // bypassed press. Returning false here short-circuits xterm before the
         // encoder runs, letting the browser and Electron paths fire normally.
         // See xterm-bypass-policy.ts for the rule derivation.
+        let pendingTerminalInterruptKeyup = false
         pane.terminal.attachCustomKeyEventHandler((e) => {
           const isMac = navigator.userAgent.includes('Mac')
+          if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
+            pendingTerminalInterruptKeyup = false
+            return false
+          }
+          if (
+            shouldHandleTerminalInterruptKeyboardEvent(e, {
+              isMac,
+              hasSelection: pane.terminal.hasSelection()
+            })
+          ) {
+            if (e.type === 'keydown') {
+              // Why: xterm's kitty encoder can turn plain Ctrl+C into CSI-u;
+              // ETX must stay transport-agnostic through the existing onData path.
+              pendingTerminalInterruptKeyup = true
+              pane.terminal.input(TERMINAL_INTERRUPT_INPUT)
+              // Why: CLIs such as Codex can die on SIGINT before restoring
+              // xterm's renderer-side Kitty flags, leaving the shell corrupted.
+              pane.terminal.write(RESET_KITTY_KEYBOARD_PROTOCOL)
+            } else {
+              pendingTerminalInterruptKeyup = false
+            }
+            return false
+          }
+          if (shouldSuppressTerminalModifierKeyboardEvent(e)) {
+            // Why: stale Kitty keyboard reporting can encode standalone
+            // modifier presses before Ctrl+C reaches the interrupt handler.
+            return false
+          }
+
           const jisYenInput = resolveTerminalJisYenInput(e, {
             enabled: settingsRef.current?.terminalJISYenToBackslash === true,
             isMac

@@ -15,9 +15,8 @@ function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
     case 'done':
     case 'idle':
       return state
-    default:
-      return 'idle'
   }
+  return 'idle'
 }
 
 function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {

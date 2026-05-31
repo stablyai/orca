@@ -2257,7 +2257,7 @@ export class OrcaRuntimeService {
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.recentPtyOutputById.set(
       ptyId,
-      `${this.recentPtyOutputById.get(ptyId) ?? ''}${data}`.slice(-RECENT_PTY_OUTPUT_LIMIT)
+      appendRecentPtyOutput(this.recentPtyOutputById.get(ptyId), data)
     )
     // Agent detection runs on raw data before leaf processing, since the
     // tail buffer logic normalizes away the OSC sequences we need.
@@ -12665,11 +12665,34 @@ function withTimeoutResult<T>(
   })
 }
 
-function buildPreview(lines: string[], partialLine: string): string {
-  const previewLines = buildTailLines(lines, partialLine)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(-MAX_PREVIEW_LINES)
+export function appendRecentPtyOutput(previous: string | undefined, data: string): string {
+  if (data.length >= RECENT_PTY_OUTPUT_LIMIT) {
+    return data.slice(-RECENT_PTY_OUTPUT_LIMIT)
+  }
+  return `${previous ?? ''}${data}`.slice(-RECENT_PTY_OUTPUT_LIMIT)
+}
+
+export function buildPreview(lines: string[], partialLine: string): string {
+  const previewLines: string[] = []
+  const collectVisibleLine = (line: string): void => {
+    const trimmed = line.trim()
+    if (trimmed.length > 0) {
+      previewLines.push(trimmed)
+    }
+  }
+
+  if (partialLine.length > 0) {
+    collectVisibleLine(partialLine)
+  }
+  for (
+    let index = lines.length - 1;
+    index >= 0 && previewLines.length < MAX_PREVIEW_LINES;
+    index--
+  ) {
+    collectVisibleLine(lines[index])
+  }
+  previewLines.reverse()
+
   const preview = previewLines.join('\n')
   return preview.length > MAX_PREVIEW_CHARS
     ? preview.slice(preview.length - MAX_PREVIEW_CHARS)
@@ -12686,7 +12709,7 @@ function buildTerminalWaitText(lines: string[], partialLine: string, preview: st
   return waitText.length > 0 ? waitText : preview
 }
 
-function appendNormalizedToTailBuffer(
+export function appendNormalizedToTailBuffer(
   previousLines: string[],
   previousPartialLine: string,
   normalizedChunk: string
@@ -12719,8 +12742,8 @@ function appendNormalizedToTailBuffer(
       : previousLines
   let truncated = previousPartialWasCapped || nextPartialLine.length > MAX_TAIL_PARTIAL_CHARS
 
-  while (nextLines.length > MAX_TAIL_LINES) {
-    nextLines.shift()
+  if (nextLines.length > MAX_TAIL_LINES) {
+    nextLines = nextLines.slice(nextLines.length - MAX_TAIL_LINES)
     truncated = true
   }
 
@@ -12730,8 +12753,13 @@ function appendNormalizedToTailBuffer(
     }
     let totalChars =
       nextLines.reduce((sum, line) => sum + line.length, 0) + retainedPartialLine.length
-    while (nextLines.length > 0 && totalChars > MAX_TAIL_CHARS) {
-      totalChars -= nextLines.shift()!.length
+    let trimStartIndex = 0
+    while (trimStartIndex < nextLines.length && totalChars > MAX_TAIL_CHARS) {
+      totalChars -= nextLines[trimStartIndex].length
+      trimStartIndex += 1
+    }
+    if (trimStartIndex > 0) {
+      nextLines = nextLines.slice(trimStartIndex)
       truncated = true
     }
   }
@@ -12795,12 +12823,15 @@ function trimTerminalPreviewToCharacterBudget(
     return { tail: lines, limited: false, omittedLineCount: 0, slicedFirstLine: false }
   }
 
-  const tail = [...lines]
   let omittedLineCount = 0
-  while (tail.length > 0 && totalCharacters - tail[0].length >= characterBudget) {
-    totalCharacters -= tail.shift()!.length
+  while (
+    omittedLineCount < lines.length &&
+    totalCharacters - lines[omittedLineCount].length >= characterBudget
+  ) {
+    totalCharacters -= lines[omittedLineCount].length
     omittedLineCount += 1
   }
+  const tail = omittedLineCount > 0 ? lines.slice(omittedLineCount) : [...lines]
 
   let slicedFirstLine = false
   if (tail.length > 0 && totalCharacters > characterBudget) {

@@ -66,6 +66,16 @@ describe('buildExcludePathPrefixes', () => {
     expect(buildExcludePathPrefixes('/home/u/repo', ['/home/u/other'])).toEqual([])
   })
 
+  it('keeps dot-dot-prefixed names inside the root while rejecting parent escapes', () => {
+    expect(
+      buildExcludePathPrefixes('/home/u/repo', [
+        '/home/u/repo/..env',
+        '/home/u/repo/..workspace/app',
+        '/home/u/repo/../outside'
+      ])
+    ).toEqual(['..env', '..workspace/app'])
+  })
+
   it('handles Windows-style roots and paths', () => {
     expect(buildExcludePathPrefixes('C:\\repo', ['C:\\repo\\packages\\app'])).toEqual([
       'packages/app'
@@ -185,10 +195,16 @@ describe('normalizeQuickOpenRgLine', () => {
     expect(normalizeQuickOpenRgLine('./src/a.ts', { kind: 'cwd-relative' })).toBe('src/a.ts')
   })
 
-  it('keeps cwd-relative files under dotdot-prefixed child directories', () => {
+  it('keeps cwd-relative dot-dot-prefixed names but rejects parent escapes', () => {
     expect(normalizeQuickOpenRgLine('./..fixtures/a.ts', { kind: 'cwd-relative' })).toBe(
       '..fixtures/a.ts'
     )
+    expect(normalizeQuickOpenRgLine('..env', { kind: 'cwd-relative' })).toBe('..env')
+    expect(normalizeQuickOpenRgLine('..workspace/file.ts', { kind: 'cwd-relative' })).toBe(
+      '..workspace/file.ts'
+    )
+    expect(normalizeQuickOpenRgLine('../outside.ts', { kind: 'cwd-relative' })).toBeNull()
+    expect(normalizeQuickOpenRgLine('..', { kind: 'cwd-relative' })).toBeNull()
   })
 
   it('strips CRLF', () => {

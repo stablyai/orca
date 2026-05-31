@@ -25,7 +25,7 @@ export function checksLabel(status: CheckStatus): string {
       return 'Failing'
     case 'pending':
       return 'Pending'
-    default:
+    case 'neutral':
       return ''
   }
 }

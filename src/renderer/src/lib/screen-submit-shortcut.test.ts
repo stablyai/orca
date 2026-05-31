@@ -23,6 +23,14 @@ describe('screen submit shortcut', () => {
     expect(getScreenSubmitShortcutLabel()).toBe('⌘ Enter')
   })
 
+  it('ignores extra modifiers on macOS', () => {
+    setUserAgent('Macintosh')
+
+    expect(isScreenSubmitShortcut({ key: 'Enter', metaKey: true, shiftKey: true })).toBe(false)
+    expect(isScreenSubmitShortcut({ key: 'Enter', metaKey: true, altKey: true })).toBe(false)
+    expect(isScreenSubmitShortcut({ key: 'Enter', metaKey: true, ctrlKey: true })).toBe(false)
+  })
+
   it('uses Ctrl+Enter off macOS', () => {
     setUserAgent('Linux')
 

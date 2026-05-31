@@ -8,6 +8,7 @@ const { handlers, clipboardWriteTextMock, submitFeedbackMock } = vi.hoisted(() =
 }))
 
 vi.mock('electron', () => ({
+  app: { getVersion: () => '1.0.0-test' },
   clipboard: { writeText: clipboardWriteTextMock },
   ipcMain: {
     removeHandler: vi.fn((channel: string) => handlers.delete(channel)),
@@ -213,5 +214,89 @@ describe('registerCrashReportingHandlers', () => {
       report: pending
     })
     expect(markSent).not.toHaveBeenCalled()
+  })
+
+  it('records a deduped renderer error boundary report through the crash store', async () => {
+    const recorded = report('pending', 'react-render')
+    const recordMock = vi.fn(async () => recorded)
+    registerCrashReportingHandlers({
+      getById: vi.fn(),
+      dismiss: vi.fn(),
+      markSent: vi.fn(),
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => []),
+      record: recordMock,
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    const args = {
+      boundaryId: 'terminal.workbench',
+      surface: 'terminal-workbench',
+      errorName: 'TypeError',
+      errorMessage: 'Cannot read /Users/alice/project/token=abc123',
+      errorStack: 'TypeError: nope\n    at /Users/alice/project/App.tsx:12:1',
+      componentStack: 'at Terminal\nat App',
+      activeView: 'terminal',
+      activeModal: 'none',
+      activeTabType: 'terminal',
+      activeRightSidebarTab: 'source-control',
+      hasActiveWorktree: true
+    }
+
+    await expect(handlers.get('crashReports:recordRendererError')?.(null, args)).resolves.toEqual({
+      ok: true,
+      report: recorded,
+      deduped: false
+    })
+    await expect(handlers.get('crashReports:recordRendererError')?.(null, args)).resolves.toEqual({
+      ok: true,
+      report: null,
+      deduped: true
+    })
+
+    expect(recordMock).toHaveBeenCalledTimes(1)
+    expect(recordMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'renderer',
+        processType: 'react-render',
+        reason: 'react-error-boundary',
+        exitCode: null,
+        appVersion: '1.0.0-test',
+        details: expect.objectContaining({
+          boundary_id: 'terminal.workbench',
+          surface: 'terminal-workbench',
+          error_name: 'TypeError',
+          error_message: 'Cannot read /Users/alice/project/token=abc123',
+          active_view: 'terminal',
+          active_modal: 'none',
+          active_tab_type: 'terminal',
+          right_sidebar_tab: 'source-control',
+          has_active_worktree: true
+        })
+      })
+    )
+  })
+
+  it('rejects invalid renderer error boundary surfaces', async () => {
+    const recordMock = vi.fn()
+    registerCrashReportingHandlers({
+      getById: vi.fn(),
+      dismiss: vi.fn(),
+      markSent: vi.fn(),
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => []),
+      record: recordMock,
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    await expect(
+      handlers.get('crashReports:recordRendererError')?.(null, {
+        boundaryId: 'terminal.workbench',
+        surface: 'unknown',
+        errorName: 'TypeError',
+        errorMessage: 'nope'
+      })
+    ).resolves.toEqual({ ok: false, error: 'Invalid renderer error report.' })
+    expect(recordMock).not.toHaveBeenCalled()
   })
 })

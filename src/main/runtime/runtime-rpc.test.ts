@@ -5,8 +5,8 @@ import { join } from 'path'
 import { createConnection, type Socket } from 'net'
 import { EventEmitter } from 'events'
 import { describe, expect, it, vi } from 'vitest'
-import Database from 'better-sqlite3'
 import WebSocket from 'ws'
+import Database from '../sqlite/sync-database'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import * as runtimeMetadataModule from './runtime-metadata'
@@ -2650,7 +2650,7 @@ describe('OrcaRuntimeRpcServer', () => {
     })
 
     it('hard-fails startup when the migration cannot be applied', () => {
-      // Simulate a migration error by monkey-patching better-sqlite3's exec.
+      // Simulate a migration error by monkey-patching the SQLite wrapper's exec.
       // If ALTER TABLE throws for any reason (e.g. disk full, permissions),
       // the constructor must propagate — not swallow and serve half-broken.
       //

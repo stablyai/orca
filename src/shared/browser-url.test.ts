@@ -50,6 +50,18 @@ describe('browser-url helpers', () => {
     ).toBe('file://wsl.localhost/Ubuntu/home/me/Example.ipynb')
   })
 
+  it('normalizes absolute local paths with spaces and reserved URL characters', () => {
+    expect(normalizeBrowserNavigationUrl('/Users/me/My Site/index #1.html')).toBe(
+      'file:///Users/me/My%20Site/index%20%231.html'
+    )
+    expect(normalizeBrowserNavigationUrl('C:\\Users\\me\\My Site\\index #1.html')).toBe(
+      'file:///C:/Users/me/My%20Site/index%20%231.html'
+    )
+    expect(normalizeBrowserNavigationUrl('C:\\tmp\\orca & 100% ! ^\\index.html')).toBe(
+      'file:///C:/tmp/orca%20%26%20100%25%20!%20%5E/index.html'
+    )
+  })
+
   // Why: in-app preview is fine (sandboxed webview), but handing file:// to
   // shell.openExternal would let a remote page drive Finder/Explorer to
   // arbitrary paths. External-open paths must still refuse file://.

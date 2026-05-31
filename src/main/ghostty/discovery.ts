@@ -35,7 +35,14 @@ export function getGhosttyConfigPaths(): string[] {
       // Why: path.win32.join preserves backslashes even when tests run on macOS/Linux.
       return [path.win32.join(base, 'config'), path.win32.join(base, 'config.ghostty')]
     }
-    default:
+    case 'aix':
+    case 'android':
+    case 'cygwin':
+    case 'freebsd':
+    case 'haiku':
+    case 'netbsd':
+    case 'openbsd':
+    case 'sunos':
       return []
   }
 }

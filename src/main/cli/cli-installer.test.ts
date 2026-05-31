@@ -1,4 +1,4 @@
-import { lstat, mkdtemp, mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, mkdir, readFile, readlink, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -202,12 +202,13 @@ describe('CliInstaller', () => {
 
   // Why: this test creates a Unix symlink to /tmp/not-orca, which only applies on macOS/Linux.
   it.skipIf(process.platform === 'win32')(
-    'reports stale when a different symlink already exists',
+    'refuses to replace an unknown symlink at the command path',
     async () => {
       const fixture = await makeFixture()
       const installPath = join(fixture.root, 'bin', 'orca')
+      const existingTarget = '/tmp/not-orca'
       await mkdir(join(fixture.root, 'bin'), { recursive: true })
-      await symlink('/tmp/not-orca', installPath)
+      await symlink(existingTarget, installPath)
 
       const installer = new CliInstaller({
         platform: 'darwin',
@@ -219,9 +220,44 @@ describe('CliInstaller', () => {
       })
 
       await expect(installer.getStatus()).resolves.toMatchObject({
-        state: 'stale',
+        state: 'conflict',
         supported: true
       })
+      await expect(installer.install()).rejects.toThrow('Refusing to replace non-Orca command')
+      await expect(readlink(installPath)).resolves.toBe(existingTarget)
+    }
+  )
+
+  // Why: packaged app moves can leave a symlink to an older Orca-owned launcher;
+  // those are safe to refresh, unlike arbitrary user symlinks.
+  it.skipIf(process.platform === 'win32')(
+    'replaces stale packaged Orca launcher symlinks',
+    async () => {
+      const fixture = await makeFixture()
+      const commandDir = join(fixture.root, 'bin')
+      const installPath = join(commandDir, 'orca')
+      const resourcesPath = join(fixture.root, 'Current.app', 'Contents', 'Resources')
+      const launcherPath = join(resourcesPath, 'bin', 'orca')
+      const oldLauncherPath = join(fixture.root, 'Old.app', 'Contents', 'Resources', 'bin', 'orca')
+      await mkdir(commandDir, { recursive: true })
+      await mkdir(join(resourcesPath, 'bin'), { recursive: true })
+      await writeFile(launcherPath, '#!/usr/bin/env bash\n', 'utf8')
+      await symlink(oldLauncherPath, installPath)
+
+      const installer = new CliInstaller({
+        platform: 'darwin',
+        isPackaged: true,
+        resourcesPath,
+        commandPathOverride: installPath,
+        processPathEnv: commandDir
+      })
+
+      await expect(installer.getStatus()).resolves.toMatchObject({
+        state: 'stale',
+        currentTarget: oldLauncherPath
+      })
+      await expect(installer.install()).resolves.toMatchObject({ state: 'installed' })
+      await expect(readlink(installPath)).resolves.toBe(launcherPath)
     }
   )
 })

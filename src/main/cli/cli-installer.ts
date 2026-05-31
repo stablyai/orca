@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { lstat, mkdir, readFile, readlink, symlink, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-install-types'
 
@@ -344,17 +344,21 @@ export class CliInstaller {
       const currentTarget = await readlink(commandPath)
       const resolvedCurrentTarget = resolve(dirname(commandPath), currentTarget)
       const resolvedLauncher = resolve(launcherPath)
+      const isInstalled = resolvedCurrentTarget === resolvedLauncher
+      const isManagedStaleTarget =
+        !isInstalled && this.isManagedSymlinkTarget(resolvedCurrentTarget, launcherPath)
       return this.buildStatus({
         commandPath,
         launcherPath,
         installMethod: 'symlink',
         supported: true,
-        state: resolvedCurrentTarget === resolvedLauncher ? 'installed' : 'stale',
+        state: isInstalled ? 'installed' : isManagedStaleTarget ? 'stale' : 'conflict',
         currentTarget: resolvedCurrentTarget,
-        detail:
-          resolvedCurrentTarget === resolvedLauncher
-            ? `Registered at ${commandPath}.`
-            : `${commandPath} points to a different launcher.`
+        detail: isInstalled
+          ? `Registered at ${commandPath}.`
+          : isManagedStaleTarget
+            ? `${commandPath} points to an older Orca launcher.`
+            : `${commandPath} points to a non-Orca launcher.`
       })
     } catch (error) {
       if (isMissingError(error)) {
@@ -370,6 +374,33 @@ export class CliInstaller {
       }
       throw error
     }
+  }
+
+  private isManagedSymlinkTarget(resolvedTarget: string, launcherPath: string): boolean {
+    const expectedName = basename(launcherPath)
+    if (basename(resolvedTarget) !== expectedName) {
+      return false
+    }
+
+    const devLauncherDir = resolve(this.userDataPath, ...DEV_LAUNCHER_DIR)
+    const devRelative = relative(devLauncherDir, resolvedTarget)
+    if (devRelative && !devRelative.startsWith('..') && !isAbsolute(devRelative)) {
+      return true
+    }
+
+    if (this.platform === 'darwin') {
+      // Why: prior packaged installs can leave a symlink to an older Orca.app
+      // resources launcher, but arbitrary user-owned symlinks must not be replaced.
+      return /(?:^|[/\\])[^/\\]+\.app[/\\]Contents[/\\]Resources[/\\]bin[/\\][^/\\]+$/.test(
+        resolvedTarget
+      )
+    }
+
+    if (this.platform === 'linux') {
+      return /(?:^|[/\\])resources[/\\]bin[/\\][^/\\]+$/.test(resolvedTarget)
+    }
+
+    return false
   }
 
   private async inspectWindowsWrapper(

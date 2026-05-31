@@ -8,18 +8,27 @@ import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 
 describe('orchestration RPC methods', () => {
   let db: OrchestrationDb
+  let dbOpen = false
   let runtime: OrcaRuntimeService
   let ctx: RpcContext
 
   function setup(): void {
     db = new OrchestrationDb(':memory:')
+    dbOpen = true
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     ctx = { runtime }
   }
 
   afterEach(() => {
-    db?.close()
+    if (!dbOpen) {
+      return
+    }
+    const currentDb = db
+    // Why: parser-only tests do not call setup(), so cleanup must not reuse
+    // the previous test's already-closed in-memory DB.
+    dbOpen = false
+    currentDb.close()
   })
 
   function findMethod(name: string) {

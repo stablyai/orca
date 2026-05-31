@@ -330,9 +330,12 @@ describe('terminal subscribe buffering', () => {
       )
 
       await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
+      const shiftSpy = vi.spyOn(Array.prototype, 'shift')
       for (let index = 0; index < 400; index += 1) {
         dataListenerRef.current?.(`${String(index).padStart(3, '0')}${'x'.repeat(1021)}`)
       }
+      const shiftCallCount = shiftSpy.mock.calls.length
+      shiftSpy.mockRestore()
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
       resolveSnapshot({ data: '', cols: 120, rows: 40 })
       await vi.waitFor(() =>
@@ -348,6 +351,7 @@ describe('terminal subscribe buffering', () => {
       expect(output.length).toBeLessThanOrEqual(256 * 1024)
       expect(output).not.toContain('000')
       expect(output).toContain('399')
+      expect(shiftCallCount).toBe(0)
 
       runtime.cleanupSubscription('terminal-1:desktop-1')
       await dispatchPromise

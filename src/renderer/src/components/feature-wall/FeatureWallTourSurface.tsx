@@ -27,9 +27,9 @@ import { useFeatureWallTourTelemetry } from './use-feature-wall-tour-telemetry'
 import { FeatureWallContinueButton } from './FeatureWallContinueButton'
 import { FeatureWallTourPanel } from './FeatureWallTourPanel'
 import { getFeatureWallActiveStepCopy } from './feature-wall-active-step-copy'
+import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 
 const NAVIGATION_KEYS = new Set<string>(['ArrowUp', 'ArrowDown', 'Home', 'End'])
-const IS_MAC_PLATFORM = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
 type FeatureWallTourSurfaceProps = {
   isOpen: boolean
@@ -330,11 +330,11 @@ export function FeatureWallTourSurface({
       return
     }
     const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-      const mod = IS_MAC_PLATFORM ? event.metaKey : event.ctrlKey
-      if (mod && event.key === 'Enter') {
-        event.preventDefault()
-        handleContinue()
+      if (!isScreenSubmitShortcut(event)) {
+        return
       }
+      event.preventDefault()
+      handleContinue()
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
@@ -351,7 +351,7 @@ export function FeatureWallTourSurface({
     <FeatureWallContinueButton
       label={continueLabel}
       enableKeyboardShortcut={enableKeyboardShortcut}
-      isMacPlatform={IS_MAC_PLATFORM}
+      shortcutModifierLabel={getScreenSubmitModifierLabel()}
       onClick={handleContinue}
     />
   )

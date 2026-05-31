@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../shared/types'
 import {
+  decodeMarkdownPreviewAnchor,
   deriveMarkdownPreviewSourceRoot,
   findMarkdownPreviewOpenedEditFileId,
   findMarkdownPreviewSourceOpenFile,
@@ -32,6 +33,10 @@ function makeWorktree(id: string, path: string): Worktree {
 }
 
 describe('MarkdownPreview source link routing', () => {
+  it('falls back to the raw anchor when percent-decoding fails', () => {
+    expect(decodeMarkdownPreviewAnchor('%E0%A4%A')).toBe('%E0%A4%A')
+  })
+
   it('keeps the explicit source worktree when it exists', () => {
     const source = makeWorktree('wt-source', '/repo')
     const nested = makeWorktree('wt-nested', '/repo/packages/app')

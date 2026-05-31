@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
 import type { LinearWorkspace } from '../../../shared/types'
 import {
@@ -18,6 +18,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
 type LinearApiKeyDialogProps = {
@@ -46,6 +47,8 @@ export function LinearApiKeyDialog({
   const settings = useAppStore((s) => s.settings)
   const connectLinear = useAppStore((s) => s.connectLinear)
   const mountedRef = useMountedRef()
+  const apiKeyInputId = useId()
+  const apiKeyErrorId = useId()
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [connectState, setConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
   const [connectError, setConnectError] = useState<string | null>(null)
@@ -106,7 +109,7 @@ export function LinearApiKeyDialog({
     description ??
     (workspace
       ? `Paste a Personal API key for ${workspace.organizationName}. If this workspace is already connected, Orca replaces its stored key.`
-      : 'Paste a Personal API key for the Linear workspace you want Orca to use.')
+      : 'Paste a Personal API key for the Linear workspace you want Orca to use. If that workspace is already connected, Orca replaces its stored key.')
   const storageCopy =
     runtimeTarget.kind === 'environment'
       ? 'This key is stored by the active remote runtime.'
@@ -129,22 +132,32 @@ export function LinearApiKeyDialog({
           <DialogDescription>{resolvedDescription}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Input
-            autoFocus
-            type="password"
-            placeholder="lin_api_..."
-            value={apiKeyDraft}
-            onChange={(event) => {
-              setApiKeyDraft(event.target.value)
-              if (connectState === 'error') {
-                setConnectState('idle')
-                setConnectError(null)
-              }
-            }}
-            disabled={connectState === 'connecting'}
-          />
+          <div className="space-y-2">
+            <Label htmlFor={apiKeyInputId} className="text-xs">
+              Personal API key
+            </Label>
+            <Input
+              id={apiKeyInputId}
+              autoFocus
+              type="password"
+              placeholder="lin_api_..."
+              value={apiKeyDraft}
+              onChange={(event) => {
+                setApiKeyDraft(event.target.value)
+                if (connectState === 'error') {
+                  setConnectState('idle')
+                  setConnectError(null)
+                }
+              }}
+              disabled={connectState === 'connecting'}
+              aria-invalid={connectState === 'error'}
+              aria-describedby={connectState === 'error' ? apiKeyErrorId : undefined}
+            />
+          </div>
           {connectState === 'error' && connectError ? (
-            <p className="text-xs text-destructive">{connectError}</p>
+            <p id={apiKeyErrorId} className="text-xs text-destructive">
+              {connectError}
+            </p>
           ) : null}
           <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
             <p>
@@ -189,7 +202,7 @@ export function LinearApiKeyDialog({
         </div>
         <DialogFooter>
           <Button
-            variant="outline"
+            variant="ghost"
             onClick={() => onOpenChange(false)}
             disabled={connectState === 'connecting'}
           >

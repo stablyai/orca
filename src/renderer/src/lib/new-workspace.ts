@@ -6,6 +6,7 @@ import {
 } from '@/runtime/runtime-terminal-inspection'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
+import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
@@ -33,7 +34,7 @@ export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
       return 'author:@me is:pr is:open'
     case 'review':
       return 'review-requested:@me is:pr is:open'
-    default:
+    case null:
       return 'is:issue is:open'
   }
 }
@@ -44,6 +45,8 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
   : IS_MAC
     ? 'darwin'
     : 'linux'
+
+export type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 
 export type LinkedWorkItemSummary = {
   /** 'mr' is the GitLab analogue of 'pr'. The shape is otherwise
@@ -56,6 +59,7 @@ export type LinkedWorkItemSummary = {
   /** Linear identifier (for example ENG-123) when this linked item came from
    *  Linear rather than GitHub. */
   linearIdentifier?: string
+  linkedContext?: LinkedWorkItemContext
 }
 
 export function isGitLabIssueUrl(url: string): boolean {
@@ -99,10 +103,11 @@ export function renderIssueCommandTemplate(
 export function buildAgentPromptWithContext(
   prompt: string,
   attachments: string[],
-  linkedUrls: string[]
+  linkedUrls: string[],
+  linkedContextBlocks: string[] = []
 ): string {
   const trimmedPrompt = prompt.trim()
-  if (attachments.length === 0 && linkedUrls.length === 0) {
+  if (attachments.length === 0 && linkedUrls.length === 0 && linkedContextBlocks.length === 0) {
     return trimmedPrompt
   }
 
@@ -115,9 +120,12 @@ export function buildAgentPromptWithContext(
     const linkBlock = linkedUrls.map((url) => `- ${url}`).join('\n')
     sections.push(`Linked work items:\n${linkBlock}`)
   }
+  if (linkedContextBlocks.length > 0) {
+    sections.push(linkedContextBlocks.join('\n\n'))
+  }
   // Why: the new-workspace flow launches each agent with a single plain-text
-  // startup prompt. Appending attachments and linked URLs keeps extra context
-  // visible to Claude/Codex/OpenCode without cluttering the visible textarea.
+  // startup prompt. Appending attachments and bounded linked context keeps
+  // extra data visible to Claude/Codex/OpenCode without cluttering the textarea.
   if (!trimmedPrompt) {
     return sections.join('\n\n')
   }
@@ -200,10 +208,6 @@ export function getWorkspaceSeedName(args: {
   // writing a brief or naming the workspace manually.
   return 'workspace'
 }
-
-// Why: bracketed paste markers and ready-wait grace timing live in
-// agent-paste-draft.ts so the new-workspace and "Use" flows share one
-// definition of "type into the agent's input as a non-submitted draft".
 
 export async function ensureAgentStartupInTerminal(args: {
   worktreeId: string

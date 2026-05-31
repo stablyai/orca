@@ -2922,14 +2922,6 @@ function SourceControlInner(): React.JSX.Element {
         case 'publish':
         case 'rebase_base':
           void runRemoteAction(kind === 'rebase_base' ? 'rebase' : kind)
-          return
-        default: {
-          // Why: exhaustiveness check — if a new DropdownActionKind is added
-          // to the union, TypeScript will flag this assignment so we can't
-          // silently drop a case.
-          const _exhaustive: never = kind
-          void _exhaustive
-        }
       }
     },
     [
@@ -3263,11 +3255,6 @@ function SourceControlInner(): React.JSX.Element {
       case 'publish':
       case 'create_pr':
         handleActionInvoke(primaryAction.kind)
-        return
-      default: {
-        const _exhaustive: never = primaryAction.kind
-        void _exhaustive
-      }
     }
   }, [handleActionInvoke, handleStageAllPrimary, primaryAction.kind])
 

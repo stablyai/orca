@@ -1027,6 +1027,76 @@ describe('createUISlice settings navigation', () => {
   })
 })
 
+describe('createUISlice new workspace draft', () => {
+  it('preserves Linear linked work item metadata and context', () => {
+    const store = createUIStore()
+
+    store.getState().setNewWorkspaceDraft({
+      repoId: 'repo-1',
+      name: 'Fix launch context handoff',
+      prompt: '',
+      note: '',
+      attachments: [],
+      linkedWorkItem: {
+        type: 'issue',
+        number: 0,
+        title: 'Fix launch context handoff',
+        url: 'https://linear.app/acme/issue/ENG-123/fix-launch-context-handoff',
+        linearIdentifier: 'ENG-123',
+        linkedContext: {
+          provider: 'linear',
+          version: 1,
+          renderedText: 'Identifier: ENG-123'
+        }
+      },
+      agent: 'claude',
+      linkedIssue: '',
+      linkedPR: null,
+      linkedGitLabIssue: null,
+      linkedGitLabMR: null
+    })
+
+    expect(store.getState().newWorkspaceDraft?.linkedWorkItem).toMatchObject({
+      linearIdentifier: 'ENG-123',
+      linkedContext: {
+        provider: 'linear',
+        version: 1,
+        renderedText: 'Identifier: ENG-123'
+      }
+    })
+  })
+
+  it('keeps older linked work item drafts without Linear context fields valid', () => {
+    const store = createUIStore()
+
+    store.getState().setNewWorkspaceDraft({
+      repoId: 'repo-1',
+      name: 'Legacy issue',
+      prompt: '',
+      note: '',
+      attachments: [],
+      linkedWorkItem: {
+        type: 'issue',
+        number: 42,
+        title: 'Legacy issue',
+        url: 'https://github.com/acme/repo/issues/42'
+      },
+      agent: 'claude',
+      linkedIssue: '42',
+      linkedPR: null,
+      linkedGitLabIssue: null,
+      linkedGitLabMR: null
+    })
+
+    expect(store.getState().newWorkspaceDraft?.linkedWorkItem).toEqual({
+      type: 'issue',
+      number: 42,
+      title: 'Legacy issue',
+      url: 'https://github.com/acme/repo/issues/42'
+    })
+  })
+})
+
 describe('createUISlice page navigation history', () => {
   it('records and rewinds Tasks visits on close', () => {
     const store = createUIStore()

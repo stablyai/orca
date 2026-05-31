@@ -33,6 +33,21 @@ describe('Electron runtime package contract', () => {
     }
   })
 
+  it('keeps Windows and Linux package builds off the macOS native helper build', () => {
+    const scripts = packageJson.scripts
+
+    expect(scripts['build:desktop']).not.toContain('build:computer-macos')
+    expect(scripts['build:win']).toContain('pnpm run build:desktop')
+    expect(scripts['build:win']).not.toContain('pnpm run build ')
+    expect(scripts['build:win']).not.toContain('build:computer-macos')
+    expect(scripts['build:linux']).toContain('pnpm run build:desktop')
+    expect(scripts['build:linux']).not.toContain('pnpm run build ')
+    expect(scripts['build:linux']).not.toContain('build:computer-macos')
+    expect(scripts['build:mac']).toContain('pnpm run build:computer-macos')
+    expect(scripts['build:release']).toContain('pnpm run build:native')
+    expect(scripts['build:release']).not.toContain('build:computer-macos')
+  })
+
   it('guards release publishing before electron-builder runs', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
@@ -86,7 +101,7 @@ describe('Electron runtime package contract', () => {
     expect(releaseWorkflow.jobs['homebrew-bump'].if).toContain(
       "startsWith(needs.cut.outputs.tag, 'v')"
     )
-    expect(releaseWorkflow.jobs['homebrew-bump'].if).not.toContain("-rc.")
+    expect(releaseWorkflow.jobs['homebrew-bump'].if).not.toContain('-rc.')
     expect(releaseWorkflow.jobs['homebrew-bump-published-rc-draft'].with.tag).toBe(
       '${{ needs.cut.outputs.latest_published_rc_tag }}'
     )

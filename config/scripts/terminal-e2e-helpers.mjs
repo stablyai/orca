@@ -142,10 +142,7 @@ export class OrcaTerminal {
    */
   probePtyIdWithScreenshot(maxId = 10, screenshotPath = tempScreenshotPath('orca-pty-probe.png')) {
     for (let i = 1; i <= maxId; i++) {
-      evalInRenderer(
-        this.port,
-        `window.api.pty.write('${i}', '\\x03\\x15echo PTY_ID_${i}\\r')`
-      )
+      evalInRenderer(this.port, `window.api.pty.write('${i}', '\\x03\\x15echo PTY_ID_${i}\\r')`)
     }
     sleep(2_000)
     this.screenshot(screenshotPath)
