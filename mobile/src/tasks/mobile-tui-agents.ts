@@ -7,7 +7,6 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
   'openclaude',
   'codex',
-  'openclaude',
   'grok',
   'copilot',
   'opencode',

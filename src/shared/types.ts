@@ -86,6 +86,8 @@ export type Repo = {
   kind?: RepoKind
   gitUsername?: string
   worktreeBaseRef?: string
+  /** Optional repo-scoped workspace root override. Relative paths resolve from `path`. */
+  worktreeBasePath?: string
   hookSettings?: RepoHookSettings
   /** SSH target ID for remote repos. null/undefined = local. */
   connectionId?: string | null
@@ -275,6 +277,15 @@ export type GitPushTarget = {
   remoteUrl?: string
   /** True when Orca added this remote while preparing a fork-PR worktree. */
   remoteCreated?: boolean
+}
+
+export type GitHubPrStartPoint = {
+  baseBranch: string
+  pushTarget?: GitPushTarget
+  /** Verified PR head commit. Present when checkout can be tied to a stable SHA. */
+  headSha?: string
+  /** Exact local branch name to create/reuse when the PR head is a safe same-repo branch. */
+  branchNameOverride?: string
 }
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
@@ -691,7 +702,13 @@ export type WorkspaceSessionState = {
    *  older builds — hydration tolerates missing/partial maps and the
    *  active worktree is seeded on first restore. */
   lastVisitedAtByWorktreeId?: Record<string, number>
+  /** Worktrees whose repo-defined default terminal tabs have already been
+   *  considered. Persisted so closing all tabs and re-opening the workspace
+   *  does not recreate the template. */
+  defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
 }
+
+export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>
 
 // ─── GitHub ──────────────────────────────────────────────────────────
 export type PRState = 'open' | 'closed' | 'merged' | 'draft'
@@ -710,6 +727,13 @@ export type PRConflictSummary = {
 
 export type GitHubRepositoryIdentity = { owner: string; repo: string }
 
+export type GitHubPRMergeMethod = 'merge' | 'squash' | 'rebase'
+
+export type GitHubPRMergeMethodSettings = {
+  defaultMethod: GitHubPRMergeMethod
+  allowedMethods: Record<GitHubPRMergeMethod, boolean>
+}
+
 export type PRInfo = {
   number: number
   title: string
@@ -721,6 +745,7 @@ export type PRInfo = {
   reviewDecision?: PRReviewDecision | null
   autoMergeEnabled?: boolean
   mergeQueueRequired?: boolean | null
+  mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   // Why: check-runs are keyed by the PR head commit, not the mutable branch name.
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
@@ -773,6 +798,8 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedHasPR?: boolean | null
   cachedPRState?: PRState | null
   cachedChecksStatus?: CheckStatus | null
+  cachedMergeable?: PRMergeableState | null
+  cachedMergeStateStatus?: string | null
 }
 
 export type GitHubPRRefreshSkippedReason =
@@ -987,6 +1014,7 @@ export type GitHubWorkItem = {
   mergeable?: PRMergeableState
   autoMergeEnabled?: boolean
   mergeQueueRequired?: boolean | null
+  mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean
   // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
@@ -1066,6 +1094,21 @@ export type LinearWorkspace = LinearViewer & {
 }
 
 export type LinearWorkspaceSelection = string | 'all'
+export type LinearWorkspaceSelector = LinearWorkspaceSelection | undefined
+export type LinearConcreteWorkspaceId = string
+
+export type LinearWorkspaceError = {
+  workspaceId: string
+  workspaceName?: string
+  type: 'auth' | 'rate_limited' | 'network' | 'unknown'
+  message: string
+}
+
+export type LinearCollectionResult<T> = {
+  items: T[]
+  errors?: LinearWorkspaceError[]
+  hasMore?: boolean
+}
 
 export type LinearConnectionStatus = {
   connected: boolean
@@ -1109,9 +1152,109 @@ export type LinearIssue = {
 
 export type LinearProjectSummary = {
   id: string
+  workspaceId?: string
+  workspaceName?: string
   name: string
   url?: string
   color?: string
+  icon?: string
+  description?: string
+  content?: string
+  status?: LinearProjectStatusSummary
+  health?: string | null
+  priority?: number | null
+  priorityLabel?: string | null
+  lead?: LinearProjectMemberSummary
+  members?: LinearProjectMemberSummary[]
+  teams?: {
+    id: string
+    name: string
+    key?: string
+  }[]
+  labels?: {
+    id: string
+    name: string
+    color?: string
+  }[]
+  startDate?: string | null
+  targetDate?: string | null
+  createdAt?: string
+  updatedAt?: string
+  completedAt?: string | null
+  canceledAt?: string | null
+  startedAt?: string | null
+  progress?: number | null
+  scope?: number | null
+  issueCount?: number
+  completedIssueCount?: number
+}
+
+export type LinearProjectStatusSummary = {
+  id: string
+  name: string
+  type?: string
+  color?: string
+}
+
+export type LinearProjectMemberSummary = {
+  id: string
+  displayName: string
+  avatarUrl?: string
+}
+
+export type LinearProjectMilestoneSummary = {
+  id: string
+  name: string
+  status?: string
+  targetDate?: string | null
+  progress?: number | null
+}
+
+export type LinearProjectResourceSummary = {
+  id: string
+  title: string
+  url: string
+  type?: string
+}
+
+export type LinearProjectUpdateSummary = {
+  id: string
+  body?: string
+  health?: string | null
+  url?: string
+  createdAt?: string
+  updatedAt?: string
+  user?: LinearProjectMemberSummary
+}
+
+export type LinearProjectDetail = LinearProjectSummary & {
+  milestones?: LinearProjectMilestoneSummary[]
+  resources?: LinearProjectResourceSummary[]
+  latestUpdate?: LinearProjectUpdateSummary
+}
+
+export type LinearCustomViewModel = 'issue' | 'project'
+
+export type LinearCustomViewSummary = {
+  id: string
+  workspaceId?: string
+  workspaceName?: string
+  name: string
+  description?: string
+  model: LinearCustomViewModel
+  url?: string
+  color?: string
+  icon?: string
+  shared?: boolean
+  team?: {
+    id: string
+    name?: string
+    key?: string
+  }
+  owner?: LinearProjectMemberSummary
+  creator?: LinearProjectMemberSummary
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type LinearIssueChildSummary = {
@@ -1132,6 +1275,11 @@ export type LinearComment = {
 }
 
 // ─── Issue Mutations ────────────────────────────────────────────────
+
+export type GitHubCreateIssueFields = {
+  labels?: string[]
+  assignees?: string[]
+}
 
 export type GitHubIssueUpdate = {
   state?: 'open' | 'closed'
@@ -1185,21 +1333,33 @@ export type GitHubOwnerRepo = GitHubRepositoryIdentity
 // (`from '../shared/types'`) keep working without changes.
 export type {
   GitLabAssignableUser,
+  GitLabAuthDiagnostic,
   GitLabCommentResult,
+  GitLabDiscussionResolveResult,
   GitLabIssueInfo,
   GitLabIssueState,
   GitLabIssueUpdate,
+  GitLabJobTraceResult,
+  GitLabRateLimitBucket,
+  GitLabRateLimitSnapshot,
+  GitLabMRApprovalRule,
+  GitLabMRApprovalState,
   GitLabMRFile,
+  GitLabMRInlineCommentInput,
+  GitLabMRReviewersUpdateResult,
+  GitLabMRUpdate,
   GitLabPagedResult,
   GitLabPipelineJob,
   GitLabProjectRef,
   GitLabProjectSettings,
+  GitLabRetryJobResult,
   GitLabReaction,
   GitLabTodo,
   GitLabTodoTargetType,
   GitLabViewer,
   GitLabWorkItem,
   GitLabWorkItemDetails,
+  GetGitLabRateLimitResult,
   ListMergeRequestsResult,
   MRCheckDetail,
   MRComment,
@@ -1311,6 +1471,13 @@ export type OrcaHooks = {
     archive?: string // Runs before worktree is archived
   }
   issueCommand?: string // Shared default command for linked GitHub issues
+  defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
+}
+
+export type OrcaDefaultTabTemplate = {
+  title?: string
+  color?: string
+  command?: string
 }
 
 export type RepoHookSettings = {
@@ -1333,6 +1500,11 @@ export type WorktreeSetupLaunch = {
 export type WorktreeStartupLaunch = {
   command: string
   env?: Record<string, string>
+}
+
+export type WorktreeDefaultTabsLaunch = {
+  tabs: OrcaDefaultTabTemplate[]
+  runCommands: boolean
 }
 
 export type CreateSparseCheckoutRequest = {
@@ -1400,6 +1572,7 @@ export type CreateWorktreeResult = {
   lineage?: WorktreeLineage | null
   warnings?: WorktreeLineageWarning[]
   setup?: WorktreeSetupLaunch
+  defaultTabs?: WorktreeDefaultTabsLaunch
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
@@ -1816,6 +1989,11 @@ export type GlobalSettings = {
    *  usable without the setup output crowding the initial pane. */
   setupScriptLaunchMode: SetupScriptLaunchMode
   terminalScrollbackBytes: number
+  /** Optional app-level proxy for Electron networking and locally spawned PTYs.
+   *  Empty preserves system proxy settings plus inherited proxy env behavior. */
+  httpProxyUrl?: string
+  /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
+  httpProxyBypassRules?: string
   /** Why: opening arbitrary links inside Orca uses an isolated guest browser surface.
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
@@ -2102,6 +2280,7 @@ export type CommitMessageAiSettings = {
 export type GhosttyImportPreview = {
   found: boolean
   configPath?: string
+  configPaths?: string[]
   diff: Partial<GlobalSettings>
   unsupportedKeys: string[]
   error?: string
@@ -2235,6 +2414,8 @@ export type WorktreeCardProperty =
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
 
+export type WorkspaceBoardColumnLayout = 'full' | 'fit'
+
 export type StatusBarItem =
   | 'claude'
   | 'codex'
@@ -2250,8 +2431,15 @@ export type TaskResumeState = {
   githubItemsPreset?: TaskViewPresetId | null
   githubItemsQuery?: string
   githubProjectHiddenFieldIdsByView?: Record<string, string[]>
+  linearMode?: 'issues' | 'projects' | 'views'
   linearPreset?: 'assigned' | 'created' | 'all' | 'completed'
   linearQuery?: string
+  linearContext?: {
+    kind: 'project' | 'view'
+    id: string
+    workspaceId: LinearConcreteWorkspaceId
+    model?: LinearCustomViewModel
+  }
 }
 
 export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
@@ -2278,6 +2466,8 @@ export type PersistedUIState = {
    *  the predicate in visible-worktrees.ts excludes worktrees with an empty
    *  branch. */
   hideDefaultBranchWorkspace: boolean
+  /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */
+  showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]
   collapsedGroups: string[]
   uiZoomLevel: number
@@ -2286,7 +2476,7 @@ export type PersistedUIState = {
   agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
-  workspaceBoardCompact?: boolean
+  workspaceBoardColumnLayout?: WorkspaceBoardColumnLayout
   workspaceBoardColumnWidth?: number
   /** One-shot migration flag for a short-lived build that persisted the
    *  default workspace statuses in reverse workflow order. Once stamped,

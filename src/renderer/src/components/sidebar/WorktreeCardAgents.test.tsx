@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: this suite shares a broad mocked sidebar
+   harness across compact/full mode, lineage, and image-note cases. */
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +11,7 @@ type MockAgentOptions = {
   state?: string
   startedAt?: number
   prompt?: string
+  lastAssistantMessage?: string
   stateStartedAt?: number
   orchestration?: { parentPaneKey: string }
   lineage?: {
@@ -26,6 +29,7 @@ function mockAgent({
   state = 'working',
   startedAt,
   prompt,
+  lastAssistantMessage,
   stateStartedAt = 1000,
   orchestration,
   lineage
@@ -38,6 +42,7 @@ function mockAgent({
     startedAt,
     entry: {
       prompt,
+      lastAssistantMessage,
       state,
       stateStartedAt,
       stateHistory: prompt === undefined ? undefined : [],
@@ -260,6 +265,72 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toBe('')
   })
 
+  it('renders a compact summary affordance for two flat agents', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockAgents = [
+      mockAgent({ agentType: 'codex', state: 'done', startedAt: 1000, prompt: 'First agent' }),
+      mockAgent({
+        paneKey: 'tab-1:2',
+        agentType: 'claude',
+        state: 'done',
+        startedAt: 1500,
+        prompt: 'Second agent'
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('All 2 agents done')
+    expect(markup).toContain('Expand All 2 agents done')
+    expect(markup).not.toContain('First agent')
+    expect(markup).not.toContain('Second agent')
+    expect(markup).not.toContain('data-testid="agent-row"')
+  })
+
+  it('renders compact agent messages with images as inline thumbnails', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockAgents = [
+      mockAgent({
+        agentType: 'codex',
+        state: 'done',
+        startedAt: 1000,
+        prompt: 'Check screenshot',
+        lastAssistantMessage: 'Result:\n\n![Image #1](data:image/png;base64,abc123)'
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('group/compact-agent-row')
+    expect(markup).toContain('<img')
+    expect(markup).toContain('alt="Image #1"')
+    expect(markup).toContain('max-h-36')
+    expect(markup).not.toContain('data-testid="agent-row"')
+  })
+
+  it('bounds long compact agent messages that include image markdown', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockAgents = [
+      mockAgent({
+        agentType: 'codex',
+        state: 'done',
+        startedAt: 1000,
+        prompt: 'Check screenshot',
+        lastAssistantMessage: `${'Detailed result. '.repeat(400)}\n\n![Image #1](https://example.com/screenshot.png)`
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('max-h-36')
+    expect(markup).toContain('overflow-hidden')
+    expect(markup).not.toContain('<img')
+    expect(markup).toContain('href="https://example.com/screenshot.png"')
+  })
+
   it('renders a compact summary affordance for multiple flat agents', async () => {
     mockAgentActivityDisplayMode = 'compact'
     mockAgents = [
@@ -290,9 +361,40 @@ describe('WorktreeCardAgents', () => {
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
     expect(markup).toContain('aria-expanded="false"')
+    expect(markup).toContain('items-center gap-0.5')
+    expect(markup).not.toContain('-space-x-1')
     expect(markup).toContain('3 agents: 1 waiting, 1 working, 1 done')
     expect(markup).toContain('Expand 3 agents: 1 waiting, 1 working, 1 done')
     expect(markup).not.toContain('data-testid="agent-row"')
+  })
+
+  it('avoids repeating the total when every compact summary agent has the same state', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockAgents = [
+      mockAgent({ agentType: 'codex', state: 'done', startedAt: 1000, prompt: 'One' }),
+      mockAgent({
+        paneKey: 'tab-1:2',
+        agentType: 'claude',
+        state: 'done',
+        startedAt: 1500,
+        prompt: 'Two'
+      }),
+      mockAgent({
+        paneKey: 'tab-1:3',
+        agentType: 'gemini',
+        state: 'done',
+        startedAt: 1700,
+        prompt: 'Three'
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('All 3 agents done')
+    expect(markup).toContain('Expand All 3 agents done')
+    expect(markup).not.toContain('3 agents: 3 done')
+    expect(markup).not.toContain('>+3<')
   })
 
   it('prioritizes agent varieties in compact summary icons', async () => {
@@ -312,6 +414,7 @@ describe('WorktreeCardAgents', () => {
     const iconTitles = [...markup.matchAll(/title="([^"]+)"/g)].map((match) => match[1])
 
     expect(iconTitles).toEqual(['Codex', 'Gemini', 'Claude'])
+    expect(markup).toContain('>+2<')
   })
 
   it('summarizes compact lineage by parent rows before revealing children', async () => {
@@ -347,6 +450,14 @@ describe('WorktreeCardAgents', () => {
         stateStartedAt: 1300,
         prompt: 'Child B',
         orchestration: { parentPaneKey: 'tab-parent-b:1' }
+      }),
+      mockAgent({
+        paneKey: 'tab-parent-c:1',
+        agentType: 'codex',
+        state: 'done',
+        startedAt: 1400,
+        stateStartedAt: 1400,
+        prompt: 'Parent C'
       })
     ]
     const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
@@ -354,7 +465,7 @@ describe('WorktreeCardAgents', () => {
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
     expect(markup).toContain('role="tree"')
-    expect(markup).toContain('2 parents: 1 waiting, 1 working')
+    expect(markup).toContain('3 parents: 1 waiting, 1 working, 1 done')
     expect(markup).not.toContain('Parent A')
     expect(markup).not.toContain('Child A')
   })

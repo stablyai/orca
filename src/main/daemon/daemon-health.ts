@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines -- Why: pid validation shares process-identity
 helpers with kill escalation so the SIGKILL safety checks stay co-located. */
 import { execFileSync } from 'child_process'
-import { existsSync, readFileSync, unlinkSync } from 'fs'
+import { existsSync, readFileSync, statSync, unlinkSync } from 'fs'
 import { connect, type Socket } from 'net'
 import { encodeNdjson } from './ndjson'
 import { getDaemonPidPath } from './daemon-spawner'
@@ -496,6 +496,38 @@ export function getDaemonLaunchIdentity(
     return 'unknown'
   }
   return commandLine.includes(expectedEntryPath) ? 'match' : 'mismatch'
+}
+
+export function isDaemonOlderThanPathMtime(
+  runtimeDir: string,
+  socketPath: string,
+  tokenPath: string,
+  path: string,
+  protocolVersion = PROTOCOL_VERSION
+): boolean {
+  let parsedPid: ParsedDaemonPid | null
+  try {
+    parsedPid = parseDaemonPidFile(
+      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    )
+  } catch {
+    return false
+  }
+
+  if (!parsedPid || !isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs)) {
+    return false
+  }
+
+  const startedAtMs = parsedPid.startedAtMs ?? getProcessStartedAtMs(parsedPid.pid)
+  if (startedAtMs === null) {
+    return false
+  }
+
+  try {
+    return startedAtMs + START_TIME_TOLERANCE_MS < statSync(path).mtimeMs
+  } catch {
+    return false
+  }
 }
 
 export async function killStaleDaemon(

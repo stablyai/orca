@@ -925,7 +925,12 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['--', 'bash', '-c', `cd '${expectedLinuxCwd}' && exec bash -l`],
+      [
+        '--',
+        'bash',
+        '-c',
+        `cd '${expectedLinuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l`
+      ],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -962,7 +967,14 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Debian', '--', 'bash', '-c', `cd '${expectedLinuxCwd}' && exec bash -l`],
+      [
+        '-d',
+        'Debian',
+        '--',
+        'bash',
+        '-c',
+        `cd '${expectedLinuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l`
+      ],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -990,7 +1002,14 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/jin/repo' && exec bash -l"],
+      [
+        '-d',
+        'Ubuntu',
+        '--',
+        'bash',
+        '-c',
+        'cd \'/home/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
+      ],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -1018,7 +1037,14 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/jin/repo' && exec bash -l"],
+      [
+        '-d',
+        'Ubuntu',
+        '--',
+        'bash',
+        '-c',
+        'cd \'/home/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
+      ],
       expect.objectContaining({
         env: expect.not.objectContaining({
           CODEX_HOME: expect.anything(),
@@ -1103,7 +1129,14 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', `cd '${expectedLinuxCwd}' && exec bash -l`],
+      [
+        '-d',
+        'Ubuntu',
+        '--',
+        'bash',
+        '-c',
+        `cd '${expectedLinuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l`
+      ],
       expect.objectContaining({
         env: expect.objectContaining({
           CODEX_HOME: '/home/jin/.local/share/orca/codex-accounts/a/home',
@@ -1137,9 +1170,52 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/jin/repo' && exec bash -l"],
+      [
+        '-d',
+        'Ubuntu',
+        '--',
+        'bash',
+        '-c',
+        'cd \'/home/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
+      ],
       expect.objectContaining({
         env: expect.objectContaining({ CODEX_HOME: '/home/jin/.codex-alt' })
+      })
+    )
+  })
+
+  it('marks Orca terminal handles for WSL env import in daemon WSL terminals', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+        env: {
+          ORCA_TERMINAL_HANDLE: 'term_wsl',
+          WSLENV: 'FOO/u'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          ORCA_TERMINAL_HANDLE: 'term_wsl',
+          WSLENV: 'FOO/u:ORCA_TERMINAL_HANDLE/u'
+        })
       })
     )
   })
@@ -1170,7 +1246,14 @@ describe('createPtySubprocess', () => {
     )
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/jin/repo/subdir' && exec bash -l"],
+      [
+        '-d',
+        'Ubuntu',
+        '--',
+        'bash',
+        '-c',
+        'cd \'/home/jin/repo/subdir\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
+      ],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })

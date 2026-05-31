@@ -83,6 +83,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     deferredSshSessionIdsByTabId: {},
     cacheTimerByKey: {},
     recentQuickCommandIdByGroup: {},
+    showDotfilesByWorktree: {},
     expandedDirs: {},
     pendingExplorerReveal: null,
     openFiles: [],
@@ -122,7 +123,14 @@ function runtimeScopedStateReset(): Partial<AppState> {
     linearStatusChecked: false,
     linearIssueCache: {},
     linearSearchCache: {},
-    linearTeamCache: {}
+    linearTeamCache: {},
+    linearProjectCache: {},
+    linearProjectDetailCache: {},
+    linearProjectIssueCache: {},
+    linearCustomViewCache: {},
+    linearCustomViewDetailCache: {},
+    linearCustomViewIssueCache: {},
+    linearCustomViewProjectCache: {}
   }
 }
 

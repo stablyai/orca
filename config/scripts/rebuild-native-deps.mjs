@@ -11,8 +11,9 @@
  * `pnpm install` from completing.
  *
  * This script replaces `electron-builder install-app-deps` in the postinstall
- * lifecycle.  It calls @electron/rebuild's JS API directly so that we can skip
- * `cpu-features` when rebuilding modules against Electron. Skipping
+ * lifecycle and the electron-builder beforeBuild hook. It calls
+ * @electron/rebuild's JS API directly so that we can skip `cpu-features` when
+ * rebuilding modules against Electron. Skipping
  * cpu-features is safe: ssh2 detects the missing native module and falls back
  * to pure-JS CPU feature detection automatically.
  */
@@ -24,6 +25,15 @@ import { platform as osPlatform } from 'node:os'
 import { resolve } from 'node:path'
 
 const projectDir = process.cwd()
+let cliOptions
+try {
+  cliOptions = readCliOptions(process.argv.slice(2))
+} catch (error) {
+  console.error(`[rebuild] ${formatError(error)}`)
+  process.exit(2)
+}
+const rebuildPlatform = cliOptions.platform ?? osPlatform()
+const rebuildArch = cliOptions.arch ?? process.arch
 const electronPackageDir = resolve(projectDir, 'node_modules/electron')
 const electronVersion = JSON.parse(
   readFileSync(resolve(electronPackageDir, 'package.json'), 'utf8')
@@ -41,7 +51,11 @@ if (ignoreModules.length > 0) {
 // ABI regardless of the package manager's store layout.
 const NATIVE_MODULES = ['node-pty', 'cpu-features']
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
-const forceRebuild = process.env.ORCA_FORCE_NATIVE_REBUILD === '1'
+const forceRebuild =
+  process.env.ORCA_FORCE_NATIVE_REBUILD === '1' ||
+  cliOptions.force ||
+  rebuildPlatform !== osPlatform() ||
+  rebuildArch !== process.arch
 
 ensureElectronPackageInstalled()
 
@@ -58,7 +72,7 @@ if (!forceRebuild) {
     console.log(probe.stderr.trim())
   }
 } else {
-  console.log('[rebuild] ORCA_FORCE_NATIVE_REBUILD=1 set; forcing native rebuild.')
+  console.log(`[rebuild] Forcing native rebuild for ${rebuildPlatform}-${rebuildArch}.`)
 }
 
 // Why: cpu-features ships without `buildcheck.gypi`; its own `install` script
@@ -95,6 +109,8 @@ try {
   await rebuild({
     buildPath: projectDir,
     electronVersion,
+    platform: rebuildPlatform,
+    arch: rebuildArch,
     ignoreModules,
     onlyModules,
     // Why: without force, @electron/rebuild skips modules it considers
@@ -253,7 +269,7 @@ function safeReaddir(targetPath) {
 
 function getElectronPlatformPath() {
   const targetPlatform =
-    process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || osPlatform()
+    process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || rebuildPlatform
   switch (targetPlatform) {
     case 'mas':
     case 'darwin':
@@ -267,6 +283,51 @@ function getElectronPlatformPath() {
     default:
       throw new Error(`Electron builds are not available on platform: ${targetPlatform}`)
   }
+}
+
+function readCliOptions(args) {
+  const options = { force: false }
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]
+    if (arg === '--force') {
+      options.force = true
+      continue
+    }
+    if (arg === '--platform') {
+      options.platform = readRequiredArgValue(args, (index += 1), '--platform')
+      continue
+    }
+    if (arg.startsWith('--platform=')) {
+      options.platform = readInlineArgValue(arg, '--platform')
+      continue
+    }
+    if (arg === '--arch') {
+      options.arch = readRequiredArgValue(args, (index += 1), '--arch')
+      continue
+    }
+    if (arg.startsWith('--arch=')) {
+      options.arch = readInlineArgValue(arg, '--arch')
+      continue
+    }
+    throw new Error(`Unknown argument: ${arg}`)
+  }
+  return options
+}
+
+function readRequiredArgValue(args, index, flag) {
+  const value = args[index]
+  if (!value || value.startsWith('--')) {
+    throw new Error(`Missing value for ${flag}`)
+  }
+  return value
+}
+
+function readInlineArgValue(arg, flag) {
+  const value = arg.slice(`${flag}=`.length)
+  if (!value) {
+    throw new Error(`Missing value for ${flag}`)
+  }
+  return value
 }
 
 function getElectronExecutablePath() {

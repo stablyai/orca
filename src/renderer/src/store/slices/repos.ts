@@ -30,6 +30,7 @@ type RepoUpdate = Partial<
     | 'repoIcon'
     | 'hookSettings'
     | 'worktreeBaseRef'
+    | 'worktreeBasePath'
     | 'kind'
     | 'symlinkPaths'
     | 'issueSourcePreference'
@@ -58,6 +59,9 @@ function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
     } else {
       sanitized.repoIcon = repoIcon
     }
+  }
+  if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
+    sanitized.worktreeBasePath = sanitized.worktreeBasePath.trim() || undefined
   }
   return sanitized
 }

@@ -234,7 +234,7 @@ export class WslCliInstaller {
       (
         await this.run(
           this.distro,
-          'command -v powershell.exe >/dev/null 2>&1 && command -v wslpath >/dev/null 2>&1 && printf yes || printf no'
+          '{ command -v powershell.exe >/dev/null 2>&1 || [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; } && command -v wslpath >/dev/null 2>&1 && printf yes || printf no'
         )
       ).trim() === 'yes'
     if (!interopReady) {

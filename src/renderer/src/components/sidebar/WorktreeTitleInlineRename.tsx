@@ -25,6 +25,7 @@ type WorktreeTitleInlineRenameProps = {
   className?: string
   editingClassName?: string
   inputClassName?: string
+  titleWrapper?: (title: React.ReactElement) => React.ReactElement
   onEditingChange?: (editing: boolean) => void
   onRename: (displayName: string) => Promise<void> | void
 }
@@ -36,6 +37,7 @@ export function WorktreeTitleInlineRename({
   className,
   editingClassName,
   inputClassName,
+  titleWrapper,
   onEditingChange,
   onRename
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
@@ -202,6 +204,10 @@ export function WorktreeTitleInlineRename({
       {displayName}
     </span>
   )
+
+  if (titleWrapper) {
+    return titleWrapper(title)
+  }
 
   return (
     <Tooltip>

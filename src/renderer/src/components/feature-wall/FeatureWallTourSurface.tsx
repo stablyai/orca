@@ -15,6 +15,11 @@ import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetr
 import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
+import { ORCA_CLI_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
 import { usePrefersReducedMotion } from './feature-wall-modal-helpers'
 import {
   getFeatureWallRailNavigationTarget,
@@ -104,14 +109,23 @@ export function FeatureWallTourSurface({
       setReviewStepId(reviewSteps[0]?.id ?? 'notes')
     }
   }
-  const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
-  const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
+  // Why: the feature-wall completion model owns skill-completion state, so read
+  // installed skills here instead of asking child setup cards to notify upward
+  // from passive Effects.
+  const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    enabled: isOpen,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
+  const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    enabled: isOpen,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
   const completion = useFeatureWallCompletion(
     isOpen,
     taskSourcePresentation.hasConnectedTaskSource,
     taskSourcePresentation.isCheckingTaskSources,
-    orchestrationSkillInstalled,
-    browserUseSkillInstalled,
+    orchestrationSkill.installed,
+    browserUseSkill.installed,
     { onTourDepthSummaryChange }
   )
   const { markExitAction } = useFeatureWallTourTelemetry({
@@ -119,6 +133,14 @@ export function FeatureWallTourSurface({
     source,
     getDepthSummary: completion.getTourDepthSummary
   })
+  const {
+    markWorkflowVisited,
+    markAgentStepVisited,
+    markWorkbenchStepVisited,
+    markReviewStepVisited
+  } = completion
+  const markWorkflowVisitedRef = useRef(markWorkflowVisited)
+  markWorkflowVisitedRef.current = markWorkflowVisited
 
   const agentsActiveStep =
     selected.id === 'agents-orchestration'
@@ -143,6 +165,7 @@ export function FeatureWallTourSurface({
 
   useEffect(() => {
     if (isOpen) {
+      markWorkflowVisitedRef.current(DEFAULT_FEATURE_WALL_WORKFLOW_ID)
       track('feature_wall_group_selected', {
         group_id: DEFAULT_FEATURE_WALL_WORKFLOW_ID,
         source
@@ -161,33 +184,6 @@ export function FeatureWallTourSurface({
     }
   }, [isOpen, source])
 
-  const {
-    markWorkflowVisited,
-    markAgentStepVisited,
-    markWorkbenchStepVisited,
-    markReviewStepVisited
-  } = completion
-  useEffect(() => {
-    if (isOpen) {
-      markWorkflowVisited(selected.id)
-    }
-  }, [isOpen, markWorkflowVisited, selected.id])
-  useEffect(() => {
-    if (isOpen && agentsActiveStep) {
-      markAgentStepVisited(agentsActiveStep.id)
-    }
-  }, [agentsActiveStep, isOpen, markAgentStepVisited])
-  useEffect(() => {
-    if (isOpen && workbenchActiveStep) {
-      markWorkbenchStepVisited(workbenchActiveStep.id)
-    }
-  }, [isOpen, markWorkbenchStepVisited, workbenchActiveStep])
-  useEffect(() => {
-    if (isOpen && reviewActiveStep) {
-      markReviewStepVisited(reviewActiveStep.id)
-    }
-  }, [isOpen, markReviewStepVisited, reviewActiveStep])
-
   const handleSelect = useCallback(
     (workflow: FeatureWallWorkflow): void => {
       markWorkflowVisited(workflow.id)
@@ -196,11 +192,17 @@ export function FeatureWallTourSurface({
       }
       setSelectedId(workflow.id)
       if (workflow.id === 'agents-orchestration') {
-        setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
+        const nextStepId = agentsSteps[0]?.id ?? 'statuses'
+        markAgentStepVisited(nextStepId)
+        setAgentsStepId(nextStepId)
       } else if (workflow.id === 'workbench') {
-        setWorkbenchStepId(workbenchSteps[0]?.id ?? 'terminal')
+        const nextStepId = workbenchSteps[0]?.id ?? 'terminal'
+        markWorkbenchStepVisited(nextStepId)
+        setWorkbenchStepId(nextStepId)
       } else if (workflow.id === 'review') {
-        setReviewStepId(reviewSteps[0]?.id ?? 'notes')
+        const nextStepId = reviewSteps[0]?.id ?? 'notes'
+        markReviewStepVisited(nextStepId)
+        setReviewStepId(nextStepId)
       }
       track('feature_wall_group_selected', { group_id: workflow.id, source })
       const tile = getFeatureWallMediaTile(workflow.primaryTileId)
@@ -213,7 +215,41 @@ export function FeatureWallTourSurface({
         track('feature_wall_tile_focused', { tile_id: tile.id })
       }
     },
-    [agentsSteps, markWorkflowVisited, reviewSteps, selectedId, source, workbenchSteps]
+    [
+      agentsSteps,
+      markAgentStepVisited,
+      markReviewStepVisited,
+      markWorkbenchStepVisited,
+      markWorkflowVisited,
+      reviewSteps,
+      selectedId,
+      source,
+      workbenchSteps
+    ]
+  )
+
+  const handleSelectAgentsStep = useCallback(
+    (id: AgentsStepId): void => {
+      markAgentStepVisited(id)
+      setAgentsStepId(id)
+    },
+    [markAgentStepVisited]
+  )
+
+  const handleSelectWorkbenchStep = useCallback(
+    (id: WorkbenchStepId): void => {
+      markWorkbenchStepVisited(id)
+      setWorkbenchStepId(id)
+    },
+    [markWorkbenchStepVisited]
+  )
+
+  const handleSelectReviewStep = useCallback(
+    (id: ReviewStepId): void => {
+      markReviewStepVisited(id)
+      setReviewStepId(id)
+    },
+    [markReviewStepVisited]
   )
 
   const handleRailKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
@@ -258,25 +294,28 @@ export function FeatureWallTourSurface({
   const handleContinue = useCallback((): void => {
     markWorkflowVisited(selected.id)
     if (selected.id === 'agents-orchestration') {
-      completion.markAgentStepVisited(agentsStepId)
+      markAgentStepVisited(agentsStepId)
       const nextStep = agentsSteps[agentsStepIndex >= 0 ? agentsStepIndex + 1 : 0]
       if (nextStep) {
+        markAgentStepVisited(nextStep.id)
         setAgentsStepId(nextStep.id)
         return
       }
     }
     if (selected.id === 'workbench') {
-      completion.markWorkbenchStepVisited(workbenchStepId)
+      markWorkbenchStepVisited(workbenchStepId)
       const nextStep = workbenchSteps[workbenchStepIndex >= 0 ? workbenchStepIndex + 1 : 0]
       if (nextStep) {
+        markWorkbenchStepVisited(nextStep.id)
         setWorkbenchStepId(nextStep.id)
         return
       }
     }
     if (selected.id === 'review') {
-      completion.markReviewStepVisited(reviewStepId)
+      markReviewStepVisited(reviewStepId)
       const nextStep = reviewSteps[reviewStepIndex >= 0 ? reviewStepIndex + 1 : 0]
       if (nextStep) {
+        markReviewStepVisited(nextStep.id)
         setReviewStepId(nextStep.id)
         return
       }
@@ -308,10 +347,12 @@ export function FeatureWallTourSurface({
     agentsStepId,
     agentsStepIndex,
     agentsSteps,
-    completion,
     handleSelect,
     isLastWorkflow,
+    markAgentStepVisited,
     markExitAction,
+    markReviewStepVisited,
+    markWorkbenchStepVisited,
     markWorkflowVisited,
     onDone,
     reviewStepId,
@@ -373,20 +414,20 @@ export function FeatureWallTourSurface({
       onRailKeyDown={handleRailKeyDown}
       agentsSteps={agentsSteps}
       agentsActiveStep={agentsActiveStep}
-      onSelectAgentsStep={setAgentsStepId}
+      onSelectAgentsStep={handleSelectAgentsStep}
       workbenchSteps={workbenchSteps}
       workbenchActiveStep={workbenchActiveStep}
-      onSelectWorkbenchStep={setWorkbenchStepId}
+      onSelectWorkbenchStep={handleSelectWorkbenchStep}
       reviewSteps={reviewSteps}
       reviewActiveStep={reviewActiveStep}
-      onSelectReviewStep={setReviewStepId}
+      onSelectReviewStep={handleSelectReviewStep}
       posterUrl={posterUrl}
       gifUrl={gifUrl}
       showGif={showGif}
       prefersReducedMotion={prefersReducedMotion}
       source={source}
-      onOrchestrationSkillInstalledChange={setOrchestrationSkillInstalled}
-      onBrowserUseSkillInstalledChange={setBrowserUseSkillInstalled}
+      orchestrationSkill={orchestrationSkill}
+      browserUseSkill={browserUseSkill}
       settings={settings}
       updateSettings={updateSettings}
       footerText={footerText}

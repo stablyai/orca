@@ -11,7 +11,7 @@ import { AgentFeatureSetupStep } from './AgentFeatureSetupStep'
 import { IntegrationsStep } from './IntegrationsStep'
 import { RepoStep } from './RepoStep'
 import { OnboardingTourStep } from './OnboardingTourStep'
-import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
+import { useOnboardingFlow } from './use-onboarding-flow'
 import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
 import { OnboardingFooter } from './OnboardingFooter'
 import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
@@ -36,8 +36,8 @@ const stepCopy = {
     subtitle: 'Turn on advanced Orca capabilities for agents.'
   },
   integrations: {
-    title: 'Connect your task sources',
-    subtitle: 'Connect GitHub or Linear to:'
+    title: 'Set up GitHub tasks',
+    subtitle: 'Install the GitHub CLI to:'
   },
   tour: {
     title: 'Explore Orca',
@@ -185,6 +185,7 @@ export default function OnboardingFlow({
       />
 
       <section
+        ref={flow.setLifecycleRootRef}
         role="dialog"
         aria-label="Orca onboarding"
         aria-modal="true"
@@ -205,52 +206,50 @@ export default function OnboardingFlow({
             <span>Orca</span>
           </div>
 
-          <div
-            className={cn(
-              'flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-              isInlineTourRunning ? 'mt-7' : 'mt-10'
-            )}
-          >
-            <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-              {STEPS.map((step, idx) => {
-                const isActive = idx === stepIndex
-                const isDone = idx < stepIndex
-                return (
-                  <Tooltip key={step.id}>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className={cn(
-                          // Why: the visible bars stay 4px tall, but the invisible
-                          // hit area makes hover/click/tooltip targeting reliable.
-                          'relative h-1 rounded-full outline-none transition-all duration-300 before:absolute before:-inset-y-2 before:-inset-x-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
-                          isActive
-                            ? 'w-10 bg-foreground'
-                            : isDone
-                              ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
-                              : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
-                        )}
-                        aria-label={`Go to onboarding step ${step.stepNumber}: ${stepCopy[step.id].title}`}
-                        aria-current={isActive ? 'step' : undefined}
-                        onClick={() => flow.jumpToStep(idx)}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={8} style={{ zIndex: 110 }}>
-                      {stepTooltipLabels[step.id]}
-                    </TooltipContent>
-                  </Tooltip>
-                )
-              })}
-            </TooltipProvider>
-            <span className="ml-3 text-xs font-medium text-muted-foreground">
-              {stepIndex + 1} of {STEPS.length}
-            </span>
-            {isInlineTourRunning ? (
-              <h1 className="ml-5 text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
+          {isInlineTourRunning ? (
+            <div className="mt-7 flex items-center transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
+              <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
                 {stepTooltipLabels.tour}
               </h1>
-            ) : null}
-          </div>
+            </div>
+          ) : (
+            <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
+              <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+                {flow.visibleSteps.map(({ step, index: realStepIndex }, visibleIdx) => {
+                  const isActive = realStepIndex === stepIndex
+                  const isDone = realStepIndex < stepIndex
+                  return (
+                    <Tooltip key={step.id}>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className={cn(
+                            // Why: the visible bars stay 4px tall, but the invisible
+                            // hit area makes hover/click/tooltip targeting reliable.
+                            'relative h-1 rounded-full outline-none transition-all duration-300 before:absolute before:-inset-y-2 before:-inset-x-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
+                            isActive
+                              ? 'w-10 bg-foreground'
+                              : isDone
+                                ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
+                                : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
+                          )}
+                          aria-label={`Go to onboarding step ${visibleIdx + 1}: ${stepCopy[step.id].title}`}
+                          aria-current={isActive ? 'step' : undefined}
+                          onClick={() => flow.jumpToStep(realStepIndex)}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" sideOffset={8} style={{ zIndex: 110 }}>
+                        {stepTooltipLabels[step.id]}
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                })}
+              </TooltipProvider>
+              <span className="ml-3 text-xs font-medium text-muted-foreground">
+                {flow.visibleStepIndex + 1} of {flow.visibleSteps.length}
+              </span>
+            </div>
+          )}
 
           {shouldShowStepHeading ? (
             <div className="mt-8 shrink-0">

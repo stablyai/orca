@@ -39,7 +39,7 @@ export type RateLimitRuntimeTarget = {
 
 export type InactiveAccountUsage = {
   accountId: string
-  claude: ProviderRateLimits | null
+  rateLimits: ProviderRateLimits | null
   updatedAt: number
   isFetching: boolean
 }

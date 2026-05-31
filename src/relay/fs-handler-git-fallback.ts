@@ -49,18 +49,15 @@ export function listFilesWithGit(
       let buf = ''
       let done = false
 
-      const processLine = (line: string): void => {
-        if (line.charCodeAt(line.length - 1) === 13) {
-          line = line.substring(0, line.length - 1)
-        }
-        if (!line) {
+      const processPath = (path: string): void => {
+        if (!path) {
           return
         }
-        if (shouldExcludeQuickOpenRelPath(line, excludePathPrefixes)) {
+        if (shouldExcludeQuickOpenRelPath(path, excludePathPrefixes)) {
           return
         }
-        if (shouldIncludeQuickOpenPath(line)) {
-          files.add(line)
+        if (shouldIncludeQuickOpenPath(path)) {
+          files.add(path)
         }
       }
 
@@ -106,11 +103,11 @@ export function listFilesWithGit(
       function handleStdoutData(chunk: string): void {
         buf += chunk
         let start = 0
-        let idx = buf.indexOf('\n', start)
+        let idx = buf.indexOf('\0', start)
         while (idx !== -1) {
-          processLine(buf.substring(start, idx))
+          processPath(buf.substring(start, idx))
           start = idx + 1
-          idx = buf.indexOf('\n', start)
+          idx = buf.indexOf('\0', start)
         }
         buf = start < buf.length ? buf.substring(start) : ''
       }
@@ -132,7 +129,7 @@ export function listFilesWithGit(
           return
         }
         if (buf) {
-          processLine(buf)
+          processPath(buf)
         }
         resolvePass()
       }

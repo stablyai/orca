@@ -29,6 +29,7 @@ type PRRefreshOutcomeObserver = (
 ) => void
 
 const MIN_BACKGROUND_REFRESH_AGE_MS = 60_000
+const MERGEABILITY_PENDING_REFRESH_MS = 10_000
 const BACKGROUND_BUDGET_WINDOW_MS = 5 * 60_000
 const MIN_BACKGROUND_SPACING_MS = 10_000
 const BACKGROUND_BUDGET_MAX = 20
@@ -48,6 +49,30 @@ let outcomeObserver: PRRefreshOutcomeObserver | null = null
 
 export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
   outcomeObserver = observer
+}
+
+function removeInvisibleVisibleRefreshes(): void {
+  for (const [key, entry] of queue) {
+    if (entry.reason === 'visible' && !isVisibleKey(key)) {
+      queue.delete(key)
+      errorBackoff.delete(key)
+      broadcast({
+        aliases: Array.from(entry.aliases.values()),
+        reason: 'visible',
+        status: 'skipped',
+        skippedReason: 'fresh'
+      })
+    }
+  }
+}
+
+export function clearVisiblePRRefreshWindow(windowId: number): void {
+  if (!visibleByWindow.delete(windowId)) {
+    return
+  }
+  // Why: visible follow-ups are owned by the renderer that reported them.
+  // If that WebContents is destroyed, no later visibility report may arrive.
+  removeInvisibleVisibleRefreshes()
 }
 
 function nextSequence(): number {
@@ -183,7 +208,9 @@ function visibleCandidateAfterOutcome(
     cachedFetchedAt: outcome.fetchedAt,
     cachedHasPR: outcome.kind === 'found',
     cachedPRState: outcome.kind === 'found' ? outcome.pr.state : null,
-    cachedChecksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null
+    cachedChecksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null,
+    cachedMergeable: outcome.kind === 'found' ? outcome.pr.mergeable : null,
+    cachedMergeStateStatus: outcome.kind === 'found' ? (outcome.pr.mergeStateStatus ?? null) : null
   }
 }
 
@@ -249,6 +276,9 @@ function scheduleVisibleFollowUp(
   windowId?: number
 ): void {
   if (!isVisibleKey(key)) {
+    // Why: manual/active refreshes can remove the queued visible retry after
+    // its owner window is gone, leaving the retry backoff without an owner.
+    errorBackoff.delete(key)
     return
   }
   if (outcome.kind === 'upstream-error') {
@@ -295,6 +325,16 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
   if (candidate.cachedHasPR === false) {
     return 15 * 60_000
   }
+  if (
+    candidate.cachedHasPR === true &&
+    candidate.cachedPRState === 'open' &&
+    candidate.cachedMergeable === 'UNKNOWN' &&
+    !hasResolvedMergeStateStatus(candidate.cachedMergeStateStatus)
+  ) {
+    // Why: GitHub can return transient UNKNOWN mergeability while it computes
+    // the PR test merge; visible merge buttons need a prompt follow-up.
+    return MERGEABILITY_PENDING_REFRESH_MS
+  }
   if (candidate.cachedChecksStatus === 'success') {
     return 10 * 60_000
   }
@@ -305,6 +345,10 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
     return 90_000
   }
   return MIN_BACKGROUND_REFRESH_AGE_MS
+}
+
+function hasResolvedMergeStateStatus(status: string | null | undefined): boolean {
+  return status === 'CLEAN' || status === 'BEHIND' || status === 'BLOCKED'
 }
 
 function backgroundRefreshBuckets(): ('core' | 'graphql')[] {
@@ -531,21 +575,18 @@ export function reportVisiblePRRefreshCandidates(
     return
   }
   visibleByWindow.set(windowId, { generation, keys: new Set(candidates.map(refreshKey)) })
-  for (const [key, entry] of queue) {
-    if (entry.reason === 'visible' && !isVisibleKey(key)) {
-      queue.delete(key)
-      errorBackoff.delete(key)
-      broadcast({
-        aliases: Array.from(entry.aliases.values()),
-        reason: 'visible',
-        status: 'skipped',
-        skippedReason: 'fresh'
-      })
-    }
-  }
+  removeInvisibleVisibleRefreshes()
   for (const candidate of candidates) {
     enqueuePRRefresh(candidate, 'visible', 40, windowId)
   }
+}
+
+export function _getVisiblePRRefreshWindowCountForTests(): number {
+  return visibleByWindow.size
+}
+
+export function _getPRRefreshErrorBackoffCountForTests(): number {
+  return errorBackoff.size
 }
 
 export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise<PRRefreshOutcome> {

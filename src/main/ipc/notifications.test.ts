@@ -965,6 +965,38 @@ describe('registerNotificationHandlers', () => {
     expect(notificationShowMock).toHaveBeenCalledTimes(2)
   })
 
+  it('bounds notification cooldown keys during unique worktree bursts', () => {
+    notificationIsSupportedMock.mockReturnValue(false)
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    for (let i = 0; i < 75; i++) {
+      expect(handler({}, { source: 'terminal-bell', worktreeId: `repo::wt-${i}` })).toEqual({
+        delivered: false,
+        reason: 'not-supported'
+      })
+    }
+
+    expect(handler({}, { source: 'terminal-bell', worktreeId: 'repo::wt-0' })).toEqual({
+      delivered: false,
+      reason: 'not-supported'
+    })
+    expect(handler({}, { source: 'terminal-bell', worktreeId: 'repo::wt-74' })).toEqual({
+      delivered: false,
+      reason: 'cooldown'
+    })
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
   it('deduplicates agent-task-complete and terminal-bell for the same worktree', () => {
     registerNotificationHandlers({
       getSettings: () => ({

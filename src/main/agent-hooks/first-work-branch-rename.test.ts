@@ -38,6 +38,7 @@ vi.mock('../text-generation/commit-message-agent-environment', () => ({
 vi.mock('../ipc/worktree-logic', () => ({ computeBranchName: computeBranchNameMock }))
 
 import {
+  FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT,
   maybeAutoRenameBranchOnFirstWork,
   resetFirstWorkBranchRenameState,
   type FirstWorkBranchRenameDeps,
@@ -201,6 +202,41 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     generateBranchNameMock.mockClear()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(generateBranchNameMock).not.toHaveBeenCalled()
+  })
+
+  it('bounds settled worktree dedupe while keeping recent entries', async () => {
+    gitExecFileAsyncMock.mockImplementation(
+      gitResponder({ currentBranch: 'you/my-feature', hasUpstream: false })
+    )
+    const { deps } = makeDeps()
+    const firstWorktreeId = `${REPO_ID}${WORKTREE_ID_SEPARATOR}/repo/wt-0`
+    const lastWorktreeId = `${REPO_ID}${WORKTREE_ID_SEPARATOR}/repo/wt-${FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT}`
+
+    for (let index = 0; index <= FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT; index += 1) {
+      await maybeAutoRenameBranchOnFirstWork(
+        workingEvent({
+          tabId: undefined,
+          paneKey: '',
+          worktreeId: `${REPO_ID}${WORKTREE_ID_SEPARATOR}/repo/wt-${index}`
+        }),
+        deps
+      )
+    }
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(
+      FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT + 1
+    )
+
+    gitExecFileAsyncMock.mockClear()
+    await maybeAutoRenameBranchOnFirstWork(
+      workingEvent({ tabId: undefined, paneKey: '', worktreeId: firstWorktreeId }),
+      deps
+    )
+    await maybeAutoRenameBranchOnFirstWork(
+      workingEvent({ tabId: undefined, paneKey: '', worktreeId: lastWorktreeId }),
+      deps
+    )
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('retries on a later event after a transient failure (does not poison the worktree)', async () => {

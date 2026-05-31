@@ -9,7 +9,7 @@ import {
   TextInput
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Search,
   X,
@@ -62,6 +62,11 @@ import {
   loadPreferences,
   savePreferences
 } from '../../../src/storage/preferences'
+import {
+  createInitialHostRouteActionState,
+  resolveHostRouteActionState,
+  setHostRouteNewWorktreeVisible
+} from '../../../src/host-route-action-state'
 
 // Why: locally-typed subset of the desktop's RuntimeStatus we read from
 // `status.get`. Only the version fields matter to mobile today; everything
@@ -340,7 +345,9 @@ export default function HostScreen() {
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
-  const [showNewWorktree, setShowNewWorktree] = useState(false)
+  const [routeActionState, setRouteActionState] = useState(() =>
+    createInitialHostRouteActionState(action)
+  )
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
 
   // Persisted pin state
@@ -348,9 +355,16 @@ export default function HostScreen() {
   const [_prefsLoaded, setPrefsLoaded] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    if (action === 'newWorktree') setShowNewWorktree(true)
-  }, [action])
+  const resolvedRouteActionState = resolveHostRouteActionState(routeActionState, action)
+  // Why: `action=newWorktree` is a route-derived open edge. Resolve it before
+  // commit, but don't reopen after the user closes while the same URL remains.
+  if (resolvedRouteActionState !== routeActionState) {
+    setRouteActionState(resolvedRouteActionState)
+  }
+  const showNewWorktree = resolvedRouteActionState.showNewWorktree
+  const setShowNewWorktreeVisible = useCallback((visible: boolean) => {
+    setRouteActionState((current) => setHostRouteNewWorktreeVisible(current, visible))
+  }, [])
 
   // Load persisted pins and preferences
   useEffect(() => {
@@ -481,12 +495,6 @@ export default function HostScreen() {
     }
   }, [client, connState, hostId])
 
-  useEffect(() => {
-    if (connState === 'connected') {
-      void fetchWorktrees()
-    }
-  }, [connState, fetchWorktrees])
-
   // Why: read desktop's protocol version from status.get on every connect
   // and re-evaluate compatibility. If the desktop declares this mobile
   // build too old (or vice versa via the local minimum), the host detail
@@ -528,13 +536,18 @@ export default function HostScreen() {
     }
   }, [connState, client])
 
-  useEffect(() => {
-    if (connState !== 'connected') return
-    const interval = setInterval(() => {
+  useFocusEffect(
+    useCallback(() => {
+      if (connState !== 'connected') return
       void fetchWorktrees()
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [connState, fetchWorktrees])
+      // Why: React Navigation keeps previous stack screens mounted; only
+      // poll the host list while this route is visible.
+      const interval = setInterval(() => {
+        void fetchWorktrees()
+      }, 3000)
+      return () => clearInterval(interval)
+    }, [connState, fetchWorktrees])
+  )
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
@@ -871,7 +884,7 @@ export default function HostScreen() {
 
           <Pressable
             style={styles.newButton}
-            onPress={() => setShowNewWorktree(true)}
+            onPress={() => setShowNewWorktreeVisible(true)}
             disabled={connState !== 'connected'}
           >
             <Plus
@@ -1246,7 +1259,7 @@ export default function HostScreen() {
           const params = new URLSearchParams({ name: worktreeName, created: '1' })
           router.push(`/h/${hostId}/session/${encodeURIComponent(worktreeId)}?${params.toString()}`)
         }}
-        onClose={() => setShowNewWorktree(false)}
+        onClose={() => setShowNewWorktreeVisible(false)}
       />
     </SafeAreaView>
   )

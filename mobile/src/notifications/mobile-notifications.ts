@@ -114,8 +114,10 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     // unmount races with disconnect). sendRequest rejects immediately on a
     // closed client — swallow it since server-side cleanup happens via
     // connection-close anyway.
+    // Always drop the local stream first; readiness can race unmount and we
+    // must not retain the callback while waiting for a subscription id.
+    unsubscribeStream()
     if (subscriptionId) {
-      unsubscribeStream()
       unsubscribeServer(subscriptionId)
     }
   }

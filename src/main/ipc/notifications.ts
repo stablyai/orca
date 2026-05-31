@@ -25,6 +25,7 @@ import { buildNotificationOptions } from './notification-options'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
+const MAX_RECENT_NOTIFICATION_KEYS = 50
 const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
 const NOTIFICATION_RELEASE_FALLBACK_MS = 5 * 60 * 1000
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
@@ -175,6 +176,26 @@ function logNativeNotificationFailure(context: string, error?: string): void {
   )
 }
 
+function pruneRecentNotifications(recentNotifications: Map<string, number>, now: number): void {
+  if (recentNotifications.size <= MAX_RECENT_NOTIFICATION_KEYS) {
+    return
+  }
+
+  for (const [key, ts] of recentNotifications) {
+    if (now - ts >= NOTIFICATION_COOLDOWN_MS) {
+      recentNotifications.delete(key)
+    }
+  }
+
+  while (recentNotifications.size > MAX_RECENT_NOTIFICATION_KEYS) {
+    const oldest = recentNotifications.keys().next()
+    if (oldest.done) {
+      break
+    }
+    recentNotifications.delete(oldest.value)
+  }
+}
+
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const recentNotifications = new Map<string, number>()
 
@@ -245,16 +266,12 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         if (now - lastSentAt < NOTIFICATION_COOLDOWN_MS) {
           return { delivered: false, reason: 'cooldown' }
         }
+        recentNotifications.delete(dedupeKey)
         recentNotifications.set(dedupeKey, now)
 
-        // Evict stale entries so the map doesn't grow unbounded.
-        if (recentNotifications.size > 50) {
-          for (const [key, ts] of recentNotifications) {
-            if (now - ts >= NOTIFICATION_COOLDOWN_MS) {
-              recentNotifications.delete(key)
-            }
-          }
-        }
+        // Why: a storm across many worktrees should not make every
+        // notification dispatch scan an ever-growing cooldown table.
+        pruneRecentNotifications(recentNotifications, now)
       }
 
       const notificationOptions = buildNotificationOptions(args)

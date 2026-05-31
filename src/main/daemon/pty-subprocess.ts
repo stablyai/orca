@@ -24,6 +24,7 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
+import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 
@@ -332,6 +333,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // CODEX_HOME from it after user profiles run.
       delete env.CODEX_HOME
       delete env.ORCA_CODEX_HOME
+    }
+    if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+      addOrcaWslInteropEnv(env)
     }
   } else {
     // Why: any Orca-injected overlay env that user rc files can clobber

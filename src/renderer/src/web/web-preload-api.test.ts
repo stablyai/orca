@@ -1260,6 +1260,18 @@ describe('web GitLab preload API', () => {
       expectedParams: unknown
     }[] = [
       {
+        key: 'diagnoseAuth',
+        invoke: (gl) => gl.diagnoseAuth(),
+        expectedMethod: 'gitlab.diagnoseAuth',
+        expectedParams: undefined
+      },
+      {
+        key: 'rateLimit',
+        invoke: (gl) => gl.rateLimit({ force: true, host: 'gitlab.example.com' }),
+        expectedMethod: 'gitlab.rateLimit',
+        expectedParams: { force: true, host: 'gitlab.example.com' }
+      },
+      {
         key: 'listMRs',
         invoke: (gl) => gl.listMRs({ repoPath, state: 'opened', page: 1, perPage: 50 }),
         expectedMethod: 'gitlab.listMRs',
@@ -1296,6 +1308,12 @@ describe('web GitLab preload API', () => {
         expectedParams: { repoPath, repo: repoPath, number: 7, body: 'Fixed' }
       },
       {
+        key: 'listLabels',
+        invoke: (gl) => gl.listLabels({ repoPath }),
+        expectedMethod: 'gitlab.listLabels',
+        expectedParams: { repoPath, repo: repoPath }
+      },
+      {
         key: 'todos',
         invoke: (gl) => gl.todos({ repoPath }),
         expectedMethod: 'gitlab.todos',
@@ -1326,10 +1344,82 @@ describe('web GitLab preload API', () => {
         expectedParams: { repoPath, repo: repoPath, iid: 8, method: 'squash' }
       },
       {
+        key: 'updateMR',
+        invoke: (gl) => gl.updateMR({ repoPath, iid: 8, updates: { title: 'New title' } }),
+        expectedMethod: 'gitlab.updateMR',
+        expectedParams: { repoPath, repo: repoPath, iid: 8, updates: { title: 'New title' } }
+      },
+      {
+        key: 'updateMRReviewers',
+        invoke: (gl) => gl.updateMRReviewers({ repoPath, iid: 8, reviewerIds: [1, 2] }),
+        expectedMethod: 'gitlab.updateMRReviewers',
+        expectedParams: { repoPath, repo: repoPath, iid: 8, reviewerIds: [1, 2] }
+      },
+      {
         key: 'addMRComment',
         invoke: (gl) => gl.addMRComment({ repoPath, iid: 8, body: 'Ship it' }),
         expectedMethod: 'gitlab.addMRComment',
         expectedParams: { repoPath, repo: repoPath, iid: 8, body: 'Ship it' }
+      },
+      {
+        key: 'addMRInlineComment',
+        invoke: (gl) =>
+          gl.addMRInlineComment({
+            repoPath,
+            iid: 8,
+            input: {
+              body: 'Please fix',
+              path: 'src/app.ts',
+              line: 12,
+              baseSha: 'base',
+              startSha: 'start',
+              headSha: 'head'
+            }
+          }),
+        expectedMethod: 'gitlab.addMRInlineComment',
+        expectedParams: {
+          repoPath,
+          repo: repoPath,
+          iid: 8,
+          input: {
+            body: 'Please fix',
+            path: 'src/app.ts',
+            line: 12,
+            baseSha: 'base',
+            startSha: 'start',
+            headSha: 'head'
+          }
+        }
+      },
+      {
+        key: 'resolveMRDiscussion',
+        invoke: (gl) =>
+          gl.resolveMRDiscussion({
+            repoPath,
+            iid: 8,
+            discussionId: 'discussion-1',
+            resolved: true
+          }),
+        expectedMethod: 'gitlab.resolveMRDiscussion',
+        expectedParams: {
+          repoPath,
+          repo: repoPath,
+          iid: 8,
+          discussionId: 'discussion-1',
+          resolved: true
+        }
+      },
+      {
+        key: 'jobTrace',
+        invoke: (gl) => gl.jobTrace({ repoPath, jobId: 99 }),
+        expectedMethod: 'gitlab.jobTrace',
+        expectedParams: { repoPath, repo: repoPath, jobId: 99 }
+      },
+      {
+        key: 'retryJob',
+        invoke: (gl) => gl.retryJob({ repoPath, jobId: 99 }),
+        expectedMethod: 'gitlab.retryJob',
+        expectedParams: { repoPath, repo: repoPath, jobId: 99 }
       },
       {
         key: 'workItemByPath',

@@ -45,6 +45,10 @@ import {
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
 import {
+  resolveAgentStatusIdentity,
+  shouldSuppressInheritedTerminalStatus
+} from '../../shared/agent-status-identity'
+import {
   isAgentInterruptInputIntent,
   type AgentInterruptInferenceRequest
 } from '../../shared/agent-interrupt-intent'
@@ -539,8 +543,10 @@ export class AgentHookServer {
     }
   }
 
-  private attachStatusTiming(payload: AgentHookEventPayload): EnrichedAgentHookEventPayload {
-    const now = Date.now()
+  private attachStatusTiming(
+    payload: AgentHookEventPayload,
+    now = Date.now()
+  ): EnrichedAgentHookEventPayload {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
@@ -627,7 +633,38 @@ export class AgentHookServer {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
-    const effectivePayload = attachClaudePermissionToolUseId(previous, payload)
+    const now = Date.now()
+    const identity = resolveAgentStatusIdentity({
+      existing: previous
+        ? {
+            agentType: previous.payload.agentType,
+            state: previous.payload.state,
+            updatedAt: previous.receivedAt
+          }
+        : undefined,
+      incoming: payload.payload.agentType,
+      now
+    })
+    if (
+      previous &&
+      shouldSuppressInheritedTerminalStatus({
+        inheritedFromActivePane: identity.inheritedFromActivePane,
+        incomingState: payload.payload.state
+      })
+    ) {
+      return previous
+    }
+    const identityResolvedPayload =
+      identity.agentType === payload.payload.agentType
+        ? payload
+        : {
+            ...payload,
+            payload: {
+              ...payload.payload,
+              agentType: identity.agentType
+            }
+          }
+    const effectivePayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
       return previous
     }
@@ -661,8 +698,10 @@ export class AgentHookServer {
     ) {
       this.clearAssistantMessageRetry(effectivePayload.paneKey)
     }
-    this.maybeTrackAgentPromptSent(effectivePayload, previous)
-    const enriched = this.attachStatusTiming(effectivePayload)
+    if (!identity.inheritedFromActivePane) {
+      this.maybeTrackAgentPromptSent(effectivePayload, previous)
+    }
+    const enriched = this.attachStatusTiming(effectivePayload, now)
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     this.scheduleStatusPersist()

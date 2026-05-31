@@ -52,13 +52,17 @@ import {
   patchPackagedProcessPath,
   shouldInstallManagedHooks
 } from './startup/configure-process'
+import { maybeRedirectAppImageCliLaunch } from './startup/appimage-cli-redirect'
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import {
   acquireSingleInstanceLock,
-  logSingleInstanceLockFailure
+  logSingleInstanceLockBypass,
+  logSingleInstanceLockFailure,
+  shouldBypassSingleInstanceLock
 } from './startup/single-instance-lock'
+import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
 import { RateLimitService } from './rate-limits/service'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
@@ -82,8 +86,7 @@ import {
   getPtyIdForPaneKey,
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
-  registerHeadlessPtyRuntime,
-  isRendererPtyOutputPaused
+  registerHeadlessPtyRuntime
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
@@ -92,6 +95,7 @@ import { AutomationService } from './automations/service'
 import { AgentAwakeService } from './agent-awake-service'
 import {
   getCrashBreadcrumbSnapshot,
+  recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
 } from './crash-reporting/crash-breadcrumb-store'
 import { CrashReportStore } from './crash-reporting/crash-report-store'
@@ -100,6 +104,7 @@ import {
   shouldRecoverRendererAfterProcessGone,
   type ExpectedTeardownScope
 } from './crash-reporting/process-gone-classification'
+import { getProcessGoneDedupeKey, processGoneDedupe } from './crash-reporting/process-gone-dedupe'
 import {
   advanceSyntheticTitleSpinnerEntries,
   type SyntheticTitleSpinnerEntry
@@ -107,6 +112,7 @@ import {
 import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
 import { isCrashReportReason } from '../shared/crash-reporting'
 import { KeybindingService } from './keybindings/keybinding-service'
+import { applyElectronProxySettings } from './network/proxy-settings'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -134,7 +140,16 @@ let watcherShutdownDone = false
 let automations: AutomationService | null = null
 let keybindings: KeybindingService | null = null
 let expectedRendererReload: { webContentsId: number; until: number } | null = null
+const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const isServeMode = process.argv.includes('--serve')
+const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
+  isPackaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  execPath: process.execPath
+})
+if (appImageCliRedirect.redirected) {
+  app.exit(appImageCliRedirect.status)
+}
 
 // Why: the store/runtime singletons live here in index.ts; injecting them keeps
 // the rename orchestrator free of module-level state and unit-testable.
@@ -211,6 +226,17 @@ configureDevUserDataPath(is.dev)
 // Why: CLI-shared Codex helpers cannot import Electron. Seed the resolved
 // app userData path once Electron has applied dev/e2e overrides.
 process.env.ORCA_USER_DATA_PATH ??= app.getPath('userData')
+const startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
+if (startupDiagnosticsEnabled) {
+  logStartupDiagnostic('before-single-instance-lock', {
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    platform: process.platform,
+    osRelease: os.release(),
+    userData: app.getPath('userData'),
+    e2eUserData: Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
+  })
+}
 
 function focusExistingWindow(): void {
   // Why: the second-instance event fires on the *primary* Electron process
@@ -262,6 +288,18 @@ function getExpectedTeardownScope(webContentsId?: number): ExpectedTeardownScope
     : 'none'
 }
 
+function recordAgentStateCrashBreadcrumb(agentType: string, state: string): void {
+  // Why: hook pings can arrive many times per second while an agent works.
+  // Coalescing preserves crash-report room for renderer errors and memory
+  // samples instead of filling all 30 breadcrumbs with identical state pings.
+  recordCoalescedCrashBreadcrumb({
+    name: 'agent_state_changed',
+    data: { agentType, state },
+    coalesceKey: `agent:${agentType}:${state}`,
+    minIntervalMs: AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS
+  })
+}
+
 // Why: the lock must be acquired AFTER configureDevUserDataPath — Electron
 // derives the lock identity from the `userData` path, so this placement lets
 // dev (`orca-dev`) and packaged (`orca`) runs lock in separate namespaces
@@ -274,8 +312,28 @@ function getExpectedTeardownScope(webContentsId?: number): ExpectedTeardownScope
 // hook endpoint files are namespaced per dev instance when the hook server
 // starts below. Packaged Orca keeps the lock to protect against the corruption
 // documented in PR #1326 / issue #1312.
+const bypassSingleInstanceLock = shouldBypassSingleInstanceLock({
+  isDev: is.dev,
+  isServeMode
+})
+if (bypassSingleInstanceLock) {
+  // Why: this is an explicit diagnostic escape hatch for macOS builds where
+  // Electron reports a false lock loss before any normal app logs exist.
+  logSingleInstanceLockBypass()
+}
 const hasSingleInstanceLock =
-  is.dev && !isServeMode ? true : acquireSingleInstanceLock(app, focusExistingWindow)
+  is.dev && !isServeMode
+    ? true
+    : bypassSingleInstanceLock
+      ? true
+      : acquireSingleInstanceLock(app, focusExistingWindow)
+if (startupDiagnosticsEnabled) {
+  logStartupDiagnostic('single-instance-lock-result', {
+    acquired: hasSingleInstanceLock,
+    bypassed: bypassSingleInstanceLock,
+    skippedForDev: is.dev && !isServeMode
+  })
+}
 if (!hasSingleInstanceLock) {
   // Why: if Electron returns a false negative here, packaged macOS launches
   // otherwise look like silent crashes. `open --stderr` can capture this line.
@@ -339,6 +397,9 @@ function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget):
       } runtime hooks before launch`,
       error
     )
+  }
+  if (target?.runtime !== 'wsl') {
+    return codexRuntimeHome!.refreshCurrentHostLaunchHome() ?? runtimeHomePath
   }
   return runtimeHomePath
 }
@@ -555,10 +616,7 @@ function openMainWindow(): BrowserWindow {
         stateStartedAt,
         ...(orchestration ? { orchestration } : {})
       })
-      recordCrashBreadcrumb('agent_state_changed', {
-        agentType: payload.agentType ?? 'unknown',
-        state: payload.state
-      })
+      recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
       // Why: cursor-agent's OSC title stays "Cursor Agent" for the whole turn,
       // and opencode's stays bare "OpenCode" — neither carries a working/idle
       // signal the title heuristic can read. Synthesize an OSC title update
@@ -601,8 +659,6 @@ function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
   webContents?.send('ui:openCrashReport')
 }
 
-const recentCrashKeys = new Map<string, number>()
-
 function recordProcessGoneCrash(
   source: 'renderer' | 'child',
   processType: string,
@@ -632,12 +688,10 @@ function recordProcessGoneCrash(
     })
     return
   }
-  const key = `${processType}:${reason}:${exitCode ?? 'null'}`
-  const now = Date.now()
-  if (now - (recentCrashKeys.get(key) ?? 0) < 2_000) {
+  const key = getProcessGoneDedupeKey(processType, reason, exitCode)
+  if (!processGoneDedupe.shouldRecord(key)) {
     return
   }
-  recentCrashKeys.set(key, now)
   const span = startSpan('electron.process_gone', {
     attributes: {
       'crash.source': source,
@@ -871,9 +925,6 @@ function sendSyntheticTitle(ptyId: string, data: string, options: { force?: bool
   if (!mainWindow || mainWindow.isDestroyed()) {
     return
   }
-  if (options.force !== true && isRendererPtyOutputPaused(ptyId)) {
-    return
-  }
   // Why: repeated working-spinner frames are decorative and can arrive every
   // 80ms per agent. Final/permission frames are forced because they drive BEL.
   if (
@@ -997,14 +1048,16 @@ function driveSyntheticTitleFromHook(
   // decorated "<Agent> ready" label rather than the bare native title — which
   // for cursor the detector deliberately treats as a no-op so cursor's own
   // per-turn re-emissions cannot clobber our synthesized state. The
-  // done/permission frames also carry a trailing BEL (0x07 outside of any OSC
-  // sequence) so the tab-level unread badge + notification dispatch in
-  // pty-connection lights up — those key off BEL, not the working→idle title
-  // transition.
+  // Permission frames also carry a trailing BEL (0x07 outside of any OSC
+  // sequence) so user-input-required states light up immediately. Done frames
+  // intentionally avoid the extra BEL: hook/status completion notifications
+  // own final-task attention and can cancel milestone noise during loops.
   stopSyntheticTitleSpinner(paneKey)
-  const label =
-    state === 'blocked' || state === 'waiting' ? profile.permissionLabel : profile.idleLabel
-  sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07\x07`, { force: true })
+  const needsUserInput = state === 'blocked' || state === 'waiting'
+  const label = needsUserInput ? profile.permissionLabel : profile.idleLabel
+  sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${needsUserInput ? '\x07' : ''}`, {
+    force: true
+  })
 }
 
 app.whenReady().then(async () => {
@@ -1017,6 +1070,13 @@ app.whenReady().then(async () => {
   }
 
   store = new Store()
+  try {
+    // Why: Dock/Launchpad launches do not inherit shell proxy env vars, so the
+    // persisted proxy must be applied before any app-owned network fetchers run.
+    await applyElectronProxySettings(store.getSettings())
+  } catch {
+    console.warn('[proxy] Failed to apply network proxy settings')
+  }
   agentAwakeService = new AgentAwakeService()
   agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
   // Why: disk-hydrated status rows are UI continuity only. The service starts

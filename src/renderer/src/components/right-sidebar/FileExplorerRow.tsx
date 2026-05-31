@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: the row owns dense file-tree rendering plus its context menu, drag target, and inline-input sibling contract. */
-import React, { useCallback, useEffect, useRef } from 'react'
+import React, { useCallback, useRef } from 'react'
 import { basename } from '@/lib/path'
 import {
   ChevronRight,
@@ -96,8 +96,16 @@ export function InlineInputRow({
   // has a chance to type. During the grace window we re-focus on blur instead
   // of auto-submitting, which would dismiss the empty input.
   const focusSettled = useRef(false)
+  const focusFrame = useRef<number | null>(null)
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const refocusFrame = useRef<number | null>(null)
+  const inlineInputKey = [
+    inlineInput.type,
+    inlineInput.parentPath,
+    inlineInput.depth,
+    inlineInput.existingPath ?? '',
+    inlineInput.existingName ?? ''
+  ].join('\0')
 
   const cancelRefocusFrame = useCallback((): void => {
     if (refocusFrame.current !== null) {
@@ -114,44 +122,58 @@ export function InlineInputRow({
     })
   }, [cancelRefocusFrame])
 
-  useEffect(() => {
-    submitted.current = false
-    focusSettled.current = false
+  const clearInlineInputTimers = useCallback(() => {
+    if (focusFrame.current !== null) {
+      cancelAnimationFrame(focusFrame.current)
+      focusFrame.current = null
+    }
     cancelRefocusFrame()
+    if (blurTimeout.current) {
+      clearTimeout(blurTimeout.current)
+      blurTimeout.current = null
+    }
+    if (settleTimer.current) {
+      clearTimeout(settleTimer.current)
+      settleTimer.current = null
+    }
+  }, [cancelRefocusFrame])
 
-    // Schedule focus after any pending focus-restore from menu close
-    const raf = requestAnimationFrame(() => {
-      const el = inputRef.current
+  const setInputRef = useCallback(
+    (el: HTMLInputElement | null): void => {
+      inputRef.current = el
+      clearInlineInputTimers()
       if (!el) {
         return
       }
-      el.focus()
-      if (inlineInput.type === 'rename' && inlineInput.existingName) {
-        const dotIndex = inlineInput.existingName.lastIndexOf('.')
-        if (dotIndex > 0) {
-          el.setSelectionRange(0, dotIndex)
-        } else {
-          el.select()
+
+      submitted.current = false
+      focusSettled.current = false
+
+      // Schedule focus after any pending focus-restore from menu close
+      focusFrame.current = requestAnimationFrame(() => {
+        focusFrame.current = null
+        if (inputRef.current !== el) {
+          return
         }
-      }
-      // Allow enough time for the menu close focus management to finish
-      // before treating blur events as intentional user actions.
-      settleTimer.current = setTimeout(() => {
-        settleTimer.current = null
-        focusSettled.current = true
-      }, 200)
-    })
-    return () => {
-      cancelAnimationFrame(raf)
-      cancelRefocusFrame()
-      if (blurTimeout.current) {
-        clearTimeout(blurTimeout.current)
-      }
-      if (settleTimer.current) {
-        clearTimeout(settleTimer.current)
-      }
-    }
-  }, [cancelRefocusFrame, inlineInput])
+        el.focus()
+        if (inlineInput.type === 'rename' && inlineInput.existingName) {
+          const dotIndex = inlineInput.existingName.lastIndexOf('.')
+          if (dotIndex > 0) {
+            el.setSelectionRange(0, dotIndex)
+          } else {
+            el.select()
+          }
+        }
+        // Allow enough time for the menu close focus management to finish
+        // before treating blur events as intentional user actions.
+        settleTimer.current = setTimeout(() => {
+          settleTimer.current = null
+          focusSettled.current = true
+        }, 200)
+      })
+    },
+    [clearInlineInputTimers, inlineInput.existingName, inlineInput.type]
+  )
 
   const clearBlurTimeout = useCallback(() => {
     if (blurTimeout.current) {
@@ -184,7 +206,8 @@ export function InlineInputRow({
         <File className="size-3 shrink-0 text-muted-foreground" />
       )}
       <input
-        ref={inputRef}
+        key={inlineInputKey}
+        ref={setInputRef}
         className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
         defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
         onKeyDown={(e) => {

@@ -28,6 +28,11 @@ export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['github', 'gh', 'graphql', 'rate limit', 'api budget']
   },
   {
+    title: 'GitLab API Budget',
+    description: 'Current GitLab CLI REST rate-limit headers when available.',
+    keywords: ['gitlab', 'glab', 'rate limit', 'api budget']
+  },
+  {
     title: 'Orca Attribution',
     description: 'Add Orca attribution to commits, PRs, and issues.',
     keywords: ['github', 'gh', 'pr', 'issue', 'co-author', 'coauthored', 'attribution', 'orca']

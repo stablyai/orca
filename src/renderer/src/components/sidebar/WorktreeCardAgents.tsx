@@ -418,8 +418,10 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   }
 
   if (agentActivityDisplayMode === 'compact') {
-    const shouldUseSummaryRow = agents.length > 1
     const summaryAgents = hasLineage ? rootAgents : agents
+    // Why: compact worktree cards keep multiple active agents to a single
+    // predictable status line, even when there are only two agents.
+    const shouldUseSummaryRow = summaryAgents.length > 1
     const subjectLabel = hasLineage
       ? `${rootAgents.length} ${rootAgents.length === 1 ? 'parent' : 'parents'}`
       : `${agents.length} agents`
@@ -427,7 +429,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     return (
       <div
         ref={compactAgentListRootRef}
-        className={cn('flex flex-col mt-1 mb-1 gap-0.5', className)}
+        className={cn('flex flex-col mt-1 gap-0.5', className)}
         onClick={stopBubble}
         onDoubleClick={stopBubble}
         onMouseDown={stopBubble}
@@ -447,12 +449,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           />
         )}
         {!shouldUseSummaryRow ? (
-          <CompactAgentRow
-            agent={agents[0]}
-            now={now}
-            onActivate={handleActivateAgentTab}
-            isFocusedPane={agents[0].paneKey === focusedAgentPaneKey}
-          />
+          rootAgents.map((rootAgent) => renderCompactAgentBranch(rootAgent))
         ) : shouldUseSummaryRow ? (
           <CompactAgentExpansion expanded={compactRootListExpanded}>
             {rootAgents.map((rootAgent) => renderCompactAgentBranch(rootAgent))}
@@ -466,7 +463,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     // Why: swallow bubbling so clicks on the gutter around the agent rows
     // don't reach WorktreeCard's activate / edit-meta handlers.
     <div
-      className={cn('flex flex-col mt-1 mb-1', className)}
+      className={cn('flex flex-col mt-1', className)}
       onClick={stopBubble}
       onDoubleClick={stopBubble}
       onMouseDown={stopBubble}

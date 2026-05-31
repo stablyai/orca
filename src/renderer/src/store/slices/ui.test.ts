@@ -441,6 +441,60 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().rightSidebarTab).toBe('checks')
   })
 
+  it('hydrates persisted per-worktree dotfile visibility', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        showDotfilesByWorktree: {
+          'repo-1::/repo': false,
+          'repo-2::/repo': true
+        }
+      })
+    )
+
+    expect(store.getState().showDotfilesByWorktree).toEqual({
+      'repo-1::/repo': false,
+      'repo-2::/repo': true
+    })
+  })
+
+  it('drops invalid persisted per-worktree dotfile visibility entries', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        showDotfilesByWorktree: {
+          'repo-1::/repo': false,
+          'repo-2::/repo': 'nope',
+          constructor: false
+        } as never
+      })
+    )
+
+    expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-1::/repo': false })
+  })
+
+  it('stores only per-worktree dotfile visibility opt-outs', () => {
+    const store = createUIStore()
+
+    store.getState().setShowDotfilesForWorktree('repo-1::/repo', false)
+    expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-1::/repo': false })
+
+    store.getState().setShowDotfilesForWorktree('repo-1::/repo', true)
+    expect(store.getState().showDotfilesByWorktree).toEqual({})
+  })
+
+  it('toggles per-worktree dotfile visibility independently', () => {
+    const store = createUIStore()
+
+    store.getState().toggleShowDotfilesForWorktree('repo-1::/repo')
+    store.getState().toggleShowDotfilesForWorktree('repo-2::/repo')
+    store.getState().toggleShowDotfilesForWorktree('repo-2::/repo')
+
+    expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-1::/repo': false })
+  })
+
   it('falls back to explorer for invalid persisted right sidebar tabs', () => {
     const store = createUIStore()
 
@@ -608,24 +662,6 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).not.toHaveBeenCalled()
   })
 
-  it('restores compact workspace board mode only from an explicit true', () => {
-    const store = createUIStore()
-
-    store.getState().hydratePersistedUI(
-      makePersistedUI({
-        workspaceBoardCompact: true
-      })
-    )
-    expect(store.getState().workspaceBoardCompact).toBe(true)
-
-    store.getState().hydratePersistedUI(
-      makePersistedUI({
-        workspaceBoardCompact: 'yes' as unknown as boolean
-      })
-    )
-    expect(store.getState().workspaceBoardCompact).toBe(false)
-  })
-
   it('clamps persisted workspace board column width', () => {
     const store = createUIStore()
 
@@ -636,6 +672,30 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().workspaceBoardColumnWidth).toBe(520)
+  })
+
+  it('hydrates workspace board column layout', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceBoardColumnLayout: 'fit'
+      })
+    )
+
+    expect(store.getState().workspaceBoardColumnLayout).toBe('fit')
+  })
+
+  it('defaults invalid workspace board column layout to full width', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceBoardColumnLayout: 'compact' as never
+      })
+    )
+
+    expect(store.getState().workspaceBoardColumnLayout).toBe('full')
   })
 
   it('hydrates a valid Kagi session link', () => {

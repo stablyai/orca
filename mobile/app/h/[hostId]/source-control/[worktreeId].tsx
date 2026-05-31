@@ -288,12 +288,16 @@ export default function MobileSourceControlScreen() {
   currentStatusIdentityRef.current = statusIdentityKey
   currentBranchCompareIdentityRef.current = statusIdentityKey
 
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false
-      loadGenerationRef.current += 1
-      branchCompareGenerationRef.current += 1
+  const setMobileSourceControlRootRef = useCallback((node: View | null): void => {
+    if (node !== null) {
+      mountedRef.current = true
+      return
     }
+    // Why: source-control RPC loads can outlive the route; invalidate pending
+    // writes when the screen detaches without a passive cleanup-only Effect.
+    mountedRef.current = false
+    loadGenerationRef.current += 1
+    branchCompareGenerationRef.current += 1
   }, [])
 
   useEffect(() => {
@@ -1336,7 +1340,7 @@ export default function MobileSourceControlScreen() {
   }, [branchDiffPreview])
 
   return (
-    <View style={styles.container}>
+    <View ref={setMobileSourceControlRootRef} style={styles.container}>
       <SafeAreaView style={styles.header} edges={['top']}>
         <View style={styles.topBar}>
           <Pressable

@@ -34,6 +34,11 @@ const GROUP_BY_OPTIONS = [
   { id: 'repo', label: 'Project' }
 ] as const
 
+const CARD_LAYOUT_OPTIONS = [
+  { id: 'detailed', label: 'Detailed' },
+  { id: 'compact', label: 'Compact' }
+] as const
+
 const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
   { id: 'issue', label: 'GitHub ticket' },
   { id: 'linear-issue', label: 'Linear issue' },
@@ -77,6 +82,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const repos = useAppStore((s) => s.repos)
   const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
   const toggleWorktreeCardProperty = useAppStore((s) => s.toggleWorktreeCardProperty)
+  const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
   const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -112,6 +119,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     (hasSleepingFilter ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
+  const cardLayout = settings?.experimentalCompactWorktreeCards ? 'compact' : 'detailed'
+  const cardLayoutLabel =
+    CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
   const visiblePropertyCount = PROPERTY_OPTIONS.filter((opt) =>
     worktreeCardProperties.includes(opt.id)
   ).length
@@ -228,19 +238,54 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
-        <DropdownMenuSeparator />
-        <SidebarWorkspaceFilterSection />
-
-        <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">
+              <span>Card layout</span>
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {cardLayoutLabel}
+              </span>
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent
+            className="w-44"
+            data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+          >
+            <DropdownMenuRadioGroup
+              value={cardLayout}
+              onValueChange={(value) => {
+                void updateSettings({
+                  experimentalCompactWorktreeCards: value === 'compact'
+                })
+              }}
+            >
+              {CARD_LAYOUT_OPTIONS.map((opt) => (
+                <DropdownMenuRadioItem
+                  key={opt.id}
+                  value={opt.id}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  {opt.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger
+            disabled={cardLayout === 'compact'}
+            className="data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+          >
+            <span className="flex flex-1 items-center justify-between">
               <span>Show properties</span>
-              {visiblePropertyCount > 0 && (
+              {cardLayout === 'compact' ? (
+                <span className="text-[11px] font-medium text-muted-foreground">Detailed only</span>
+              ) : visiblePropertyCount > 0 ? (
                 <span className="text-[11px] font-medium text-muted-foreground">
                   {visiblePropertyCount}
                 </span>
-              )}
+              ) : null}
             </span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
@@ -279,6 +324,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+
+        <DropdownMenuSeparator />
+        <SidebarWorkspaceFilterSection />
 
         <DropdownMenuSeparator />
         <SidebarRepositoryFilterSection />

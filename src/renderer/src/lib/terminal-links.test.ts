@@ -20,6 +20,13 @@ describe('terminal path helpers', () => {
     expect(
       toWorktreeRelativePath('//server/share/repo/src/file.ts', '\\\\server\\share\\repo')
     ).toBe('src/file.ts')
+
+    expect(isPathInsideWorktree('//server/share/repo/src/file.ts', '//Server/Share/Repo')).toBe(
+      true
+    )
+    expect(toWorktreeRelativePath('//server/share/repo/src/file.ts', '//Server/Share/Repo')).toBe(
+      'src/file.ts'
+    )
   })
 
   describe('extractTerminalFileLinks bare-filename tokens', () => {
@@ -116,6 +123,19 @@ describe('terminal path helpers', () => {
       expect(links[0]).toMatchObject({
         pathText: './My Folder',
         displayText: './My Folder'
+      })
+    })
+
+    it('detects framework route paths with bracket and paren segments', () => {
+      const links = extractTerminalFileLinks(
+        'Error in app/(shop)/products/[productId]/page.tsx:42:7'
+      )
+      expect(links).toHaveLength(1)
+      expect(links[0]).toMatchObject({
+        pathText: 'app/(shop)/products/[productId]/page.tsx',
+        line: 42,
+        column: 7,
+        displayText: 'app/(shop)/products/[productId]/page.tsx:42:7'
       })
     })
 

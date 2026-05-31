@@ -62,6 +62,7 @@ import {
 import { track } from '@/lib/telemetry'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
+import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
 import {
   type GroupHeaderRow,
   type ProjectGroupOrdering,
@@ -170,7 +171,7 @@ import {
 } from '../../../../shared/worktree-ownership'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import ImportedWorktreesVisibilityCard from './ImportedWorktreesVisibilityCard'
+import ImportedWorktreesVisibilityLine from './ImportedWorktreesVisibilityLine'
 import {
   keepImportedWorktreesHiddenCard,
   showImportedWorktreesCard,
@@ -293,13 +294,14 @@ function getWorktreeVisibilityMenuLabel(repo: Repo): string {
     repo,
     isLegacyRepoForExternalWorktreeVisibility(repo)
   )
-  return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Import Worktrees'
+  return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Show hidden worktrees'
 }
 
 const LINEAGE_INDENT = 18
 // Why: top-level worktrees are children of their project header; indent the
 // group one step so the status dots nest under the folder icon for hierarchy.
 const WORKTREE_GROUP_INDENT = 18
+const PROJECT_GROUP_HEADER_BASE_PADDING = 4
 const PROJECT_GROUP_HEADER_INDENT = 10
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
 
@@ -717,22 +719,52 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const worktreeNativeAutoscrollLastFrameTimeRef = useRef<number | null>(null)
   const worktreeNativeLatestPointRef = useRef<WorktreeSidebarDragPoint | null>(null)
   const pendingRevealRetryRef = useRef<{ worktreeId: string; count: number } | null>(null)
+  const pendingRevealFrameIdsRef = useRef<Set<number>>(new Set())
+  const revealHighlightFrameIdRef = useRef<number | null>(null)
   const revealHighlightTimeoutRef = useRef<number | null>(null)
-  const flashRevealedWorktree = useCallback((worktreeId: string) => {
+  const cancelPendingRevealFrames = useCallback(() => {
+    for (const frameId of pendingRevealFrameIdsRef.current) {
+      window.cancelAnimationFrame(frameId)
+    }
+    pendingRevealFrameIdsRef.current.clear()
+  }, [])
+  const schedulePendingRevealFrame = useCallback((callback: FrameRequestCallback) => {
+    const frameId = window.requestAnimationFrame((time) => {
+      pendingRevealFrameIdsRef.current.delete(frameId)
+      callback(time)
+    })
+    pendingRevealFrameIdsRef.current.add(frameId)
+  }, [])
+  const clearRevealHighlightFrame = useCallback(() => {
+    if (revealHighlightFrameIdRef.current !== null) {
+      window.cancelAnimationFrame(revealHighlightFrameIdRef.current)
+      revealHighlightFrameIdRef.current = null
+    }
+  }, [])
+  const clearRevealHighlightTimeout = useCallback(() => {
     if (revealHighlightTimeoutRef.current !== null) {
       window.clearTimeout(revealHighlightTimeoutRef.current)
+      revealHighlightTimeoutRef.current = null
     }
-    // Why: remove before add restarts the CSS glow when the user repeatedly
-    // asks to reveal the same active workspace.
-    setHighlightedRevealWorktreeId(null)
-    window.requestAnimationFrame(() => {
-      setHighlightedRevealWorktreeId(worktreeId)
-      revealHighlightTimeoutRef.current = window.setTimeout(() => {
-        revealHighlightTimeoutRef.current = null
-        setHighlightedRevealWorktreeId(null)
-      }, 1500)
-    })
   }, [])
+  const flashRevealedWorktree = useCallback(
+    (worktreeId: string) => {
+      clearRevealHighlightTimeout()
+      clearRevealHighlightFrame()
+      // Why: remove before add restarts the CSS glow when the user repeatedly
+      // asks to reveal the same active workspace.
+      setHighlightedRevealWorktreeId(null)
+      revealHighlightFrameIdRef.current = window.requestAnimationFrame(() => {
+        revealHighlightFrameIdRef.current = null
+        setHighlightedRevealWorktreeId(worktreeId)
+        revealHighlightTimeoutRef.current = window.setTimeout(() => {
+          revealHighlightTimeoutRef.current = null
+          setHighlightedRevealWorktreeId(null)
+        }, 1500)
+      })
+    },
+    [clearRevealHighlightFrame, clearRevealHighlightTimeout]
+  )
   const suppressWorktreeClickUntilRef = useRef(0)
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders =
@@ -742,6 +774,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     (s) => s.reportVisibleGitHubPRRefreshCandidates
   )
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
+  const rightSidebarShowsPR = useAppStore((s) => rightSidebarShowsPullRequestData(s))
   const keybindings = useAppStore((s) => s.keybindings)
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const prVisibleRefreshGeneration = useAppStore((s) => s.prVisibleRefreshGeneration)
@@ -916,6 +949,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const activeLineageChildSshDisconnected =
     activeLineageChildSshStatus !== null && activeLineageChildSshStatus !== 'connected'
+  const lineageReconnectPromptKey =
+    activeLineageChildWorktreeId && activeLineageChildSshDisconnected
+      ? activeLineageChildWorktreeId
+      : null
+  const [lastLineageReconnectPromptKey, setLastLineageReconnectPromptKey] = useState<string | null>(
+    null
+  )
   const renderRowsRef = useRef(renderRows)
   renderRowsRef.current = renderRows
   const getVirtualItemKey = useCallback(
@@ -1119,7 +1159,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       }
     }
 
-    requestAnimationFrame(() => {
+    let cancelled = false
+    schedulePendingRevealFrame(() => {
+      if (cancelled) {
+        return
+      }
       const targetWorktreeStillExists = worktrees.some(
         (worktree) => worktree.id === pendingRevealWorktree.worktreeId
       )
@@ -1141,7 +1185,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             count: nextRetryCount
           }
           if (nextRetryCount <= 8) {
-            requestAnimationFrame(() => setPendingRevealRetryTick((tick) => tick + 1))
+            schedulePendingRevealFrame(() => {
+              if (!cancelled) {
+                setPendingRevealRetryTick((tick) => tick + 1)
+              }
+            })
           } else {
             pendingRevealRetryRef.current = null
             clearPendingRevealWorktreeId()
@@ -1190,6 +1238,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         clearPendingRevealWorktreeId()
       }
     })
+    return () => {
+      cancelled = true
+      cancelPendingRevealFrames()
+    }
   }, [
     pendingRevealWorktree,
     agentSendTargetWorktreeId,
@@ -1208,7 +1260,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     settings,
     projectGroups,
     pendingRevealRetryTick,
-    flashRevealedWorktree
+    flashRevealedWorktree,
+    schedulePendingRevealFrame,
+    cancelPendingRevealFrames
   ])
 
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
@@ -1385,12 +1439,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   }, [activeModal, keybindings, markDirectScrollInput, navigateWorktree])
 
   // Why: lightweight nested cards do not mount WorktreeCard, so the viewport
-  // owns the SSH reconnect prompt for an active lineage child.
-  useEffect(() => {
-    if (activeLineageChildWorktreeId && activeLineageChildSshDisconnected) {
-      setLineageReconnectWorktreeId(activeLineageChildWorktreeId)
+  // owns the SSH reconnect prompt for an active lineage child. The prompt key
+  // keeps dismissals sticky until the active/disconnected child changes.
+  if (lineageReconnectPromptKey !== lastLineageReconnectPromptKey) {
+    setLastLineageReconnectPromptKey(lineageReconnectPromptKey)
+    if (lineageReconnectPromptKey) {
+      setLineageReconnectWorktreeId(lineageReconnectPromptKey)
     }
-  }, [activeLineageChildWorktreeId, activeLineageChildSshDisconnected])
+  }
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -1432,14 +1488,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const handleScroll = useCallback(() => {
     markScrollMovement()
   }, [markScrollMovement])
-
-  useEffect(() => {
-    return () => {
-      if (revealHighlightTimeoutRef.current !== null) {
-        window.clearTimeout(revealHighlightTimeoutRef.current)
-      }
-    }
-  }, [])
 
   const cancelWorktreePointerAutoscroll = useCallback(() => {
     if (worktreePointerAutoscrollFrameIdRef.current !== null) {
@@ -1485,13 +1533,21 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const setScrollRootRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (node === null && scrollRef.current !== null) {
-        // Why: sidebar drag previews and autoscroll frames are tied to the
-        // scroll root surface; clear them before that DOM owner disappears.
+        // Why: sidebar drag previews, autoscroll frames, and reveal row
+        // snapshots are tied to the scroll root; clear them before it disappears.
+        cancelPendingRevealFrames()
+        clearRevealHighlightFrame()
+        clearRevealHighlightTimeout()
         clearWorktreeDrag()
       }
       scrollRef.current = node
     },
-    [clearWorktreeDrag]
+    [
+      cancelPendingRevealFrames,
+      clearRevealHighlightFrame,
+      clearRevealHighlightTimeout,
+      clearWorktreeDrag
+    ]
   )
 
   const flushWorktreePointerDrag = useCallback(() => {
@@ -2086,7 +2142,17 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       lastVisibleRefreshKeyRef.current = '__document_hidden__'
       return
     }
-    if (groupBy !== 'pr-status' && !cardProps.includes('pr') && !cardProps.includes('ci')) {
+    const currentWorktree = currentWorktreeId ? (worktreeMap.get(currentWorktreeId) ?? null) : null
+    // Why: this visible reporter feeds the GitHub coordinator; GitLab-only MR
+    // panels refresh through hosted-review paths instead.
+    const sidebarWorktreeHasGitHubReview =
+      currentWorktree !== null &&
+      ((currentWorktree.linkedGitLabMR ?? null) === null ||
+        (currentWorktree.linkedPR ?? null) !== null)
+    const shouldTrackSidebarWorktree = rightSidebarShowsPR && sidebarWorktreeHasGitHubReview
+    const shouldTrackVisibleRows =
+      groupBy === 'pr-status' || cardProps.includes('pr') || cardProps.includes('ci')
+    if (!shouldTrackVisibleRows && !shouldTrackSidebarWorktree) {
       if (lastVisibleRefreshKeyRef.current !== '__hidden__') {
         lastVisibleRefreshKeyRef.current = '__hidden__'
         reportVisibleGitHubPRRefreshCandidates([], Date.now())
@@ -2104,25 +2170,40 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       .map((item) => renderRows[item.index])
       .filter((row): row is Extract<Row, { type: 'item' }> => row?.type === 'item')
       .filter((row) => row.repo?.kind === 'git' && !row.worktree.isBare && row.worktree.branch)
-    const visibleWorktreeIds = visibleRows.map((row) => row.worktree.id)
+    const visibleWorktreeIds = new Set(visibleRows.map((row) => row.worktree.id))
+    if (
+      shouldTrackSidebarWorktree &&
+      currentWorktree &&
+      !currentWorktree.isBare &&
+      currentWorktree.branch
+    ) {
+      visibleWorktreeIds.add(currentWorktree.id)
+    }
     const visibleIdentity = visibleRows
       .map((row) => `${row.worktree.id}:${row.worktree.branch}:${row.worktree.linkedPR ?? ''}`)
       .join('|')
-    const key = `${visibleIdentity}:${sshConnectedGeneration}:${prVisibleRefreshGeneration}:${cardProps.join(',')}`
+    const sidebarIdentity =
+      shouldTrackSidebarWorktree && currentWorktree
+        ? `${currentWorktree.id}:${currentWorktree.branch}:${currentWorktree.linkedPR ?? ''}`
+        : ''
+    const key = `${visibleIdentity}:${sidebarIdentity}:${sshConnectedGeneration}:${prVisibleRefreshGeneration}:${cardProps.join(',')}`
     if (!key || key === lastVisibleRefreshKeyRef.current) {
       return
     }
     lastVisibleRefreshKeyRef.current = key
-    reportVisibleGitHubPRRefreshCandidates(visibleWorktreeIds, Date.now())
+    reportVisibleGitHubPRRefreshCandidates(Array.from(visibleWorktreeIds), Date.now())
   }, [
     cardProps,
+    currentWorktreeId,
     documentVisibilityRevision,
     groupBy,
     renderRows,
     reportVisibleGitHubPRRefreshCandidates,
     prVisibleRefreshGeneration,
+    rightSidebarShowsPR,
     sshConnectedGeneration,
-    virtualItems
+    virtualItems,
+    worktreeMap
   ])
 
   const activeDescendantId =
@@ -2400,7 +2481,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     // flush at the top. The swap fires when the header row
                     // reaches the top (see getActiveStickyHeaderIndexForScroll),
                     // so the previous repo no longer stays pinned over it.
-                    hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-2',
+                    hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-1',
                     isActiveStickyHeader ? 'sticky -top-px z-20 bg-sidebar' : 'absolute top-0'
                   )}
                   style={
@@ -2430,7 +2511,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       row.repo && 'overflow-hidden'
                     )}
                     style={{
-                      paddingLeft: 12 + Math.min(projectGroupDepth, 6) * PROJECT_GROUP_HEADER_INDENT
+                      paddingLeft:
+                        PROJECT_GROUP_HEADER_BASE_PADDING +
+                        Math.min(projectGroupDepth, 6) * PROJECT_GROUP_HEADER_INDENT
                     }}
                     onDragOver={
                       isPinnedHeader
@@ -2741,8 +2824,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               // Why: child cards render inside the parent card body, so their
               // first nested level starts flush with that inset.
               const paddingDepth = nested ? Math.max(0, itemRow.depth - 1) : itemRow.depth
-              // Why: ungrouped mode keeps workspace cards flush; grouped modes
-              // indent top-level cards under their visible section header.
+              // Why: grouped rows still indent their contents under the header,
+              // but the card surface spans the full sidebar hit/background row.
               const basePadding = !nested && groupBy !== 'none' ? WORKTREE_GROUP_INDENT : 0
               const paddingLeft = basePadding + paddingDepth * LINEAGE_INDENT
               const worktreeDragGroupKey = groupKeyByWorktreeId.get(itemRow.worktree.id)
@@ -2781,7 +2864,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     nested ? undefined : handleWorktreeRowPointerDown(event, itemRow.worktree.id)
                   }
                   style={{
-                    paddingLeft: paddingLeft > 0 ? `${paddingLeft}px` : undefined
+                    paddingLeft: nested && paddingLeft > 0 ? `${paddingLeft}px` : undefined
                   }}
                 >
                   <WorktreeCard
@@ -2797,6 +2880,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     revealHighlightTone={revealHighlightTone}
                     selectedWorktrees={selectedWorktrees}
                     nativeDragEnabled={false}
+                    contentIndent={nested ? 0 : paddingLeft}
+                    flushSurface={!nested}
                     onSelectionGesture={onSelectionGesture}
                     onContextMenuSelect={(event) => onContextMenuSelect(event, itemRow.worktree)}
                     onCardDragStart={handleWorktreeCardDragStart}
@@ -3016,7 +3101,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   className="absolute left-0 right-0 top-0"
                   style={{ transform: getVirtualRowTransform(vItem.start) }}
                 >
-                  <ImportedWorktreesVisibilityCard
+                  <ImportedWorktreesVisibilityLine
                     repoDisplayName={row.repo.displayName}
                     hiddenWorktrees={row.hiddenWorktrees}
                     placement={row.placement}

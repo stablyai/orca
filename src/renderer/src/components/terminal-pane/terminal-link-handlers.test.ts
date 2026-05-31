@@ -12,6 +12,7 @@ import {
   openFilePathLinkAtBufferPosition,
   openDetectedFilePath
 } from './terminal-link-handlers'
+import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from './terminal-path-exists-cache'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
@@ -371,6 +372,36 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
+  it('opens Windows absolute OSC link targets that parse as URL schemes', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'C:\\repo\\src\\index.ts:12:3',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        startupCwd: 'C:\\repo',
+        worktreePath: 'C:\\repo'
+      }
+    )
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: 'C:/repo/src/index.ts'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' })
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: 'C:/repo/src/index.ts',
+      line: 12,
+      column: 3,
+      matchLength: 0
+    })
+  })
+
   it('opens Windows UNC file URL links from Windows worktrees', async () => {
     setPlatform('Windows')
 
@@ -467,6 +498,38 @@ describe('handleOscLink', () => {
       filePath: '/tmp/test.txt',
       line: 42,
       column: 7,
+      matchLength: 0
+    })
+  })
+
+  it('opens UNC file URL links with line and column anchors', async () => {
+    setPlatform('Windows')
+
+    handleOscLink(
+      'file://Server/Share/Repo/src/app.ts#L12C3',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        worktreePath: '//Server/Share/Repo'
+      }
+    )
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
+      targetPath: '//server/Share/Repo/src/app.ts'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '//server/Share/Repo/src/app.ts',
+        relativePath: 'src/app.ts'
+      })
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '//server/Share/Repo/src/app.ts',
+      line: 12,
+      column: 3,
       matchLength: 0
     })
   })
@@ -912,6 +975,91 @@ describe('createFilePathLinkProvider range bounds', () => {
     links[0]!.hover?.({} as MouseEvent, links[0]!.text)
 
     expect(linkTooltip.textContent).toBe('/repo/CLAUDE.md (⌘+click to open in Orca)')
+  })
+
+  it('bounds the terminal path-exists cache while preserving recent probes', async () => {
+    const pathExistsCache = new Map<string, boolean>()
+    for (let index = 0; index < TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES; index += 1) {
+      pathExistsCache.set(`active\0/repo/old-${index}.ts`, true)
+    }
+    const pane = makePane([makeBufferLine('fresh.ts')])
+    const managerRef = {
+      current: { getPanes: () => [pane] } as unknown as PaneManager
+    }
+    const provider = createFilePathLinkProvider(
+      1,
+      {
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        startupCwd: '/repo',
+        managerRef,
+        linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+        pathExistsCache
+      },
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+      getTerminalFileOpenHint()
+    )
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(links.map((link) => link.text)).toEqual(['fresh.ts'])
+    expect(pathExistsCache.size).toBe(TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES)
+    expect(pathExistsCache.has('active\0/repo/old-0.ts')).toBe(false)
+    expect(pathExistsCache.get('active\0/repo/fresh.ts')).toBe(true)
+  })
+
+  it('does not reuse SSH path-exists cache entries across connections', async () => {
+    setPlatform('Macintosh')
+    const pathExistsCache = new Map<string, boolean>()
+    const rows = [makeBufferLine('shared.ts')]
+    const pane = makePane(rows)
+    const managerRef = {
+      current: { getPanes: () => [pane] } as unknown as PaneManager
+    }
+    const deps = {
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      startupCwd: '/repo',
+      managerRef,
+      linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
+      pathExistsCache
+    }
+
+    vi.mocked(getConnectionId).mockReturnValue('ssh-one')
+    const firstProvider = createFilePathLinkProvider(
+      1,
+      deps,
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+      getTerminalFileOpenHint()
+    )
+    const firstLinks = await new Promise<ILink[]>((resolve) => {
+      firstProvider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+    expect(firstLinks.map((link) => link.text)).toEqual(['shared.ts'])
+    expect(statMock).toHaveBeenCalledWith({
+      filePath: '/repo/shared.ts',
+      connectionId: 'ssh-one'
+    })
+
+    vi.mocked(getConnectionId).mockReturnValue('ssh-two')
+    statMock.mockRejectedValueOnce(new Error('ENOENT'))
+    const secondProvider = createFilePathLinkProvider(
+      1,
+      deps,
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+      getTerminalFileOpenHint()
+    )
+    const secondLinks = await new Promise<ILink[]>((resolve) => {
+      secondProvider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(secondLinks).toEqual([])
+    expect(statMock).toHaveBeenLastCalledWith({
+      filePath: '/repo/shared.ts',
+      connectionId: 'ssh-two'
+    })
   })
 
   it('opens a single-row file path from a direct modifier-click fallback', async () => {

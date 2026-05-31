@@ -37,6 +37,7 @@ import type {
   SearchResult,
   UpdateStatus,
   WorktreeBaseStatusEvent,
+  WorktreeDefaultTabsLaunch,
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
@@ -125,6 +126,7 @@ import type {
   ExternalAutomationRunsPage,
   ExternalAutomationUpdateInput,
   AutomationRun,
+  AutomationPrecheckResult,
   AutomationUpdateInput
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
@@ -151,6 +153,7 @@ import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-su
 import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
 import type { HostedReviewForBranchArgs } from '../shared/hosted-review'
 import type {
+  CrashReportBreadcrumbData,
   CrashReportSubmitArgs,
   CrashReportSubmitResult,
   ReactErrorBoundaryReportArgs,
@@ -668,10 +671,6 @@ const api = {
       ipcRenderer.send('pty:ackColdRestore', { id })
     },
 
-    pauseOutput: (id: string, paused: boolean): void => {
-      ipcRenderer.send('pty:pauseOutput', { id, paused })
-    },
-
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
 
@@ -795,6 +794,8 @@ const api = {
       args: ReactErrorBoundaryReportArgs
     ): Promise<ReactErrorBoundaryReportResult> =>
       ipcRenderer.invoke('crashReports:recordRendererError', args),
+    recordBreadcrumb: (args: { name: string; data?: CrashReportBreadcrumbData }): void =>
+      ipcRenderer.send('crashReports:recordBreadcrumb', args),
     submit: (args: CrashReportSubmitArgs): Promise<CrashReportSubmitResult> =>
       ipcRenderer.invoke('crashReports:submit', args),
     copyLatestDiagnostics: (args?: { reportId?: string; notes?: string }) =>
@@ -890,6 +891,8 @@ const api = {
       repoId?: string
       title: string
       body: string
+      labels?: string[]
+      assignees?: string[]
     }): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:createIssue', args),
 
@@ -1025,6 +1028,7 @@ const api = {
       number: number
       body: string
       type?: 'issue' | 'pr'
+      prRepo?: { owner: string; repo: string } | null
     }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addIssueComment', args),
 
     addPRReviewCommentReply: (args: {
@@ -1036,6 +1040,7 @@ const api = {
       threadId?: string
       path?: string
       line?: number
+      prRepo?: { owner: string; repo: string } | null
     }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewCommentReply', args),
 
     addPRReviewComment: (args: {
@@ -1227,7 +1232,40 @@ const api = {
       query?: string
       limit?: number
       workspaceId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('linear:listProjects', args),
+    }): Promise<unknown> => ipcRenderer.invoke('linear:listProjects', args),
+
+    getProject: (args: { id: string; workspaceId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('linear:getProject', args),
+
+    listProjectIssues: (args: {
+      projectId: string
+      limit?: number
+      workspaceId: string
+    }): Promise<unknown> => ipcRenderer.invoke('linear:listProjectIssues', args),
+
+    listCustomViews: (args: {
+      model: string
+      limit?: number
+      workspaceId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViews', args),
+
+    getCustomView: (args: {
+      viewId: string
+      model: string
+      workspaceId: string
+    }): Promise<unknown> => ipcRenderer.invoke('linear:getCustomView', args),
+
+    listCustomViewIssues: (args: {
+      viewId: string
+      limit?: number
+      workspaceId: string
+    }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViewIssues', args),
+
+    listCustomViewProjects: (args: {
+      viewId: string
+      limit?: number
+      workspaceId: string
+    }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViewProjects', args),
 
     teamStates: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:teamStates', args),
@@ -1395,6 +1433,7 @@ const api = {
     markTrusted: (args: {
       preset: 'cursor' | 'copilot' | 'codex'
       workspacePath: string
+      connectionId?: string
     }): Promise<void> => ipcRenderer.invoke('agentTrust:markTrusted', args)
   },
 
@@ -1928,6 +1967,7 @@ const api = {
   session: {
     get: () => ipcRenderer.invoke('session:get'),
     set: (args) => ipcRenderer.invoke('session:set', args),
+    patch: (args) => ipcRenderer.invoke('session:patch', args),
     /** Synchronous session save for beforeunload — blocks until flushed to disk. */
     setSync: (args) => {
       ipcRenderer.sendSync('session:set-sync', args)
@@ -2377,6 +2417,11 @@ const api = {
       ipcRenderer.on('ui:newBrowserTab', listener)
       return () => ipcRenderer.removeListener('ui:newBrowserTab', listener)
     },
+    onNewMarkdownTab: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:newMarkdownTab', listener)
+      return () => ipcRenderer.removeListener('ui:newMarkdownTab', listener)
+    },
     onRequestTabCreate: (
       callback: (data: {
         requestId: string
@@ -2507,6 +2552,7 @@ const api = {
         worktreeId: string
         setup?: { runnerScriptPath: string; envVars: Record<string, string> }
         startup?: { command: string; env?: Record<string, string> }
+        defaultTabs?: WorktreeDefaultTabsLaunch
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2516,6 +2562,7 @@ const api = {
           worktreeId: string
           setup?: { runnerScriptPath: string; envVars: Record<string, string> }
           startup?: { command: string; env?: Record<string, string> }
+          defaultTabs?: WorktreeDefaultTabsLaunch
         }
       ) => callback(data)
       ipcRenderer.on('ui:activateWorktree', listener)
@@ -3178,6 +3225,11 @@ const api = {
     delete: (args: { id: string }): Promise<void> => ipcRenderer.invoke('automations:delete', args),
     runNow: (args: { id: string }): Promise<AutomationRun> =>
       ipcRenderer.invoke('automations:runNow', args),
+    runPrecheck: (args: {
+      automationId: string
+      runId: string
+    }): Promise<AutomationPrecheckResult | null> =>
+      ipcRenderer.invoke('automations:runPrecheck', args),
     markDispatchResult: (result: AutomationDispatchResult): Promise<AutomationRun> =>
       ipcRenderer.invoke('automations:markDispatchResult', result),
     snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }): Promise<number> =>

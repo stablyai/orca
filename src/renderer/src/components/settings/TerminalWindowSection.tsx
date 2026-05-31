@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { RotateCw } from 'lucide-react'
 import type { GlobalSettings, TerminalColorOverrides } from '../../../../shared/types'
 import { Button } from '../ui/button'
@@ -87,16 +87,6 @@ export function TerminalWindowSection({
   const blurPendingRestart = (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
   const [relaunchingBlur, setRelaunchingBlur] = useState(false)
   const mountedRef = useMountedRef()
-
-  // Why: the mount-time snapshot captures local state, not main-process state.
-  // If the setting is persisted and read correctly on next boot we never need
-  // to re-snapshot, but tests mount the component with arbitrary initial
-  // values — keep `blurAtMountRef` honest if the settings load asynchronously
-  // and the value arrives after mount.
-  useEffect(() => {
-    blurAtMountRef.current = settings.windowBackgroundBlur ?? false
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const handleRelaunch = async (): Promise<void> => {
     if (relaunchingBlur) {

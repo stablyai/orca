@@ -1,4 +1,5 @@
 import type { SettingsSearchEntry } from './settings-search'
+import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import {
   AGENT_AWAKE_TITLE,
   getAgentAwakeDescription,
@@ -15,53 +16,45 @@ import {
   AGENT_STATUS_HOOKS_TITLE
 } from './agent-status-hooks-copy'
 
+const AGENT_SETTINGS_KEYWORDS = buildAgentSettingsKeywords()
+
+function buildAgentSettingsKeywords(): string[] {
+  const keywords = [
+    'agent',
+    'default',
+    'command',
+    'override',
+    'install',
+    'detected',
+    'enable',
+    'disable',
+    'hide',
+    'show',
+    'github'
+  ]
+
+  for (const agent of AGENT_CATALOG) {
+    keywords.push(...expandAgentSearchText(agent.id), ...expandAgentSearchText(agent.label))
+    keywords.push(...expandAgentSearchText(agent.cmd))
+  }
+
+  return [...new Set(keywords)]
+}
+
+function expandAgentSearchText(value: string): string[] {
+  const spaced = value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .trim()
+
+  return spaced === value ? [value] : [value, spaced]
+}
+
 export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Agents',
     description: 'Configure AI coding agents, default agent, and command overrides.',
-    keywords: [
-      'agent',
-      'default',
-      'claude',
-      'openclaude',
-      'open claude',
-      'codex',
-      'opencode',
-      'pi',
-      'omp',
-      'gemini',
-      'aider',
-      'goose',
-      'amp',
-      'kilocode',
-      'kiro',
-      'charm',
-      'auggie',
-      'cline',
-      'codebuff',
-      'command code',
-      'continue',
-      'cursor',
-      'droid',
-      'kimi',
-      'mistral',
-      'qwen',
-      'rovo',
-      'hermes',
-      'openclaw',
-      'copilot',
-      'grok',
-      'github',
-      'github copilot',
-      'command',
-      'override',
-      'install',
-      'detected',
-      'enable',
-      'disable',
-      'hide',
-      'show'
-    ]
+    keywords: AGENT_SETTINGS_KEYWORDS
   },
   {
     title: 'Agent Location',

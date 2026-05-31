@@ -424,6 +424,61 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.prompt).toBe('')
   })
 
+  it('bounds Amp thread-scoped caches for a long-lived pane', () => {
+    let latestPrompt = ''
+    for (let i = 0; i < 40; i++) {
+      const threadId = `thread-${i}`
+      const started = normalizeHookPayload(
+        state,
+        'amp',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hookEventName: 'agent.start',
+            threadId,
+            message: `prompt ${i}`
+          }
+        },
+        'production'
+      )
+      expect(started?.payload.state).toBe('working')
+
+      const ended = normalizeHookPayload(
+        state,
+        'amp',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hookEventName: 'agent.end',
+            threadId,
+            status: 'completed'
+          }
+        },
+        'production'
+      )
+      expect(ended?.payload.state).toBe('done')
+      latestPrompt = ended?.payload.prompt ?? ''
+    }
+
+    const scopedPrefix = `${PANE_KEY}\0amp:`
+    const promptKeys = [...state.lastPromptByPaneKey.keys()].filter((key) =>
+      key.startsWith(scopedPrefix)
+    )
+    const toolKeys = [...state.lastToolByPaneKey.keys()].filter((key) =>
+      key.startsWith(scopedPrefix)
+    )
+    const completedKeys = [...state.ampCompletedCacheKeys].filter((key) =>
+      key.startsWith(scopedPrefix)
+    )
+
+    expect(promptKeys.length).toBeLessThanOrEqual(32)
+    expect(toolKeys.length).toBeLessThanOrEqual(32)
+    expect(completedKeys.length).toBeLessThanOrEqual(32)
+    expect(state.lastPromptByPaneKey.has(`${scopedPrefix}thread-0`)).toBe(false)
+    expect(state.lastPromptByPaneKey.get(`${scopedPrefix}thread-39`)).toBe('prompt 39')
+    expect(latestPrompt).toBe('prompt 39')
+  })
+
   it('normalizes Antigravity invocation and tool hooks', () => {
     const started = normalizeHookPayload(
       state,

@@ -25,6 +25,7 @@ import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
   normalizeTerminalLayoutSnapshot,
+  RESET_KITTY_KEYBOARD_PROTOCOL,
   replayTerminalLayout,
   restoreScrollbackBuffers
 } from './layout-serialization'
@@ -39,7 +40,13 @@ import { handleOsc52ClipboardRequest } from './osc52-clipboard'
 import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
-import { shouldBypassXtermKeyboardEvent } from './xterm-bypass-policy'
+import {
+  shouldBypassXtermKeyboardEvent,
+  shouldHandleTerminalInterruptKeyboardEvent,
+  shouldSuppressTerminalInterruptKeyup,
+  shouldSuppressTerminalModifierKeyboardEvent,
+  TERMINAL_INTERRUPT_INPUT
+} from './xterm-bypass-policy'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
@@ -64,6 +71,11 @@ import {
   type CloseTerminalPaneDetail
 } from '@/constants/terminal'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
+
+function extractUncHost(value: string | undefined): string | null {
+  const match = /^(?:\\\\|\/\/)([^\\/]+)/.exec(value ?? '')
+  return match?.[1] || null
+}
 
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
@@ -470,6 +482,7 @@ export function useTerminalPaneLifecycle({
 
     const fileOpenLinkHint = getTerminalFileOpenHint()
     const urlOpenLinkHint = getTerminalUrlOpenHint()
+    const osc7UncHost = extractUncHost(cwd)
 
     let releaseWebviewDragPassthrough: (() => void) | null = null
 
@@ -523,10 +536,10 @@ export function useTerminalPaneLifecycle({
         // consumer registers on code 7, registration order decides who sees
         // each sequence.
         const osc7Disposable = pane.terminal.parser.registerOscHandler(7, (data) => {
-          const cwd = parseOsc7(data)
-          if (cwd) {
+          const parsedCwd = parseOsc7(data, { uncHost: osc7UncHost })
+          if (parsedCwd) {
             const confirmed = !isPaneReplaying(replayingPanesRef, pane.id)
-            paneCwdRef.current.set(pane.id, { cwd, confirmed })
+            paneCwdRef.current.set(pane.id, { cwd: parsedCwd, confirmed })
           }
           return true
         })
@@ -542,8 +555,38 @@ export function useTerminalPaneLifecycle({
         // bypassed press. Returning false here short-circuits xterm before the
         // encoder runs, letting the browser and Electron paths fire normally.
         // See xterm-bypass-policy.ts for the rule derivation.
+        let pendingTerminalInterruptKeyup = false
         pane.terminal.attachCustomKeyEventHandler((e) => {
           const isMac = navigator.userAgent.includes('Mac')
+          if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
+            pendingTerminalInterruptKeyup = false
+            return false
+          }
+          if (
+            shouldHandleTerminalInterruptKeyboardEvent(e, {
+              isMac,
+              hasSelection: pane.terminal.hasSelection()
+            })
+          ) {
+            if (e.type === 'keydown') {
+              // Why: xterm's kitty encoder can turn plain Ctrl+C into CSI-u;
+              // ETX must stay transport-agnostic through the existing onData path.
+              pendingTerminalInterruptKeyup = true
+              pane.terminal.input(TERMINAL_INTERRUPT_INPUT)
+              // Why: CLIs such as Codex can die on SIGINT before restoring
+              // xterm's renderer-side Kitty flags, leaving the shell corrupted.
+              pane.terminal.write(RESET_KITTY_KEYBOARD_PROTOCOL)
+            } else {
+              pendingTerminalInterruptKeyup = false
+            }
+            return false
+          }
+          if (shouldSuppressTerminalModifierKeyboardEvent(e)) {
+            // Why: stale Kitty keyboard reporting can encode standalone
+            // modifier presses before Ctrl+C reaches the interrupt handler.
+            return false
+          }
+
           const jisYenInput = resolveTerminalJisYenInput(e, {
             enabled: settingsRef.current?.terminalJISYenToBackslash === true,
             isMac
@@ -1189,13 +1232,11 @@ export function useTerminalPaneLifecycle({
     isVisibleRef.current = isVisible
     for (const panePtyBinding of panePtyBindingsRef.current.values()) {
       const bindingWithVisibility = panePtyBinding as IDisposable & {
-        syncRendererOutputVisibility?: () => void
         syncProcessTracking?: () => void
       }
-      bindingWithVisibility.syncRendererOutputVisibility?.()
       bindingWithVisibility.syncProcessTracking?.()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility flips must notify existing PTY bindings even though the ref object identity is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility flips must refresh existing PTY process tracking even though the ref object identity is stable.
   }, [isVisible, isVisibleRef, panePtyBindingsRef])
 
   useEffect(() => {

@@ -69,6 +69,7 @@ function mockBrowserManager(
     getWebContentsIdByTabId: () => tabs,
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
     getGuestWebContentsId: vi.fn(() => null),
+    unregisterGuest: vi.fn(),
     ensureWebviewVisible: vi.fn(async () => () => {}),
     acquireAutomationVisibility: vi.fn(async () => () => {}),
     ...overrides
@@ -377,6 +378,21 @@ describe('AgentBrowserBridge', () => {
       ])
       expect(b.getActiveWebContentsId()).toBeNull()
     })
+
+    it('unregisters stale tab-list entries when their WebContents is gone', () => {
+      const tabs = new Map([
+        ['tab-a', 1],
+        ['tab-b', 2]
+      ])
+      const wc2 = mockWebContents(2, 'https://b.com', 'B')
+      webContentsFromIdMock.mockImplementation((id: number) => (id === 2 ? wc2 : null))
+      const unregisterGuest = vi.fn()
+
+      const b = new AgentBrowserBridge(mockBrowserManager(tabs, new Map(), { unregisterGuest }))
+
+      expect(b.tabList().tabs).toMatchObject([{ browserPageId: 'tab-b', active: true }])
+      expect(unregisterGuest).toHaveBeenCalledWith('tab-a')
+    })
   })
 
   // ── Tab switch ──
@@ -436,6 +452,19 @@ describe('AgentBrowserBridge', () => {
     expect(mouseCalls).toHaveLength(2)
     expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', x: 10, y: 20 })
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 10, y: 20 })
+  })
+
+  it('drops empty command queues after direct CDP commands finish', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.mouseClick(10, 20, 'right', undefined, 'tab-1')
+
+    expect(
+      (bridge as unknown as { commandQueues: Map<string, unknown[]> }).commandQueues.size
+    ).toBe(0)
+    expect((bridge as unknown as { processingQueues: Set<string> }).processingQueues.size).toBe(0)
   })
 
   // ── Command queue serialization ──
@@ -770,6 +799,53 @@ describe('AgentBrowserBridge', () => {
     expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
   })
 
+  it('tears down a session that finishes creating after destruction starts', async () => {
+    const commandCalls: string[][] = []
+    let releaseStaleClose: (() => void) | null = null
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        commandCalls.push(args)
+        if (args.includes('close') && !releaseStaleClose) {
+          releaseStaleClose = () => {
+            cb(null, JSON.stringify({ success: true, data: null }), '')
+          }
+          return { kill: vi.fn() }
+        }
+        cb(null, JSON.stringify({ success: true, data: null }), '')
+        return { kill: vi.fn() }
+      }
+    )
+
+    const ensurePromise = (
+      bridge as unknown as {
+        ensureSession: (
+          sessionName: string,
+          browserPageId: string,
+          webContentsId: number
+        ) => Promise<void>
+      }
+    ).ensureSession('orca-tab-tab-1', 'tab-1', 100)
+
+    await vi.waitFor(() => {
+      expect(releaseStaleClose).not.toBeNull()
+    })
+    expect(CdpWsProxyMock.instances).toHaveLength(0)
+
+    const destroyPromise = (
+      bridge as unknown as { destroySession: (name: string) => Promise<void> }
+    ).destroySession('orca-tab-tab-1')
+
+    releaseStaleClose!()
+    await ensurePromise
+    await destroyPromise
+
+    const sessions = (bridge as unknown as { sessions: Map<string, unknown> }).sessions
+    const proxy = CdpWsProxyMock.instances[0] as { stop: ReturnType<typeof vi.fn> }
+    expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
+    expect(sessions.size).toBe(0)
+    expect(proxy.stop).toHaveBeenCalledTimes(1)
+  })
+
   it('cancels the command already running when a session is destroyed', async () => {
     succeedWith({ snapshot: 'initial' })
     await bridge.snapshot()
@@ -920,6 +996,33 @@ describe('AgentBrowserBridge', () => {
     expect(routeCalls[0]).toContain('https://new.example/**')
     expect(routeCalls[0]).not.toContain('https://old.example/**')
     expect(routeCalls[0]).toContain('--cdp')
+  })
+
+  it('clears pending intercept restore state when a swapped tab closes before reuse', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const mgr = mockBrowserManager(tabs)
+    const b = new AgentBrowserBridge(mgr)
+    b.setActiveTab(100)
+
+    succeedWith({ ok: true })
+    await b.interceptEnable(['https://old.example/**'])
+
+    tabs.set('tab-1', 200)
+    webContentsFromIdMock.mockReturnValue(mockWebContents(200))
+    succeedWith(null)
+    await b.onProcessSwap('tab-1', 200)
+
+    expect(
+      (b as unknown as { pendingInterceptRestore: Map<string, string[]> }).pendingInterceptRestore
+        .size
+    ).toBe(1)
+
+    await b.onTabClosed(200)
+
+    expect(
+      (b as unknown as { pendingInterceptRestore: Map<string, string[]> }).pendingInterceptRestore
+        .size
+    ).toBe(0)
   })
 
   // ── Tab close clears active ──

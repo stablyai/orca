@@ -21,13 +21,12 @@ import {
 } from '../claude-accounts/managed-auth-path'
 import { createOAuthUsageError, OAuthUsageError } from './claude-oauth-usage-error'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
+import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20'
 const CLAUDE_CODE_USER_AGENT = 'claude-code/2.1.0'
 const API_TIMEOUT_MS = 10_000
-
-let proxyConfigured = false
 
 /**
  * Bridge standard HTTP proxy env vars into Electron's session proxy config.
@@ -40,36 +39,10 @@ let proxyConfigured = false
  * Anthropic from an unexpected IP, risking rate-limit signals on the account.
  */
 async function ensureProxyFromEnv(): Promise<void> {
-  if (proxyConfigured) {
-    return
-  }
-  proxyConfigured = true
-
-  // Why: app.resolveProxy does NOT reflect session-level proxy config —
-  // only session.defaultSession.resolveProxy does.
-  const resolved = await session.defaultSession.resolveProxy(OAUTH_USAGE_URL)
-  if (resolved !== 'DIRECT') {
-    return
-  }
-
-  const proxyUrl =
-    process.env.HTTPS_PROXY ??
-    process.env.https_proxy ??
-    process.env.ALL_PROXY ??
-    process.env.all_proxy ??
-    process.env.HTTP_PROXY ??
-    process.env.http_proxy
-  if (!proxyUrl) {
-    return
-  }
-
-  try {
-    new URL(proxyUrl)
-    await session.defaultSession.setProxy({ proxyRules: proxyUrl })
-  } catch {
-    // Invalid proxy URL — degrade to direct connection rather than crashing.
-    // The usage bar is cosmetic; a typo'd envvar should not break polling.
-  }
+  await ensureElectronProxyFromEnvironment({
+    proxySession: session.defaultSession,
+    probeUrl: OAUTH_USAGE_URL
+  }).catch(() => {})
 }
 
 // ---------------------------------------------------------------------------

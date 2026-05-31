@@ -10,9 +10,10 @@ function xdgConfigDirs(home: string): string[] {
   return [path.join(home, '.config', 'ghostty')]
 }
 
-// Why: Check legacy `config` first, then modern `config.ghostty` per Ghostty docs.
+// Why: Ghostty loads the modern filename before the legacy `config` fallback,
+// and later files in this order override earlier files.
 function withFilenames(dirs: string[]): string[] {
-  return dirs.flatMap((dir) => [path.join(dir, 'config'), path.join(dir, 'config.ghostty')])
+  return dirs.flatMap((dir) => [path.join(dir, 'config.ghostty'), path.join(dir, 'config')])
 }
 
 export function getGhosttyConfigPaths(): string[] {
@@ -33,7 +34,7 @@ export function getGhosttyConfigPaths(): string[] {
       const appData = process.env.APPDATA || home
       const base = path.win32.join(appData, 'ghostty')
       // Why: path.win32.join preserves backslashes even when tests run on macOS/Linux.
-      return [path.win32.join(base, 'config'), path.win32.join(base, 'config.ghostty')]
+      return [path.win32.join(base, 'config.ghostty'), path.win32.join(base, 'config')]
     }
     case 'aix':
     case 'android':
@@ -47,16 +48,22 @@ export function getGhosttyConfigPaths(): string[] {
   }
 }
 
-export async function findGhosttyConfigPath(): Promise<string | null> {
+export async function findGhosttyConfigPaths(): Promise<string[]> {
+  const found: string[] = []
   for (const p of getGhosttyConfigPaths()) {
     try {
       const s = await stat(p)
       if (s.isFile()) {
-        return p
+        found.push(p)
       }
     } catch {
       // ENOENT or permission error — continue probing other paths.
     }
   }
-  return null
+  return found
+}
+
+export async function findGhosttyConfigPath(): Promise<string | null> {
+  const paths = await findGhosttyConfigPaths()
+  return paths[0] ?? null
 }

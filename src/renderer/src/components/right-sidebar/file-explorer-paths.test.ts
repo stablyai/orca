@@ -35,4 +35,11 @@ describe('file explorer path helpers', () => {
     ])
     expect(getRevealAncestorDirs('/repo', '/Repo/Src/File.ts')).toBeNull()
   })
+
+  it('builds reveal ancestors for Windows drive-root worktrees', () => {
+    expect(getRevealAncestorDirs('C:\\', 'c:\\repo\\src\\app.ts')).toEqual([
+      'C:\\repo',
+      'C:\\repo\\src'
+    ])
+  })
 })

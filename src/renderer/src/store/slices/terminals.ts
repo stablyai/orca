@@ -259,6 +259,8 @@ export type TerminalSlice = {
   pendingIssueCommandSplitByTabId: Record<string, { command: string; env?: Record<string, string> }>
   tabBarOrderByWorktree: Record<string, string[]>
   workspaceSessionReady: boolean
+  defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
+  markDefaultTerminalTabsApplied: (worktreeId: string) => void
   /** True only after hydrateWorkspaceSession ran from a real load of
    *  orca-data.json. Guards the debounced session writer so that a crash
    *  during early startup (fetchRepos / fetchAllWorktrees / session.get /
@@ -430,6 +432,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   pendingIssueCommandSplitByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
+  defaultTerminalTabsAppliedByWorktreeId: {},
+  markDefaultTerminalTabsApplied: (worktreeId) =>
+    set((s) => {
+      if (s.defaultTerminalTabsAppliedByWorktreeId[worktreeId]) {
+        return {}
+      }
+      return {
+        defaultTerminalTabsAppliedByWorktreeId: {
+          ...s.defaultTerminalTabsAppliedByWorktreeId,
+          [worktreeId]: true
+        }
+      }
+    }),
   hydrationSucceeded: false,
   setHydrationSucceeded: (value) => {
     set({ hydrationSucceeded: value })
@@ -2103,6 +2118,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // after hydration) — not here — because SSH worktrees may still be
         // appearing in worktreesByRepo at this moment.
         lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
+        defaultTerminalTabsAppliedByWorktreeId:
+          session.defaultTerminalTabsAppliedByWorktreeId ?? {},
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
         pendingReconnectPtyIdByTabId,

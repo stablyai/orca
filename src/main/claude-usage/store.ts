@@ -671,7 +671,7 @@ export class ClaudeUsageStore {
       return unavailable('no_matching_session', 'Run session metadata is incomplete.')
     }
 
-    const scanState = await this.refresh(true)
+    const scanState = await this.refresh(this.shouldForceAutomationUsageScan(input.completedAt))
     if (scanState.lastScanError) {
       return unavailable('scan_failed', scanState.lastScanError)
     }
@@ -788,6 +788,15 @@ export class ClaudeUsageStore {
       }
       return true
     })
+  }
+
+  private shouldForceAutomationUsageScan(completedAt: number): boolean {
+    const { lastScanCompletedAt, lastScanError } = this.state.scanState
+    // Why: attribution needs a scan after the run finishes, but repeated
+    // lookups after that point should not rescan all Claude transcript history.
+    return (
+      Boolean(lastScanError) || lastScanCompletedAt === null || lastScanCompletedAt < completedAt
+    )
   }
 
   private async getCurrentWorktreeFingerprint(): Promise<string> {

@@ -471,6 +471,43 @@ describe('SshFilesystemProvider', () => {
       expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
     })
 
+    it('sends fs.unwatch for active roots when disposed', async () => {
+      const callback = vi.fn()
+      await provider.watch('/home/user/project', callback)
+
+      provider.dispose()
+
+      expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('fs.changed', {
+        events: [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]
+      })
+      expect(callback).not.toHaveBeenCalled()
+    })
+
+    it('unwatches when disposed while fs.watch setup is still resolving', async () => {
+      let resolveWatch: () => void = () => {}
+      mux.request.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveWatch = resolve
+          })
+      )
+      const callback = vi.fn()
+      const pendingWatch = provider.watch('/home/user/project', callback)
+
+      provider.dispose()
+      resolveWatch()
+
+      await expect(pendingWatch).rejects.toThrow('SSH filesystem provider disposed')
+      expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('fs.changed', {
+        events: [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]
+      })
+      expect(callback).not.toHaveBeenCalled()
+    })
+
     it('does not send fs.unwatch while other roots are watched', async () => {
       const cb1 = vi.fn()
       const cb2 = vi.fn()

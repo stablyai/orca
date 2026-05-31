@@ -10,11 +10,28 @@ export type AzureDevOpsRepoRef = {
   organization?: string | null
 }
 
+const REPO_REF_CACHE_MAX_ENTRIES = 512
 const repoRefCache = new Map<string, AzureDevOpsRepoRef | null>()
 
 /** @internal - exposed for tests only */
 export function _resetAzureDevOpsRepoRefCache(): void {
   repoRefCache.clear()
+}
+
+/** @internal - exposed for tests only */
+export function _getAzureDevOpsRepoRefCacheSize(): number {
+  return repoRefCache.size
+}
+
+function rememberRepoRefCacheEntry(cacheKey: string, value: AzureDevOpsRepoRef | null): void {
+  repoRefCache.set(cacheKey, value)
+  while (repoRefCache.size > REPO_REF_CACHE_MAX_ENTRIES) {
+    const oldestKey = repoRefCache.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    repoRefCache.delete(oldestKey)
+  }
 }
 
 function decodeSegment(value: string): string {
@@ -31,6 +48,7 @@ function encodeSegment(value: string): string {
 
 function splitPath(path: string): string[] {
   return path
+    .replace(/\/+$/, '')
     .replace(/\.git$/i, '')
     .split('/')
     .map((part) => part.trim())
@@ -203,7 +221,7 @@ export async function getAzureDevOpsRepoRefForRemote(
           cwd: repoPath
         })
     const result = parseAzureDevOpsRepoRef(stdout)
-    repoRefCache.set(cacheKey, result)
+    rememberRepoRefCacheEntry(cacheKey, result)
     return result
   } catch {
     if (connectionId) {
@@ -211,7 +229,7 @@ export async function getAzureDevOpsRepoRefForRemote(
       // caching them as "not Azure DevOps" would poison the repo for the session.
       return null
     }
-    repoRefCache.set(cacheKey, null)
+    rememberRepoRefCacheEntry(cacheKey, null)
     return null
   }
 }

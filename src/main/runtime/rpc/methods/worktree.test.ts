@@ -174,10 +174,15 @@ describe('worktree RPC methods', () => {
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
   })
 
-  it('passes explicit repo selectors to PR base resolution', async () => {
+  it('passes explicit repo selectors to PR base resolution and preserves start-point fields', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      resolveManagedPrBase: vi.fn().mockResolvedValue({ baseBranch: 'origin/pr-head' })
+      resolveManagedPrBase: vi.fn().mockResolvedValue({
+        baseBranch: 'abc123',
+        headSha: 'abc123',
+        branchNameOverride: 'feature/pr-head',
+        pushTarget: { remoteName: 'origin', branchName: 'feature/pr-head' }
+      })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
@@ -191,6 +196,14 @@ describe('worktree RPC methods', () => {
     )
 
     expect(response).toMatchObject({ ok: true })
+    expect(response).toMatchObject({
+      result: {
+        baseBranch: 'abc123',
+        headSha: 'abc123',
+        branchNameOverride: 'feature/pr-head',
+        pushTarget: { remoteName: 'origin', branchName: 'feature/pr-head' }
+      }
+    })
     expect(runtime.resolveManagedPrBase).toHaveBeenCalledWith({
       repoSelector: 'id:repo-1',
       prNumber: 42,

@@ -90,6 +90,42 @@ describe('subscribeRemoteRuntimeRequest', () => {
       offSpy.mockRestore()
     }
   })
+
+  it('closes established subscription sockets after terminal protocol errors', async () => {
+    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+    try {
+      const server = await createSubscriptionServer({ sendMismatchedResponseAfterSubscribe: true })
+      const onResponse = vi.fn()
+      const onError = vi.fn()
+      const onClose = vi.fn()
+
+      const subscription = await subscribeRemoteRuntimeRequest(
+        server.pairing,
+        'terminal.subscribe',
+        { terminal: 't1' },
+        1000,
+        {
+          onResponse,
+          onError,
+          onClose
+        }
+      )
+
+      await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+      await vi.waitFor(() =>
+        expect(onError).toHaveBeenCalledWith(
+          expect.objectContaining({ code: 'invalid_runtime_response' })
+        )
+      )
+      expect(onClose).toHaveBeenCalledOnce()
+
+      const removedEvents = offSpy.mock.calls.map(([event]) => event)
+      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
+      expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
+    } finally {
+      offSpy.mockRestore()
+    }
+  })
 })
 
 describe('sendRemoteRuntimeRequest', () => {
@@ -129,7 +165,11 @@ describe('sendRemoteRuntimeRequest', () => {
   })
 })
 
-async function createSubscriptionServer(): Promise<{
+async function createSubscriptionServer(
+  options: {
+    sendMismatchedResponseAfterSubscribe?: boolean
+  } = {}
+): Promise<{
   pairing: PairingOffer
   nextBinary: Promise<Uint8Array>
 }> {
@@ -186,6 +226,15 @@ async function createSubscriptionServer(): Promise<{
         result: { type: 'subscribed' },
         _meta: { runtimeId: 'runtime-test' }
       })
+      if (options.sendMismatchedResponseAfterSubscribe) {
+        sendEncrypted(ws, sharedKey, {
+          id: `${request.id}-mismatch`,
+          ok: true,
+          streaming: true,
+          result: { type: 'subscribed' },
+          _meta: { runtimeId: 'runtime-test' }
+        })
+      }
     })
   })
 

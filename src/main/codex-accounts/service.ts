@@ -229,6 +229,7 @@ export class CodexAccountService {
     })
     this.runtimeHome.syncForCurrentSelection()
 
+    this.runtimeHome.removeLaunchHomeForAccount?.(account)
     this.safeRemoveManagedHome(account.managedHomePath)
     // Why: a removed account can no longer appear in the switcher dropdown,
     // so purge its cached usage to avoid stale entries.
@@ -495,7 +496,16 @@ export class CodexAccountService {
   }
 
   private writeManagedConfig(managedHomePath: string, contents: string): void {
-    writeFileAtomically(join(managedHomePath, 'config.toml'), contents)
+    const configPath = join(managedHomePath, 'config.toml')
+    try {
+      if (existsSync(configPath) && readFileSync(configPath, 'utf-8') === contents) {
+        return
+      }
+    } catch {
+      // Why: read errors should not make a stale config look current; the
+      // atomic write path owns Windows ACL repair and persistent error surfacing.
+    }
+    writeFileAtomically(configPath, contents)
   }
 
   private getManagedAccountsRoot(): string {

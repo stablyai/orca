@@ -64,6 +64,60 @@ describe('OnboardingFlow', () => {
     expect(html).not.toContain('>Skip</button>')
   })
 
+  it('skips GitHub task setup when the GitHub CLI is already detected', () => {
+    useAppStore.setState({
+      preflightStatus: {
+        git: { installed: true },
+        gh: { installed: true, authenticated: false }
+      },
+      preflightStatusChecked: true
+    })
+
+    const html = renderToStaticMarkup(
+      <OnboardingFlow
+        onboarding={{
+          ...getDefaultOnboardingState(),
+          lastCompletedStep: 4
+        }}
+        onOnboardingChange={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('Explore Orca')
+    expect(html).not.toContain('Set up GitHub tasks')
+    expect(html).not.toContain('Connect your task sources')
+  })
+
+  it('shows only GitHub on the task setup page when the GitHub CLI is missing', () => {
+    useAppStore.setState({
+      preflightStatus: {
+        git: { installed: true },
+        gh: { installed: false, authenticated: false }
+      },
+      preflightStatusChecked: true
+    })
+
+    const html = renderToStaticMarkup(
+      <OnboardingFlow
+        onboarding={{
+          ...getDefaultOnboardingState(),
+          lastCompletedStep: 4
+        }}
+        onOnboardingChange={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('Set up GitHub tasks')
+    expect(html).toContain('Install the GitHub CLI to:')
+    expect(html).toContain('GitHub')
+    expect(html).not.toContain(
+      '<h3 class="text-[15px] font-semibold leading-tight text-foreground">Linear</h3>'
+    )
+    expect(html).toContain(
+      'Linear, GitLab, Bitbucket, Azure DevOps, Gitea, and Jira live in Settings'
+    )
+  })
+
   it('renders onboarding inside a centered modal shell', () => {
     const html = renderToStaticMarkup(
       <OnboardingFlow onboarding={getDefaultOnboardingState()} onOnboardingChange={vi.fn()} />

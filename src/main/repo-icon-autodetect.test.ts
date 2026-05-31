@@ -69,6 +69,41 @@ describe('detectRepoIcon', () => {
     })
   })
 
+  it('resolves relative declared icon hrefs from nested source files', async () => {
+    const repoPath = await makeTempRepoDir()
+    await mkdir(join(repoPath, 'src', 'routes', 'brand'), { recursive: true })
+    await writeFile(
+      join(repoPath, 'src', 'routes', '__root.tsx'),
+      'export const links = () => [{ rel: "icon", href: "./brand/icon.png" }]'
+    )
+    await writeFile(
+      join(repoPath, 'src', 'routes', 'brand', 'icon.png'),
+      Buffer.from(PNG_1X1_BASE64, 'base64')
+    )
+
+    await expect(detectRepoIcon({ repoPath, kind: 'folder' })).resolves.toEqual({
+      type: 'image',
+      src: `data:image/png;base64,${PNG_1X1_BASE64}`,
+      source: 'file',
+      label: 'src/routes/brand/icon.png'
+    })
+  })
+
+  it('skips oversized source files when looking for declared icon hrefs', async () => {
+    const repoPath = await makeTempRepoDir()
+    await writeFile(
+      join(repoPath, 'index.html'),
+      `${'x'.repeat(256 * 1024 + 1)}<link rel="icon" href="/brand/icon.png">`
+    )
+    await mkdir(join(repoPath, 'public', 'brand'), { recursive: true })
+    await writeFile(
+      join(repoPath, 'public', 'brand', 'icon.png'),
+      Buffer.from(PNG_1X1_BASE64, 'base64')
+    )
+
+    await expect(detectRepoIcon({ repoPath, kind: 'folder' })).resolves.toBeUndefined()
+  })
+
   it('does not resolve declared icon hrefs outside the repo', async () => {
     const parentPath = await makeTempRepoDir()
     const repoPath = join(parentPath, 'repo')

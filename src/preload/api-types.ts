@@ -40,6 +40,7 @@ import type {
   GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRFileContents,
+  GitHubPrStartPoint,
   GitHubPRReviewCommentInput,
   GitHubCommentResult,
   GitHubOwnerRepo,
@@ -47,21 +48,32 @@ import type {
   GitHubWorkItemDetails,
   GitHubViewer,
   GitLabAssignableUser,
+  GitLabAuthDiagnostic,
   GitLabCommentResult,
+  GitLabDiscussionResolveResult,
   GitLabIssueInfo,
   GitLabIssueUpdate,
+  GitLabJobTraceResult,
+  GitLabMRInlineCommentInput,
+  GitLabMRReviewersUpdateResult,
+  GitLabMRUpdate,
   GitLabProjectRef,
+  GitLabRetryJobResult,
   GitLabTodo,
   GitLabViewer,
   GitLabWorkItem,
   GitLabWorkItemDetails,
+  GetGitLabRateLimitResult,
   ListMergeRequestsResult,
   MRInfo,
   MRListState,
   ListWorkItemsResult,
   IssueInfo,
   LinearViewer,
+  LinearCollectionResult,
   LinearConnectionStatus,
+  LinearCustomViewModel,
+  LinearCustomViewSummary,
   LinearWorkspaceSelection,
   LinearIssue,
   LinearIssueUpdate,
@@ -69,6 +81,7 @@ import type {
   LinearWorkflowState,
   LinearLabel,
   LinearMember,
+  LinearProjectDetail,
   LinearProjectSummary,
   LinearTeam,
   MarkdownDocument,
@@ -109,8 +122,10 @@ import type {
   WorktreeMeta,
   WorktreeRemoteBranchConflictEvent,
   RemoveWorktreeResult,
+  WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
+  WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
@@ -191,6 +206,7 @@ import type {
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult } from '../shared/skills'
 import type {
+  CrashReportBreadcrumbData,
   CrashReportRecord,
   CrashReportSubmitArgs,
   CrashReportSubmitResult,
@@ -296,6 +312,7 @@ import type {
   ExternalAutomationRunsPage,
   ExternalAutomationUpdateInput,
   AutomationRun,
+  AutomationPrecheckResult,
   AutomationUpdateInput
 } from '../shared/automations-types'
 import type {
@@ -646,6 +663,7 @@ export type PreloadApi = {
           | 'repoIcon'
           | 'hookSettings'
           | 'worktreeBaseRef'
+          | 'worktreeBasePath'
           | 'kind'
           | 'issueSourcePreference'
           | 'externalWorktreeVisibility'
@@ -736,7 +754,7 @@ export type PreloadApi = {
       prNumber: number
       headRefName?: string
       isCrossRepository?: boolean
-    }) => Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>
+    }) => Promise<GitHubPrStartPoint | { error: string }>
     /** GitLab parallel of resolvePrBase. For same-project MRs returns
      *  `<remote>/<source_branch>`; for fork MRs fetches
      *  refs/merge-requests/<iid>/head and returns the SHA. */
@@ -832,7 +850,6 @@ export type PreloadApi = {
     signal: (id: string, signal: string) => void
     kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
     ackColdRestore: (id: string) => void
-    pauseOutput: (id: string, paused: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
@@ -878,6 +895,7 @@ export type PreloadApi = {
     recordRendererError: (
       args: ReactErrorBoundaryReportArgs
     ) => Promise<ReactErrorBoundaryReportResult>
+    recordBreadcrumb: (args: { name: string; data?: CrashReportBreadcrumbData }) => void
     submit: (args: CrashReportSubmitArgs) => Promise<CrashReportSubmitResult>
     copyLatestDiagnostics: (args?: {
       reportId?: string
@@ -954,6 +972,8 @@ export type PreloadApi = {
       repoId?: string
       title: string
       body: string
+      labels?: string[]
+      assignees?: string[]
     }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
     countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
     listWorkItems: (args: {
@@ -1065,6 +1085,7 @@ export type PreloadApi = {
        *  scope the cross-window invalidation broadcast correctly and avoid
        *  evicting an unrelated PR/issue that happens to share the number. */
       type?: 'issue' | 'pr'
+      prRepo?: GitHubOwnerRepo | null
     }) => Promise<GitHubCommentResult>
     addPRReviewCommentReply: (args: {
       repoPath: string
@@ -1075,6 +1096,7 @@ export type PreloadApi = {
       threadId?: string
       path?: string
       line?: number
+      prRepo?: GitHubOwnerRepo | null
     }) => Promise<GitHubCommentResult>
     addPRReviewComment: (
       args: GitHubPRReviewCommentInput & { repoId?: string }
@@ -1158,6 +1180,11 @@ export type PreloadApi = {
   // host, paginated envelope from `glab api -i`).
   gl: {
     viewer: () => Promise<GitLabViewer | null>
+    diagnoseAuth: () => Promise<GitLabAuthDiagnostic>
+    rateLimit: (args?: {
+      force?: boolean
+      host?: string | null
+    }) => Promise<GetGitLabRateLimitResult>
     projectSlug: (args: { repoPath: string }) => Promise<GitLabProjectRef | null>
     mrForBranch: (args: {
       repoPath: string
@@ -1224,11 +1251,44 @@ export type PreloadApi = {
       iid: number
       method?: 'merge' | 'squash' | 'rebase'
     }) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateMR: (args: {
+      repoPath: string
+      iid: number
+      updates: GitLabMRUpdate
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateMRReviewers: (args: {
+      repoPath: string
+      iid: number
+      reviewerIds: number[]
+      projectRef?: GitLabProjectRef | null
+    }) => Promise<GitLabMRReviewersUpdateResult>
     addMRComment: (args: {
       repoPath: string
       iid: number
       body: string
     }) => Promise<GitLabCommentResult>
+    addMRInlineComment: (args: {
+      repoPath: string
+      iid: number
+      input: GitLabMRInlineCommentInput
+      projectRef?: GitLabProjectRef | null
+    }) => Promise<GitLabCommentResult>
+    resolveMRDiscussion: (args: {
+      repoPath: string
+      iid: number
+      discussionId: string
+      resolved: boolean
+    }) => Promise<GitLabDiscussionResolveResult>
+    jobTrace: (args: {
+      repoPath: string
+      jobId: number
+      projectRef?: GitLabProjectRef | null
+    }) => Promise<GitLabJobTraceResult>
+    retryJob: (args: {
+      repoPath: string
+      jobId: number
+      projectRef?: GitLabProjectRef | null
+    }) => Promise<GitLabRetryJobResult>
     workItemByPath: (args: {
       repoPath: string
       host: string
@@ -1291,7 +1351,33 @@ export type PreloadApi = {
       query?: string
       limit?: number
       workspaceId?: LinearWorkspaceSelection
-    }) => Promise<LinearProjectSummary[]>
+    }) => Promise<LinearCollectionResult<LinearProjectSummary>>
+    getProject: (args: { id: string; workspaceId: string }) => Promise<LinearProjectDetail | null>
+    listProjectIssues: (args: {
+      projectId: string
+      limit?: number
+      workspaceId: string
+    }) => Promise<LinearCollectionResult<LinearIssue>>
+    listCustomViews: (args: {
+      model: LinearCustomViewModel
+      limit?: number
+      workspaceId?: LinearWorkspaceSelection
+    }) => Promise<LinearCollectionResult<LinearCustomViewSummary>>
+    getCustomView: (args: {
+      viewId: string
+      model: LinearCustomViewModel
+      workspaceId: string
+    }) => Promise<LinearCustomViewSummary | null>
+    listCustomViewIssues: (args: {
+      viewId: string
+      limit?: number
+      workspaceId: string
+    }) => Promise<LinearCollectionResult<LinearIssue>>
+    listCustomViewProjects: (args: {
+      viewId: string
+      limit?: number
+      workspaceId: string
+    }) => Promise<LinearCollectionResult<LinearProjectSummary>>
     teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
     teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
     teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>
@@ -1414,6 +1500,7 @@ export type PreloadApi = {
     markTrusted: (args: {
       preset: 'cursor' | 'copilot' | 'codex'
       workspacePath: string
+      connectionId?: string
     }) => Promise<void>
   }
   preflight: PreflightApi
@@ -1510,12 +1597,13 @@ export type PreloadApi = {
   session: {
     get: () => Promise<WorkspaceSessionState>
     set: (args: WorkspaceSessionState) => Promise<void>
+    patch: (args: WorkspaceSessionPatch) => Promise<void>
     setSync: (args: WorkspaceSessionState) => void
   }
   remoteWorkspace: {
     get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>
     setForConnectedTargets: (args: {
-      session: WorkspaceSessionState
+      session?: WorkspaceSessionState
       hydratedTargetIds?: string[]
     }) => Promise<{ targetId: string; result: RemoteWorkspacePatchResult }[]>
     listEnabledConnectedTargets: () => Promise<string[]>
@@ -1847,6 +1935,7 @@ export type PreloadApi = {
     onJumpToTabIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
+    onNewMarkdownTab: (callback: () => void) => () => void
     onRequestTabCreate: (
       callback: (data: {
         requestId: string
@@ -1885,6 +1974,7 @@ export type PreloadApi = {
         worktreeId: string
         setup?: WorktreeSetupLaunch
         startup?: WorktreeStartupLaunch
+        defaultTabs?: WorktreeDefaultTabsLaunch
       }) => void
     ) => () => void
     onCreateTerminal: (
@@ -2148,6 +2238,10 @@ export type PreloadApi = {
     update: (args: { id: string; updates: AutomationUpdateInput }) => Promise<Automation>
     delete: (args: { id: string }) => Promise<void>
     runNow: (args: { id: string }) => Promise<AutomationRun>
+    runPrecheck: (args: {
+      automationId: string
+      runId: string
+    }) => Promise<AutomationPrecheckResult | null>
     markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
     snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }) => Promise<number>
     rendererReady: () => Promise<void>

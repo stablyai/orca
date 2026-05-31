@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -81,35 +81,38 @@ export default function ProjectViewList({
     () => getAvailableColumns(table.selectedView),
     [table.selectedView]
   )
-  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => loadHiddenColumns(scopeKey))
-  useEffect(() => {
-    setHidden(loadHiddenColumns(scopeKey))
-  }, [scopeKey])
+  // Why: switching project views should not paint one commit with the
+  // previous view's local column preferences before an Effect catches up.
+  const persistedHidden = useMemo(() => loadHiddenColumns(scopeKey), [scopeKey])
+  const [hiddenByScope, setHiddenByScope] = useState<
+    Readonly<Record<string, ReadonlySet<string> | undefined>>
+  >({})
+  const hidden = hiddenByScope[scopeKey] ?? persistedHidden
   const fields = useMemo(
     () => availableFields.filter((f) => !hidden.has(f.id)),
     [availableFields, hidden]
   )
 
-  const [widths, setWidths] = useState<Readonly<Record<string, number>>>(() =>
-    loadColumnWidths(scopeKey)
-  )
-  useEffect(() => {
-    setWidths(loadColumnWidths(scopeKey))
-  }, [scopeKey])
+  const persistedWidths = useMemo(() => loadColumnWidths(scopeKey), [scopeKey])
+  const [widthsByScope, setWidthsByScope] = useState<
+    Readonly<Record<string, Readonly<Record<string, number>> | undefined>>
+  >({})
+  const widths = widthsByScope[scopeKey] ?? persistedWidths
 
   const setColumnPair = useCallback(
     (fieldId: string, width: number, nextFieldId: string, nextWidth: number): void => {
-      setWidths((prev) => {
+      setWidthsByScope((prev) => {
+        const currentWidths = prev[scopeKey] ?? persistedWidths
         const updated = {
-          ...prev,
+          ...currentWidths,
           [fieldId]: Math.max(MIN_COLUMN_WIDTH, Math.round(width)),
           [nextFieldId]: Math.max(MIN_COLUMN_WIDTH, Math.round(nextWidth))
         }
         saveColumnWidths(scopeKey, updated)
-        return updated
+        return { ...prev, [scopeKey]: updated }
       })
     },
-    [scopeKey]
+    [persistedWidths, scopeKey]
   )
 
   const gridTemplate = useMemo(() => buildProjectGridTemplate(fields, widths), [fields, widths])
@@ -124,15 +127,15 @@ export default function ProjectViewList({
   }, [])
 
   const toggleColumn = (fieldId: string): void => {
-    setHidden((prev) => {
-      const next = new Set(prev)
+    setHiddenByScope((prev) => {
+      const next = new Set(prev[scopeKey] ?? persistedHidden)
       if (next.has(fieldId)) {
         next.delete(fieldId)
       } else {
         next.add(fieldId)
       }
       saveHiddenColumns(scopeKey, next)
-      return next
+      return { ...prev, [scopeKey]: next }
     })
   }
 

@@ -66,7 +66,10 @@ describe('pane terminal output scheduler', () => {
       callback?.()
     })
 
-    writeTerminalOutput(terminal, '中文 PowerShell repaint\r\n', { foreground: true })
+    writeTerminalOutput(terminal, '中文 PowerShell repaint\r\n', {
+      foreground: true,
+      forceForegroundRefresh: true
+    })
 
     expect(terminal._core.refresh).toHaveBeenCalledWith(0, 23, true)
     expect(terminal.refresh).not.toHaveBeenCalled()
@@ -90,7 +93,10 @@ describe('pane terminal output scheduler', () => {
       callback?.()
     })
 
-    writeTerminalOutput(terminal, '顶部滚动中文复现\r\n', { foreground: true })
+    writeTerminalOutput(terminal, '顶部滚动中文复现\r\n', {
+      foreground: true,
+      forceForegroundRefresh: true
+    })
 
     expect(terminal._core.refresh).toHaveBeenCalledTimes(1)
     expect(scheduledFrames).toHaveLength(1)
@@ -99,6 +105,16 @@ describe('pane terminal output scheduler', () => {
 
     expect(terminal._core.refresh).toHaveBeenCalledTimes(2)
     expect(terminal._core.refresh).toHaveBeenLastCalledWith(0, 23, true)
+  })
+
+  it('skips forced viewport refresh for ordinary foreground output', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+
+    writeTerminalOutput(terminal, 'plain foreground output\r\n', { foreground: true })
+
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
+    expect(terminal.refresh).not.toHaveBeenCalled()
   })
 
   it('hides the foreground cursor until output parsing has gone quiet', async () => {
@@ -147,6 +163,29 @@ describe('pane terminal output scheduler', () => {
 
     expect(terminal.write).toHaveBeenCalledTimes(1)
     expect(terminal.write).toHaveBeenCalledWith('ab')
+  })
+
+  it('defers throughput foreground output to the shared high-priority drain', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, 'a'.repeat(16 * 1024), {
+      foreground: true,
+      latencySensitive: false
+    })
+    writeTerminalOutput(terminal, 'b'.repeat(16 * 1024), {
+      foreground: true,
+      latencySensitive: false
+    })
+
+    expect(terminal.write).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(0)
+
+    expect(terminal.write).toHaveBeenCalledTimes(2)
+    expect(terminal.write.mock.calls.map(([data]) => data).join('')).toBe(
+      `${'a'.repeat(16 * 1024)}${'b'.repeat(16 * 1024)}`
+    )
   })
 
   it('defers background write preparation until coalesced output drains', async () => {

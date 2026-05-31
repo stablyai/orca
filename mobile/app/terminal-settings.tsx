@@ -35,6 +35,7 @@ import {
   saveTerminalAccessoryLayout,
   setTerminalAccessoryBuiltInVisible
 } from '../src/terminal/terminal-accessory-layout'
+import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-auto-restore-fit-state'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
 
@@ -136,6 +137,10 @@ export default function TerminalSettingsScreen() {
   }, [])
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const hostClients = useAllHostClients(hostIds)
+  const hostClientsById = useMemo(
+    () => new Map(hostClients.map((entry) => [entry.hostId, entry.client])),
+    [hostClients]
+  )
 
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
@@ -224,47 +229,45 @@ export default function TerminalSettingsScreen() {
   useEffect(() => {
     let cancelled = false
     for (const host of hosts) {
-      const entry = hostClients.find((e) => e.hostId === host.id)
-      const client = entry?.client ?? null
+      const client = hostClientsById.get(host.id) ?? null
       if (!client) continue
       void client
         .sendRequest('terminal.getAutoRestoreFit')
         .then((resp) => {
           if (cancelled) return
           const value = (resp as { ms?: number | null } | null)?.ms
-          setHostMs((prev) => ({ ...prev, [host.id]: value === undefined ? null : value }))
+          // Why: reconnect/status ticks can replay the same value; preserving
+          // object identity avoids rerendering every settings row again.
+          setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, host.id, value))
         })
         .catch(() => {
-          if (!cancelled) setHostMs((prev) => ({ ...prev, [host.id]: null }))
+          if (!cancelled) {
+            setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, host.id, null))
+          }
         })
     }
     return () => {
       cancelled = true
     }
-  }, [hosts, hostClients])
+  }, [hosts, hostClientsById])
 
   async function selectValue(hostId: string, value: RestoreValue) {
-    const entry = hostClients.find((e) => e.hostId === hostId)
-    const client = entry?.client ?? null
+    const client = hostClientsById.get(hostId) ?? null
     if (!client) return
     const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === value)
     if (!opt) return
-    setHostMs((prev) => ({ ...prev, [hostId]: opt.ms }))
+    setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, opt.ms))
     try {
       const resp = (await client.sendRequest('terminal.setAutoRestoreFit', {
         ms: opt.ms
       })) as { ms?: number | null } | null
-      const finalMs = resp?.ms === undefined ? null : resp.ms
-      setHostMs((prev) => ({ ...prev, [hostId]: finalMs }))
+      setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, resp?.ms))
     } catch {
       try {
         const resp = (await client.sendRequest('terminal.getAutoRestoreFit')) as {
           ms?: number | null
         } | null
-        setHostMs((prev) => ({
-          ...prev,
-          [hostId]: resp?.ms === undefined ? null : resp.ms
-        }))
+        setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, resp?.ms))
       } catch {
         // give up silently — the next mount retries
       }
@@ -301,12 +304,12 @@ export default function TerminalSettingsScreen() {
         ) : (
           <View style={[styles.section, styles.sectionTopGap]}>
             {hosts.map((host, idx) => {
-              const entry = hostClients.find((e) => e.hostId === host.id)
+              const client = hostClientsById.get(host.id) ?? null
               return (
                 <View key={host.id}>
                   {idx > 0 && <View style={styles.separator} />}
                   <HostFitRow
-                    client={entry?.client ?? null}
+                    client={client}
                     hostName={host.name}
                     ms={hostMs[host.id]}
                     onPress={() => setPickerHostId(host.id)}

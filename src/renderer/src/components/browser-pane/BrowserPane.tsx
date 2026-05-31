@@ -112,6 +112,10 @@ import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
 import { getShortcutPlatform, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import {
+  getRemoteBrowserKeyboardShortcut,
+  getRemoteBrowserKeypressKey
+} from './remote-browser-keyboard'
+import {
   consumeBrowserFocusRequest,
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   type BrowserFocusRequestDetail
@@ -521,52 +525,6 @@ function fileUrlToAbsolutePath(url: string): string | null {
 function getNotebookPathFromBrowserUrl(url: string): string | null {
   const filePath = fileUrlToAbsolutePath(url)
   return filePath?.toLowerCase().endsWith('.ipynb') ? filePath : null
-}
-
-function getRemoteBrowserKeypressKey(event: React.KeyboardEvent): string | null {
-  if (event.key.length === 1) {
-    return event.key === ' ' ? 'Space' : event.key
-  }
-  if (event.metaKey || event.ctrlKey || event.altKey) {
-    return null
-  }
-  const supported = new Set([
-    'Enter',
-    'Backspace',
-    'Delete',
-    'Tab',
-    'Escape',
-    'ArrowUp',
-    'ArrowDown',
-    'ArrowLeft',
-    'ArrowRight',
-    'Home',
-    'End',
-    'PageUp',
-    'PageDown'
-  ])
-  return supported.has(event.key) ? event.key : null
-}
-
-function getRemoteBrowserKeyboardShortcut(event: React.KeyboardEvent): string | null {
-  const modifiers: string[] = []
-  if (event.metaKey) {
-    modifiers.push('Meta')
-  }
-  if (event.ctrlKey) {
-    modifiers.push('Control')
-  }
-  if (event.altKey) {
-    modifiers.push('Alt')
-  }
-  if (event.shiftKey && event.key.length !== 1) {
-    modifiers.push('Shift')
-  }
-  if (modifiers.length === 0 || ['Meta', 'Control', 'Alt', 'Shift'].includes(event.key)) {
-    return null
-  }
-  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
-  return `${modifiers.join('+')}+${key}`
 }
 
 function getRemoteBrowserMouseButton(button: number): 'left' | 'middle' | 'right' | null {
@@ -1183,6 +1141,7 @@ function RemoteBrowserPagePane({
         remoteTabRefreshTimerRef.current = null
       }
       clearPendingRemoteWheel()
+      restartRemoteStreamForViewportRef.current = () => {}
       if (streamFrameUrlRef.current) {
         URL.revokeObjectURL(streamFrameUrlRef.current)
         streamFrameUrlRef.current = null
@@ -1784,12 +1743,6 @@ function RemoteBrowserPagePane({
   }, [restartRemoteStreamForViewport, startRemoteStream])
 
   useEffect(() => {
-    return () => {
-      restartRemoteStreamForViewportRef.current = () => {}
-    }
-  }, [])
-
-  useEffect(() => {
     if (!isActive) {
       return
     }
@@ -2162,7 +2115,13 @@ function RemoteBrowserPagePane({
           { ...params, key },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
-        if (key === 'Enter' || key === 'Meta+r' || key === 'Control+r') {
+        if (
+          key === 'Enter' ||
+          key === 'Meta+r' ||
+          key === 'Meta+Shift+r' ||
+          key === 'Control+r' ||
+          key === 'Control+Shift+r'
+        ) {
           scheduleRemoteTabInfoRefresh(operationToken, 400)
         }
       } catch (error) {
@@ -2557,6 +2516,18 @@ function BrowserPagePane({
 }): React.JSX.Element {
   const isPaintable = isActive || isAutomationVisible
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const setContainerRef = useCallback((node: HTMLDivElement | null): void => {
+    containerRef.current = node
+    if (node !== null) {
+      return
+    }
+    // Why: feedback timers are scoped to this pane owner and must not fire
+    // after the DOM owner is detached.
+    clearTimeout(grabToastTimerRef.current)
+    clearTimeout(annotationCopyTimerRef.current)
+  }, [])
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const browserTabIdRef = useRef(browserTab.id)
@@ -2694,17 +2665,6 @@ function BrowserPagePane({
     below: boolean
     payload: BrowserGrabPayload | null
   } | null>(null)
-  const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  // Why: clear the toast auto-dismiss timer on unmount so it cannot fire
-  // after the component is destroyed (prevents setState-on-unmounted warnings
-  // and stale rearm calls).
-  useEffect(() => {
-    return () => {
-      clearTimeout(grabToastTimerRef.current)
-      clearTimeout(annotationCopyTimerRef.current)
-    }
-  }, [])
 
   const grabRef = useRef(grab)
   grabRef.current = grab
@@ -4767,7 +4727,7 @@ function BrowserPagePane({
         </div>
       ) : null}
       <div
-        ref={containerRef}
+        ref={setContainerRef}
         className="relative flex min-h-0 flex-1 overflow-hidden bg-background"
         onDragOver={handleInternalFileDragOver}
         onDrop={handleInternalFileDrop}

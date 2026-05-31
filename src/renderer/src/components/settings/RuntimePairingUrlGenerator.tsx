@@ -116,20 +116,27 @@ export function RuntimePairingUrlGenerator({
   const [isGeneratingPairing, setIsGeneratingPairing] = useState(false)
   const networkInterfaceLoadIdRef = useRef(0)
   const accessGrantLoadIdRef = useRef(0)
+  const copiedTargetResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
 
-  useEffect(() => {
-    if (copiedTarget === null) {
+  const clearCopiedTargetResetTimer = useCallback((): void => {
+    if (copiedTargetResetTimerRef.current === null) {
       return
     }
-    const target = copiedTarget
-    const timeout = window.setTimeout(() => {
-      if (mountedRef.current) {
-        setCopiedTarget((current) => (current === target ? null : current))
+    window.clearTimeout(copiedTargetResetTimerRef.current)
+    copiedTargetResetTimerRef.current = null
+  }, [])
+
+  const setContainerNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: copy feedback timers are owned by this settings surface; clear
+      // them when Settings collapses or navigates away.
+      if (!node) {
+        clearCopiedTargetResetTimer()
       }
-    }, 1400)
-    return () => window.clearTimeout(timeout)
-  }, [copiedTarget, mountedRef])
+    },
+    [clearCopiedTargetResetTimer]
+  )
 
   const loadRuntimeAccessGrants = useCallback(
     async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
@@ -291,7 +298,14 @@ export function RuntimePairingUrlGenerator({
     try {
       await window.api.ui.writeClipboardText(value)
       if (mountedRef.current) {
+        clearCopiedTargetResetTimer()
         setCopiedTarget(target)
+        copiedTargetResetTimerRef.current = window.setTimeout(() => {
+          copiedTargetResetTimerRef.current = null
+          if (mountedRef.current) {
+            setCopiedTarget((current) => (current === target ? null : current))
+          }
+        }, 1400)
         toast.success(target === 'web' ? 'Copied web client URL.' : 'Copied pairing URL.')
       }
     } catch (error) {
@@ -317,7 +331,7 @@ export function RuntimePairingUrlGenerator({
   }
 
   return (
-    <div className={containerClassName}>
+    <div ref={setContainerNode} className={containerClassName}>
       {showHeader ? (
         <div className="space-y-1">
           <Label id="runtime-share-server-label">Share this Orca server</Label>

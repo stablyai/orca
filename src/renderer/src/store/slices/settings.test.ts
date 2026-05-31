@@ -202,6 +202,7 @@ describe('createSettingsSlice runtime switching', () => {
       markdownViewMode: { '/env-1/repo/stale.md': 'rich' },
       editorViewMode: { '/env-1/repo/stale.md': 'changes' },
       editorCursorLine: { '/env-1/repo/stale.md': 4 },
+      showDotfilesByWorktree: { 'repo-env-1::/env-1/repo': false },
       gitIgnoredPathsByWorktree: { 'repo-env-1::/env-1/repo': ['dist/'] },
       prCache: { '/env-1/repo::main': { data: null, fetchedAt: Date.now() } },
       linearIssueCache: { 'LIN-1': { data: { id: 'LIN-1' } as never, fetchedAt: Date.now() } }
@@ -254,6 +255,7 @@ describe('createSettingsSlice runtime switching', () => {
     expect(store.getState().markdownViewMode).toEqual({})
     expect(store.getState().editorViewMode).toEqual({})
     expect(store.getState().editorCursorLine).toEqual({})
+    expect(store.getState().showDotfilesByWorktree).toEqual({})
     expect(store.getState().gitIgnoredPathsByWorktree).toEqual({})
     expect(store.getState().ptyIdsByTabId).toEqual({})
     expect(store.getState().browserTabsByWorktree).toEqual({})

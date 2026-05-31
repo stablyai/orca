@@ -6,7 +6,11 @@ import * as path from 'path'
 import type { RelayDispatcher } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
-import { parseBranchDiff, parseWorktreeList } from './git-handler-utils'
+import {
+  isUnsupportedWorktreeListZError,
+  parseBranchDiff,
+  parseWorktreeList
+} from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
 import {
   computeDiff,
@@ -139,7 +143,7 @@ export class GitHandler {
     // path.join. Without validation, ../../etc/passwd traverses outside the worktree.
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
     return computeDiff(
@@ -617,6 +621,17 @@ export class GitHandler {
 
   private async listWorktrees(params: Record<string, unknown>) {
     const repoPath = params.repoPath as string
+    try {
+      const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath)
+      return parseWorktreeList(stdout, { nulDelimited: true })
+    } catch (error) {
+      if (!isUnsupportedWorktreeListZError(error)) {
+        return []
+      }
+    }
+
+    // Why: `-z` keeps newline-containing SSH worktree paths intact, but older
+    // Git rejects it. Fall back to the original line-block parser there.
     try {
       const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath)
       return parseWorktreeList(stdout)

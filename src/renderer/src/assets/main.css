@@ -336,10 +336,14 @@
 
 /* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
 .worktree-sidebar-scrollbar {
-  /* Why: the scrollbar itself owns the gutter; padding is only the card-to-gutter gap. */
-  padding-right: 2px;
+  /* Why: the scrollbar itself owns the gutter; avoid adding a second visual gap beside cards. */
+  padding-right: 0;
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
+}
+
+.worktree-sidebar-scrollbar::-webkit-scrollbar {
+  width: 8px;
 }
 
 .worktree-sidebar-scrollbar::-webkit-scrollbar-thumb {
@@ -407,6 +411,16 @@
   background: rgba(121, 121, 121, 0.7);
   border: 3px solid transparent;
   background-clip: padding-box;
+}
+
+.combined-diff-scroll-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.combined-diff-scroll-container::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 /* Hide tab-strip scrollbars to prevent drag-time scrollbar flashes */
@@ -2516,6 +2530,8 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 .orca-diff-comment-actions-pill {
   display: inline-flex;
   align-items: center;
+  gap: 2px;
+  padding: 0 2px;
   border: 1px solid color-mix(in srgb, var(--foreground) 10%, var(--border));
   border-radius: 6px;
   background: var(--background);
@@ -2532,7 +2548,8 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
+  min-width: 28px;
+  padding: 4px 7px;
   font-size: 11px;
   font-weight: 500;
   color: var(--muted-foreground);
@@ -2543,6 +2560,13 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   transition:
     background-color 100ms ease,
     color 100ms ease;
+}
+
+.orca-diff-comment-edit {
+  min-width: 28px;
+  height: 24px;
+  padding: 4px 7px;
+  border-radius: 4px;
 }
 
 .orca-diff-comment-pill-btn:hover {

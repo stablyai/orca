@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { spawn } from 'child_process'
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { createServer, connect, type Server } from 'net'
@@ -8,6 +9,7 @@ import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
   getProcessStartedAtMs,
   healthCheckDaemon,
+  isDaemonOlderThanPathMtime,
   killStaleDaemon,
   parseDaemonPidFile,
   startTimeMatches
@@ -261,6 +263,63 @@ describe('killStaleDaemon pid identity guards', () => {
       expect(terminationSignals).toEqual([])
     } finally {
       killSpy.mockRestore()
+    }
+  })
+})
+
+describe('isDaemonOlderThanPathMtime', () => {
+  let dir: string
+  let socketPath: string
+  let tokenPath: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'daemon-health-mtime-test-'))
+    socketPath = join(dir, 'daemon.sock')
+    tokenPath = join(dir, 'daemon.token')
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('detects a daemon that started before the current bundle entry was written', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+
+    const child = spawn(
+      process.execPath,
+      [
+        '-e',
+        'setTimeout(() => {}, 30000)',
+        'daemon-entry',
+        '--socket',
+        socketPath,
+        '--token',
+        tokenPath
+      ],
+      { stdio: 'ignore' }
+    )
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      const startedAtMs = getProcessStartedAtMs(child.pid!)
+      if (startedAtMs === null) {
+        return
+      }
+
+      const entryPath = join(dir, 'daemon-entry.js')
+      writeFileSync(entryPath, '', 'utf8')
+      const future = new Date(startedAtMs + 10_000)
+      utimesSync(entryPath, future, future)
+      writeFileSync(
+        getDaemonPidPath(dir),
+        serializeDaemonPidFile({ pid: child.pid!, startedAtMs, entryPath }),
+        { mode: 0o600 }
+      )
+
+      expect(isDaemonOlderThanPathMtime(dir, socketPath, tokenPath, entryPath)).toBe(true)
+    } finally {
+      child.kill('SIGKILL')
     }
   })
 })

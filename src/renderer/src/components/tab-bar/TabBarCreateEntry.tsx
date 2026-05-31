@@ -41,6 +41,7 @@ export default function TabBarCreateEntry({
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [selectedIndexQuery, setSelectedIndexQuery] = useState(query)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileList = useRuntimeFileListForWorktree({ enabled: menuOpen, worktreeId })
 
@@ -62,9 +63,13 @@ export default function TabBarCreateEntry({
     [agentOptions, query]
   )
 
-  useEffect(() => {
-    setSelectedIndex(0)
-  }, [query])
+  if (selectedIndexQuery !== query) {
+    setSelectedIndexQuery(query)
+    if (selectedIndex !== 0) {
+      // Why: the first filtered action should be highlighted on the same paint as the new query.
+      setSelectedIndex(0)
+    }
+  }
 
   const disabled = !onOpenEntry
   const hasQuery = query.trim().length > 0

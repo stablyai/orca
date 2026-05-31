@@ -110,14 +110,26 @@ function LinearIssueSubIssueButton({
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
-  const [subIssues, setSubIssues] = useState<LinearIssueChildSummary[]>(issue.subIssues ?? [])
+  const [optimisticSubIssues, setOptimisticSubIssues] = useState<{
+    issueId: string
+    subIssues: LinearIssueChildSummary[]
+  }>(() => ({
+    issueId: issue.id,
+    subIssues: []
+  }))
   const [submitting, setSubmitting] = useState(false)
   const [openingSubIssueId, setOpeningSubIssueId] = useState<string | null>(null)
   const mountedRef = useMountedRef()
 
-  useEffect(() => {
-    setSubIssues(issue.subIssues ?? [])
-  }, [issue.id, issue.subIssues])
+  const subIssues = useMemo(() => {
+    const baseSubIssues = issue.subIssues ?? []
+    if (optimisticSubIssues.issueId !== issue.id || optimisticSubIssues.subIssues.length === 0) {
+      return baseSubIssues
+    }
+    const baseIds = new Set(baseSubIssues.map((subIssue) => subIssue.id))
+    const additions = optimisticSubIssues.subIssues.filter((subIssue) => !baseIds.has(subIssue.id))
+    return additions.length === 0 ? baseSubIssues : [...baseSubIssues, ...additions]
+  }, [issue.id, issue.subIssues, optimisticSubIssues])
 
   const handleOpenSubIssue = useCallback(
     async (subIssue: LinearIssueChildSummary) => {
@@ -166,9 +178,16 @@ function LinearIssueSubIssueButton({
           title: result.title || trimmed,
           url: result.url
         }
-        setSubIssues((prev) =>
-          prev.some((subIssue) => subIssue.id === child.id) ? prev : [...prev, child]
-        )
+        setOptimisticSubIssues((current) => {
+          const currentSubIssues = current.issueId === issue.id ? current.subIssues : []
+          if (
+            currentSubIssues.some((subIssue) => subIssue.id === child.id) ||
+            issue.subIssues?.some((subIssue) => subIssue.id === child.id)
+          ) {
+            return current
+          }
+          return { issueId: issue.id, subIssues: [...currentSubIssues, child] }
+        })
         toast.success(`Created ${result.identifier}`)
         setTitle('')
         setOpen(false)
@@ -180,7 +199,15 @@ function LinearIssueSubIssueButton({
     } finally {
       setSubmitting(false)
     }
-  }, [issue.id, issue.project?.id, issue.team.id, issue.workspaceId, settings, title])
+  }, [
+    issue.id,
+    issue.project?.id,
+    issue.subIssues,
+    issue.team.id,
+    issue.workspaceId,
+    settings,
+    title
+  ])
 
   return (
     <section className="mt-10 max-w-[820px]">
@@ -272,7 +299,7 @@ function LinearIssueSidebarProjectCard({
       void linearListProjects(settings, query, 20, issue.workspaceId)
         .then((result) => {
           if (!cancelled) {
-            setProjects(result)
+            setProjects(result.items)
           }
         })
         .catch((error) => {

@@ -514,7 +514,9 @@ export class AgentBrowserBridge {
       this.activeWebContentsId = nextWorktreeActiveWebContentsId
     }
     if (browserPageId) {
-      await this.destroySession(`orca-tab-${browserPageId}`)
+      const sessionName = `orca-tab-${browserPageId}`
+      await this.destroySession(sessionName)
+      this.pendingInterceptRestore.delete(sessionName)
     }
     this.options.onTabsChanged?.(owningWorktreeId)
   }
@@ -582,6 +584,7 @@ export class AgentBrowserBridge {
     for (const [tabId, wcId] of tabs) {
       const wc = this.getWebContents(wcId)
       if (!wc) {
+        this.browserManager.unregisterGuest(tabId)
         continue
       }
       if (firstLiveWcId === null) {
@@ -1726,6 +1729,7 @@ export class AgentBrowserBridge {
       promises.push(this.destroySession(sessionName))
     }
     await Promise.allSettled(promises)
+    this.pendingInterceptRestore.clear()
   }
 
   // ── Internal ──
@@ -1813,6 +1817,9 @@ export class AgentBrowserBridge {
       }
     }
 
+    if (queue && queue.length === 0 && this.commandQueues.get(sessionName) === queue) {
+      this.commandQueues.delete(sessionName)
+    }
     this.processingQueues.delete(sessionName)
   }
 
@@ -1843,6 +1850,7 @@ export class AgentBrowserBridge {
     }
 
     if (!this.getWebContents(webContentsId)) {
+      this.browserManager.unregisterGuest(browserPageId)
       throw new BrowserError(
         'browser_tab_not_found',
         `Browser page ${browserPageId} is no longer available`
@@ -1869,6 +1877,15 @@ export class AgentBrowserBridge {
         if (wcId === preferredWcId && this.getWebContents(wcId)) {
           return { browserPageId: tabId, webContentsId: wcId }
         }
+        if (wcId === preferredWcId) {
+          this.browserManager.unregisterGuest(tabId)
+          if (this.activeWebContentsId === wcId) {
+            this.activeWebContentsId = null
+          }
+          if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === wcId) {
+            this.activeWebContentsPerWorktree.delete(worktreeId)
+          }
+        }
       }
     }
 
@@ -1884,6 +1901,7 @@ export class AgentBrowserBridge {
         }
         return { browserPageId: tabId, webContentsId: wcId }
       }
+      this.browserManager.unregisterGuest(tabId)
     }
 
     throw new BrowserError(
@@ -1964,8 +1982,21 @@ export class AgentBrowserBridge {
       return
     }
 
+    const pendingCreation = this.pendingSessionCreation.get(sessionName)
+    if (pendingCreation) {
+      // Why: tab close can race with stale-session cleanup before sessions.set().
+      // Wait for creation to settle so a late proxy cannot survive the close.
+      try {
+        await pendingCreation
+      } catch {
+        // Creation failures are handled by the original caller; teardown still
+        // needs to reject queued work and clear any partial state below.
+      }
+    }
+
     const session = this.sessions.get(sessionName)
     if (!session) {
+      this.rejectQueuedCommandsForClosedSession(sessionName)
       return
     }
 
@@ -1974,19 +2005,7 @@ export class AgentBrowserBridge {
 
     // Why: queued commands would hang forever if we just delete the queue —
     // their promises would never resolve or reject. Drain and reject them.
-    const queue = this.commandQueues.get(sessionName)
-    this.commandQueues.delete(sessionName)
-    this.processingQueues.delete(sessionName)
-    if (queue) {
-      const err = new BrowserError(
-        'browser_tab_closed',
-        'Tab was closed while commands were queued'
-      )
-      for (const cmd of queue) {
-        cmd.reject(err)
-      }
-      queue.length = 0
-    }
+    this.rejectQueuedCommandsForClosedSession(sessionName)
 
     if (session.activeProcess) {
       // Why: queued command rejection is not enough when a daemon command is
@@ -2021,6 +2040,22 @@ export class AgentBrowserBridge {
     }
   }
 
+  private rejectQueuedCommandsForClosedSession(sessionName: string): void {
+    const queue = this.commandQueues.get(sessionName)
+    this.commandQueues.delete(sessionName)
+    this.processingQueues.delete(sessionName)
+    if (queue) {
+      const err = new BrowserError(
+        'browser_tab_closed',
+        'Tab was closed while commands were queued'
+      )
+      for (const cmd of queue) {
+        cmd.reject(err)
+      }
+      queue.length = 0
+    }
+  }
+
   private async execAgentBrowser(
     sessionName: string,
     commandArgs: string[],
@@ -2038,6 +2073,7 @@ export class AgentBrowserBridge {
     // could be destroyed. Check here to give a clear error instead of letting the
     // proxy fail with cryptic Electron debugger errors.
     if (!this.getWebContents(session.webContentsId)) {
+      await this.destroySession(sessionName)
       throw this.createPageUnavailableError(sessionName)
     }
 

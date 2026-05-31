@@ -92,6 +92,33 @@ describe('mcp-config', () => {
     ])
   })
 
+  it('marks declared transports without their target as invalid', () => {
+    const result = inspectMcpConfigContent(
+      workspaceCandidate,
+      JSON.stringify({
+        mcpServers: {
+          remoteMissingUrl: { type: 'http' },
+          localMissingCommand: { type: 'local' }
+        }
+      })
+    )
+
+    expect(result.servers).toEqual([
+      {
+        name: 'remoteMissingUrl',
+        transport: 'http',
+        status: 'invalid',
+        issue: 'Missing URL.'
+      },
+      {
+        name: 'localMissingCommand',
+        transport: 'stdio',
+        status: 'invalid',
+        issue: 'Missing command.'
+      }
+    ])
+  })
+
   it('masks env values that look sensitive by key or value', () => {
     expect(
       maskMcpEnv({

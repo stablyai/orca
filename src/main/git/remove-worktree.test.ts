@@ -52,7 +52,15 @@ function mockGitCommands(results: Record<string, MockResult>): void {
     const key = `git ${args.join(' ')}`
     const callCount = (callCounts.get(key) ?? 0) + 1
     callCounts.set(key, callCount)
-    const result = results[`${key}#${callCount}`] ?? results[key] ?? {}
+    const lineListKey =
+      key === 'git worktree list --porcelain -z' ? 'git worktree list --porcelain' : ''
+    const result =
+      results[`${key}#${callCount}`] ??
+      results[key] ??
+      (lineListKey
+        ? (results[`${lineListKey}#${callCount}`] ?? results[lineListKey])
+        : undefined) ??
+      {}
 
     if (result.error) {
       throw Object.assign(result.error, {
@@ -184,7 +192,7 @@ branch refs/heads/feature/test
       expect.arrayContaining([
         'git worktree remove /repo-feature',
         'git worktree prune',
-        'git worktree list --porcelain'
+        'git worktree list --porcelain -z'
       ])
     )
     expect(calls).not.toContain('git branch -d -- feature/test')
@@ -476,7 +484,7 @@ describe('listWorktrees', () => {
     // Why: the non-sparse main worktree gets an fs probe of its sparse config
     // file; the linked worktree short-circuits on the parsed `sparse` token and
     // does not. Only one git subprocess runs regardless of worktree count.
-    expect(getGitCalls()).toEqual(['git worktree list --porcelain'])
+    expect(getGitCalls()).toEqual(['git worktree list --porcelain -z'])
     expect(statMock).toHaveBeenCalledTimes(1)
     expect(translateWslOutputPathsMock).toHaveBeenCalledTimes(2)
   })
@@ -492,7 +500,7 @@ describe('listWorktrees', () => {
 
     await expect(listWorktrees('/workspace/deleted-repo')).resolves.toEqual([])
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain'], {
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
       cwd: '/workspace/deleted-repo'
     })
     expect(statMock).toHaveBeenCalledWith('/workspace/deleted-repo')
@@ -514,7 +522,7 @@ describe('listWorktrees', () => {
 
     await expect(listWorktrees('/private/tmp/orca-issue-1582-test/my-repo')).resolves.toEqual([])
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain'], {
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
       cwd: '/private/tmp/orca-issue-1582-test/my-repo'
     })
     expect(warnSpy).not.toHaveBeenCalled()
@@ -523,7 +531,7 @@ describe('listWorktrees', () => {
 
   it('detects sparse checkout after translating paths when porcelain omits sparse token', async () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
-      if (args.join(' ') === 'worktree list --porcelain') {
+      if (args.join(' ') === 'worktree list --porcelain -z') {
         return {
           stdout:
             'worktree /home/me/repo\nHEAD abc123\nbranch refs/heads/main\n\n' +
@@ -572,7 +580,101 @@ describe('listWorktrees', () => {
     // Why: the detection path must not spawn a git subprocess per worktree —
     // the perf regression in #1131 came from `git sparse-checkout list` firing
     // on every poll.
-    expect(getGitCalls()).toEqual(['git worktree list --porcelain'])
+    expect(getGitCalls()).toEqual(['git worktree list --porcelain -z'])
+  })
+
+  it('bounds concurrent sparse-checkout filesystem probes', async () => {
+    const worktreeCount = 20
+    const sparseWorktreePath = '/repo-worktree-17'
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: Array.from({ length: worktreeCount }, (_, index) =>
+        [
+          `worktree ${index === 0 ? '/repo' : `/repo-worktree-${index}`}`,
+          `HEAD ${String(index).padStart(6, '0')}`,
+          `branch refs/heads/${index === 0 ? 'main' : `feature/${index}`}`,
+          ''
+        ].join('\n')
+      ).join('\n'),
+      stderr: ''
+    })
+
+    const pendingProbeResolves: (() => void)[] = []
+    let activeProbes = 0
+    let maxActiveProbes = 0
+    statMock.mockImplementation(async (filePath: string) => {
+      activeProbes += 1
+      maxActiveProbes = Math.max(maxActiveProbes, activeProbes)
+      await new Promise<void>((resolve) => pendingProbeResolves.push(resolve))
+      activeProbes -= 1
+
+      if (filePath.includes(sparseWorktreePath)) {
+        return { isFile: () => true, size: 32 }
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+
+    let completed = false
+    const listPromise = listWorktrees('/repo').finally(() => {
+      completed = true
+    })
+
+    for (let attempt = 0; pendingProbeResolves.length < 8 && attempt < 20; attempt += 1) {
+      await Promise.resolve()
+    }
+    expect(pendingProbeResolves).toHaveLength(8)
+
+    for (let attempt = 0; !completed && attempt < 20; attempt += 1) {
+      pendingProbeResolves.splice(0).forEach((resolve) => resolve())
+      await Promise.resolve()
+      await Promise.resolve()
+    }
+    expect(completed).toBe(true)
+
+    const worktrees = await listPromise
+
+    expect(maxActiveProbes).toBeLessThanOrEqual(8)
+    expect(statMock).toHaveBeenCalledTimes(worktreeCount)
+    expect(worktrees).toHaveLength(worktreeCount)
+    expect(worktrees[17]).toMatchObject({
+      path: sparseWorktreePath,
+      isSparse: true
+    })
+  })
+
+  it('falls back to line-block porcelain output when Git rejects -z', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain -z': {
+        error: Object.assign(new Error("unknown switch `z'"), {
+          stderr: "error: unknown switch `z'"
+        })
+      },
+      'git worktree list --porcelain': {
+        stdout:
+          'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n' +
+          'worktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
+      }
+    })
+
+    await expect(listWorktrees('/repo')).resolves.toEqual([
+      {
+        path: '/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/repo-feature',
+        head: 'def456',
+        branch: 'refs/heads/feature/test',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    expect(getGitCalls()).toEqual([
+      'git worktree list --porcelain -z',
+      'git worktree list --porcelain'
+    ])
   })
 })
 

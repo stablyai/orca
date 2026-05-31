@@ -398,6 +398,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let output = ''
     let resolved = false
     let sentStatus = false
+    let settleTimer: ReturnType<typeof setTimeout> | null = null
 
     const term = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',
@@ -414,6 +415,10 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
+        if (settleTimer) {
+          clearTimeout(settleTimer)
+          settleTimer = null
+        }
         cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         resolve({
           provider: 'codex',
@@ -442,8 +447,11 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       }
 
       // Check if we have parseable output
-      if (sentStatus && (FIVE_HOUR_RE.test(output) || WEEKLY_RE.test(output))) {
-        setTimeout(() => {
+      if (sentStatus && !settleTimer && (FIVE_HOUR_RE.test(output) || WEEKLY_RE.test(output))) {
+        // Why: after status text is parseable the TUI may continue streaming
+        // chunks; one settle timer is enough to let the panel finish flushing.
+        settleTimer = setTimeout(() => {
+          settleTimer = null
           if (resolved) {
             return
           }
@@ -475,6 +483,10 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
 
     const onExitDisposable = term.onExit(() => {
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })
+      if (settleTimer) {
+        clearTimeout(settleTimer)
+        settleTimer = null
+      }
       if (!resolved) {
         resolved = true
         clearTimeout(timeout)

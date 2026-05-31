@@ -45,6 +45,25 @@ describe('parseNumstat', () => {
     expect(plain.get('new.ts')).toEqual({ added: 2, removed: 1 })
   })
 
+  it('keeps literal rename-marker filenames when parsing NUL-delimited numstat', () => {
+    const stats = parseNumstat('1\t0\tdocs/a => b.txt\0')
+
+    expect(stats.get('docs/a => b.txt')).toEqual({ added: 1, removed: 0 })
+  })
+
+  it('keys NUL-delimited renames to the post-rename path', () => {
+    const stats = parseNumstat('2\t1\t\0old.ts\0new.ts\0')
+
+    expect(stats.get('new.ts')).toEqual({ added: 2, removed: 1 })
+  })
+
+  it('decodes Git C-quoted paths before keying stats', () => {
+    expect(parseNumstat('1\t1\t"tab\\tfile.txt"\n').get('tab\tfile.txt')).toEqual({
+      added: 1,
+      removed: 1
+    })
+  })
+
   it('ignores blank lines', () => {
     expect(parseNumstat('').size).toBe(0)
   })

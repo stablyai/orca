@@ -9,8 +9,10 @@ import type { DiffComment } from '../../../../shared/types'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { useAppStore } from '@/store'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { DiffCommentCard } from './DiffCommentCard'
 import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
+import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
 import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
 
 // Why: Monaco glyph-margin *decorations* don't expose click events in a way
@@ -61,6 +63,7 @@ type ZoneEntry = {
   // mutating the delegate is the supported way to grow a zone in place.
   delegate: monacoEditor.IViewZone
   root: Root
+  disposeMouseDownStopper: () => void
   lastRenderSignature: string
   // Why: Monaco invokes IViewZone.onDomNodeTop on every render once the zone
   // is in the layout. The first invocation is our deterministic "this zone is
@@ -398,7 +401,10 @@ export function useDiffCommentDecorator({
       // delay. Clear `zones` synchronously so a subsequent editor mount sees
       // empty bookkeeping immediately. This matches the deferred unmount in
       // the diff-pass effect below.
-      const rootsToUnmount = Array.from(zones.values(), (z) => z.root)
+      const rootsToUnmount = Array.from(zones.values(), (z) => {
+        z.disposeMouseDownStopper()
+        return z.root
+      })
       zones.clear()
       if (rootsToUnmount.length > 0) {
         queueMicrotask(() => {
@@ -443,7 +449,16 @@ export function useDiffCommentDecorator({
       if (!entry) {
         return
       }
-      const measured = entry.domNode.scrollHeight
+      const child = entry.domNode.firstElementChild
+      const wrapperStyle = window.getComputedStyle(entry.domNode)
+      const verticalPadding =
+        Number.parseFloat(wrapperStyle.paddingTop) + Number.parseFloat(wrapperStyle.paddingBottom)
+      // Why: Monaco pins the view-zone node to the previous height, so its
+      // scrollHeight cannot shrink. Measure the rendered card and wrapper
+      // padding instead so cancel/save can collapse the zone after edit mode.
+      const measured = Math.ceil(
+        (child?.getBoundingClientRect().height ?? entry.domNode.scrollHeight) + verticalPadding
+      )
       if (measured <= 0) {
         return
       }
@@ -496,45 +511,49 @@ export function useDiffCommentDecorator({
     // future prop is added once.
     const renderCard = (root: Root, comment: DecoratedDiffComment): void => {
       root.render(
-        <DiffCommentCard
-          lineNumber={comment.lineNumber}
-          startLine={comment.startLine}
-          label={comment.author ? getDiffCommentLineLabel(comment).toLowerCase() : undefined}
-          body={comment.body}
-          sentAt={comment.sentAt}
-          author={comment.author}
-          createdAtLabel={comment.createdAtLabel}
-          url={comment.url}
-          onDelete={
-            comment.canDelete === false ? undefined : () => onDeleteCommentRef.current(comment.id)
-          }
-          onSubmitEdit={
-            onUpdateCommentRef.current && comment.canEdit !== false
-              ? async (body) => {
-                  const fn = onUpdateCommentRef.current
-                  if (!fn) {
-                    return false
+        // Why: Monaco view zones are separate React roots outside the app root,
+        // so context providers from App.tsx do not reach tooltip-using actions.
+        <TooltipProvider delayDuration={400}>
+          <DiffCommentCard
+            lineNumber={comment.lineNumber}
+            startLine={comment.startLine}
+            label={comment.author ? getDiffCommentLineLabel(comment).toLowerCase() : undefined}
+            body={comment.body}
+            sentAt={comment.sentAt}
+            author={comment.author}
+            createdAtLabel={comment.createdAtLabel}
+            url={comment.url}
+            onDelete={
+              comment.canDelete === false ? undefined : () => onDeleteCommentRef.current(comment.id)
+            }
+            onSubmitEdit={
+              onUpdateCommentRef.current && comment.canEdit !== false
+                ? async (body) => {
+                    const fn = onUpdateCommentRef.current
+                    if (!fn) {
+                      return false
+                    }
+                    return fn(comment.id, body)
                   }
-                  return fn(comment.id, body)
-                }
-              : undefined
-          }
-          onContentResize={() => resizeZone(comment.id)}
-          headerActions={
-            worktreeId && comment.author === undefined ? (
-              <NotesSendMenu
-                worktreeId={worktreeId}
-                groupId={activeGroupId}
-                modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
-                scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
-                targetModeLabel="This note"
-                triggerClassName="orca-diff-comment-edit"
-                disabledTooltip="Note already sent"
-                onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
-              />
-            ) : null
-          }
-        />
+                : undefined
+            }
+            onContentResize={() => resizeZone(comment.id)}
+            headerActions={
+              worktreeId && comment.author === undefined ? (
+                <NotesSendMenu
+                  worktreeId={worktreeId}
+                  groupId={activeGroupId}
+                  modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
+                  scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
+                  targetModeLabel="This note"
+                  triggerClassName="orca-diff-comment-edit"
+                  disabledTooltip="Note already sent"
+                  onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+                />
+              ) : null
+            }
+          />
+        </TooltipProvider>
       )
     }
 
@@ -545,6 +564,7 @@ export function useDiffCommentDecorator({
       for (const [commentId, entry] of zones) {
         if (!relevantMap.has(commentId)) {
           accessor.removeZone(entry.zoneId)
+          entry.disposeMouseDownStopper()
           rootsToUnmount.push(entry.root)
           zones.delete(commentId)
           // Why: if the user requested a scroll-to-note on a comment that
@@ -567,10 +587,9 @@ export function useDiffCommentDecorator({
         // steal focus (or start a selection drag) when the user interacts
         // with anything inside the card. Delete still fires because click is
         // attached directly on the button.
-        dom.addEventListener('mousedown', (ev) => ev.stopPropagation())
+        const disposeMouseDownStopper = installDiffCommentZoneMouseDownStopper(dom)
 
         const root = createRoot(dom)
-        renderCard(root, c)
 
         // Why: estimate height from line count so the zone is close to the
         // right size on first paint. Monaco sets heightInPx authoritatively at
@@ -618,9 +637,11 @@ export function useDiffCommentDecorator({
           domNode: dom,
           delegate,
           root,
+          disposeMouseDownStopper,
           lastRenderSignature: getRenderSignature(c, formatCommentPrompt),
           laidOut: false
         })
+        renderCard(root, c)
       }
 
       // Patch existing zones whose visible props changed in place — re-render
@@ -634,8 +655,8 @@ export function useDiffCommentDecorator({
         if (entry.lastRenderSignature === renderSignature) {
           continue
         }
-        renderCard(entry.root, c)
         entry.lastRenderSignature = renderSignature
+        renderCard(entry.root, c)
       }
     })
 

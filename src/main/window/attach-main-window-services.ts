@@ -38,6 +38,11 @@ import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-rel
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 
+let appReloadHandlerTokenCounter = 0
+let activeAppReloadHandlerToken: number | null = null
+let runtimeNotifierTokenCounter = 0
+let activeRuntimeNotifierToken: number | null = null
+
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
   store: Store,
@@ -236,6 +241,8 @@ function registerAppReloadHandler(
 ): void {
   // Why: the process-global IPC handler can outlive the BrowserWindow, so keep
   // the registered WebContents and guard both lifetimes before using it.
+  const handlerToken = ++appReloadHandlerTokenCounter
+  activeAppReloadHandlerToken = handlerToken
   const mainWebContents = mainWindow.webContents
   ipcMain.removeHandler('app:reload')
   ipcMain.handle('app:reload', (event) => {
@@ -249,12 +256,23 @@ function registerAppReloadHandler(
     onBeforeRendererReload?.({ webContentsId: mainWebContents.id, ignoreCache: false })
     mainWebContents.reload()
   })
+  mainWindow.on('closed', () => {
+    if (activeAppReloadHandlerToken !== handlerToken) {
+      return
+    }
+    // Why: macOS can keep the process alive with no window, and this global
+    // handler otherwise keeps the closed BrowserWindow reachable until reopen.
+    ipcMain.removeHandler('app:reload')
+    activeAppReloadHandlerToken = null
+  })
 }
 
 function registerRuntimeWindowLifecycle(
   mainWindow: BrowserWindow,
   runtime: OrcaRuntimeService
 ): void {
+  const notifierToken = ++runtimeNotifierTokenCounter
+  activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
   const send = (channel: string, ...args: unknown[]): void => {
     if (!mainWindow.isDestroyed()) {
@@ -270,13 +288,15 @@ function registerRuntimeWindowLifecycle(
       repoId,
       worktreeId,
       setup?: CreateWorktreeResult['setup'],
-      startup?: WorktreeStartupLaunch
+      startup?: WorktreeStartupLaunch,
+      defaultTabs?: CreateWorktreeResult['defaultTabs']
     ) => {
       send('ui:activateWorktree', {
         repoId,
         worktreeId,
         ...(setup ? { setup } : {}),
-        ...(startup ? { startup } : {})
+        ...(startup ? { startup } : {}),
+        ...(defaultTabs ? { defaultTabs } : {})
       })
     },
     createTerminal: (worktreeId, opts) =>
@@ -369,6 +389,13 @@ function registerRuntimeWindowLifecycle(
   })
   mainWindow.on('closed', () => {
     runtime.markGraphUnavailable(mainWindow.id)
+    if (activeRuntimeNotifierToken === notifierToken) {
+      // Why: the notifier closes over the BrowserWindow for mobile/CLI UI
+      // relays; clear it during the no-window gap so the runtime does not
+      // retain destroyed window graphs.
+      runtime.setNotifier(null)
+      activeRuntimeNotifierToken = null
+    }
   })
 }
 

@@ -1299,6 +1299,14 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     () => buildAgentPaneThreads({ events: allEvents, liveAgentByPaneKey }),
     [allEvents, liveAgentByPaneKey]
   )
+  const selectedPaneKeyIsLive =
+    selectedPaneKey === null || allThreads.some((thread) => thread.paneKey === selectedPaneKey)
+  const effectiveSelectedPaneKey = selectedPaneKeyIsLive ? selectedPaneKey : null
+  if (!selectedPaneKeyIsLive) {
+    // Why: Activity rows disappear when agent retention or tab state changes;
+    // clear stale selection before detail/portal rendering can target it.
+    setSelectedPaneKey(null)
+  }
 
   const visibleThreads = useMemo(() => {
     const trimmedQuery = query.trim().toLowerCase()
@@ -1306,25 +1314,23 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       // Why: keep the just-selected thread visible even after auto-mark-read
       // flips it to read, otherwise clicking a row in unread-only mode makes it
       // vanish from the left list while staying selected on the right.
-      if (readFilter === 'unread' && !thread.unread && thread.paneKey !== selectedPaneKey) {
+      if (
+        readFilter === 'unread' &&
+        !thread.unread &&
+        thread.paneKey !== effectiveSelectedPaneKey
+      ) {
         return false
       }
       return activityThreadMatchesSearchQuery({ thread, searchQuery: trimmedQuery })
     })
-  }, [allThreads, readFilter, query, selectedPaneKey])
+  }, [allThreads, readFilter, query, effectiveSelectedPaneKey])
   const visibleThreadGroups = useMemo(
     () => buildActivityThreadGroups(visibleThreads, groupBy),
     [visibleThreads, groupBy]
   )
 
-  useEffect(() => {
-    if (selectedPaneKey && !allThreads.some((thread) => thread.paneKey === selectedPaneKey)) {
-      setSelectedPaneKey(null)
-    }
-  }, [allThreads, selectedPaneKey])
-
-  const selectedThread = selectedPaneKey
-    ? (allThreads.find((thread) => thread.paneKey === selectedPaneKey) ?? null)
+  const selectedThread = effectiveSelectedPaneKey
+    ? (allThreads.find((thread) => thread.paneKey === effectiveSelectedPaneKey) ?? null)
     : null
   const selectedTabId = selectedThread?.tab.id ?? null
   // Why: repo-less terminal buckets can still produce Activity rows, but the
@@ -1485,8 +1491,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     setActivityTerminalPortals(portalDescriptors)
   }, [portalDescriptors])
 
-  useLayoutEffect(() => {
-    return () => {
+  const setActivityPageRef = useCallback((node: HTMLDivElement | null): void => {
+    if (!node) {
+      // Why: portal cleanup must only happen when the page unmounts; clearing on
+      // descriptor changes flashes the workspace pane behind the activity slot.
       setActivityTerminalPortals([])
     }
   }, [])
@@ -1538,20 +1546,20 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       !selectedThread ||
       !selectedThread.unread ||
       stagedThread ||
-      selectedThread.paneKey !== selectedPaneKey
+      selectedThread.paneKey !== effectiveSelectedPaneKey
     ) {
       return
     }
     const selectedThreadHasDetailOnlyView =
       !selectedHasLiveTab || selectedThread.migrationUnsupportedPtyId !== undefined
     const selectedThreadIsVisibleTerminal =
-      visibleThread?.paneKey === selectedPaneKey && visiblePortalReady
+      visibleThread?.paneKey === effectiveSelectedPaneKey && visiblePortalReady
     if (selectedThreadHasDetailOnlyView || selectedThreadIsVisibleTerminal) {
       storeData.acknowledgeAgents([selectedThread.paneKey])
     }
   }, [
     selectedHasLiveTab,
-    selectedPaneKey,
+    effectiveSelectedPaneKey,
     selectedThread,
     stagedThread,
     storeData,
@@ -1584,7 +1592,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   // breathing-room band above; the right pane's title row supplies its own
   // top padding (pt-2) so the heading isn't pinned to the titlebar.
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background pb-3">
+    <div ref={setActivityPageRef} className="flex h-full min-h-0 flex-col bg-background pb-3">
       <main className="flex min-h-0 flex-1 overflow-hidden">
         <aside
           ref={threadListRef}

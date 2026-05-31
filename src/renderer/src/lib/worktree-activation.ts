@@ -1,7 +1,9 @@
+/* eslint-disable max-lines -- Why: worktree activation is a single ordered flow spanning startup, setup, issue commands, and default tabs; splitting it would obscure sequencing guarantees. */
 import type {
   SetupSplitDirection,
   TuiAgent,
   Worktree,
+  WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../shared/types'
 import type { EventProps } from '../../../shared/telemetry-events'
@@ -39,6 +41,7 @@ export type IssueCommandLaunch =
 
 type WorktreeActivationStore = {
   tabsByWorktree: Record<string, { id: string }[]>
+  defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   createTab: (
     worktreeId: string,
     targetGroupId?: string,
@@ -55,6 +58,8 @@ type WorktreeActivationStore = {
     title: string | null,
     opts?: { recordInteraction?: boolean }
   ) => void
+  setTabColor: (tabId: string, color: string | null) => void
+  markDefaultTerminalTabsApplied: (worktreeId: string) => void
   reconcileWorktreeTabModel: (worktreeId: string) => { renderableTabCount: number }
   queueTabStartupCommand: (
     tabId: string,
@@ -139,6 +144,7 @@ export function activateAndRevealWorktree(
       telemetry?: AgentStartedTelemetry
     }
     setup?: WorktreeSetupLaunch
+    defaultTabs?: WorktreeDefaultTabsLaunch
     issueCommand?: IssueCommandLaunch
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
   }
@@ -192,7 +198,8 @@ export function activateAndRevealWorktree(
     worktreeId,
     opts?.startup ?? buildCreatedAgentReopenStartup(wt),
     opts?.setup,
-    opts?.issueCommand
+    opts?.issueCommand,
+    opts?.defaultTabs
   )
 
   // 5. Clear sidebar filters that would hide the target worktree
@@ -223,7 +230,8 @@ export function ensureWorktreeHasInitialTerminal(
     telemetry?: AgentStartedTelemetry
   },
   setup?: WorktreeSetupLaunch,
-  issueCommand?: IssueCommandLaunch
+  issueCommand?: IssueCommandLaunch,
+  defaultTabs?: WorktreeDefaultTabsLaunch
 ): string | null {
   const { renderableTabCount } = store.reconcileWorktreeTabModel(worktreeId)
   // Why: activation can now restore editor- or browser-only worktrees from the
@@ -238,6 +246,18 @@ export function ensureWorktreeHasInitialTerminal(
     isWebRuntimeSessionActive(useAppStore.getState().settings?.activeRuntimeEnvironmentId ?? null)
   ) {
     return null
+  }
+
+  const templatedTabId = applyDefaultTerminalTabs(
+    store,
+    worktreeId,
+    startup,
+    setup,
+    issueCommand,
+    defaultTabs
+  )
+  if (templatedTabId) {
+    return templatedTabId
   }
 
   // Why: this tab only exists because the user clicked/activated a worktree
@@ -265,7 +285,73 @@ export function ensureWorktreeHasInitialTerminal(
   if (startup) {
     store.queueTabStartupCommand(terminalTab.id, startup)
   }
+  queueSetupAndIssueCommands(store, worktreeId, terminalTab.id, setup, issueCommand)
 
+  return terminalTab.id
+}
+
+function applyDefaultTerminalTabs(
+  store: WorktreeActivationStore,
+  worktreeId: string,
+  startup:
+    | {
+        command: string
+        env?: Record<string, string>
+        initialAgentStatus?: { agent: TuiAgent; prompt: string }
+        telemetry?: AgentStartedTelemetry
+      }
+    | undefined,
+  setup: WorktreeSetupLaunch | undefined,
+  issueCommand: IssueCommandLaunch | undefined,
+  defaultTabs: WorktreeDefaultTabsLaunch | undefined
+): string | null {
+  if (!defaultTabs || store.defaultTerminalTabsAppliedByWorktreeId[worktreeId]) {
+    return null
+  }
+  store.markDefaultTerminalTabsApplied(worktreeId)
+  if (defaultTabs.tabs.length === 0) {
+    return null
+  }
+
+  let firstTabId: string | null = null
+  for (const [index, template] of defaultTabs.tabs.entries()) {
+    const tab = store.createTab(worktreeId, undefined, undefined, {
+      pendingActivationSpawn: true,
+      recordInteraction: false
+    })
+    if (index === 0) {
+      firstTabId = tab.id
+    }
+    if (template.title) {
+      store.setTabCustomTitle(tab.id, template.title, { recordInteraction: false })
+    }
+    if (template.color) {
+      store.setTabColor(tab.id, template.color)
+    }
+    const templateCommand = template.command?.trim()
+    if (templateCommand && defaultTabs.runCommands && !(index === 0 && startup)) {
+      store.queueTabStartupCommand(tab.id, { command: templateCommand })
+    }
+  }
+
+  if (!firstTabId) {
+    return null
+  }
+  store.setActiveTab(firstTabId)
+  if (startup) {
+    store.queueTabStartupCommand(firstTabId, startup)
+  }
+  queueSetupAndIssueCommands(store, worktreeId, firstTabId, setup, issueCommand)
+  return firstTabId
+}
+
+function queueSetupAndIssueCommands(
+  store: WorktreeActivationStore,
+  worktreeId: string,
+  terminalTabId: string,
+  setup: WorktreeSetupLaunch | undefined,
+  issueCommand: IssueCommandLaunch | undefined
+): void {
   // Why: the setup script launch location is user-configurable. The default
   // 'new-tab' creates a separate background tab titled "Setup" without
   // stealing focus from the main terminal, so setup output never crowds the
@@ -284,14 +370,14 @@ export function ensureWorktreeHasInitialTerminal(
       // Why: createTab auto-activates the new tab. Revert activation so the
       // user's focus stays on the primary terminal — per the design, the
       // Setup tab runs unattended in the background.
-      store.setActiveTab(terminalTab.id)
+      store.setActiveTab(terminalTabId)
       // Why: customTitle wins over the auto-generated "Terminal N" label
       // everywhere the tab is rendered (tab bar, switcher, session snapshots),
       // so labeling via customTitle is the single authoritative source.
       store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
       store.queueTabStartupCommand(setupTab.id, setupCommand)
     } else {
-      store.queueTabSetupSplit(terminalTab.id, {
+      store.queueTabSetupSplit(terminalTabId, {
         ...setupCommand,
         direction: mode === 'split-horizontal' ? 'horizontal' : 'vertical'
       })
@@ -314,10 +400,8 @@ export function ensureWorktreeHasInitialTerminal(
             env: issueCommand.envVars
           }
         : { command: issueCommand.command, env: issueCommand.env }
-    store.queueTabIssueCommandSplit(terminalTab.id, queuedIssueCommand)
+    store.queueTabIssueCommandSplit(terminalTabId, queuedIssueCommand)
   }
-
-  return terminalTab.id
 }
 
 // Why: break the import cycle — the nav-history slice must call

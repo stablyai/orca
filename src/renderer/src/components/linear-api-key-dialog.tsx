@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
 import type { LinearWorkspace } from '../../../shared/types'
 import {
@@ -18,7 +18,12 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import {
+  createLinearApiKeyDialogState,
+  resolveLinearApiKeyDialogState
+} from './linear-api-key-dialog-state'
 
 type LinearApiKeyDialogProps = {
   open: boolean
@@ -46,23 +51,21 @@ export function LinearApiKeyDialog({
   const settings = useAppStore((s) => s.settings)
   const connectLinear = useAppStore((s) => s.connectLinear)
   const mountedRef = useMountedRef()
-  const [apiKeyDraft, setApiKeyDraft] = useState('')
-  const [connectState, setConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
-  const [connectError, setConnectError] = useState<string | null>(null)
+  const apiKeyInputId = useId()
+  const apiKeyErrorId = useId()
+  const [dialogState, setDialogState] = useState(createLinearApiKeyDialogState)
 
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const personalKeyUrl = buildLinearPersonalApiKeySettingsUrl(workspace?.organizationUrlKey)
   const workspaceApiUrl = buildLinearWorkspaceApiSettingsUrl(workspace?.organizationUrlKey)
   const submitLabel = connectLabel ?? (workspace ? 'Update access' : 'Connect')
-
-  useEffect(() => {
-    if (open) {
-      return
-    }
-    setApiKeyDraft('')
-    setConnectState('idle')
-    setConnectError(null)
-  }, [open])
+  const resolvedDialogState = resolveLinearApiKeyDialogState(dialogState, open)
+  if (resolvedDialogState !== dialogState) {
+    // Why: parent-controlled close can race an in-flight connect request; keep
+    // hidden draft/error state reset before the next open paints.
+    setDialogState(resolvedDialogState)
+  }
+  const { apiKeyDraft, connectState, connectError } = resolvedDialogState
 
   const handleOpenChange = (nextOpen: boolean): void => {
     if (connectState !== 'connecting') {
@@ -75,26 +78,30 @@ export function LinearApiKeyDialog({
     if (!apiKey || connectState === 'connecting') {
       return
     }
-    setConnectState('connecting')
-    setConnectError(null)
+    setDialogState((current) => ({ ...current, connectState: 'connecting', connectError: null }))
     try {
       const result = await connectLinear(apiKey)
       if (!mountedRef.current) {
         return
       }
       if (result.ok) {
-        setApiKeyDraft('')
-        setConnectState('idle')
+        setDialogState(createLinearApiKeyDialogState())
         onOpenChange(false)
         onConnected?.()
         return
       }
-      setConnectState('error')
-      setConnectError(result.error)
+      setDialogState((current) => ({
+        ...current,
+        connectState: 'error',
+        connectError: result.error
+      }))
     } catch (error) {
       if (mountedRef.current) {
-        setConnectState('error')
-        setConnectError(error instanceof Error ? error.message : 'Connection failed')
+        setDialogState((current) => ({
+          ...current,
+          connectState: 'error',
+          connectError: error instanceof Error ? error.message : 'Connection failed'
+        }))
       }
     }
   }
@@ -106,7 +113,7 @@ export function LinearApiKeyDialog({
     description ??
     (workspace
       ? `Paste a Personal API key for ${workspace.organizationName}. If this workspace is already connected, Orca replaces its stored key.`
-      : 'Paste a Personal API key for the Linear workspace you want Orca to use.')
+      : 'Paste a Personal API key for the Linear workspace you want Orca to use. If that workspace is already connected, Orca replaces its stored key.')
   const storageCopy =
     runtimeTarget.kind === 'environment'
       ? 'This key is stored by the active remote runtime.'
@@ -129,22 +136,33 @@ export function LinearApiKeyDialog({
           <DialogDescription>{resolvedDescription}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Input
-            autoFocus
-            type="password"
-            placeholder="lin_api_..."
-            value={apiKeyDraft}
-            onChange={(event) => {
-              setApiKeyDraft(event.target.value)
-              if (connectState === 'error') {
-                setConnectState('idle')
-                setConnectError(null)
-              }
-            }}
-            disabled={connectState === 'connecting'}
-          />
+          <div className="space-y-2">
+            <Label htmlFor={apiKeyInputId} className="text-xs">
+              Personal API key
+            </Label>
+            <Input
+              id={apiKeyInputId}
+              autoFocus
+              type="password"
+              placeholder="lin_api_..."
+              value={apiKeyDraft}
+              onChange={(event) => {
+                const nextDraft = event.target.value
+                setDialogState((current) => ({
+                  apiKeyDraft: nextDraft,
+                  connectState: current.connectState === 'error' ? 'idle' : current.connectState,
+                  connectError: current.connectState === 'error' ? null : current.connectError
+                }))
+              }}
+              disabled={connectState === 'connecting'}
+              aria-invalid={connectState === 'error'}
+              aria-describedby={connectState === 'error' ? apiKeyErrorId : undefined}
+            />
+          </div>
           {connectState === 'error' && connectError ? (
-            <p className="text-xs text-destructive">{connectError}</p>
+            <p id={apiKeyErrorId} className="text-xs text-destructive">
+              {connectError}
+            </p>
           ) : null}
           <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
             <p>
@@ -189,7 +207,7 @@ export function LinearApiKeyDialog({
         </div>
         <DialogFooter>
           <Button
-            variant="outline"
+            variant="ghost"
             onClick={() => onOpenChange(false)}
             disabled={connectState === 'connecting'}
           >

@@ -70,8 +70,10 @@ import {
   loadTerminalAccessoryLayout
 } from '../../../../src/terminal/terminal-accessory-layout'
 import {
+  clearTerminalLiveInputFocusTimer,
   getTerminalLiveSpecialKeyBytes,
-  isTerminalLiveInputWithinByteLimit
+  isTerminalLiveInputWithinByteLimit,
+  scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
@@ -119,6 +121,11 @@ import {
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
 } from '../../../../src/session/mobile-new-tab-agent-options'
+import {
+  createMobileSessionCreateWarningState,
+  dismissMobileSessionCreateWarningState,
+  reconcileMobileSessionCreateWarningState
+} from '../../../../src/session/mobile-session-create-warning-state'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
 import type { DiffComment } from '../../../../../src/shared/types'
 
@@ -979,7 +986,9 @@ export default function SessionScreen() {
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [creatingMarkdown, setCreatingMarkdown] = useState(false)
   const [createError, setCreateError] = useState('')
-  const [createWarning, setCreateWarning] = useState(initialCreateWarning)
+  const [createWarningState, setCreateWarningState] = useState(() =>
+    createMobileSessionCreateWarningState(initialCreateWarning)
+  )
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
   const [createTabAgentLoadState, setCreateTabAgentLoadState] =
     useState<MobileNewTabAgentLoadState>('idle')
@@ -1030,6 +1039,8 @@ export default function SessionScreen() {
   const [canPaste, setCanPaste] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
+  const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const toastSeqRef = useRef(0)
   // Why: WebView pushes terminal modes (bracketed-paste, alt-screen) on every
   // change so paste reads a synchronous snapshot — no round-trip required.
   const ptyModesRef = useRef<Map<string, TerminalModes>>(new Map())
@@ -1046,6 +1057,7 @@ export default function SessionScreen() {
   const viewportMeasuredRef = useRef(false)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
+  const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   const initializedHandlesRef = useRef<Set<string>>(new Set())
@@ -1062,6 +1074,9 @@ export default function SessionScreen() {
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
   const subscribeSeqRef = useRef<Map<string, number>>(new Map())
+  // Why: post-RPC refresh timers capture this screen and must not survive
+  // route reuse or unmount.
+  const delayedActionTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
   // Why: server-side layout state machine emits a monotonic seq on every
   // applyLayout. Track the highest seq we've observed per handle and drop
   // any scrollback/resized event with a strictly older seq — these are
@@ -1084,27 +1099,74 @@ export default function SessionScreen() {
     activeSessionTab?.type !== 'browser'
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
+  // Why: terminal gesture/input callbacks are intentionally stable and
+  // imperative; keep their refs current before commit instead of one effect later.
+  clientRef.current = client
+  connStateRef.current = connState
+  activeSessionTabTypeRef.current = activeSessionTab?.type ?? null
+  sessionTabsRef.current = sessionTabs
+  activeSessionTabIdRef.current = activeSessionTabId
+  markdownDocsRef.current = markdownDocs
+  const reconciledCreateWarningState = reconcileMobileSessionCreateWarningState(
+    createWarningState,
+    initialCreateWarning
+  )
+  // Why: Expo can reuse this screen for a new route. Reconcile before paint
+  // so a dismissed old creation warning never flashes for the next session.
+  if (reconciledCreateWarningState !== createWarningState) {
+    setCreateWarningState(reconciledCreateWarningState)
+  }
+  const createWarning = reconciledCreateWarningState.visible
 
-  useEffect(() => {
-    setCreateWarning(initialCreateWarning)
-  }, [initialCreateWarning])
-
-  const showToast = useCallback((message: string, durationMs = 1200) => {
-    setToastMessage(message)
-    Animated.timing(toastOpacityRef.current, {
-      toValue: 1,
-      duration: 150,
-      useNativeDriver: true
-    }).start(() => {
-      setTimeout(() => {
-        Animated.timing(toastOpacityRef.current, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true
-        }).start(() => setToastMessage(null))
-      }, durationMs)
-    })
+  const clearDelayedActionTimers = useCallback(() => {
+    for (const timer of delayedActionTimersRef.current) {
+      clearTimeout(timer)
+    }
+    delayedActionTimersRef.current.clear()
   }, [])
+
+  const scheduleDelayedAction = useCallback((fn: () => void, ms: number) => {
+    const timer = setTimeout(() => {
+      delayedActionTimersRef.current.delete(timer)
+      fn()
+    }, ms)
+    delayedActionTimersRef.current.add(timer)
+  }, [])
+
+  const clearToastHideTimer = useCallback(() => {
+    if (!toastHideTimerRef.current) return
+    clearTimeout(toastHideTimerRef.current)
+    toastHideTimerRef.current = null
+  }, [])
+
+  const showToast = useCallback(
+    (message: string, durationMs = 1200) => {
+      const seq = toastSeqRef.current + 1
+      toastSeqRef.current = seq
+      clearToastHideTimer()
+      setToastMessage(message)
+      Animated.timing(toastOpacityRef.current, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true
+      }).start(({ finished }) => {
+        if (!finished || toastSeqRef.current !== seq) return
+        toastHideTimerRef.current = setTimeout(() => {
+          toastHideTimerRef.current = null
+          Animated.timing(toastOpacityRef.current, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true
+          }).start((result) => {
+            if (result.finished && toastSeqRef.current === seq) {
+              setToastMessage(null)
+            }
+          })
+        }, durationMs)
+      })
+    },
+    [clearToastHideTimer]
+  )
 
   const dictation = useMobileDictation({
     client,
@@ -1123,22 +1185,6 @@ export default function SessionScreen() {
       showToast(err.message)
     }
   })
-
-  useEffect(() => {
-    activeSessionTabTypeRef.current = activeSessionTab?.type ?? null
-  }, [activeSessionTab])
-
-  useEffect(() => {
-    sessionTabsRef.current = sessionTabs
-  }, [sessionTabs])
-
-  useEffect(() => {
-    activeSessionTabIdRef.current = activeSessionTabId
-  }, [activeSessionTabId])
-
-  useEffect(() => {
-    markdownDocsRef.current = markdownDocs
-  }, [markdownDocs])
 
   useEffect(() => {
     diffCommentsRef.current = diffComments
@@ -1292,7 +1338,7 @@ export default function SessionScreen() {
             // xterm's scrollWidth can still be transient when it commits.
             // Re-fire after a short delay so it runs against a settled DOM.
             // Mirrors the 'resized' handler below.
-            setTimeout(() => getTerminalRef(handle)?.resetZoom(), 200)
+            scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
             // Why: viewport measurement needs xterm to be initialized (cell
             // dimensions come from the renderer). On the first subscribe the
             // WebView hasn't loaded yet, so viewportRef is null and the server
@@ -1385,7 +1431,7 @@ export default function SessionScreen() {
                 new Map(prev).set(handle, data.displayMode as MobileDisplayMode)
               )
             }
-            setTimeout(() => getTerminalRef(handle)?.resetZoom(), 200)
+            scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
           }
         }
       )
@@ -1397,7 +1443,7 @@ export default function SessionScreen() {
       }
       subscribingHandlesRef.current.delete(handle)
     },
-    [client, getTerminalRef]
+    [client, getTerminalRef, scheduleDelayedAction]
   )
 
   // Why: toggles between phone and desktop mode via server RPC. The server
@@ -2068,15 +2114,7 @@ export default function SessionScreen() {
     }
   }, [applySessionTabs, client, worktreeId])
 
-  // Why: keep clientRef in sync with the shared client from
-  // useHostClient() so the existing imperative call sites
-  // (clientRef.current.sendRequest...) keep working without churn.
   useEffect(() => {
-    clientRef.current = client
-  }, [client])
-
-  useEffect(() => {
-    connStateRef.current = connState
     if (connState === 'connected') return
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) clearTimeout(queued.timer)
@@ -2107,17 +2145,6 @@ export default function SessionScreen() {
       stale = true
     }
   }, [client, connState])
-
-  // Why: only clear terminal cache on actual unmount. Running it whenever
-  // `client` changes — including the initial null → real-client transition
-  // from useHostClient's async open path — would unsubscribe terminals and
-  // wipe xterm state mid-subscribe on a normal session-screen mount.
-  useEffect(() => {
-    return () => {
-      clearTerminalCache()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // Why: deviceToken is read from host record so feature code can pass
   // `client.id` on subscribe/send for driver-state-machine identity.
@@ -2293,7 +2320,11 @@ export default function SessionScreen() {
     setLiveInputTerminalHandles(new Set())
     setMarkdownDocs(new Map())
     setFileDocs(new Map())
-  }, [clearTerminalCache, worktreeId])
+    clearDelayedActionTimers()
+    return () => {
+      clearDelayedActionTimers()
+    }
+  }, [clearDelayedActionTimers, clearTerminalCache, worktreeId])
 
   useEffect(() => {
     if (connState !== 'connected') return
@@ -2383,14 +2414,20 @@ export default function SessionScreen() {
     return () => unsubscribe()
   }, [applySessionTabs, client, connState, worktreeId])
 
-  useEffect(() => {
-    if (connState !== 'connected') return
-    const interval = setInterval(() => {
+  useFocusEffect(
+    useCallback(() => {
+      if (connState !== 'connected') return
       void fetchSessionTabs()
       void fetchTerminals()
-    }, 2000)
-    return () => clearInterval(interval)
-  }, [connState, fetchSessionTabs, fetchTerminals])
+      // Why: the live tab subscription stays mounted for stream ownership,
+      // but the fallback list poll should stop while this route is hidden.
+      const interval = setInterval(() => {
+        void fetchSessionTabs()
+        void fetchTerminals()
+      }, 2000)
+      return () => clearInterval(interval)
+    }, [connState, fetchSessionTabs, fetchTerminals])
+  )
 
   // Why: unsubscribe the old terminal so the server restores its desktop dims
   // (clearing the phone-fit banner), then subscribe the new terminal with the
@@ -2679,8 +2716,9 @@ export default function SessionScreen() {
     })
     setLiveInputCapture('')
     if (nextEnabled) {
-      setTimeout(() => liveInputRef.current?.focus(), 50)
+      scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
     } else {
+      clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
       liveInputRef.current?.blur()
     }
   }, [activeHandle, liveInputTerminalHandles])
@@ -2917,9 +2955,23 @@ export default function SessionScreen() {
     },
     [stopAccessoryRepeat]
   )
-  useEffect(() => {
-    return () => stopAccessoryRepeat()
-  }, [stopAccessoryRepeat])
+  const setMobileSessionRootRef = useCallback(
+    (node: View | null): void => {
+      if (node !== null) {
+        return
+      }
+      // Why: terminal subscriptions and route-level timers must clear only on
+      // real route detach; client churn during mount can otherwise wipe xterm
+      // state mid-subscribe.
+      toastSeqRef.current += 1
+      clearTerminalCache()
+      clearToastHideTimer()
+      clearDelayedActionTimers()
+      clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
+      stopAccessoryRepeat()
+    },
+    [clearDelayedActionTimers, clearTerminalCache, clearToastHideTimer, stopAccessoryRepeat]
+  )
 
   const handleSelectionMode = useCallback((handle: string, active: boolean) => {
     if (handle !== activeHandleRef.current) return
@@ -3229,7 +3281,7 @@ export default function SessionScreen() {
           activeHandleRef.current = null
           setActiveHandle(null)
         }
-        setTimeout(() => void fetchSessionTabs(), 500)
+        scheduleDelayedAction(() => void fetchSessionTabs(), 500)
       } else {
         setCreateError('Failed to create terminal')
       }
@@ -3271,7 +3323,7 @@ export default function SessionScreen() {
         if (!openResponse.ok) {
           throw new Error((openResponse as RpcFailure).error.message)
         }
-        setTimeout(() => void fetchSessionTabs(), 300)
+        scheduleDelayedAction(() => void fetchSessionTabs(), 300)
         return
       }
       throw new Error('Unable to create untitled markdown note')
@@ -3312,7 +3364,7 @@ export default function SessionScreen() {
       if (!response.ok) {
         throw new Error((response as RpcFailure).error.message)
       }
-      setTimeout(() => void fetchSessionTabs(), 300)
+      scheduleDelayedAction(() => void fetchSessionTabs(), 300)
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create browser'
@@ -3344,7 +3396,7 @@ export default function SessionScreen() {
       if (!response.ok) {
         throw new Error((response as RpcFailure).error.message)
       }
-      setTimeout(() => void fetchSessionTabs(), 250)
+      scheduleDelayedAction(() => void fetchSessionTabs(), 250)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Browser command failed'
       showToast(message, 1600)
@@ -3372,7 +3424,7 @@ export default function SessionScreen() {
           terminalsRef.current = next
           return next
         })
-        setTimeout(() => void fetchTerminals(), 300)
+        scheduleDelayedAction(() => void fetchTerminals(), 300)
       }
     } catch {
       // Rename failed — refresh will restore the server title.
@@ -3402,7 +3454,7 @@ export default function SessionScreen() {
             subscribeToTerminal(replacement.handle)
           }
         }
-        setTimeout(() => void fetchTerminals(), 300)
+        scheduleDelayedAction(() => void fetchTerminals(), 300)
       }
     } catch {
       // Close failed — keep the local tab list unchanged.
@@ -3429,7 +3481,7 @@ export default function SessionScreen() {
           activeHandleRef.current = null
           setActiveHandle(null)
         }
-        setTimeout(() => void fetchSessionTabs(), 300)
+        scheduleDelayedAction(() => void fetchSessionTabs(), 300)
       }
     } catch {
       // Close failed — keep the authoritative session snapshot visible.
@@ -3602,7 +3654,7 @@ export default function SessionScreen() {
               : []
 
   return (
-    <View style={styles.container}>
+    <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
         <SafeAreaView style={styles.sessionChrome} edges={['top']}>
           <View style={styles.sessionTopBar}>
@@ -3742,7 +3794,7 @@ export default function SessionScreen() {
             <Text style={styles.createWarningText}>{createWarning}</Text>
             <Pressable
               style={styles.createWarningDismiss}
-              onPress={() => setCreateWarning('')}
+              onPress={() => setCreateWarningState(dismissMobileSessionCreateWarningState)}
               accessibilityLabel="Dismiss workspace creation warning"
               hitSlop={8}
             >

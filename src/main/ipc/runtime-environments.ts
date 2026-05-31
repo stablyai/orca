@@ -40,6 +40,7 @@ const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
 ] as const
 
 type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
+  environmentId: string
   ownerWebContentsId: number
   removeDestroyedListener: () => void
 }
@@ -51,6 +52,18 @@ function getUserDataPath(): string {
 
 function shouldUseCachedRequestConnection(method: string): boolean {
   return method === 'terminal.send' || method === 'terminal.updateViewport'
+}
+
+function closeSubscriptionsForEnvironment(environmentId: string): void {
+  // Why: removing a saved runtime invalidates its streaming WebSockets too;
+  // otherwise terminal/browser subscriptions stay alive until renderer teardown.
+  for (const [subscriptionId, subscription] of remoteRuntimeSubscriptions) {
+    if (subscription.environmentId !== environmentId) {
+      continue
+    }
+    remoteRuntimeSubscriptions.delete(subscriptionId)
+    subscription.close()
+  }
 }
 
 export function registerRuntimeEnvironmentHandlers(): void {
@@ -86,6 +99,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
       if (args.selector !== removed.id) {
         closeRemoteRuntimeRequestConnection(args.selector)
       }
+      closeSubscriptionsForEnvironment(removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )
@@ -136,6 +150,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
       if (remoteRuntimeSubscriptions.has(subscriptionId)) {
         throw new Error('Runtime environment subscription id already exists')
       }
+      const environment = resolveEnvironment(getUserDataPath(), args.selector)
       const sender = event.sender
       const ownerWebContentsId = sender.id
       let senderDestroyed = sender.isDestroyed()
@@ -163,7 +178,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
       destroyedListenerAttached = true
       try {
         subscription = await subscribeRuntimeEnvironment(
-          args.selector,
+          environment.id,
           args.method,
           args.params,
           args.timeoutMs,
@@ -194,6 +209,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
       }
       remoteRuntimeSubscriptions.set(subscriptionId, {
         requestId: subscription.requestId,
+        environmentId: environment.id,
         ownerWebContentsId,
         removeDestroyedListener,
         sendBinary: (bytes) => subscription?.sendBinary(bytes) ?? false,

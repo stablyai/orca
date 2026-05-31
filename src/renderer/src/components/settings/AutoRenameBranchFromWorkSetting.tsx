@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the setting owns one collapsed form with
    queued writes, model selection, and prompt draft state. Splitting the
    tiny subcontrols would make the settings write flow harder to audit. */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
 import type {
@@ -158,12 +158,16 @@ export function AutoRenameBranchFromWorkSetting({
     onBranchPromptDirtyChange?.(branchNamePromptDirty)
   }, [branchNamePromptDirty, onBranchPromptDirtyChange])
 
-  useEffect(
-    () => () => {
-      onBranchPromptDirtyChange?.(false)
-    },
-    [onBranchPromptDirtyChange]
-  )
+  const onBranchPromptDirtyChangeRef = useRef(onBranchPromptDirtyChange)
+  onBranchPromptDirtyChangeRef.current = onBranchPromptDirtyChange
+  const setSettingRootRef = useCallback((node: HTMLDivElement | null): void => {
+    if (node !== null) {
+      return
+    }
+    // Why: Settings owns the global unsaved-branch-prompt guard; reset it
+    // when this setting detaches without a passive cleanup-only Effect.
+    onBranchPromptDirtyChangeRef.current?.(false)
+  }, [])
 
   const resolvedAgentId = resolveCommitMessageAgentChoice(
     config.agentId,
@@ -302,7 +306,7 @@ export function AutoRenameBranchFromWorkSetting({
       forceVisible={forceVisible || branchNamePromptDirty || advancedSearchOpen}
       className="space-y-3 py-2"
     >
-      <div className="flex items-center justify-between gap-4">
+      <div ref={setSettingRootRef} className="flex items-center justify-between gap-4">
         <div className="space-y-0.5">
           <Label>Auto-Rename Branch</Label>
           <p className="text-xs text-muted-foreground">

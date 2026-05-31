@@ -79,6 +79,29 @@ function formatRebaseBaseRef(baseRef: string): string {
   return baseRef.replace(/^refs\/remotes\//, '').replace(/^remotes\//, '')
 }
 
+function reviewCopy(
+  provider: NonNullable<PrimaryActionInputs['hostedReviewCreation']>['provider'] | undefined
+): {
+  shortLabel: 'PR' | 'MR'
+  reviewLabel: 'pull request' | 'merge request'
+  providerName: 'GitHub' | 'GitLab'
+  authCommand: 'gh auth login' | 'glab auth login'
+} {
+  return provider === 'gitlab'
+    ? {
+        shortLabel: 'MR',
+        reviewLabel: 'merge request',
+        providerName: 'GitLab',
+        authCommand: 'glab auth login'
+      }
+    : {
+        shortLabel: 'PR',
+        reviewLabel: 'pull request',
+        providerName: 'GitHub',
+        authCommand: 'gh auth login'
+      }
+}
+
 /**
  * Resolve the chevron dropdown items. Every item is always rendered so the
  * menu shape stays stable across states; inapplicable rows are disabled
@@ -116,12 +139,14 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   const publishBlockedByMergedPR = !hasUpstream && prState === 'merged'
   const publishBlockedByPRLoading = !hasUpstream && !!isPRStateLoading
   const publishBlockedByNoBranchCommits = !hasUpstream && branchCommitsAhead === 0
+  const publishBlockedByUncommittedChanges = publishBlockedByNoBranchCommits && hasDirtyLocalChanges
   const ahead = upstreamStatus?.ahead ?? 0
   const behind = upstreamStatus?.behind ?? 0
   const shouldForcePushWithLease = shouldForcePushWithLeaseForUpstream(upstreamStatus)
   const pushLabelCount =
     shouldForcePushWithLease && branchCommitsAhead !== undefined ? branchCommitsAhead : ahead
   const forcePushTitle = formatForcePushTitle(branchCommitsAhead, upstreamStatus?.upstreamName)
+  const createReviewCopy = reviewCopy(hostedReviewCreation?.provider)
 
   // Why: any in-flight commit or remote operation should lock the whole menu.
   // A running push shouldn't let a second pull/sync click queue up behind it
@@ -360,20 +385,24 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     label:
       publishBlockedByMergedPR || publishBlockedByPRLoading
         ? 'PR Status'
-        : publishBlockedByNoBranchCommits
-          ? 'No Branch Changes'
-          : 'Publish Branch',
+        : publishBlockedByUncommittedChanges
+          ? 'Commit Changes First'
+          : publishBlockedByNoBranchCommits
+            ? 'No Branch Changes'
+            : 'Publish Branch',
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : publishBlockedByNoBranchCommits
-            ? 'Nothing to publish'
-            : hasUpstream
-              ? 'Branch is already published'
-              : 'Publish this branch to origin',
+          : publishBlockedByUncommittedChanges
+            ? 'Commit changes before publishing the branch'
+            : publishBlockedByNoBranchCommits
+              ? 'Nothing to publish'
+              : hasUpstream
+                ? 'Branch is already published'
+                : 'Publish this branch to origin',
     disabled:
       globalBusy ||
       upstreamLoading ||
@@ -398,11 +427,11 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       case 'needs_sync':
         return shouldForcePushWithLease ? 'Force Push first' : 'Sync first'
       case 'auth_required':
-        return 'Run gh auth login in this environment'
+        return `Run ${createReviewCopy.authCommand} in this environment`
       case 'unsupported_provider':
         return 'Unsupported provider'
       case 'existing_review':
-        return 'A pull request already exists'
+        return `A ${createReviewCopy.reviewLabel} already exists`
       case 'fork_head_unsupported':
         return 'Fork head unsupported'
       case null:
@@ -413,9 +442,9 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
 
   const createPRItem: DropdownItem = {
     kind: 'create_pr',
-    label: 'Create PR',
+    label: `Create ${createReviewCopy.shortLabel}`,
     title: hostedReviewCreation?.canCreate
-      ? 'Create a pull request for this branch'
+      ? `Create a ${createReviewCopy.reviewLabel} for this branch`
       : createBlockedHint,
     hint: hostedReviewCreation?.canCreate ? undefined : createBlockedHint,
     disabled: globalBusy || upstreamLoading || !hostedReviewCreation?.canCreate
@@ -424,16 +453,18 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   const canPushAndCreate =
     !globalBusy &&
     !upstreamLoading &&
-    hostedReviewCreation?.provider === 'github' &&
+    (hostedReviewCreation?.provider === 'github' || hostedReviewCreation?.provider === 'gitlab') &&
     (hostedReviewCreation.blockedReason === 'needs_push' ||
       (hostedReviewCreation.blockedReason === 'needs_sync' && shouldForcePushWithLease))
   const pushCreatePRItem: DropdownItem = {
     kind: 'push_create_pr',
-    label: shouldForcePushWithLease ? 'Force Push before PR' : 'Push before PR',
+    label: shouldForcePushWithLease
+      ? `Force Push before ${createReviewCopy.shortLabel}`
+      : `Push before ${createReviewCopy.shortLabel}`,
     title: canPushAndCreate
       ? shouldForcePushWithLease
-        ? 'Force push with lease before creating a pull request'
-        : 'Push local commits before creating a pull request'
+        ? `Force push with lease before creating a ${createReviewCopy.reviewLabel}`
+        : `Push local commits before creating a ${createReviewCopy.reviewLabel}`
       : createBlockedHint,
     hint: canPushAndCreate ? undefined : createBlockedHint,
     disabled: !canPushAndCreate
@@ -476,7 +507,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       ? entry
       : {
           ...entry,
-          title: 'Pull request operation in progress…',
+          title: 'Hosted review operation in progress…',
           disabled: true
         }
   )

@@ -102,6 +102,10 @@ function makeLineage(child: Worktree, parent: Worktree): WorktreeLineage {
   }
 }
 
+function buttonText(props: Record<string, unknown>): string {
+  return renderToStaticMarkup(<>{props.children as ReactNode}</>)
+}
+
 describe('DeleteWorktreeDialog lineage copy', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -133,6 +137,14 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     expect(markup).toContain('Delete All 2')
     expect(markup).toContain('Delete Parent Only')
     expect(markup).not.toContain('Don&apos;t ask again')
+
+    const destructiveButton = mocks.buttonProps.find((props) => props.variant === 'destructive')
+    const parentOnlyButton = mocks.buttonProps.find((props) =>
+      buttonText(props).includes('Delete Parent Only')
+    )
+
+    expect(destructiveButton ? buttonText(destructiveButton) : '').toContain('Delete All 2')
+    expect(parentOnlyButton?.variant).toBe('outline')
   })
 
   it('keeps long child workspace paths constrained inside the lineage notice', async () => {

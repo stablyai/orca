@@ -53,6 +53,8 @@ export function MobilePane(): React.JSX.Element {
   const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
+  const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
+  const devicesRef = useRef<PairedDevice[]>([])
   const codeCopiedResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
   // Why: clipboard IPC can resolve after settings navigation; avoid starting
@@ -80,6 +82,7 @@ export function MobilePane(): React.JSX.Element {
     try {
       const result = await window.api.mobile.listDevices()
       if (mountedRef.current) {
+        devicesRef.current = result.devices
         setDevices(result.devices)
       }
     } catch {
@@ -128,6 +131,10 @@ export function MobilePane(): React.JSX.Element {
             setQrDataUrl(result.qrDataUrl)
             setPairingUrl(result.pairingUrl)
             setEndpoint(result.endpoint)
+            // Why: async QR generation may overlap a device-list refresh; use
+            // the latest committed list, then keep this baseline ahead of the
+            // post-QR refresh below.
+            setDeviceCountAtQr(devicesRef.current.length)
             clearCodeCopiedResetTimer()
             setCodeCopied(false)
             void loadDevices()
@@ -154,17 +161,6 @@ export function MobilePane(): React.JSX.Element {
     void loadDevices()
     void loadNetworkInterfaces()
   }, [loadDevices, loadNetworkInterfaces])
-
-  // Why: after generating a QR code the device only appears once the phone
-  // actually connects (lastSeenAt > 0). Poll until a new device shows up.
-  const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
-  useEffect(() => {
-    if (!qrDataUrl) {
-      setDeviceCountAtQr(null)
-      return
-    }
-    setDeviceCountAtQr(devices.length)
-  }, [qrDataUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useMobilePairingDevicePolling({
     deviceCountAtQr,
@@ -201,7 +197,11 @@ export function MobilePane(): React.JSX.Element {
     try {
       await window.api.mobile.revokeDevice({ deviceId })
       if (mountedRef.current) {
-        setDevices((prev) => prev.filter((d) => d.deviceId !== deviceId))
+        setDevices((prev) => {
+          const nextDevices = prev.filter((d) => d.deviceId !== deviceId)
+          devicesRef.current = nextDevices
+          return nextDevices
+        })
         toast.success('Device revoked')
       }
     } catch {

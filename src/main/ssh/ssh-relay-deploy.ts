@@ -34,6 +34,10 @@ import {
 export type RelayDeployResult = {
   transport: MultiplexerTransport
   platform: RelayPlatform
+  remoteHome?: string
+  remoteRelayDir?: string
+  nodePath?: string
+  sockPath?: string
 }
 
 // Why: individual exec commands have 30s timeouts, but the full deploy
@@ -161,7 +165,7 @@ async function deployAndLaunchRelayInner(
 
   onProgress?.('Starting relay...')
   console.log('[ssh-relay] Launching relay...')
-  const transport = await launchRelay(conn, remoteRelayDir, graceTimeSeconds, relayInstanceId)
+  const launched = await launchRelay(conn, remoteRelayDir, graceTimeSeconds, relayInstanceId)
   console.log('[ssh-relay] Relay started successfully')
 
   // Why: best-effort cleanup of unreferenced sibling version dirs. Errors
@@ -169,7 +173,14 @@ async function deployAndLaunchRelayInner(
   // can never block the user from connecting.
   void gcOldRelayVersions(conn, remoteHome, remoteRelayDir).catch(() => {})
 
-  return { transport, platform }
+  return {
+    transport: launched.transport,
+    platform,
+    remoteHome,
+    remoteRelayDir,
+    nodePath: launched.nodePath,
+    sockPath: launched.sockPath
+  }
 }
 
 async function detectRemotePlatform(conn: SshConnection): Promise<RelayPlatform | null> {
@@ -423,7 +434,7 @@ async function launchRelay(
   remoteDir: string,
   graceTimeSeconds?: number,
   relayInstanceId?: string
-): Promise<MultiplexerTransport> {
+): Promise<{ transport: MultiplexerTransport; nodePath: string; sockPath: string }> {
   // Why: Phase 1 of the plan requires Node.js on the remote. We use the
   // system `node` rather than bundling a node binary, keeping the relay
   // package small (~100KB JS vs ~60MB with embedded node).
@@ -466,7 +477,7 @@ async function launchRelay(
         )
         const transport = await waitForSentinel(channel)
         console.log('[ssh-relay] Reconnected to existing relay via socket')
-        return transport
+        return { transport, nodePath, sockPath: sockFile }
       } catch (err) {
         console.warn(
           '[ssh-relay] Socket reconnect failed, launching fresh relay:',
@@ -555,5 +566,5 @@ async function launchRelay(
   const channel = await conn.exec(
     `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)}`
   )
-  return waitForSentinel(channel)
+  return { transport: await waitForSentinel(channel), nodePath, sockPath: sockFile }
 }

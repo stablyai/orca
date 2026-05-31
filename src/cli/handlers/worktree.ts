@@ -161,6 +161,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       displayName: getOptionalStringFlag(flags, 'display-name'),
       linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
       comment: getOptionalStringFlag(flags, 'comment'),
+      workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
       noParent: flags.get('no-parent') === true
     })

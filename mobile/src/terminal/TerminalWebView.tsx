@@ -74,6 +74,9 @@ type TerminalMessage =
   | { type: 'do-select-all'; id?: number }
   | { type: 'set-theme'; id?: number; terminalTheme?: MobileTerminalTheme }
 
+const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000
+const MAX_PENDING_WEB_WRITE_MESSAGES = 4096
+
 const DEFAULT_TERMINAL_THEME: MobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
   foreground: '#c0caf5',
@@ -270,8 +273,10 @@ const XTERM_HTML = `<!DOCTYPE html>
   var scrollThumb = document.getElementById('scroll-thumb');
   var scrollIndicatorHideTimer = null;
   var writeQueue = [];
+  var writeQueueHead = 0;
   var writesDraining = false;
   var afterDrainCallbacks = [];
+  var termObserverDisposables = [];
   var ready = false;
   var currentScale = 1;
   var userScale = 1;
@@ -589,6 +594,39 @@ const XTERM_HTML = `<!DOCTYPE html>
     }
   }
 
+  function resetWriteQueue() {
+    writeQueue = [];
+    writeQueueHead = 0;
+  }
+
+  function enqueueWrite(data) {
+    writeQueue.push(data);
+  }
+
+  function nextQueuedWrite() {
+    if (writeQueueHead >= writeQueue.length) {
+      resetWriteQueue();
+      return undefined;
+    }
+    var next = writeQueue[writeQueueHead];
+    writeQueueHead++;
+    // Why: high-throughput terminals can enqueue faster than xterm parses;
+    // compact consumed slots so drain work stays O(1) without retaining old chunks.
+    if (writeQueueHead > 128 && writeQueueHead * 2 > writeQueue.length) {
+      writeQueue = writeQueue.slice(writeQueueHead);
+      writeQueueHead = 0;
+    }
+    return next;
+  }
+
+  function disposeTermObservers() {
+    var disposables = termObserverDisposables;
+    termObserverDisposables = [];
+    for (var i = 0; i < disposables.length; i++) {
+      try { disposables[i] && disposables[i].dispose && disposables[i].dispose(); } catch (e) {}
+    }
+  }
+
   function extractMouseModeScanTail(input) {
     var start = Math.max(input.lastIndexOf(ESC), input.lastIndexOf(C1_CSI));
     if (start === -1) return '';
@@ -608,7 +646,7 @@ const XTERM_HTML = `<!DOCTYPE html>
 
   function pumpWrites(gen) {
     if (!ready || !term || writesDraining || gen !== terminalGeneration) return;
-    var next = writeQueue.shift();
+    var next = nextQueuedWrite();
     if (typeof next !== 'string') {
       var callbacks = afterDrainCallbacks;
       afterDrainCallbacks = [];
@@ -634,7 +672,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     terminalGeneration++;
     var gen = terminalGeneration;
     ready = false;
-    writeQueue = [];
+    resetWriteQueue();
     writesDraining = false;
     afterDrainCallbacks = [];
     initRows = rows || 24;
@@ -659,6 +697,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     var oldTerm = term;
     var oldSurface = surface;
     var nextSurface = null;
+    disposeTermObservers();
     if (oldTerm) {
       nextSurface = document.createElement('div');
       nextSurface.id = 'terminal-surface';
@@ -689,7 +728,7 @@ const XTERM_HTML = `<!DOCTYPE html>
     });
     term.open(surface);
     if (typeof replayData === 'string' && replayData.length > 0) {
-      writeQueue.push(replayData);
+      enqueueWrite(replayData);
     }
 
     // Why: reset eviction tracking + attach observers for the new term.
@@ -718,7 +757,7 @@ const XTERM_HTML = `<!DOCTYPE html>
 
   function write(data) {
     updateMouseModeFromData(data);
-    writeQueue.push(data);
+    enqueueWrite(data);
     pumpWrites(terminalGeneration);
     // Why: first live data chunk after init may widen the buffer past
     // what the post-replay applyFitScale measured. Re-fit once after this
@@ -816,7 +855,7 @@ const XTERM_HTML = `<!DOCTYPE html>
       write(msg.data);
     } else if (msg.type === 'clear') {
       terminalGeneration++;
-      writeQueue = [];
+      resetWriteQueue();
       afterDrainCallbacks = [];
       writesDraining = false;
       mouseModeScanTail = '';
@@ -968,15 +1007,20 @@ const XTERM_HTML = `<!DOCTYPE html>
 
   function attachTermObservers() {
     if (!term) return;
-    try { term.onLineFeed(logFeedAndEvict); } catch (e) {}
-    try { term.onScroll(function() { updateScrollIndicator(false); }); } catch (e) {}
+    disposeTermObservers();
+    try { termObserverDisposables.push(term.onLineFeed(logFeedAndEvict)); } catch (e) {}
+    try {
+      termObserverDisposables.push(term.onScroll(function() { updateScrollIndicator(false); }));
+    } catch (e) {}
     // Why: emit modes on every parsed write so RN's mirror stays current
     // without round-trip; covers \\x1b[?2004h/l and alt-screen toggles.
     try {
-      term.onWriteParsed && term.onWriteParsed(function() {
-        emitModesIfChanged();
-        emitKeyboardAvoidanceMetrics();
-      });
+      if (term.onWriteParsed) {
+        termObserverDisposables.push(term.onWriteParsed(function() {
+          emitModesIfChanged();
+          emitKeyboardAvoidanceMetrics();
+        }));
+      }
     } catch (e) {}
     // Initial emit once buffer settles.
     afterWritesDrained(function() {
@@ -1880,6 +1924,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const webViewRef = useRef<WebView>(null)
   const isWebReadyRef = useRef(false)
   const pendingMessagesRef = useRef<TerminalMessage[]>([])
+  const pendingWriteBytesRef = useRef(0)
+  const pendingWriteCountRef = useRef(0)
   const messageIdRef = useRef(0)
   const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
   const measureResolveRef = useRef<
@@ -1900,20 +1946,58 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const flushPendingMessages = useCallback(() => {
     const pending = pendingMessagesRef.current
     pendingMessagesRef.current = []
+    pendingWriteBytesRef.current = 0
+    pendingWriteCountRef.current = 0
     for (const msg of pending) {
       sendToWebView(msg)
     }
   }, [sendToWebView])
 
+  const clearPendingMessages = useCallback(() => {
+    pendingMessagesRef.current = []
+    pendingWriteBytesRef.current = 0
+    pendingWriteCountRef.current = 0
+  }, [])
+
+  const queuePendingMessage = useCallback((msg: TerminalMessage) => {
+    const pending = pendingMessagesRef.current
+    pending.push(msg)
+    if (msg.type !== 'write') {
+      return
+    }
+
+    pendingWriteBytesRef.current += msg.data.length
+    pendingWriteCountRef.current += 1
+    while (
+      pendingWriteBytesRef.current > MAX_PENDING_WEB_WRITE_BYTES ||
+      pendingWriteCountRef.current > MAX_PENDING_WEB_WRITE_MESSAGES
+    ) {
+      const dropIndex = pending.findIndex((candidate) => candidate.type === 'write')
+      if (dropIndex === -1) {
+        pendingWriteBytesRef.current = 0
+        pendingWriteCountRef.current = 0
+        return
+      }
+      const [dropped] = pending.splice(dropIndex, 1)
+      if (dropped?.type === 'write') {
+        pendingWriteBytesRef.current = Math.max(
+          0,
+          pendingWriteBytesRef.current - dropped.data.length
+        )
+        pendingWriteCountRef.current = Math.max(0, pendingWriteCountRef.current - 1)
+      }
+    }
+  }, [])
+
   const postMessage = useCallback(
     (msg: TerminalMessage) => {
       if (!isWebReadyRef.current) {
-        pendingMessagesRef.current.push(msg)
+        queuePendingMessage(msg)
         return
       }
       sendToWebView(msg)
     },
-    [sendToWebView]
+    [queuePendingMessage, sendToWebView]
   )
 
   const handleMessage = useCallback(
@@ -2017,7 +2101,10 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
 
   const handleLoadStart = useCallback(() => {
     isWebReadyRef.current = false
-  }, [])
+    // Why: messages queued for a previous WebView generation are stale after a reload;
+    // dropping them avoids replaying terminal chunks before the next init snapshot.
+    clearPendingMessages()
+  }, [clearPendingMessages])
 
   useEffect(() => {
     postMessage({ type: 'set-theme', terminalTheme })
@@ -2060,15 +2147,25 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         if (!isWebReadyRef.current) return Promise.resolve(null)
         return new Promise((resolve) => {
           measureResolveRef.current?.(null)
-          measureResolveRef.current = resolve
+          let timeout: ReturnType<typeof setTimeout> | null = null
+          const finish = (result: { cols: number; rows: number } | null) => {
+            if (timeout) {
+              clearTimeout(timeout)
+              timeout = null
+            }
+            if (measureResolveRef.current === finish) {
+              measureResolveRef.current = null
+            }
+            resolve(result)
+          }
+          measureResolveRef.current = finish
           sendToWebView({ type: 'measure', containerHeight })
           // Why: if the WebView doesn't respond within 2s (e.g., xterm
           // failed to load), resolve null so the caller can disable
           // Fit to Phone rather than hanging indefinitely.
-          setTimeout(() => {
-            if (measureResolveRef.current === resolve) {
-              measureResolveRef.current = null
-              resolve(null)
+          timeout = setTimeout(() => {
+            if (measureResolveRef.current === finish) {
+              finish(null)
             }
           }, 2000)
         })
@@ -2088,7 +2185,20 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         // WebView doesn't hang the caller.
         const p = readyPromiseRef.current
         if (!p) return
-        await Promise.race([p, new Promise<void>((resolve) => setTimeout(resolve, 3000))])
+        await new Promise<void>((resolve) => {
+          let settled = false
+          const timeout = setTimeout(() => {
+            settled = true
+            resolve()
+          }, 3000)
+          void p.finally(() => {
+            if (!settled) {
+              clearTimeout(timeout)
+              settled = true
+              resolve()
+            }
+          })
+        })
       }
     }),
     [postMessage, sendToWebView, terminalTheme]

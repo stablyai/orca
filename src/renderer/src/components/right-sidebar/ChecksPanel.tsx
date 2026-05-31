@@ -3,23 +3,29 @@ merge actions, and conflict state in one component to keep the data flow straigh
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle, ExternalLink, RefreshCw, Check, X, Pencil, GitMerge } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { prChecksCacheSuffix, prCommentsCacheSuffix } from '@/store/slices/github'
+import {
+  mergePRCommentIntoList,
+  prChecksCacheSuffix,
+  prCommentsCacheSuffix
+} from '@/store/slices/github'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import PRActions from './PRActions'
+import HostedReviewActions from './HostedReviewActions'
 import {
   PullRequestIcon,
   prStateColor,
   ConflictingFilesSection,
   MergeConflictNotice,
   ChecksList,
-  PRCommentsList
+  PRCommentsList,
+  PRTriageStrip
 } from './checks-panel-content'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
 import type {
+  GitLabDiscussionResolveResult,
   GitLabWorkItemDetails,
   PRInfo,
   PRCheckDetail,
@@ -36,10 +42,17 @@ import { buildFixBrokenChecksPrompt, getBrokenChecks } from '../pr-checks-fix-pr
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type {
   HostedReviewCreationEligibility,
-  HostedReviewInfo
+  HostedReviewInfo,
+  HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices/hosted-review'
 import { toast } from 'sonner'
+import {
+  classifyHostedReview,
+  type HostedReviewClassificationOptions
+} from '../../../../shared/hosted-review-queue'
+import { hostedReviewSummaryFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
+import { hostedReviewSummaryFromGitLabInfo } from '../../../../shared/hosted-review-gitlab'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey,
@@ -141,6 +154,36 @@ async function fetchGitLabMRDetailsForChecks(args: {
   })) as GitLabWorkItemDetails | null
 }
 
+async function resolveGitLabMRDiscussionForChecks(args: {
+  repoPath: string
+  repoId?: string
+  settings: Parameters<typeof getActiveRuntimeTarget>[0]
+  iid: number
+  discussionId: string
+  resolved: boolean
+}): Promise<GitLabDiscussionResolveResult> {
+  const target = getActiveRuntimeTarget(args.settings)
+  if (target.kind === 'environment') {
+    return callRuntimeRpc<GitLabDiscussionResolveResult>(
+      target,
+      'gitlab.resolveMRDiscussion',
+      {
+        repo: args.repoId ?? args.repoPath,
+        iid: args.iid,
+        discussionId: args.discussionId,
+        resolved: args.resolved
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gl.resolveMRDiscussion({
+    repoPath: args.repoPath,
+    iid: args.iid,
+    discussionId: args.discussionId,
+    resolved: args.resolved
+  })
+}
+
 export default function ChecksPanel(): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -177,13 +220,24 @@ export default function ChecksPanel(): React.JSX.Element {
   const isPanelVisible = rightSidebarOpen && rightSidebarTab === 'checks'
 
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
+  const fetchPRCheckDetails = useAppStore((s) => s.fetchPRCheckDetails)
   const fetchPRComments = useAppStore((s) => s.fetchPRComments)
+  const addPRConversationComment = useAppStore((s) => s.addPRConversationComment)
+  const addPRReviewCommentReply = useAppStore((s) => s.addPRReviewCommentReply)
   const resolveReviewThread = useAppStore((s) => s.resolveReviewThread)
+  const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
+  const remoteDetectedAgentIds = useAppStore((s) => {
+    const connectionId = activeWorktreeId ? getConnectionId(activeWorktreeId) : undefined
+    return typeof connectionId === 'string'
+      ? (s.remoteDetectedAgentIds[connectionId] ?? null)
+      : null
+  })
 
   const [checks, setChecks] = useState<PRCheckDetail[]>([])
   const [checksLoading, setChecksLoading] = useState(false)
   const [comments, setComments] = useState<PRComment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
+  const [gitLabDetailsFetchedAt, setGitLabDetailsFetchedAt] = useState<number | null>(null)
   const [emptyRefreshing, setEmptyRefreshing] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [conflictDetailsRefreshing, setConflictDetailsRefreshing] = useState(false)
@@ -266,6 +320,7 @@ export default function ChecksPanel(): React.JSX.Element {
     setChecksLoading(false)
     setComments([])
     setCommentsLoading(false)
+    setGitLabDetailsFetchedAt(null)
     setIsRefreshing(false)
     setEmptyRefreshing(false)
     setConflictDetailsRefreshing(false)
@@ -318,6 +373,7 @@ export default function ChecksPanel(): React.JSX.Element {
     (linkedGitLabMR !== null ? null : pr ? gitHubPRToChecksPanelReview(pr) : null)
   const activeGitLabReview = isGitLabChecksPanelReview(activeReview) ? activeReview : null
   const isGitLabReviewContext = Boolean(activeGitLabReview || linkedGitLabMR !== null)
+  const activeConflictReview = activeReview?.mergeable === 'CONFLICTING' ? activeReview : null
   const prRefreshState = useAppStore((s) =>
     prCacheKey ? s.prRefreshStates[prCacheKey] : undefined
   )
@@ -848,6 +904,7 @@ export default function ChecksPanel(): React.JSX.Element {
         const result = gitLabPipelineJobsToPRChecks(details?.pipelineJobs ?? [])
         setChecks(result)
         setComments(gitLabMRCommentsToPRComments(details?.comments))
+        setGitLabDetailsFetchedAt(Date.now())
         const signature = JSON.stringify(result.map((c) => `${c.name}:${c.status}:${c.conclusion}`))
         pollIntervalRef.current =
           signature === prevChecksRef.current
@@ -861,6 +918,7 @@ export default function ChecksPanel(): React.JSX.Element {
         console.warn('Failed to fetch GitLab MR checks:', err)
         setChecks([])
         setComments([])
+        setGitLabDetailsFetchedAt(null)
       } finally {
         if (isCurrentAsyncResult(requestKey)) {
           setChecksLoading(false)
@@ -981,6 +1039,26 @@ export default function ChecksPanel(): React.JSX.Element {
     ]
   )
 
+  const handleLoadCheckDetails = useCallback(
+    (check: PRCheckDetail) => {
+      if (!repo) {
+        return Promise.resolve(null)
+      }
+      return fetchPRCheckDetails(
+        repo.path,
+        {
+          checkRunId: check.checkRunId,
+          workflowRunId: check.workflowRunId,
+          checkName: check.name,
+          url: check.url,
+          prRepo: pr?.prRepo ?? null
+        },
+        { repoId: repo.id }
+      )
+    },
+    [fetchPRCheckDetails, pr?.prRepo, repo]
+  )
+
   useEffect(() => {
     if (activeGitLabReview) {
       return
@@ -989,19 +1067,24 @@ export default function ChecksPanel(): React.JSX.Element {
       setComments([])
       return
     }
-    // Why: without this guard a slow response from a previous PR can overwrite
-    // state after the user switches worktrees, showing the wrong PR's comments.
     let cancelled = false
+    const requestKey = checksPanelAsyncResultKey(
+      prCacheKey,
+      branch,
+      prNumber,
+      pr?.prRepo,
+      pr?.headSha
+    )
     setCommentsLoading(true)
     void fetchPRComments(repo.path, prNumber, { repoId: repo.id, prRepo: pr?.prRepo }).then(
       (result) => {
-        if (!cancelled) {
+        if (!cancelled && isCurrentAsyncResult(requestKey)) {
           setComments(result)
           setCommentsLoading(false)
         }
       },
       () => {
-        if (!cancelled) {
+        if (!cancelled && isCurrentAsyncResult(requestKey)) {
           setComments([])
           setCommentsLoading(false)
         }
@@ -1010,7 +1093,32 @@ export default function ChecksPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [activeGitLabReview, repo, prNumber, pr?.prRepo, prCacheKey, isPanelVisible, fetchPRComments])
+  }, [
+    activeGitLabReview,
+    repo,
+    prNumber,
+    pr?.headSha,
+    pr?.prRepo,
+    prCacheKey,
+    branch,
+    isPanelVisible,
+    fetchPRComments,
+    isCurrentAsyncResult
+  ])
+
+  useEffect(() => {
+    if (activeGitLabReview || !repo || !prNumber || !isPanelVisible) {
+      return undefined
+    }
+    return window.api.gh.onWorkItemMutated((payload) => {
+      const sameRepo =
+        payload.repoId != null ? payload.repoId === repo.id : payload.repoPath === repo.path
+      if (!sameRepo || payload.type !== 'pr' || payload.number !== prNumber) {
+        return
+      }
+      void fetchComments({ force: true })
+    })
+  }, [activeGitLabReview, fetchComments, isPanelVisible, prNumber, repo])
 
   const handleRefresh = useCallback(async () => {
     if (!repo || !branch) {
@@ -1280,18 +1388,69 @@ export default function ChecksPanel(): React.JSX.Element {
     handleEntryRefresh({ refreshChecks, refreshComments })
   }, [entryKey, prFetchedAt, checksFetchedAt, commentsFetchedAt, prNumber, handleEntryRefresh])
 
-  const handleStartEdit = useCallback(() => {
-    if (!pr) {
+  const refreshHostedReviewAfterMutation = useCallback(async () => {
+    if (!repo || !branch) {
       return
     }
-    setTitleDraft(pr.title)
+    if (activeReview?.provider === 'gitlab') {
+      const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+        repoPath: repo.path,
+        repoId: repo.id,
+        branch,
+        linkedGitHubPR: linkedPR,
+        fallbackGitHubPR: fallbackGitHubPRNumber,
+        linkedGitLabMR
+      })
+      const refreshedGitLabReview =
+        refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
+      if (refreshedGitLabReview) {
+        await fetchGitLabDetails({
+          mrNumberOverride: refreshedGitLabReview.number,
+          headShaOverride: refreshedGitLabReview.headSha,
+          commitAsCurrent: true
+        })
+      }
+      return
+    }
+    const refreshedPR = await fetchPRForBranch(repo.path, branch, {
+      force: true,
+      repoId: repo.id,
+      linkedPRNumber: linkedPR,
+      fallbackPRNumber: fallbackGitHubPRNumber
+    })
+    await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+      repoPath: repo.path,
+      repoId: repo.id,
+      branch,
+      linkedGitHubPR: linkedPR,
+      fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
+      linkedGitLabMR
+    })
+  }, [
+    activeGitLabReview,
+    activeReview?.provider,
+    branch,
+    fallbackGitHubPRNumber,
+    fetchGitLabDetails,
+    fetchHostedReviewForBranch,
+    fetchPRForBranch,
+    linkedGitLabMR,
+    linkedPR,
+    repo
+  ])
+
+  const handleStartEdit = useCallback(() => {
+    if (!activeReview) {
+      return
+    }
+    setTitleDraft(activeReview.title)
     setEditingTitle(true)
     clearTitleInputFocusTimer()
     titleInputFocusTimerRef.current = setTimeout(() => {
       titleInputFocusTimerRef.current = null
       titleInputRef.current?.focus()
     }, 0)
-  }, [clearTitleInputFocusTimer, pr])
+  }, [activeReview, clearTitleInputFocusTimer])
 
   const handleCancelEdit = useCallback(() => {
     clearTitleInputFocusTimer()
@@ -1300,28 +1459,39 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [clearTitleInputFocusTimer])
 
   const handleSaveTitle = useCallback(async () => {
-    if (!repo || !pr || !titleDraft.trim() || titleDraft === pr.title) {
+    const nextTitle = titleDraft.trim()
+    if (!repo || !activeReview || !nextTitle || nextTitle === activeReview.title) {
       clearTitleInputFocusTimer()
       setEditingTitle(false)
       return
     }
     setTitleSaving(true)
     try {
-      const ok = await window.api.gh.updatePRTitle({
-        repoPath: repo.path,
-        repoId: repo.id,
-        prNumber: pr.number,
-        title: titleDraft.trim(),
-        prRepo: pr.prRepo ?? null
-      })
-      if (ok) {
-        // Re-fetch PR to get updated title
-        await fetchPRForBranch(repo.path, branch, {
-          force: true,
-          repoId: repo.id,
-          linkedPRNumber: linkedPR,
-          fallbackPRNumber: fallbackGitHubPRNumber ?? pr.number
+      if (activeReview.provider === 'gitlab') {
+        const result = await window.api.gl.updateMR({
+          repoPath: repo.path,
+          iid: activeReview.number,
+          updates: { title: nextTitle }
         })
+        if (!result.ok) {
+          toast.error(result.error)
+          return
+        }
+        await refreshHostedReviewAfterMutation()
+      } else {
+        if (!pr) {
+          return
+        }
+        const ok = await window.api.gh.updatePRTitle({
+          repoPath: repo.path,
+          repoId: repo.id,
+          prNumber: pr.number,
+          title: nextTitle,
+          prRepo: pr.prRepo ?? null
+        })
+        if (ok) {
+          await refreshHostedReviewAfterMutation()
+        }
       }
     } finally {
       clearTitleInputFocusTimer()
@@ -1331,13 +1501,11 @@ export default function ChecksPanel(): React.JSX.Element {
       }
     }
   }, [
+    activeReview,
     repo,
     pr,
     titleDraft,
-    branch,
-    linkedPR,
-    fallbackGitHubPRNumber,
-    fetchPRForBranch,
+    refreshHostedReviewAfterMutation,
     clearTitleInputFocusTimer,
     mountedRef
   ])
@@ -1355,35 +1523,191 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   const handleResolve = useCallback(
-    (threadId: string, resolve: boolean) => {
-      if (!repo || !prNumber) {
-        return
+    async (threadId: string, resolve: boolean): Promise<boolean> => {
+      if (repo && activeGitLabReview) {
+        const previousComments = comments
+        setComments((prev) =>
+          prev.map((comment) =>
+            comment.threadId === threadId ? { ...comment, isResolved: resolve } : comment
+          )
+        )
+        const result = await resolveGitLabMRDiscussionForChecks({
+          repoPath: repo.path,
+          repoId: repo.id,
+          settings,
+          iid: activeGitLabReview.number,
+          discussionId: threadId,
+          resolved: resolve
+        })
+        if (!result.ok) {
+          setComments(previousComments)
+          toast.error(result.error)
+          return false
+        }
+        return true
       }
-      void resolveReviewThread(repo.path, prNumber, threadId, resolve, {
+      if (!repo || !prNumber) {
+        return false
+      }
+      const requestKey = checksPanelAsyncResultKey(
+        prCacheKey,
+        branch,
+        prNumber,
+        pr?.prRepo,
+        pr?.headSha
+      )
+      const previousComments = comments
+      setComments((prev) =>
+        prev.map((comment) =>
+          comment.threadId === threadId ? { ...comment, isResolved: resolve } : comment
+        )
+      )
+      const ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
         repoId: repo.id,
         prRepo: pr?.prRepo
-      }).then((ok) => {
-        if (ok) {
-          // Update local state to match the optimistic store update
-          setComments((prev) =>
-            prev.map((c) => (c.threadId === threadId ? { ...c, isResolved: resolve } : c))
-          )
-        } else {
-          toast.error('Could not update review thread. Check the GitHub API budget.')
-        }
       })
+      if (!isCurrentAsyncResult(requestKey)) {
+        return ok
+      }
+      if (!ok) {
+        setComments(previousComments)
+        toast.error('Could not update review thread. Check the GitHub API budget.')
+      }
+      return ok
     },
-    [repo, prNumber, pr?.prRepo, resolveReviewThread]
+    [
+      activeGitLabReview,
+      branch,
+      comments,
+      isCurrentAsyncResult,
+      pr?.headSha,
+      pr?.prRepo,
+      prCacheKey,
+      prNumber,
+      repo,
+      resolveReviewThread,
+      settings
+    ]
   )
 
-  // Why: PR conflict files come from the host mergeability check, not a local
-  // MERGE_HEAD, so the prompt must tell the agent how to reproduce the merge
-  // locally instead of reusing the live Source Control conflict prompt.
+  const canTargetPRComments = Boolean(repo && prNumber && pr?.prRepo)
+  const commentsDisabledReason = canTargetPRComments
+    ? undefined
+    : 'Commenting requires a GitHub PR repository target.'
+  const activeConnectionId = activeWorktreeId ? getConnectionId(activeWorktreeId) : undefined
+  const detectedAgentsForAI =
+    typeof activeConnectionId === 'string' ? remoteDetectedAgentIds : detectedAgentIds
+  const noEnabledAgentKnown =
+    detectedAgentsForAI != null &&
+    pickDefaultSourceControlAgent(
+      settings?.defaultTuiAgent,
+      detectedAgentsForAI,
+      settings?.disabledTuiAgents
+    ) == null
+  const aiActionDisabledReason = !activeWorktreeId
+    ? 'Select a workspace before launching an AI action.'
+    : activeConnectionId === undefined
+      ? 'Unable to resolve the workspace connection.'
+      : noEnabledAgentKnown
+        ? 'No enabled AI agents. Configure agents in Settings.'
+        : undefined
+
+  const handleAddPRComment = useCallback(
+    async (body: string) => {
+      if (!repo || !prNumber || !pr?.prRepo) {
+        return { ok: false as const, error: commentsDisabledReason ?? 'Commenting unavailable.' }
+      }
+      const requestKey = checksPanelAsyncResultKey(
+        prCacheKey,
+        branch,
+        prNumber,
+        pr.prRepo,
+        pr.headSha
+      )
+      const result = await addPRConversationComment(repo.path, prNumber, body, {
+        repoId: repo.id,
+        prRepo: pr.prRepo
+      })
+      if (!isCurrentAsyncResult(requestKey)) {
+        return result.ok ? { ok: true as const } : result
+      }
+      if (!result.ok) {
+        toast.error(result.error)
+        return result
+      }
+      setComments((prev) => mergePRCommentIntoList(prev, result.comment))
+      return { ok: true as const }
+    },
+    [
+      addPRConversationComment,
+      branch,
+      commentsDisabledReason,
+      isCurrentAsyncResult,
+      pr,
+      prCacheKey,
+      prNumber,
+      repo
+    ]
+  )
+
+  const handleReplyToComment = useCallback(
+    async (comment: PRComment, body: string) => {
+      if (!repo || !prNumber || !pr?.prRepo) {
+        return { ok: false as const, error: commentsDisabledReason ?? 'Commenting unavailable.' }
+      }
+      const requestKey = checksPanelAsyncResultKey(
+        prCacheKey,
+        branch,
+        prNumber,
+        pr.prRepo,
+        pr.headSha
+      )
+      const canReplyToReviewThread =
+        Boolean(comment.threadId) && Number.isSafeInteger(comment.id) && comment.id > 0
+      const result = canReplyToReviewThread
+        ? await addPRReviewCommentReply(repo.path, prNumber, comment.id, body, {
+            repoId: repo.id,
+            prRepo: pr.prRepo,
+            threadId: comment.threadId,
+            path: comment.path,
+            line: comment.line
+          })
+        : await addPRConversationComment(repo.path, prNumber, `@${comment.author} ${body}`, {
+            repoId: repo.id,
+            prRepo: pr.prRepo
+          })
+      if (!isCurrentAsyncResult(requestKey)) {
+        return result.ok ? { ok: true as const } : result
+      }
+      if (!result.ok) {
+        toast.error(result.error)
+        return result
+      }
+      setComments((prev) => mergePRCommentIntoList(prev, result.comment))
+      return { ok: true as const }
+    },
+    [
+      addPRConversationComment,
+      addPRReviewCommentReply,
+      branch,
+      commentsDisabledReason,
+      isCurrentAsyncResult,
+      pr,
+      prCacheKey,
+      prNumber,
+      repo
+    ]
+  )
+
+  // Why: hosted-review conflict files come from the host mergeability check,
+  // not a local MERGE_HEAD, so the prompt must tell the agent how to reproduce
+  // the merge locally instead of reusing the live Source Control conflict prompt.
   const handleResolveConflictsWithAI = useCallback(async (): Promise<void> => {
-    if (isResolvingConflictsWithAI || !activeWorktreeId || !pr) {
+    if (isResolvingConflictsWithAI || !activeWorktreeId || !activeConflictReview) {
       return
     }
-    const conflictFiles = pr.conflictSummary?.files ?? []
+    const requestKey = stateRequestKey
+    const conflictFiles = activeConflictReview.conflictSummary?.files ?? []
     setIsResolvingConflictsWithAI(true)
     try {
       const connectionId = getConnectionId(activeWorktreeId)
@@ -1405,10 +1729,14 @@ export default function ChecksPanel(): React.JSX.Element {
         toast.error('No enabled AI agents. Configure agents in Settings.')
         return
       }
+      if (!isCurrentAsyncResult(requestKey)) {
+        return
+      }
       const prompt = buildResolvePullRequestConflictsPrompt({
-        baseRef: pr.conflictSummary?.baseRef,
+        baseRef: activeConflictReview.conflictSummary?.baseRef,
         entries: conflictFiles.map((path) => ({ path })),
-        worktreePath: activeWorktreePath ?? null
+        worktreePath: activeWorktreePath ?? null,
+        reviewKind: activeGitLabReview ? 'merge request' : 'pull request'
       })
       const result = launchAgentInNewTab({
         agent,
@@ -1426,7 +1754,15 @@ export default function ChecksPanel(): React.JSX.Element {
     } finally {
       setIsResolvingConflictsWithAI(false)
     }
-  }, [activeWorktreeId, activeWorktreePath, isResolvingConflictsWithAI, pr])
+  }, [
+    activeConflictReview,
+    activeGitLabReview,
+    activeWorktreeId,
+    activeWorktreePath,
+    isCurrentAsyncResult,
+    isResolvingConflictsWithAI,
+    stateRequestKey
+  ])
 
   const handleFixChecksWithAI = useCallback(async (): Promise<void> => {
     if (isFixingChecksWithAI || !activeWorktreeId || !activeReview) {
@@ -1437,6 +1773,7 @@ export default function ChecksPanel(): React.JSX.Element {
       toast.message('No broken checks to fix.')
       return
     }
+    const requestKey = stateRequestKey
     setIsFixingChecksWithAI(true)
     try {
       const connectionId = getConnectionId(activeWorktreeId)
@@ -1458,6 +1795,9 @@ export default function ChecksPanel(): React.JSX.Element {
         toast.error('No enabled AI agents. Configure agents in Settings.')
         return
       }
+      if (!isCurrentAsyncResult(requestKey)) {
+        return
+      }
       const prompt = buildFixBrokenChecksPrompt({
         reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',
         reviewNumber: activeReview.number,
@@ -1470,45 +1810,26 @@ export default function ChecksPanel(): React.JSX.Element {
         worktreeId: activeWorktreeId,
         prompt,
         promptDelivery: 'submit-after-ready',
-        launchSource: 'task_page'
+        launchSource: 'task_page',
+        onPromptDelivered: () => {
+          toast.success('Started an AI agent for the broken checks.')
+        }
       })
       if (!result) {
         toast.error('Could not build the agent launch command.')
         return
       }
       focusTerminalTabSurface(result.tabId)
-      toast.success('Started an AI agent for the broken checks.')
     } finally {
       setIsFixingChecksWithAI(false)
     }
-  }, [activeReview, activeWorktreeId, checks, isFixingChecksWithAI])
-
-  // Refresh PR (passed to PRActions)
-  const handleRefreshPR = useCallback(async () => {
-    if (repo && branch) {
-      const refreshedPR = await fetchPRForBranch(repo.path, branch, {
-        force: true,
-        repoId: repo.id,
-        linkedPRNumber: linkedPR,
-        fallbackPRNumber: fallbackGitHubPRNumber
-      })
-      await refreshHostedReviewCard(fetchHostedReviewForBranch, {
-        repoPath: repo.path,
-        repoId: repo.id,
-        branch,
-        linkedGitHubPR: linkedPR,
-        fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
-        linkedGitLabMR
-      })
-    }
   }, [
-    repo,
-    branch,
-    linkedPR,
-    fallbackGitHubPRNumber,
-    linkedGitLabMR,
-    fetchPRForBranch,
-    fetchHostedReviewForBranch
+    activeReview,
+    activeWorktreeId,
+    checks,
+    isCurrentAsyncResult,
+    isFixingChecksWithAI,
+    stateRequestKey
   ])
 
   // Open hosted review in browser
@@ -1592,23 +1913,48 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [activeWorktree?.path, activeWorktreeId, fetchUpstreamStatus])
 
   const handlePullRequestCreated = useCallback(
-    async (result: { number: number; url: string }): Promise<void> => {
+    async (result: {
+      provider: HostedReviewProvider
+      number: number
+      url: string
+    }): Promise<void> => {
       if (!repo || !branch) {
         return
       }
-      const initialRequestKey = checksPanelAsyncResultKey(
-        prCacheKey,
-        branch,
-        prNumber,
-        pr?.prRepo,
-        pr?.headSha
-      )
       setRightSidebarOpen(true)
       setRightSidebarTab('checks')
       try {
-        if (activeWorktreeId) {
+        if (activeWorktreeId && result.provider === 'github') {
           await updateWorktreeMeta(activeWorktreeId, { linkedPR: result.number })
         }
+        if (activeWorktreeId && result.provider === 'gitlab') {
+          await updateWorktreeMeta(activeWorktreeId, { linkedGitLabMR: result.number })
+        }
+        if (result.provider === 'gitlab') {
+          const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+            repoPath: repo.path,
+            repoId: repo.id,
+            branch,
+            linkedGitHubPR: linkedPR,
+            fallbackGitHubPR: fallbackGitHubPRNumber,
+            linkedGitLabMR: result.number
+          })
+          const refreshedGitLabReview =
+            refreshedReview?.provider === 'gitlab' ? refreshedReview : null
+          await fetchGitLabDetails({
+            mrNumberOverride: result.number,
+            headShaOverride: refreshedGitLabReview?.headSha,
+            commitAsCurrent: true
+          })
+          return
+        }
+        const initialRequestKey = checksPanelAsyncResultKey(
+          prCacheKey,
+          branch,
+          prNumber,
+          pr?.prRepo,
+          pr?.headSha
+        )
         const refreshedPR = await fetchPRForBranch(repo.path, branch, {
           force: true,
           repoId: repo.id,
@@ -1666,12 +2012,15 @@ export default function ChecksPanel(): React.JSX.Element {
     },
     [
       branch,
+      fallbackGitHubPRNumber,
+      fetchGitLabDetails,
       fetchHostedReviewForBranch,
       fetchPRChecks,
       fetchPRComments,
       fetchPRForBranch,
       isCurrentAsyncResult,
       linkedGitLabMR,
+      linkedPR,
       prCacheKey,
       prNumber,
       pr?.headSha,
@@ -1683,6 +2032,82 @@ export default function ChecksPanel(): React.JSX.Element {
       updateWorktreeMeta
     ]
   )
+
+  const activeReviewClassification = React.useMemo(() => {
+    if (!repo) {
+      return null
+    }
+    const options: HostedReviewClassificationOptions = {
+      agentAuthorLogins: [],
+      viewer: null
+    }
+    if (activeGitLabReview) {
+      const commentsForClassification =
+        gitLabDetailsFetchedAt !== null && !commentsLoading ? comments : undefined
+      const summary = hostedReviewSummaryFromGitLabInfo({
+        review: activeGitLabReview,
+        comments: commentsForClassification,
+        checks
+      })
+      return classifyHostedReview(summary, options)
+    }
+    if (!pr) {
+      return null
+    }
+    let host = 'github.com'
+    let owner = 'unknown'
+    let repoName = 'unknown'
+    try {
+      const parsed = new URL(pr.url)
+      host = parsed.host || host
+      const segments = parsed.pathname.split('/').filter(Boolean)
+      if (segments.length >= 2) {
+        owner = segments[0]
+        repoName = segments[1]
+      }
+    } catch {
+      // Why: malformed URLs should not block queue-state classification.
+    }
+
+    // Why: unresolved thread data is paginated and fetched separately. Until
+    // comments have loaded for this PR, do not let queue badges imply a clean review.
+    const commentsForClassification =
+      commentsFetchedAt !== undefined && !commentsLoading ? comments : undefined
+    const summary = hostedReviewSummaryFromGitHubPRInfo({
+      pr,
+      owner,
+      repo: repoName,
+      host,
+      comments: commentsForClassification,
+      checks
+    })
+    return classifyHostedReview(summary, options)
+  }, [
+    activeGitLabReview,
+    repo,
+    gitLabDetailsFetchedAt,
+    commentsLoading,
+    comments,
+    checks,
+    pr,
+    commentsFetchedAt
+  ])
+
+  const queueBadges = React.useMemo(() => {
+    if (!activeReviewClassification) {
+      return [] as string[]
+    }
+    const badges: string[] = []
+    if (activeReviewClassification.needsResponse) {
+      badges.push('Needs response')
+    }
+    // Why: viewer/author/requestedReviewer signals are not wired into the
+    // ChecksPanel call site yet, so `state` and `requested` would mis-classify
+    // every PR (collapsing to 'teammate'). Suppress those badges until the
+    // inputs are available; needs-response works from PR metadata alone and
+    // remains accurate.
+    return badges
+  }, [activeReviewClassification])
 
   // ── Empty state ──
   if (!activeWorktree) {
@@ -1782,7 +2207,9 @@ export default function ChecksPanel(): React.JSX.Element {
                     setCreatePrDialogOpen(true)
                   }}
                 >
-                  {canPushCreate ? 'Push & Create PR' : 'Create PR'}
+                  {canPushCreate
+                    ? `Push & Create ${emptyReviewShortLabel}`
+                    : `Create ${emptyReviewShortLabel}`}
                 </Button>
               )}
               <Button
@@ -1849,7 +2276,7 @@ export default function ChecksPanel(): React.JSX.Element {
         </div>
 
         {/* Review title */}
-        {pr && editingTitle ? (
+        {editingTitle ? (
           <div className="flex items-center gap-1">
             <input
               ref={titleInputRef}
@@ -1880,7 +2307,7 @@ export default function ChecksPanel(): React.JSX.Element {
               <X className="size-3.5" />
             </button>
           </div>
-        ) : pr ? (
+        ) : (
           <div
             className="group/title flex items-start gap-1.5 cursor-pointer -mx-1 px-1 py-0.5 rounded hover:bg-accent/40 transition-colors"
             onClick={handleStartEdit}
@@ -1890,10 +2317,6 @@ export default function ChecksPanel(): React.JSX.Element {
             </span>
             <Pencil className="size-3 text-muted-foreground/40 opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0 mt-0.5" />
           </div>
-        ) : (
-          <div className="-mx-1 px-1 py-0.5">
-            <span className="text-[12px] text-foreground leading-snug">{activeReview.title}</span>
-          </div>
         )}
 
         {/* Updated at */}
@@ -1902,43 +2325,79 @@ export default function ChecksPanel(): React.JSX.Element {
             {reviewShortLabel} updated {new Date(activeReview.updatedAt).toLocaleString()}
           </div>
         )}
+        {queueBadges.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {queueBadges.map((badge) => (
+              <span
+                key={badge}
+                className="rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         {/* Merge / Delete Workspace actions */}
-        {pr && activeWorktree && repo && (
-          <PRActions pr={pr} repo={repo} worktree={activeWorktree} onRefreshPR={handleRefreshPR} />
+        {activeReview && activeWorktree && repo && (
+          <HostedReviewActions
+            review={activeReview}
+            githubPR={pr}
+            repo={repo}
+            worktree={activeWorktree}
+            onRefreshReview={refreshHostedReviewAfterMutation}
+          />
         )}
       </div>
 
-      {pr && (
+      {activeConflictReview && (
         <>
           <ConflictingFilesSection
-            pr={pr}
+            pr={activeConflictReview}
             isResolvingWithAI={isResolvingConflictsWithAI}
             onResolveWithAI={() => void handleResolveConflictsWithAI()}
+            resolveDisabled={Boolean(aiActionDisabledReason)}
+            resolveDisabledReason={aiActionDisabledReason}
           />
           <MergeConflictNotice
-            pr={pr}
+            pr={activeConflictReview}
             isRefreshingConflictDetails={isRefreshing || conflictDetailsRefreshing}
-            isResolvingWithAI={isResolvingConflictsWithAI}
-            onResolveWithAI={() => void handleResolveConflictsWithAI()}
           />
+          {pr ? (
+            <PRTriageStrip
+              pr={pr}
+              checks={checks}
+              isResolvingConflictsWithAI={isResolvingConflictsWithAI}
+              onResolveConflictsWithAI={() => void handleResolveConflictsWithAI()}
+              resolveConflictsDisabled={Boolean(aiActionDisabledReason)}
+              resolveConflictsDisabledReason={aiActionDisabledReason}
+              isFixingChecksWithAI={isFixingChecksWithAI}
+              onFixChecksWithAI={() => void handleFixChecksWithAI()}
+              fixChecksDisabled={Boolean(aiActionDisabledReason)}
+              fixChecksDisabledReason={aiActionDisabledReason}
+            />
+          ) : null}
         </>
       )}
-      {/* Why: when the PR has merge conflicts and no checks have been fetched,
+      {/* Why: when the hosted review has merge conflicts and no checks have been fetched,
           showing "No checks configured" is misleading — checks may exist but
           simply cannot run until conflicts are resolved. Hide the empty state. */}
-      {!(pr?.mergeable === 'CONFLICTING' && checks.length === 0 && !checksLoading) && (
+      {!(activeConflictReview && checks.length === 0 && !checksLoading) && (
         <ChecksList
           checks={checks}
           checksLoading={checksLoading}
-          isFixingWithAI={isFixingChecksWithAI}
-          onFixWithAI={() => void handleFixChecksWithAI()}
+          checkDetailsContextKey={stateRequestKey}
+          onLoadCheckDetails={handleLoadCheckDetails}
         />
       )}
       <PRCommentsList
         comments={comments}
         commentsLoading={commentsLoading}
-        onResolve={pr ? handleResolve : undefined}
+        commentsDisabled={!canTargetPRComments}
+        commentsDisabledReason={commentsDisabledReason}
+        onAddComment={pr ? handleAddPRComment : undefined}
+        onReply={pr ? handleReplyToComment : undefined}
+        onResolve={pr || activeGitLabReview ? handleResolve : undefined}
       />
     </div>
   )

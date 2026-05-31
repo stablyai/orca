@@ -33,6 +33,18 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
             keywords: [repo.displayName, 'base ref', 'branch']
           },
           {
+            title: 'Worktree Location',
+            description: 'Project-specific directory for new worktrees.',
+            keywords: [
+              repo.displayName,
+              'worktree path',
+              'workspace path',
+              'directory',
+              'relative',
+              '../worktrees'
+            ]
+          },
+          {
             title: 'Sparse Checkout Presets',
             description: 'Saved directory sets for sparse worktree creation.',
             keywords: [

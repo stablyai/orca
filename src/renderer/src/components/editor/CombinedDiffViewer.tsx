@@ -54,6 +54,10 @@ import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './dif
 import type { DiffSection } from './diff-section-types'
 import { getInitialCombinedDiffSectionLoadIndices } from './combined-diff-initial-section-load'
 import { createCombinedDiffLoadScheduler } from './combined-diff-load-scheduler'
+import {
+  beginCombinedDiffScrollbarDrag,
+  type CombinedDiffScrollbarDragCleanup
+} from './combined-diff-scrollbar-drag'
 
 type CachedCombinedDiffViewState = {
   entrySignature: string
@@ -64,9 +68,16 @@ type CachedCombinedDiffViewState = {
   sideBySide: boolean
 }
 
+type CombinedDiffScrollThumb = {
+  visible: boolean
+  top: number
+  height: number
+}
+
 const combinedDiffViewStateCache = new Map<string, CachedCombinedDiffViewState>()
 const combinedDiffScrollTopCache = new Map<string, number>()
 const COMBINED_DIFF_OVERSCAN = 5
+const COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT = 64
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_GIT_BRANCH_ENTRIES: GitBranchChangeEntry[] = []
 let combinedDiffCollapsedPreference: boolean | null = null
@@ -180,8 +191,17 @@ export default function CombinedDiffViewer({
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [clearNotesDialogOpen, setClearNotesDialogOpen] = useState(false)
   const [isClearingNotes, setIsClearingNotes] = useState(false)
+  const clearNotesDialogVisible = clearNotesDialogOpen && (diffCommentCount > 0 || isClearingNotes)
+  if (clearNotesDialogOpen && !clearNotesDialogVisible) {
+    // Why: notes may be cleared outside this dialog; keep the modal closed in
+    // the same render instead of showing an empty confirmation for one frame.
+    setClearNotesDialogOpen(false)
+  }
   const [notesCopied, setNotesCopied] = useState(false)
   const mountedRef = useRef(true)
+  // Why: copy feedback is created by the copy action, so the same handler owns
+  // its reset timer instead of repairing copied state after render.
+  const notesCopiedResetTimerRef = useRef<number | null>(null)
   // Why: clipboard IPC can resolve after the combined diff unmounts; skip
   // copied feedback instead of starting a reset timer on a stale viewer.
   const notesCopyMountedRef = useRef(false)
@@ -194,23 +214,76 @@ export default function CombinedDiffViewer({
   // `loadSection`, where reading state would capture a stale closure value.
   const [generation, setGeneration] = useState(0)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [scrollThumb, setScrollThumb] = useState<CombinedDiffScrollThumb>({
+    visible: false,
+    top: 0,
+    height: COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT
+  })
   const pendingRestoreScrollTopRef = useRef<number | null>(null)
+  const activeScrollbarDragCleanupRef = useRef<CombinedDiffScrollbarDragCleanup | null>(null)
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
-  const setScrollContainerRef = useCallback((node: HTMLDivElement | null) => {
-    scrollContainerRef.current = node
-    notesCopyMountedRef.current = node !== null
+  const updateCombinedDiffScrollbar = useCallback(() => {
+    const container = scrollContainerRef.current
+    if (!container || container.scrollHeight <= container.clientHeight + 1) {
+      setScrollThumb((prev) =>
+        prev.visible
+          ? { visible: false, top: 0, height: COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT }
+          : prev
+      )
+      return
+    }
+
+    const trackHeight = Math.max(1, container.clientHeight - 8)
+    const maxScrollTop = Math.max(1, container.scrollHeight - container.clientHeight)
+    const height = Math.min(
+      trackHeight,
+      Math.max(
+        COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT,
+        (container.clientHeight / container.scrollHeight) * trackHeight
+      )
+    )
+    const top = ((trackHeight - height) * container.scrollTop) / maxScrollTop
+    setScrollThumb({ visible: true, top, height })
   }, [])
+
+  const clearNotesCopiedResetTimer = useCallback((): void => {
+    if (notesCopiedResetTimerRef.current !== null) {
+      window.clearTimeout(notesCopiedResetTimerRef.current)
+      notesCopiedResetTimerRef.current = null
+    }
+  }, [])
+
+  const cleanupActiveScrollbarDrag = useCallback((): void => {
+    activeScrollbarDragCleanupRef.current?.()
+  }, [])
+
+  const setScrollContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      scrollContainerRef.current = node
+      notesCopyMountedRef.current = node !== null
+      if (node === null) {
+        // Why: copied feedback is tied to the combined-diff surface lifetime;
+        // the root ref unmount is the same boundary that disables stale feedback.
+        clearNotesCopiedResetTimer()
+        cleanupActiveScrollbarDrag()
+        return
+      }
+      window.requestAnimationFrame(updateCombinedDiffScrollbar)
+    },
+    [cleanupActiveScrollbarDrag, clearNotesCopiedResetTimer, updateCombinedDiffScrollbar]
+  )
 
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
+      cleanupActiveScrollbarDrag()
     }
-  }, [])
+  }, [cleanupActiveScrollbarDrag])
   const loadSchedulerRef = useRef(
     createCombinedDiffLoadScheduler({
       loadSection: (index) => loadSectionRef.current(index)
@@ -618,10 +691,17 @@ export default function CombinedDiffViewer({
     () => createCombinedDiffSectionIndexMap(sections),
     [sections]
   )
-  const [activeTreeSectionKey, setActiveTreeSectionKey] = useState<string | null>(null)
-  useEffect(() => {
-    setActiveTreeSectionKey(null)
-  }, [entrySignature])
+  const [activeTreeSectionState, setActiveTreeSectionState] = useState<{
+    entrySignature: string
+    key: string | null
+  }>(() => ({ entrySignature, key: null }))
+  const activeTreeSectionKey =
+    activeTreeSectionState.entrySignature === entrySignature ? activeTreeSectionState.key : null
+  if (activeTreeSectionState.entrySignature !== entrySignature) {
+    // Why: the tree highlight belongs to one diff entry set and must not flash
+    // on another entry set before an Effect reset would run.
+    setActiveTreeSectionState({ entrySignature, key: null })
+  }
   const viewedSectionKeys = React.useMemo(
     () => new Set(sections.filter((section) => !section.loading).map((section) => section.key)),
     [sections]
@@ -637,10 +717,13 @@ export default function CombinedDiffViewer({
         scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
       })
       if (navigatedIndex !== null) {
-        setActiveTreeSectionKey(sectionsRef.current[navigatedIndex]?.key ?? null)
+        setActiveTreeSectionState({
+          entrySignature,
+          key: sectionsRef.current[navigatedIndex]?.key ?? null
+        })
       }
     },
-    [sectionIndexByKey, toggleSection, treeMode, virtualizer]
+    [entrySignature, sectionIndexByKey, toggleSection, treeMode, virtualizer]
   )
 
   const setAllSectionsCollapsed = useCallback((collapsed: boolean) => {
@@ -803,6 +886,7 @@ export default function CombinedDiffViewer({
     const updateCachedScrollPosition = (): void => {
       const existing = combinedDiffViewStateCache.get(viewStateKey)
       setWithLRU(combinedDiffScrollTopCache, viewStateKey, container.scrollTop)
+      updateCombinedDiffScrollbar()
       if (!existing || existing.entrySignature !== entrySignature) {
         return
       }
@@ -816,12 +900,20 @@ export default function CombinedDiffViewer({
     // must detach in the layout phase so the outgoing tab snapshots its last
     // real scroll position before the soon-to-be-removed container emits a
     // reset-to-top scroll event during teardown.
+    updateCombinedDiffScrollbar()
+    const resizeObserver = new ResizeObserver(updateCombinedDiffScrollbar)
+    resizeObserver.observe(container)
     container.addEventListener('scroll', updateCachedScrollPosition)
     return () => {
       updateCachedScrollPosition()
+      resizeObserver.disconnect()
       container.removeEventListener('scroll', updateCachedScrollPosition)
     }
-  }, [entrySignature, sections.length, viewStateKey])
+  }, [entrySignature, sections.length, updateCombinedDiffScrollbar, viewStateKey])
+
+  useLayoutEffect(() => {
+    updateCombinedDiffScrollbar()
+  }, [sectionHeights, sections, updateCombinedDiffScrollbar])
 
   useLayoutEffect(() => {
     const container = scrollContainerRef.current
@@ -877,19 +969,71 @@ export default function CombinedDiffViewer({
     }
   }, [branchSummary, file, openAllDiffs, openBranchAllDiffs])
 
-  useEffect(() => {
-    if (diffCommentCount === 0 && !isClearingNotes) {
-      setClearNotesDialogOpen(false)
-    }
-  }, [diffCommentCount, isClearingNotes])
+  const handleCombinedDiffScrollbarPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const container = scrollContainerRef.current
+      if (!container) {
+        return
+      }
 
-  useEffect(() => {
-    if (!notesCopied) {
-      return
-    }
-    const handle = window.setTimeout(() => setNotesCopied(false), 1500)
-    return () => window.clearTimeout(handle)
-  }, [notesCopied])
+      event.preventDefault()
+      const track = event.currentTarget
+      const thumb =
+        event.target instanceof HTMLElement
+          ? event.target.closest('[data-combined-diff-scrollbar-thumb]')
+          : null
+
+      const getLiveThumbHeight = (): number => {
+        const trackHeight = Math.max(1, track.getBoundingClientRect().height)
+        return Math.min(
+          trackHeight,
+          Math.max(
+            COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT,
+            (container.clientHeight / container.scrollHeight) * trackHeight
+          )
+        )
+      }
+
+      const getScrollTopForPointer = (clientY: number, grabOffset: number): number => {
+        const trackRect = track.getBoundingClientRect()
+        const trackHeight = Math.max(1, trackRect.height)
+        const thumbHeight = getLiveThumbHeight()
+        const maxThumbTop = Math.max(1, trackHeight - thumbHeight)
+        const maxScrollTop = Math.max(1, container.scrollHeight - container.clientHeight)
+        const thumbTop = Math.max(0, Math.min(maxThumbTop, clientY - trackRect.top - grabOffset))
+        return (thumbTop / maxThumbTop) * maxScrollTop
+      }
+
+      const grabOffset = thumb
+        ? event.clientY - thumb.getBoundingClientRect().top
+        : getLiveThumbHeight() / 2
+
+      if (!thumb) {
+        container.scrollTop = getScrollTopForPointer(event.clientY, grabOffset)
+        updateCombinedDiffScrollbar()
+      }
+
+      const handlePointerMove = (moveEvent: PointerEvent): void => {
+        moveEvent.preventDefault()
+        container.scrollTop = getScrollTopForPointer(moveEvent.clientY, grabOffset)
+        updateCombinedDiffScrollbar()
+      }
+      cleanupActiveScrollbarDrag()
+      let cleanupPointerDrag: CombinedDiffScrollbarDragCleanup
+      cleanupPointerDrag = beginCombinedDiffScrollbarDrag({
+        track,
+        pointerId: event.pointerId,
+        onPointerMove: handlePointerMove,
+        onEnd: () => {
+          if (activeScrollbarDragCleanupRef.current === cleanupPointerDrag) {
+            activeScrollbarDragCleanupRef.current = null
+          }
+        }
+      })
+      activeScrollbarDragCleanupRef.current = cleanupPointerDrag
+    },
+    [cleanupActiveScrollbarDrag, updateCombinedDiffScrollbar]
+  )
 
   const handleCopyNotes = useCallback(async (): Promise<void> => {
     if (diffCommentCount === 0) {
@@ -900,12 +1044,17 @@ export default function CombinedDiffViewer({
       if (!notesCopyMountedRef.current) {
         return
       }
+      clearNotesCopiedResetTimer()
       setNotesCopied(true)
+      notesCopiedResetTimerRef.current = window.setTimeout(() => {
+        setNotesCopied(false)
+        notesCopiedResetTimerRef.current = null
+      }, 1500)
     } catch {
       // Why: clipboard writes can fail while the app is not focused; this
       // mirrors the sidebar notes action and keeps the popover non-blocking.
     }
-  }, [diffCommentCount, diffCommentsPrompt])
+  }, [clearNotesCopiedResetTimer, diffCommentCount, diffCommentsPrompt])
 
   const handleConfirmClearNotes = useCallback(async (): Promise<void> => {
     if (diffCommentCount === 0 || isClearingNotes) {
@@ -1153,74 +1302,92 @@ export default function CombinedDiffViewer({
             onCollapsedChange={setFileTreeCollapsed}
             onNavigate={handleTreeNavigate}
           />
-          <div
-            ref={setScrollContainerRef}
-            className="min-w-0 flex-1 overflow-auto scrollbar-editor"
-          >
-            {skippedConflictNotice}
-            <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-              {virtualizer.getVirtualItems().map((virtualItem) => {
-                const section = sections[virtualItem.index]
-                if (!section) {
-                  return null
-                }
+          <div className="relative min-w-0 flex-1">
+            <div
+              ref={setScrollContainerRef}
+              className="combined-diff-scroll-container h-full overflow-auto pr-5 scrollbar-editor"
+            >
+              {skippedConflictNotice}
+              <div
+                className="relative w-full"
+                style={{ height: `${virtualizer.getTotalSize()}px` }}
+              >
+                {virtualizer.getVirtualItems().map((virtualItem) => {
+                  const section = sections[virtualItem.index]
+                  if (!section) {
+                    return null
+                  }
 
-                return (
-                  <div
-                    key={virtualItem.key}
-                    data-index={virtualItem.index}
-                    ref={virtualizer.measureElement}
-                    className="absolute left-0 top-0 w-full"
-                    // Why: `top` preserves sticky file headers inside each row;
-                    // transform-based virtualization creates a containing block
-                    // that makes long-section headers feel jumpy while scrolling.
-                    style={{ top: `${virtualItem.start}px` }}
-                  >
-                    <DiffSectionItem
-                      section={section}
-                      index={virtualItem.index}
-                      isBranchMode={isBranchMode}
-                      sideBySide={sideBySide}
-                      isDark={isDark}
-                      settings={settings}
-                      sectionHeight={sectionHeights[virtualItem.index]}
-                      worktreeId={file.worktreeId}
-                      loadSection={loadSection}
-                      retrySection={retrySection}
-                      toggleSection={toggleSection}
-                      openSection={openSection}
-                      openSectionTitle={
-                        isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
-                      }
-                      setSectionHeights={setSectionHeights}
-                      setSections={setSections}
-                      modifiedEditorsRef={modifiedEditorsRef}
-                      handleSectionSaveRef={handleSectionSaveRef}
-                      renderHeaderTrailingContent={(section) => {
-                        const fileNotes = diffCommentsForWorktree.filter(
-                          (comment) => comment.filePath === section.path
-                        )
-                        return fileNotes.length > 0 ? (
-                          <DiffNotesSendMenu
-                            worktreeId={file.worktreeId}
-                            groupId={activeGroupId ?? file.worktreeId}
-                            comments={diffCommentsForWorktree}
-                            filePath={section.path}
-                            showFileScope
-                            triggerClassName="p-0.5 opacity-0 group-hover:opacity-100"
-                          />
-                        ) : null
-                      }}
-                    />
-                  </div>
-                )
-              })}
+                  return (
+                    <div
+                      key={virtualItem.key}
+                      data-index={virtualItem.index}
+                      ref={virtualizer.measureElement}
+                      className="absolute left-0 top-0 w-full"
+                      // Why: `top` preserves sticky file headers inside each row;
+                      // transform-based virtualization creates a containing block
+                      // that makes long-section headers feel jumpy while scrolling.
+                      style={{ top: `${virtualItem.start}px` }}
+                    >
+                      <DiffSectionItem
+                        section={section}
+                        index={virtualItem.index}
+                        isBranchMode={isBranchMode}
+                        sideBySide={sideBySide}
+                        isDark={isDark}
+                        settings={settings}
+                        sectionHeight={sectionHeights[virtualItem.index]}
+                        worktreeId={file.worktreeId}
+                        loadSection={loadSection}
+                        retrySection={retrySection}
+                        toggleSection={toggleSection}
+                        openSection={openSection}
+                        openSectionTitle={
+                          isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
+                        }
+                        setSectionHeights={setSectionHeights}
+                        setSections={setSections}
+                        modifiedEditorsRef={modifiedEditorsRef}
+                        handleSectionSaveRef={handleSectionSaveRef}
+                        renderHeaderTrailingContent={(section) => {
+                          const fileNotes = diffCommentsForWorktree.filter(
+                            (comment) => comment.filePath === section.path
+                          )
+                          return fileNotes.length > 0 ? (
+                            <DiffNotesSendMenu
+                              worktreeId={file.worktreeId}
+                              groupId={activeGroupId ?? file.worktreeId}
+                              comments={diffCommentsForWorktree}
+                              filePath={section.path}
+                              showFileScope
+                              triggerClassName="p-0.5 opacity-0 group-hover:opacity-100"
+                            />
+                          ) : null
+                        }}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
             </div>
+            {scrollThumb.visible && (
+              <div
+                aria-hidden="true"
+                className="absolute inset-y-1 right-1 z-20 w-4 cursor-default rounded bg-muted/15 pl-1"
+                onPointerDown={handleCombinedDiffScrollbarPointerDown}
+              >
+                <div
+                  data-combined-diff-scrollbar-thumb
+                  className="absolute left-1 right-0 rounded bg-muted-foreground/30"
+                  style={{ top: scrollThumb.top, height: scrollThumb.height }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
       <Dialog
-        open={clearNotesDialogOpen}
+        open={clearNotesDialogVisible}
         onOpenChange={(open) => {
           if (!open && !isClearingNotes) {
             setClearNotesDialogOpen(false)

@@ -12,6 +12,10 @@ import { pasteTerminalText } from './terminal-bracketed-paste'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
+import {
+  prepareAgentSessionForkFromPane,
+  type PreparedAgentSessionFork
+} from './terminal-agent-session-fork'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -27,6 +31,7 @@ type UseTerminalPaneContextMenuDeps = {
   onRequestClosePane: (paneId: number) => void
   onSetTitle: (paneId: number) => void
   onPasteError: (message: string) => void
+  onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
   rightClickToPaste: boolean
 }
 
@@ -46,6 +51,7 @@ type TerminalMenuState = {
   onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
+  onForkAgentSession: () => Promise<void>
   onQuickCommand: (command: TerminalQuickCommand) => void
   onToggleExpand: () => void
   onSetTitle: () => void
@@ -63,6 +69,7 @@ export function useTerminalPaneContextMenu({
   onRequestClosePane,
   onSetTitle,
   onPasteError,
+  onAgentSessionForkReady,
   rightClickToPaste
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
@@ -203,6 +210,17 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  const onForkAgentSession = async (): Promise<void> => {
+    const pane = resolveMenuPane()
+    if (!pane) {
+      return
+    }
+    const fork = prepareAgentSessionForkFromPane({ pane, tabId, worktreeId, groupId })
+    if (fork) {
+      onAgentSessionForkReady(fork)
+    }
+  }
+
   const onQuickCommand = (command: TerminalQuickCommand): void => {
     if (isTerminalAgentQuickCommand(command)) {
       runQuickCommandInNewTab({ command, worktreeId, groupId })
@@ -272,8 +290,11 @@ export function useTerminalPaneContextMenu({
     setOpen(true)
   }
 
-  const paneCount = managerRef.current?.getPanes().length ?? 1
-  const menuPaneId = resolveMenuPane()?.id ?? null
+  // Why: PaneManager.getPanes() allocates public pane wrappers. Closed menus
+  // do not need pane counts or target identity, so avoid that work on every
+  // render across hundreds of mounted terminal tabs.
+  const paneCount = open ? (managerRef.current?.getPanes().length ?? 1) : 1
+  const menuPaneId = open ? (resolveMenuPane()?.id ?? null) : null
 
   return {
     open,
@@ -291,6 +312,7 @@ export function useTerminalPaneContextMenu({
     onEqualizePaneSizes,
     onClosePane,
     onClearScreen,
+    onForkAgentSession,
     onQuickCommand,
     onToggleExpand,
     onSetTitle: handleSetTitle

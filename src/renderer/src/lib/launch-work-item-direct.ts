@@ -22,6 +22,7 @@ import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import type {
   GitPushTarget,
+  GitHubPrStartPoint,
   OrcaHooks,
   RepoHookSettings,
   SetupDecision,
@@ -78,14 +79,17 @@ async function resolveDirectPrStartPoint(
   repoId: string,
   prNumber: number,
   settings: AppState['settings']
-): Promise<{ baseBranch: string; pushTarget?: GitPushTarget }> {
+): Promise<GitHubPrStartPoint> {
   const target = getActiveRuntimeTarget(settings)
   const result =
     target.kind === 'local'
       ? await window.api.worktrees.resolvePrBase({ repoId, prNumber })
-      : await callRuntimeRpc<
-          { baseBranch: string; pushTarget?: GitPushTarget } | { error: string }
-        >(target, 'worktree.resolvePrBase', { repo: repoId, prNumber }, { timeoutMs: 30_000 })
+      : await callRuntimeRpc<GitHubPrStartPoint | { error: string }>(
+          target,
+          'worktree.resolvePrBase',
+          { repo: repoId, prNumber },
+          { timeoutMs: 30_000 }
+        )
   if ('error' in result) {
     throw new Error(result.error)
   }
@@ -217,6 +221,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   })
   let resolvedBaseBranch = baseBranch
   let resolvedPushTarget: GitPushTarget | undefined
+  let resolvedBranchNameOverride: string | undefined
   if (!resolvedBaseBranch && item.type === 'pr' && item.number) {
     try {
       // Why: direct "Use PR" launches bypass the Start-from picker, so they
@@ -224,6 +229,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       const result = await resolveDirectPrStartPoint(repoId, item.number, settings)
       resolvedBaseBranch = result.baseBranch
       resolvedPushTarget = result.pushTarget
+      resolvedBranchNameOverride = result.branchNameOverride
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to resolve PR head.')
       openModalFallback()
@@ -251,7 +257,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       resolvedPushTarget,
       undefined,
       item.linearIdentifier,
-      undefined,
+      resolvedBranchNameOverride,
       undefined,
       item.type === 'mr' && item.number ? item.number : undefined,
       item.type === 'issue' && item.number && isGitLabIssueUrl(item.url) ? item.number : undefined
@@ -332,6 +338,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     const activation = activateAndRevealWorktree(worktreeId, {
       sidebarRevealBehavior: 'auto',
       setup: result.setup,
+      defaultTabs: result.defaultTabs,
       ...buildStartupOpts(effectiveAgent, startupPlan, launchSource)
     })
     if (!activation) {

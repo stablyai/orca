@@ -57,13 +57,14 @@ import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { DiffCommentCard } from '../diff-comments/DiffCommentCard'
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
-import { MessageSquare, Plus } from 'lucide-react'
+import { Check, Copy, MessageSquare, Plus } from 'lucide-react'
 import {
   formatMarkdownReviewNotes,
   getMarkdownReviewCardQuote,
   sortMarkdownReviewNotes,
   type MarkdownReviewNote
 } from '@/lib/markdown-review-notes'
+import { copyMarkdownReviewNotesForAgent } from '@/lib/markdown-review-note-copy'
 import {
   richMarkdownAnnotationHighlightPluginKey,
   type RichMarkdownAnnotationHighlightRange
@@ -106,6 +107,13 @@ type RichMarkdownEditorProps = {
 const richMarkdownExtensions = createRichMarkdownExtensions({
   includePlaceholder: true
 })
+
+function clampMenuSelectionIndex(index: number, itemCount: number): number {
+  if (itemCount <= 0) {
+    return 0
+  }
+  return Math.min(Math.max(index, 0), itemCount - 1)
+}
 
 function runRichMarkdownContextCommand(
   command: RichMarkdownContextMenuCommand,
@@ -593,10 +601,18 @@ export default function RichMarkdownEditor({
   })
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null)
-  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
+  const [slashSelection, setSlashSelection] = useState<{ query: string | null; index: number }>({
+    query: null,
+    index: 0
+  })
   const [docLinkMenu, setDocLinkMenu] = useState<DocLinkMenuState | null>(null)
   const [emojiMenu, setEmojiMenu] = useState<{ left: number; top: number } | null>(null)
-  const [selectedDocLinkIndex, setSelectedDocLinkIndex] = useState(0)
+  const [docLinkSelection, setDocLinkSelection] = useState<{ query: string | null; index: number }>(
+    {
+      query: null,
+      index: 0
+    }
+  )
   const isMac = navigator.userAgent.includes('Mac')
   const lastCommittedMarkdownRef = useRef(content)
   const slashMenuRef = useRef<SlashMenuState | null>(null)
@@ -635,6 +651,8 @@ export default function RichMarkdownEditor({
     null
   )
   const [reviewRailOpen, setReviewRailOpen] = useState(false)
+  const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
+  const [copiedReviewNoteId, setCopiedReviewNoteId] = useState<string | null>(null)
   const [activeReviewCommentId, setActiveReviewCommentId] = useState<string | null>(null)
   const [attentionReviewCommentId, setAttentionReviewCommentId] = useState<string | null>(null)
   const [notePositions, setNotePositions] = useState<RichMarkdownReviewNotePosition[]>([])
@@ -645,6 +663,8 @@ export default function RichMarkdownEditor({
   const markdownSourceLineOffsetRef = useRef(markdownSourceLineOffset)
   const attentionReviewCommentTimeoutRef = useRef<number | null>(null)
   const sourceAttentionTimeoutRef = useRef<number | null>(null)
+  const reviewNotesCopiedResetTimerRef = useRef<number | null>(null)
+  const copiedReviewNoteResetTimerRef = useRef<number | null>(null)
   const annotationTargetFrameRef = useRef<number | null>(null)
   const notePositionsFrameRef = useRef<number | null>(null)
   const isEditingLinkRef = useRef(false)
@@ -710,9 +730,47 @@ export default function RichMarkdownEditor({
   isEditingLinkRef.current = isEditingLink
   annotationPopoverRef.current = annotationPopover
   canAnnotateRichMarkdownRef.current = canAnnotateRichMarkdown
+  slashMenuRef.current = slashMenu
+  docLinkMenuRef.current = docLinkMenu
   markdownCommentsRef.current = markdownComments
   notePositionsRef.current = notePositions
   markdownSourceLineOffsetRef.current = markdownSourceLineOffset
+
+  // Why: selection belongs to the active menu query so query changes can reset
+  // and clamp during render without a post-render repair Effect.
+  const setSelectedCommandIndex = useCallback<React.Dispatch<React.SetStateAction<number>>>(
+    (nextIndex) => {
+      setSlashSelection((current) => {
+        const query = slashMenuRef.current?.query ?? null
+        const optionCount = filteredSlashCommandsRef.current.length
+        const currentIndex =
+          current.query === query ? clampMenuSelectionIndex(current.index, optionCount) : 0
+        const resolvedIndex = typeof nextIndex === 'function' ? nextIndex(currentIndex) : nextIndex
+        return {
+          query,
+          index: clampMenuSelectionIndex(resolvedIndex, optionCount)
+        }
+      })
+    },
+    []
+  )
+
+  const setSelectedDocLinkIndex = useCallback<React.Dispatch<React.SetStateAction<number>>>(
+    (nextIndex) => {
+      setDocLinkSelection((current) => {
+        const query = docLinkMenuRef.current?.query ?? null
+        const rowCount = filteredDocLinkRowsRef.current.length
+        const currentIndex =
+          current.query === query ? clampMenuSelectionIndex(current.index, rowCount) : 0
+        const resolvedIndex = typeof nextIndex === 'function' ? nextIndex(currentIndex) : nextIndex
+        return {
+          query,
+          index: clampMenuSelectionIndex(resolvedIndex, rowCount)
+        }
+      })
+    },
+    []
+  )
 
   const flushPendingSerialization = useCallback(() => {
     if (serializeTimerRef.current === null) {
@@ -750,16 +808,53 @@ export default function RichMarkdownEditor({
     }
   }, [])
 
+  const clearReviewCopyTimers = useCallback(() => {
+    if (reviewNotesCopiedResetTimerRef.current !== null) {
+      window.clearTimeout(reviewNotesCopiedResetTimerRef.current)
+      reviewNotesCopiedResetTimerRef.current = null
+    }
+    if (copiedReviewNoteResetTimerRef.current !== null) {
+      window.clearTimeout(copiedReviewNoteResetTimerRef.current)
+      copiedReviewNoteResetTimerRef.current = null
+    }
+  }, [])
+
+  const clearAllAnnotationHighlights = useCallback((): void => {
+    const ed = editorRef.current
+    if (!ed) {
+      return
+    }
+    ed.view.dispatch(
+      ed.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
+        activeRange: null,
+        noteRanges: []
+      })
+    )
+  }, [])
+
   const setRootElement = useCallback(
     (node: HTMLDivElement | null) => {
-      // Why: review-note pulses are tied to this editor root; ref cleanup
-      // keeps the existing unmount boundary without a passive Effect.
       if (node === null) {
+        // Why: these transient editor resources are owned by this root; clearing
+        // them at detach keeps unmount cleanup out of passive Effects.
         clearAttentionTimers()
+        clearReviewCopyTimers()
+        clearAllAnnotationHighlights()
+        if (annotationTargetFrameRef.current !== null) {
+          window.cancelAnimationFrame(annotationTargetFrameRef.current)
+          annotationTargetFrameRef.current = null
+        }
+        if (notePositionsFrameRef.current !== null) {
+          window.cancelAnimationFrame(notePositionsFrameRef.current)
+          notePositionsFrameRef.current = null
+        }
+        cancelAutoFocusRef.current?.()
+        cancelAutoFocusRef.current = null
+        window.api.ui.setMarkdownEditorFocused(false)
       }
       rootRef.current = node
     },
-    [clearAttentionTimers]
+    [clearAllAnnotationHighlights, clearAttentionTimers, clearReviewCopyTimers]
   )
 
   const syncAnnotationTarget = useCallback((nextEditor: Editor): void => {
@@ -802,6 +897,60 @@ export default function RichMarkdownEditor({
       }, 900)
     })
   }, [])
+
+  const markReviewNotesCopied = useCallback((): void => {
+    clearReviewCopyTimers()
+    setCopiedReviewNoteId(null)
+    setReviewNotesCopied(true)
+    reviewNotesCopiedResetTimerRef.current = window.setTimeout(() => {
+      reviewNotesCopiedResetTimerRef.current = null
+      setReviewNotesCopied(false)
+    }, 1600)
+  }, [clearReviewCopyTimers])
+
+  const markReviewNoteCopied = useCallback((noteId: string): void => {
+    if (copiedReviewNoteResetTimerRef.current !== null) {
+      window.clearTimeout(copiedReviewNoteResetTimerRef.current)
+    }
+    setCopiedReviewNoteId(noteId)
+    copiedReviewNoteResetTimerRef.current = window.setTimeout(() => {
+      copiedReviewNoteResetTimerRef.current = null
+      setCopiedReviewNoteId(null)
+    }, 1600)
+  }, [])
+
+  const handleCopyMarkdownReviewNotes = useCallback(async (): Promise<void> => {
+    try {
+      const copied = await copyMarkdownReviewNotesForAgent({
+        notes: markdownReviewNotes,
+        content: markdownReviewContent,
+        writeClipboardText: window.api.ui.writeClipboardText
+      })
+      if (copied && rootRef.current) {
+        markReviewNotesCopied()
+      }
+    } catch {
+      // Best-effort clipboard action; failures usually mean the window is not focused.
+    }
+  }, [markdownReviewContent, markdownReviewNotes, markReviewNotesCopied])
+
+  const handleCopyMarkdownReviewNote = useCallback(
+    async (note: MarkdownReviewNote): Promise<void> => {
+      try {
+        const copied = await copyMarkdownReviewNotesForAgent({
+          notes: [note],
+          content: markdownReviewContent,
+          writeClipboardText: window.api.ui.writeClipboardText
+        })
+        if (copied && rootRef.current) {
+          markReviewNoteCopied(note.id)
+        }
+      } catch {
+        // Best-effort clipboard action; failures usually mean the window is not focused.
+      }
+    },
+    [markdownReviewContent, markReviewNoteCopied]
+  )
 
   const syncNotePositions = useCallback((): void => {
     const ed = editorRef.current
@@ -1212,9 +1361,7 @@ export default function RichMarkdownEditor({
     }
   })
 
-  useEffect(() => {
-    editorRef.current = editor ?? null
-  }, [editor])
+  editorRef.current = editor ?? null
 
   const clearAnnotationHighlight = useCallback((): void => {
     const ed = editorRef.current
@@ -1222,19 +1369,6 @@ export default function RichMarkdownEditor({
       return
     }
     ed.view.dispatch(ed.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, null))
-  }, [])
-
-  const clearAllAnnotationHighlights = useCallback((): void => {
-    const ed = editorRef.current
-    if (!ed) {
-      return
-    }
-    ed.view.dispatch(
-      ed.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
-        activeRange: null,
-        noteRanges: []
-      })
-    )
   }, [])
 
   useEffect(() => {
@@ -1245,10 +1379,6 @@ export default function RichMarkdownEditor({
     setAnnotationPopover(null)
     clearAllAnnotationHighlights()
   }, [canAnnotateRichMarkdown, clearAllAnnotationHighlights])
-
-  useEffect(() => {
-    return () => clearAllAnnotationHighlights()
-  }, [clearAllAnnotationHighlights])
 
   useEffect(() => {
     if (!editor || !canAnnotateRichMarkdown) {
@@ -1303,30 +1433,6 @@ export default function RichMarkdownEditor({
       window.removeEventListener('resize', update)
     }
   }, [requestSyncNotePositions, reviewRailVisible])
-
-  useEffect(() => {
-    return () => {
-      if (annotationTargetFrameRef.current !== null) {
-        window.cancelAnimationFrame(annotationTargetFrameRef.current)
-      }
-      if (notePositionsFrameRef.current !== null) {
-        window.cancelAnimationFrame(notePositionsFrameRef.current)
-      }
-      cancelAutoFocusRef.current?.()
-      cancelAutoFocusRef.current = null
-    }
-  }, [])
-
-  // Why: TipTap's onBlur may not fire on unmount paths (tab close, HMR,
-  // component teardown while focused), leaving the main-process flag stale at
-  // `true` and silently disabling Cmd+B sidebar-toggle until the next editor
-  // focus/blur cycle. Force a `false` on unmount as a belt-and-braces reset.
-  // See docs/markdown-cmd-b-bold-design.md "Stale-flag recovery".
-  useEffect(() => {
-    return () => {
-      window.api.ui.setMarkdownEditorFocused(false)
-    }
-  }, [])
 
   // Why: use useLayoutEffect (synchronous cleanup) so the pending serialization
   // flush runs before useEditor's cleanup destroys the editor instance on tab
@@ -1383,10 +1489,7 @@ export default function RichMarkdownEditor({
   }, [editor, markdownDocuments])
 
   const handleLocalImagePick = useLocalImagePick(editor, filePath, worktreeId, runtimeEnvironmentId)
-
-  useEffect(() => {
-    handleLocalImagePickRef.current = handleLocalImagePick
-  }, [handleLocalImagePick])
+  handleLocalImagePickRef.current = handleLocalImagePick
 
   const {
     handleLinkSave,
@@ -1432,9 +1535,7 @@ export default function RichMarkdownEditor({
     rootRef,
     scrollContainerRef
   })
-  useEffect(() => {
-    openSearchRef.current = openSearch
-  }, [openSearch])
+  openSearchRef.current = openSearch
 
   const navigateToTableOfContentsItem = useCallback(
     (id: string): void => {
@@ -1551,9 +1652,7 @@ export default function RichMarkdownEditor({
     setAnnotationTarget(null)
   }, [annotationTarget, canAnnotateRichMarkdown, markdownComments, markdownSourceLineOffset])
 
-  useEffect(() => {
-    handleEmojiPickRef.current = openEmojiMenu
-  }, [openEmojiMenu])
+  handleEmojiPickRef.current = openEmojiMenu
 
   const filteredSlashCommands = useMemo(() => {
     const query = slashMenu?.query.trim().toLowerCase() ?? ''
@@ -1566,28 +1665,13 @@ export default function RichMarkdownEditor({
     })
   }, [slashMenu?.query])
 
-  useEffect(() => {
-    slashMenuRef.current = slashMenu
-  }, [slashMenu])
-  useEffect(() => {
-    filteredSlashCommandsRef.current = filteredSlashCommands
-  }, [filteredSlashCommands])
-  useEffect(() => {
-    selectedCommandIndexRef.current = selectedCommandIndex
-  }, [selectedCommandIndex])
-  useEffect(() => {
-    setSelectedCommandIndex(0)
-  }, [slashMenu?.query])
-  useEffect(() => {
-    if (filteredSlashCommands.length === 0) {
-      setSelectedCommandIndex(0)
-      return
-    }
-
-    setSelectedCommandIndex((currentIndex) =>
-      Math.min(currentIndex, filteredSlashCommands.length - 1)
-    )
-  }, [filteredSlashCommands.length])
+  const slashMenuQuery = slashMenu?.query ?? null
+  const selectedCommandIndex =
+    slashSelection.query === slashMenuQuery
+      ? clampMenuSelectionIndex(slashSelection.index, filteredSlashCommands.length)
+      : 0
+  filteredSlashCommandsRef.current = filteredSlashCommands
+  selectedCommandIndexRef.current = selectedCommandIndex
 
   // Why: memo key is the `markdownDocuments` prop (stable reference from parent),
   // not `editor.storage.markdownDocLink.documents`. The storage mirror is mutated
@@ -1605,22 +1689,13 @@ export default function RichMarkdownEditor({
     return { docLinkRows: rows, docLinkTotalMatches: matches.length }
   }, [docLinkMenu, markdownDocuments])
 
-  useEffect(() => {
-    docLinkMenuRef.current = docLinkMenu
-  }, [docLinkMenu])
-  useEffect(() => {
-    filteredDocLinkRowsRef.current = docLinkRows
-  }, [docLinkRows])
-  useEffect(() => {
-    selectedDocLinkIndexRef.current = selectedDocLinkIndex
-  }, [selectedDocLinkIndex])
-  useEffect(() => {
-    if (docLinkRows.length === 0) {
-      setSelectedDocLinkIndex(0)
-      return
-    }
-    setSelectedDocLinkIndex((currentIndex) => Math.min(currentIndex, docLinkRows.length - 1))
-  }, [docLinkRows.length])
+  const docLinkMenuQuery = docLinkMenu?.query ?? null
+  const selectedDocLinkIndex =
+    docLinkSelection.query === docLinkMenuQuery
+      ? clampMenuSelectionIndex(docLinkSelection.index, docLinkRows.length)
+      : 0
+  filteredDocLinkRowsRef.current = docLinkRows
+  selectedDocLinkIndexRef.current = selectedDocLinkIndex
 
   useEffect(() => {
     if (!editor) {
@@ -1766,28 +1841,62 @@ export default function RichMarkdownEditor({
                       onSubmitEdit={(body) => updateDiffComment(worktreeId, comment.id, body)}
                       onContentResize={syncNotePositions}
                       headerActions={
-                        <NotesSendMenu
-                          worktreeId={worktreeId}
-                          groupId={worktreeId}
-                          modeIdParts={['markdown-notes', worktreeId, filePath, 'note', comment.id]}
-                          scopes={[
-                            {
-                              id: 'note',
-                              label: 'This note',
-                              notes: comment.sentAt ? [] : [comment as MarkdownReviewNote],
-                              prompt: formatMarkdownReviewNotes(
-                                [comment as MarkdownReviewNote],
-                                markdownReviewContent
-                              )
+                        <>
+                          <button
+                            type="button"
+                            className="rich-markdown-review-note-action"
+                            title={
+                              copiedReviewNoteId === comment.id
+                                ? 'Copied note'
+                                : 'Copy note for agent'
                             }
-                          ]}
-                          targetModeLabel="This note"
-                          triggerClassName="rich-markdown-review-note-send"
-                          disabledTooltip="Note already sent"
-                          onDelivered={(notes) =>
-                            void clearDeliveredDiffComments(worktreeId, notes)
-                          }
-                        />
+                            aria-label={
+                              copiedReviewNoteId === comment.id
+                                ? 'Copied note'
+                                : 'Copy note for agent'
+                            }
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              void handleCopyMarkdownReviewNote(comment as MarkdownReviewNote)
+                            }}
+                          >
+                            {copiedReviewNoteId === comment.id ? (
+                              <Check className="size-3.5" />
+                            ) : (
+                              <Copy className="size-3.5" />
+                            )}
+                          </button>
+                          <NotesSendMenu
+                            worktreeId={worktreeId}
+                            groupId={worktreeId}
+                            modeIdParts={[
+                              'markdown-notes',
+                              worktreeId,
+                              filePath,
+                              'note',
+                              comment.id
+                            ]}
+                            scopes={[
+                              {
+                                id: 'note',
+                                label: 'This note',
+                                notes: comment.sentAt ? [] : [comment as MarkdownReviewNote],
+                                prompt: formatMarkdownReviewNotes(
+                                  [comment as MarkdownReviewNote],
+                                  markdownReviewContent
+                                )
+                              }
+                            ]}
+                            targetModeLabel="This note"
+                            triggerClassName="rich-markdown-review-note-action"
+                            disabledTooltip="Note already sent"
+                            onDelivered={(notes) =>
+                              void clearDeliveredDiffComments(worktreeId, notes)
+                            }
+                          />
+                        </>
                       }
                     />
                   </div>
@@ -1899,12 +2008,21 @@ export default function RichMarkdownEditor({
               <MessageSquare className="size-3.5" />
               <span>{markdownComments.length}</span>
             </button>
+            <button
+              type="button"
+              className="rich-markdown-review-rail-action"
+              title={reviewNotesCopied ? 'Copied notes' : 'Copy notes for agent'}
+              aria-label={reviewNotesCopied ? 'Copied notes' : 'Copy notes for agent'}
+              onClick={() => void handleCopyMarkdownReviewNotes()}
+            >
+              {reviewNotesCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            </button>
             <NotesSendMenu
               worktreeId={worktreeId}
               groupId={worktreeId}
               modeIdParts={['markdown-notes', worktreeId, filePath, 'rail']}
               scopes={unsentMarkdownReviewScope}
-              triggerClassName="rich-markdown-review-rail-send"
+              triggerClassName="rich-markdown-review-rail-action"
               onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
             />
           </div>

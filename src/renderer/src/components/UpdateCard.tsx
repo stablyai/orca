@@ -1,7 +1,8 @@
 /* eslint-disable max-lines -- Why: the update card owns the full updater lifecycle in one
    renderer surface. Keeping the state machine and its presentation variants together avoids
    scattering tightly coupled update behavior across multiple files. */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useAppStore } from '../store'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
@@ -197,25 +198,30 @@ export function UpdateCard() {
   }, [status.state])
 
   // ── Prefers-reduced-motion ──────────────────────────────────────────
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    setPrefersReducedMotion(mq.matches)
-    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [])
+  const prefersReducedMotion = usePrefersReducedMotion()
 
-  useEffect(() => {
-    return () => {
-      if (dismissAnimationTimerRef.current !== null) {
-        window.clearTimeout(dismissAnimationTimerRef.current)
-      }
-      if (collapseAnimationTimerRef.current !== null) {
-        window.clearTimeout(collapseAnimationTimerRef.current)
-      }
+  const clearAnimationTimers = useCallback(() => {
+    if (dismissAnimationTimerRef.current !== null) {
+      window.clearTimeout(dismissAnimationTimerRef.current)
+      dismissAnimationTimerRef.current = null
+    }
+    if (collapseAnimationTimerRef.current !== null) {
+      window.clearTimeout(collapseAnimationTimerRef.current)
+      collapseAnimationTimerRef.current = null
     }
   }, [])
+
+  const cardRootRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node !== null) {
+        return
+      }
+      // Why: exit timers are owned by the visible update-card surface, so
+      // stale callbacks should be cancelled as soon as that surface unmounts.
+      clearAnimationTimers()
+    },
+    [clearAnimationTimers]
+  )
 
   // ── Visibility gates ──────────────────────────────────────────────
 
@@ -548,6 +554,7 @@ export function UpdateCard() {
 
   return (
     <div
+      ref={cardRootRef}
       className="fixed bottom-10 right-4 z-40 w-[360px] max-w-[calc(100vw-32px)] flex flex-col gap-2
       max-[480px]:left-4 max-[480px]:right-4 max-[480px]:w-auto"
     >

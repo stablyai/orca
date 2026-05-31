@@ -256,7 +256,8 @@ describe('gitlab issue operations', () => {
     glabExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'bug\nfeature\n' })
       .mockResolvedValueOnce({
-        stdout: '{"username":"alice","name":"Alice","avatar_url":"https://example.com/a.png"}\n'
+        stdout:
+          '{"id":12,"username":"alice","name":"Alice","avatar_url":"https://example.com/a.png","state":"active"}\n'
       })
 
     await expect(listLabels('/repo-root', 'upstream', 'conn-1')).resolves.toEqual([
@@ -265,9 +266,11 @@ describe('gitlab issue operations', () => {
     ])
     await expect(listAssignableUsers('/repo-root', 'upstream', 'conn-1')).resolves.toEqual([
       {
+        id: 12,
         username: 'alice',
         name: 'Alice',
-        avatarUrl: 'https://example.com/a.png'
+        avatarUrl: 'https://example.com/a.png',
+        state: 'active'
       }
     ])
 
@@ -287,7 +290,7 @@ describe('gitlab issue operations', () => {
       '--paginate',
       'projects/stablyai%2Forca/members/all?per_page=100',
       '--jq',
-      '.[] | {username, name, avatar_url}'
+      '.[] | {id, username, name, avatar_url, state}'
     ])
   })
 

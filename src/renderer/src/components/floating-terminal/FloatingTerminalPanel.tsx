@@ -33,7 +33,7 @@ import {
 import { useTerminalSaveDialog } from '@/components/terminal/useTerminalSaveDialog'
 import { appendUniqueOpenFileIds } from '@/components/terminal/unsaved-close-queue'
 import { getConnectionId } from '@/lib/connection-context'
-import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
+import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
@@ -645,12 +645,15 @@ export function FloatingTerminalPanel({
     }
     void (async () => {
       try {
-        const fileInfo = await createUntitledMarkdownFile(
+        const fileInfo = await createUntitledMarkdownFileWithTemplateSelection(
           markdownCwd,
           FLOATING_TERMINAL_WORKTREE_ID,
           getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
           LOCAL_RUNTIME_SETTINGS
         )
+        if (!fileInfo) {
+          return
+        }
         openFile(fileInfo, {
           preview: false,
           targetGroupId: activeGroup?.id,
@@ -700,7 +703,7 @@ export function FloatingTerminalPanel({
         : (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? [])
       const items = visibleIds
         .map((visibleId) => resolveGroupTabFromVisibleId(currentGroupTabs, visibleId))
-        .filter((item): item is Tab => item !== null)
+        .filter((item): item is Tab => item !== null && !item.isPinned)
       if (items.length === 0) {
         return
       }
@@ -1216,12 +1219,14 @@ export function FloatingTerminalPanel({
   }, [])
 
   return (
+    // Why: root notification cards use z-40; keep the floating workspace below
+    // them so alerts are never hidden behind an open terminal panel.
     <div
       ref={setPanelNode}
       data-floating-terminal-panel
       aria-hidden={!open}
       tabIndex={-1}
-      className={`fixed z-50 flex min-h-[280px] min-w-[420px] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] outline-none ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
+      className={`fixed z-30 flex min-h-[280px] min-w-[420px] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] outline-none ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
       style={{
         visibility: open ? 'visible' : 'hidden',
         left: bounds.left,
@@ -1270,6 +1275,7 @@ export function FloatingTerminalPanel({
               onNewBrowserTab={createFloatingBrowserTab}
               onNewFileTab={createFloatingMarkdownTab}
               onOpenFileTab={openFloatingMarkdownTab}
+              newTabMenuOrder="markdown-first"
               onSetCustomTitle={setTabCustomTitle}
               onSetTabColor={setTabColor}
               onTogglePaneExpand={(tabId) =>
@@ -1364,9 +1370,12 @@ export function FloatingTerminalPanel({
                   </div>
                 }
               >
+                {/* Why: floating workspace markdown is scratch/local context,
+                    not a repo review surface that should expose agent notes. */}
                 <EditorPanel
                   activeFileId={activeEditorFile.id}
                   activeViewStateId={activeEditorUnifiedId}
+                  markdownAnnotationsEnabled={false}
                 />
               </Suspense>
             </div>
@@ -1516,50 +1525,50 @@ function FloatingTerminalEmptyState({
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onNewTerminal}
         >
-          <TerminalSquare className="size-3.5 opacity-80" />
+          <TerminalSquare className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">New Terminal</span>
           <FloatingEmptyStateShortcut keys={newTerminalShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-          onClick={onNewBrowser}
-        >
-          <Globe className="size-3.5 opacity-80" />
-          <span className="truncate text-left leading-none">New Browser</span>
-          <FloatingEmptyStateShortcut keys={newBrowserShortcutKeys} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onNewMarkdown}
         >
-          <FileText className="size-3.5 opacity-80" />
+          <FileText className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">New Markdown Note</span>
           <FloatingEmptyStateShortcut keys={newMarkdownShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onOpenMarkdown}
         >
-          <FileText className="size-3.5 opacity-80" />
+          <FileText className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">Open Markdown Note</span>
           <FloatingEmptyStateShortcut keys={openMarkdownShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={onNewBrowser}
+        >
+          <Globe className="size-3.5 opacity-90" />
+          <span className="truncate text-left leading-none">New Browser</span>
+          <FloatingEmptyStateShortcut keys={newBrowserShortcutKeys} />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onClose}
         >
-          <Minus className="size-3.5 opacity-80" />
+          <Minus className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">Minimize</span>
           <FloatingEmptyStateShortcut keys={closeShortcutKeys} />
         </Button>
@@ -1575,8 +1584,8 @@ function FloatingEmptyStateShortcut({ keys }: { keys: string[] }): React.JSX.Ele
   return (
     <ShortcutKeyCombo
       keys={keys}
-      className="self-center justify-self-end opacity-75"
-      separatorClassName="mx-0 text-[9px] text-muted-foreground"
+      className="self-center justify-self-end opacity-90 [&>span]:text-foreground"
+      separatorClassName="mx-0 text-[9px] text-foreground"
     />
   )
 }

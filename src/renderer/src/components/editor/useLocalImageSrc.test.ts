@@ -57,4 +57,30 @@ describe('getLocalImageCacheKey', () => {
       loadLocalImageSrc('file:///repo/docs/diagram.png', '/repo/docs/readme.md')
     ).resolves.toBeNull()
   })
+
+  it('revokes a blob URL that is overwritten by a concurrent load for the same image', async () => {
+    const readFile = vi.fn().mockResolvedValue({
+      isBinary: true,
+      content: 'AA==',
+      mimeType: 'image/png'
+    })
+    vi.spyOn(URL, 'createObjectURL')
+      .mockReturnValueOnce('blob:local-image-first')
+      .mockReturnValueOnce('blob:local-image-second')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    vi.stubGlobal('window', {
+      api: {
+        fs: { readFile }
+      }
+    })
+
+    const first = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
+    const second = loadLocalImageSrc('diagram.png', '/repo/docs/readme.md')
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      'blob:local-image-first',
+      'blob:local-image-second'
+    ])
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:local-image-first')
+  })
 })

@@ -263,6 +263,10 @@ export function TerminalQuickCommandDialog({
                   rows={4}
                   className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Supports skills, file paths, and built-in commands like{' '}
+                  <code className="rounded bg-muted px-1 font-mono text-[11px]">/goal</code>.
+                </p>
               </div>
             </>
           ) : (

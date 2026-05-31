@@ -113,15 +113,11 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     !isBatchDelete && modalData.allowSkipConfirm !== false && childWorkspaceCount === 0
   const [dontAskAgain, setDontAskAgain] = useState(false)
 
-  // Why: the checkbox is a one-shot intent captured inside the dialog — when
-  // the dialog closes (cancel, delete, or esc) we reset it so the next open
-  // starts unchecked. Without this, toggling the box and cancelling would
-  // silently re-surface the checked state on the next delete.
-  useEffect(() => {
-    if (!isOpen) {
-      setDontAskAgain(false)
-    }
-  }, [isOpen])
+  if (!isOpen && dontAskAgain) {
+    // Why: this checkbox is a one-shot dialog intent; reset it as soon as the
+    // dialog is closed so a later delete never inherits a cancelled choice.
+    setDontAskAgain(false)
+  }
 
   useEffect(() => {
     if (isOpen && worktreeIds.length > 0 && worktrees.length === 0 && !isDeleting) {
@@ -406,8 +402,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               <>
                 {canDeleteAllLineage ? (
                   <Button
-                    variant="outline"
-                    className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    ref={confirmButtonRef}
+                    variant="destructive"
                     onClick={handleDeleteAll}
                     disabled={isDeleting}
                   >
@@ -418,8 +414,13 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                   </Button>
                 ) : null}
                 <Button
-                  ref={confirmButtonRef}
-                  variant="destructive"
+                  ref={canDeleteAllLineage ? undefined : confirmButtonRef}
+                  variant={canDeleteAllLineage ? 'outline' : 'destructive'}
+                  className={
+                    canDeleteAllLineage
+                      ? 'border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive'
+                      : undefined
+                  }
                   onClick={() => handleDelete(false)}
                   disabled={isDeleting}
                 >

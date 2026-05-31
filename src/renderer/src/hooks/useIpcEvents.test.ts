@@ -1,7 +1,11 @@
 /* eslint-disable max-lines -- Why: this test file keeps the hook wiring mocks close to the assertions so IPC event behavior stays understandable and maintainable. */
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveBrowserSessionTabTarget, resolveZoomTarget } from './useIpcEvents'
+import {
+  buildNewWorkspaceShortcutModalData,
+  resolveBrowserSessionTabTarget,
+  resolveZoomTarget
+} from './useIpcEvents'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 const FUTURE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -114,6 +118,71 @@ describe('resolveBrowserSessionTabTarget', () => {
       kind: 'fallback-browser',
       workspaceId: 'browser-workspace'
     })
+  })
+})
+
+describe('buildNewWorkspaceShortcutModalData', () => {
+  it('carries the active Linear issue into the Cmd+N composer', () => {
+    const data = buildNewWorkspaceShortcutModalData({
+      activeView: 'tasks',
+      taskPageData: {
+        openLinearIssue: {
+          id: 'issue-1',
+          identifier: 'ENG-123',
+          title: 'Fix Linear context handoff',
+          description: 'Pass the active issue into the agent prompt.',
+          url: 'https://linear.app/acme/issue/ENG-123/fix-linear-context-handoff',
+          state: { name: 'Todo', type: 'unstarted', color: '#999999' },
+          team: { id: 'team-1', name: 'Engineering', key: 'ENG' },
+          labels: [],
+          labelIds: [],
+          priority: 3,
+          estimate: null,
+          updatedAt: '2026-05-29T12:00:00.000Z'
+        }
+      }
+    } as never)
+
+    expect(data.telemetrySource).toBe('shortcut')
+    expect(data.prefilledName).toBe('fix-linear-context-handoff')
+    expect(data.linkedWorkItem).toMatchObject({
+      type: 'issue',
+      number: 0,
+      title: 'Fix Linear context handoff',
+      url: 'https://linear.app/acme/issue/ENG-123/fix-linear-context-handoff',
+      linearIdentifier: 'ENG-123',
+      linkedContext: {
+        provider: 'linear',
+        version: 1
+      }
+    })
+    expect(data.linkedWorkItem?.linkedContext?.renderedText).toContain('Identifier: ENG-123')
+    expect(data.linkedWorkItem?.linkedContext?.renderedText).toContain(
+      'URL: https://linear.app/acme/issue/ENG-123/fix-linear-context-handoff'
+    )
+  })
+
+  it('does not reuse stale task context outside the Tasks view', () => {
+    const data = buildNewWorkspaceShortcutModalData({
+      activeView: 'terminal',
+      taskPageData: {
+        openLinearIssue: {
+          id: 'issue-1',
+          identifier: 'ENG-123',
+          title: 'Fix Linear context handoff',
+          url: 'https://linear.app/acme/issue/ENG-123/fix-linear-context-handoff',
+          state: { name: 'Todo', type: 'unstarted', color: '#999999' },
+          team: { id: 'team-1', name: 'Engineering', key: 'ENG' },
+          labels: [],
+          labelIds: [],
+          priority: 3,
+          estimate: null,
+          updatedAt: '2026-05-29T12:00:00.000Z'
+        }
+      }
+    } as never)
+
+    expect(data).toEqual({ telemetrySource: 'shortcut' })
   })
 })
 
@@ -270,6 +339,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: (
             listener: NonNullable<typeof requestTabCreateListenerRef.current>
           ) => {
@@ -474,6 +544,7 @@ describe('useIpcEvents updater integration', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -710,6 +781,7 @@ describe('useIpcEvents updater integration', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -1122,6 +1194,7 @@ describe('useIpcEvents updater integration', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -1610,6 +1683,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: (
@@ -1823,6 +1897,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: (
@@ -2031,6 +2106,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: (
@@ -2266,6 +2342,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -2399,6 +2476,21 @@ describe('useIpcEvents agent status snapshot integration', () => {
   }
   type StoreLike = Record<string, unknown>
   type StoreSubscribeListener = (state: StoreLike) => void
+  type MobileFitEvent = {
+    ptyId: string
+    mode: 'mobile-fit' | 'desktop-fit'
+    cols: number
+    rows: number
+  }
+  type MobileFitListener = (event: MobileFitEvent) => void
+  type MobileDriverListener = (event: {
+    ptyId: string
+    driver: { kind: 'mobile'; clientId: string }
+  }) => void
+  type MobileBrowserDriverListener = (event: {
+    browserPageId: string
+    driver: { kind: 'mobile'; clientId: string }
+  }) => void
 
   function buildStoreState(overrides: StoreLike): StoreLike {
     // Why: copy the defensive set of getState() fields the hook touches during
@@ -2435,6 +2527,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       clearTabPtyId: vi.fn(),
       runtimePaneTitlesByTabId: {},
       terminalLayoutsByTabId: {},
+      agentStatusByPaneKey: {},
       repos: [],
       worktreesByRepo: {},
       tabsByWorktree: {},
@@ -2450,6 +2543,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     getSnapshot?: () => Promise<AgentStatusSetData[]>
     drop?: (paneKey: string) => void
     remoteWorkspace?: Record<string, unknown>
+    runtime?: Record<string, unknown>
   }): Record<string, unknown> {
     return {
       api: {
@@ -2487,6 +2581,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -2528,7 +2623,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          ...args.runtime
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
@@ -2587,6 +2683,218 @@ describe('useIpcEvents agent status snapshot integration', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
+  })
+
+  it('caps pending mobile state events while startup hydration is unresolved', async () => {
+    const setFitOverride = vi.fn()
+    const hydrateOverrides = vi.fn()
+    const setDriverForPty = vi.fn()
+    const hydrateDrivers = vi.fn()
+    const setDriverForBrowserPage = vi.fn()
+    const hydrateBrowserDrivers = vi.fn()
+    const listeners: { fit?: MobileFitListener } = {}
+    let resolveFitOverrides: (value: []) => void = () => {}
+    let resolveDrivers: (value: []) => void = () => {}
+    let resolveBrowserDrivers: (value: []) => void = () => {}
+
+    vi.doMock('@/lib/pane-manager/mobile-fit-overrides', () => ({
+      setFitOverride,
+      hydrateOverrides
+    }))
+    vi.doMock('@/lib/pane-manager/mobile-driver-state', () => ({
+      setDriverForPty,
+      hydrateDrivers
+    }))
+    vi.doMock('@/lib/pane-manager/browser-mobile-driver-state', () => ({
+      setDriverForBrowserPage,
+      hydrateBrowserDrivers
+    }))
+    stubReactSyncEffect()
+    stubAuxiliaryModules()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => buildStoreState({})
+      }
+    }))
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: () => () => {},
+        runtime: {
+          getTerminalFitOverrides: () =>
+            new Promise<[]>((resolve) => {
+              resolveFitOverrides = resolve
+            }),
+          getTerminalDrivers: () =>
+            new Promise<[]>((resolve) => {
+              resolveDrivers = resolve
+            }),
+          getBrowserDrivers: () =>
+            new Promise<[]>((resolve) => {
+              resolveBrowserDrivers = resolve
+            }),
+          onTerminalFitOverrideChanged: (listener: MobileFitListener) => {
+            listeners.fit = listener
+            return () => {}
+          }
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+
+    const emitFit = listeners.fit
+    if (!emitFit) {
+      throw new Error('Expected fit listener to be registered')
+    }
+    for (let index = 0; index < 350; index += 1) {
+      emitFit({
+        ptyId: `pty-${index}`,
+        mode: 'mobile-fit',
+        cols: 80,
+        rows: 24
+      })
+    }
+    expect(setFitOverride).not.toHaveBeenCalled()
+
+    resolveFitOverrides([])
+    resolveDrivers([])
+    resolveBrowserDrivers([])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(hydrateOverrides).toHaveBeenCalledWith([])
+    expect(hydrateDrivers).toHaveBeenCalledWith([])
+    expect(hydrateBrowserDrivers).toHaveBeenCalledWith([])
+    expect(setFitOverride).toHaveBeenCalledTimes(300)
+    expect(setFitOverride).toHaveBeenNthCalledWith(1, 'pty-50', 'mobile-fit', 80, 24)
+    expect(setFitOverride).toHaveBeenLastCalledWith('pty-349', 'mobile-fit', 80, 24)
+  })
+
+  it('clears pending mobile state events and ignores late hydration after cleanup', async () => {
+    const setFitOverride = vi.fn()
+    const hydrateOverrides = vi.fn()
+    const setDriverForPty = vi.fn()
+    const hydrateDrivers = vi.fn()
+    const setDriverForBrowserPage = vi.fn()
+    const hydrateBrowserDrivers = vi.fn()
+    const unsubscribeFit = vi.fn()
+    const unsubscribeDriver = vi.fn()
+    const unsubscribeBrowserDriver = vi.fn()
+    const refs: {
+      cleanup?: () => void
+      fit?: MobileFitListener
+      driver?: MobileDriverListener
+      browserDriver?: MobileBrowserDriverListener
+    } = {}
+    let resolveFitOverrides: (value: []) => void = () => {}
+    let resolveDrivers: (value: []) => void = () => {}
+    let resolveBrowserDrivers: (value: []) => void = () => {}
+
+    vi.doMock('@/lib/pane-manager/mobile-fit-overrides', () => ({
+      setFitOverride,
+      hydrateOverrides
+    }))
+    vi.doMock('@/lib/pane-manager/mobile-driver-state', () => ({
+      setDriverForPty,
+      hydrateDrivers
+    }))
+    vi.doMock('@/lib/pane-manager/browser-mobile-driver-state', () => ({
+      setDriverForBrowserPage,
+      hydrateBrowserDrivers
+    }))
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          const result = effect()
+          if (typeof result === 'function') {
+            refs.cleanup = result
+          }
+        }
+      }
+    })
+    stubAuxiliaryModules()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => buildStoreState({})
+      }
+    }))
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: () => () => {},
+        runtime: {
+          getTerminalFitOverrides: () =>
+            new Promise<[]>((resolve) => {
+              resolveFitOverrides = resolve
+            }),
+          getTerminalDrivers: () =>
+            new Promise<[]>((resolve) => {
+              resolveDrivers = resolve
+            }),
+          getBrowserDrivers: () =>
+            new Promise<[]>((resolve) => {
+              resolveBrowserDrivers = resolve
+            }),
+          onTerminalFitOverrideChanged: (listener: MobileFitListener) => {
+            refs.fit = listener
+            return unsubscribeFit
+          },
+          onTerminalDriverChanged: (listener: MobileDriverListener) => {
+            refs.driver = listener
+            return unsubscribeDriver
+          },
+          onBrowserDriverChanged: (listener: MobileBrowserDriverListener) => {
+            refs.browserDriver = listener
+            return unsubscribeBrowserDriver
+          }
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+
+    if (!refs.fit || !refs.driver || !refs.browserDriver || !refs.cleanup) {
+      throw new Error('Expected mobile listeners and cleanup to be registered')
+    }
+
+    refs.fit({
+      ptyId: 'pty-1',
+      mode: 'mobile-fit',
+      cols: 80,
+      rows: 24
+    })
+    refs.driver({
+      ptyId: 'pty-1',
+      driver: { kind: 'mobile', clientId: 'phone' }
+    })
+    refs.browserDriver({
+      browserPageId: 'page-1',
+      driver: { kind: 'mobile', clientId: 'phone' }
+    })
+
+    refs.cleanup()
+    resolveFitOverrides([])
+    resolveDrivers([])
+    resolveBrowserDrivers([])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(unsubscribeFit).toHaveBeenCalledTimes(1)
+    expect(unsubscribeDriver).toHaveBeenCalledTimes(1)
+    expect(unsubscribeBrowserDriver).toHaveBeenCalledTimes(1)
+    expect(hydrateOverrides).not.toHaveBeenCalled()
+    expect(hydrateDrivers).not.toHaveBeenCalled()
+    expect(hydrateBrowserDrivers).not.toHaveBeenCalled()
+    expect(setFitOverride).not.toHaveBeenCalled()
+    expect(setDriverForPty).not.toHaveBeenCalled()
+    expect(setDriverForBrowserPage).not.toHaveBeenCalled()
   })
 
   it('ignores early push events but applies the main-process snapshot after readiness', async () => {
@@ -2750,6 +3058,81 @@ describe('useIpcEvents agent status snapshot integration', () => {
       'Inactive Tab',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 }
     )
+  })
+
+  it('drops nested child done push events when the parent pane agent is still active', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
+      agentStatusByPaneKey: {
+        [FUTURE_PANE_KEY]: {
+          state: 'working',
+          prompt: 'parent codex',
+          agentType: 'codex',
+          updatedAt: 1_700_000_000_000,
+          stateStartedAt: 1_700_000_000_000,
+          paneKey: FUTURE_PANE_KEY,
+          stateHistory: []
+        }
+      },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Codex' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [FUTURE_LEAF_ID]: 'pty-1' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-future': ['pty-1'] }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'done',
+      prompt: 'nested claude',
+      agentType: 'claude',
+      lastAssistantMessage: 'child finished',
+      receivedAt: 1_700_000_000_200,
+      stateStartedAt: 1_700_000_000_200
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
   })
 
   it('keeps OpenClaude hook status distinct when it arrives through Claude-compatible hooks', async () => {

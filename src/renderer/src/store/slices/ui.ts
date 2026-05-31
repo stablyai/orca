@@ -18,6 +18,7 @@ import type {
   TaskViewPresetId,
   TuiAgent,
   UpdateStatus,
+  WorkspaceBoardColumnLayout,
   WorkspaceStatusDefinition,
   AgentActivityDisplayMode,
   WorktreeCardProperty
@@ -55,7 +56,7 @@ import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   cloneDefaultWorkspaceStatuses,
-  normalizeWorkspaceBoardCompact,
+  normalizeWorkspaceBoardColumnLayout,
   normalizeWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
@@ -219,6 +220,11 @@ const VALID_LINEAR_PRESETS = new Set<NonNullable<TaskResumeState['linearPreset']
   'all',
   'completed'
 ])
+const VALID_LINEAR_MODES = new Set<NonNullable<TaskResumeState['linearMode']>>([
+  'issues',
+  'projects',
+  'views'
+])
 
 function filterTrustedOrcaHooksToValidRepos(
   trust: PersistedTrustedOrcaHooks,
@@ -231,6 +237,24 @@ function filterTrustedOrcaHooksToValidRepos(
     }
   }
   return next
+}
+
+function isSafePersistedRecordKey(key: string): boolean {
+  return key !== '__proto__' && key !== 'constructor' && key !== 'prototype'
+}
+
+function sanitizeShowDotfilesByWorktree(value: unknown): Record<string, boolean> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const out: Record<string, boolean> = {}
+  for (const [worktreeId, showDotfiles] of Object.entries(value as Record<string, unknown>)) {
+    if (!worktreeId || !isSafePersistedRecordKey(worktreeId) || typeof showDotfiles !== 'boolean') {
+      continue
+    }
+    out[worktreeId] = showDotfiles
+  }
+  return out
 }
 
 function sanitizePersistedSidebarWidth(width: unknown, fallback: number, maxWidth: number): number {
@@ -251,10 +275,7 @@ function sanitizeAcknowledgedAgentsByPaneKey(value: unknown): Record<string, num
   const cutoff = Date.now() - HYDRATE_MAX_AGE_MS
   const out: Record<string, number> = {}
   for (const [key, ackAt] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof key !== 'string') {
-      continue
-    }
-    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+    if (typeof key !== 'string' || !isSafePersistedRecordKey(key)) {
       continue
     }
     if (typeof ackAt !== 'number' || !Number.isFinite(ackAt) || ackAt <= 0) {
@@ -340,8 +361,32 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   ) {
     next.linearPreset = input.linearPreset as NonNullable<TaskResumeState['linearPreset']>
   }
+  if (
+    typeof input.linearMode === 'string' &&
+    VALID_LINEAR_MODES.has(input.linearMode as NonNullable<TaskResumeState['linearMode']>)
+  ) {
+    next.linearMode = input.linearMode as NonNullable<TaskResumeState['linearMode']>
+  }
   if (typeof input.linearQuery === 'string') {
     next.linearQuery = input.linearQuery
+  }
+  if (input.linearContext && typeof input.linearContext === 'object') {
+    const context = input.linearContext as Record<string, unknown>
+    if (
+      (context.kind === 'project' || context.kind === 'view') &&
+      typeof context.id === 'string' &&
+      context.id.trim() &&
+      typeof context.workspaceId === 'string' &&
+      context.workspaceId.trim() &&
+      context.workspaceId !== 'all'
+    ) {
+      next.linearContext = {
+        kind: context.kind,
+        id: context.id,
+        workspaceId: context.workspaceId,
+        model: context.model === 'issue' || context.model === 'project' ? context.model : undefined
+      }
+    }
   }
 
   return Object.keys(next).length > 0 ? next : undefined
@@ -570,6 +615,9 @@ export type UISlice = {
   setShowSleepingWorkspaces: (v: boolean) => void
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
+  showDotfilesByWorktree: Record<string, boolean>
+  setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
+  toggleShowDotfilesForWorktree: (worktreeId: string) => void
   filterRepoIds: string[]
   setFilterRepoIds: (ids: string[]) => void
   collapsedGroups: Set<string>
@@ -582,8 +630,8 @@ export type UISlice = {
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
   workspaceBoardOpacity: number
   setWorkspaceBoardOpacity: (opacity: number) => void
-  workspaceBoardCompact: boolean
-  setWorkspaceBoardCompact: (compact: boolean) => void
+  workspaceBoardColumnLayout: WorkspaceBoardColumnLayout
+  setWorkspaceBoardColumnLayout: (layout: WorkspaceBoardColumnLayout) => void
   workspaceBoardColumnWidth: number
   setWorkspaceBoardColumnWidth: (width: number) => void
   statusBarItems: StatusBarItem[]
@@ -1217,6 +1265,40 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   hideDefaultBranchWorkspace: false,
   setHideDefaultBranchWorkspace: (v) => set({ hideDefaultBranchWorkspace: v }),
 
+  showDotfilesByWorktree: {},
+  setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
+    set((s) => {
+      if (!worktreeId) {
+        return s
+      }
+      const current = s.showDotfilesByWorktree[worktreeId] ?? true
+      if (current === showDotfiles) {
+        return s
+      }
+      const next = { ...s.showDotfilesByWorktree }
+      // Why: showing dotfiles is the default; only persist worktree-level opt-outs.
+      if (showDotfiles) {
+        delete next[worktreeId]
+      } else {
+        next[worktreeId] = false
+      }
+      return { showDotfilesByWorktree: next }
+    }),
+  toggleShowDotfilesForWorktree: (worktreeId) =>
+    set((s) => {
+      if (!worktreeId) {
+        return s
+      }
+      const nextShowDotfiles = !(s.showDotfilesByWorktree[worktreeId] ?? true)
+      const next = { ...s.showDotfilesByWorktree }
+      if (nextShowDotfiles) {
+        delete next[worktreeId]
+      } else {
+        next[worktreeId] = false
+      }
+      return { showDotfilesByWorktree: next }
+    }),
+
   filterRepoIds: [],
   setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
@@ -1265,11 +1347,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceBoardOpacity: clamped })
   },
 
-  workspaceBoardCompact: false,
-  setWorkspaceBoardCompact: (compact) => {
-    const normalized = normalizeWorkspaceBoardCompact(compact)
-    window.api.ui.set({ workspaceBoardCompact: normalized }).catch(console.error)
-    set({ workspaceBoardCompact: normalized })
+  workspaceBoardColumnLayout: 'full',
+  setWorkspaceBoardColumnLayout: (layout) => {
+    const normalized = normalizeWorkspaceBoardColumnLayout(layout)
+    window.api.ui.set({ workspaceBoardColumnLayout: normalized }).catch(console.error)
+    set({ workspaceBoardColumnLayout: normalized })
   },
 
   workspaceBoardColumnWidth: WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
@@ -1439,6 +1521,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // start from the new default: sleeping workspaces visible.
         showSleepingWorkspaces: !(ui.hideSleepingWorkspaces ?? DEFAULT_HIDE_SLEEPING_WORKSPACES),
         hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
+        showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
         filterRepoIds: (ui.filterRepoIds ?? []).filter((repoId) => validRepoIds.has(repoId)),
         collapsedGroups: new Set(ui.collapsedGroups ?? []),
         uiZoomLevel: ui.uiZoomLevel ?? 0,
@@ -1447,7 +1530,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
-        workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),
+        workspaceBoardColumnLayout: normalizeWorkspaceBoardColumnLayout(
+          ui.workspaceBoardColumnLayout
+        ),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
         statusBarItems,
         statusBarVisible: ui.statusBarVisible ?? true,

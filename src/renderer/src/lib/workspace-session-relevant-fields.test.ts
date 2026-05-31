@@ -27,7 +27,8 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     repos: true,
     worktreesByRepo: true,
     lastKnownRelayPtyIdByTabId: true,
-    lastVisitedAtByWorktreeId: true
+    lastVisitedAtByWorktreeId: true,
+    defaultTerminalTabsAppliedByWorktreeId: true
   }
 
   it('contains every key of WorkspaceSessionSnapshot', () => {

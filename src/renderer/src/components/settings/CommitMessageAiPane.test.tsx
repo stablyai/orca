@@ -10,8 +10,10 @@ import {
 import { useAppStore } from '../../store'
 import {
   CommitMessageAiPane,
+  createCommitMessageInstructionDraftState,
   getCommitMessageSettingsPaneDiscoveryHostKey,
-  mergeDiscoveredModelsIntoCommitMessageConfig
+  mergeDiscoveredModelsIntoCommitMessageConfig,
+  resolveCommitMessageInstructionDraftState
 } from './CommitMessageAiPane'
 import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
 
@@ -41,6 +43,67 @@ function buildSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings 
 describe('CommitMessageAiPane', () => {
   beforeEach(() => {
     useAppStore.setState({ settingsSearchQuery: '' })
+  })
+
+  it('updates clean instruction drafts when persisted instructions change', () => {
+    const state = createCommitMessageInstructionDraftState(
+      {
+        commitMessage: 'commit-a',
+        pullRequest: 'pr-a'
+      },
+      1
+    )
+
+    const resolved = resolveCommitMessageInstructionDraftState(
+      state,
+      {
+        commitMessage: 'commit-b',
+        pullRequest: 'pr-a'
+      },
+      1
+    )
+
+    expect(resolved.draft).toEqual({
+      commitMessage: 'commit-b',
+      pullRequest: 'pr-a'
+    })
+  })
+
+  it('preserves dirty instruction drafts until the discard signal changes', () => {
+    const state = createCommitMessageInstructionDraftState(
+      {
+        commitMessage: 'commit-a',
+        pullRequest: 'pr-a'
+      },
+      1
+    )
+    state.draft.commitMessage = 'local edit'
+
+    const withExternalChange = resolveCommitMessageInstructionDraftState(
+      state,
+      {
+        commitMessage: 'commit-b',
+        pullRequest: 'pr-b'
+      },
+      1
+    )
+    expect(withExternalChange.draft).toEqual({
+      commitMessage: 'local edit',
+      pullRequest: 'pr-b'
+    })
+
+    const afterDiscard = resolveCommitMessageInstructionDraftState(
+      withExternalChange,
+      {
+        commitMessage: 'commit-b',
+        pullRequest: 'pr-b'
+      },
+      2
+    )
+    expect(afterDiscard.draft).toEqual({
+      commitMessage: 'commit-b',
+      pullRequest: 'pr-b'
+    })
   })
 
   it('renders only the opt-in control before the feature is enabled', () => {

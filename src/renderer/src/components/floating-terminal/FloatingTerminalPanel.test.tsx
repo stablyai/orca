@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { BrowserTab, Tab, TabGroup, TerminalTab } from '../../../../shared/types'
 import type { OpenFile } from '@/store/slices/editor'
-import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
+import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import {
   FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
   clampFloatingTerminalBounds,
@@ -252,7 +252,7 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 vi.mock('@/lib/create-untitled-markdown', () => ({
-  createUntitledMarkdownFile: vi.fn()
+  createUntitledMarkdownFileWithTemplateSelection: vi.fn()
 }))
 
 vi.mock('@/lib/ipc-error', () => ({
@@ -510,6 +510,11 @@ function getPanelStyleBounds(element: unknown): FloatingTerminalPanelBounds {
   }
 }
 
+function getPanelClassName(element: unknown): string {
+  const panel = findByProp(element, 'data-floating-terminal-panel')
+  return panel.props.className as string
+}
+
 function getMockedLocalStorage(): {
   getItem: ReturnType<typeof vi.fn>
   setItem: ReturnType<typeof vi.fn>
@@ -616,6 +621,12 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
 
     expect(getPanelStyleBounds(element)).toEqual(savedBounds)
+  })
+
+  it('layers below root notification cards', async () => {
+    const element = await renderPanel(true)
+
+    expect(getPanelClassName(element)).toContain('z-30')
   })
 
   it('falls back to default bounds when persisted geometry is malformed', async () => {
@@ -1146,7 +1157,7 @@ describe('FloatingTerminalPanel close behavior', () => {
 
   it('creates floating markdown files in local filesystem mode', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
-    vi.mocked(createUntitledMarkdownFile).mockResolvedValue({
+    vi.mocked(createUntitledMarkdownFileWithTemplateSelection).mockResolvedValue({
       filePath: '/tmp/orca/floating-notes/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
@@ -1163,7 +1174,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     ;(tabBar.props.onNewFileTab as () => void)()
     await flushAsyncWork()
 
-    expect(createUntitledMarkdownFile).toHaveBeenCalledWith(
+    expect(createUntitledMarkdownFileWithTemplateSelection).toHaveBeenCalledWith(
       '/tmp/orca/floating-notes',
       FLOATING_TERMINAL_WORKTREE_ID,
       undefined,
@@ -1199,6 +1210,16 @@ describe('FloatingTerminalPanel close behavior', () => {
       }),
       expect.objectContaining({ suppressActiveRuntimeFallback: true })
     )
+  })
+
+  it('disables markdown annotations in floating editor tabs', async () => {
+    setFloatingEditorTabs([makeFile({ id: 'notes' })])
+
+    const element = await renderPanel(true)
+    const editorPanel = findByProp(element, 'activeFileId')
+
+    expect(editorPanel.props.markdownAnnotationsEnabled).toBe(false)
+    expect(editorPanel.props.activeFileId).toBe('notes')
   })
 
   it('keeps the panel open when the explicit close action removes the last tab', async () => {

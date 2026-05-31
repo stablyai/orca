@@ -40,6 +40,7 @@ vi.mock('@/lib/telemetry', () => ({
 
 import {
   ensureAgentStartupInTerminal,
+  getSetupConfig,
   getWorkspaceSeedName,
   isGitLabIssueUrl
 } from './new-workspace'
@@ -250,5 +251,65 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       agent: 'claude'
     })
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+  })
+
+  it('pastes drafts into the activation primary tab when active tab state differs', async () => {
+    store.activeTabIdByWorktree = { 'wt-1': 'setup-tab' }
+    store.tabsByWorktree = { 'wt-1': [{ id: 'setup-tab' }, { id: 'agent-tab' }] }
+    store.ptyIdsByTabId = { 'setup-tab': ['setup-pty'], 'agent-tab': ['agent-pty'] }
+
+    await ensureAgentStartupInTerminal({
+      worktreeId: 'wt-1',
+      primaryTabId: 'agent-tab',
+      startup: {
+        agent: 'codex',
+        launchCommand: 'codex',
+        expectedProcess: 'codex',
+        followupPrompt: null,
+        draftPrompt: 'Linear context draft'
+      }
+    })
+
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith({
+      tabId: 'agent-tab',
+      content: 'Linear context draft',
+      agent: 'codex'
+    })
+  })
+})
+
+describe('getSetupConfig', () => {
+  it('treats default tab commands as setup-decision commands', () => {
+    expect(
+      getSetupConfig(undefined, {
+        scripts: {},
+        defaultTabs: [
+          { title: 'Server', command: 'pnpm dev' },
+          { title: 'Notes' },
+          { command: 'codex' }
+        ]
+      })
+    ).toEqual({
+      source: 'yaml',
+      kind: 'default-tabs',
+      command: '# defaultTabs[1] Server\npnpm dev\n\n# defaultTabs[3]\ncodex'
+    })
+  })
+
+  it('ignores shared default tab commands when command source is local-only', () => {
+    expect(
+      getSetupConfig(
+        {
+          hookSettings: {
+            commandSourcePolicy: 'local-only',
+            scripts: {}
+          }
+        },
+        {
+          scripts: {},
+          defaultTabs: [{ title: 'Server', command: 'pnpm dev' }]
+        }
+      )
+    ).toBeNull()
   })
 })

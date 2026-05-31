@@ -11,8 +11,7 @@ const CONTROL_PATTERN =
 const LOW_SIGNAL_LINE_PATTERN =
   /^(?:npm\s+(?:warn|warning)\b.*(?:env|config)|npm\s+notice\b|husky\s+-\s+deprecated\b)/i
 const HOOK_PATTERN = /\b(?:pre-commit|precommit|husky|lint-staged)\b/i
-const LINT_PATTERN =
-  /\b(?:eslint|oxlint|lint-staged|lint)\b|(?:found|found:)\s+\d+\s+errors?\b|\b\d+\s+errors?\b/i
+const LINT_PATTERN = /\b(?:eslint|oxlint|lint-staged|lint)\b/i
 
 function normalizeCommitFailure(raw: string): string {
   return raw.replace(ANSI_PATTERN, '').replace(/\r\n?/g, '\n').replace(CONTROL_PATTERN, '').trim()

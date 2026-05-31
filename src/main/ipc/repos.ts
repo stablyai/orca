@@ -933,6 +933,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'repoIcon'
             | 'hookSettings'
             | 'worktreeBaseRef'
+            | 'worktreeBasePath'
             | 'kind'
             | 'symlinkPaths'
             | 'issueSourcePreference'
@@ -971,6 +972,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         const v = updates.symlinkPaths as unknown
         if (!Array.isArray(v) || !v.every((e) => typeof e === 'string')) {
           delete updates.symlinkPaths
+        }
+      }
+      if ('worktreeBasePath' in updates && updates.worktreeBasePath !== undefined) {
+        const v = updates.worktreeBasePath as unknown
+        if (typeof v !== 'string') {
+          delete updates.worktreeBasePath
+        } else {
+          updates.worktreeBasePath = v.trim() || undefined
         }
       }
       if ('repoIcon' in updates) {
@@ -1017,6 +1026,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       }
       const updated = store.updateRepo(args.repoId, updates)
       if (updated) {
+        if ('worktreeBasePath' in updates) {
+          invalidateAuthorizedRootsCache()
+        }
         notifyReposChanged(mainWindow)
       }
       return updated

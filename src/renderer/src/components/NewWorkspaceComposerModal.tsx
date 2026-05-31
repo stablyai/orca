@@ -4,8 +4,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
 import { useComposerState } from '@/hooks/useComposerState'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import { pickQuickWorkspaceAgent } from '@/lib/quick-workspace-agent-selection'
+import {
+  pickQuickWorkspaceAgent,
+  resolveQuickWorkspaceAgentSelection
+} from '@/lib/quick-workspace-agent-selection'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -143,24 +145,18 @@ function QuickTabBody({
     // prior catalog fallback while filtering disabled agents out of that choice.
     return pickQuickWorkspaceAgent(pref, cardProps.detectedAgentIds, settings?.disabledTuiAgents)
   }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent, settings?.disabledTuiAgents])
-  const quickAgent = quickAgentOverride === undefined ? preferredQuickAgent : quickAgentOverride
-
-  useEffect(() => {
-    if (
-      quickAgentOverride === undefined ||
-      quickAgentOverride === null ||
-      (isTuiAgentEnabled(quickAgentOverride, settings?.disabledTuiAgents) &&
-        (cardProps.detectedAgentIds === null || cardProps.detectedAgentIds.has(quickAgentOverride)))
-    ) {
-      return
-    }
-    setQuickAgentOverride(preferredQuickAgent)
-  }, [
-    cardProps.detectedAgentIds,
-    preferredQuickAgent,
+  const resolvedQuickAgentSelection = resolveQuickWorkspaceAgentSelection({
     quickAgentOverride,
-    settings?.disabledTuiAgents
-  ])
+    preferredQuickAgent,
+    detectedAgentIds: cardProps.detectedAgentIds,
+    disabledTuiAgents: settings?.disabledTuiAgents
+  })
+  if (resolvedQuickAgentSelection.quickAgentOverride !== quickAgentOverride) {
+    // Why: detection/settings changes can invalidate a user-picked agent; repair
+    // before the child selector renders an unavailable option for one commit.
+    setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
+  }
+  const quickAgent = resolvedQuickAgentSelection.quickAgent
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
     setQuickAgentOverride(agent)

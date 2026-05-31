@@ -23,6 +23,11 @@ import {
   rangeForParsedFileLink,
   type WrappedLogicalLine
 } from './wrapped-terminal-link-ranges'
+import {
+  getTerminalPathExistsCacheKey,
+  readTerminalPathExistsCache,
+  writeTerminalPathExistsCache
+} from './terminal-path-exists-cache'
 
 export { openDetectedFilePath } from './terminal-file-open-routing'
 export { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
@@ -149,20 +154,28 @@ export function createFilePathLinkProvider(
 
               const runtimeEnvironmentId =
                 deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
-              const cacheKey = `${runtimeEnvironmentId ?? 'active'}\0${resolved.absolutePath}`
-              const cachedExists = pathExistsCache.get(cacheKey)
               const fileContext = getTerminalFileContext(
                 worktreeId,
                 worktreePath,
                 runtimeEnvironmentId
               )
+              const isRemoteRuntimePath = isRemoteRuntimeFileOperation(
+                fileContext,
+                resolved.absolutePath
+              )
+              const cacheKey = getTerminalPathExistsCacheKey({
+                absolutePath: resolved.absolutePath,
+                connectionId: fileContext.connectionId,
+                isRemoteRuntimePath,
+                runtimeEnvironmentId
+              })
+              const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
               const exists =
                 cachedExists ??
-                (fileContext.connectionId ||
-                isRemoteRuntimeFileOperation(fileContext, resolved.absolutePath)
+                (fileContext.connectionId || isRemoteRuntimePath
                   ? await runtimePathExists(fileContext, resolved.absolutePath)
                   : await window.api.shell.pathExists(resolved.absolutePath))
-              pathExistsCache.set(cacheKey, exists)
+              writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
               if (!exists) {
                 return null
               }

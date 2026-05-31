@@ -15,7 +15,7 @@ import type { editor as monacoEditor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
-import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { computeDiffEditorFontSize } from '@/lib/editor-font-zoom'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   useDiffCommentDecorator,
@@ -36,6 +36,7 @@ import { cn } from '@/lib/utils'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { Button } from '@/components/ui/button'
 import { installEditorSaveShortcut } from './editor-shortcuts'
+import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -119,7 +120,7 @@ export function DiffSectionItem({
       `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}`,
     [section.key, worktreeId]
   )
-  const editorFontSize = computeEditorFontSize(
+  const diffEditorFontSize = computeDiffEditorFontSize(
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
@@ -533,12 +534,12 @@ export function DiffSectionItem({
                 renderSideBySide: sideBySide,
                 minimap: { enabled: false },
                 scrollBeyondLastLine: false,
-                fontSize: editorFontSize,
+                fontSize: diffEditorFontSize,
                 fontFamily: settings?.terminalFontFamily || 'monospace',
                 lineNumbers: 'on',
                 automaticLayout: true,
                 renderOverviewRuler: false,
-                scrollbar: { vertical: 'hidden', handleMouseWheel: false },
+                scrollbar: combinedDiffSectionScrollbarOptions,
                 hideUnchangedRegions: { enabled: true },
                 find: {
                   addExtraSpaceOnTop: false,

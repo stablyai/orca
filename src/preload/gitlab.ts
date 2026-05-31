@@ -6,6 +6,9 @@ import { ipcRenderer } from 'electron'
 
 export const glApi = {
   viewer: (): Promise<unknown> => ipcRenderer.invoke('gitlab:viewer'),
+  diagnoseAuth: (): Promise<unknown> => ipcRenderer.invoke('gitlab:diagnoseAuth'),
+  rateLimit: (args?: { force?: boolean; host?: string | null }): Promise<unknown> =>
+    ipcRenderer.invoke('gitlab:rateLimit', args),
 
   projectSlug: (args: { repoPath: string }): Promise<unknown> =>
     ipcRenderer.invoke('gitlab:projectSlug', args),
@@ -95,8 +98,42 @@ export const glApi = {
   }): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:mergeMR', args),
 
+  updateMR: (args: {
+    repoPath: string
+    iid: number
+    updates: unknown
+  }): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('gitlab:updateMR', args),
+
+  updateMRReviewers: (args: {
+    repoPath: string
+    iid: number
+    reviewerIds: number[]
+    projectRef?: unknown
+  }): Promise<unknown> => ipcRenderer.invoke('gitlab:updateMRReviewers', args),
+
   addMRComment: (args: { repoPath: string; iid: number; body: string }): Promise<unknown> =>
     ipcRenderer.invoke('gitlab:addMRComment', args),
+
+  addMRInlineComment: (args: {
+    repoPath: string
+    iid: number
+    input: unknown
+    projectRef?: unknown
+  }): Promise<unknown> => ipcRenderer.invoke('gitlab:addMRInlineComment', args),
+
+  resolveMRDiscussion: (args: {
+    repoPath: string
+    iid: number
+    discussionId: string
+    resolved: boolean
+  }): Promise<unknown> => ipcRenderer.invoke('gitlab:resolveMRDiscussion', args),
+
+  jobTrace: (args: { repoPath: string; jobId: number; projectRef?: unknown }): Promise<unknown> =>
+    ipcRenderer.invoke('gitlab:jobTrace', args),
+
+  retryJob: (args: { repoPath: string; jobId: number; projectRef?: unknown }): Promise<unknown> =>
+    ipcRenderer.invoke('gitlab:retryJob', args),
 
   workItemByPath: (args: {
     repoPath: string

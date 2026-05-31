@@ -17,7 +17,7 @@ import { track } from '@/lib/telemetry'
 import { RemoteStep, CloneStep, useRemoteRepo } from './AddRepoSteps'
 import { CreateStep, useCreateRepo } from './AddRepoCreateStep'
 import { getProjectAddedPrimaryBranchName, SetupStep } from './AddRepoSetupStep'
-import { getDefaultCloneParent } from './clone-defaults'
+import { getCloneDestinationAutoFill } from './clone-defaults'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
@@ -193,26 +193,21 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     return window.api.repos.onCloneProgress(setCloneProgress)
   }, [isCloning])
 
-  useEffect(() => {
-    if (step !== 'clone') {
-      cloneStepAutoFilledRef.current = false
-      return
-    }
-    if (cloneStepAutoFilledRef.current) {
-      return
-    }
-    if (cloneDestination) {
-      return
-    }
-    if (settings?.activeRuntimeEnvironmentId?.trim()) {
-      return
-    }
-    if (!settings?.workspaceDir) {
-      return
-    }
+  const cloneDestinationAutoFill = getCloneDestinationAutoFill({
+    step,
+    cloneDestination,
+    activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
+    workspaceDir: settings?.workspaceDir,
+    cloneStepAutoFilled: cloneStepAutoFilledRef.current
+  })
+  if (step !== 'clone') {
+    cloneStepAutoFilledRef.current = false
+  } else if (cloneDestinationAutoFill) {
+    // Why: late settings hydration should still seed the local clone path,
+    // but runtime/server clone flows must keep their destination user-entered.
     cloneStepAutoFilledRef.current = true
-    setCloneDestination(getDefaultCloneParent(settings.workspaceDir))
-  }, [step, cloneDestination, settings?.activeRuntimeEnvironmentId, settings?.workspaceDir])
+    setCloneDestination(cloneDestinationAutoFill.destination)
+  }
 
   const isOpen = activeModal === 'add-repo'
   const droppedLocalPath =

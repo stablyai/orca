@@ -34,6 +34,7 @@ import type {
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
 import type { Automation, AutomationRun } from '../shared/automations-types'
+import { formatAutomationPrecheckTimeout } from '../shared/automation-precheck'
 import { formatAutomationSchedule } from '../shared/automation-schedules'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
@@ -340,6 +341,13 @@ export function formatAutomationShow(result: { automation: Automation }): string
     `enabled: ${automation.enabled}`,
     `schedule: ${formatAutomationSchedule(automation.rrule)}`,
     `rrule: ${automation.rrule}`,
+    `precheck: ${
+      automation.precheck
+        ? `${automation.precheck.command} (timeout ${formatAutomationPrecheckTimeout(
+            automation.precheck.timeoutSeconds
+          )})`
+        : 'none'
+    }`,
     `nextRunAt: ${new Date(automation.nextRunAt).toISOString()}`,
     `projectId: ${automation.projectId}`,
     `workspaceMode: ${automation.workspaceMode}`,
@@ -366,8 +374,23 @@ export function formatAutomationRun(result: { run: AutomationRun }): string {
     `trigger: ${result.run.trigger}`,
     `scheduledFor: ${new Date(result.run.scheduledFor).toISOString()}`,
     `workspaceId: ${result.run.workspaceId ?? 'null'}`,
+    `precheck: ${formatAutomationRunPrecheck(result.run)}`,
     `error: ${result.run.error ?? 'null'}`
   ].join('\n')
+}
+
+function formatAutomationRunPrecheck(run: AutomationRun): string {
+  const result = run.precheckResult
+  if (!result) {
+    return 'none'
+  }
+  const outcome = result.timedOut
+    ? 'timed out'
+    : result.error
+      ? 'error'
+      : `exit ${result.exitCode ?? 'unknown'}`
+  const output = result.stderr.trim() || result.stdout.trim()
+  return output ? `${outcome}; ${output}` : outcome
 }
 
 export function formatAutomationRuns(result: { runs: AutomationRun[] }): string {
@@ -377,7 +400,7 @@ export function formatAutomationRuns(result: { runs: AutomationRun[] }): string 
   return result.runs
     .map(
       (run) =>
-        `${run.id}  ${run.automationId}  ${run.status}  ${run.trigger}  ${new Date(run.scheduledFor).toISOString()}\n${run.title}${run.error ? `\nerror: ${run.error}` : ''}`
+        `${run.id}  ${run.automationId}  ${run.status}  ${run.trigger}  ${new Date(run.scheduledFor).toISOString()}\n${run.title}${run.precheckResult ? `\nprecheck: ${formatAutomationRunPrecheck(run)}` : ''}${run.error ? `\nerror: ${run.error}` : ''}`
     )
     .join('\n\n')
 }
@@ -511,9 +534,12 @@ function prepareCliJsonResult<TResult>(
 }
 
 const COMPUTER_SCREENSHOT_TTL_MS = 24 * 60 * 60 * 1000
+const COMPUTER_SCREENSHOT_CLEANUP_INTERVAL_MS = 60 * 60 * 1000
+const COMPUTER_SCREENSHOT_CLEANUP_MARKER = '.last-cleanup'
 
 function computerScreenshotTempDir(): string {
-  const outputDir = join(tmpdir(), 'orca-computer-use')
+  const outputDir =
+    process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR || join(tmpdir(), 'orca-computer-use')
   mkdirSync(outputDir, { recursive: true, mode: 0o700 })
   const stat = lstatSync(outputDir)
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
@@ -527,7 +553,19 @@ function computerScreenshotTempDir(): string {
 }
 
 function cleanupComputerScreenshots(outputDir: string): void {
-  const cutoff = Date.now() - COMPUTER_SCREENSHOT_TTL_MS
+  const now = Date.now()
+  const markerPath = join(outputDir, COMPUTER_SCREENSHOT_CLEANUP_MARKER)
+  try {
+    // Why: agents can call computer-use CLI commands in loops; a marker keeps
+    // temp cleanup from becoming a synchronous directory scan per screenshot.
+    if (statSync(markerPath).mtimeMs > now - COMPUTER_SCREENSHOT_CLEANUP_INTERVAL_MS) {
+      return
+    }
+  } catch {
+    // Missing or unreadable marker means this process should attempt cleanup.
+  }
+
+  const cutoff = now - COMPUTER_SCREENSHOT_TTL_MS
   for (const entry of readdirSync(outputDir)) {
     if (!entry.endsWith('-screenshot.png') && !entry.endsWith('-screenshot.img')) {
       continue
@@ -540,6 +578,11 @@ function cleanupComputerScreenshots(outputDir: string): void {
     } catch {
       // Best-effort cleanup only; formatting should not fail because a temp file raced.
     }
+  }
+  try {
+    writeFileSync(markerPath, `${now}\n`, { mode: 0o600 })
+  } catch {
+    // Best-effort marker only; stale cleanup state should not hide a screenshot.
   }
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { LinearIssue } from '../../../shared/types'
-import { buildLinearIssueLinkedWorkItem } from './linear-linked-work-item'
+import { buildLinearIssueLinkedWorkItem, isLinearLinkedWorkItem } from './linear-linked-work-item'
 
 function makeIssue(patch: Partial<LinearIssue> = {}): LinearIssue {
   return {
@@ -51,5 +51,13 @@ describe('buildLinearIssueLinkedWorkItem', () => {
 
     expect(item.linkedContext?.renderedText).toContain('Linear issue context snapshot')
     expect(item.linkedContext?.renderedText).toContain('Identifier: ENG-123')
+  })
+})
+
+describe('isLinearLinkedWorkItem', () => {
+  it('recognizes Linear-linked composer sources by identifier', () => {
+    expect(isLinearLinkedWorkItem(buildLinearIssueLinkedWorkItem(makeIssue()))).toBe(true)
+    expect(isLinearLinkedWorkItem({})).toBe(false)
+    expect(isLinearLinkedWorkItem(null)).toBe(false)
   })
 })

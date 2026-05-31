@@ -27,7 +27,8 @@ function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSess
     repos: [],
     worktreesByRepo: {},
     lastKnownRelayPtyIdByTabId: {},
-    lastVisitedAtByWorktreeId: {}
+    lastVisitedAtByWorktreeId: {},
+    defaultTerminalTabsAppliedByWorktreeId: {}
   }
 }
 

@@ -8,6 +8,9 @@ import { useAppStore } from '@/store'
 const ONBOARDING_INLINE_TERMINAL_WORKTREE_ID = 'onboarding-inline-terminal'
 const AUTO_INSERT_DELAY_MS = 250
 const READY_RETRY_MS = 100
+// Why: PTY startup can fail before [data-pty-id] appears; cap polling so the
+// setup panel does not leave a hidden retry timer alive forever.
+export const READY_MAX_ATTEMPTS = 50
 const PTY_TEXT_FALLBACK_MS = 750
 
 type OnboardingInlineCommandTerminalProps = {
@@ -190,7 +193,7 @@ export function OnboardingInlineCommandTerminal({
       }, AUTO_INSERT_DELAY_MS)
     }
 
-    const waitForTerminal = (): void => {
+    const waitForTerminal = (attempt: number): void => {
       if (canceled) {
         return
       }
@@ -212,10 +215,13 @@ export function OnboardingInlineCommandTerminal({
       } else {
         ptyFirstSeenAt = null
       }
-      retryTimer = window.setTimeout(waitForTerminal, READY_RETRY_MS)
+      const nextAttempt = getNextTerminalReadyRetryAttempt(attempt)
+      if (nextAttempt !== null) {
+        retryTimer = window.setTimeout(() => waitForTerminal(nextAttempt), READY_RETRY_MS)
+      }
     }
 
-    waitForTerminal()
+    waitForTerminal(0)
     return () => {
       canceled = true
       if (retryTimer !== null) {
@@ -286,6 +292,10 @@ function findTerminalTabElement(tabId: string): HTMLElement | null {
     }
   }
   return null
+}
+
+export function getNextTerminalReadyRetryAttempt(attempt: number): number | null {
+  return attempt < READY_MAX_ATTEMPTS ? attempt + 1 : null
 }
 
 function terminalReadyForCommand(element: HTMLElement | null): boolean {
