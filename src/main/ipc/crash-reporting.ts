@@ -17,6 +17,7 @@ const recentRendererErrorReportKeys = new Map<string, number>()
 
 const RENDERER_ERROR_DEDUPE_MS = 10 * 60 * 1000
 const MAX_RENDERER_ERROR_KEY_AGE_MS = RENDERER_ERROR_DEDUPE_MS * 2
+const MAX_RECENT_RENDERER_ERROR_REPORT_KEYS = 256
 
 const REACT_ERROR_BOUNDARY_SURFACES = new Set<ReactErrorBoundaryReportArgs['surface']>([
   'app-root',
@@ -101,6 +102,13 @@ function pruneRendererErrorReportKeys(now: number): void {
       recentRendererErrorReportKeys.delete(key)
     }
   }
+  while (recentRendererErrorReportKeys.size > MAX_RECENT_RENDERER_ERROR_REPORT_KEYS) {
+    const oldestKey = recentRendererErrorReportKeys.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    recentRendererErrorReportKeys.delete(oldestKey)
+  }
 }
 
 function getRendererErrorReportKey(args: ReactErrorBoundaryReportArgs): string {
@@ -129,6 +137,10 @@ async function recordRendererErrorReport(
     return { ok: true, report: null, deduped: true }
   }
   recentRendererErrorReportKeys.set(key, now)
+  // Why: renderer error reports are IPC input. A broken renderer can vary the
+  // component stack/message inside the age window, so bound the main-side
+  // dedupe map by count as well as time.
+  pruneRendererErrorReportKeys(now)
 
   const report = await store.record({
     source: 'renderer',
@@ -164,6 +176,10 @@ async function recordRendererErrorReport(
   })
 
   return { ok: true, report, deduped: false }
+}
+
+export function _resetRendererErrorReportDedupeForTests(): void {
+  recentRendererErrorReportKeys.clear()
 }
 
 async function getLatestPendingReport(
