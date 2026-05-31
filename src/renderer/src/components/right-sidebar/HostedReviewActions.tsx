@@ -1,4 +1,5 @@
-import React, { useCallback, useState } from 'react'
+/* eslint-disable max-lines -- Why: Checks owns one compact hosted-review action bar; keeping GitHub PR and GitLab MR action branching together keeps provider parity visible. */
+import React, { useCallback, useMemo, useState } from 'react'
 import {
   LoaderCircle,
   GitMerge,
@@ -21,6 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 
@@ -32,16 +34,86 @@ const MERGE_LABELS: Record<(typeof MERGE_METHODS)[number], string> = {
   rebase: 'Rebase and merge'
 }
 
-export default function PRActions({
-  pr,
+type HostedReviewActionInfo = Pick<
+  HostedReviewInfo,
+  'provider' | 'number' | 'state' | 'status' | 'mergeable'
+> &
+  Partial<
+    Pick<
+      HostedReviewInfo,
+      'reviewDecision' | 'autoMergeEnabled' | 'mergeQueueRequired' | 'mergeStateStatus'
+    >
+  >
+
+function presentGitLabMRMergeState(review: HostedReviewActionInfo): {
+  label: string
+  tooltip: string
+  directMergeAvailable: boolean
+} {
+  if (review.state === 'merged') {
+    return {
+      label: 'Merged',
+      tooltip: 'This merge request is already merged',
+      directMergeAvailable: false
+    }
+  }
+  if (review.state === 'closed') {
+    return {
+      label: 'Closed',
+      tooltip: 'This merge request is closed',
+      directMergeAvailable: false
+    }
+  }
+  if (review.state === 'draft') {
+    return {
+      label: 'Draft',
+      tooltip: 'This merge request is still a draft',
+      directMergeAvailable: false
+    }
+  }
+  if (review.mergeable === 'CONFLICTING') {
+    return {
+      label: 'Conflicts',
+      tooltip: 'GitLab reports merge conflicts',
+      directMergeAvailable: false
+    }
+  }
+  if (review.status === 'failure') {
+    return {
+      label: 'Checks failed',
+      tooltip: 'GitLab says this MR can merge, but some pipeline jobs failed',
+      directMergeAvailable: true
+    }
+  }
+  if (review.status === 'pending') {
+    return {
+      label: 'Checks pending',
+      tooltip: 'GitLab says this MR can merge, but the pipeline is still running',
+      directMergeAvailable: true
+    }
+  }
+  return {
+    label: 'Able to merge',
+    tooltip:
+      review.mergeable === 'UNKNOWN'
+        ? 'GitLab has not reported a final merge status'
+        : 'GitLab says this MR can merge',
+    directMergeAvailable: true
+  }
+}
+
+export default function HostedReviewActions({
+  review,
+  githubPR,
   repo,
   worktree,
-  onRefreshPR
+  onRefreshReview
 }: {
-  pr: PRInfo
+  review: HostedReviewActionInfo
+  githubPR?: PRInfo | null
   repo: Repo
   worktree: Worktree
-  onRefreshPR: () => Promise<void>
+  onRefreshReview: () => Promise<void>
 }): React.JSX.Element | null {
   const isDeletingWorktree = useAppStore(
     (s) => s.deleteStateByWorktreeId[worktree.id]?.isDeleting ?? false
@@ -51,32 +123,55 @@ export default function PRActions({
   const [stateUpdating, setStateUpdating] = useState<'open' | 'closed' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const mergePresentation = presentGitHubPRMergeState(pr)
-  const isUpdatingPRState = stateUpdating !== null
+  const isGitLab = review.provider === 'gitlab'
+  const shortLabel = isGitLab ? 'MR' : 'PR'
+  const reviewLabel = isGitLab ? 'merge request' : 'pull request'
+  const mergePresentation = useMemo(() => {
+    if (isGitLab) {
+      return { ...presentGitLabMRMergeState(review), autoMergeAction: null }
+    }
+    return presentGitHubPRMergeState({
+      ...githubPR,
+      state: review.state,
+      mergeable: review.mergeable,
+      mergeStateStatus: review.mergeStateStatus,
+      reviewDecision: review.reviewDecision,
+      checksStatus: review.status,
+      autoMergeEnabled: review.autoMergeEnabled,
+      mergeQueueRequired: review.mergeQueueRequired
+    })
+  }, [githubPR, isGitLab, review])
+  const isUpdatingReviewState = stateUpdating !== null
   const primaryMergeDisabled =
     merging ||
-    isUpdatingPRState ||
+    isUpdatingReviewState ||
     (!mergePresentation.directMergeAvailable && !mergePresentation.autoMergeAction)
   const directMergeDisabled =
-    merging || isUpdatingPRState || !mergePresentation.directMergeAvailable
-  const menuDisabled = merging || isUpdatingPRState
+    merging || isUpdatingReviewState || !mergePresentation.directMergeAvailable
+  const menuDisabled = merging || isUpdatingReviewState
 
   const handleMerge = useCallback(
     async (method: 'merge' | 'squash' | 'rebase' = 'squash') => {
       setMerging(true)
       setActionError(null)
       try {
-        const result = await window.api.gh.mergePR({
-          repoPath: repo.path,
-          repoId: repo.id,
-          prNumber: pr.number,
-          method,
-          prRepo: pr.prRepo ?? null
-        })
+        const result = isGitLab
+          ? await window.api.gl.mergeMR({
+              repoPath: repo.path,
+              iid: review.number,
+              method
+            })
+          : await window.api.gh.mergePR({
+              repoPath: repo.path,
+              repoId: repo.id,
+              prNumber: review.number,
+              method,
+              prRepo: githubPR?.prRepo ?? null
+            })
         if (!result.ok) {
           setActionError(result.error)
         } else {
-          await onRefreshPR()
+          await onRefreshReview()
         }
       } catch (err) {
         setActionError(err instanceof Error ? err.message : 'Merge failed')
@@ -84,11 +179,11 @@ export default function PRActions({
         setMerging(false)
       }
     },
-    [repo.id, repo.path, pr.number, pr.prRepo, onRefreshPR]
+    [githubPR?.prRepo, isGitLab, onRefreshReview, repo.id, repo.path, review.number]
   )
 
   const handleAutoMerge = useCallback(async () => {
-    if (!mergePresentation.autoMergeAction) {
+    if (isGitLab || !mergePresentation.autoMergeAction) {
       return
     }
     const enabled = mergePresentation.autoMergeAction.kind === 'enable'
@@ -98,23 +193,31 @@ export default function PRActions({
       const result = await window.api.gh.setPRAutoMerge({
         repoPath: repo.path,
         repoId: repo.id,
-        prNumber: pr.number,
+        prNumber: review.number,
         enabled,
-        prRepo: pr.prRepo ?? null
+        prRepo: githubPR?.prRepo ?? null
       })
       if (!result.ok) {
         setActionError(result.error)
       } else {
-        await onRefreshPR()
+        await onRefreshReview()
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Auto-merge update failed')
     } finally {
       setMerging(false)
     }
-  }, [mergePresentation.autoMergeAction, onRefreshPR, pr.number, pr.prRepo, repo.id, repo.path])
+  }, [
+    githubPR?.prRepo,
+    isGitLab,
+    mergePresentation.autoMergeAction,
+    onRefreshReview,
+    repo.id,
+    repo.path,
+    review.number
+  ])
 
-  const handlePRStateChange = useCallback(
+  const handleReviewStateChange = useCallback(
     async (nextState: 'open' | 'closed') => {
       if (stateUpdating) {
         return
@@ -122,10 +225,10 @@ export default function PRActions({
       const isClosing = nextState === 'closed'
       const label = isClosing ? 'Close' : 'Reopen'
       const confirmed = await confirm({
-        title: `${label} PR #${pr.number}?`,
+        title: `${label} ${shortLabel} ${isGitLab ? '!' : '#'}${review.number}?`,
         description: isClosing
-          ? 'This will close the pull request.'
-          : 'This will reopen the pull request.',
+          ? `This will close the ${reviewLabel}.`
+          : `This will reopen the ${reviewLabel}.`,
         confirmLabel: label,
         confirmVariant: isClosing ? 'destructive' : 'default'
       })
@@ -135,38 +238,52 @@ export default function PRActions({
       setStateUpdating(nextState)
       setActionError(null)
       try {
-        const result = await window.api.gh.updatePRState({
-          repoPath: repo.path,
-          repoId: repo.id,
-          prNumber: pr.number,
-          updates: { state: nextState }
-        })
+        const result = isGitLab
+          ? isClosing
+            ? await window.api.gl.closeMR({ repoPath: repo.path, iid: review.number })
+            : await window.api.gl.reopenMR({ repoPath: repo.path, iid: review.number })
+          : await window.api.gh.updatePRState({
+              repoPath: repo.path,
+              repoId: repo.id,
+              prNumber: review.number,
+              updates: { state: nextState }
+            })
         if (!result.ok) {
           setActionError(result.error)
           toast.error(result.error)
         } else {
-          toast.success(isClosing ? 'Pull request closed' : 'Pull request reopened')
-          await onRefreshPR()
+          toast.success(isClosing ? `${shortLabel} closed` : `${shortLabel} reopened`)
+          await onRefreshReview()
         }
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : `Failed to ${label.toLowerCase()} pull request`
+          err instanceof Error ? err.message : `Failed to ${label.toLowerCase()} ${reviewLabel}`
         setActionError(message)
         toast.error(message)
       } finally {
         setStateUpdating(null)
       }
     },
-    [confirm, onRefreshPR, pr.number, repo.id, repo.path, stateUpdating]
+    [
+      confirm,
+      isGitLab,
+      onRefreshReview,
+      repo.id,
+      repo.path,
+      review.number,
+      reviewLabel,
+      shortLabel,
+      stateUpdating
+    ]
   )
 
-  const handleClosePR = useCallback(async () => {
-    await handlePRStateChange('closed')
-  }, [handlePRStateChange])
+  const handleCloseReview = useCallback(async () => {
+    await handleReviewStateChange('closed')
+  }, [handleReviewStateChange])
 
-  const handleReopenPR = useCallback(async () => {
-    await handlePRStateChange('open')
-  }, [handlePRStateChange])
+  const handleReopenReview = useCallback(async () => {
+    await handleReviewStateChange('open')
+  }, [handleReviewStateChange])
 
   const handleDeleteWorktree = useCallback(() => {
     // Why: route every UI delete entry point through the shared funnel so
@@ -174,7 +291,7 @@ export default function PRActions({
     runWorktreeDelete(worktree.id)
   }, [worktree.id])
 
-  if (pr.state === 'open') {
+  if (review.state === 'open') {
     return (
       <div className="space-y-1.5">
         <TooltipProvider delayDuration={300}>
@@ -229,7 +346,7 @@ export default function PRActions({
                     'disabled:opacity-50 disabled:cursor-not-allowed'
                   )}
                   disabled={menuDisabled}
-                  aria-label="More pull request actions"
+                  aria-label={`More ${reviewLabel} actions`}
                   title="More actions"
                 >
                   {stateUpdating === 'closed' ? (
@@ -266,10 +383,10 @@ export default function PRActions({
                 <DropdownMenuItem
                   variant="destructive"
                   disabled={menuDisabled}
-                  onSelect={() => void handleClosePR()}
+                  onSelect={() => void handleCloseReview()}
                 >
                   <GitPullRequestClosed className="size-3.5" />
-                  Close PR
+                  Close {shortLabel}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -280,7 +397,7 @@ export default function PRActions({
     )
   }
 
-  if (pr.state === 'closed') {
+  if (review.state === 'closed') {
     return (
       <div className="space-y-1.5">
         <Button
@@ -288,22 +405,22 @@ export default function PRActions({
           variant="outline"
           size="xs"
           className="w-full cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => void handleReopenPR()}
-          disabled={isUpdatingPRState}
+          onClick={() => void handleReopenReview()}
+          disabled={isUpdatingReviewState}
         >
           {stateUpdating === 'open' ? (
             <LoaderCircle className="size-3.5 animate-spin" />
           ) : (
             <CircleDot className="size-3.5" />
           )}
-          {stateUpdating === 'open' ? 'Reopening...' : 'Reopen PR'}
+          {stateUpdating === 'open' ? 'Reopening...' : `Reopen ${shortLabel}`}
         </Button>
         {actionError && <div className="text-[10px] text-rose-500 break-words">{actionError}</div>}
       </div>
     )
   }
 
-  if (pr.state === 'merged') {
+  if (review.state === 'merged') {
     return (
       <Button
         type="button"

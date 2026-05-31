@@ -818,6 +818,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const mergeRepoPR = vi.fn().mockResolvedValue({ ok: true })
     const addGitLabRepoIssueComment = vi.fn().mockResolvedValue({ ok: true })
     const addGitLabRepoMRComment = vi.fn().mockResolvedValue({ ok: true })
+    const resolveGitLabRepoMRDiscussion = vi.fn().mockResolvedValue({ ok: true })
     const mergeGitLabRepoMR = vi.fn().mockResolvedValue({ ok: true })
     const addGitHubIssueCommentBySlug = vi.fn().mockResolvedValue({
       ok: true,
@@ -877,6 +878,7 @@ describe('OrcaRuntimeRpcServer', () => {
       mergeRepoPR,
       addGitLabRepoIssueComment,
       addGitLabRepoMRComment,
+      resolveGitLabRepoMRDiscussion,
       mergeGitLabRepoMR,
       addGitHubIssueCommentBySlug,
       updateGitHubIssueCommentBySlug,
@@ -1285,6 +1287,21 @@ describe('OrcaRuntimeRpcServer', () => {
           repo: 'id:repo-1',
           iid: 456,
           body: 'ship it'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_gitlab_resolve_mr_discussion',
+        method: 'gitlab.resolveMRDiscussion',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          iid: 456,
+          discussionId: 'discussion-1',
+          resolved: true
         }
       }),
       (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
@@ -1789,6 +1806,13 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(mergeRepoPR).toHaveBeenCalledWith('id:repo-1', 456, 'squash', null)
     expect(addGitLabRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', undefined)
     expect(addGitLabRepoMRComment).toHaveBeenCalledWith('id:repo-1', 456, 'ship it', undefined)
+    expect(resolveGitLabRepoMRDiscussion).toHaveBeenCalledWith(
+      'id:repo-1',
+      456,
+      'discussion-1',
+      true,
+      undefined
+    )
     expect(mergeGitLabRepoMR).toHaveBeenCalledWith('id:repo-1', 456, 'merge', undefined)
     expect(updateGitHubProjectItemField).toHaveBeenCalledWith({
       projectId: 'project-1',

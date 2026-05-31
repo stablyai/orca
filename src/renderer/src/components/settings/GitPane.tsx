@@ -9,6 +9,7 @@ import { matchesSettingsSearch } from './settings-search'
 import { GitHubRateLimitPanel } from '../github/github-rate-limit-display'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
 import { AUTO_RENAME_BRANCH_SEARCH_ENTRIES } from './auto-rename-branch-search'
+import { GitLabRateLimitPanel } from '../gitlab/gitlab-rate-limit-display'
 
 export { GIT_PANE_SEARCH_ENTRIES }
 
@@ -186,6 +187,21 @@ export function GitPane({
         className="space-y-3"
       >
         <GitHubRateLimitPanel />
+      </SearchableSetting>
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
+      title: 'GitLab API Budget',
+      description: 'Current GitLab CLI REST rate-limit headers when available.',
+      keywords: ['gitlab', 'glab', 'rate limit', 'api budget']
+    }) ? (
+      <SearchableSetting
+        key="gitlab-api-budget"
+        title="GitLab API Budget"
+        description="Current GitLab CLI REST rate-limit headers when available."
+        keywords={['gitlab', 'glab', 'rate limit', 'api budget']}
+        className="space-y-3"
+      >
+        <GitLabRateLimitPanel />
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {

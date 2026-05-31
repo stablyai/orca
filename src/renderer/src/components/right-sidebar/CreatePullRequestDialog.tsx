@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: create-review dialog keeps provider copy, base/head selection, template controls, and submit state together so GitHub PR and GitLab MR creation stay symmetric. */
 import React, { useCallback, useRef, useState } from 'react'
 import { Check, ChevronsUpDown, Loader2, Sparkles, Square, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
@@ -17,7 +18,8 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import type {
   CreateHostedReviewResult,
-  HostedReviewCreationEligibility
+  HostedReviewCreationEligibility,
+  HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
@@ -41,15 +43,45 @@ type CreatePullRequestDialogProps = {
   onOpenChange: (open: boolean) => void
   onPushBeforeCreate: () => Promise<boolean>
   onBranchChangedByGeneration: () => Promise<void>
-  onCreated: (result: { number: number; url: string }) => Promise<void>
+  onCreated: (result: {
+    provider: HostedReviewProvider
+    number: number
+    url: string
+  }) => Promise<void>
 }
 
-function formatCreateError(result: CreateHostedReviewResult, pushed: boolean): string {
+function reviewCopy(provider: HostedReviewProvider): {
+  shortLabel: 'PR' | 'MR'
+  reviewLabel: 'pull request' | 'merge request'
+  titleLabel: 'Pull Request' | 'Merge Request'
+  providerName: 'GitHub' | 'GitLab'
+} {
+  return provider === 'gitlab'
+    ? {
+        shortLabel: 'MR',
+        reviewLabel: 'merge request',
+        titleLabel: 'Merge Request',
+        providerName: 'GitLab'
+      }
+    : {
+        shortLabel: 'PR',
+        reviewLabel: 'pull request',
+        titleLabel: 'Pull Request',
+        providerName: 'GitHub'
+      }
+}
+
+function formatCreateError(
+  result: CreateHostedReviewResult,
+  pushed: boolean,
+  shortLabel: 'PR' | 'MR'
+): string {
   if (result.ok) {
     return ''
   }
   if (pushed) {
-    return `Push succeeded, but PR creation failed: ${result.error.replace(/^Create PR failed:\s*/i, '')}`
+    const prefix = new RegExp(`^Create ${shortLabel} failed:\\s*`, 'i')
+    return `Push succeeded, but ${shortLabel} creation failed: ${result.error.replace(prefix, '')}`
   }
   return result.error
 }
@@ -74,6 +106,8 @@ export function CreatePullRequestDialog({
   const submitInFlightRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const provider = eligibility?.provider === 'gitlab' ? 'gitlab' : 'github'
+  const copy = reviewCopy(provider)
   const prCreationDefaults = React.useMemo(() => {
     if (!settings) {
       return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
@@ -161,7 +195,7 @@ export function CreatePullRequestDialog({
         pushed = true
       }
       const result = await createHostedReview(repoPath, {
-        provider: 'github',
+        provider,
         base: stripBaseRef(base.trim()),
         head: normalizeHostedReviewHeadRef(branch),
         title: title.trim(),
@@ -171,7 +205,7 @@ export function CreatePullRequestDialog({
         useTemplate: prCreationDefaults.useTemplate
       })
       if (result.ok) {
-        await onCreated(result)
+        await onCreated({ provider, number: result.number, url: result.url })
         if (prCreationDefaults.openAfterCreate) {
           window.api.shell.openUrl(result.url)
         }
@@ -182,22 +216,24 @@ export function CreatePullRequestDialog({
       if (result.existingReview?.url) {
         const number = result.existingReview.number
         toast.success(
-          number ? `Pull request #${number} is already open` : 'Pull request is already open',
+          number
+            ? `${copy.titleLabel} #${number} is already open`
+            : `${copy.titleLabel} is already open`,
           {
             action: {
-              label: 'Open on GitHub',
+              label: `Open on ${copy.providerName}`,
               onClick: () => window.api.shell.openUrl(result.existingReview!.url)
             }
           }
         )
         if (number) {
-          await onCreated({ number, url: result.existingReview.url })
+          await onCreated({ provider, number, url: result.existingReview.url })
           resetSubmissionState()
           onOpenChange(false)
           return
         }
       }
-      setError(formatCreateError(result, pushed))
+      setError(formatCreateError(result, pushed, copy.shortLabel))
     } finally {
       submitInFlightRef.current = false
       setSubmitting(false)
@@ -211,7 +247,11 @@ export function CreatePullRequestDialog({
     onCreated,
     onOpenChange,
     onPushBeforeCreate,
+    provider,
     pushBeforeCreate,
+    copy.providerName,
+    copy.shortLabel,
+    copy.titleLabel,
     prCreationDefaults.openAfterCreate,
     prCreationDefaults.useTemplate,
     repoPath,
@@ -241,7 +281,7 @@ export function CreatePullRequestDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <div className="flex min-w-0 items-center justify-between gap-2 pr-8">
-            <DialogTitle className="min-w-0 truncate">Create Pull Request</DialogTitle>
+            <DialogTitle className="min-w-0 truncate">Create {copy.titleLabel}</DialogTitle>
             {aiGenerationEnabled ? (
               <div className="shrink-0">
                 {generating ? (
@@ -253,7 +293,7 @@ export function CreatePullRequestDialog({
                         size="sm"
                         onClick={handleCancelGenerate}
                         title="Stop generating"
-                        aria-label="Stop generating pull request details"
+                        aria-label={`Stop generating ${copy.reviewLabel} details`}
                       >
                         <RefreshCw className="size-4 animate-spin" />
                         Generating…
@@ -261,7 +301,7 @@ export function CreatePullRequestDialog({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="left" sideOffset={6}>
-                      Generating PR details. Click to stop.
+                      Generating {copy.shortLabel} details. Click to stop.
                     </TooltipContent>
                   </Tooltip>
                 ) : (
@@ -271,8 +311,8 @@ export function CreatePullRequestDialog({
                     size="sm"
                     disabled={generateDisabled}
                     onClick={() => void handleGenerate()}
-                    title={generateDisabledReason ?? 'Generate pull request details with AI'}
-                    aria-label="Generate pull request details with AI"
+                    title={generateDisabledReason ?? `Generate ${copy.reviewLabel} details with AI`}
+                    aria-label={`Generate ${copy.reviewLabel} details with AI`}
                   >
                     <Sparkles className="size-4" />
                     Generate with AI
@@ -282,7 +322,8 @@ export function CreatePullRequestDialog({
             ) : null}
           </div>
           <DialogDescription>
-            Confirm the target branch and PR details before creating the hosted review.
+            Confirm the target branch and {copy.shortLabel} details before creating the hosted
+            review.
           </DialogDescription>
         </DialogHeader>
 
@@ -375,7 +416,7 @@ export function CreatePullRequestDialog({
 
           {stripBaseRef(base).toLowerCase() === stripBaseRef(branch).toLowerCase() ? (
             <p className="text-xs text-destructive">
-              Choose a different base branch before creating a pull request.
+              Choose a different base branch before creating a {copy.reviewLabel}.
             </p>
           ) : null}
           {generateError ? <p className="text-xs text-destructive">{generateError}</p> : null}
@@ -388,7 +429,7 @@ export function CreatePullRequestDialog({
           </Button>
           <Button onClick={() => void handleSubmit()} disabled={submitDisabled}>
             {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
-            {pushBeforeCreate ? 'Push & Create PR' : 'Create PR'}
+            {pushBeforeCreate ? `Push & Create ${copy.shortLabel}` : `Create ${copy.shortLabel}`}
           </Button>
         </DialogFooter>
       </DialogContent>

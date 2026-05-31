@@ -23,6 +23,13 @@ import { gitOptionalLocksDisabledEnv } from '../git/runner'
 import { resolveDefaultBaseRefViaExec } from '../git/repo'
 import { getUpstreamStatus } from '../git/upstream'
 import { getProjectSlug } from '../gitlab/client'
+import { createGitLabMergeRequest } from '../gitlab/merge-request-creation'
+import {
+  acquire as acquireGlab,
+  glabExecFileAsync,
+  glabRepoExecOptions,
+  release as releaseGlab
+} from '../gitlab/gl-utils'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getHostedReviewForBranch } from './hosted-review'
 
@@ -71,6 +78,28 @@ async function isGitHubAuthenticated(
     return false
   } finally {
     release()
+  }
+}
+
+async function isGitLabAuthenticated(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<boolean> {
+  const projectRef = await getProjectSlug(repoPath, connectionId)
+  if (!projectRef) {
+    return false
+  }
+  await acquireGlab()
+  try {
+    await glabExecFileAsync(
+      ['auth', 'status', '--hostname', projectRef.host],
+      glabRepoExecOptions(repoPath, connectionId)
+    )
+    return true
+  } catch {
+    return false
+  } finally {
+    releaseGlab()
   }
 }
 
@@ -154,56 +183,83 @@ async function getHostedReviewUpstreamStatus(
   }
 }
 
-const blockedCreateResultByReason = {
-  auth_required: {
-    ok: false,
-    code: 'auth_required',
-    error:
-      'Create PR failed: GitHub is not authenticated. Next step: run gh auth login in this environment.'
-  },
-  unsupported_provider: {
-    ok: false,
-    code: 'unsupported_provider',
-    error: 'Creating pull requests requires a GitHub remote.'
-  },
-  dirty: {
-    ok: false,
-    code: 'validation',
-    error: 'Create PR failed: commit or discard local changes before creating a pull request.'
-  },
-  detached_head: {
-    ok: false,
-    code: 'validation',
-    error: 'Create PR failed: switch to a branch before creating a pull request.'
-  },
-  default_branch: {
-    ok: false,
-    code: 'validation',
-    error: 'Create PR failed: choose a feature branch before creating a pull request.'
-  },
-  no_upstream: {
-    ok: false,
-    code: 'validation',
-    error: 'Create PR failed: publish this branch before creating a pull request.'
-  },
-  needs_push: {
-    ok: false,
-    code: 'validation',
-    error: 'Create PR failed: push this branch before creating a pull request.'
-  },
-  needs_sync: {
-    ok: false,
-    code: 'validation',
-    error: 'Create PR failed: sync this branch before creating a pull request.'
-  },
-  fork_head_unsupported: {
-    ok: false,
-    code: 'validation',
-    error: 'Create PR failed: refresh source control status and try again.'
-  }
-} satisfies Partial<
-  Record<NonNullable<HostedReviewCreationBlockedReason>, CreateHostedReviewResult>
->
+function reviewCopy(provider: HostedReviewProvider): {
+  shortLabel: 'PR' | 'MR'
+  reviewLabel: 'pull request' | 'merge request'
+  providerName: 'GitHub' | 'GitLab'
+  authCommand: 'gh auth login' | 'glab auth login'
+} {
+  return provider === 'gitlab'
+    ? {
+        shortLabel: 'MR',
+        reviewLabel: 'merge request',
+        providerName: 'GitLab',
+        authCommand: 'glab auth login'
+      }
+    : {
+        shortLabel: 'PR',
+        reviewLabel: 'pull request',
+        providerName: 'GitHub',
+        authCommand: 'gh auth login'
+      }
+}
+
+function blockedCreateResultForReason(
+  reason: NonNullable<HostedReviewCreationBlockedReason>,
+  provider: HostedReviewProvider
+): CreateHostedReviewResult | null {
+  const copy = reviewCopy(provider)
+  const blockedCreateResultByReason = {
+    auth_required: {
+      ok: false,
+      code: 'auth_required',
+      error: `Create ${copy.shortLabel} failed: ${copy.providerName} is not authenticated. Next step: run ${copy.authCommand} in this environment.`
+    },
+    unsupported_provider: {
+      ok: false,
+      code: 'unsupported_provider',
+      error: `Creating ${copy.reviewLabel}s requires a ${copy.providerName} remote.`
+    },
+    dirty: {
+      ok: false,
+      code: 'validation',
+      error: `Create ${copy.shortLabel} failed: commit or discard local changes before creating a ${copy.reviewLabel}.`
+    },
+    detached_head: {
+      ok: false,
+      code: 'validation',
+      error: `Create ${copy.shortLabel} failed: switch to a branch before creating a ${copy.reviewLabel}.`
+    },
+    default_branch: {
+      ok: false,
+      code: 'validation',
+      error: `Create ${copy.shortLabel} failed: choose a feature branch before creating a ${copy.reviewLabel}.`
+    },
+    no_upstream: {
+      ok: false,
+      code: 'validation',
+      error: `Create ${copy.shortLabel} failed: publish this branch before creating a ${copy.reviewLabel}.`
+    },
+    needs_push: {
+      ok: false,
+      code: 'validation',
+      error: `Create ${copy.shortLabel} failed: push this branch before creating a ${copy.reviewLabel}.`
+    },
+    needs_sync: {
+      ok: false,
+      code: 'validation',
+      error: `Create ${copy.shortLabel} failed: sync this branch before creating a ${copy.reviewLabel}.`
+    },
+    fork_head_unsupported: {
+      ok: false,
+      code: 'validation',
+      error: `Create ${copy.shortLabel} failed: refresh source control status and try again.`
+    }
+  } satisfies Partial<
+    Record<NonNullable<HostedReviewCreationBlockedReason>, CreateHostedReviewResult>
+  >
+  return blockedCreateResultByReason[reason] ?? null
+}
 
 function blockedEligibilityToCreateResult(
   eligibility: HostedReviewCreationEligibility
@@ -212,20 +268,22 @@ function blockedEligibilityToCreateResult(
     return null
   }
   if (eligibility.review?.url) {
+    const copy = reviewCopy(eligibility.provider)
     return {
       ok: false,
       code: 'already_exists',
-      error: 'A pull request already exists for this branch.',
+      error: `A ${copy.reviewLabel} already exists for this branch.`,
       existingReview: eligibility.review
     }
   }
   if (eligibility.blockedReason) {
-    return blockedCreateResultByReason[eligibility.blockedReason] ?? null
+    return blockedCreateResultForReason(eligibility.blockedReason, eligibility.provider)
   }
+  const copy = reviewCopy(eligibility.provider)
   return {
     ok: false,
     code: 'validation',
-    error: 'Create PR failed: refresh source control status and try again.'
+    error: `Create ${copy.shortLabel} failed: refresh source control status and try again.`
   }
 }
 
@@ -236,11 +294,12 @@ async function validateCurrentBranchCanCreateReview(
 ): Promise<CreateHostedReviewResult | null> {
   const requestedHead = input.head ? stripRefPrefix(input.head).trim() : ''
   const currentBranch = await getCurrentBranch(repoPath, connectionId)
+  const copy = reviewCopy(input.provider)
   if (requestedHead && requestedHead !== currentBranch) {
     return {
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: switch back to the selected branch before creating a pull request.'
+      error: `Create ${copy.shortLabel} failed: switch back to the selected branch before creating a ${copy.reviewLabel}.`
     }
   }
 
@@ -267,8 +326,7 @@ async function validateCurrentBranchCanCreateReview(
     return {
       ok: false,
       code: 'validation',
-      error:
-        'Create PR failed: could not verify branch status. Refresh source control and try again.'
+      error: `Create ${copy.shortLabel} failed: could not verify branch status. Refresh source control and try again.`
     }
   }
 }
@@ -311,7 +369,7 @@ export async function getHostedReviewCreationEligibility(
       nextAction: 'open_existing_review'
     }
   }
-  if (provider !== 'github') {
+  if (provider !== 'github' && provider !== 'gitlab') {
     return {
       ...baseResult,
       canCreate: false,
@@ -334,7 +392,11 @@ export async function getHostedReviewCreationEligibility(
   if ((args.behind ?? 0) > 0) {
     return { ...baseResult, canCreate: false, blockedReason: 'needs_sync', nextAction: 'sync' }
   }
-  if (!(await isGitHubAuthenticated(args.repoPath, args.connectionId))) {
+  const authenticated =
+    provider === 'gitlab'
+      ? await isGitLabAuthenticated(args.repoPath, args.connectionId)
+      : await isGitHubAuthenticated(args.repoPath, args.connectionId)
+  if (!authenticated) {
     return {
       ...baseResult,
       canCreate: false,
@@ -353,7 +415,7 @@ export async function createHostedReview(
   input: CreateHostedReviewInput,
   connectionId?: string | null
 ): Promise<CreateHostedReviewResult> {
-  if (input.provider !== 'github') {
+  if (input.provider !== 'github' && input.provider !== 'gitlab') {
     return {
       ok: false,
       code: 'unsupported_provider',
@@ -361,16 +423,20 @@ export async function createHostedReview(
     }
   }
   const provider = await detectHostedReviewProvider(repoPath, connectionId)
-  if (provider !== 'github') {
+  if (provider !== input.provider) {
+    const copy = reviewCopy(input.provider)
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating pull requests requires a GitHub remote.'
+      error: `Creating ${copy.reviewLabel}s requires a ${copy.providerName} remote.`
     }
   }
   const blocked = await validateCurrentBranchCanCreateReview(repoPath, connectionId, input)
   if (blocked) {
     return blocked
+  }
+  if (input.provider === 'gitlab') {
+    return createGitLabMergeRequest(repoPath, input, connectionId)
   }
   return createGitHubPullRequest(repoPath, input, connectionId)
 }

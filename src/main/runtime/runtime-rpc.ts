@@ -208,6 +208,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'gitlab.addMRComment',
   'gitlab.listWorkItems',
   'gitlab.mergeMR',
+  'gitlab.resolveMRDiscussion',
   'gitlab.todos',
   'gitlab.updateIssue',
   'gitlab.updateMR',

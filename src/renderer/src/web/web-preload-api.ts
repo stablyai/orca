@@ -250,31 +250,49 @@ type WebGitHubRuntimeMethod =
 type WebGitLabApi = NonNullable<PreloadApi['gl']>
 type WebGitLabResult<K extends keyof WebGitLabApi> = Awaited<ReturnType<WebGitLabApi[K]>>
 type WebGitLabRouteKey =
+  | 'diagnoseAuth'
+  | 'rateLimit'
   | 'listMRs'
   | 'listWorkItems'
   | 'listIssues'
   | 'createIssue'
   | 'updateIssue'
   | 'addIssueComment'
+  | 'listLabels'
   | 'todos'
   | 'workItemDetails'
   | 'closeMR'
   | 'reopenMR'
   | 'mergeMR'
+  | 'updateMR'
+  | 'updateMRReviewers'
   | 'addMRComment'
+  | 'addMRInlineComment'
+  | 'resolveMRDiscussion'
+  | 'jobTrace'
+  | 'retryJob'
   | 'workItemByPath'
 type WebGitLabRuntimeMethod =
+  | 'gitlab.diagnoseAuth'
+  | 'gitlab.rateLimit'
   | 'gitlab.listMRs'
   | 'gitlab.listWorkItems'
   | 'gitlab.listIssues'
   | 'gitlab.createIssue'
   | 'gitlab.updateIssue'
   | 'gitlab.addIssueComment'
+  | 'gitlab.listLabels'
   | 'gitlab.todos'
   | 'gitlab.workItemDetails'
   | 'gitlab.updateMRState'
   | 'gitlab.mergeMR'
+  | 'gitlab.updateMR'
+  | 'gitlab.updateMRReviewers'
   | 'gitlab.addMRComment'
+  | 'gitlab.addMRInlineComment'
+  | 'gitlab.resolveMRDiscussion'
+  | 'gitlab.jobTrace'
+  | 'gitlab.retryJob'
   | 'gitlab.workItemByPath'
 type WebKeybindingDocument = {
   version: 1
@@ -332,18 +350,27 @@ export const GITHUB_WEB_RPC_METHODS = {
 } as const satisfies Record<WebGitHubRouteKey, WebGitHubRuntimeMethod>
 
 export const GITLAB_WEB_RPC_METHODS = {
+  diagnoseAuth: 'gitlab.diagnoseAuth',
+  rateLimit: 'gitlab.rateLimit',
   listMRs: 'gitlab.listMRs',
   listWorkItems: 'gitlab.listWorkItems',
   listIssues: 'gitlab.listIssues',
   createIssue: 'gitlab.createIssue',
   updateIssue: 'gitlab.updateIssue',
   addIssueComment: 'gitlab.addIssueComment',
+  listLabels: 'gitlab.listLabels',
   todos: 'gitlab.todos',
   workItemDetails: 'gitlab.workItemDetails',
   closeMR: 'gitlab.updateMRState',
   reopenMR: 'gitlab.updateMRState',
   mergeMR: 'gitlab.mergeMR',
+  updateMR: 'gitlab.updateMR',
+  updateMRReviewers: 'gitlab.updateMRReviewers',
   addMRComment: 'gitlab.addMRComment',
+  addMRInlineComment: 'gitlab.addMRInlineComment',
+  resolveMRDiscussion: 'gitlab.resolveMRDiscussion',
+  jobTrace: 'gitlab.jobTrace',
+  retryJob: 'gitlab.retryJob',
   workItemByPath: 'gitlab.workItemByPath'
 } as const satisfies Record<WebGitLabRouteKey, WebGitLabRuntimeMethod>
 
@@ -1502,6 +1529,9 @@ function createGitLabApi(): WebGitLabApi {
 
   const gitLabApi = {
     viewer: () => Promise.resolve(null),
+    diagnoseAuth: () => route<WebGitLabResult<'diagnoseAuth'>>(GITLAB_WEB_RPC_METHODS.diagnoseAuth),
+    rateLimit: (args) =>
+      route<WebGitLabResult<'rateLimit'>>(GITLAB_WEB_RPC_METHODS.rateLimit, args),
     projectSlug: () => Promise.resolve(null),
     mrForBranch: () => Promise.resolve(null),
     mr: () => Promise.resolve(null),
@@ -1517,7 +1547,8 @@ function createGitLabApi(): WebGitLabApi {
       route<WebGitLabResult<'updateIssue'>>(GITLAB_WEB_RPC_METHODS.updateIssue, args),
     addIssueComment: (args) =>
       route<WebGitLabResult<'addIssueComment'>>(GITLAB_WEB_RPC_METHODS.addIssueComment, args),
-    listLabels: () => Promise.resolve([]),
+    listLabels: (args) =>
+      route<WebGitLabResult<'listLabels'>>(GITLAB_WEB_RPC_METHODS.listLabels, args),
     listAssignableUsers: () => Promise.resolve([]),
     todos: (args) => route<WebGitLabResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
     workItemDetails: (args) =>
@@ -1533,8 +1564,20 @@ function createGitLabApi(): WebGitLabApi {
         state: 'opened'
       }),
     mergeMR: (args) => route<WebGitLabResult<'mergeMR'>>(GITLAB_WEB_RPC_METHODS.mergeMR, args),
+    updateMR: (args) => route<WebGitLabResult<'updateMR'>>(GITLAB_WEB_RPC_METHODS.updateMR, args),
+    updateMRReviewers: (args) =>
+      route<WebGitLabResult<'updateMRReviewers'>>(GITLAB_WEB_RPC_METHODS.updateMRReviewers, args),
     addMRComment: (args) =>
       route<WebGitLabResult<'addMRComment'>>(GITLAB_WEB_RPC_METHODS.addMRComment, args),
+    addMRInlineComment: (args) =>
+      route<WebGitLabResult<'addMRInlineComment'>>(GITLAB_WEB_RPC_METHODS.addMRInlineComment, args),
+    resolveMRDiscussion: (args) =>
+      route<WebGitLabResult<'resolveMRDiscussion'>>(
+        GITLAB_WEB_RPC_METHODS.resolveMRDiscussion,
+        args
+      ),
+    jobTrace: (args) => route<WebGitLabResult<'jobTrace'>>(GITLAB_WEB_RPC_METHODS.jobTrace, args),
+    retryJob: (args) => route<WebGitLabResult<'retryJob'>>(GITLAB_WEB_RPC_METHODS.retryJob, args),
     workItemByPath: (args) =>
       route<WebGitLabResult<'workItemByPath'>>(GITLAB_WEB_RPC_METHODS.workItemByPath, args)
   } satisfies WebGitLabApi

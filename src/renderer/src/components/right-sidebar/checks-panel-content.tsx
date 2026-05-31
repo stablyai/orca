@@ -58,7 +58,14 @@ import {
   PR_COMMENT_RESOLVED_CONTAINER_CLASS,
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
-import type { PRInfo, PRCheckDetail, PRCheckRunDetails, PRComment } from '../../../../shared/types'
+import type {
+  PRInfo,
+  PRCheckDetail,
+  PRCheckRunDetails,
+  PRComment,
+  PRConflictSummary,
+  PRMergeableState
+} from '../../../../shared/types'
 import { useCheckDetailsResize } from './check-details-resize'
 import {
   RightPanelCommentComposer,
@@ -87,7 +94,55 @@ export const CHECK_COLOR: Record<string, string> = {
   timed_out: 'text-rose-500'
 }
 
-export function ConflictingFilesSection({ pr }: { pr: PRInfo }): React.JSX.Element | null {
+type ConflictReview = {
+  mergeable: PRMergeableState
+  conflictSummary?: PRConflictSummary
+}
+
+function ResolveConflictsWithAIButton({
+  isResolvingWithAI,
+  onResolveWithAI,
+  disabled,
+  disabledReason
+}: {
+  isResolvingWithAI: boolean
+  onResolveWithAI: () => void
+  disabled?: boolean
+  disabledReason?: string
+}): React.JSX.Element {
+  return (
+    <Button
+      type="button"
+      variant="default"
+      size="sm"
+      className="mt-2 h-7 w-full text-xs"
+      disabled={isResolvingWithAI || disabled}
+      onClick={onResolveWithAI}
+      title={disabled ? disabledReason : undefined}
+    >
+      {isResolvingWithAI ? (
+        <RefreshCw className="size-3.5 animate-spin" />
+      ) : (
+        <Sparkles className="size-3.5" />
+      )}
+      Resolve with AI
+    </Button>
+  )
+}
+
+export function ConflictingFilesSection({
+  pr,
+  isResolvingWithAI,
+  onResolveWithAI,
+  resolveDisabled,
+  resolveDisabledReason
+}: {
+  pr: ConflictReview
+  isResolvingWithAI: boolean
+  onResolveWithAI: () => void
+  resolveDisabled?: boolean
+  resolveDisabledReason?: string
+}): React.JSX.Element | null {
   const files = pr.conflictSummary?.files ?? []
   if (pr.mergeable !== 'CONFLICTING' || files.length === 0) {
     return null
@@ -116,16 +171,22 @@ export function ConflictingFilesSection({ pr }: { pr: PRInfo }): React.JSX.Eleme
           </div>
         ))}
       </div>
+      <ResolveConflictsWithAIButton
+        isResolvingWithAI={isResolvingWithAI}
+        onResolveWithAI={onResolveWithAI}
+        disabled={resolveDisabled}
+        disabledReason={resolveDisabledReason}
+      />
     </div>
   )
 }
 
-/** Fallback shown when GitHub reports merge conflicts but no file list is available yet. */
+/** Fallback shown when the hosted review reports merge conflicts but no file list is available yet. */
 export function MergeConflictNotice({
   pr,
   isRefreshingConflictDetails
 }: {
-  pr: PRInfo
+  pr: ConflictReview
   isRefreshingConflictDetails: boolean
 }): React.JSX.Element | null {
   if (pr.mergeable !== 'CONFLICTING' || (pr.conflictSummary?.files.length ?? 0) > 0) {
