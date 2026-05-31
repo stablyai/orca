@@ -2383,14 +2383,20 @@ export default function SessionScreen() {
     return () => unsubscribe()
   }, [applySessionTabs, client, connState, worktreeId])
 
-  useEffect(() => {
-    if (connState !== 'connected') return
-    const interval = setInterval(() => {
+  useFocusEffect(
+    useCallback(() => {
+      if (connState !== 'connected') return
       void fetchSessionTabs()
       void fetchTerminals()
-    }, 2000)
-    return () => clearInterval(interval)
-  }, [connState, fetchSessionTabs, fetchTerminals])
+      // Why: the live tab subscription stays mounted for stream ownership,
+      // but the fallback list poll should stop while this route is hidden.
+      const interval = setInterval(() => {
+        void fetchSessionTabs()
+        void fetchTerminals()
+      }, 2000)
+      return () => clearInterval(interval)
+    }, [connState, fetchSessionTabs, fetchTerminals])
+  )
 
   // Why: unsubscribe the old terminal so the server restores its desktop dims
   // (clearing the phone-fit banner), then subscribe the new terminal with the
