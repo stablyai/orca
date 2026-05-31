@@ -82,6 +82,7 @@ import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { workspaceSourceSchema, type WorkspaceSource } from '../../shared/telemetry-events'
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
+import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaWorktreeDirectory,
@@ -96,6 +97,14 @@ import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
 
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
+
+function removeWorktreeMetadataAndTransientState(store: Store, worktreeId: string): void {
+  // Why: worktree IDs are path-derived and can be recreated, so removal must
+  // drop process-local caches before the same ID can point at a new workspace.
+  store.removeWorktreeMeta(worktreeId)
+  advertisedUrlWatcher.forgetWorktree(worktreeId)
+  deleteWorktreeHistoryDir(worktreeId)
+}
 
 // Why: worktrees discovered on disk (not created via Orca's UI) have no
 // persisted WorktreeMeta, so mergeWorktree falls back to `lastActivityAt: 0`.
@@ -995,8 +1004,7 @@ export function registerWorktreeHandlers(
           }).catch((err) => {
             console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
           })
-          store.removeWorktreeMeta(args.worktreeId)
-          deleteWorktreeHistoryDir(args.worktreeId)
+          removeWorktreeMetadataAndTransientState(store, args.worktreeId)
           preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
           notifyWorktreesChanged(mainWindow, repoId)
           return {}
@@ -1072,8 +1080,7 @@ export function registerWorktreeHandlers(
               invalidateAuthorizedRootsCache()
             }
             runtime.clearOptimisticReconcileToken(args.worktreeId)
-            store.removeWorktreeMeta(args.worktreeId)
-            deleteWorktreeHistoryDir(args.worktreeId)
+            removeWorktreeMetadataAndTransientState(store, args.worktreeId)
             preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
             notifyWorktreesChanged(mainWindow, repoId)
             return {}
@@ -1100,8 +1107,7 @@ export function registerWorktreeHandlers(
               invalidateAuthorizedRootsCache()
             }
             runtime.clearOptimisticReconcileToken(args.worktreeId)
-            store.removeWorktreeMeta(args.worktreeId)
-            deleteWorktreeHistoryDir(args.worktreeId)
+            removeWorktreeMetadataAndTransientState(store, args.worktreeId)
             preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
             notifyWorktreesChanged(mainWindow, repoId)
             return {}
@@ -1160,8 +1166,7 @@ export function registerWorktreeHandlers(
             removedPushTarget
           )
           runtime.clearOptimisticReconcileToken(args.worktreeId)
-          store.removeWorktreeMeta(args.worktreeId)
-          deleteWorktreeHistoryDir(args.worktreeId)
+          removeWorktreeMetadataAndTransientState(store, args.worktreeId)
           notifyWorktreesChanged(mainWindow, repoId)
           return removalResult ?? {}
         }
@@ -1243,8 +1248,7 @@ export function registerWorktreeHandlers(
               store
             )
             runtime.clearOptimisticReconcileToken(args.worktreeId)
-            store.removeWorktreeMeta(args.worktreeId)
-            deleteWorktreeHistoryDir(args.worktreeId)
+            removeWorktreeMetadataAndTransientState(store, args.worktreeId)
             preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
             invalidateAuthorizedRootsCache()
             notifyWorktreesChanged(mainWindow, repoId)
@@ -1267,8 +1271,7 @@ export function registerWorktreeHandlers(
           removedPushTarget
         )
         runtime.clearOptimisticReconcileToken(args.worktreeId)
-        store.removeWorktreeMeta(args.worktreeId)
-        deleteWorktreeHistoryDir(args.worktreeId)
+        removeWorktreeMetadataAndTransientState(store, args.worktreeId)
         invalidateAuthorizedRootsCache()
 
         notifyWorktreesChanged(mainWindow, repoId)

@@ -9028,9 +9028,10 @@ export class OrcaRuntimeService {
   }
 
   private removeWorktreeMetadataAndHistory(store: RuntimeStore, worktreeId: string): void {
-    // Why: terminal history is keyed by worktree ID, so metadata cleanup must
-    // also purge history before the same path-derived ID can be recreated.
+    // Why: worktree IDs are path-derived and can be recreated, so removal must
+    // purge history and process-local caches before the ID points at new state.
     store.removeWorktreeMeta(worktreeId)
+    advertisedUrlWatcher.forgetWorktree(worktreeId)
     deleteWorktreeHistoryDir(worktreeId)
   }
 

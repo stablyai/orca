@@ -180,6 +180,16 @@ vi.mock('../terminal-history', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
+const { advertisedUrlWatcherForgetWorktreeMock } = vi.hoisted(() => ({
+  advertisedUrlWatcherForgetWorktreeMock: vi.fn()
+}))
+
+vi.mock('../ports/advertised-url-watcher', () => ({
+  advertisedUrlWatcher: {
+    forgetWorktree: advertisedUrlWatcherForgetWorktreeMock
+  }
+}))
+
 const { killAllProcessesForWorktreeMock, getLocalPtyProviderMock } = vi.hoisted(() => ({
   killAllProcessesForWorktreeMock: vi.fn(),
   getLocalPtyProviderMock: vi.fn()
@@ -279,7 +289,8 @@ describe('registerWorktreeHandlers', () => {
       store.removeWorktreeLineage,
       killAllProcessesForWorktreeMock,
       getLocalPtyProviderMock,
-      deleteWorktreeHistoryDirMock
+      deleteWorktreeHistoryDirMock,
+      advertisedUrlWatcherForgetWorktreeMock
     ]) {
       m.mockReset()
     }
@@ -3188,6 +3199,7 @@ describe('registerWorktreeHandlers', () => {
       store.removeWorktreeMeta.mock.invocationCallOrder[0]
     )
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+    expect(advertisedUrlWatcherForgetWorktreeMock).toHaveBeenCalledWith(worktreeId)
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-folder'
