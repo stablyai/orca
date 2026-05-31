@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/types'
-import { getNestedWorktreeExcludePaths, isNestedWorktreePath } from './quick-open-file-list'
+import { buildExcludePathPrefixes } from '../../../shared/quick-open-filter'
+import {
+  getNestedWorktreeExcludePaths,
+  getNestedWorktreeExcludeRequest,
+  isNestedWorktreePath
+} from './quick-open-file-list'
 
 function makeWorktree(id: string, path: string): Worktree {
   return {
@@ -40,5 +45,16 @@ describe('quick-open nested worktree excludes', () => {
         makeWorktree('sibling', '//server/share/repo2')
       ])
     ).toEqual(['//server/share/repo/packages/app'])
+  })
+
+  it('keeps newline-containing nested worktree paths intact for listFiles requests', () => {
+    const request = getNestedWorktreeExcludeRequest('root', '/tmp/repo', [
+      makeWorktree('root', '/tmp/repo'),
+      makeWorktree('nested', '/tmp/repo/linked\nworktree')
+    ])
+
+    expect(request.paths).toEqual(['/tmp/repo/linked\nworktree'])
+    expect(request.key).toBe('["/tmp/repo/linked\\nworktree"]')
+    expect(buildExcludePathPrefixes('/tmp/repo', request.paths)).toEqual(['linked\nworktree'])
   })
 })
