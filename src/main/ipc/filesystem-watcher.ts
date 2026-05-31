@@ -49,7 +49,22 @@ const watchedRoots = new Map<string, WatchedRoot>()
 // @parcel/watcher's ReadDirectoryChangesW doesn't work) are cached so
 // we don't retry on every worktree switch and spam the console with
 // repeated "Failed to read changes" / "watchman not found" errors.
+const UNWATCHABLE_ROOT_CACHE_MAX = 256
 const unwatchableRoots = new Set<string>()
+
+function rememberUnwatchableRoot(rootKey: string): void {
+  // Why: missing/deleted worktrees can churn through unique paths during a long
+  // session; keep retry suppression useful without retaining every failed path.
+  unwatchableRoots.delete(rootKey)
+  unwatchableRoots.add(rootKey)
+  while (unwatchableRoots.size > UNWATCHABLE_ROOT_CACHE_MAX) {
+    const oldest = unwatchableRoots.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    unwatchableRoots.delete(oldest)
+  }
+}
 
 // Why: watcher cleanup is keyed to the renderer WebContents, not to a specific
 // watched root. One listener per sender avoids MaxListeners warnings when a
@@ -376,6 +391,7 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
 
   // Don't retry roots that already failed — avoids repeated error spam.
   if (unwatchableRoots.has(rootKey)) {
+    rememberUnwatchableRoot(rootKey)
     return
   }
 
@@ -394,12 +410,12 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
       const s = await stat(rootKey)
       if (!s.isDirectory()) {
         console.warn(`[filesystem-watcher] not a directory: ${rootKey}`)
-        unwatchableRoots.add(rootKey)
+        rememberUnwatchableRoot(rootKey)
         return
       }
     } catch {
       console.warn(`[filesystem-watcher] cannot stat root: ${rootKey}`)
-      unwatchableRoots.add(rootKey)
+      rememberUnwatchableRoot(rootKey)
       return
     }
 
@@ -417,7 +433,7 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
       // Why: createWatcher / createWslWatcher already logged the error.
       // Swallow it here so the renderer's watchWorktree call resolves
       // without crashing the main process.
-      unwatchableRoots.add(rootKey)
+      rememberUnwatchableRoot(rootKey)
       return
     }
     watchedRoots.set(rootKey, root)
@@ -731,6 +747,7 @@ export function registerFilesystemWatcherHandlers(): void {
 /** Tear down all watchers on app shutdown. */
 export async function closeAllWatchers(): Promise<void> {
   senderCleanupRegistered.clear()
+  unwatchableRoots.clear()
 
   // Cancel any pending grace-period teardowns — we're tearing down everything.
   for (const timer of pendingTeardowns.values()) {
