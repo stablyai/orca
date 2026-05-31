@@ -175,4 +175,20 @@ describe('MacOSNativeProviderClient', () => {
 
     await expect(secondCall).resolves.toEqual(capabilities)
   })
+
+  it('terminates the helper process when socket startup fails', async () => {
+    const providerKill = vi.fn()
+    spawnMock.mockReturnValueOnce({ unref: vi.fn(), kill: providerKill })
+    connectMacOSProviderSocketMock.mockRejectedValueOnce(new Error('socket did not open'))
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    await expect(client.capabilities()).rejects.toThrow('socket did not open')
+
+    expect(providerKill).toHaveBeenCalledWith('SIGTERM')
+    expect(rmSyncMock).toHaveBeenCalledWith(expect.stringContaining('orca-computer-use-'), {
+      recursive: true,
+      force: true
+    })
+  })
 })
