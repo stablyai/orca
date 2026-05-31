@@ -108,6 +108,7 @@ describe('Linear label catalog API', () => {
         isGroup: false,
         archivedAt: null,
         retiredAt: null,
+        retired: false,
         workspaceId: 'workspace-1',
         workspaceName: 'Workspace'
       }
@@ -123,9 +124,59 @@ describe('Linear label catalog API', () => {
       }
     )
     expect(rawRequest.mock.calls[0][0]).toContain('archivedAt')
-    expect(rawRequest.mock.calls[0][0]).not.toContain('retiredAt')
+    expect(rawRequest.mock.calls[0][0]).toContain('retiredBy')
     expect(acquire).toHaveBeenCalledTimes(1)
     expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides retired labels from the default catalog view', async () => {
+    const rawRequest = vi.fn().mockResolvedValue({
+      data: {
+        issueLabels: {
+          nodes: [
+            labelNode({ id: 'active-label', name: 'Active', team: null, parent: null }),
+            labelNode({
+              id: 'retired-label',
+              name: 'Retired',
+              retiredBy: { id: 'user-1' },
+              team: null,
+              parent: null
+            })
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null }
+        }
+      }
+    })
+    getClients.mockReturnValue([makeEntry({ client: { client: { rawRequest } } } as never)])
+    const { listIssueLabels } = await import('./labels')
+
+    await expect(listIssueLabels({ workspaceId: 'workspace-1' })).resolves.toMatchObject([
+      { id: 'active-label' }
+    ])
+  })
+
+  it('includes retired labels when archived labels are requested', async () => {
+    const rawRequest = vi.fn().mockResolvedValue({
+      data: {
+        issueLabels: {
+          nodes: [
+            labelNode({
+              id: 'retired-label',
+              retiredBy: { id: 'user-1' },
+              team: null,
+              parent: null
+            })
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null }
+        }
+      }
+    })
+    getClients.mockReturnValue([makeEntry({ client: { client: { rawRequest } } } as never)])
+    const { listIssueLabels } = await import('./labels')
+
+    await expect(
+      listIssueLabels({ workspaceId: 'workspace-1', includeArchived: true })
+    ).resolves.toMatchObject([{ id: 'retired-label', retired: true }])
   })
 
   it('follows label list pagination so large catalogs are complete', async () => {
@@ -331,6 +382,7 @@ describe('Linear label catalog API', () => {
         issueLabel: labelNode({
           id: 'label-1',
           archivedAt,
+          retiredBy: { id: 'user-1' },
           team: null,
           parent: null
         })
@@ -343,13 +395,13 @@ describe('Linear label catalog API', () => {
 
     await expect(retireIssueLabel('label-1', 'workspace-1')).resolves.toMatchObject({
       ok: true,
-      label: { id: 'label-1', archivedAt }
+      label: { id: 'label-1', archivedAt, retired: true }
     })
     expect(rawRequest).toHaveBeenCalledWith(expect.stringContaining('query OrcaLinearIssueLabel'), {
       id: 'label-1'
     })
     expect(rawRequest.mock.calls[0][0]).toContain('archivedAt')
-    expect(rawRequest.mock.calls[0][0]).not.toContain('retiredAt')
+    expect(rawRequest.mock.calls[0][0]).toContain('retiredBy')
   })
 
   it('rejects mutations when all workspaces are selected', async () => {

@@ -26,6 +26,7 @@ async function fetchAllTeamsForWorkspace(entry: LinearClientForWorkspace): Promi
     id: t.id,
     workspaceId: entry.workspace.id,
     workspaceName: entry.workspace.organizationName,
+    organizationUrlKey: entry.workspace.organizationUrlKey,
     name: t.name,
     key: t.key,
     url:

@@ -31,6 +31,7 @@ type LinearIssueLabelNode = {
   isGroup?: boolean
   archivedAt?: Date | string | null
   retiredAt?: Date | string | null
+  retiredBy?: Relation<{ id: string }>
   team?: Relation<{ id: string; name: string }>
   parent?: Relation<{ id: string; name: string }>
 }
@@ -71,6 +72,9 @@ const LINEAR_ISSUE_LABEL_NODE_FIELDS = `
   description
   isGroup
   archivedAt
+  retiredBy {
+    id
+  }
   team {
     id
     name
@@ -127,9 +131,10 @@ async function mapIssueLabelForWorkspace(
   entry: LinearClientForWorkspace,
   label: LinearIssueLabelNode
 ): Promise<LinearIssueLabel> {
-  const [team, parent] = await Promise.all([
+  const [team, parent, retiredBy] = await Promise.all([
     optionalRelation(label.team),
-    optionalRelation(label.parent)
+    optionalRelation(label.parent),
+    optionalRelation(label.retiredBy)
   ])
 
   return {
@@ -144,6 +149,7 @@ async function mapIssueLabelForWorkspace(
     isGroup: label.isGroup ?? false,
     archivedAt: dateToString(label.archivedAt),
     retiredAt: dateToString(label.retiredAt),
+    retired: Boolean(retiredBy),
     workspaceId: entry.workspace.id,
     workspaceName: entry.workspace.organizationName
   }
@@ -158,6 +164,10 @@ function buildLabelFilter(teamId?: string | null): Record<string, unknown> | und
     return undefined
   }
   return { team: { id: { eq: teamId } } }
+}
+
+function isMappedIssueLabelRetired(label: LinearIssueLabel): boolean {
+  return Boolean(label.archivedAt || label.retiredAt || label.retired)
 }
 
 async function fetchAllIssueLabelNodes(
@@ -210,7 +220,12 @@ export async function listIssueLabels(
       await acquire()
       try {
         const labels = await fetchAllIssueLabelNodes(entry, options)
-        return await Promise.all(labels.map((label) => mapIssueLabelForWorkspace(entry, label)))
+        const mappedLabels = await Promise.all(
+          labels.map((label) => mapIssueLabelForWorkspace(entry, label))
+        )
+        return options.includeArchived
+          ? mappedLabels
+          : mappedLabels.filter((label) => !isMappedIssueLabelRetired(label))
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)

@@ -1461,6 +1461,7 @@ export type LinearIssueLabel = {
   isGroup: boolean
   archivedAt?: string | null
   retiredAt?: string | null
+  retired?: boolean
 }
 
 export type LinearIssueLabelCreateInput = {
@@ -1494,6 +1495,7 @@ export type LinearTeam = {
   id: string
   workspaceId?: string
   workspaceName?: string
+  organizationUrlKey?: string
   name: string
   key: string
   url?: string

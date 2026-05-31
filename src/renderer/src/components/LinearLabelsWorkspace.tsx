@@ -1,7 +1,15 @@
 /* eslint-disable max-lines -- Why: the label catalog view keeps list, form,
    and retire/restore actions together until more Linear admin surfaces exist. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { LoaderCircle, Pencil, Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
+import {
+  ExternalLink,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Trash2
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -129,6 +137,10 @@ function selectedWorkspaceCanMutate(
   return Boolean(workspaceId && workspaceId !== 'all')
 }
 
+export function isLinearLabelRetired(label: LinearIssueLabel): boolean {
+  return Boolean(label.archivedAt || label.retiredAt || label.retired)
+}
+
 export type LinearLabelMutationDeps = {
   createIssueLabel: typeof linearCreateIssueLabel
   updateIssueLabel: typeof linearUpdateIssueLabel
@@ -224,6 +236,7 @@ export default function LinearLabelsWorkspace({
     effectiveSelectedTeamId === 'all'
       ? null
       : teams.find((team) => team.id === effectiveSelectedTeamId)
+  const selectedTeamUrl = selectedTeam?.url ?? null
 
   const loadLabels = useCallback(() => {
     const requestSeq = requestSeqRef.current + 1
@@ -388,6 +401,18 @@ export default function LinearLabelsWorkspace({
               ))}
             </SelectContent>
           </Select>
+          {selectedTeamUrl ? (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => window.api.shell.openUrl(selectedTeamUrl)}
+              aria-label={`View ${selectedTeam?.name ?? 'team'} on Linear`}
+              title={`View ${selectedTeam?.name ?? 'team'} on Linear`}
+              className="size-8 border-border/50 bg-background/70"
+            >
+              <ExternalLink className="size-3.5" />
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             size="sm"
@@ -455,7 +480,7 @@ export default function LinearLabelsWorkspace({
         {viewState === 'ready' ? (
           <div className="divide-y divide-border/50">
             {labels.map((label) => {
-              const archived = Boolean(label.archivedAt)
+              const archived = isLinearLabelRetired(label)
               return (
                 <div key={label.id} className="flex items-center gap-3 px-4 py-3">
                   <span

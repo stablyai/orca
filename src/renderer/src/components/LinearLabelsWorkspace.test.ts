@@ -4,6 +4,7 @@ import {
   compactLinearLabelCreateInput,
   compactLinearLabelUpdateInput,
   getLinearLabelsWorkspaceViewState,
+  isLinearLabelRetired,
   mutateLinearLabelArchiveState,
   reconcileSelectedLinearLabelTeamId,
   saveLinearLabelForm,
@@ -63,6 +64,21 @@ describe('reconcileSelectedLinearLabelTeamId', () => {
     expect(reconcileSelectedLinearLabelTeamId('team-1', [{ id: 'team-1' } as never])).toBe('team-1')
     expect(reconcileSelectedLinearLabelTeamId('team-old', [{ id: 'team-1' } as never])).toBe('all')
     expect(reconcileSelectedLinearLabelTeamId('all', [])).toBe('all')
+  })
+})
+
+describe('isLinearLabelRetired', () => {
+  it('treats archivedAt and retiredAt as retired label states', () => {
+    expect(
+      isLinearLabelRetired({ archivedAt: '2026-05-30T12:00:00.000Z' } as LinearIssueLabel)
+    ).toBe(true)
+    expect(
+      isLinearLabelRetired({ retiredAt: '2026-05-31T01:00:00.000Z' } as LinearIssueLabel)
+    ).toBe(true)
+    expect(isLinearLabelRetired({ retired: true } as LinearIssueLabel)).toBe(true)
+    expect(isLinearLabelRetired({ archivedAt: null, retiredAt: null } as LinearIssueLabel)).toBe(
+      false
+    )
   })
 })
 
