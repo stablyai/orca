@@ -28,6 +28,16 @@ export function getLinkBubblePosition(
   }
 }
 
+export function isLinkEditCancelShortcut(
+  event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey'>,
+  isMac: boolean
+): boolean {
+  if (event.key.toLowerCase() !== 'k') {
+    return false
+  }
+  return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+}
+
 function LinkEditInput({
   initialHref,
   onSave,
@@ -38,6 +48,7 @@ function LinkEditInput({
   onCancel: () => void
 }): React.JSX.Element {
   const [value, setValue] = useState(initialHref)
+  const isMac = navigator.userAgent.includes('Mac')
 
   const setInputElement = useCallback((input: HTMLInputElement | null) => {
     if (!input) {
@@ -64,7 +75,7 @@ function LinkEditInput({
           onCancel()
         }
         // Cmd/Ctrl+K while editing cancels the edit.
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        if (isLinkEditCancelShortcut(e, isMac)) {
           e.preventDefault()
           onCancel()
         }
