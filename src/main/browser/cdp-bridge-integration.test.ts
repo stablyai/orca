@@ -210,7 +210,15 @@ function createMockGuest(id: number, url: string, title: string) {
     }
   }
 
-  return { guest, sendCommandMock }
+  return {
+    guest,
+    sendCommandMock,
+    emitDebugger(event: string, ...args: unknown[]) {
+      for (const handler of debuggerListeners.get(event) ?? []) {
+        handler(...args)
+      }
+    }
+  }
 }
 
 // ── RPC helper ──
@@ -247,12 +255,14 @@ describe('Browser automation pipeline (integration)', () => {
   let endpoint: string
   let authToken: string
   let activeGuest: ReturnType<typeof createMockGuest>['guest']
+  let activeGuestHarness: ReturnType<typeof createMockGuest>
 
   const GUEST_WC_ID = 5001
   const RENDERER_WC_ID = 1
 
   beforeEach(async () => {
-    const { guest } = createMockGuest(GUEST_WC_ID, 'https://example.com', 'Example Domain')
+    activeGuestHarness = createMockGuest(GUEST_WC_ID, 'https://example.com', 'Example Domain')
+    const { guest } = activeGuestHarness
     activeGuest = guest
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === GUEST_WC_ID) {
@@ -323,6 +333,23 @@ describe('Browser automation pipeline (integration)', () => {
       name: 'More information...'
     })
     expect(activeGuest.debugger.attach).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves debugger listeners owned by other browser streams', async () => {
+    const externalDetach = vi.fn()
+    const externalMessage = vi.fn()
+    activeGuest.debugger.on('detach', externalDetach)
+    activeGuest.debugger.on('message', externalMessage)
+
+    const res = await rpc('browser.snapshot')
+    expect(res.ok).toBe(true)
+
+    activeGuestHarness.emitDebugger('message', {}, 'Runtime.consoleAPICalled', {})
+    activeGuestHarness.emitDebugger('detach')
+
+    expect(externalMessage).toHaveBeenCalledWith({}, 'Runtime.consoleAPICalled', {})
+    expect(externalDetach).toHaveBeenCalledTimes(1)
+    expect(activeGuest.debugger.removeAllListeners).not.toHaveBeenCalled()
   })
 
   // ── Click ──
