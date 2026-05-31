@@ -2,15 +2,17 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 type MockState = {
   tabsByWorktree: Record<string, TerminalTab[]>
   browserTabsByWorktree: Record<string, { id: string }[]>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   ptyIdsByTabId: Record<string, string[]>
   agentStatusEpoch: number
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
@@ -51,6 +53,19 @@ function makeAgentStatusEntry(args: {
   }
 }
 
+function makeSplitLayout(): TerminalLayoutSnapshot {
+  return {
+    root: {
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: LEAF_ID },
+      second: { type: 'leaf', leafId: SECOND_LEAF_ID }
+    },
+    activeLeafId: LEAF_ID,
+    expandedLeafId: null
+  }
+}
+
 function StatusProbe({ worktreeId }: { worktreeId: string }) {
   return <span>{useWorktreeActivityStatus(worktreeId)}</span>
 }
@@ -62,6 +77,7 @@ describe('useWorktreeActivityStatus', () => {
       tabsByWorktree: {},
       browserTabsByWorktree: {},
       runtimePaneTitlesByTabId: {},
+      terminalLayoutsByTabId: {},
       ptyIdsByTabId: {},
       agentStatusEpoch: 0,
       agentStatusByPaneKey: {},
@@ -93,6 +109,35 @@ describe('useWorktreeActivityStatus', () => {
     expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
       '<span>working</span>'
     )
+  })
+
+  it('lets a fresh hook done state override the same pane stale working title', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    mockState = {
+      ...mockState,
+      tabsByWorktree: {
+        [worktreeId]: [makeTab('tab-1', worktreeId)]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1']
+      },
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: '⠋ Codex',
+          2: 'bash'
+        }
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': makeSplitLayout()
+      },
+      agentStatusEpoch: 1,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'done' })
+      }
+    }
+
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
   })
 
   it('scopes cached agent summaries to the matching worktree', () => {

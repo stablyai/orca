@@ -15,6 +15,7 @@ import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
+import { selectTerminalLayoutsForWorktree } from './worktree-agent-row-selectors'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
 
 export type WorktreeSectionActivityState = Pick<
@@ -23,6 +24,7 @@ export type WorktreeSectionActivityState = Pick<
   | 'browserTabsByWorktree'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
+  | 'terminalLayoutsByTabId'
   | 'agentStatusEpoch'
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
@@ -100,6 +102,8 @@ function getSectionWorktreeStatus(
     browserTabs: state.browserTabsByWorktree[worktreeId] ?? [],
     ptyIdsByTabId: selectLivePtyIdsForWorktree(state, worktreeId),
     runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, worktreeId),
+    freshHookLeafIdsByTabId: agentSummary.freshHookLeafIdsByTabId,
+    terminalLayoutsByTabId: selectTerminalLayoutsForWorktree(state, worktreeId),
     hasPermission: agentSummary.hasPermission,
     hasLiveWorking: agentSummary.hasLiveWorking,
     hasLiveDone: agentSummary.hasLiveDone,

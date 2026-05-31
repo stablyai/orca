@@ -3260,6 +3260,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const sectionActivityBrowserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const sectionActivityPtyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const sectionActivityRuntimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
+  const sectionActivityTerminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const sectionActivityAgentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const sectionActivityMigrationUnsupportedByPtyId = useAppStore(
     (s) => s.migrationUnsupportedByPtyId
@@ -3651,6 +3652,7 @@ const WorktreeList = React.memo(function WorktreeList({
       browserTabsByWorktree: sectionActivityBrowserTabsByWorktree,
       ptyIdsByTabId: sectionActivityPtyIdsByTabId,
       runtimePaneTitlesByTabId: sectionActivityRuntimePaneTitlesByTabId,
+      terminalLayoutsByTabId: sectionActivityTerminalLayoutsByTabId,
       agentStatusEpoch: sectionActivityAgentStatusEpoch,
       // Why: agentStatusByPaneKey can tick for same-state tool details. The
       // section counts only need structural status transitions, tracked by
@@ -3666,6 +3668,7 @@ const WorktreeList = React.memo(function WorktreeList({
     sectionActivityPtyIdsByTabId,
     sectionActivityRetainedAgentsByPaneKey,
     sectionActivityRuntimePaneTitlesByTabId,
+    sectionActivityTerminalLayoutsByTabId,
     sectionActivityTabsByWorktree
   ])
   const sectionActivityByGroupKey = useMemo(

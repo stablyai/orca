@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../../shared/types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
 const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'
 
-function makeTab(id: string): TerminalTab {
+function makeTab(id: string, overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
     id,
     worktreeId: 'wt-1',
@@ -15,7 +15,8 @@ function makeTab(id: string): TerminalTab {
     customTitle: null,
     color: null,
     sortOrder: 0,
-    createdAt: 0
+    createdAt: 0,
+    ...overrides
   }
 }
 
@@ -68,6 +69,39 @@ describe('buildTitleDerivedAgentRows', () => {
         'tab-1': { 1: '⠋ Codex' }
       },
       ptyIdsByTabId: {},
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not infer Claude Code from a spinner-only non-agent title', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ installing dependencies' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-plain'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not turn generic Codex-launched task titles into Claude Code rows', () => {
+    const launchAgent: TuiAgent = 'codex'
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '✳ refactor split-pane status' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-codex'] },
       terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
       now: 2000
     })

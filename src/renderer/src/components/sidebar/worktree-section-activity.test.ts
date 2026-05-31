@@ -83,6 +83,7 @@ function makeState(
     browserTabsByWorktree: {},
     ptyIdsByTabId: {},
     runtimePaneTitlesByTabId: {},
+    terminalLayoutsByTabId: {},
     agentStatusEpoch: 0,
     agentStatusByPaneKey: {},
     migrationUnsupportedByPtyId: {},

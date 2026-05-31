@@ -12,13 +12,17 @@ export type WorktreeAgentActivitySummary = {
   hasLiveWorking: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
+  freshHookLeafIdsByTabId: Record<string, ReadonlySet<string>>
 }
+
+const EMPTY_HOOK_LEAF_IDS_BY_TAB_ID: Record<string, ReadonlySet<string>> = {}
 
 const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasPermission: false,
   hasLiveWorking: false,
   hasLiveDone: false,
-  hasRetainedDone: false
+  hasRetainedDone: false,
+  freshHookLeafIdsByTabId: EMPTY_HOOK_LEAF_IDS_BY_TAB_ID
 }
 
 export type AgentActivityInput = Pick<
@@ -82,11 +86,18 @@ function getWorktreeAgentActivitySummaries(
 
   const now = Date.now()
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    const worktreeId = worktreeIdForPaneKey(paneKey, tabIdToWorktreeId)
+    const parsed = parsePaneKey(paneKey)
+    const worktreeId = parsed
+      ? (tabIdToWorktreeId.get(parsed.tabId) ?? null)
+      : worktreeIdForLegacyPaneKey(paneKey, tabIdToWorktreeId)
     if (!worktreeId || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       continue
     }
-    applyLiveAgentState(summaryForWorktree(worktreeId), entry)
+    const summary = summaryForWorktree(worktreeId)
+    if (parsed) {
+      addFreshHookLeafId(summary, parsed.tabId, parsed.leafId)
+    }
+    applyLiveAgentState(summary, entry)
   }
 
   for (const unsupported of Object.values(state.migrationUnsupportedByPtyId ?? {})) {
@@ -124,7 +135,33 @@ function applyLiveAgentState(
   }
 }
 
+function addFreshHookLeafId(
+  summary: WorktreeAgentActivitySummary,
+  tabId: string,
+  leafId: string
+): void {
+  if (summary.freshHookLeafIdsByTabId === EMPTY_HOOK_LEAF_IDS_BY_TAB_ID) {
+    summary.freshHookLeafIdsByTabId = {}
+  }
+  let leafIds = summary.freshHookLeafIdsByTabId[tabId] as Set<string> | undefined
+  if (!leafIds) {
+    leafIds = new Set<string>()
+    summary.freshHookLeafIdsByTabId[tabId] = leafIds
+  }
+  leafIds.add(leafId)
+}
+
 function worktreeIdForPaneKey(
+  paneKey: string,
+  tabIdToWorktreeId: Map<string, string>
+): string | null {
+  const parsed = parsePaneKey(paneKey)
+  return parsed
+    ? (tabIdToWorktreeId.get(parsed.tabId) ?? null)
+    : worktreeIdForLegacyPaneKey(paneKey, tabIdToWorktreeId)
+}
+
+function worktreeIdForLegacyPaneKey(
   paneKey: string,
   tabIdToWorktreeId: Map<string, string>
 ): string | null {

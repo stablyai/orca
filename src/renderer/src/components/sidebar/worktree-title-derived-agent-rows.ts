@@ -33,6 +33,8 @@ const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   Pi: 'pi'
 }
 
+const CLAUDE_AGENT_TOKEN_RE = /(?<![\w./\\-])claude(?![\w./\\-])/i
+
 export function buildTitleDerivedAgentRows(args: {
   tabs: TerminalTab[]
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
@@ -108,7 +110,10 @@ function buildTitleDerivedAgentRow(args: {
     return null
   }
   const paneKey = makePaneKey(args.tab.id, args.leafId)
-  const agentType = TITLE_AGENT_LABEL_TO_TYPE[label] ?? 'unknown'
+  const agentType = resolveTitleDerivedAgentType(args.title, label)
+  if (!agentType) {
+    return null
+  }
   const rowState = titleStatusToRowState(status)
   const secondary =
     status === 'permission' ? 'Needs input' : status === 'working' ? 'Running' : 'Idle'
@@ -132,6 +137,17 @@ function buildTitleDerivedAgentRow(args: {
     state: rowState,
     startedAt: 0
   }
+}
+
+function resolveTitleDerivedAgentType(title: string, label: string): AgentType | null {
+  const agentType = TITLE_AGENT_LABEL_TO_TYPE[label] ?? 'unknown'
+  if (agentType !== 'claude') {
+    return agentType
+  }
+  // Why: Claude's task-title spinner heuristic has no provider identity. In
+  // split panes it can match arbitrary terminal spinners, so sidebar rows only
+  // accept Claude when the title itself names Claude.
+  return CLAUDE_AGENT_TOKEN_RE.test(title) ? agentType : null
 }
 
 function titleStatusToRowState(
