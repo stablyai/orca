@@ -485,6 +485,42 @@ describe('RateLimitService', () => {
     await firstFetch
   })
 
+  it('keeps sibling inactive Codex preview fetches alive when one account is evicted', async () => {
+    const service = new RateLimitService()
+    const accountFetch = deferred<ProviderRateLimits>()
+    let inactiveAccounts = [
+      { id: 'account-a', managedHomePath: '/tmp/account-a/home' },
+      { id: 'account-b', managedHomePath: '/tmp/account-b/home' }
+    ]
+    service.setInactiveCodexAccountsResolver(() => inactiveAccounts)
+    vi.mocked(fetchCodexRateLimits).mockReturnValueOnce(accountFetch.promise)
+
+    const fetchOnOpen = service.fetchInactiveCodexAccountsOnOpen()
+    await Promise.resolve()
+    expect(service.getState().inactiveCodexAccounts).toEqual([
+      { accountId: 'account-a', rateLimits: null, updatedAt: 0, isFetching: true },
+      { accountId: 'account-b', rateLimits: null, updatedAt: 0, isFetching: true }
+    ])
+
+    inactiveAccounts = [{ id: 'account-a', managedHomePath: '/tmp/account-a/home' }]
+    service.evictInactiveCodexCache('account-b')
+    accountFetch.resolve(okProvider('codex', 64, Date.now()))
+    await fetchOnOpen
+
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+    expect(service.getState().inactiveCodexAccounts).toEqual([
+      {
+        accountId: 'account-a',
+        rateLimits: expect.objectContaining({
+          provider: 'codex',
+          session: expect.objectContaining({ usedPercent: 64 })
+        }),
+        updatedAt: expect.any(Number),
+        isFetching: false
+      }
+    ])
+  })
+
   it('does not recache an inactive Codex account that becomes active during fetch-on-open', async () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()
