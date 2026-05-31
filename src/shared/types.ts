@@ -2378,6 +2378,8 @@ export type WorktreeCardProperty =
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
 
+export type WorkspaceBoardColumnLayout = 'full' | 'fit'
+
 export type StatusBarItem =
   | 'claude'
   | 'codex'
@@ -2436,6 +2438,7 @@ export type PersistedUIState = {
   agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
+  workspaceBoardColumnLayout?: WorkspaceBoardColumnLayout
   workspaceBoardColumnWidth?: number
   /** One-shot migration flag for a short-lived build that persisted the
    *  default workspace statuses in reverse workflow order. Once stamped,

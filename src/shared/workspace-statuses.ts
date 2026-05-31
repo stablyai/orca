@@ -1,4 +1,9 @@
-import type { Worktree, WorkspaceStatus, WorkspaceStatusDefinition } from './types'
+import type {
+  Worktree,
+  WorkspaceBoardColumnLayout,
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from './types'
 import { DEFAULT_STATUS_VISUALS, DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 import {
   isKnownBadPRReorderedDefaultStatusPayload,
@@ -22,6 +27,10 @@ export const WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT = 308
 export const WORKSPACE_BOARD_COLUMN_WIDTH_MIN = 220
 export const WORKSPACE_BOARD_COLUMN_WIDTH_MAX = 520
 export const WORKSPACE_BOARD_COLUMN_WIDTH_STEP = 20
+// Why: keep this aligned with the `gap-3` lane gap in WorkspaceKanbanLaneGrid;
+// layout calculations need the actual rendered gap between status columns.
+export const WORKSPACE_BOARD_COLUMN_GAP = 12
+export const WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT: WorkspaceBoardColumnLayout = 'full'
 
 export const WORKSPACE_STATUS_COLOR_IDS = [
   'neutral',
@@ -235,6 +244,10 @@ export function clampWorkspaceBoardOpacity(value: unknown): number {
   return Math.min(1, Math.max(0.2, Math.round(value * 100) / 100))
 }
 
+export function normalizeWorkspaceBoardColumnLayout(value: unknown): WorkspaceBoardColumnLayout {
+  return value === 'fit' ? 'fit' : WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT
+}
+
 export function clampWorkspaceBoardColumnWidth(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
@@ -243,6 +256,22 @@ export function clampWorkspaceBoardColumnWidth(value: unknown): number {
     WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
     Math.max(WORKSPACE_BOARD_COLUMN_WIDTH_MIN, Math.round(value))
   )
+}
+
+export function fitWorkspaceBoardColumnWidth(args: {
+  containerWidth: number
+  columnCount: number
+  capWidth: number
+  gap?: number
+}): number {
+  const cap = clampWorkspaceBoardColumnWidth(args.capWidth)
+  if (args.columnCount <= 0 || !Number.isFinite(args.containerWidth) || args.containerWidth <= 0) {
+    return cap
+  }
+  const gap = args.gap ?? WORKSPACE_BOARD_COLUMN_GAP
+  const available = args.containerWidth - gap * Math.max(0, args.columnCount - 1)
+  const perColumn = Math.floor(available / args.columnCount)
+  return Math.min(cap, Math.max(WORKSPACE_BOARD_COLUMN_WIDTH_MIN, perColumn))
 }
 
 export function isWorkspaceStatusId(

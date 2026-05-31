@@ -5,16 +5,23 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { WorkspaceStatusDefinition } from '../../../../shared/types'
+import type {
+  WorkspaceBoardColumnLayout,
+  WorkspaceStatusDefinition
+} from '../../../../shared/types'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import WorkspaceStatusAppearancePopover from './WorkspaceStatusAppearancePopover'
 
 type WorkspaceKanbanSettingsMenuProps = {
+  columnLayout: WorkspaceBoardColumnLayout
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  onColumnLayoutChange: (layout: WorkspaceBoardColumnLayout) => void
   onRenameStatus: (statusId: string, label: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
@@ -24,7 +31,9 @@ type WorkspaceKanbanSettingsMenuProps = {
 }
 
 export default function WorkspaceKanbanSettingsMenu({
+  columnLayout,
   workspaceStatuses,
+  onColumnLayoutChange,
   onRenameStatus,
   onChangeStatusColor,
   onChangeStatusIcon,
@@ -66,6 +75,36 @@ export default function WorkspaceKanbanSettingsMenu({
           }
         }}
       >
+        <DropdownMenuLabel>Column layout</DropdownMenuLabel>
+        <div className="px-2 pt-0.5 pb-2">
+          <ToggleGroup
+            type="single"
+            value={columnLayout}
+            onValueChange={(value) => {
+              if (value === 'full' || value === 'fit') {
+                onColumnLayoutChange(value)
+              }
+            }}
+            variant="outline"
+            size="sm"
+            className="h-7 w-full justify-stretch"
+            aria-label="Workspace board column layout"
+          >
+            <ToggleGroupItem
+              value="full"
+              className="h-7 grow basis-0 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+            >
+              Full width
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="fit"
+              className="h-7 grow basis-0 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+            >
+              Fit panel
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+        <DropdownMenuSeparator />
         <DropdownMenuLabel>Statuses</DropdownMenuLabel>
         <div className="space-y-2 px-1 pb-1">
           {workspaceStatuses.map((status, index) => {

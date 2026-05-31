@@ -14,7 +14,10 @@ import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import type { VoiceSettings } from './speech-types'
-import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
+import {
+  WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT,
+  cloneDefaultWorkspaceStatuses
+} from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
 import { getDefaultSourceControlAiSettings } from './source-control-ai'
@@ -395,6 +398,7 @@ export function getDefaultUIState(): PersistedUIState {
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
+    workspaceBoardColumnLayout: WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT,
     workspaceBoardColumnWidth: 308,
     _workspaceStatusesDefaultOrderMigrated: true,
     _workspaceStatusesDefaultWorkflowMigrated: true,
