@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { Send, Sparkles } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { AgentSendPopoverTargetMode } from '@/store/slices/ui'
@@ -130,8 +130,13 @@ export function NotesSendMenu<TNote>({
     setSendMenuOpen(false)
   }
 
-  useEffect(
-    () => () => {
+  const setTriggerRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (node !== null) {
+        return
+      }
+      // Why: the send target is owned by this menu trigger; close it when the
+      // owner detaches or the target id changes.
       closeAgentSendPopoverTargetMode(targetModeId)
     },
     [closeAgentSendPopoverTargetMode, targetModeId]
@@ -143,6 +148,7 @@ export function NotesSendMenu<TNote>({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <button
+              ref={setTriggerRef}
               type="button"
               className={cn(
                 'inline-flex items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground',
