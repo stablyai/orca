@@ -159,12 +159,25 @@ function resolveMobileFloorClientId(
 function appendPendingMultiplexOutput(stream: TerminalMultiplexStream, data: string): void {
   stream.pendingOutput.push(data)
   stream.pendingOutputChars += data.length
+  stream.pendingOutputChars = trimPendingOutputToBudget(
+    stream.pendingOutput,
+    stream.pendingOutputChars
+  )
+}
+
+function trimPendingOutputToBudget(pendingOutput: string[], pendingOutputChars: number): number {
+  let omittedChunkCount = 0
   while (
-    stream.pendingOutputChars > TERMINAL_MULTIPLEX_PENDING_MAX_CHARS &&
-    stream.pendingOutput.length > 0
+    pendingOutputChars > TERMINAL_MULTIPLEX_PENDING_MAX_CHARS &&
+    omittedChunkCount < pendingOutput.length
   ) {
-    stream.pendingOutputChars -= stream.pendingOutput.shift()?.length ?? 0
+    pendingOutputChars -= pendingOutput[omittedChunkCount].length
+    omittedChunkCount += 1
   }
+  if (omittedChunkCount > 0) {
+    pendingOutput.splice(0, omittedChunkCount)
+  }
+  return pendingOutputChars
 }
 
 function isTerminalReadPayloadIncomplete(read: { truncated: boolean; limited?: boolean }): boolean {
@@ -692,7 +705,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalMultiplex,
     handler: async (
       _params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler },
+      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
       emit
     ) => {
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
@@ -809,9 +822,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         const isMobile = request.client?.type === 'mobile'
         if (!leaf?.ptyId && isMobile) {
           try {
-            const ptyId = await runtime.waitForLeafPtyId(request.terminal)
+            const ptyId = await runtime.waitForLeafPtyId(request.terminal, 10_000, signal)
             leaf = { ptyId }
           } catch {
+            if (closed || signal?.aborted) {
+              return
+            }
             // Fall through to the explicit no_connected_pty error below.
           }
         }
@@ -997,7 +1013,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalSubscribe,
     handler: async (
       params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler },
+      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
       emit
     ) => {
       let leaf = runtime.resolveLeafForHandle(params.terminal)
@@ -1010,9 +1026,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       // the subscribe can proceed normally.
       if (!leaf?.ptyId && isMobile) {
         try {
-          const ptyId = await runtime.waitForLeafPtyId(params.terminal)
+          const ptyId = await runtime.waitForLeafPtyId(params.terminal, 10_000, signal)
           leaf = { ptyId }
         } catch {
+          if (signal?.aborted) {
+            return
+          }
           // PTY wait timed out — fall through to scrollback-only path below
         }
       }
@@ -1204,12 +1223,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (buffering) {
             pendingOutput.push(data)
             pendingOutputChars += data.length
-            while (
-              pendingOutputChars > TERMINAL_MULTIPLEX_PENDING_MAX_CHARS &&
-              pendingOutput.length > 0
-            ) {
-              pendingOutputChars -= pendingOutput.shift()?.length ?? 0
-            }
+            pendingOutputChars = trimPendingOutputToBudget(pendingOutput, pendingOutputChars)
             return
           }
           outputBatcher?.push(data)

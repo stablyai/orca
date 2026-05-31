@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
         isMainWorktree: boolean
       }
     >(),
+    repos: [] as { id: string; displayName: string }[],
     worktreeLineageById: {},
     allWorktrees: () => Array.from(state.worktreeMap.values()),
     clearWorktreeDeleteState: vi.fn(),
@@ -96,6 +97,7 @@ describe('runWorktreeBatchDelete', () => {
     mocks.state.removeWorktree.mockClear().mockResolvedValue({ ok: true })
     mocks.state.deleteStateByWorktreeId = {}
     mocks.state.worktreeLineageById = {}
+    mocks.state.repos = []
     vi.mocked(toast.error).mockClear()
     vi.mocked(toast.info).mockClear()
     setWorktrees([])
@@ -159,6 +161,29 @@ describe('runWorktreeBatchDelete', () => {
     })
   })
 
+  it('notifies onDeleted after a skip-confirm force delete succeeds', async () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    mocks.state.deleteStateByWorktreeId = { 'wt-1': { canForceDelete: true } }
+    mocks.state.removeWorktree
+      .mockResolvedValueOnce({ ok: false, error: 'changed files' })
+      .mockResolvedValueOnce({ ok: true })
+    setWorktrees([{ id: 'wt-1', displayName: 'one' }])
+    const onDeleted = vi.fn()
+
+    expect(runWorktreeBatchDelete(['wt-1'], { onDeleted })).toBe(true)
+
+    await vi.waitFor(() => expect(toast.info).toHaveBeenCalled())
+    const toastOptions = vi.mocked(toast.info).mock.calls[0]?.[1] as
+      | { action?: { onClick?: () => void } }
+      | undefined
+    toastOptions?.action?.onClick?.()
+
+    await vi.waitFor(() => {
+      expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'wt-1', true)
+      expect(onDeleted).toHaveBeenCalledWith(['wt-1'])
+    })
+  })
+
   it('keeps parent workspace deletes behind confirmation even when confirmation is skipped', () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
     setWorktrees([
@@ -211,6 +236,28 @@ describe('runWorktreeBatchDelete', () => {
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
       worktreeId: 'parent',
       allowSkipConfirm: false
+    })
+  })
+
+  it('opens project removal confirmation for a primary workspace', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([
+      {
+        id: 'main',
+        repoId: 'repo-1',
+        displayName: 'main',
+        isMainWorktree: true
+      }
+    ])
+    mocks.state.repos = [{ id: 'repo-1', displayName: 'orca' }]
+
+    runWorktreeDelete('main')
+
+    expect(mocks.state.clearWorktreeDeleteState).not.toHaveBeenCalled()
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).toHaveBeenCalledWith('confirm-remove-folder', {
+      repoId: 'repo-1',
+      displayName: 'orca'
     })
   })
 

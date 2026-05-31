@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { useAppStore } from '../../store'
@@ -6,21 +7,44 @@ import { GIT_PANE_SEARCH_ENTRIES } from './git-search'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { GitHubRateLimitPanel } from '../github/github-rate-limit-display'
+import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
+import { AUTO_RENAME_BRANCH_SEARCH_ENTRIES } from './auto-rename-branch-search'
 
 export { GIT_PANE_SEARCH_ENTRIES }
 
+export function shouldShowAutoRenameBranchSetting(
+  searchQuery: string,
+  hasUnsavedBranchPromptChanges: boolean
+): boolean {
+  return (
+    hasUnsavedBranchPromptChanges ||
+    matchesSettingsSearch(searchQuery, AUTO_RENAME_BRANCH_SEARCH_ENTRIES)
+  )
+}
+
 type GitPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  writeSourceControlAiSettings: (patch: SourceControlAiSettingsPatch) => Promise<void>
   displayedGitUsername: string
+  hasUnsavedBranchPromptChanges?: boolean
+  onBranchPromptDirtyChange?: (dirty: boolean) => void
+  branchPromptDiscardSignal?: number
+  settingsSearchQuery?: string
 }
 
 export function GitPane({
   settings,
   updateSettings,
-  displayedGitUsername
+  writeSourceControlAiSettings,
+  displayedGitUsername,
+  hasUnsavedBranchPromptChanges = false,
+  onBranchPromptDirtyChange,
+  branchPromptDiscardSignal,
+  settingsSearchQuery
 }: GitPaneProps): React.JSX.Element {
-  const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const searchQuery = settingsSearchQuery ?? storeSearchQuery
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, {
@@ -35,6 +59,12 @@ export function GitPane({
         keywords={['branch naming', 'git username', 'custom']}
         className="space-y-3"
       >
+        <div className="space-y-0.5">
+          <Label>Branch Prefix</Label>
+          <p className="text-xs text-muted-foreground">
+            Choose whether branch names use your Git username, a custom prefix, or no prefix.
+          </p>
+        </div>
         <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
           {(['git-username', 'custom', 'none'] as const).map((option) => (
             <button
@@ -131,46 +161,17 @@ export function GitPane({
         </button>
       </SearchableSetting>
     ) : null,
-    matchesSettingsSearch(searchQuery, {
-      title: 'Auto-Rename Branch From Work',
-      description: 'Rename the auto-generated branch based on the work once an agent starts.',
-      keywords: ['branch', 'rename', 'auto', 'creature name', 'agent', 'prompt', 'worktree']
-    }) ? (
-      <SearchableSetting
+    shouldShowAutoRenameBranchSetting(searchQuery, hasUnsavedBranchPromptChanges) ? (
+      <AutoRenameBranchFromWorkSetting
         key="auto-rename-branch-from-work"
-        title="Auto-Rename Branch From Work"
-        description="Rename the auto-generated branch based on the work once an agent starts."
-        keywords={['branch', 'rename', 'auto', 'creature name', 'agent', 'prompt', 'worktree']}
-        className="flex items-center justify-between gap-4 py-2"
-      >
-        <div className="space-y-0.5">
-          <Label>Auto-Rename Branch From Work</Label>
-          <p className="text-xs text-muted-foreground">
-            When an agent starts working in a new workspace, Orca renames its auto-generated branch
-            (e.g. <code>Nautilus</code>) to a short name summarizing the task. Only branches Orca
-            named itself are renamed, and never after they have been pushed. Uses the agent
-            configured for AI commit messages.
-          </p>
-        </div>
-        <button
-          role="switch"
-          aria-checked={settings.autoRenameBranchFromWork}
-          onClick={() =>
-            updateSettings({
-              autoRenameBranchFromWork: !settings.autoRenameBranchFromWork
-            })
-          }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            settings.autoRenameBranchFromWork ? 'bg-foreground' : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              settings.autoRenameBranchFromWork ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
-      </SearchableSetting>
+        settings={settings}
+        updateSettings={updateSettings}
+        writeSourceControlAiSettings={writeSourceControlAiSettings}
+        forceVisible={hasUnsavedBranchPromptChanges}
+        onBranchPromptDirtyChange={onBranchPromptDirtyChange}
+        branchPromptDiscardSignal={branchPromptDiscardSignal}
+        settingsSearchQuery={searchQuery}
+      />
     ) : null,
     matchesSettingsSearch(searchQuery, {
       title: 'GitHub API Budget',

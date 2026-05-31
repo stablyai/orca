@@ -13,6 +13,10 @@ import {
   getWorkspaceSeedName,
   isGitLabIssueUrl
 } from '@/lib/new-workspace'
+import {
+  getLaunchableWorkItemDraftContent,
+  type LinkedWorkItemContext
+} from '@/lib/linked-work-item-context'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
@@ -40,6 +44,7 @@ export type LaunchableWorkItem = {
    *  `type: 'issue'` / `number: null` to reuse the GitHub draft-paste flow,
    *  so this field is the only signal that the worktree is Linear-linked. */
   linearIdentifier?: string
+  linkedContext?: LinkedWorkItemContext
 }
 
 // Why: bracketed paste markers and ready-wait grace timing live in
@@ -139,6 +144,10 @@ function buildStartupOpts(
   }
 }
 
+function getDirectDraftContent(item: LaunchableWorkItem): string {
+  return getLaunchableWorkItemDraftContent(item)
+}
+
 async function pasteWorkItemDraftWhenAgentReady(args: {
   primaryTabId: string
   startupPlan: NonNullable<ReturnType<typeof buildAgentStartupPlan>>
@@ -153,9 +162,7 @@ async function pasteWorkItemDraftWhenAgentReady(args: {
     content,
     agent: startupPlan.agent,
     onTimeout: () => {
-      toast.message(
-        'Agent took too long to start. The workspace is ready — paste the issue URL when the agent is idle.'
-      )
+      toast.message('Agent took too long to start. Paste the work item context when it is idle.')
       // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
       // on the dashboard is the trigger to add one.
       if (agentKind) {
@@ -167,7 +174,7 @@ async function pasteWorkItemDraftWhenAgentReady(args: {
 
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
- * and paste the work item URL into the agent's prompt as a draft (no submit).
+ * and paste the work item context into the agent's prompt as a draft (no submit).
  *
  * Falls back to `openModalFallback()` when:
  *   - the repo's `setupRunPolicy` is `'ask'` (the user must pick per-workspace)
@@ -176,7 +183,7 @@ async function pasteWorkItemDraftWhenAgentReady(args: {
  *
  * Best-effort: after the workspace is created and activated, failures during
  * the agent-readiness or paste steps only toast a notice — the user still
- * has a usable workspace and can paste the URL themselves.
+ * has a usable workspace and can paste the work item context themselves.
  */
 export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Promise<void> {
   const { item, repoId, openModalFallback, baseBranch, telemetrySource, launchSource } = args
@@ -229,6 +236,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
   let effectiveAgent: TuiAgent | null = null
   let draftLaunchedNatively = false
+  const draftContent = getDirectDraftContent(item)
   try {
     const result = await store.createWorktree(
       repoId,
@@ -265,8 +273,6 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         // Non-critical: activation still has the explicit startup below.
       })
     }
-    const draftContent = item.pasteContent ?? item.url
-
     // Why: agents that gate first-launch behind a "Do you trust this folder?"
     // menu (cursor-agent, copilot) consume the bracketed paste as menu input.
     // Pre-write the same trust artifact those CLIs write after the user
@@ -289,11 +295,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       }
     }
 
-    // Why: prefer a native prefill flag (e.g. `claude --prefill <url>`) when
-    // the agent's CLI exposes one — the TUI mounts with the URL already in
+    // Why: prefer a native prefill flag (e.g. `claude --prefill <context>`) when
+    // the agent's CLI exposes one — the TUI mounts with the draft already in
     // its input box, which sidesteps the readiness/paste race entirely. Fall
     // back to launching with no prompt + bracketed-paste-after-ready for
-    // every other agent so the URL still lands as a draft (not auto-
+    // every other agent so the context still lands as a draft (not auto-
     // submitted as the first turn).
     const draftLaunchPlan =
       effectiveAgent === null
@@ -330,7 +336,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     })
     if (!activation) {
       // Worktree vanished between create and activate — extremely unlikely but
-      // worth handling explicitly rather than silently dropping the URL.
+      // worth handling explicitly rather than silently dropping the draft.
       toast.error('Workspace created but could not be activated.')
       return
     }
@@ -346,13 +352,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   // Why: at this point the workspace is live and the agent (if any) has
   // been queued on `primaryTabId`. The post-launch paste step below only
   // applies to agents that lacked a native prefill flag; for agents that
-  // were launched with the URL already on argv (Claude --prefill today),
-  // the URL is in the input box already — pasting again would duplicate it.
+  // were launched with the draft already on argv (Claude --prefill today),
+  // the context is in the input box already — pasting again would duplicate it.
   if (!primaryTabId || !startupPlan || draftLaunchedNatively) {
     return
   }
 
-  const content = item.pasteContent ?? item.url
   // Why: the workspace is already created and visible; do not block selection
   // latency on agent readiness. Run the paste in the background so the
   // "Use" CTA's spinner ends when the worktree is ready, not when the TUI
@@ -360,7 +365,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   void pasteWorkItemDraftWhenAgentReady({
     primaryTabId,
     startupPlan,
-    content,
+    content: draftContent,
     ...(effectiveAgent ? { agentKind: tuiAgentToAgentKind(effectiveAgent) } : {})
   })
 }

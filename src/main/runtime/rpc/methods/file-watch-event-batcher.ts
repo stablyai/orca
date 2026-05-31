@@ -38,7 +38,11 @@ export function createFileWatchEventBatcher(
       if (nextEvents.length === 0) {
         return
       }
-      events.push(...nextEvents)
+      // Why: file watchers can report huge bursts; spreading them into push can
+      // exceed JavaScript's argument limit before the batch has a chance to flush.
+      for (const event of nextEvents) {
+        events.push(event)
+      }
       const now = Date.now()
       if (firstEventAt === 0) {
         firstEventAt = now

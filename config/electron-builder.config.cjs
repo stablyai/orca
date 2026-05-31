@@ -200,8 +200,8 @@ module.exports = {
     extraResources: [
       relayExtraResource,
       {
-        from: 'resources/linux/bin/orca',
-        to: 'bin/orca'
+        from: 'resources/linux/bin/orca-ide',
+        to: 'bin/orca-ide'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-linux-${arch}',
@@ -213,7 +213,7 @@ module.exports = {
       },
       featureWallResources
     ],
-    target: ['AppImage', 'deb'],
+    target: ['AppImage', 'deb', 'rpm'],
     maintainer: 'stablyai',
     category: 'Utility'
   },
@@ -224,6 +224,11 @@ module.exports = {
     packageName: 'orca-ide',
     artifactName: 'orca-ide_${version}_${arch}.${ext}',
     depends: ['python3', 'python3-gi', 'gir1.2-atspi-2.0', 'at-spi2-core', 'xdotool', 'xclip']
+  },
+  rpm: {
+    packageName: 'orca-ide',
+    artifactName: 'orca-ide-${version}.${arch}.${ext}',
+    depends: ['python3', 'python3-gobject', 'at-spi2-core', 'xdotool', 'xclip']
   },
   // Why: must be true so that electron-builder rebuilds native modules
   // (node-pty) for each target architecture when producing dual-arch macOS

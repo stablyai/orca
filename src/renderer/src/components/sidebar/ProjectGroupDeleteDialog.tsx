@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -23,12 +23,23 @@ export function ProjectGroupDeleteDialog({
   onConfirm
 }: ProjectGroupDeleteDialogProps): React.JSX.Element {
   const [deleting, setDeleting] = useState(false)
+  const [wasOpen, setWasOpen] = useState(open)
+  const mountedRef = useRef(true)
 
-  useEffect(() => {
-    if (open) {
+  const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
+    // Why: deleting can resolve after the dialog closes; the content ref keeps
+    // late completions from mutating stale dialog state without an Effect.
+    mountedRef.current = node !== null
+  }, [])
+
+  // Why: opening the dialog must clear a stale in-flight state before the
+  // destructive button renders; an Effect would leave one disabled frame.
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open && deleting) {
       setDeleting(false)
     }
-  }, [open])
+  }
 
   const handleConfirm = useCallback(async () => {
     if (deleting) {
@@ -37,11 +48,15 @@ export function ProjectGroupDeleteDialog({
     setDeleting(true)
     try {
       await onConfirm()
-      setDeleting(false)
-      onOpenChange(false)
+      if (mountedRef.current) {
+        setDeleting(false)
+        onOpenChange(false)
+      }
     } catch (error) {
       console.error('Failed to delete project group:', error)
-      setDeleting(false)
+      if (mountedRef.current) {
+        setDeleting(false)
+      }
     }
   }, [deleting, onConfirm, onOpenChange])
 
@@ -55,7 +70,11 @@ export function ProjectGroupDeleteDialog({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
+      <DialogContent
+        ref={handleDialogContentRef}
+        className="max-w-sm sm:max-w-sm"
+        showCloseButton={false}
+      >
         <DialogHeader>
           <DialogTitle className="text-sm">Delete Project Group</DialogTitle>
           <DialogDescription className="text-xs">

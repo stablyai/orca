@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: this class owns the daemon socket protocol,
+   request routing, stream fanout, and session lifecycle in one place so
+   renderer/daemon request semantics stay auditable across platform branches. */
 import { createServer, type Server, type Socket } from 'net'
 import { randomUUID } from 'crypto'
 import { performance } from 'perf_hooks'
@@ -220,6 +223,7 @@ export class DaemonServer {
           envToDelete: p.envToDelete,
           command: p.command,
           shellOverride: p.shellOverride,
+          terminalWindowsWslDistro: p.terminalWindowsWslDistro,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
           shellReadySupported: p.shellReadySupported,
           streamClient: {
@@ -259,6 +263,9 @@ export class DaemonServer {
           shellState: result.shellState
         }
       }
+
+      case 'cancelCreateOrAttach':
+        return {}
 
       case 'write':
         try {
@@ -301,6 +308,9 @@ export class DaemonServer {
       case 'getCwd':
         return { cwd: await this.host.getCwd(request.payload.sessionId) }
 
+      case 'getForegroundProcess':
+        return { foregroundProcess: this.host.getForegroundProcess(request.payload.sessionId) }
+
       case 'clearScrollback':
         this.host.clearScrollback(request.payload.sessionId)
         return {}
@@ -323,10 +333,8 @@ export class DaemonServer {
         }
         process.nextTick(() => this.shutdown())
         return {}
-
-      default:
-        throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
     }
+    throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
   }
 
   private sendExitEvent(

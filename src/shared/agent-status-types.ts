@@ -13,9 +13,11 @@ export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 // wants to pattern-match on common agents.
 export type WellKnownAgentType =
   | 'claude'
+  | 'openclaude'
   | 'codex'
   | 'gemini'
   | 'antigravity'
+  | 'amp'
   | 'opencode'
   | 'cursor'
   | 'copilot'

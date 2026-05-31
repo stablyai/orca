@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import type { Worktree } from '../../../../shared/types'
 import {
   areWorktreeSelectionsEqual,
@@ -20,23 +20,24 @@ export function useWorkspaceKanbanSelection(open: boolean, boardWorktrees: reado
     [boardWorktrees, selectedWorktreeIds]
   )
 
-  useEffect(() => {
-    if (!open) {
+  if (!open) {
+    if (selectedWorktreeIds.size > 0) {
       setSelectedWorktreeIds(new Set())
-      setSelectionAnchorId(null)
-      return
     }
-
-    setSelectedWorktreeIds((previous) => {
-      const pruned = pruneWorktreeSelection(previous, selectionAnchorId, boardWorktreeIds)
-      if (pruned.anchorId !== selectionAnchorId) {
-        setSelectionAnchorId(pruned.anchorId)
-      }
-      return areWorktreeSelectionsEqual(previous, pruned.selectedIds)
-        ? previous
-        : pruned.selectedIds
-    })
-  }, [boardWorktreeIds, open, selectionAnchorId])
+    if (selectionAnchorId !== null) {
+      setSelectionAnchorId(null)
+    }
+  } else {
+    const pruned = pruneWorktreeSelection(selectedWorktreeIds, selectionAnchorId, boardWorktreeIds)
+    // Why: the drawer can keep rendering while rows are filtered/reordered.
+    // Prune stale local selection before children see ids that no longer exist.
+    if (!areWorktreeSelectionsEqual(selectedWorktreeIds, pruned.selectedIds)) {
+      setSelectedWorktreeIds(pruned.selectedIds)
+    }
+    if (selectionAnchorId !== pruned.anchorId) {
+      setSelectionAnchorId(pruned.anchorId)
+    }
+  }
 
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktreeId: string): boolean => {

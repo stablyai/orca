@@ -271,5 +271,12 @@ describe('HistoryReader', () => {
 
       expect(reader.listRestorable()).toEqual([sessionId])
     })
+
+    it('skips malformed encoded session directories', () => {
+      mkdirSync(join(dir, '%E0%A4%A'), { recursive: true })
+      writeSessionWithScrollback(dir, 'alive', makeMeta(), 'data')
+
+      expect(reader.listRestorable()).toEqual(['alive'])
+    })
   })
 })

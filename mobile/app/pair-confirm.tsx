@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, BackHandler } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { parsePairingCode } from '../src/transport/pairing'
 import { connect } from '../src/transport/rpc-client'
@@ -31,6 +31,20 @@ export default function PairConfirmScreen() {
   // over the initial state setter) always sees the freshest list and we
   // batch fewer setState calls when entries arrive in bursts.
   const logsRef = useRef<ConnectionLogEntry[]>([])
+
+  const cancel = useCallback(() => {
+    router.replace('/')
+  }, [router])
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        cancel()
+        return true
+      })
+      return () => subscription.remove()
+    }, [cancel])
+  )
 
   useEffect(() => {
     if (!params.code) {
@@ -116,10 +130,6 @@ export default function PairConfirmScreen() {
         `Pairing succeeded but couldn't save the host: ${err instanceof Error ? err.message : String(err)}`
       )
     }
-  }
-
-  function cancel() {
-    router.replace('/')
   }
 
   const containerPadding = { paddingTop: insets.top + spacing.sm }

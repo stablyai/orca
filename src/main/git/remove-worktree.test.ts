@@ -35,6 +35,7 @@ vi.mock('fs/promises', async () => {
 import {
   addSparseWorktree,
   assertWorktreeCleanForRemoval,
+  forceDeleteLocalBranch,
   listWorktrees,
   removeWorktree
 } from './worktree'
@@ -117,11 +118,11 @@ branch refs/heads/main
       expect.arrayContaining([
         'git worktree remove /repo-feature',
         'git worktree prune',
-        'git branch -d feature/test'
+        'git branch -d -- feature/test'
       ])
     )
     expectGitCallOrder(calls, 'git worktree remove /repo-feature', 'git worktree prune')
-    expectGitCallOrder(calls, 'git worktree prune', 'git branch -d feature/test')
+    expectGitCallOrder(calls, 'git worktree prune', 'git branch -d -- feature/test')
   })
 
   it('preserves the branch when requested for a pre-existing local branch checkout', async () => {
@@ -144,8 +145,8 @@ branch refs/heads/feature/test
     expect(calls).toEqual(
       expect.arrayContaining(['git worktree remove /repo-feature', 'git worktree prune'])
     )
-    expect(calls).not.toContain('git branch -d feature/test')
-    expect(calls).not.toContain('git branch -D feature/test')
+    expect(calls).not.toContain('git branch -d -- feature/test')
+    expect(calls).not.toContain('git branch -D -- feature/test')
   })
 
   it('skips branch deletion when another worktree still points at the branch', async () => {
@@ -186,8 +187,8 @@ branch refs/heads/feature/test
         'git worktree list --porcelain'
       ])
     )
-    expect(calls).not.toContain('git branch -d feature/test')
-    expect(calls).not.toContain('git branch -D feature/test')
+    expect(calls).not.toContain('git branch -d -- feature/test')
+    expect(calls).not.toContain('git branch -D -- feature/test')
     expectGitCallOrder(calls, 'git worktree remove /repo-feature', 'git worktree prune')
   })
 
@@ -223,10 +224,10 @@ branch refs/heads/main
       expect.arrayContaining([
         'git worktree remove /repo-feature',
         'git worktree prune',
-        'git branch -d feature/test'
+        'git branch -d -- feature/test'
       ])
     )
-    expectGitCallOrder(calls, 'git worktree prune', 'git branch -d feature/test')
+    expectGitCallOrder(calls, 'git worktree prune', 'git branch -d -- feature/test')
   })
 
   it('passes --force before the worktree path when forced removal is requested', async () => {
@@ -281,7 +282,7 @@ branch refs/heads/main
       expect.arrayContaining([
         'git worktree remove c:\\workspaces\\delete-branch-ui-test',
         'git worktree prune',
-        'git branch -d feature/test'
+        'git branch -d -- feature/test'
       ])
     )
   })
@@ -305,13 +306,15 @@ HEAD abc123
 branch refs/heads/main
 `
       },
-      'git branch -d feature/test': {
+      'git branch -d -- feature/test': {
         error: new Error('branch delete failed'),
         stderr: 'branch delete failed'
       }
     })
 
-    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toBeUndefined()
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({
+      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+    })
 
     expect(warnSpy).toHaveBeenCalledWith(
       '[git] Preserved local branch "feature/test" after removing worktree (not fully merged)',
@@ -319,6 +322,73 @@ branch refs/heads/main
     )
 
     warnSpy.mockRestore()
+  })
+
+  it('force-deletes a preserved branch only at its saved head', async () => {
+    mockGitCommands({})
+
+    await forceDeleteLocalBranch('/repo', 'feature/test', 'def456')
+
+    const calls = getGitCalls()
+    expect(calls).toContain('git worktree list --porcelain')
+    expect(calls).toContain('git update-ref -d refs/heads/feature/test def456')
+    expect(calls).toContain('git config --remove-section branch.feature/test')
+  })
+
+  it('refuses to force-delete a preserved branch that is checked out again', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      }
+    })
+
+    await expect(forceDeleteLocalBranch('/repo', 'feature/test', 'def456')).rejects.toThrow(
+      'checked out in another worktree'
+    )
+    expect(getGitCalls()).not.toContain('git update-ref -d refs/heads/feature/test def456')
+  })
+
+  it('restores a preserved branch when a concurrent checkout wins after deletion', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+`
+      },
+      'git worktree list --porcelain#2': {
+        stdout: `worktree /repo-feature
+HEAD 0000000000000000000000000000000000000000
+branch refs/heads/feature/test
+`
+      }
+    })
+
+    await expect(forceDeleteLocalBranch('/repo', 'feature/test', 'def456')).rejects.toThrow(
+      'checked out in another worktree'
+    )
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
+      'update-ref',
+      'refs/heads/feature/test',
+      'def456',
+      ''
+    ])
+  })
+
+  it('refuses to force-delete a preserved branch after its head changes', async () => {
+    mockGitCommands({
+      'git update-ref -d refs/heads/feature/test def456': {
+        error: new Error('cannot lock ref')
+      }
+    })
+
+    await expect(forceDeleteLocalBranch('/repo', 'feature/test', 'def456')).rejects.toThrow(
+      'changed after the workspace was deleted'
+    )
+    expect(getGitCalls()).not.toContain('git config --remove-section branch.feature/test')
   })
 })
 
@@ -576,7 +646,7 @@ branch refs/heads/main
         'git sparse-checkout set -- packages/web',
         'git worktree remove --force /repo-feature',
         'git worktree prune',
-        'git branch -D feature/test'
+        'git branch -D -- feature/test'
       ])
     )
     expectGitCallOrder(
@@ -584,6 +654,6 @@ branch refs/heads/main
       'git sparse-checkout set -- packages/web',
       'git worktree remove --force /repo-feature'
     )
-    expectGitCallOrder(calls, 'git worktree prune', 'git branch -D feature/test')
+    expectGitCallOrder(calls, 'git worktree prune', 'git branch -D -- feature/test')
   })
 })

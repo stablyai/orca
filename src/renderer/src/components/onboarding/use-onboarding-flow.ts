@@ -45,6 +45,7 @@ import {
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -153,29 +154,28 @@ export function useOnboardingFlow(
   const tourOutcomeTrackerRef = useRef(createOnboardingTourOutcomeTracker())
 
   // Why: settings load async; the lazy useState initializers above run before
-  // settings hydrates. Re-sync once when settings transitions to non-null,
-  // unless the user has already interacted with that field.
+  // settings hydrates. Re-sync once before commit so children never paint the
+  // fallback defaults, unless the user already interacted with that field.
   const themeInteractedRef = useRef(false)
   const agentInteractedRef = useRef(false)
-  const settingsHydratedRef = useRef(false)
-  useEffect(() => {
-    if (!settings || settingsHydratedRef.current) {
-      return
+  const [settingsHydrated, setSettingsHydrated] = useState(settings != null)
+  const settingsHydration = resolveOnboardingSettingsHydration({
+    settings,
+    settingsHydrated,
+    themeInteracted: themeInteractedRef.current,
+    agentInteracted: agentInteractedRef.current,
+    currentTheme: theme,
+    currentAgent: selectedAgent
+  })
+  if (settingsHydration) {
+    setSettingsHydrated(settingsHydration.settingsHydrated)
+    if (settingsHydration.theme !== undefined) {
+      setTheme(settingsHydration.theme)
     }
-    settingsHydratedRef.current = true
-    if (!themeInteractedRef.current) {
-      setTheme(settings.theme)
+    if (settingsHydration.selectedAgent !== undefined) {
+      setSelectedAgent(settingsHydration.selectedAgent)
     }
-    if (!agentInteractedRef.current) {
-      const fromSettings =
-        settings.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
-          ? settings.defaultTuiAgent
-          : null
-      if (fromSettings !== null) {
-        setSelectedAgent(fromSettings)
-      }
-    }
-  }, [settings])
+  }
 
   // Why: track user interaction so async settings hydration above doesn't
   // overwrite a value the user explicitly chose.
@@ -195,9 +195,13 @@ export function useOnboardingFlow(
   // detectedAgentIdsRef / isDetectingRef pattern.
   const pathSourceRef = useRef(pathSource)
   const pathFailureReasonRef = useRef(pathFailureReason)
-  useEffect(() => {
-    selectedAgentRef.current = selectedAgent
-  }, [selectedAgent])
+  // Why: stable onboarding handlers read these values at click/async time, so
+  // keep the mirrors fresh before events can run.
+  selectedAgentRef.current = selectedAgent
+  detectedAgentIdsRef.current = detectedAgentIds ?? []
+  isDetectingRef.current = isDetectingAgents
+  pathSourceRef.current = pathSource
+  pathFailureReasonRef.current = pathFailureReason
   const setSelectedAgentInteractive = useCallback(
     (value: TuiAgent | null, fromCollapsedSection = false) => {
       agentInteractedRef.current = true
@@ -231,32 +235,13 @@ export function useOnboardingFlow(
   const currentStep = STEPS[stepIndex]
   const hasExistingProject = repos.length > 0
 
-  // Why: refs let `setSelectedAgentInteractive` (a stable useCallback) read
-  // the freshest detection snapshot at click time without re-rebinding the
-  // handler whenever the store flips a flag. Mirrors the
-  // `selectedAgentRef` pattern above.
-  useEffect(() => {
-    detectedAgentIdsRef.current = detectedAgentIds ?? []
-  }, [detectedAgentIds])
-  useEffect(() => {
-    isDetectingRef.current = isDetectingAgents
-  }, [isDetectingAgents])
-  useEffect(() => {
-    pathSourceRef.current = pathSource
-  }, [pathSource])
-  useEffect(() => {
-    pathFailureReasonRef.current = pathFailureReason
-  }, [pathFailureReason])
-
   // Why: pin start time once so onboarding_completed reports a real funnel duration.
   const startTimeRef = useRef<number>(Date.now())
 
   // Why: track the latest persisted theme in a ref so the unmount-only revert
   // below uses the freshest value without retriggering on each settings change.
   const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')
-  useEffect(() => {
-    persistedThemeRef.current = settings?.theme ?? 'dark'
-  }, [settings?.theme])
+  persistedThemeRef.current = settings?.theme ?? 'dark'
   const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
   const themeStepEntryCapturedRef = useRef(false)
   useEffect(() => {

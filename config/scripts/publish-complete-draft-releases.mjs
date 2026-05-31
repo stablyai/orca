@@ -85,13 +85,18 @@ export async function publishCompleteDraftReleases({
 
     // Why: only release-cut-authored RC drafts with a complete asset set are
     // resumed here; incomplete drafts stay private for the normal rebuild path.
-    await githubJson(fetchImpl, `https://api.github.com/repos/${repo}/releases/${release.id}`, token, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        draft: false,
-        prerelease: isRcTag(tag)
-      })
-    })
+    await githubJson(
+      fetchImpl,
+      `https://api.github.com/repos/${repo}/releases/${release.id}`,
+      token,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          draft: false,
+          prerelease: isRcTag(tag)
+        })
+      }
+    )
     published.push(tag)
     log(`Published complete RC draft release ${tag}`)
   }
@@ -112,6 +117,7 @@ export function writeGithubOutputs({ published, skipped }, outputPath = process.
     `${[
       `published_count=${published.length}`,
       `skipped_count=${skipped.length}`,
+      `latest_published_tag=${published.at(-1) ?? ''}`,
       `published_tags=${published.join(',')}`,
       `skipped_tags=${skipped.map((item) => item.tag).join(',')}`
     ].join('\n')}\n`

@@ -363,7 +363,8 @@ function buildMirroredTerminalTabs(
         customTitle: existing?.customTitle ?? null,
         color: existing?.color ?? null,
         sortOrder: sortOffset + index,
-        createdAt: existing?.createdAt ?? now + index
+        createdAt: existing?.createdAt ?? now + index,
+        ...(activeSurface.launchAgent ? { launchAgent: activeSurface.launchAgent } : {})
       },
       hostTabId: parentTabId,
       ptyIds,
@@ -489,6 +490,7 @@ function buildTerminalUnifiedTab(tab: TerminalTab, groupId: string): Tab {
     worktreeId: tab.worktreeId,
     contentType: 'terminal',
     label: tab.title,
+    ...(tab.generatedTitle?.trim() ? { generatedLabel: tab.generatedTitle.trim() } : {}),
     customLabel: tab.customTitle,
     color: tab.color,
     sortOrder: tab.sortOrder,
@@ -1125,12 +1127,14 @@ function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.worktreeId === b.worktreeId &&
     a.title === b.title &&
     a.defaultTitle === b.defaultTitle &&
+    a.generatedTitle === b.generatedTitle &&
     a.customTitle === b.customTitle &&
     a.color === b.color &&
     a.sortOrder === b.sortOrder &&
     a.createdAt === b.createdAt &&
     a.generation === b.generation &&
     a.shellOverride === b.shellOverride &&
+    a.launchAgent === b.launchAgent &&
     a.pendingActivationSpawn === b.pendingActivationSpawn
   )
 }

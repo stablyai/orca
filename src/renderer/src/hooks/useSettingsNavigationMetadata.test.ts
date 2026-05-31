@@ -23,6 +23,30 @@ function ids(args: { isMac?: boolean; isWindows?: boolean; isWebClient?: boolean
 }
 
 describe('settings navigation metadata', () => {
+  it('puts AI capability panes at the top on desktop', () => {
+    expect(ids().slice(0, 8)).toEqual([
+      'agents',
+      'accounts',
+      'orchestration',
+      'computer-use',
+      'voice',
+      'general',
+      'integrations',
+      'git'
+    ])
+  })
+
+  it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {
+    expect(ids({ isWebClient: true }).slice(0, 6)).toEqual([
+      'agents',
+      'accounts',
+      'orchestration',
+      'general',
+      'integrations',
+      'git'
+    ])
+  })
+
   it('keeps desktop-only Settings panes out of web metadata', () => {
     const webIds = ids({ isWebClient: true })
 

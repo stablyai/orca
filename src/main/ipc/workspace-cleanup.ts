@@ -199,8 +199,8 @@ export async function scanWorkspaceCleanup(
       targetWorktreeId: args.worktreeId,
       skipGitWorktreeIds: new Set(args.skipGitWorktreeIds ?? [])
     })
-    candidates.push(...result.candidates)
-    errors.push(...result.errors)
+    appendListItems(candidates, result.candidates)
+    appendListItems(errors, result.errors)
   }
 
   return { scannedAt, candidates, errors }
@@ -327,7 +327,7 @@ async function buildCandidate(args: {
   const gitEvidence = !shouldReadGit
     ? createEmptyGitEvidence()
     : await readGitEvidence(worktree, repo, provider)
-  blockers.push(...gitEvidence.blockers)
+  appendListItems(blockers, gitEvidence.blockers)
 
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
     worktreeId: worktree.id,
@@ -390,6 +390,14 @@ function shouldReadGitEvidence(args: {
   // Why: inactivity is the only recommendation signal now. Git is read only
   // to keep the destructive path from deleting dirty or local-only branch work.
   return true
+}
+
+function appendListItems<T>(target: T[], entries: readonly T[]): void {
+  // Why: cleanup can aggregate generated-size worktree batches; spreading
+  // those batches into push can exceed JavaScript's argument limit.
+  for (const entry of entries) {
+    target.push(entry)
+  }
 }
 
 async function readGitEvidence(
@@ -582,7 +590,16 @@ function getNewestDiffCommentAt(diffComments: Worktree['diffComments'] | undefin
   if (!diffComments || diffComments.length === 0) {
     return null
   }
-  return Math.max(...diffComments.map((comment) => comment.createdAt))
+  // Why: persisted diff notes can grow large enough for spread-based Math.max
+  // to exceed the JavaScript argument limit during cleanup scans.
+  let newest = diffComments[0]?.createdAt ?? null
+  for (let index = 1; index < diffComments.length; index += 1) {
+    const createdAt = diffComments[index]?.createdAt
+    if (createdAt !== undefined && (newest === null || createdAt > newest)) {
+      newest = createdAt
+    }
+  }
+  return newest
 }
 
 function createEmptyGitEvidence(): GitEvidence {

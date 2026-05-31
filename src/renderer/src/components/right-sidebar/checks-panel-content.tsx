@@ -1035,20 +1035,49 @@ export function ChecksList({
 
 function CopyButton({ text }: { text: string }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+  const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after this row action unmounts; avoid
+  // starting a reset timer that will outlive the component.
+  const isMountedRef = useRef(false)
+
+  const clearCopiedResetTimer = useCallback((): void => {
+    if (copiedResetTimerRef.current !== null) {
+      window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = null
+    }
+  }, [])
+
+  const setCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
+      if (node === null) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
 
   const handleCopy = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
       void window.api.ui.writeClipboardText(text).then(() => {
+        if (!isMountedRef.current) {
+          return
+        }
+        clearCopiedResetTimer()
         setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
+        copiedResetTimerRef.current = window.setTimeout(() => {
+          copiedResetTimerRef.current = null
+          setCopied(false)
+        }, 1500)
       })
     },
-    [text]
+    [clearCopiedResetTimer, text]
   )
 
   return (
     <button
+      ref={setCopyButtonRef}
       className="p-1 rounded hover:bg-accent text-muted-foreground/40 hover:text-foreground transition-colors shrink-0"
       title="Copy comment"
       onClick={handleCopy}
@@ -1068,27 +1097,47 @@ function ResolveButton({
   onResolve: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
 }): React.JSX.Element {
   const [loading, setLoading] = useState(false)
+  const loadingResetTimerRef = useRef<number | null>(null)
+
+  const clearLoadingResetTimer = useCallback((): void => {
+    if (loadingResetTimerRef.current !== null) {
+      window.clearTimeout(loadingResetTimerRef.current)
+      loadingResetTimerRef.current = null
+    }
+  }, [])
+
+  const setResolveButtonRootRef = useCallback(
+    (node: HTMLSpanElement | null) => {
+      if (node === null) {
+        clearLoadingResetTimer()
+      }
+    },
+    [clearLoadingResetTimer]
+  )
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
+      clearLoadingResetTimer()
       setLoading(true)
       void Promise.resolve(onResolve(threadId, !isResolved)).finally(() => setLoading(false))
     },
-    [threadId, isResolved, onResolve]
+    [clearLoadingResetTimer, threadId, isResolved, onResolve]
   )
 
-  if (loading) {
-    return <LoaderCircle className="size-3 animate-spin text-muted-foreground shrink-0" />
-  }
-
   return (
-    <button
-      className="text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent"
-      onClick={handleClick}
-    >
-      {isResolved ? 'Unresolve' : 'Resolve'}
-    </button>
+    <span ref={setResolveButtonRootRef} className="contents">
+      {loading ? (
+        <LoaderCircle className="size-3 animate-spin text-muted-foreground shrink-0" />
+      ) : (
+        <button
+          className="text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+          onClick={handleClick}
+        >
+          {isResolved ? 'Unresolve' : 'Resolve'}
+        </button>
+      )}
+    </span>
   )
 }
 
@@ -1505,7 +1554,7 @@ export function prStateColor(state: PRInfo['state']): string {
     case 'open':
       return 'bg-emerald-500/15 text-emerald-500 border-emerald-500/20'
     case 'closed':
-      return 'bg-muted text-muted-foreground border-border'
+      return 'bg-destructive/10 text-destructive border-destructive/20'
     case 'draft':
       return 'bg-muted text-muted-foreground/70 border-border'
   }

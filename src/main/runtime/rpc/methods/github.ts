@@ -10,7 +10,8 @@ const RepoSelector = z.object({
 const WorkItemsList = RepoSelector.extend({
   limit: OptionalFiniteNumber,
   query: OptionalString,
-  before: OptionalString
+  before: OptionalString,
+  noCache: z.boolean().optional()
 })
 
 const IssuesList = RepoSelector.extend({
@@ -119,6 +120,12 @@ const UpdatePr = RepoSelector.extend({
 const MergePr = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   method: z.enum(['merge', 'squash', 'rebase']).optional(),
+  prRepo: SlugRepo.nullable().optional()
+})
+
+const SetPrAutoMerge = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  enabled: z.boolean(),
   prRepo: SlugRepo.nullable().optional()
 })
 
@@ -285,7 +292,13 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.listWorkItems',
     params: WorkItemsList,
     handler: async (params, { runtime }) =>
-      runtime.listRepoWorkItems(params.repo, params.limit, params.query, params.before)
+      runtime.listRepoWorkItems(
+        params.repo,
+        params.limit,
+        params.query,
+        params.before,
+        params.noCache
+      )
   }),
   defineMethod({
     name: 'github.listIssues',
@@ -434,6 +447,17 @@ export const GITHUB_METHODS: RpcMethod[] = [
     params: MergePr,
     handler: async (params, { runtime }) =>
       runtime.mergeRepoPR(params.repo, params.prNumber, params.method, params.prRepo ?? null)
+  }),
+  defineMethod({
+    name: 'github.setPRAutoMerge',
+    params: SetPrAutoMerge,
+    handler: async (params, { runtime }) =>
+      runtime.setRepoPRAutoMerge(
+        params.repo,
+        params.prNumber,
+        params.enabled,
+        params.prRepo ?? null
+      )
   }),
   defineMethod({
     name: 'github.updatePRState',

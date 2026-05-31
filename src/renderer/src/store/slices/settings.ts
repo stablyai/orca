@@ -122,7 +122,14 @@ function runtimeScopedStateReset(): Partial<AppState> {
     linearStatusChecked: false,
     linearIssueCache: {},
     linearSearchCache: {},
-    linearTeamCache: {}
+    linearTeamCache: {},
+    linearProjectCache: {},
+    linearProjectDetailCache: {},
+    linearProjectIssueCache: {},
+    linearCustomViewCache: {},
+    linearCustomViewDetailCache: {},
+    linearCustomViewIssueCache: {},
+    linearCustomViewProjectCache: {}
   }
 }
 

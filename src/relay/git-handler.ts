@@ -76,6 +76,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
     this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
+    this.dispatcher.onRequest('git.fastForward', (p) => this.fastForward(p))
     this.dispatcher.onRequest('git.rebaseFromBase', (p) => this.rebaseFromBase(p))
     this.dispatcher.onRequest('git.branchDiff', (p) => this.branchDiff(p))
     this.dispatcher.onRequest('git.commitDiff', (p) => this.commitDiff(p))
@@ -235,14 +236,20 @@ export class GitHandler {
 
     let tracked = false
     try {
-      await this.git(['ls-files', '--error-unmatch', '--', filePath], worktreePath)
+      await this.git(
+        ['ls-files', '--error-unmatch', '--', this.literalPathspec(filePath)],
+        worktreePath
+      )
       tracked = true
     } catch {
       // untracked
     }
 
     if (tracked) {
-      await this.git(['restore', '--worktree', '--source=HEAD', '--', filePath], worktreePath)
+      await this.git(
+        ['restore', '--worktree', '--source=HEAD', '--', this.literalPathspec(filePath)],
+        worktreePath
+      )
       return
     }
 
@@ -265,8 +272,17 @@ export class GitHandler {
     const trackedPathSpecs: string[] = []
     for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
       const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-      const { stdout } = await this.git(['ls-files', '-z', '--', ...chunk], worktreePath)
-      trackedPathSpecs.push(...stdout.split('\0').filter(Boolean))
+      const { stdout } = await this.git(
+        ['ls-files', '-z', '--', ...chunk.map((p) => this.literalPathspec(p))],
+        worktreePath
+      )
+      // Why: selecting a tracked directory can make `ls-files -z` return
+      // enough descendants for push(...split) to exceed the argument limit.
+      for (const trackedPathSpec of stdout.split('\0')) {
+        if (trackedPathSpec) {
+          trackedPathSpecs.push(trackedPathSpec)
+        }
+      }
     }
 
     const trackedPaths = filePaths.filter((filePath) =>
@@ -282,10 +298,24 @@ export class GitHandler {
       async () => {
         for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
           const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-          await this.git(['restore', '--worktree', '--source=HEAD', '--', ...chunk], worktreePath)
+          await this.git(
+            [
+              'restore',
+              '--worktree',
+              '--source=HEAD',
+              '--',
+              ...chunk.map((p) => this.literalPathspec(p))
+            ],
+            worktreePath
+          )
         }
       }
     )
+  }
+
+  private literalPathspec(filePath: string): string {
+    // Why: source-control selections are concrete paths, not user-authored Git globs.
+    return `:(literal)${filePath}`
   }
 
   private async cleanUntrackedPaths(worktreePath: string, filePaths: readonly string[]) {
@@ -293,7 +323,10 @@ export class GitHandler {
       const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
       if (chunk.length > 0) {
         // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
-        await this.git(['clean', '-ffdx', '--', ...chunk], worktreePath)
+        await this.git(
+          ['clean', '-ffdx', '--', ...chunk.map((p) => this.literalPathspec(p))],
+          worktreePath
+        )
       }
     }
   }
@@ -460,31 +493,45 @@ export class GitHandler {
     }
   }
 
-  private async pull(params: Record<string, unknown>) {
+  private async pullWithArgs(params: Record<string, unknown>, pullArgs: string[]) {
     const worktreePath = params.worktreePath as string
-    // Why: plain `git pull` uses the user's configured pull strategy (merge by
-    // default) so diverged branches reconcile instead of erroring out.
     try {
       if (params.pushTarget !== undefined) {
         assertGitPushTargetShape(params.pushTarget)
         const pushTarget = params.pushTarget as GitPushTarget
         await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
-        await this.git(['pull', pushTarget.remoteName, pushTarget.branchName], worktreePath)
+        await this.git(
+          ['pull', ...pullArgs, pushTarget.remoteName, pushTarget.branchName],
+          worktreePath
+        )
         return
       }
       const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
       if (upstream && !upstream.isConfiguredUpstream) {
         // Why: legacy Orca branches may still track origin/main while pushes
         // target origin/<branch>. Pull the same effective branch the UI reports.
-        await this.git(['pull', upstream.remoteName, upstream.branchName], worktreePath)
+        await this.git(
+          ['pull', ...pullArgs, upstream.remoteName, upstream.branchName],
+          worktreePath
+        )
         return
       }
-      await this.git(['pull'], worktreePath)
+      await this.git(['pull', ...pullArgs], worktreePath)
     } catch (error) {
       // Why: mirror the local gitPull normalization so SSH users see the same
       // actionable messages instead of raw git stderr.
       throw new Error(normalizeGitErrorMessage(error, 'pull'))
     }
+  }
+
+  private async pull(params: Record<string, unknown>) {
+    // Why: plain `git pull` uses the user's configured pull strategy (merge by
+    // default) so diverged branches reconcile instead of erroring out.
+    await this.pullWithArgs(params, [])
+  }
+
+  private async fastForward(params: Record<string, unknown>) {
+    await this.pullWithArgs(params, ['--ff-only'])
   }
 
   private async rebaseFromBase(params: Record<string, unknown>) {

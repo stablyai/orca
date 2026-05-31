@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
+import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
 
 const RepoSelector = z.object({
@@ -36,10 +37,17 @@ const RepoSourceControlAiOverrides = z
     value === undefined ? undefined : normalizeRepoSourceControlAiOverrides(value)
   )
 
+const RepoBadgeColor = z
+  .unknown()
+  .optional()
+  .transform((value) =>
+    value === undefined ? undefined : (normalizeRepoBadgeColor(value) ?? undefined)
+  )
+
 const RepoUpdate = RepoSelector.extend({
   updates: z.object({
     displayName: OptionalString,
-    badgeColor: OptionalString,
+    badgeColor: RepoBadgeColor,
     repoIcon: z
       .unknown()
       .transform((value) => sanitizeRepoIcon(value))

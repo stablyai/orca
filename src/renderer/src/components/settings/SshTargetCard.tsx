@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   CircleStop,
   Loader2,
@@ -43,7 +43,7 @@ export function statusColor(status: SshConnectionStatus): string {
     case 'reconnection-failed':
     case 'error':
       return 'bg-red-500'
-    default:
+    case 'disconnected':
       return 'bg-muted-foreground/40'
   }
 }
@@ -85,13 +85,29 @@ export function SshTargetCard({
   const terminateInFlight = actionInFlight === 'terminate' || busyAction === 'terminate'
   const resetInFlight = actionInFlight === 'reset' || busyAction === 'reset'
   const removeInFlight = busyAction === 'remove'
+  const mountedRef = useRef(true)
+  const endpoint = target.username
+    ? `${target.username}@${target.host}:${target.port}`
+    : `${target.host}:${target.port}`
+
+  const handleCardRef = useCallback((node: HTMLDivElement | null): void => {
+    // Why: SSH target actions can resolve after the card is removed; the root
+    // ref gives async completions the same stale-write guard without an Effect.
+    mountedRef.current = node !== null
+  }, [])
+
+  const clearActionInFlight = (): void => {
+    if (mountedRef.current) {
+      setActionInFlight(null)
+    }
+  }
 
   const handleConnect = (): void => {
     if (actionInFlight) {
       return
     }
     setActionInFlight('connect')
-    Promise.resolve(onConnect(target.id)).finally(() => setActionInFlight(null))
+    void Promise.resolve(onConnect(target.id)).finally(clearActionInFlight)
   }
 
   const handleDisconnect = (): void => {
@@ -99,7 +115,7 @@ export function SshTargetCard({
       return
     }
     setActionInFlight('disconnect')
-    Promise.resolve(onDisconnect(target.id)).finally(() => setActionInFlight(null))
+    void Promise.resolve(onDisconnect(target.id)).finally(clearActionInFlight)
   }
 
   const handleTerminateSessions = (): void => {
@@ -107,7 +123,7 @@ export function SshTargetCard({
       return
     }
     setActionInFlight('terminate')
-    Promise.resolve(onTerminateSessions(target.id)).finally(() => setActionInFlight(null))
+    void Promise.resolve(onTerminateSessions(target.id)).finally(clearActionInFlight)
   }
 
   const handleResetRelay = (): void => {
@@ -115,7 +131,7 @@ export function SshTargetCard({
       return
     }
     setActionInFlight('reset')
-    Promise.resolve(onResetRelay(target.id)).finally(() => setActionInFlight(null))
+    void Promise.resolve(onResetRelay(target.id)).finally(clearActionInFlight)
   }
 
   const renderEndRemoteTerminalsButton = (): React.JSX.Element => (
@@ -212,7 +228,10 @@ export function SshTargetCard({
   )
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card/40 px-4 py-3">
+    <div
+      ref={handleCardRef}
+      className="flex items-center gap-3 rounded-lg border border-border/50 bg-card/40 px-4 py-3"
+    >
       <Server className="size-4 shrink-0 text-muted-foreground" />
 
       <div className="min-w-0 flex-1">
@@ -222,7 +241,7 @@ export function SshTargetCard({
           <span className="text-[11px] text-muted-foreground">{STATUS_LABELS[status]}</span>
         </div>
         <p className="truncate text-xs text-muted-foreground">
-          {target.username}@{target.host}:{target.port}
+          {endpoint}
           {target.identityFile ? ` \u2022 ${target.identityFile}` : ''}
         </p>
         {state?.error ? (

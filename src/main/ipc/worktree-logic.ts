@@ -1,4 +1,4 @@
-import { basename, join, resolve, relative, isAbsolute, posix, win32 } from 'path'
+import { basename, join, resolve, relative, isAbsolute, posix, sep, win32 } from 'path'
 import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -57,7 +57,7 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
   const resolvedTargetPath = resolve(targetPath)
   const rel = relative(resolvedWorkspaceDir, resolvedTargetPath)
 
-  if (isAbsolute(rel) || rel.startsWith('..')) {
+  if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) {
     throw new Error('Invalid worktree path')
   }
 

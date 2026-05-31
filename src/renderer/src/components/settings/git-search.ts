@@ -1,4 +1,5 @@
 import type { SettingsSearchEntry } from './settings-search'
+import { AUTO_RENAME_BRANCH_SEARCH_ENTRIES } from './auto-rename-branch-search'
 
 export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
@@ -20,11 +21,7 @@ export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'worktree'
     ]
   },
-  {
-    title: 'Auto-Rename Branch From Work',
-    description: 'Rename the auto-generated branch based on the work once an agent starts.',
-    keywords: ['branch', 'rename', 'auto', 'creature name', 'agent', 'prompt', 'worktree']
-  },
+  ...AUTO_RENAME_BRANCH_SEARCH_ENTRIES,
   {
     title: 'GitHub API Budget',
     description: 'Current GitHub CLI REST, Search, and GraphQL rate limits.',

@@ -155,7 +155,7 @@ describe('removeWorktreeOp', () => {
       '/repo$ worktree remove /repo-feature',
       '/repo$ worktree prune',
       '/repo$ worktree list --porcelain',
-      '/repo$ branch -d feature/test'
+      '/repo$ branch -d -- feature/test'
     ])
   })
 
@@ -184,11 +184,13 @@ describe('removeWorktreeOp', () => {
       return { stdout: '', stderr: '' }
     })
 
-    // The unmerged-branch refusal must be swallowed, not propagated.
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toBeUndefined()
+    // The unmerged-branch refusal must be surfaced without failing workspace removal.
+    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({
+      preservedBranch: { branchName: 'feature/test', head: '1' }
+    })
 
-    expect(git).toHaveBeenCalledWith(['branch', '-d', 'feature/test'], expect.any(String))
-    expect(git).not.toHaveBeenCalledWith(['branch', '-D', 'feature/test'], expect.any(String))
+    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
+    expect(git).not.toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
   })
 
   it('force-deletes the just-created branch during failed sparse setup rollback', async () => {
@@ -219,8 +221,8 @@ describe('removeWorktreeOp', () => {
       forceBranchDelete: true
     })
 
-    expect(git).toHaveBeenCalledWith(['branch', '-D', 'feature/test'], expect.any(String))
-    expect(git).not.toHaveBeenCalledWith(['branch', '-d', 'feature/test'], expect.any(String))
+    expect(git).toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
+    expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
   })
 
   it('skips branch deletion entirely when deleteBranch is false', async () => {
@@ -279,8 +281,8 @@ describe('removeWorktreeOp', () => {
 
     await removeWorktreeOp(git, { worktreePath: '/repo-feature' })
 
-    expect(git).not.toHaveBeenCalledWith(['branch', '-d', 'feature/test'], expect.any(String))
-    expect(git).not.toHaveBeenCalledWith(['branch', '-D', 'feature/test'], expect.any(String))
+    expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
+    expect(git).not.toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
   })
 })
 

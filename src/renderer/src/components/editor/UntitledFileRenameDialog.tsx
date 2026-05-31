@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { getRelativePathInsideRoot } from '@/lib/path'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 type UntitledFileRenameDialogProps = {
   open: boolean
@@ -36,28 +37,56 @@ export function UntitledFileRenameDialog({
   const [dir, setDir] = useState(worktreePath)
   const [error, setError] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
+  const focusFrameRef = useRef<number | null>(null)
+  const seededOpenStateRef = useRef({ open: false, baseName, worktreePath })
+  const mountedRef = useMountedRef()
 
   const displayError = externalError ?? error
 
-  useEffect(() => {
-    if (open) {
+  const cancelFocusFrame = useCallback(() => {
+    if (focusFrameRef.current !== null) {
+      cancelAnimationFrame(focusFrameRef.current)
+      focusFrameRef.current = null
+    }
+  }, [])
+
+  const setNameInputNode = useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (!node) {
+        // Why: on a quick close, Radix may unmount the input before the
+        // deferred focus frame runs. Cancel it from the ref cleanup path.
+        cancelFocusFrame()
+      }
+      nameInputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
+
+  // Why: seed the drafts before the open dialog paints; focus is handled by
+  // Radix's open lifecycle below so this does not need a post-render Effect.
+  if (open) {
+    const seeded = seededOpenStateRef.current
+    if (!seeded.open || seeded.baseName !== baseName || seeded.worktreePath !== worktreePath) {
+      seededOpenStateRef.current = { open: true, baseName, worktreePath }
       setName(baseName)
       setDir(worktreePath)
       setError(null)
-      requestAnimationFrame(() => {
-        nameInputRef.current?.select()
-      })
     }
-  }, [open, baseName, worktreePath])
+  } else if (seededOpenStateRef.current.open) {
+    seededOpenStateRef.current = { open: false, baseName, worktreePath }
+  }
 
   const handleBrowse = useCallback(async () => {
     const picked = await window.api.shell.pickDirectory({ defaultPath: dir || worktreePath })
     if (!picked) {
       return
     }
+    if (!mountedRef.current) {
+      return
+    }
     setDir(picked)
     setError(null)
-  }, [dir, worktreePath])
+  }, [dir, mountedRef, worktreePath])
 
   const handleSubmit = useCallback(() => {
     const trimmedName = name.trim().replace(/\.md$/, '')
@@ -89,7 +118,19 @@ export function UntitledFileRenameDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent showCloseButton={false} className="max-w-[340px]">
+      <DialogContent
+        showCloseButton={false}
+        className="max-w-[340px]"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          cancelFocusFrame()
+          focusFrameRef.current = requestAnimationFrame(() => {
+            focusFrameRef.current = null
+            nameInputRef.current?.focus()
+            nameInputRef.current?.select()
+          })
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="text-sm">Save as</DialogTitle>
           <DialogDescription className="text-xs">
@@ -101,7 +142,7 @@ export function UntitledFileRenameDialog({
             <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Name</label>
             <div className="flex items-center gap-1.5">
               <Input
-                ref={nameInputRef}
+                ref={setNameInputNode}
                 value={name}
                 onChange={(e) => {
                   setName(e.target.value)

@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: telemetry schema tests keep related event
+   invariants together so cross-event payload rules stay easy to audit. */
 // Schema round-trip coverage for the event map. Fail-closed invariants that
 // must hold: agent_error is enum-only (error_message / error_stack rejected
 // by `.strict()`), unknown enum values fail, and any well-formed payload
@@ -8,12 +10,44 @@ import {
   addRepoSetupStepActionSchema,
   AGENT_KIND_VALUES,
   agentKindSchema,
-  commonPropsSchema,
   errorClassSchema,
   eventSchemas,
   SETTINGS_CHANGED_WHITELIST,
   settingsChangedKeySchema
 } from './telemetry-events'
+import { appStarSourceSchema } from './gh-star-source'
+
+describe('app_starred_orca schema', () => {
+  it('accepts every declared app star source', () => {
+    for (const source of appStarSourceSchema.options) {
+      const parsed = eventSchemas.app_starred_orca.safeParse({ source })
+      expect(parsed.success).toBe(true)
+    }
+  })
+
+  it('accepts cohort context on successful app star telemetry', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'settings',
+      nth_repo_added: 2
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects unknown app star source values', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'github_website'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects extra keys via .strict()', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'landing',
+      repo: 'stablyai/orca'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
 
 describe('agent_error schema', () => {
   it('round-trips a minimal {error_class, agent_kind} payload', () => {
@@ -106,6 +140,28 @@ describe('agent_started schema', () => {
     const parsed = eventSchemas.agent_started.safeParse({
       agent_kind: 'claude-code',
       launch_source: 'sidebar'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
+describe('agent_prompt_sent schema', () => {
+  it('accepts a hook-confirmed prompt-send payload with cohort context', () => {
+    const parsed = eventSchemas.agent_prompt_sent.safeParse({
+      agent_kind: 'codex',
+      launch_source: 'unknown',
+      request_kind: 'followup',
+      nth_repo_added: 1
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects prompt text via .strict()', () => {
+    const parsed = eventSchemas.agent_prompt_sent.safeParse({
+      agent_kind: 'claude-code',
+      launch_source: 'unknown',
+      request_kind: 'followup',
+      prompt: 'please inspect /Users/alice/private-repo'
     })
     expect(parsed.success).toBe(false)
   })
@@ -205,64 +261,6 @@ describe('settings_changed schema', () => {
     const parsed = eventSchemas.settings_changed.safeParse({
       setting_key: 'telemetryOptIn', // deliberately excluded from the whitelist
       value_kind: 'bool'
-    })
-    expect(parsed.success).toBe(false)
-  })
-})
-
-describe('commonPropsSchema', () => {
-  it('round-trips a realistic payload', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: '1.3.33',
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '00000000-0000-4000-8000-000000000000',
-      session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      orca_channel: 'stable'
-    })
-    expect(parsed.success).toBe(true)
-  })
-
-  it('rejects strings past the 64-char cap', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: 'x'.repeat(65),
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '00000000-0000-4000-8000-000000000000',
-      session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      orca_channel: 'stable'
-    })
-    expect(parsed.success).toBe(false)
-  })
-
-  // Empty `install_id` would collapse every event under one synthetic
-  // PostHog `distinctId`; empty `session_id` would blend unrelated process
-  // lifetimes. `.min(1)` guards both — this test pins that contract so a
-  // future edit can't relax it back to `.max(64)`-only.
-  it('rejects empty install_id', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: '1.3.33',
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '',
-      session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      orca_channel: 'stable'
-    })
-    expect(parsed.success).toBe(false)
-  })
-
-  it('rejects empty session_id', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: '1.3.33',
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '00000000-0000-4000-8000-000000000000',
-      session_id: '',
-      orca_channel: 'stable'
     })
     expect(parsed.success).toBe(false)
   })

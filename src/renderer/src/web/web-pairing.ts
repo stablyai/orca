@@ -15,6 +15,13 @@ export function parseWebPairingInput(input: string): WebPairingOffer | null {
 
   try {
     if (trimmed.startsWith('orca://pair')) {
+      const queryIndex = trimmed.indexOf('?')
+      if (queryIndex !== -1) {
+        const query = trimmed.slice(queryIndex + 1).split('#')[0] ?? ''
+        const params = new URLSearchParams(query)
+        const code = params.get('code')
+        return code ? decodePairingPayload(code) : null
+      }
       const hashIndex = trimmed.indexOf('#')
       if (hashIndex === -1) {
         return null
@@ -88,7 +95,7 @@ function decodePairingPayload(base64url: string): WebPairingOffer | null {
 function base64UrlToBytes(value: string): Uint8Array {
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
   const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
-  const binary = window.atob(padded)
+  const binary = globalThis.atob(padded)
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index)

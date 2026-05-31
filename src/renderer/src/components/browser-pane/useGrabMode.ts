@@ -3,6 +3,7 @@ import type {
   BrowserGrabPayload,
   BrowserGrabScreenshot
 } from '../../../../shared/browser-grab-types'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 
 // ---------------------------------------------------------------------------
@@ -43,7 +44,9 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   const [error, setError] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState(false)
   const activeOpIdRef = useRef<string | null>(null)
+  const grabTabIdRef = useRef<string | null>(null)
   const browserTabIdRef = useRef(browserPageId)
+  const mountedRef = useMountedRef()
 
   useEffect(() => {
     browserTabIdRef.current = browserPageId
@@ -53,8 +56,11 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   // current grab operation so stale overlays don't survive tab switches.
   useEffect(() => {
     return () => {
-      if (activeOpIdRef.current) {
-        void window.api.browser.cancelGrab({ browserPageId })
+      const grabTabId = grabTabIdRef.current
+      if (grabTabId) {
+        void window.api.browser.setGrabMode({ browserPageId: grabTabId, enabled: false })
+        void window.api.browser.cancelGrab({ browserPageId: grabTabId })
+        grabTabIdRef.current = null
         activeOpIdRef.current = null
       }
     }
@@ -62,13 +68,27 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
 
   const armAndAwait = useCallback(async () => {
     const tabId = browserTabIdRef.current
+    grabTabIdRef.current = tabId
 
     // Enable grab mode — injects the overlay
     const setResult = await window.api.browser.setGrabMode({
       browserPageId: tabId,
       enabled: true
     })
+    if (
+      !mountedRef.current ||
+      browserTabIdRef.current !== tabId ||
+      grabTabIdRef.current !== tabId
+    ) {
+      void window.api.browser.setGrabMode({ browserPageId: tabId, enabled: false })
+      void window.api.browser.cancelGrab({ browserPageId: tabId })
+      if (grabTabIdRef.current === tabId) {
+        grabTabIdRef.current = null
+      }
+      return
+    }
     if (!setResult.ok) {
+      grabTabIdRef.current = null
       setState('error')
       setError(`Cannot enable grab mode: ${setResult.reason}`)
       return
@@ -87,7 +107,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     })
 
     // Ignore stale results
-    if (activeOpIdRef.current !== opId) {
+    if (!mountedRef.current || activeOpIdRef.current !== opId || grabTabIdRef.current !== tabId) {
       return
     }
 
@@ -107,18 +127,23 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       } catch {
         // Screenshot failure is non-fatal
       }
+      if (!mountedRef.current || grabTabIdRef.current !== tabId) {
+        return
+      }
 
       setContextMenu(result.kind === 'context-selected')
       setPayload({ ...result.payload, screenshot })
       setState('confirming')
     } else if (result.kind === 'cancelled') {
+      grabTabIdRef.current = null
       setState('idle')
       setPayload(null)
     } else {
+      grabTabIdRef.current = null
       setState('error')
       setError(result.reason)
     }
-  }, [])
+  }, [mountedRef])
 
   const toggle = useCallback(() => {
     if (state === 'idle' || state === 'error') {
@@ -138,6 +163,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
         })
         activeOpIdRef.current = null
       }
+      grabTabIdRef.current = null
       setState('idle')
       setPayload(null)
       setError(null)
@@ -156,6 +182,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       })
       activeOpIdRef.current = null
     }
+    grabTabIdRef.current = null
     setState('idle')
     setPayload(null)
     setError(null)
@@ -184,6 +211,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     // Why: clear the active opId so that any in-flight result from the
     // previous operation is ignored by the stale-opId check in armAndAwait.
     activeOpIdRef.current = null
+    grabTabIdRef.current = null
     setState('idle')
     setPayload(null)
     setError(null)

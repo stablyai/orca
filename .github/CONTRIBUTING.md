@@ -88,7 +88,7 @@ The workflow resolves the next version from GitHub Releases, bumps `package.json
 
 **How the next version is chosen:**
 
-All stable kinds (`patch`, `minor`, `major`) are computed off the latest *stable* release, ignoring any RCs in between.
+All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable_ release, ignoring any RCs in between.
 
 - `kind=rc` + last tag was stable (e.g. `v1.3.14`) → `v1.3.15-rc.0`.
 - `kind=rc` + active RC series (e.g. `v1.3.15-rc.2`) → `v1.3.15-rc.3`.

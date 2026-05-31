@@ -93,20 +93,12 @@ export function buildSettingsNavigationMetadata({
 
   return [
     {
-      id: 'general',
-      title: 'General',
-      description: 'Workspace defaults, app setup, and maintenance.',
-      icon: SlidersHorizontal,
-      searchEntries: GENERAL_PANE_SEARCH_ENTRIES,
-      group: 'setup'
-    },
-    {
       id: 'agents',
       title: 'Agents',
       description: 'Manage AI agents, set a default, and customize commands.',
       icon: Bot,
       searchEntries: AGENTS_PANE_SEARCH_ENTRIES,
-      group: 'setup'
+      group: 'capabilities'
     },
     {
       id: 'accounts',
@@ -114,8 +106,46 @@ export function buildSettingsNavigationMetadata({
       description: 'Optional account switching for Claude, Codex, Gemini, and OpenCode Go.',
       icon: UserCog,
       searchEntries: ACCOUNTS_PANE_SEARCH_ENTRIES,
-      group: 'setup',
+      group: 'capabilities',
       badge: 'Optional'
+    },
+    {
+      id: 'orchestration',
+      title: 'Orchestration',
+      description: 'Coordinate multiple coding agents through Orca.',
+      icon: Network,
+      searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES,
+      group: 'capabilities'
+    },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'computer-use',
+            title: 'Computer Use',
+            description: 'Enable agents to control any app on your computer.',
+            icon: MousePointerClick,
+            searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
+            group: 'capabilities',
+            badge: 'Beta'
+          },
+          {
+            id: 'voice',
+            title: 'Voice',
+            description: 'Local speech-to-text dictation with on-device models.',
+            icon: Mic,
+            searchEntries: VOICE_PANE_SEARCH_ENTRIES,
+            group: 'capabilities',
+            badge: 'Beta'
+          }
+        ]
+      : []),
+    {
+      id: 'general',
+      title: 'General',
+      description: 'Workspace defaults, app setup, and maintenance.',
+      icon: SlidersHorizontal,
+      searchEntries: GENERAL_PANE_SEARCH_ENTRIES,
+      group: 'setup'
     },
     {
       id: 'integrations',
@@ -204,14 +234,6 @@ export function buildSettingsNavigationMetadata({
         ]
       : []),
     {
-      id: 'orchestration',
-      title: 'Orchestration',
-      description: 'Coordinate multiple coding agents through Orca.',
-      icon: Network,
-      searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES,
-      group: 'capabilities'
-    },
-    {
       id: 'servers',
       title: 'Remote Orca Servers',
       description: isWebClient
@@ -239,24 +261,6 @@ export function buildSettingsNavigationMetadata({
             icon: Smartphone,
             searchEntries: MOBILE_SETTINGS_PANE_SEARCH_ENTRIES,
             group: 'remote'
-          },
-          {
-            id: 'computer-use',
-            title: 'Computer Use',
-            description: 'Enable agents to control any app on your computer.',
-            icon: MousePointerClick,
-            searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
-            group: 'capabilities',
-            badge: 'Beta'
-          },
-          {
-            id: 'voice',
-            title: 'Voice',
-            description: 'Local speech-to-text dictation with on-device models.',
-            icon: Mic,
-            searchEntries: VOICE_PANE_SEARCH_ENTRIES,
-            group: 'capabilities',
-            badge: 'Beta'
           }
         ]
       : []),

@@ -52,7 +52,8 @@ vi.mock('./use-worktree-activity-status', () => ({
 }))
 
 vi.mock('./CacheTimer', () => ({
-  default: () => null
+  default: () => null,
+  usePromptCacheCountdownStartedAt: () => null
 }))
 
 vi.mock('./WorktreeCardAgents', () => ({

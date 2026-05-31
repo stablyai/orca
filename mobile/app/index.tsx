@@ -48,6 +48,7 @@ import {
   normalizeVisibleTaskProviders,
   type TaskProvider
 } from '../src/tasks/mobile-task-providers'
+import { useResponsiveLayout } from '../src/layout/responsive-layout'
 
 function endpointLabel(endpoint: string): string {
   try {
@@ -270,6 +271,9 @@ function repoColor(name: string): string {
 export default function HomeScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  // Why: cap and center content on wide/tablet canvases so cards don't stretch
+  // edge-to-edge on iPad; on phones isWideLayout is false and layout is unchanged.
+  const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const [hosts, setHosts] = useState<HostProfile[]>([])
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [renameTarget, setRenameTarget] = useState<HostProfile | null>(null)
@@ -676,7 +680,13 @@ export default function HomeScreen() {
 
       {hosts.length === 0 ? (
         /* ─── Empty state: onboarding ─── */
-        <View style={[styles.emptyContainer, { paddingBottom: insets.bottom }]}>
+        <View
+          style={[
+            styles.emptyContainer,
+            { paddingBottom: insets.bottom },
+            isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
+          ]}
+        >
           <View style={styles.emptyHero}>
             <Text style={styles.emptyTitle}>Connect your desktop</Text>
             <Text style={styles.emptyBody}>
@@ -712,7 +722,11 @@ export default function HomeScreen() {
           // Why: edge-to-edge — let the list scroll under the system nav bar
           // but reserve insets.bottom so the last row stays reachable above
           // the Samsung 3-button nav / iOS home indicator.
-          contentContainerStyle={[styles.list, { paddingBottom: spacing.xl + insets.bottom }]}
+          contentContainerStyle={[
+            styles.list,
+            { paddingBottom: spacing.xl + insets.bottom },
+            isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
+          ]}
           ListHeaderComponent={
             <View>
               <View style={styles.hero}>

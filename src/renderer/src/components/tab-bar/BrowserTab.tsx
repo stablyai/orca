@@ -65,9 +65,14 @@ function BrowserTabFavicon({
   const displayFaviconUrl = faviconUrl?.trim() ? faviconUrl : null
   const [failedFavicon, setFailedFavicon] = useState<FailedFavicon | null>(null)
 
-  useEffect(() => {
+  // Why: reset during render so a new favicon identity retries before the tab
+  // commits one frame with the stale fallback icon.
+  if (
+    failedFavicon &&
+    (failedFavicon.tabId !== tabId || failedFavicon.faviconUrl !== displayFaviconUrl)
+  ) {
     setFailedFavicon(null)
-  }, [tabId, displayFaviconUrl])
+  }
 
   const currentFaviconFailed =
     failedFavicon?.tabId === tabId && failedFavicon.faviconUrl === displayFaviconUrl

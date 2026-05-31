@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { CornerDownLeft } from 'lucide-react'
+import { CornerDownLeft, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 // Why: rendered as a DOM sibling overlay inside the editor container rather
 // than as a Monaco content widget because it owns a React textarea with
@@ -43,6 +44,7 @@ export function DiffCommentPopover({
   // fresh id/createdAt. Tracked in React state (not a ref) so the button can
   // reflect the in-flight status to the user.
   const [submitting, setSubmitting] = useState(false)
+  const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   // Why: stash onCancel in a ref so the document mousedown listener below can
@@ -104,7 +106,9 @@ export function DiffCommentPopover({
     try {
       await onSubmit(trimmed)
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
@@ -119,55 +123,69 @@ export function DiffCommentPopover({
       onMouseDown={(ev) => ev.stopPropagation()}
       onClick={(ev) => ev.stopPropagation()}
     >
-      <div id={labelId} className="orca-diff-comment-popover-label">
-        {title ??
-          (startLine && startLine !== lineNumber
-            ? `Lines ${startLine}-${lineNumber}`
-            : `Line ${lineNumber}`)}
+      {/* Left Column: Avatar */}
+      <div className="orca-diff-comment-avatar-col">
+        <span className="orca-diff-comment-avatar orca-diff-comment-avatar-local">
+          <User className="size-3" />
+        </span>
       </div>
-      <textarea
-        ref={textareaRef}
-        className="orca-diff-comment-popover-textarea"
-        placeholder={placeholder}
-        value={body}
-        onChange={(e) => {
-          setBody(e.target.value)
-          autoResize(e.currentTarget)
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.preventDefault()
-            onCancel()
-            return
-          }
-          // Why: plain Enter submits so the note popover behaves like a
-          // single-field form. Shift+Enter inserts a newline (browser default)
-          // so multi-line notes are still possible. We also accept
-          // Cmd/Ctrl+Enter as a submit alias so users who learned the old
-          // shortcut aren't silently broken. IME composition (isComposing) is
-          // excluded because Enter during composition only confirms the
-          // conversion candidate — submitting then would send a half-typed
-          // note for CJK/IME users. We guard against a second Enter while an
-          // earlier submit is still awaiting IPC — otherwise it would enqueue
-          // a duplicate addDiffComment call.
-          if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
-            e.preventDefault()
-            if (submitting) {
+
+      {/* Right Column: Content */}
+      <div className="orca-diff-comment-content-col" style={{ gap: '8px' }}>
+        <div id={labelId} className="orca-diff-comment-popover-label">
+          {title ??
+            (startLine && startLine !== lineNumber
+              ? `Lines ${startLine}-${lineNumber}`
+              : `Line ${lineNumber}`)}
+        </div>
+        <textarea
+          ref={textareaRef}
+          className="orca-diff-comment-popover-textarea"
+          placeholder={placeholder}
+          value={body}
+          onChange={(e) => {
+            setBody(e.target.value)
+            autoResize(e.currentTarget)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              onCancel()
               return
             }
-            void handleSubmit()
-          }
-        }}
-        rows={3}
-      />
-      <div className="orca-diff-comment-popover-footer">
-        <Button variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button size="sm" onClick={handleSubmit} disabled={submitting || body.trim().length === 0}>
-          {submitting ? submittingLabel : submitLabel}
-          {!submitting && <CornerDownLeft className="ml-1 size-3 opacity-70" />}
-        </Button>
+            // Why: plain Enter submits so the note popover behaves like a
+            // single-field form. Shift+Enter inserts a newline (browser default)
+            // so multi-line notes are still possible. We also accept
+            // Cmd/Ctrl+Enter as a submit alias so users who learned the old
+            // shortcut aren't silently broken. IME composition (isComposing) is
+            // excluded because Enter during composition only confirms the
+            // conversion candidate — submitting then would send a half-typed
+            // note for CJK/IME users. We guard against a second Enter while an
+            // earlier submit is still awaiting IPC — otherwise it would enqueue
+            // a duplicate addDiffComment call.
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
+              e.preventDefault()
+              if (submitting) {
+                return
+              }
+              void handleSubmit()
+            }
+          }}
+          rows={3}
+        />
+        <div className="orca-diff-comment-popover-footer">
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={submitting || body.trim().length === 0}
+          >
+            {submitting ? submittingLabel : submitLabel}
+            {!submitting && <CornerDownLeft className="ml-1 size-3 opacity-70" />}
+          </Button>
+        </div>
       </div>
     </div>
   )

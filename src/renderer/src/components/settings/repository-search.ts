@@ -18,6 +18,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
         'project icon',
         'repository icon',
         'color',
+        'hex',
         'badge',
         'emoji',
         'favicon'
@@ -67,8 +68,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
               'branch name',
               'rename',
               'model',
-              'prompt',
-              'instructions'
+              'prompt'
             ]
           },
           {

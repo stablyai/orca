@@ -209,7 +209,7 @@ Wait Options:
 
 Output Options:
   --json                    Emit machine-readable JSON instead of human text
-  --pairing-code <code>      Connect to a remote Orca runtime using an orca://pair#... code
+  --pairing-code <code>      Connect to a remote Orca runtime using an orca://pair?... code
   --environment <selector>   Connect using a saved environment id or name
   --help                    Show this help message
 

@@ -4,6 +4,7 @@ import { join } from 'path'
 import { homedir } from 'os'
 import type { SshTarget } from '../../shared/ssh-types'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
+import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
 
 export type SshConfigHost = {
   host: string
@@ -44,7 +45,7 @@ export function parseSshConfig(content: string): SshConfigHost[] {
 
     if (key === 'host') {
       if (current.length > 0) {
-        hosts.push(...current)
+        appendHosts(hosts, current)
       }
 
       const patterns = splitHostPatterns(value)
@@ -62,7 +63,7 @@ export function parseSshConfig(content: string): SshConfigHost[] {
 
     if (key === 'match') {
       if (current.length > 0) {
-        hosts.push(...current)
+        appendHosts(hosts, current)
       }
       current = []
       continue
@@ -90,12 +91,12 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'identityfile':
         for (const host of current) {
-          host.identityFile = resolveHomePath(value)
+          host.identityFile = resolveSshConfigHomePath(value)
         }
         break
       case 'identityagent':
         for (const host of current) {
-          host.identityAgent = resolveHomePath(value)
+          host.identityAgent = resolveSshConfigHomePath(value)
         }
         break
       case 'identitiesonly':
@@ -122,9 +123,17 @@ export function parseSshConfig(content: string): SshConfigHost[] {
   }
 
   if (current.length > 0) {
-    hosts.push(...current)
+    appendHosts(hosts, current)
   }
   return hosts
+}
+
+function appendHosts(target: SshConfigHost[], entries: SshConfigHost[]): void {
+  // Why: generated SSH configs can put many concrete aliases on one Host line;
+  // spreading that block into push can exceed JavaScript's argument limit.
+  for (const entry of entries) {
+    target.push(entry)
+  }
 }
 
 function splitHostPatterns(input: string): string[] {
@@ -171,13 +180,6 @@ function splitHostPatterns(input: string): string[] {
   }
 
   return patterns
-}
-
-function resolveHomePath(filepath: string): string {
-  if (filepath.startsWith('~/') || filepath === '~') {
-    return join(homedir(), filepath.slice(1))
-  }
-  return filepath
 }
 
 /** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */
@@ -253,15 +255,41 @@ const SSH_G_TIMEOUT_MS = 5000
 // resolution without reimplementing OpenSSH's complex matching logic.
 export function resolveWithSshG(host: string): Promise<SshResolvedConfig | null> {
   return new Promise((resolve) => {
-    // Why: '--' prevents a host label starting with '-' from being interpreted
-    // as an SSH flag (classic argument injection vector).
-    execFile('ssh', ['-G', '--', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
-      if (err) {
-        resolve(null)
+    let settled = false
+    let child: ReturnType<typeof execFile> | undefined
+    const timer = setTimeout(() => {
+      if (settled) {
         return
       }
-      resolve(parseSshGOutput(stdout))
-    })
+      settled = true
+      child?.kill()
+      resolve(null)
+    }, SSH_G_TIMEOUT_MS)
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      callback()
+    }
+
+    // Why: '--' prevents a host label starting with '-' from being interpreted
+    // as an SSH flag (classic argument injection vector).
+    // Why: execFile's timeout only signals ssh; a stuck callback must still
+    // release SSH import/connection resolution with the existing null fallback.
+    try {
+      child = execFile('ssh', ['-G', '--', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
+        if (err) {
+          settle(() => resolve(null))
+          return
+        }
+        settle(() => resolve(parseSshGOutput(stdout)))
+      })
+    } catch {
+      settle(() => resolve(null))
+    }
   })
 }
 
@@ -277,7 +305,7 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
     const key = line.substring(0, spaceIdx).toLowerCase()
     const value = line.substring(spaceIdx + 1).trim()
     if (key === 'identityfile') {
-      identityFiles.push(resolveHomePath(value))
+      identityFiles.push(resolveSshConfigHomePath(value))
     } else {
       map.set(key, value)
     }
@@ -290,7 +318,7 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
   const rawJump = map.get('proxyjump')
   const proxyJump = rawJump && rawJump !== 'none' ? rawJump : undefined
   const rawIdentityAgent = map.get('identityagent')
-  const identityAgent = rawIdentityAgent ? resolveHomePath(rawIdentityAgent) : undefined
+  const identityAgent = rawIdentityAgent ? resolveSshConfigHomePath(rawIdentityAgent) : undefined
 
   return {
     hostname: map.get('hostname') ?? '',

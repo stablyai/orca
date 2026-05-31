@@ -1,6 +1,7 @@
 import type { WebContents } from 'electron'
 
 const SCREENSHOT_TIMEOUT_MS = 8000
+const FALLBACK_CAPTURE_TIMEOUT_MS = 1000
 const SCREENSHOT_TIMEOUT_MESSAGE =
   'Screenshot timed out — the browser tab may not be visible or the window may not have focus.'
 
@@ -210,6 +211,34 @@ export function captureScreenshot(
   }
 
   let settled = false
+  let timeoutTimer: ReturnType<typeof setTimeout> | null = null
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+  const clearTimers = (): void => {
+    if (timeoutTimer) {
+      clearTimeout(timeoutTimer)
+      timeoutTimer = null
+    }
+    if (fallbackTimer) {
+      clearTimeout(fallbackTimer)
+      fallbackTimer = null
+    }
+  }
+  const settleResult = (result: unknown): void => {
+    if (settled) {
+      return
+    }
+    settled = true
+    clearTimers()
+    onResult(result)
+  }
+  const settleError = (message: string): void => {
+    if (settled) {
+      return
+    }
+    settled = true
+    clearTimers()
+    onError(message)
+  }
   // Why: a compositor invalidate is cheap and can recover guest instances that
   // are visible but have not produced a fresh frame since being reclaimed into
   // the active browser tab.
@@ -218,47 +247,52 @@ export function captureScreenshot(
   } catch {
     // Some guest teardown paths reject repaint requests. Fall through to CDP.
   }
-  const timer = setTimeout(async () => {
-    if (!settled) {
-      try {
-        const image = await webContents.capturePage()
-        if (settled) {
-          return
-        }
-        const fallback = encodeNativeImageScreenshot(image, params)
-        if (fallback) {
+  timeoutTimer = setTimeout(() => {
+    if (settled) {
+      return
+    }
+    // Why: capturePage is only a best-effort fallback. If it also stalls, the
+    // CDP proxy must still settle instead of inheriting the compositor hang.
+    fallbackTimer = setTimeout(
+      () => settleError(SCREENSHOT_TIMEOUT_MESSAGE),
+      FALLBACK_CAPTURE_TIMEOUT_MS
+    )
+    void Promise.resolve()
+      .then(() => webContents.capturePage())
+      .then(
+        (image) => {
           if (settled) {
             return
           }
-          settled = true
-          onResult(fallback)
-          return
+          if (fallbackTimer) {
+            clearTimeout(fallbackTimer)
+            fallbackTimer = null
+          }
+          let fallback: { data: string } | null = null
+          try {
+            fallback = encodeNativeImageScreenshot(image, params)
+          } catch {
+            settleError(SCREENSHOT_TIMEOUT_MESSAGE)
+            return
+          }
+          if (fallback) {
+            settleResult(fallback)
+            return
+          }
+          settleError(SCREENSHOT_TIMEOUT_MESSAGE)
+        },
+        () => {
+          if (fallbackTimer) {
+            clearTimeout(fallbackTimer)
+            fallbackTimer = null
+          }
+          settleError(SCREENSHOT_TIMEOUT_MESSAGE)
         }
-      } catch {
-        // Fall through to the original timeout error below.
-      }
-
-      if (!settled) {
-        settled = true
-        onError(SCREENSHOT_TIMEOUT_MESSAGE)
-      }
-    }
+      )
   }, SCREENSHOT_TIMEOUT_MS)
 
   dbg
     .sendCommand('Page.captureScreenshot', screenshotParams)
-    .then((result) => {
-      if (!settled) {
-        settled = true
-        clearTimeout(timer)
-        onResult(result)
-      }
-    })
-    .catch((err) => {
-      if (!settled) {
-        settled = true
-        clearTimeout(timer)
-        onError((err as Error).message)
-      }
-    })
+    .then((result) => settleResult(result))
+    .catch((err) => settleError((err as Error).message))
 }

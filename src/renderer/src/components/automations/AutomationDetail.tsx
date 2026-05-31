@@ -30,7 +30,7 @@ function DetailMetric({ label, value }: { label: string; value: string }): React
   return (
     <div className="min-w-0">
       <div className="text-[11px] font-medium uppercase text-muted-foreground">{label}</div>
-      <div className="mt-1 text-sm font-medium">{value}</div>
+      <div className="mt-1 break-words text-sm font-medium">{value}</div>
     </div>
   )
 }
@@ -104,6 +104,12 @@ export function AutomationDetail({
       : usageSummary.unavailableRuns > 0
         ? 'Unavailable'
         : 'No runs'
+  const agentLabel =
+    AGENT_CATALOG.find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
+  const runLocationLabel =
+    automation.workspaceMode === 'new_per_run'
+      ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
+      : workspaceName
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -150,7 +156,8 @@ export function AutomationDetail({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-6 gap-6 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
+        <DetailMetric label="Schedule" value={formatAutomationSchedule(automation.rrule)} />
         <DetailMetric
           label="Next run"
           value={
@@ -159,6 +166,25 @@ export function AutomationDetail({
               : 'Paused'
           }
         />
+        <DetailMetric
+          label={automation.workspaceMode === 'new_per_run' ? 'Create from' : 'Run location'}
+          value={runLocationLabel}
+        />
+        <DetailMetric
+          label="Session"
+          value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
+        />
+        <DetailMetric label="Grace" value={formatGrace(automation.missedRunGraceMinutes)} />
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium uppercase text-muted-foreground">Agent</div>
+          <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-medium">
+            <AgentIcon agent={automation.agentId} size={16} />
+            <span className="truncate">{agentLabel}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">
         <DetailMetric
           label="Last run"
           value={formatAutomationDateTimeWithRelative(automation.lastRunAt, now)}
@@ -169,37 +195,12 @@ export function AutomationDetail({
         />
         <DetailMetric label="Tokens" value={formatAutomationTokens(usageSummary.totalTokens)} />
         <DetailMetric label="Usage coverage" value={usageCoverage} />
-        <DetailMetric label="Grace" value={formatGrace(automation.missedRunGraceMinutes)} />
       </div>
 
       <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
-        <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">Configuration</div>
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-6 gap-y-4 px-3 py-3">
+        <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">Prompt</div>
+        <div className="px-3 py-3">
           <div className="min-w-0">
-            <div className="text-[11px] font-medium uppercase text-muted-foreground">Agent</div>
-            <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-medium">
-              <AgentIcon agent={automation.agentId} size={16} />
-              <span className="truncate">
-                {AGENT_CATALOG.find((agent) => agent.id === automation.agentId)?.label ??
-                  automation.agentId}
-              </span>
-            </div>
-          </div>
-          <DetailMetric label="Schedule" value={formatAutomationSchedule(automation.rrule)} />
-          <DetailMetric
-            label={automation.workspaceMode === 'new_per_run' ? 'Create from' : 'Workspace'}
-            value={
-              automation.workspaceMode === 'new_per_run'
-                ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
-                : workspaceName
-            }
-          />
-          <DetailMetric
-            label="Session"
-            value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
-          />
-          <div className="min-w-0">
-            <div className="text-[11px] font-medium uppercase text-muted-foreground">Prompt</div>
             <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-foreground">
               {automation.prompt}
             </p>

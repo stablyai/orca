@@ -1,5 +1,6 @@
 import path from 'path'
 import { constants } from 'fs'
+import { EventEmitter } from 'events'
 import { Readable, Writable } from 'stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -71,10 +72,30 @@ const store = {
 }
 const enoent = (): Error => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 
+type MockSftpWriteStream = EventEmitter & {
+  destroy: ReturnType<typeof vi.fn>
+  end: ReturnType<typeof vi.fn>
+}
+
+function createMockSftpWriteStream(): MockSftpWriteStream {
+  const stream = new EventEmitter() as MockSftpWriteStream
+  stream.destroy = vi.fn()
+  stream.end = vi.fn(() => stream.emit('close'))
+  return stream
+}
+
 describe('fs:importExternalPaths — SSH routing & connection', () => {
   const destDir = '/home/user/project/src'
   const connId = 'ssh-conn-1'
-  const mockSftp = { end: vi.fn() }
+  const sftpWriteStreams: MockSftpWriteStream[] = []
+  const mockSftp = {
+    end: vi.fn(),
+    createWriteStream: vi.fn(() => {
+      const stream = createMockSftpWriteStream()
+      sftpWriteStreams.push(stream)
+      return stream
+    })
+  }
   const makeConn = (status = 'connected') => ({
     getState: () => ({ status }),
     sftp: vi.fn().mockResolvedValue(mockSftp)
@@ -111,6 +132,8 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
       getConnMgrMock
     ].forEach((m) => m.mockReset())
     mockSftp.end.mockReset()
+    mockSftp.createWriteStream.mockClear()
+    sftpWriteStreams.length = 0
     handleMock.mockImplementation((ch: string, h: never) => {
       handlers.set(ch, h)
     })
@@ -234,5 +257,22 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
     })
     expect(results[0]).toMatchObject({ status: 'failed', reason: 'disk full' })
     expect(mockSftp.end).toHaveBeenCalledOnce()
+  })
+
+  it('removes staging marker write listeners after remote stream close', async () => {
+    getConnMgrMock.mockReturnValue({ getConnection: () => makeConn() })
+    mockFile('/tmp/dropped/file.txt')
+
+    await invoke({
+      sourcePaths: ['/tmp/dropped/file.txt'],
+      destDir: '/home/user/project/.orca/drops',
+      connectionId: connId,
+      ensureDir: true
+    })
+
+    expect(mockSftp.createWriteStream).toHaveBeenCalledWith('/home/user/project/.orca/.gitignore')
+    expect(sftpWriteStreams[0]!.listenerCount('close')).toBe(0)
+    expect(sftpWriteStreams[0]!.listenerCount('error')).toBe(0)
+    expect(sftpWriteStreams[0]!.destroy).toHaveBeenCalledOnce()
   })
 })

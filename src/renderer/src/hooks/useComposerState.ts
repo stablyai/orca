@@ -50,6 +50,11 @@ import {
   type SetupConfig
 } from '@/lib/new-workspace'
 import {
+  getLinkedWorkItemPromptContext,
+  resolveQuickCreateLinkedWorkItemPrompt
+} from '@/lib/linked-work-item-context'
+import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import {
   getFullComposerCreateDisabled,
   getQuickComposerCreateDisabled
 } from '@/lib/new-workspace-create-gates'
@@ -212,6 +217,7 @@ export type UseComposerStateResult = {
   /** Ref the consumer should attach to the composer wrapper so the global
    *  Enter-to-submit handler can scope its behavior to the visible composer. */
   composerRef: React.RefObject<HTMLDivElement | null>
+  onComposerNodeChange: (node: HTMLDivElement | null) => void
   promptTextareaRef: React.RefObject<HTMLTextAreaElement | null>
   nameInputRef: React.RefObject<HTMLInputElement | null>
   submit: () => Promise<void>
@@ -478,6 +484,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [note])
   const composerRef = useRef<HTMLDivElement | null>(null)
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const promptCaretFrameRef = useRef<number | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
   // Why: the native-file-drop effect below subscribes once on mount and must
   // read the latest agentPrompt when computing the caret-scoped insertion.
@@ -504,6 +511,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   selectedRepoPathRef.current = selectedRepoPath
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+
+  const cancelPromptCaretFrame = useCallback((): void => {
+    if (promptCaretFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(promptCaretFrameRef.current)
+    promptCaretFrameRef.current = null
+  }, [])
+
+  const handleComposerNodeChange = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued caret restoration targets composer descendants and
+      // must be canceled as soon as the composer root leaves the DOM.
+      if (!node) {
+        cancelPromptCaretFrame()
+      }
+    },
+    [cancelPromptCaretFrame]
+  )
+
   const hookCheckRef = useRef<{
     key: string
     promise: Promise<HookCheckResult>
@@ -654,12 +681,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const shouldWaitForSetupCheck = Boolean(selectedRepo) && selectedRepoIsGit && isSetupCheckPending
 
   // Why: when the user leaves the workspace name blank and provides no other
-  // seed source (prompt, linked issue/PR), pick a repo-scoped unique marine
+  // seed source (prompt, linked issue/PR), pick a globally-unique marine
   // creature name so the workspace gets a distinct, readable identifier
-  // instead of colliding on a literal "workspace" default.
+  // instead of colliding on a literal "workspace" default — or on the same
+  // creature already used in another repo.
   const fallbackCreatureName = useMemo(
-    () => getSuggestedCreatureName(repoId, worktreesByRepo, settings?.nestWorkspaces ?? true),
-    [repoId, worktreesByRepo, settings?.nestWorkspaces]
+    () => getSuggestedCreatureName(worktreesByRepo),
+    [worktreesByRepo]
   )
   const workspaceSeedName = useMemo(
     () =>
@@ -1226,50 +1254,58 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     })
   }, [])
 
-  const insertComposerFolderPaths = useCallback((folderPaths: string[]): void => {
-    if (folderPaths.length === 0) {
-      return
-    }
-    // Why: de-dup within a single drop — the OS occasionally delivers the
-    // same folder twice when a user drags from a selection that includes both
-    // the item and its parent, and we don't want to insert it multiple times.
-    const uniqueFolderPaths = Array.from(new Set(folderPaths))
-    // Why: wrap paths containing shell metacharacters in double quotes (and
-    // escape embedded quotes) so inserted folder refs stay a single token if
-    // pasted into a terminal. Simple paths stay unadorned to match OS drops.
-    const formatPath = (p: string): string => {
-      if (/[\s"'$`\\()[\]{}*?!;&|<>#~]/.test(p)) {
-        return `"${p.replace(/(["\\$`])/g, '\\$1')}"`
+  const insertComposerFolderPaths = useCallback(
+    (folderPaths: string[]): void => {
+      if (folderPaths.length === 0) {
+        return
       }
-      return p
-    }
-    const insertion = uniqueFolderPaths.map(formatPath).join(' ')
-    const textarea = promptTextareaRef.current
-    // Why: compute selection, insertion, and caret target OUTSIDE the
-    // setAgentPrompt updater so the updater stays pure. React Strict Mode
-    // double-invokes updaters in dev, and batching can delay execution.
-    const current = agentPromptRef.current
-    const selStart = textarea?.selectionStart ?? current.length
-    const selEnd = textarea?.selectionEnd ?? current.length
-    const before = current.slice(0, selStart)
-    const after = current.slice(selEnd)
-    // Why: pad with single spaces when the caret sits directly against other
-    // text so the folder path doesn't merge into an adjacent word.
-    const needsLeadingSpace = before.length > 0 && !/\s$/.test(before)
-    const needsTrailingSpace = after.length > 0 && !/^\s/.test(after)
-    const padded = `${needsLeadingSpace ? ' ' : ''}${insertion}${needsTrailingSpace ? ' ' : ''}`
-    const caret = before.length + padded.length
-    if (textarea) {
-      requestAnimationFrame(() => {
-        textarea.focus()
-        textarea.setSelectionRange(caret, caret)
-      })
-    }
-    // Why: pass a plain value (not an updater) since `before`/`after` were
-    // already resolved from `agentPromptRef.current`; this keeps the state
-    // write side-effect-free under Strict-Mode double-render.
-    setAgentPrompt(before + padded + after)
-  }, [])
+      // Why: de-dup within a single drop — the OS occasionally delivers the
+      // same folder twice when a user drags from a selection that includes both
+      // the item and its parent, and we don't want to insert it multiple times.
+      const uniqueFolderPaths = Array.from(new Set(folderPaths))
+      // Why: wrap paths containing shell metacharacters in double quotes (and
+      // escape embedded quotes) so inserted folder refs stay a single token if
+      // pasted into a terminal. Simple paths stay unadorned to match OS drops.
+      const formatPath = (p: string): string => {
+        if (/[\s"'$`\\()[\]{}*?!;&|<>#~]/.test(p)) {
+          return `"${p.replace(/(["\\$`])/g, '\\$1')}"`
+        }
+        return p
+      }
+      const insertion = uniqueFolderPaths.map(formatPath).join(' ')
+      const textarea = promptTextareaRef.current
+      // Why: compute selection, insertion, and caret target OUTSIDE the
+      // setAgentPrompt updater so the updater stays pure. React Strict Mode
+      // double-invokes updaters in dev, and batching can delay execution.
+      const current = agentPromptRef.current
+      const selStart = textarea?.selectionStart ?? current.length
+      const selEnd = textarea?.selectionEnd ?? current.length
+      const before = current.slice(0, selStart)
+      const after = current.slice(selEnd)
+      // Why: pad with single spaces when the caret sits directly against other
+      // text so the folder path doesn't merge into an adjacent word.
+      const needsLeadingSpace = before.length > 0 && !/\s$/.test(before)
+      const needsTrailingSpace = after.length > 0 && !/^\s/.test(after)
+      const padded = `${needsLeadingSpace ? ' ' : ''}${insertion}${needsTrailingSpace ? ' ' : ''}`
+      const caret = before.length + padded.length
+      if (textarea) {
+        cancelPromptCaretFrame()
+        promptCaretFrameRef.current = requestAnimationFrame(() => {
+          promptCaretFrameRef.current = null
+          if (promptTextareaRef.current !== textarea || !textarea.isConnected) {
+            return
+          }
+          textarea.focus()
+          textarea.setSelectionRange(caret, caret)
+        })
+      }
+      // Why: pass a plain value (not an updater) since `before`/`after` were
+      // already resolved from `agentPromptRef.current`; this keeps the state
+      // write side-effect-free under Strict-Mode double-render.
+      setAgentPrompt(before + padded + after)
+    },
+    [cancelPromptCaretFrame]
+  )
 
   const uploadComposerPaths = useCallback(
     async (
@@ -1643,14 +1679,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     (issue: LinearIssue): void => {
       setLinkedIssue('')
       setLinkedPR(null)
-      setLinkedWorkItem({
-        type: 'issue',
-        // Why: Linear identifiers are strings (e.g. ENG-123); keep GitHub
-        // numeric metadata empty and carry the real source through the URL.
-        number: 0,
-        title: issue.title,
-        url: issue.url
-      })
+      setLinkedWorkItem(buildLinearIssueLinkedWorkItem(issue))
       const suggestedName = issue.title
       if (!name.trim() || name === lastAutoNameRef.current) {
         setName(suggestedName)
@@ -1658,11 +1687,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       setBranchNameOverride(undefined)
       branchAutoNameRef.current = ''
-      // Why: match the GitHub issue/PR flow — paste only the URL as a draft
-      // into the agent's input (no auto-submit). The launch path already
-      // drafts `linkedWorkItem.url` when the note is empty; auto-filling the
-      // note here would flip Linear into the `isLinearTypedOnly` branch and
-      // auto-submit the full details block.
+      // Why: match the GitHub issue/PR flow by drafting linked context for
+      // review instead of auto-submitting. Auto-filling the note here would
+      // turn a source selection into user-authored instructions.
     },
     [name]
   )
@@ -1776,12 +1803,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             )
           : ''
+      const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem)
       const submitStartupPrompt = submitShouldApplyLinkedOnlyTemplate
-        ? buildAgentPromptWithContext(submitLinkedOnlyTemplatePrompt, attachmentPaths, [])
+        ? buildAgentPromptWithContext(
+            submitLinkedOnlyTemplatePrompt,
+            attachmentPaths,
+            [],
+            linkedPromptContext.linkedContextBlocks
+          )
         : buildAgentPromptWithContext(
             agentPrompt,
             attachmentPaths,
-            submitLinkedWorkItem?.url ? [submitLinkedWorkItem.url] : []
+            linkedPromptContext.linkedUrls,
+            linkedPromptContext.linkedContextBlocks
           )
       const submitShouldRunIssueAutomation =
         enableIssueAutomation &&
@@ -2057,16 +2091,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const trimmedNote = note.trim()
         await applyWorktreeMeta(worktree.id, trimmedNote ? { comment: trimmedNote } : {})
 
-        // Why: when a linked work item is selected in the quick flow, launch
-        // the agent with a blank prompt and type the URL into its input as a
-        // draft (no trailing Enter). This lets the user review/edit before
-        // sending instead of auto-executing a "Complete <url>" template.
-        // Falls back to the trimmed note when the linked item carries no
-        // number/URL (Linear typed-only entries).
-        const isLinearTypedOnly = submitLinkedWorkItem?.number === 0 && Boolean(trimmedNote)
-        const quickPrompt = isLinearTypedOnly && trimmedNote ? trimmedNote : ''
-        const quickDraftPrompt =
-          submitLinkedWorkItem && !isLinearTypedOnly ? submitLinkedWorkItem.url : null
+        // Why: quick create should draft linked source data for review instead
+        // of auto-executing it. Rich linked context wins over URL fallback;
+        // typed-only Linear entries still use the note as the startup prompt.
+        const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
+          resolveQuickCreateLinkedWorkItemPrompt(submitLinkedWorkItem, trimmedNote)
 
         // Why: agents that gate first-launch behind a "Do you trust this
         // folder?" menu (cursor-agent, copilot) consume the bracketed paste
@@ -2308,6 +2337,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   return {
     cardProps,
     composerRef,
+    onComposerNodeChange: handleComposerNodeChange,
     promptTextareaRef,
     nameInputRef,
     submit,

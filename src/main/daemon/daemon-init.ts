@@ -83,19 +83,35 @@ function probeSocket(socketPath: string): Promise<boolean> {
       return
     }
     const sock = connect({ path: socketPath })
-    const timer = setTimeout(() => {
-      sock.destroy()
-      resolve(false)
+    let settled = false
+    let timer: ReturnType<typeof setTimeout>
+    function finish(alive: boolean, options?: { destroy?: boolean }): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      sock.removeListener('connect', onConnect)
+      sock.removeListener('error', onError)
+      if (options?.destroy) {
+        sock.destroy()
+      }
+      resolve(alive)
+    }
+
+    function onConnect(): void {
+      finish(true, { destroy: true })
+    }
+
+    function onError(): void {
+      finish(false)
+    }
+
+    timer = setTimeout(() => {
+      finish(false, { destroy: true })
     }, 1000)
-    sock.on('connect', () => {
-      clearTimeout(timer)
-      sock.destroy()
-      resolve(true)
-    })
-    sock.on('error', () => {
-      clearTimeout(timer)
-      resolve(false)
-    })
+    sock.on('connect', onConnect)
+    sock.on('error', onError)
   })
 }
 

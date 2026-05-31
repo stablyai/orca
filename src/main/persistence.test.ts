@@ -16,7 +16,9 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import type {
   PersistedState,
+  ProjectGroup,
   Repo,
+  TerminalPaneLayoutNode,
   TerminalTab,
   WorktreeLineage,
   WorkspaceSessionState
@@ -216,6 +218,19 @@ function makeSessionWithBrowserHistory(count: number): WorkspaceSessionState {
       lastVisitedAt: 1_700_000_000_000 - index,
       visitCount: 1
     }))
+  }
+}
+
+function makeBalancedLegacyPaneLayout(start: number, end: number): TerminalPaneLayoutNode {
+  if (end - start === 1) {
+    return { type: 'leaf', leafId: `pane:${start + 1}` }
+  }
+  const midpoint = Math.floor((start + end) / 2)
+  return {
+    type: 'split',
+    direction: 'horizontal',
+    first: makeBalancedLegacyPaneLayout(start, midpoint),
+    second: makeBalancedLegacyPaneLayout(midpoint, end)
   }
 }
 
@@ -1504,6 +1519,35 @@ describe('Store', () => {
     expect(store.getRepo('sibling')?.projectGroupId).toBe(sibling.id)
   })
 
+  it('creates a project group when persisted group history is very large', async () => {
+    const projectGroups: ProjectGroup[] = Array.from({ length: 130_000 }, (_, index) => ({
+      id: `group-${index}`,
+      name: `Group ${index}`,
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual',
+      tabOrder: index,
+      isCollapsed: false,
+      color: null,
+      createdAt: index,
+      updatedAt: index
+    }))
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups
+    })
+    const store = await createStore()
+
+    const group = store.createProjectGroup({ name: 'New group', createdFrom: 'manual' })
+
+    expect(group.tabOrder).toBe(projectGroups.length)
+  })
+
   it('sanitizes invalid project group updates before persisting a repo', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })
@@ -1604,6 +1648,26 @@ describe('Store', () => {
     expect(updated).not.toBeNull()
     expect(updated!.repoIcon).toBeUndefined()
     expect(store.getRepo('r1')!.repoIcon).toBeUndefined()
+  })
+
+  it('updateRepo normalizes custom repo badge colors before storing', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', { badgeColor: ' ABCDEF ' })
+
+    expect(updated!.badgeColor).toBe('#abcdef')
+    expect(store.getRepo('r1')!.badgeColor).toBe('#abcdef')
+  })
+
+  it('updateRepo ignores invalid repo badge colors without clearing the existing color', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ badgeColor: '#123456' }))
+
+    const updated = store.updateRepo('r1', { badgeColor: 'blue' })
+
+    expect(updated!.badgeColor).toBe('#123456')
+    expect(store.getRepo('r1')!.badgeColor).toBe('#123456')
   })
 
   it('getRepo does not expose invalid persisted repo icons', async () => {
@@ -2937,6 +3001,71 @@ describe('Store', () => {
     expect(store.getWorkspaceSession()).toEqual(session)
   })
 
+  it('patches workspace session without replacing unchanged slices', async () => {
+    const store = await createStore()
+    const tabsByWorktree = {
+      wt1: [makeTerminalTab({ id: 'tab1', ptyId: null, worktreeId: 'wt1' })]
+    }
+    const terminalLayoutsByTabId = {
+      tab1: { root: null, activeLeafId: null, expandedLeafId: null }
+    }
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree,
+      terminalLayoutsByTabId,
+      activeConnectionIdsAtShutdown: ['ssh-1']
+    })
+
+    store.patchWorkspaceSession({
+      activeTabId: 'tab2',
+      activeConnectionIdsAtShutdown: undefined
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.activeTabId).toBe('tab2')
+    expect(session.tabsByWorktree).toEqual(tabsByWorktree)
+    expect(session.terminalLayoutsByTabId).toEqual(terminalLayoutsByTabId)
+    expect(session.activeConnectionIdsAtShutdown).toBeUndefined()
+  })
+
+  it('uses full normalization for structural workspace session patches', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'local-repo', connectionId: null }))
+    store.setWorkspaceSession({
+      activeRepoId: 'local-repo',
+      activeWorktreeId: 'local-repo::/worktree',
+      activeTabId: 'tab-local',
+      tabsByWorktree: {
+        'local-repo::/worktree': [
+          makeTerminalTab({
+            id: 'tab-local',
+            ptyId: 'pty-local',
+            worktreeId: 'local-repo::/worktree'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    store.patchWorkspaceSession({
+      terminalLayoutsByTabId: {
+        'tab-local': {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          buffersByLeafId: { [TEST_LEAF_1]: 'local-scrollback' },
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-local' }
+        }
+      }
+    })
+
+    expect(
+      store.getWorkspaceSession().terminalLayoutsByTabId['tab-local'].buffersByLeafId
+    ).toBeUndefined()
+  })
+
   it('strips local terminal scrollback buffers when setting workspace session', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'local-repo', connectionId: null }))
@@ -3587,6 +3716,62 @@ describe('Store', () => {
         ])
       })
     )
+  })
+
+  it('loads legacy pane aliases from very large persisted split layouts', async () => {
+    const leafCount = 130_000
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {
+        activeRepoId: 'r1',
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [
+            {
+              id: 'tab1',
+              worktreeId: 'wt1',
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'large-pty'
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: makeBalancedLegacyPaneLayout(0, leafCount),
+            activeLeafId: 'pane:1',
+            expandedLeafId: null
+          }
+        }
+      }
+    })
+
+    const store = await createStore()
+    store.flush()
+
+    const persisted = readDataFile() as PersistedState
+    const aliasEntries = persisted.legacyPaneKeyAliasEntries
+    expect(aliasEntries).toHaveLength(leafCount + 1)
+    expect(
+      aliasEntries.some((entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === 'tab1:0')
+    ).toBe(true)
+    expect(
+      aliasEntries.some((entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === 'tab1:1')
+    ).toBe(true)
+    expect(
+      aliasEntries.some(
+        (entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === `tab1:${leafCount}`
+      )
+    ).toBe(true)
   })
 
   it('converts unambiguous dev migration rows into persisted aliases', async () => {

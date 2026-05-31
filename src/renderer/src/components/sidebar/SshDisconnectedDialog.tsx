@@ -10,6 +10,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { statusColor } from '@/components/settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 
@@ -41,18 +42,23 @@ export function SshDisconnectedDialog({
   status
 }: SshDisconnectedDialogProps): React.JSX.Element {
   const [connecting, setConnecting] = useState(false)
+  const mountedRef = useMountedRef()
 
   const handleReconnect = useCallback(async () => {
     setConnecting(true)
     try {
       await window.api.ssh.connect({ targetId })
-      onOpenChange(false)
+      if (mountedRef.current) {
+        onOpenChange(false)
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Reconnection failed')
     } finally {
-      setConnecting(false)
+      if (mountedRef.current) {
+        setConnecting(false)
+      }
     }
-  }, [targetId, onOpenChange])
+  }, [mountedRef, targetId, onOpenChange])
 
   const isConnecting =
     connecting ||
