@@ -78,6 +78,35 @@ describe('TerminalWebView scroll routing', () => {
     expect(resetBlock).toContain('cancelAnimationFrame(normalScrollFrameId);')
   })
 
+  it('drains terminal writes without shifting the queued array', () => {
+    expect(source).toContain('var writeQueueHead = 0;')
+    expect(source).toContain('function nextQueuedWrite()')
+    expect(source).toContain('writeQueueHead++;')
+    expect(source).toContain('writeQueue = writeQueue.slice(writeQueueHead);')
+    expect(source).not.toContain('writeQueue.shift()')
+  })
+
+  it('bounds native-side pending WebView writes while preserving control messages', () => {
+    expect(source).toContain('const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000')
+    expect(source).toContain('const MAX_PENDING_WEB_WRITE_MESSAGES = 4096')
+    expect(source).toContain('const pendingWriteBytesRef = useRef(0)')
+    expect(source).toContain('const pendingWriteCountRef = useRef(0)')
+    expect(source).toContain('const queuePendingMessage = useCallback')
+    expect(source).toContain('pendingWriteCountRef.current > MAX_PENDING_WEB_WRITE_MESSAGES')
+    expect(source).toContain("candidate.type === 'write'")
+    expect(source).toContain('clearPendingMessages()')
+  })
+
+  it('clears WebView await timers when the real response wins', () => {
+    const measureBlock = sliceBetween('measureFitDimensions(', 'resetZoom()')
+    expect(measureBlock).toContain('clearTimeout(timeout)')
+    expect(measureBlock).toContain('measureResolveRef.current === finish')
+
+    const readyBlock = sliceBetween('async awaitReady()', '})')
+    expect(readyBlock).toContain('clearTimeout(timeout)')
+    expect(readyBlock).toContain('void p.finally')
+  })
+
   it('hides xterm scrollbars and drives the mobile scroll indicator from committed rows', () => {
     expect(source).toContain('<div id="scroll-indicator"><div id="scroll-thumb"></div></div>')
     expect(source).toContain('.xterm .xterm-viewport::-webkit-scrollbar')
