@@ -151,6 +151,7 @@ export class DaemonServer {
     socket.write(encodeNdjson({ type: 'hello', ok: true }))
 
     if (hello.role === 'control') {
+      const previous = this.clients.get(hello.clientId)
       const client: ConnectedClient = {
         clientId: hello.clientId,
         controlSocket: socket,
@@ -158,12 +159,22 @@ export class DaemonServer {
       }
       this.clients.set(hello.clientId, client)
       this.setupControlSocket(socket, hello.clientId)
+      if (previous) {
+        // Why: a reconnect can reuse a clientId before the old sockets notice
+        // their close. Tear them down after installing the new owner so stale
+        // close events cannot delete the replacement client entry.
+        previous.streamSocket?.destroy()
+        previous.controlSocket.destroy()
+      }
     } else if (hello.role === 'stream') {
       const client = this.clients.get(hello.clientId)
-      if (client) {
-        client.streamSocket = socket
+      if (!client) {
+        // Why: stream sockets are only meaningful beside a control socket; an
+        // orphan stream would otherwise stay open with no tracked owner.
+        socket.destroy()
+        return
       }
-      // Stream socket is receive-only from daemon's perspective (for events)
+      this.setupStreamSocket(socket, client)
     }
   }
 
@@ -178,9 +189,39 @@ export class DaemonServer {
     socket.on('data', (chunk) => parser.feed(chunk.toString()))
 
     socket.on('close', () => {
+      const client = this.clients.get(clientId)
+      if (client?.controlSocket !== socket) {
+        return
+      }
       this.streamDataBatcher.clear(clientId)
+      client.streamSocket?.destroy()
       this.clients.delete(clientId)
     })
+  }
+
+  private setupStreamSocket(socket: Socket, client: ConnectedClient): void {
+    const previous = client.streamSocket
+    socket.removeAllListeners('data')
+    client.streamSocket = socket
+
+    const cleanup = (): void => {
+      socket.removeListener('close', cleanup)
+      socket.removeListener('error', cleanup)
+      if (this.clients.get(client.clientId) !== client || client.streamSocket !== socket) {
+        return
+      }
+      this.streamDataBatcher.clear(client.clientId)
+      client.streamSocket = null
+    }
+
+    socket.on('close', cleanup)
+    socket.on('error', cleanup)
+
+    if (previous && previous !== socket) {
+      // Why: replacing a stream socket must not leave the old receive-only
+      // channel alive and untracked.
+      previous.destroy()
+    }
   }
 
   private async handleRequest(
