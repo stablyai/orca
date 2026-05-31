@@ -888,6 +888,88 @@ describe('runtime file client', () => {
     })
   })
 
+  it('removes a created runtime directory import root when a nested file upload fails', async () => {
+    fsStageExternalPathsForRuntimeUpload.mockResolvedValue({
+      sources: [
+        {
+          sourcePath: '/Users/me/assets',
+          status: 'staged',
+          name: 'assets',
+          kind: 'directory',
+          entries: [
+            { relativePath: '', kind: 'directory' },
+            { relativePath: 'logo.png', kind: 'file', contentBase64: 'cG5n' }
+          ]
+        }
+      ]
+    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'stat-destination',
+        ok: true,
+        result: { size: 0, isDirectory: true, mtime: 1 },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'stat-import-root-miss',
+        ok: false,
+        error: { code: 'not_found', message: 'not found' },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'create-import-root',
+        ok: true,
+        result: { ok: true },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'write-file',
+        ok: false,
+        error: { code: 'write_failed', message: 'disk full' },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'delete-temp',
+        ok: true,
+        result: { ok: true },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'delete-import-root',
+        ok: true,
+        result: { ok: true },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+
+    await expect(
+      importExternalPathsToRuntime(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        ['/Users/me/assets'],
+        '/remote/repo/uploads'
+      )
+    ).resolves.toMatchObject({
+      results: [{ status: 'failed', reason: 'disk full' }]
+    })
+
+    const writeCall = runtimeEnvironmentCall.mock.calls[3]?.[0] as
+      | { params: { relativePath: string } }
+      | undefined
+    if (!writeCall) {
+      throw new Error('missing failed file write call')
+    }
+    expect(writeCall.params.relativePath).toMatch(/^uploads\/assets\/\.logo\.png\.orca-upload-/)
+    expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith({
+      selector: 'env-1',
+      method: 'files.delete',
+      params: { worktree: 'wt-1', relativePath: 'uploads/assets', recursive: true },
+      timeoutMs: 15_000
+    })
+  })
+
   it('keeps local external imports on filesystem IPC when no runtime is active', async () => {
     fsImportExternalPaths.mockResolvedValue({
       results: [
