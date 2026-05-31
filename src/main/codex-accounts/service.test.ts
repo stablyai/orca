@@ -1,7 +1,16 @@
 /* eslint-disable max-lines -- test suite covers config sync, login seeding, and fallback scenarios */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -225,6 +234,45 @@ describe('CodexAccountService config sync', () => {
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(
       '{"account":"managed"}\n'
     )
+  })
+
+  it('does not rewrite managed configs that already match canonical config', async () => {
+    const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+    const canonicalConfig = 'approval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
+    writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
+    const managedHomePath = createManagedHome(
+      testState.userDataDir,
+      'account-1',
+      canonicalConfig,
+      '{"account":"managed"}\n'
+    )
+    const managedConfigPath = join(managedHomePath, 'config.toml')
+    const oldDate = new Date('2024-01-01T00:00:00.000Z')
+    utimesSync(managedConfigPath, oldDate, oldDate)
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    const { CodexAccountService } = await import('./service')
+    new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
+
+    expect(statSync(managedConfigPath).mtimeMs).toBeLessThan(Date.now() - 60_000)
   })
 
   it('does not sync configs when ~/.codex/config.toml is missing', async () => {

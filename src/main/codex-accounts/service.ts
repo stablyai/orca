@@ -495,7 +495,16 @@ export class CodexAccountService {
   }
 
   private writeManagedConfig(managedHomePath: string, contents: string): void {
-    writeFileAtomically(join(managedHomePath, 'config.toml'), contents)
+    const configPath = join(managedHomePath, 'config.toml')
+    try {
+      if (existsSync(configPath) && readFileSync(configPath, 'utf-8') === contents) {
+        return
+      }
+    } catch {
+      // Why: read errors should not make a stale config look current; the
+      // atomic write path owns Windows ACL repair and persistent error surfacing.
+    }
+    writeFileAtomically(configPath, contents)
   }
 
   private getManagedAccountsRoot(): string {
