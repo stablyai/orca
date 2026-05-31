@@ -25,18 +25,32 @@ export async function readCurrentProcessMacSystemResolverHealth(): Promise<Syste
     let stdout = ''
     let stderr = ''
     let settled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const child = spawn('/usr/sbin/scutil', ['--dns'], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    const onStdoutData = (chunk: string): void => {
+      stdout += chunk
+    }
+    const onStderrData = (chunk: string): void => {
+      stderr += chunk
+    }
     const finish = (): void => {
       if (settled) {
         return
       }
       settled = true
-      clearTimeout(timer)
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
+      child.stdout.off('data', onStdoutData)
+      child.stderr.off('data', onStderrData)
+      child.off('error', finish)
+      child.off('close', finish)
       resolve(classifyMacSystemResolverHealth(`${stdout}\n${stderr}`))
     }
-    const child = spawn('/usr/sbin/scutil', ['--dns'], {
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       child.kill()
       // Why: this runs inside the daemon request path, so the timeout must
       // cap the RPC even if scutil is slow to exit after SIGTERM.
@@ -44,12 +58,8 @@ export async function readCurrentProcessMacSystemResolverHealth(): Promise<Syste
     }, MAC_RESOLVER_CHECK_TIMEOUT_MS)
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => {
-      stdout += chunk
-    })
-    child.stderr.on('data', (chunk: string) => {
-      stderr += chunk
-    })
+    child.stdout.on('data', onStdoutData)
+    child.stderr.on('data', onStderrData)
     child.on('error', finish)
     child.on('close', finish)
   })

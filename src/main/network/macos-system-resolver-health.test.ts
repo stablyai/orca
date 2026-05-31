@@ -109,4 +109,51 @@ resolver #1
     await expect(healthPromise).resolves.toBe('unknown')
     expect(child.kill).toHaveBeenCalledTimes(1)
   })
+
+  it('removes scutil listeners when the timeout settles before child close', async () => {
+    vi.useFakeTimers()
+    mockPlatform('darwin')
+    const child = createMockScutilProcess()
+    vi.mocked(spawn).mockReturnValue(child)
+
+    const healthPromise = readCurrentProcessMacSystemResolverHealth()
+
+    expect(child.stdout.listenerCount('data')).toBe(1)
+    expect(child.stderr.listenerCount('data')).toBe(1)
+    expect(child.listenerCount('error')).toBe(1)
+    expect(child.listenerCount('close')).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(1_500)
+    await expect(healthPromise).resolves.toBe('unknown')
+
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+  })
+
+  it('removes scutil listeners when the child closes normally', async () => {
+    mockPlatform('darwin')
+    const child = createMockScutilProcess()
+    vi.mocked(spawn).mockReturnValue(child)
+
+    const healthPromise = readCurrentProcessMacSystemResolverHealth()
+
+    child.stdout.emit(
+      'data',
+      `
+DNS configuration
+
+resolver #1
+  nameserver[0] : 1.1.1.1
+`
+    )
+    child.emit('close', 0)
+
+    await expect(healthPromise).resolves.toBe('healthy')
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+  })
 })
