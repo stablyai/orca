@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
 import type { LinearWorkspace } from '../../../shared/types'
 import {
@@ -20,6 +20,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import {
+  createLinearApiKeyDialogState,
+  resolveLinearApiKeyDialogState
+} from './linear-api-key-dialog-state'
 
 type LinearApiKeyDialogProps = {
   open: boolean
@@ -49,23 +53,19 @@ export function LinearApiKeyDialog({
   const mountedRef = useMountedRef()
   const apiKeyInputId = useId()
   const apiKeyErrorId = useId()
-  const [apiKeyDraft, setApiKeyDraft] = useState('')
-  const [connectState, setConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
-  const [connectError, setConnectError] = useState<string | null>(null)
+  const [dialogState, setDialogState] = useState(createLinearApiKeyDialogState)
 
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const personalKeyUrl = buildLinearPersonalApiKeySettingsUrl(workspace?.organizationUrlKey)
   const workspaceApiUrl = buildLinearWorkspaceApiSettingsUrl(workspace?.organizationUrlKey)
   const submitLabel = connectLabel ?? (workspace ? 'Update access' : 'Connect')
-
-  useEffect(() => {
-    if (open) {
-      return
-    }
-    setApiKeyDraft('')
-    setConnectState('idle')
-    setConnectError(null)
-  }, [open])
+  const resolvedDialogState = resolveLinearApiKeyDialogState(dialogState, open)
+  if (resolvedDialogState !== dialogState) {
+    // Why: parent-controlled close can race an in-flight connect request; keep
+    // hidden draft/error state reset before the next open paints.
+    setDialogState(resolvedDialogState)
+  }
+  const { apiKeyDraft, connectState, connectError } = resolvedDialogState
 
   const handleOpenChange = (nextOpen: boolean): void => {
     if (connectState !== 'connecting') {
@@ -78,26 +78,30 @@ export function LinearApiKeyDialog({
     if (!apiKey || connectState === 'connecting') {
       return
     }
-    setConnectState('connecting')
-    setConnectError(null)
+    setDialogState((current) => ({ ...current, connectState: 'connecting', connectError: null }))
     try {
       const result = await connectLinear(apiKey)
       if (!mountedRef.current) {
         return
       }
       if (result.ok) {
-        setApiKeyDraft('')
-        setConnectState('idle')
+        setDialogState(createLinearApiKeyDialogState())
         onOpenChange(false)
         onConnected?.()
         return
       }
-      setConnectState('error')
-      setConnectError(result.error)
+      setDialogState((current) => ({
+        ...current,
+        connectState: 'error',
+        connectError: result.error
+      }))
     } catch (error) {
       if (mountedRef.current) {
-        setConnectState('error')
-        setConnectError(error instanceof Error ? error.message : 'Connection failed')
+        setDialogState((current) => ({
+          ...current,
+          connectState: 'error',
+          connectError: error instanceof Error ? error.message : 'Connection failed'
+        }))
       }
     }
   }
@@ -143,11 +147,12 @@ export function LinearApiKeyDialog({
               placeholder="lin_api_..."
               value={apiKeyDraft}
               onChange={(event) => {
-                setApiKeyDraft(event.target.value)
-                if (connectState === 'error') {
-                  setConnectState('idle')
-                  setConnectError(null)
-                }
+                const nextDraft = event.target.value
+                setDialogState((current) => ({
+                  apiKeyDraft: nextDraft,
+                  connectState: current.connectState === 'error' ? 'idle' : current.connectState,
+                  connectError: current.connectState === 'error' ? null : current.connectError
+                }))
               }}
               disabled={connectState === 'connecting'}
               aria-invalid={connectState === 'error'}
