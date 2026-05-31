@@ -2474,6 +2474,46 @@ describe('connectPanePty', () => {
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
   })
 
+  it('clears the pending serializer when disposed before non-deferred SSH reattach expiry resolves', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const reattach = createDeferred<undefined>()
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(
+      (opts: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (opts.sessionId) {
+          opts.callbacks?.onError?.('SSH_SESSION_EXPIRED: restored-session')
+          return reattach.promise
+        }
+        return Promise.resolve('fresh-ssh-pty')
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'restored-session' }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([['conn-1', { status: 'connected' }]])
+    } as StoreState
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
+    })
+
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+    binding.dispose()
+    reattach.resolve(undefined)
+    await flushAsyncTicks(10)
+
+    expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_2),
+      1
+    )
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+  })
+
   it('resets reattach cursor/focus state after daemon snapshot replay without applying the full mode reset', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -4951,6 +4991,46 @@ describe('connectPanePty', () => {
     expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'expired-session')
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'fresh-ssh-pty')
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
+  })
+
+  it('clears the pending serializer when disposed before deferred SSH expiry resolves', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const reattach = createDeferred<undefined>()
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(
+      (opts: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (opts.sessionId) {
+          opts.callbacks?.onError?.('SSH_SESSION_EXPIRED: expired-session')
+          return reattach.promise
+        }
+        return Promise.resolve('fresh-ssh-pty')
+      }
+    )
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': 'expired-session' }
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(10)
+    binding.dispose()
+    reattach.resolve(undefined)
+    await flushAsyncTicks(10)
+
+    expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      1
+    )
+    expect(transport.connect).toHaveBeenCalledTimes(1)
   })
 
   // Why: the working→idle transition fires an 'agent-task-complete' OS

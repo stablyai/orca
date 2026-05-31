@@ -2441,15 +2441,15 @@ export function connectPanePty(
                     : 'undefined'
                 )
                 if (!result && expiredReattachError) {
+                  const gen = await preSignalPromise
+                  if (typeof gen === 'number') {
+                    void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+                  }
                   if (disposed) {
                     return
                   }
                   deps.syncPanePtyLayoutBinding(pane.id, null)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
-                  const gen = await preSignalPromise
-                  if (typeof gen === 'number') {
-                    void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
-                  }
                   startFreshSpawn()
                   return
                 }
@@ -2567,15 +2567,15 @@ export function connectPanePty(
       void Promise.resolve(reattachPromise)
         .then(async (result) => {
           if (!result && expiredReattachError) {
+            const gen = await preSignalPromise
+            if (typeof gen === 'number') {
+              void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+            }
             if (disposed) {
               return
             }
             deps.syncPanePtyLayoutBinding(pane.id, null)
             deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
-            const gen = await preSignalPromise
-            if (typeof gen === 'number') {
-              void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
-            }
             startFreshSpawn()
             return
           }
