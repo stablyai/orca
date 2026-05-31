@@ -53,13 +53,15 @@ function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
 
 function CliFeatureTipVisual(): JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
-  const [visibleCommandCount, setVisibleCommandCount] = useState(
-    reducedMotion ? CLI_AGENT_COMMANDS.length : 0
-  )
+  const [animatedVisibleCommandCount, setAnimatedVisibleCommandCount] = useState(0)
+  // Why: reduced-motion users should see the static completed state without a
+  // post-render state repair; only the animated path needs timer-backed state.
+  const visibleCommandCount = reducedMotion
+    ? CLI_AGENT_COMMANDS.length
+    : animatedVisibleCommandCount
 
   useEffect(() => {
     if (reducedMotion) {
-      setVisibleCommandCount(CLI_AGENT_COMMANDS.length)
       return
     }
 
@@ -72,9 +74,9 @@ function CliFeatureTipVisual(): JSX.Element {
     // Why: terminal lines mirror the orchestration tour beat timings so the
     // shell shows each command as the parent agent runs it.
     const runOnce = (): void => {
-      setVisibleCommandCount(0)
+      setAnimatedVisibleCommandCount(0)
       ORCHESTRATION_CLI_COMMAND_TIMINGS_MS.forEach((ms, index) => {
-        later(() => setVisibleCommandCount(index + 1), ms)
+        later(() => setAnimatedVisibleCommandCount(index + 1), ms)
       })
       later(runOnce, ORCHESTRATION_CLI_COMMAND_LOOP_MS)
     }
