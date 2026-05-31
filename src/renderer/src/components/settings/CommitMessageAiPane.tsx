@@ -2,7 +2,7 @@
    model dropdown, thinking effort dropdown, custom command, custom prompt) is
    a SearchableSetting block, and splitting the pane across files would scatter
    the ~6 conditional render branches without making any of them clearer. */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import type {
@@ -349,12 +349,16 @@ export function CommitMessageAiPane({
     onCustomPromptDirtyChange?.(isCustomPromptDirty)
   }, [isCustomPromptDirty, onCustomPromptDirtyChange])
 
-  useEffect(
-    () => () => {
-      onCustomPromptDirtyChange?.(false)
-    },
-    [onCustomPromptDirtyChange]
-  )
+  const onCustomPromptDirtyChangeRef = useRef(onCustomPromptDirtyChange)
+  onCustomPromptDirtyChangeRef.current = onCustomPromptDirtyChange
+  const setPaneRootRef = useCallback((node: HTMLDivElement | null): void => {
+    if (node !== null) {
+      return
+    }
+    // Why: Settings owns the global unsaved-prompt guard; reset it when this
+    // pane detaches without keeping a passive cleanup-only Effect.
+    onCustomPromptDirtyChangeRef.current?.(false)
+  }, [])
 
   const baseAgentCapabilities = useMemo(listCommitMessageAgentCapabilities, [])
   const agentCapabilities = useMemo(
@@ -1422,6 +1426,7 @@ export function CommitMessageAiPane({
   // Branch Prefix / Refresh Local Base Ref / Orca Attribution rows above.
   return (
     <div
+      ref={setPaneRootRef}
       id="source-control-ai-settings"
       data-settings-section="source-control-ai-settings"
       className="space-y-4 border-t border-border/40 pt-4"
