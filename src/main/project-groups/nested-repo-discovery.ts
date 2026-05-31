@@ -70,13 +70,10 @@ async function hasGitMarker(dirPath: string): Promise<boolean> {
 }
 
 async function readLocalDirectory(dirPath: string): Promise<NestedRepoDirectoryEntry[]> {
-  const entries = await readdir(dirPath)
-  const result: NestedRepoDirectoryEntry[] = []
-  for (const name of entries) {
-    const childStat = await stat(join(dirPath, name)).catch(() => null)
-    result.push({ name, isDirectory: childStat?.isDirectory() === true })
-  }
-  return result
+  // Why: Dirent data avoids one stat per child and keeps symlinked directories
+  // from expanding the scan outside the selected folder.
+  const entries = await readdir(dirPath, { withFileTypes: true })
+  return entries.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory() }))
 }
 
 export async function scanNestedRepos(args: {
