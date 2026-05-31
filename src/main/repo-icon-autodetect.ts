@@ -34,6 +34,10 @@ const REPO_ICON_SOURCE_FILE_CANDIDATES = [
   'src/index.html'
 ]
 
+// Why: repo icon detection runs while adding repos; declared-icon probing should
+// not read large app entrypoints just to find a small favicon href.
+const MAX_REPO_ICON_SOURCE_BYTES = 256 * 1024
+
 const LINK_ICON_HTML_RE =
   /<link\b(?=[^>]*\brel=["'](?:icon|shortcut icon)["'])(?=[^>]*\bhref=["']([^"'?]+))[^>]*>/i
 const LINK_ICON_OBJECT_RE =
@@ -153,7 +157,12 @@ async function detectLocalPngIcon(repoPath: string): Promise<RepoIcon | null> {
   }
   for (const sourceFile of REPO_ICON_SOURCE_FILE_CANDIDATES) {
     try {
-      const source = await readFile(joinWorktreeRelativePath(repoPath, sourceFile), 'utf8')
+      const sourcePath = joinWorktreeRelativePath(repoPath, sourceFile)
+      const sourceInfo = await stat(sourcePath)
+      if (!sourceInfo.isFile() || sourceInfo.size > MAX_REPO_ICON_SOURCE_BYTES) {
+        continue
+      }
+      const source = await readFile(sourcePath, 'utf8')
       const href = extractIconHref(source)
       if (!href) {
         continue
@@ -191,7 +200,12 @@ async function detectRemotePngIcon(
   }
   for (const sourceFile of REPO_ICON_SOURCE_FILE_CANDIDATES) {
     try {
-      const result = await fsProvider.readFile(joinWorktreeRelativePath(repoPath, sourceFile))
+      const sourcePath = joinWorktreeRelativePath(repoPath, sourceFile)
+      const sourceInfo = await fsProvider.stat(sourcePath)
+      if (sourceInfo.type !== 'file' || sourceInfo.size > MAX_REPO_ICON_SOURCE_BYTES) {
+        continue
+      }
+      const result = await fsProvider.readFile(sourcePath)
       if (result.isBinary) {
         continue
       }

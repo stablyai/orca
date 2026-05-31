@@ -69,6 +69,21 @@ describe('detectRepoIcon', () => {
     })
   })
 
+  it('skips oversized source files when looking for declared icon hrefs', async () => {
+    const repoPath = await makeTempRepoDir()
+    await writeFile(
+      join(repoPath, 'index.html'),
+      `${'x'.repeat(256 * 1024 + 1)}<link rel="icon" href="/brand/icon.png">`
+    )
+    await mkdir(join(repoPath, 'public', 'brand'), { recursive: true })
+    await writeFile(
+      join(repoPath, 'public', 'brand', 'icon.png'),
+      Buffer.from(PNG_1X1_BASE64, 'base64')
+    )
+
+    await expect(detectRepoIcon({ repoPath, kind: 'folder' })).resolves.toBeUndefined()
+  })
+
   it('does not resolve declared icon hrefs outside the repo', async () => {
     const parentPath = await makeTempRepoDir()
     const repoPath = join(parentPath, 'repo')
