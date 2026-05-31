@@ -216,6 +216,25 @@ describe('gitlab client — MR operations', () => {
       )
     })
 
+    it('uses legacy pipeline payloads when branch MR lists omit head_pipeline', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 8,
+            title: 'Legacy pipeline branch',
+            state: 'opened',
+            sha: 'def',
+            pipeline: { status: 'failed' }
+          }
+        ])
+      })
+
+      const mr = await getMergeRequestForBranch('/repo', 'feature/legacy-pipeline')
+      expect(mr?.number).toBe(8)
+      expect(mr?.pipelineStatus).toBe('failure')
+    })
+
     it('strips refs/heads/ prefix from the branch arg', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
       glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })

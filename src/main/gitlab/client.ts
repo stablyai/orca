@@ -273,10 +273,13 @@ export async function getMergeRequestForBranch(
       )
       const data = JSON.parse(stdout) as (Parameters<typeof mapMRInfo>[0] & {
         head_pipeline?: { status?: string } | null
+        pipeline?: { status?: string } | null
       })[]
       if (Array.isArray(data) && data.length > 0) {
         const raw = data[0]
-        const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? null)
+        // Why: older GitLab list payloads expose `pipeline` instead of
+        // `head_pipeline`, matching the detail endpoint compatibility path.
+        const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
         return mapMRInfo(raw, pipelineStatus)
       }
     }
