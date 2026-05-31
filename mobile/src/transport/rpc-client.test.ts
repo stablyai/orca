@@ -479,4 +479,29 @@ describe('mobile rpc-client connection timeout', () => {
 
     client.close()
   })
+
+  it('rejects requests waiting for reconnect after the retry cap', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+
+    socket.open()
+    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+    socket.close()
+
+    const waitingRequestError = client.sendRequest('status.get').then(
+      () => null,
+      (error: Error) => error
+    )
+    await vi.runAllTimersAsync()
+
+    expect(client.getState()).toBe('reconnecting')
+    expect(client.getReconnectAttempt()).toBe(12)
+    await expect(waitingRequestError).resolves.toMatchObject({
+      message: 'Connection retry limit reached'
+    })
+    await expect(client.sendRequest('status.get')).rejects.toThrow('Connection retry limit reached')
+
+    client.close()
+  })
 })

@@ -199,6 +199,13 @@ export function connect(
   // in the logs.
   let stateEnteredAt = Date.now()
 
+  function rejectConnectWaiters(reason: string) {
+    const error = new Error(reason)
+    for (const waiter of connectWaiters.splice(0)) {
+      waiter.reject(error)
+    }
+  }
+
   function setState(next: ConnectionState) {
     if (state === next) return
     const prev = state
@@ -218,7 +225,7 @@ export function connect(
     } else if (next === 'disconnected' || next === 'auth-failed') {
       const reason =
         next === 'auth-failed' ? 'Unauthorized — pairing may be revoked' : 'Connection closed'
-      for (const w of connectWaiters.splice(0)) w.reject(new Error(reason))
+      rejectConnectWaiters(reason)
     }
     for (const listener of stateListeners) {
       listener(next)
@@ -239,6 +246,11 @@ export function connect(
   function waitForConnected(): Promise<void> {
     if (state === 'connected') return Promise.resolve()
     if (intentionallyClosed) return Promise.reject(new Error('Client closed'))
+    if (state === 'reconnecting' && reconnectAttempt >= GIVE_UP_AFTER_ATTEMPTS && !reconnectTimer) {
+      // Why: after the retry cap there is no future state transition to
+      // release callers waiting before their per-request timeout starts.
+      return Promise.reject(new Error('Connection retry limit reached'))
+    }
     return new Promise((resolve, reject) => {
       connectWaiters.push({ resolve, reject })
     })
@@ -699,6 +711,7 @@ export function connect(
         reason: 'give-up-cap',
         endpoint: redactedEndpoint(endpoint)
       })
+      rejectConnectWaiters('Connection retry limit reached')
       return
     }
     const delay = RECONNECT_DELAYS[Math.min(reconnectAttempt, RECONNECT_DELAYS.length - 1)]!
