@@ -26,6 +26,10 @@ import {
 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
+import {
+  startDiagnosticFetchTimeout,
+  type DiagnosticFetchTimeout
+} from '../src/diagnostics/diagnostic-fetch-timeout'
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -113,10 +117,15 @@ export default function TroubleshootScreen() {
   const [diagnosticStatus, setDiagnosticStatus] = useState<DiagnosticStatus>('idle')
   const [checks, setChecks] = useState<CheckResult[]>([])
   const abortRef = useRef(false)
+  const diagnosticRunRef = useRef(0)
+  const activeInternetCheckRef = useRef<DiagnosticFetchTimeout | null>(null)
 
   useEffect(() => {
     return () => {
       abortRef.current = true
+      diagnosticRunRef.current += 1
+      activeInternetCheckRef.current?.dispose()
+      activeInternetCheckRef.current = null
     }
   }, [])
 
@@ -125,11 +134,16 @@ export default function TroubleshootScreen() {
   }, [])
 
   const runDiagnostics = useCallback(async () => {
+    const runId = diagnosticRunRef.current + 1
+    diagnosticRunRef.current = runId
     abortRef.current = false
+    activeInternetCheckRef.current?.dispose()
+    activeInternetCheckRef.current = null
     setDiagnosticStatus('running')
     setChecks([])
 
     const results: CheckResult[] = []
+    const isCurrentRun = () => !abortRef.current && diagnosticRunRef.current === runId
 
     try {
       const hosts = await loadHosts()
@@ -142,33 +156,40 @@ export default function TroubleshootScreen() {
       results.push({ label: 'Paired hosts', status: 'warn', detail: 'Could not read host data' })
     }
 
-    if (abortRef.current) return
+    if (!isCurrentRun()) return
     setChecks([...results])
 
+    const internetCheck = startDiagnosticFetchTimeout(5000)
+    activeInternetCheckRef.current = internetCheck
     try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 5000)
       const resp = await fetch('https://dns.google/resolve?name=example.com&type=A', {
-        signal: controller.signal
+        signal: internetCheck.signal
       })
-      clearTimeout(timeout)
+      if (!isCurrentRun()) return
       results.push(
         resp.ok
           ? { label: 'Internet', status: 'pass', detail: 'Connected' }
           : { label: 'Internet', status: 'warn', detail: 'Unexpected response' }
       )
     } catch {
+      if (!isCurrentRun()) return
       results.push({ label: 'Internet', status: 'fail', detail: 'No connection' })
+    } finally {
+      internetCheck.dispose()
+      if (activeInternetCheckRef.current === internetCheck) {
+        activeInternetCheckRef.current = null
+      }
     }
 
-    if (abortRef.current) return
+    if (!isCurrentRun()) return
     setChecks([...results])
 
     try {
       const hosts = await loadHosts()
       for (const host of hosts) {
-        if (abortRef.current) return
+        if (!isCurrentRun()) return
         const reachable = await testHostReachability(host.endpoint)
+        if (!isCurrentRun()) return
         results.push({
           label: host.name,
           status: reachable ? 'pass' : 'fail',
@@ -182,7 +203,7 @@ export default function TroubleshootScreen() {
       results.push({ label: 'Hosts', status: 'warn', detail: 'Could not test' })
     }
 
-    if (abortRef.current) return
+    if (!isCurrentRun()) return
 
     results.push({
       label: 'Platform',
