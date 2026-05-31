@@ -80,7 +80,7 @@ const SETTINGS_NAV_GROUPS = [
   { id: 'workflows', title: 'Workflows' },
   { id: 'interface', title: 'Interface' },
   { id: 'remote', title: 'Remote Access' },
-  { id: 'safety', title: 'Safety' },
+  { id: 'security', title: 'Privacy & Security' },
   { id: 'experimental', title: 'Experimental' }
 ] as const
 
@@ -960,17 +960,6 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
-                  id="floating-workspace"
-                  title="Floating Workspace"
-                  description="Global terminal, browser, and markdown tabs."
-                  searchEntries={getSectionSearchEntries('floating-workspace')}
-                >
-                  {isSectionMounted('floating-workspace') ? (
-                    <FloatingWorkspacePane settings={settings} updateSettings={updateSettings} />
-                  ) : null}
-                </SettingsSection>
-
-                <SettingsSection
                   id="terminal"
                   title="Terminal"
                   description="Shells, terminal appearance, and pane behavior."
@@ -1038,6 +1027,17 @@ function Settings(): React.JSX.Element {
                     ) : null}
                   </SettingsSection>
                 ) : null}
+
+                <SettingsSection
+                  id="floating-workspace"
+                  title="Floating Workspace"
+                  description="Global terminal, browser, and markdown tabs."
+                  searchEntries={getSectionSearchEntries('floating-workspace')}
+                >
+                  {isSectionMounted('floating-workspace') ? (
+                    <FloatingWorkspacePane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
 
                 <SettingsSection
                   id="appearance"
