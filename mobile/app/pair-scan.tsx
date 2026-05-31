@@ -1,10 +1,14 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
 import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
+import {
+  startPairingConnectionAttempt,
+  type PairingConnectionAttempt
+} from '../src/transport/pairing-connection-attempt'
 import { connect } from '../src/transport/rpc-client'
 import { saveHost, getNextHostName } from '../src/transport/host-store'
 import type { ConnectionLogEntry, PairingOffer, RpcResponse } from '../src/transport/types'
@@ -38,6 +42,16 @@ export default function PairScanScreen() {
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
   const logsRef = useRef<ConnectionLogEntry[]>([])
   const processingRef = useRef(false)
+  const mountedRef = useRef(true)
+  const activePairingAttemptRef = useRef<PairingConnectionAttempt | null>(null)
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+      activePairingAttemptRef.current?.dispose()
+      activePairingAttemptRef.current = null
+    }
+  }, [])
 
   const handleBarCodeScanned = useCallback(
     ({ data }: { data: string }) => {
@@ -78,30 +92,41 @@ export default function PairScanScreen() {
     logsRef.current = []
     setLogs([])
     let client: ReturnType<typeof connect> | null = null
+    activePairingAttemptRef.current?.dispose()
 
     // Why: split the try/catch around the network call vs the local save
     // so a Keychain or AsyncStorage failure doesn't masquerade as a
     // "Cannot connect — same network?" error. Pairing reached the
     // desktop fine; the failure is local persistence.
     let response: RpcResponse
-    let timedOut = false
-    const overallTimer = setTimeout(() => {
-      timedOut = true
-      client?.close()
-    }, PAIRING_OVERALL_TIMEOUT_MS)
+    const attempt = startPairingConnectionAttempt({
+      timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+      closeClient: () => client?.close()
+    })
+    activePairingAttemptRef.current = attempt
     try {
       client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64, {
         onLog: (entry) => {
+          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) return
           logsRef.current = [...logsRef.current, entry]
           setLogs(logsRef.current)
         }
       })
       response = await client.sendRequest('status.get')
-      clearTimeout(overallTimer)
-      client.close()
-      client = null
+      const attemptIsCurrent = activePairingAttemptRef.current === attempt
+      attempt.dispose()
+      if (activePairingAttemptRef.current === attempt) {
+        activePairingAttemptRef.current = null
+      }
+      if (!mountedRef.current || !attemptIsCurrent) return
     } catch (err) {
-      clearTimeout(overallTimer)
+      const timedOut = attempt.timedOut
+      const attemptIsCurrent = activePairingAttemptRef.current === attempt
+      attempt.dispose()
+      if (activePairingAttemptRef.current === attempt) {
+        activePairingAttemptRef.current = null
+      }
+      if (!mountedRef.current || !attemptIsCurrent) return
       console.warn('[pair] connect failed', err)
       setStatus('error')
       setErrorMessage(
@@ -110,11 +135,11 @@ export default function PairScanScreen() {
           : 'Cannot connect — check that your computer is on the same network'
       )
       processingRef.current = false
-      client?.close()
       return
     }
 
     if (!response.ok) {
+      if (!mountedRef.current) return
       if (response.error.code === 'unauthorized') {
         setStatus('error')
         setErrorMessage('Authentication failed — token may be expired')
@@ -138,8 +163,10 @@ export default function PairScanScreen() {
         publicKeyB64: offer.publicKeyB64,
         lastConnected: Date.now()
       })
+      if (!mountedRef.current) return
       router.replace(`/h/${hostId}`)
     } catch (err) {
+      if (!mountedRef.current) return
       console.warn('[pair] save failed', err)
       setStatus('error')
       setErrorMessage(
