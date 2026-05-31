@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the add-project dialog centralizes step routing, clone/remote/create state, and reset semantics across five steps so the modal flow stays in one place. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { FolderOpen, ArrowLeft, Globe, Monitor, FolderTree, Lightbulb } from 'lucide-react'
+import { FolderOpen, ArrowLeft, Globe, Monitor, FolderTree, Lightbulb, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -43,6 +43,7 @@ import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../shared/worktree-ownership'
+import { NestedRepoScanLimitNotice } from '../repo/NestedRepoScanLimitNotice'
 
 function defaultProjectGroupNameForPath(path: string): string {
   return (
@@ -81,6 +82,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const [isAdding, setIsAdding] = useState(false)
   const [serverPath, setServerPath] = useState('')
   const [isAddingServerPath, setIsAddingServerPath] = useState(false)
+  const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
   const [cloneUrl, setCloneUrl] = useState('')
   const [cloneDestination, setCloneDestination] = useState('')
   const [isCloning, setIsCloning] = useState(false)
@@ -265,6 +267,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setIsAdding(false)
     setServerPath('')
     setIsAddingServerPath(false)
+    setAddProjectBusyLabel(null)
     setCloneUrl('')
     setCloneDestination('')
     setIsCloning(false)
@@ -304,6 +307,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       }
       const gen = ++localAddGenRef.current
       setIsAdding(true)
+      setAddProjectBusyLabel('Scanning for repositories...')
       try {
         const attemptId = createNestedRepoTelemetryAttemptId()
         const scan = await scanNestedRepos(path)
@@ -329,6 +333,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           setStep('nested')
           return
         }
+        setAddProjectBusyLabel('Opening project...')
         const repo = await addRepoPath(path)
         if (gen !== localAddGenRef.current) {
           return
@@ -349,6 +354,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       } finally {
         if (gen === localAddGenRef.current) {
           setIsAdding(false)
+          setAddProjectBusyLabel(null)
         }
       }
     },
@@ -369,6 +375,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const handleBrowse = useCallback(async () => {
     const gen = ++localAddGenRef.current
     setIsAdding(true)
+    setAddProjectBusyLabel('Choose a folder...')
     try {
       const path = await window.api.repos.pickFolder()
       if (!path || gen !== localAddGenRef.current) {
@@ -516,6 +523,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       }
       const gen = ++serverAddGenRef.current
       setIsAddingServerPath(true)
+      setAddProjectBusyLabel(kind === 'git' ? 'Scanning for repositories...' : 'Opening folder...')
       try {
         if (kind === 'git') {
           const attemptId = createNestedRepoTelemetryAttemptId()
@@ -543,6 +551,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             return
           }
         }
+        setAddProjectBusyLabel(kind === 'git' ? 'Opening project...' : 'Opening folder...')
         const repo = await addRepoPath(path, kind)
         if (gen !== serverAddGenRef.current) {
           return
@@ -563,6 +572,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       } finally {
         if (gen === serverAddGenRef.current) {
           setIsAddingServerPath(false)
+          setAddProjectBusyLabel(null)
         }
       }
     },
@@ -918,6 +928,12 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                   Open as Folder
                 </Button>
               </div>
+              {isAddingServerPath && addProjectBusyLabel ? (
+                <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                  <span>{addProjectBusyLabel}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-center gap-4 pt-1">
                 <button
                   type="button"
@@ -925,7 +941,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                     setCloneError(null)
                     setStep('clone')
                   }}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  disabled={isAddingServerPath}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
                 >
                   Clone into server path
                 </button>
@@ -935,7 +952,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                     setCreateError(null)
                     setStep('create')
                   }}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  disabled={isAddingServerPath}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
                 >
                   Create on server
                 </button>
@@ -971,6 +989,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
               <Button
                 onClick={() => setStep('clone')}
+                disabled={isAdding}
                 variant="outline"
                 className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
               >
@@ -985,6 +1004,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
               <Button
                 onClick={handleOpenRemoteStep}
+                disabled={isAdding}
                 variant="outline"
                 className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
               >
@@ -997,6 +1017,13 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 </div>
               </Button>
             </div>
+
+            {isAdding && addProjectBusyLabel ? (
+              <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                <span>{addProjectBusyLabel}</span>
+              </div>
+            ) : null}
 
             <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
               <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground">
@@ -1014,7 +1041,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                   setCreateError(null)
                   setStep('create')
                 }}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                disabled={isAdding}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
               >
                 Or start a new project from scratch
               </button>
@@ -1105,9 +1133,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 className="flex-1"
               />
               {nestedScan.truncated || nestedScan.timedOut ? (
-                <div className="text-[11px] text-muted-foreground">
-                  Showing partial results from a bounded scan.
-                </div>
+                <NestedRepoScanLimitNotice scan={nestedScan} />
               ) : null}
               <div className="shrink-0 flex items-center gap-2">
                 <Button onClick={handleBack} disabled={isAdding} variant="ghost">

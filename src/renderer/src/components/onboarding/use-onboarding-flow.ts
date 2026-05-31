@@ -665,6 +665,7 @@ export function useOnboardingFlow(
       try {
         let result = await window.api.repos.add({ path })
         if ('error' in result && result.error.includes('Not a valid git repository')) {
+          setBusyLabel('Scanning for repositories...')
           const attemptId = createNestedRepoTelemetryAttemptId()
           const scan = await scanNestedRepos(path)
           track(

@@ -225,7 +225,9 @@ export async function scanNestedRepos(args: {
       truncated: false,
       timedOut: false,
       durationMs: Date.now() - startedAt,
-      maxDepth: options.maxDepth
+      maxDepth: options.maxDepth,
+      maxRepos: options.maxRepos,
+      timeoutMs: options.timeoutMs
     }
   }
 
@@ -314,6 +316,8 @@ export async function scanNestedRepos(args: {
     truncated,
     timedOut,
     durationMs: Date.now() - startedAt,
-    maxDepth: options.maxDepth
+    maxDepth: options.maxDepth,
+    maxRepos: options.maxRepos,
+    timeoutMs: options.timeoutMs
   }
 }

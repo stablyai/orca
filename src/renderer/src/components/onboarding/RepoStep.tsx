@@ -10,6 +10,7 @@ import {
 import type { Dispatch, SetStateAction } from 'react'
 import { NestedRepoTreePreview } from '@/components/repo/NestedRepoTreePreview'
 import type { NestedRepoScanResult } from '../../../../shared/types'
+import { NestedRepoScanLimitNotice } from '../repo/NestedRepoScanLimitNotice'
 
 type RepoStepProps = {
   cloneUrl: string
@@ -96,8 +97,8 @@ export function RepoStep({
             className="mt-3 flex-1"
           />
           {nestedScan.truncated || nestedScan.timedOut ? (
-            <div className="mt-2 shrink-0 text-[11px] text-muted-foreground">
-              Showing partial results from a bounded scan.
+            <div className="mt-2 shrink-0">
+              <NestedRepoScanLimitNotice scan={nestedScan} />
             </div>
           ) : null}
           <div className="mt-4 flex shrink-0 items-center gap-2">

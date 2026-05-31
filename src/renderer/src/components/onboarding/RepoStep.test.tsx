@@ -50,7 +50,9 @@ describe('RepoStep', () => {
         truncated: false,
         timedOut: false,
         durationMs: 4,
-        maxDepth: 3
+        maxDepth: 3,
+        maxRepos: 100,
+        timeoutMs: 8_000
       },
       nestedGroupName: 'platform'
     })

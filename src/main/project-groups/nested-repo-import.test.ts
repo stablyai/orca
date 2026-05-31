@@ -128,7 +128,9 @@ describe('createNestedProjectGroupResolver', () => {
         truncated: false,
         timedOut: false,
         durationMs: 1,
-        maxDepth: 3
+        maxDepth: 3,
+        maxRepos: 100,
+        timeoutMs: 8_000
       },
       projectPaths: ['c:/workspace/services/api', 'C:/workspace/services/api', 'D:/other/repo']
     })

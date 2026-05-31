@@ -148,6 +148,8 @@ export type NestedRepoScanResult = {
   timedOut: boolean
   durationMs: number
   maxDepth: number
+  maxRepos: number
+  timeoutMs: number
 }
 
 export type ProjectGroupImportMode = 'group' | 'separate'
