@@ -12,6 +12,7 @@ import type {
   PRComment
 } from '../../shared/types'
 import { mapIssueInfo } from './mappers'
+import type { OwnerRepo } from './gh-utils'
 // prettier-ignore
 import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError, ghRepoExecOptions, githubRepoContext } from './gh-utils'
 
@@ -323,11 +324,12 @@ export async function addIssueComment(
   repoPath: string,
   issueNumber: number,
   body: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  ownerRepoOverride?: OwnerRepo | null
 ): Promise<GitHubCommentResult> {
   const context = githubRepoContext(repoPath, connectionId)
   const ghOptions = ghRepoExecOptions(context)
-  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId)
+  const ownerRepo = ownerRepoOverride ?? (await getIssueOwnerRepo(repoPath, connectionId))
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -351,8 +353,11 @@ export async function addIssueComment(
       created_at?: string
       html_url?: string
     }
+    if (typeof data.id !== 'number' || !Number.isSafeInteger(data.id) || data.id < 1) {
+      return { ok: false, error: 'Unexpected response from GitHub' }
+    }
     const comment: PRComment = {
-      id: data.id ?? Date.now(),
+      id: data.id,
       author: data.user?.login ?? 'You',
       authorAvatarUrl: data.user?.avatar_url ?? '',
       body: data.body ?? body,

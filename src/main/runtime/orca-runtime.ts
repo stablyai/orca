@@ -6321,8 +6321,11 @@ export class OrcaRuntimeService {
     }
   ): Promise<Awaited<ReturnType<typeof getPRCheckDetails>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
-    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_check_details')
-    return getPRCheckDetails(repo.path, { ...args, prRepo: args.prRepo ?? null })
+    return getPRCheckDetails(
+      repo.path,
+      { ...args, prRepo: args.prRepo ?? null },
+      repo.connectionId ?? null
+    )
   }
 
   async getRepoPRComments(
@@ -6469,10 +6472,11 @@ export class OrcaRuntimeService {
   async addRepoIssueComment(
     repoSelector: string,
     number: number,
-    body: string
+    body: string,
+    prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof addIssueComment>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
-    return addIssueComment(repo.path, number, body, repo.connectionId ?? null)
+    return addIssueComment(repo.path, number, body, repo.connectionId ?? null, prRepo ?? null)
   }
 
   async addRepoPRReviewComment(
@@ -6496,6 +6500,7 @@ export class OrcaRuntimeService {
       threadId?: string
       path?: string
       line?: number
+      prRepo?: GitHubOwnerRepo | null
     }
   ): Promise<Awaited<ReturnType<typeof addPRReviewCommentReply>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
@@ -6507,7 +6512,8 @@ export class OrcaRuntimeService {
       args.threadId,
       args.path,
       args.line,
-      repo.connectionId ?? null
+      repo.connectionId ?? null,
+      args.prRepo ?? null
     )
   }
 

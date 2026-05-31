@@ -162,7 +162,8 @@ const UpdateIssue = RepoSelector.extend({
 const IssueComment = RepoSelector.extend({
   number: z.number().int().positive(),
   body: requiredString('Comment body required'),
-  type: z.enum(['issue', 'pr']).optional()
+  type: z.enum(['issue', 'pr']).optional(),
+  prRepo: SlugRepo.nullable().optional()
 })
 
 const PRReviewComment = RepoSelector.extend({
@@ -180,7 +181,8 @@ const PRReviewCommentReply = RepoSelector.extend({
   body: requiredString('Comment body required'),
   threadId: OptionalString,
   path: OptionalString,
-  line: z.number().int().positive().optional()
+  line: z.number().int().positive().optional(),
+  prRepo: SlugRepo.nullable().optional()
 })
 
 const ProjectOwnerType = z.enum(['organization', 'user'])
@@ -467,7 +469,7 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.addIssueComment',
     params: IssueComment,
     handler: async (params, { runtime }) =>
-      runtime.addRepoIssueComment(params.repo, params.number, params.body)
+      runtime.addRepoIssueComment(params.repo, params.number, params.body, params.prRepo ?? null)
   }),
   defineMethod({
     name: 'github.addPRReviewComment',
@@ -492,7 +494,8 @@ export const GITHUB_METHODS: RpcMethod[] = [
         body: params.body,
         threadId: params.threadId,
         path: params.path,
-        line: params.line
+        line: params.line,
+        prRepo: params.prRepo ?? null
       })
   }),
   defineMethod({

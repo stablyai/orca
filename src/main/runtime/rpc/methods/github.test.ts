@@ -467,11 +467,15 @@ describe('github RPC methods', () => {
         repo: 'repo-1',
         number: 3,
         body: 'Looks good',
-        type: 'pr'
+        type: 'pr',
+        prRepo: { owner: 'acme', repo: 'widgets' }
       })
     )
 
-    expect(runtime.addRepoIssueComment).toHaveBeenCalledWith('repo-1', 3, 'Looks good')
+    expect(runtime.addRepoIssueComment).toHaveBeenCalledWith('repo-1', 3, 'Looks good', {
+      owner: 'acme',
+      repo: 'widgets'
+    })
     expect(response).toMatchObject({ ok: true, result: { ok: true, comment: { id: 1 } } })
   })
 
@@ -520,7 +524,8 @@ describe('github RPC methods', () => {
         body: 'Done',
         threadId: 'PRRT_1',
         path: 'src/app.ts',
-        line: 12
+        line: 12,
+        prRepo: { owner: 'acme', repo: 'widgets' }
       })
     )
 
@@ -530,7 +535,8 @@ describe('github RPC methods', () => {
       body: 'Done',
       threadId: 'PRRT_1',
       path: 'src/app.ts',
-      line: 12
+      line: 12,
+      prRepo: { owner: 'acme', repo: 'widgets' }
     })
     expect(response).toMatchObject({ ok: true, result: { ok: true, comment: { id: 4 } } })
   })

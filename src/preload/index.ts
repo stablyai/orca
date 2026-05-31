@@ -1099,6 +1099,7 @@ const api = {
       number: number
       body: string
       type?: 'issue' | 'pr'
+      prRepo?: { owner: string; repo: string } | null
     }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addIssueComment', args),
 
     addPRReviewCommentReply: (args: {
@@ -1110,6 +1111,7 @@ const api = {
       threadId?: string
       path?: string
       line?: number
+      prRepo?: { owner: string; repo: string } | null
     }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewCommentReply', args),
 
     addPRReviewComment: (args: {

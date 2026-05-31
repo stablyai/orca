@@ -510,12 +510,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       event,
       args: {
         repoPath: string
+        repoId?: string
         prNumber: number
         commentId: number
         body: string
         threadId?: string
         path?: string
         line?: number
+        prRepo?: GitHubOwnerRepo | null
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
@@ -544,7 +546,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.threadId,
         args.path,
         args.line,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        args.prRepo ?? null
       )
       if (result.ok) {
         broadcastWorkItemMutated(
@@ -793,7 +796,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:addIssueComment',
     async (
       event,
-      args: { repoPath: string; number: number; body: string; type?: 'issue' | 'pr' }
+      args: {
+        repoPath: string
+        repoId?: string
+        number: number
+        body: string
+        type?: 'issue' | 'pr'
+        prRepo?: GitHubOwnerRepo | null
+      }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
@@ -806,7 +816,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.number,
         args.body.trim(),
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        args.prRepo ?? null
       )
       if (result.ok) {
         // Why: PR conversation comments hit `/issues/N/comments` too, but the

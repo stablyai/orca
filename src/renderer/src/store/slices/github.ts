@@ -12,8 +12,10 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
+  GitHubCommentResult,
   IssueInfo,
   PRCheckDetail,
+  PRCheckRunDetails,
   PRComment,
   Repo,
   Worktree,
@@ -483,6 +485,47 @@ export function prCommentsCacheSuffix(prNumber: number, prRepo?: GitHubOwnerRepo
     return `pr-comments::${prNumber}`
   }
   return `pr-comments::${normalizedRepoIdentity(prRepo)}::${prNumber}`
+}
+
+function commentTimestamp(comment: PRComment): number {
+  const timestamp = new Date(comment.createdAt).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+export function mergePRCommentIntoList(
+  comments: readonly PRComment[] | null | undefined,
+  incoming: PRComment
+): PRComment[] {
+  const byId = new Map<number, PRComment>()
+  for (const comment of comments ?? []) {
+    byId.set(comment.id, comment)
+  }
+  const previous = byId.get(incoming.id)
+  byId.set(incoming.id, {
+    ...previous,
+    ...incoming,
+    threadId: incoming.threadId ?? previous?.threadId,
+    path: incoming.path ?? previous?.path,
+    line: incoming.line ?? previous?.line,
+    startLine: incoming.startLine ?? previous?.startLine,
+    isResolved: incoming.isResolved ?? previous?.isResolved,
+    isOutdated: incoming.isOutdated ?? previous?.isOutdated
+  })
+  return Array.from(byId.values()).sort((a, b) => commentTimestamp(a) - commentTimestamp(b))
+}
+
+function hasUsableCommentPayload(result: GitHubCommentResult): result is {
+  ok: true
+  comment: PRComment
+} {
+  return (
+    result.ok &&
+    typeof result.comment?.id === 'number' &&
+    Number.isSafeInteger(result.comment.id) &&
+    result.comment.id > 0 &&
+    typeof result.comment.body === 'string' &&
+    typeof result.comment.createdAt === 'string'
+  )
 }
 
 // Why: 500 entries is generous enough that active developers will never hit it
@@ -991,11 +1034,40 @@ export type GitHubSlice = {
     prRepo?: GitHubOwnerRepo | null,
     options?: RepoScopedFetchOptions
   ) => Promise<PRCheckDetail[]>
+  fetchPRCheckDetails: (
+    repoPath: string,
+    args: {
+      checkRunId?: number
+      workflowRunId?: number
+      checkName?: string
+      url?: string | null
+      prRepo?: GitHubOwnerRepo | null
+    },
+    options?: RepoScopedFetchOptions
+  ) => Promise<PRCheckRunDetails | null>
   fetchPRComments: (
     repoPath: string,
     prNumber: number,
     options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
   ) => Promise<PRComment[]>
+  addPRConversationComment: (
+    repoPath: string,
+    prNumber: number,
+    body: string,
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+  ) => Promise<GitHubCommentResult>
+  addPRReviewCommentReply: (
+    repoPath: string,
+    prNumber: number,
+    commentId: number,
+    body: string,
+    options?: RepoScopedFetchOptions & {
+      prRepo?: GitHubOwnerRepo | null
+      threadId?: string
+      path?: string
+      line?: number
+    }
+  ) => Promise<GitHubCommentResult>
   resolveReviewThread: (
     repoPath: string,
     prNumber: number,
@@ -2164,6 +2236,38 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return request
   },
 
+  fetchPRCheckDetails: async (repoPath, args, options): Promise<PRCheckRunDetails | null> => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = get().settings
+    const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+    return runtimeRepo
+      ? await callRuntimeRpc<PRCheckRunDetails | null>(
+          runtimeRepo.target,
+          'github.prCheckDetails',
+          {
+            repo: runtimeRepo.repo.id,
+            checkRunId: args.checkRunId,
+            workflowRunId: args.workflowRunId,
+            checkName: args.checkName,
+            url: args.url,
+            prRepo: args.prRepo ?? null
+          },
+          { timeoutMs: 30_000 }
+        )
+      : ((await window.api.gh.prCheckDetails({
+          repoPath,
+          repoId,
+          checkRunId: args.checkRunId,
+          workflowRunId: args.workflowRunId,
+          checkName: args.checkName,
+          url: args.url,
+          prRepo: args.prRepo ?? null
+        })) as PRCheckRunDetails | null)
+  },
+
   fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
@@ -2228,6 +2332,136 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return request
   },
 
+  addPRConversationComment: async (repoPath, prNumber, body, options) => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = get().settings
+    const cacheKey = runtimeScopedRepoCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo),
+      requestSettings,
+      repo?.connectionId
+    )
+    const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+    let result: GitHubCommentResult
+    try {
+      result = runtimeRepo
+        ? await callRuntimeRpc<GitHubCommentResult>(
+            runtimeRepo.target,
+            'github.addIssueComment',
+            {
+              repo: runtimeRepo.repo.id,
+              number: prNumber,
+              body,
+              type: 'pr',
+              prRepo: options?.prRepo ?? null
+            },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.addIssueComment({
+            repoPath,
+            repoId,
+            number: prNumber,
+            body,
+            type: 'pr',
+            prRepo: options?.prRepo ?? null
+          })
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Failed to post comment.'
+      return { ok: false, error }
+    }
+    if (!hasUsableCommentPayload(result)) {
+      return result.ok ? { ok: false, error: 'GitHub did not return the new comment.' } : result
+    }
+    set((s) => {
+      const entry = s.commentsCache[cacheKey]
+      return {
+        commentsCache: {
+          ...s.commentsCache,
+          [cacheKey]: {
+            data: mergePRCommentIntoList(entry?.data, result.comment),
+            fetchedAt: Date.now()
+          }
+        }
+      }
+    })
+    return result
+  },
+
+  addPRReviewCommentReply: async (repoPath, prNumber, commentId, body, options) => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = get().settings
+    const cacheKey = runtimeScopedRepoCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo),
+      requestSettings,
+      repo?.connectionId
+    )
+    const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+    let result: GitHubCommentResult
+    try {
+      result = runtimeRepo
+        ? await callRuntimeRpc<GitHubCommentResult>(
+            runtimeRepo.target,
+            'github.addPRReviewCommentReply',
+            {
+              repo: runtimeRepo.repo.id,
+              prNumber,
+              commentId,
+              body,
+              threadId: options?.threadId,
+              path: options?.path,
+              line: options?.line,
+              prRepo: options?.prRepo ?? null
+            },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.addPRReviewCommentReply({
+            repoPath,
+            repoId,
+            prNumber,
+            commentId,
+            body,
+            threadId: options?.threadId,
+            path: options?.path,
+            line: options?.line,
+            prRepo: options?.prRepo ?? null
+          })
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Failed to post reply.'
+      return { ok: false, error }
+    }
+    if (!hasUsableCommentPayload(result)) {
+      return result.ok ? { ok: false, error: 'GitHub did not return the new comment.' } : result
+    }
+    const comment: PRComment = {
+      ...result.comment,
+      threadId: result.comment.threadId ?? options?.threadId,
+      path: result.comment.path ?? options?.path,
+      line: result.comment.line ?? options?.line
+    }
+    set((s) => {
+      const entry = s.commentsCache[cacheKey]
+      return {
+        commentsCache: {
+          ...s.commentsCache,
+          [cacheKey]: {
+            data: mergePRCommentIntoList(entry?.data, comment),
+            fetchedAt: Date.now()
+          }
+        }
+      }
+    })
+    return { ok: true, comment }
+  },
+
   resolveReviewThread: async (repoPath, prNumber, threadId, resolve, options) => {
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
@@ -2258,14 +2492,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
 
     const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
-    const ok = runtimeRepo
-      ? await callRuntimeRpc<boolean>(
-          runtimeRepo.target,
-          'github.resolveReviewThread',
-          { repo: runtimeRepo.repo.id, threadId, resolve },
-          { timeoutMs: 30_000 }
-        )
-      : await window.api.gh.resolveReviewThread({ repoPath, repoId, threadId, resolve })
+    let ok = false
+    try {
+      ok = runtimeRepo
+        ? await callRuntimeRpc<boolean>(
+            runtimeRepo.target,
+            'github.resolveReviewThread',
+            { repo: runtimeRepo.repo.id, threadId, resolve },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.resolveReviewThread({ repoPath, repoId, threadId, resolve })
+    } catch (err) {
+      console.error('Failed to update review thread:', err)
+      ok = false
+    }
     if (!ok && prev) {
       // Revert optimistic update on failure
       set((s) => ({
