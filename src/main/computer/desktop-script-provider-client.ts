@@ -71,6 +71,9 @@ type BridgeSnapshot = {
   windowId?: number | null
   windowBounds?: BridgeFrame | null
   screenshotPngBase64?: string | null
+  screenshotWidth?: number | null
+  screenshotHeight?: number | null
+  screenshotScale?: number | null
   coordinateSpace?: 'window'
   truncation?: {
     truncated?: boolean
@@ -488,13 +491,20 @@ function execBridge(
 function renderSnapshot(snapshot: BridgeSnapshot, noScreenshot: boolean): ComputerSnapshotResult {
   const bounds = snapshot.windowBounds
   const treeText = renderTreeText(snapshot)
+  // Why: Linux/Windows providers may downscale screenshots to cap IPC payloads,
+  // while window bounds remain the unscaled coordinate space for actions.
+  const screenshotWidth =
+    positiveRoundedNumber(snapshot.screenshotWidth) ?? Math.max(1, Math.round(bounds?.width ?? 1))
+  const screenshotHeight =
+    positiveRoundedNumber(snapshot.screenshotHeight) ?? Math.max(1, Math.round(bounds?.height ?? 1))
+  const screenshotScale = positiveNumber(snapshot.screenshotScale) ?? 1
   const screenshot = snapshot.screenshotPngBase64
     ? {
         data: snapshot.screenshotPngBase64,
         format: 'png' as const,
-        width: Math.max(1, Math.round(bounds?.width ?? 1)),
-        height: Math.max(1, Math.round(bounds?.height ?? 1)),
-        scale: 1
+        width: screenshotWidth,
+        height: screenshotHeight,
+        scale: screenshotScale
       }
     : null
   return {
@@ -544,6 +554,15 @@ function renderSnapshot(snapshot: BridgeSnapshot, noScreenshot: boolean): Comput
               'desktop provider returned no image; grant screen capture permission or pass --no-screenshot to inspect accessibility state only.'
           }
   }
+}
+
+function positiveNumber(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+}
+
+function positiveRoundedNumber(value: number | null | undefined): number | null {
+  const numberValue = positiveNumber(value)
+  return numberValue === null ? null : Math.max(1, Math.round(numberValue))
 }
 
 function fallbackSnapshotId(snapshot: BridgeSnapshot): string {

@@ -107,6 +107,34 @@ describe('DesktopScriptProviderClient', () => {
     expect(typeof operationPath).toBe('string')
   })
 
+  it('uses bridge screenshot dimensions when the native payload is downscaled', async () => {
+    mockBridgeResponse({
+      ok: true,
+      snapshot: {
+        ...sampleBridgeSnapshot('Text Editor', 'initial'),
+        screenshotWidth: 150,
+        screenshotHeight: 100,
+        screenshotScale: 0.5
+      }
+    })
+
+    const client = new DesktopScriptProviderClient('linux', '/tmp/runtime.py')
+
+    const result = await client.snapshot({ app: 'Text Editor' })
+
+    expect(result.screenshot).toEqual({
+      data: 'iVBORw0KGgo=',
+      format: 'png',
+      width: 150,
+      height: 100,
+      scale: 0.5
+    })
+    expect(result.snapshot.window).toMatchObject({
+      width: 300,
+      height: 200
+    })
+  })
+
   it('targets cached elements by session and explicit window id', async () => {
     mockBridgeResponse({
       ok: true,
