@@ -91,6 +91,27 @@ type LocalWatcherInstallResult = 'installed' | 'unavailable' | 'cancelled'
 const inFlightLocalInstalls = new Map<string, LocalWatcherInstallToken>()
 const pendingLocalInstallPromises = new Map<string, Promise<LocalWatcherInstallResult>>()
 
+function addInFlightLocalInstallListener(
+  token: LocalWatcherInstallToken,
+  sender: WebContents
+): void {
+  if (sender.isDestroyed()) {
+    return
+  }
+  token.listeners.set(sender.id, sender)
+  token.cancelled = false
+  registerSenderCleanup(sender)
+}
+
+function cleanupInFlightLocalInstallsForSender(senderId: number): void {
+  for (const token of inFlightLocalInstalls.values()) {
+    token.listeners.delete(senderId)
+    if (token.listeners.size === 0) {
+      token.cancelled = true
+    }
+  }
+}
+
 // ── Path normalization ───────────────────────────────────────────────
 
 function normalizeRootPath(rootPath: string): string {
@@ -350,6 +371,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
 // ── Subscribe / Unsubscribe ──────────────────────────────────────────
 
 function cleanupLocalWatchersForSender(senderId: number): void {
+  cleanupInFlightLocalInstallsForSender(senderId)
   for (const [key, watchedRoot] of watchedRoots) {
     if (watchedRoot.listeners.has(senderId)) {
       watchedRoot.listeners.delete(senderId)
@@ -433,11 +455,10 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
   const pendingInstall = pendingLocalInstallPromises.get(rootKey)
   if (pendingInstall) {
     const inFlight = inFlightLocalInstalls.get(rootKey)
-    if (inFlight && !sender.isDestroyed()) {
-      inFlight.listeners.set(sender.id, sender)
+    if (inFlight) {
       // Why: an unwatch may cancel an install while another renderer is still
       // awaiting the same root; a new live listener should keep it alive.
-      inFlight.cancelled = false
+      addInFlightLocalInstallListener(inFlight, sender)
     }
     const result = await pendingInstall
     if (
@@ -451,11 +472,9 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
     return
   }
 
-  const cancelToken: LocalWatcherInstallToken = {
-    cancelled: false,
-    listeners: sender.isDestroyed() ? new Map() : new Map([[sender.id, sender]])
-  }
+  const cancelToken: LocalWatcherInstallToken = { cancelled: false, listeners: new Map() }
   inFlightLocalInstalls.set(rootKey, cancelToken)
+  addInFlightLocalInstallListener(cancelToken, sender)
   const installPromise = doInstallLocalWatcher(rootKey, worktreePath, cancelToken)
   pendingLocalInstallPromises.set(rootKey, installPromise)
   try {
@@ -591,6 +610,27 @@ const pendingRemoteInstallPromises = new Map<string, Promise<RemoteWatcherInstal
 const REMOTE_WATCH_RETRY_MS = 1_000
 const REMOTE_WATCH_RETRY_TIMEOUT_MS = 60_000
 
+function addInFlightRemoteInstallListener(
+  token: RemoteWatcherInstallToken,
+  sender: WebContents
+): void {
+  if (sender.isDestroyed()) {
+    return
+  }
+  token.listeners.set(sender.id, sender)
+  token.cancelled = false
+  registerSenderCleanup(sender)
+}
+
+function cleanupInFlightRemoteInstallsForSender(senderId: number): void {
+  for (const token of inFlightRemoteInstalls.values()) {
+    token.listeners.delete(senderId)
+    if (token.listeners.size === 0) {
+      token.cancelled = true
+    }
+  }
+}
+
 function addRemoteWatchListener(key: string, sender: WebContents): void {
   const state = remoteWatchers.get(key)
   if (!state) {
@@ -614,6 +654,7 @@ function releaseRemoteWatchListener(key: string, senderId: number): void {
 }
 
 function cleanupRemoteWatchersForSender(senderId: number): void {
+  cleanupInFlightRemoteInstallsForSender(senderId)
   for (const key of Array.from(remoteWatchers.keys())) {
     releaseRemoteWatchListener(key, senderId)
   }
@@ -645,12 +686,11 @@ async function installRemoteWatcher(
   const pendingInstall = pendingRemoteInstallPromises.get(key)
   if (pendingInstall) {
     const inFlight = inFlightRemoteInstalls.get(key)
-    if (inFlight && !sender.isDestroyed()) {
-      inFlight.listeners.set(sender.id, sender)
+    if (inFlight) {
       // Why: a new watcher can join after all previous pending listeners
       // unwatched but before provider.watch() resolves; revive that install
       // instead of inheriting the stale cancellation.
-      inFlight.cancelled = false
+      addInFlightRemoteInstallListener(inFlight, sender)
     }
     const result = await pendingInstall
     if (
@@ -663,11 +703,9 @@ async function installRemoteWatcher(
     }
     return result
   }
-  const cancelToken: RemoteWatcherInstallToken = {
-    cancelled: false,
-    listeners: sender.isDestroyed() ? new Map() : new Map([[sender.id, sender]])
-  }
+  const cancelToken: RemoteWatcherInstallToken = { cancelled: false, listeners: new Map() }
   inFlightRemoteInstalls.set(key, cancelToken)
+  addInFlightRemoteInstallListener(cancelToken, sender)
   const installPromise = doInstallRemoteWatcher(provider, key, worktreePath, cancelToken)
   pendingRemoteInstallPromises.set(key, installPromise)
   try {

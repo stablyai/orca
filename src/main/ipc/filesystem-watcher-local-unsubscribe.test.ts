@@ -127,7 +127,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
 
   it('unsubscribes if the sender is destroyed while the local watcher is opening', async () => {
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
-    let destroyed = false
+    const destroyedCallbacks: (() => void)[] = []
     let resolveSubscribe: (subscription: { unsubscribe: () => void }) => void = () => {}
     const unsubscribeMock = vi.fn()
     vi.mocked(subscribeParcelWatcher).mockImplementation(
@@ -137,9 +137,13 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
         })
     )
     const sender = {
-      isDestroyed: () => destroyed,
+      isDestroyed: () => false,
       send: vi.fn(),
-      once: vi.fn(),
+      once: vi.fn((event: string, callback: () => void) => {
+        if (event === 'destroyed') {
+          destroyedCallbacks.push(callback)
+        }
+      }),
       id: 1
     }
 
@@ -150,12 +154,13 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     await vi.waitFor(() => {
       expect(subscribeParcelWatcher).toHaveBeenCalled()
     })
-    destroyed = true
+    expect(destroyedCallbacks).toHaveLength(1)
+    destroyedCallbacks[0]()
     resolveSubscribe({ unsubscribe: unsubscribeMock })
     await watchPromise
 
     expect(unsubscribeMock).toHaveBeenCalledTimes(1)
-    expect(sender.once).not.toHaveBeenCalled()
+    expect(sender.once).toHaveBeenCalledWith('destroyed', expect.any(Function))
   })
 
   it('dedupes concurrent local watcher opens for the same root', async () => {
