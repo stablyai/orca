@@ -558,7 +558,7 @@ export async function listWorkItems(
           items: [] as GitLabWorkItem[],
           error: undefined as ClassifiedError | undefined
         })
-      : fetchIssuesAsWorkItems(repoPath, projectRef, issueState, perPage, query, connectionId)
+      : fetchIssuesAsWorkItems(repoPath, projectRef, issueState, page, perPage, query, connectionId)
   ])
   const merged = [...mrs.items, ...issues.items].sort((a, b) =>
     (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
@@ -587,6 +587,7 @@ export async function fetchIssuesAsWorkItems(
   repoPath: string,
   projectRef: ProjectRef,
   state: IssueListState,
+  page: number,
   perPage: number,
   query?: string,
   connectionId?: string | null
@@ -599,7 +600,7 @@ export async function fetchIssuesAsWorkItems(
       [
         'api',
         ...glabHostnameArgs(projectRef, connectionId),
-        `projects/${encodedProject(projectRef.path)}/issues?per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${searchParam}`
+        `projects/${encodedProject(projectRef.path)}/issues?page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${searchParam}`
       ],
       glabRepoExecOptions(repoPath, connectionId)
     )
