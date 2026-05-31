@@ -3254,16 +3254,14 @@ export async function updatePRState(
 
   await acquire()
   try {
+    const cmd = updates.state === 'closed' ? 'close' : 'reopen'
+    // Why: GitHub can reject REST pull state PATCHes for reopen paths with a
+    // generic 422; gh's PR commands use GitHub's supported reopen flow.
     await ghExecFileAsync(
-      [
-        'api',
-        '-X',
-        'PATCH',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${prNumber}`,
-        '--raw-field',
-        `state=${updates.state}`
-      ],
-      ghOptions
+      ['pr', cmd, String(prNumber), '--repo', `${ownerRepo.owner}/${ownerRepo.repo}`],
+      {
+        ...ghOptions
+      }
     )
     return { ok: true }
   } catch (err) {

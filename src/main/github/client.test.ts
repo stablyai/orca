@@ -98,6 +98,7 @@ import {
   mergePR,
   resolveReviewThread,
   setPRAutoMerge,
+  updatePRState,
   updatePRTitle,
   _resetOwnerRepoCache,
   _resetMergeQueueCacheForTests
@@ -1275,6 +1276,65 @@ describe('getPRForBranch', () => {
         }
       ]
     })
+  })
+})
+
+describe('updatePRState', () => {
+  beforeEach(() => {
+    ghExecFileAsyncMock.mockReset()
+    getOwnerRepoMock.mockReset()
+    ghRepoExecOptionsMock.mockClear()
+    githubRepoContextMock.mockClear()
+    acquireMock.mockReset()
+    releaseMock.mockReset()
+    acquireMock.mockResolvedValue(undefined)
+    _resetOwnerRepoCache()
+  })
+
+  it('reopens pull requests through the gh PR command', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(updatePRState('/repo-root', 3977, { state: 'open' })).resolves.toEqual({
+      ok: true
+    })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['pr', 'reopen', '3977', '--repo', 'stablyai/orca'],
+      { cwd: '/repo-root' }
+    )
+    expect(acquireMock).toHaveBeenCalledTimes(1)
+    expect(releaseMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes pull requests through the gh PR command', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(updatePRState('/repo-root', 3977, { state: 'closed' })).resolves.toEqual({
+      ok: true
+    })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['pr', 'close', '3977', '--repo', 'stablyai/orca'],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('reopens SSH-backed pull requests without local cwd options', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(
+      updatePRState('/remote/repo-root', 3977, { state: 'open' }, 'ssh-1')
+    ).resolves.toEqual({
+      ok: true
+    })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['pr', 'reopen', '3977', '--repo', 'stablyai/orca'],
+      {}
+    )
   })
 })
 
