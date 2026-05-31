@@ -319,6 +319,19 @@ export function connect(
 
     ws = new WebSocket(endpoint)
     const openingWs = ws
+    const ignoreStaleSocketEvent = (eventName: string): boolean => {
+      if (ws === openingWs) {
+        return false
+      }
+      // Why: React Native can deliver callbacks from a timed-out socket after
+      // reconnect has swapped in a replacement; stale events must not mutate it.
+      console.log('[net] stale ws event ignored', {
+        eventName,
+        state,
+        attempt: reconnectAttempt
+      })
+      return true
+    }
 
     // Why: React Native can leave TCP/WebSocket opens pending indefinitely on
     // flaky network handoffs. Force the existing onclose reconnect path if
@@ -343,6 +356,9 @@ export function connect(
     }, CONNECT_TIMEOUT_MS)
 
     ws.onopen = () => {
+      if (ignoreStaleSocketEvent('open')) {
+        return
+      }
       console.log('[net] ws.onopen', { attempt: reconnectAttempt })
       clearConnectTimer()
       reconnectAttempt = 0
@@ -357,13 +373,16 @@ export function connect(
         type: 'e2ee_hello',
         publicKeyB64: publicKeyToBase64(ephemeral.publicKey)
       })
-      ws?.send(hello)
+      openingWs.send(hello)
       emitLog('info', 'Sent e2ee_hello', 'Awaiting server e2ee_ready')
 
       sharedKey = deriveSharedKey(ephemeral.secretKey, serverPublicKey)
 
       handshakeTimer = setTimeout(() => {
         handshakeTimer = null
+        if (ws !== openingWs || state !== 'handshaking') {
+          return
+        }
         console.log('[net] handshake-timeout fired (e2ee_authenticated never arrived)', {
           timeoutMs: HANDSHAKE_TIMEOUT_MS
         })
@@ -372,11 +391,14 @@ export function connect(
           'Handshake timeout',
           `No e2ee_ready/e2ee_authenticated within ${HANDSHAKE_TIMEOUT_MS / 1000}s`
         )
-        ws?.close()
+        openingWs.close()
       }, HANDSHAKE_TIMEOUT_MS)
     }
 
     ws.onmessage = (event) => {
+      if (ignoreStaleSocketEvent('message')) {
+        return
+      }
       void handleSocketMessage(event.data)
     }
 
@@ -472,6 +494,9 @@ export function connect(
 
       if (raw === null) {
         const bytes = await websocketPayloadToUint8(rawData)
+        if (ws !== openingWs) {
+          return
+        }
         if (!bytes) {
           return
         }
@@ -650,6 +675,9 @@ export function connect(
     }
 
     ws.onerror = (event) => {
+      if (ignoreStaleSocketEvent('error')) {
+        return
+      }
       // Why: RN surfaces network errors here (DNS failure, TCP RST, etc).
       // onclose fires right after, but logging the error message gives us
       // the original cause that the close code alone can hide.

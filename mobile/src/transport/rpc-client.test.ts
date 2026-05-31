@@ -151,6 +151,29 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
+  it('ignores stale socket opens after reconnect swaps in a new socket', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const firstSocket = mockSockets[0]!
+    firstSocket.emitCloseOnClose = false
+
+    vi.advanceTimersByTime(12_000)
+    vi.advanceTimersByTime(500)
+
+    const secondSocket = mockSockets[1]!
+    expect(client.getState()).toBe('connecting')
+
+    firstSocket.open()
+
+    expect(client.getState()).toBe('connecting')
+    expect(secondSocket.sent).toEqual([])
+
+    vi.advanceTimersByTime(12_000)
+
+    expect(secondSocket.close).toHaveBeenCalledTimes(1)
+
+    client.close()
+  })
+
   it('clears the open timeout once the socket opens and authenticates', () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!
