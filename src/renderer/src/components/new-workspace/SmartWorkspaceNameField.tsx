@@ -231,15 +231,6 @@ export default function SmartWorkspaceNameField({
     [gitlabAvailable, linearAvailable, textOnly]
   )
 
-  const setInputNode = useCallback(
-    (node: HTMLInputElement | null) => {
-      localInputRef.current = node
-      if (inputRef) {
-        inputRef.current = node
-      }
-    },
-    [inputRef]
-  )
   const selectedSourceFocusKey = selectedSource
     ? `${selectedSource.kind}:${selectedSource.label}:${selectedSource.url ?? ''}`
     : null
@@ -271,7 +262,18 @@ export default function SmartWorkspaceNameField({
     localInputFocusFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelLocalInputFocusFrame, [cancelLocalInputFocusFrame])
+  const setInputNode = useCallback(
+    (node: HTMLInputElement | null) => {
+      if (node === null) {
+        cancelLocalInputFocusFrame()
+      }
+      localInputRef.current = node
+      if (inputRef) {
+        inputRef.current = node
+      }
+    },
+    [cancelLocalInputFocusFrame, inputRef]
+  )
 
   useEffect(() => {
     if (disabled || textOnly) {
