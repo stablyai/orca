@@ -251,4 +251,28 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     })
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
+
+  it('pastes drafts into the activation primary tab when active tab state differs', async () => {
+    store.activeTabIdByWorktree = { 'wt-1': 'setup-tab' }
+    store.tabsByWorktree = { 'wt-1': [{ id: 'setup-tab' }, { id: 'agent-tab' }] }
+    store.ptyIdsByTabId = { 'setup-tab': ['setup-pty'], 'agent-tab': ['agent-pty'] }
+
+    await ensureAgentStartupInTerminal({
+      worktreeId: 'wt-1',
+      primaryTabId: 'agent-tab',
+      startup: {
+        agent: 'codex',
+        launchCommand: 'codex',
+        expectedProcess: 'codex',
+        followupPrompt: null,
+        draftPrompt: 'Linear context draft'
+      }
+    })
+
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith({
+      tabId: 'agent-tab',
+      content: 'Linear context draft',
+      agent: 'codex'
+    })
+  })
 })

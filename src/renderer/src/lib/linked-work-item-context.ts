@@ -49,6 +49,12 @@ export function buildContainedLinkedContextBlock(
   return [header, body, footer].join('\n')
 }
 
+function formatDraftContextBlock(value: string): string {
+  // Why: Codex keeps the cursor on the final pasted line unless the draft ends
+  // with a newline; leave linked source blocks visually separated for review.
+  return `${value.trimEnd()}\n`
+}
+
 function escapeLinkedContextControlChars(value: string): string {
   return Array.from(value, (char) => {
     const code = char.charCodeAt(0)
@@ -107,7 +113,7 @@ export function getLinkedWorkItemDraftContent(
 ): string | null {
   const linkedContextBlock = buildContainedLinkedContextBlock(linkedWorkItem?.linkedContext)
   if (linkedContextBlock) {
-    return linkedContextBlock
+    return formatDraftContextBlock(linkedContextBlock)
   }
   const linkedUrl = linkedWorkItem?.url?.trim()
   return linkedUrl || null
@@ -121,7 +127,8 @@ export function getLaunchableWorkItemDraftContent(args: {
   if (args.pasteContent?.trim()) {
     return args.pasteContent
   }
-  return buildContainedLinkedContextBlock(args.linkedContext) ?? args.url
+  const linkedContextBlock = buildContainedLinkedContextBlock(args.linkedContext)
+  return linkedContextBlock ? formatDraftContextBlock(linkedContextBlock) : args.url
 }
 
 export function resolveQuickCreateLinkedWorkItemPrompt(
@@ -135,7 +142,8 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
   note: string
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()
-  const linkedContextDraft = buildContainedLinkedContextBlock(linkedWorkItem?.linkedContext)
+  const linkedContextBlock = buildContainedLinkedContextBlock(linkedWorkItem?.linkedContext)
+  const linkedContextDraft = linkedContextBlock ? formatDraftContextBlock(linkedContextBlock) : null
   const linkedUrl = linkedWorkItem?.url?.trim() || null
   const draftPrompt = linkedContextDraft
     ? [trimmedNote, linkedContextDraft].filter(Boolean).join('\n\n')

@@ -96,6 +96,16 @@ describe('linked work item context prompt helpers', () => {
     expect(withContext.linkedUrls).toEqual([])
     expect(withContext.linkedContextBlocks).toHaveLength(1)
     expect(
+      getLinkedWorkItemDraftContent({
+        url: 'https://linear.app/acme/issue/ENG-123/test',
+        linkedContext: {
+          provider: 'linear',
+          version: 1,
+          renderedText: 'Identifier: ENG-123'
+        }
+      })
+    ).toMatch(/--- END LINKED WORK ITEM CONTEXT ---\n$/)
+    expect(
       getLinkedWorkItemDraftContent({ url: 'https://example.test', linkedContext: undefined })
     ).toBe('https://example.test')
     expect(
@@ -126,6 +136,7 @@ describe('linked work item context prompt helpers', () => {
     expect(result.prompt).toBe('')
     expect(result.draftPrompt).toContain('typed fallback note')
     expect(result.draftPrompt).toContain('[source:linear] Identifier: ENG-123')
+    expect(result.draftPrompt).toMatch(/--- END LINKED WORK ITEM CONTEXT ---\n$/)
     expect(result.draftPrompt).not.toBe('https://linear.app/acme/issue/ENG-123/test')
   })
 
@@ -178,7 +189,7 @@ describe('linked work item context prompt helpers', () => {
         url: 'https://linear.app/acme/issue/ENG-123/test',
         linkedContext
       })
-    ).toContain('[source:linear] Identifier: ENG-123')
+    ).toMatch(/\[source:linear\] Identifier: ENG-123[\s\S]*--- END LINKED WORK ITEM CONTEXT ---\n$/)
     expect(
       getLaunchableWorkItemDraftContent({
         pasteContent: '',

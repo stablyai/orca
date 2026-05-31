@@ -211,9 +211,10 @@ export function getWorkspaceSeedName(args: {
 
 export async function ensureAgentStartupInTerminal(args: {
   worktreeId: string
+  primaryTabId?: string | null
   startup: AgentStartupPlan
 }): Promise<void> {
-  const { worktreeId, startup } = args
+  const { worktreeId, primaryTabId, startup } = args
   const draftPrompt = startup.draftPrompt ?? null
   if (startup.followupPrompt === null && draftPrompt === null) {
     return
@@ -229,8 +230,14 @@ export async function ensureAgentStartupInTerminal(args: {
       await new Promise((resolve) => window.setTimeout(resolve, 150))
     }
     const state = useAppStore.getState()
+    // Why: workspace activation tells us the exact tab that received the agent
+    // startup command. Use it for draft paste instead of re-deriving from
+    // active tab state, which can move while setup/background panes mount.
     tabId =
-      state.activeTabIdByWorktree[worktreeId] ?? state.tabsByWorktree[worktreeId]?.[0]?.id ?? null
+      primaryTabId ??
+      state.activeTabIdByWorktree[worktreeId] ??
+      state.tabsByWorktree[worktreeId]?.[0]?.id ??
+      null
     if (!tabId) {
       continue
     }

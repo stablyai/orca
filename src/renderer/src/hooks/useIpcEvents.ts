@@ -5,6 +5,7 @@ import { useAppStore } from '../store'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import {
@@ -75,6 +76,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
 import type { AppState } from '../store/types'
 import {
   closeWebRuntimeSessionTab,
@@ -554,6 +556,30 @@ type BrowserSessionTabTarget =
   | { kind: 'unified-browser'; unifiedTabId: string; workspaceId: string; groupId: string }
   | { kind: 'fallback-browser'; workspaceId: string }
 
+type NewWorkspaceShortcutModalData = {
+  telemetrySource: 'shortcut'
+  prefilledName?: string
+  linkedWorkItem?: ReturnType<typeof buildLinearIssueLinkedWorkItem>
+}
+
+export function buildNewWorkspaceShortcutModalData(
+  state: Pick<AppState, 'activeView' | 'taskPageData'>
+): NewWorkspaceShortcutModalData {
+  const linearIssue =
+    state.activeView === 'tasks' ? (state.taskPageData.openLinearIssue ?? null) : null
+  if (!linearIssue) {
+    return { telemetrySource: 'shortcut' }
+  }
+
+  return {
+    telemetrySource: 'shortcut',
+    prefilledName: getLinkedWorkItemSuggestedName(linearIssue),
+    // Why: Cmd+N from a Linear issue should behave like the issue's Start
+    // workspace action; otherwise the agent launches without source context.
+    linkedWorkItem: buildLinearIssueLinkedWorkItem(linearIssue)
+  }
+}
+
 export function resolveBrowserSessionTabTarget(
   state: Pick<AppState, 'browserTabsByWorktree' | 'unifiedTabsByWorktree'>,
   worktreeId: string,
@@ -785,7 +811,7 @@ export function useIpcEvents(): void {
         if (store.activeModal === 'new-workspace-composer') {
           return
         }
-        store.openModal('new-workspace-composer', { telemetrySource: 'shortcut' })
+        store.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(store))
       })
     )
 

@@ -54,7 +54,10 @@ import {
   getLinkedWorkItemPromptContext,
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
-import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import {
+  buildLinearIssueLinkedWorkItem,
+  isLinearLinkedWorkItem
+} from '@/lib/linear-linked-work-item'
 import {
   getFullComposerCreateDisabled,
   getQuickComposerCreateDisabled
@@ -1481,12 +1484,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       } else if (baseBranch) {
         hint = `was ${baseBranch}`
       }
+      const preserveLinearLinkedWorkItem = isLinearLinkedWorkItem(linkedWorkItem)
       setRepoId(value)
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
-      setLinkedWorkItem(null)
+      // Why: repo changes invalidate repo-scoped sources (GitHub/GitLab/branch),
+      // but a selected Linear issue is workspace-scoped source context and
+      // must survive choosing the implementation project.
+      if (!preserveLinearLinkedWorkItem) {
+        setLinkedWorkItem(null)
+      }
       setSparseEnabled(false)
       setSparseDirectories('')
       // Why: presets are repo-scoped, so a stale selection from the prior
@@ -1928,7 +1937,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         launch_source: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
         request_kind: 'new'
       }
-      activateAndRevealWorktree(worktree.id, {
+      const activation = activateAndRevealWorktree(worktree.id, {
         sidebarRevealBehavior: 'auto',
         setup: result.setup,
         issueCommand,
@@ -1953,6 +1962,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       if (startupPlan) {
         void ensureAgentStartupInTerminal({
           worktreeId: worktree.id,
+          primaryTabId: activation === false ? null : activation.primaryTabId,
           startup: startupPlan
         })
       }
@@ -2194,7 +2204,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                   telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
                 request_kind: 'new'
               }
-        activateAndRevealWorktree(worktree.id, {
+        const activation = activateAndRevealWorktree(worktree.id, {
           sidebarRevealBehavior: 'auto',
           setup: result.setup,
           ...(startupPlan
@@ -2218,6 +2228,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         if (startupPlan) {
           void ensureAgentStartupInTerminal({
             worktreeId: worktree.id,
+            primaryTabId: activation === false ? null : activation.primaryTabId,
             startup: startupPlan
           })
         }
