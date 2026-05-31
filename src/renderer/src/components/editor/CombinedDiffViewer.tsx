@@ -1283,7 +1283,7 @@ export default function CombinedDiffViewer({
           <div className="relative min-w-0 flex-1">
             <div
               ref={setScrollContainerRef}
-              className="combined-diff-scroll-container h-full overflow-auto pr-5"
+              className="combined-diff-scroll-container h-full overflow-auto pr-5 scrollbar-editor"
             >
               {skippedConflictNotice}
               <div
