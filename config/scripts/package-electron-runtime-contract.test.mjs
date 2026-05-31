@@ -90,6 +90,22 @@ describe('Electron runtime package contract', () => {
     expect(bumpStep.run).toContain('git commit --allow-empty -m "$commit_message"')
   })
 
+  it('keeps release-cut RC retries monotonic across stale attempts', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const versionStep = parsedWorkflow.jobs.cut.steps.find(
+      (step) => step.name === 'Compute next version'
+    )
+
+    expect(versionStep.run).toContain('node config/scripts/release-rc-history.mjs "$1"')
+    expect(versionStep.run).toContain('tag_matches_current_ref')
+    expect(versionStep.run).toContain('cutting the next version instead of reusing stale artifacts')
+    expect(versionStep.run).toContain('git rev-parse "$existing_rc_tag"')
+  })
+
   it('bumps separate Homebrew casks for stable and RC desktop tags', () => {
     const releaseWorkflow = parse(
       readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
