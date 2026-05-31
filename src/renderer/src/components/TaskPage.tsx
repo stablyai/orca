@@ -140,6 +140,11 @@ import {
   shouldReplaceTaskPageItemsAfterRefresh,
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
+import {
+  createTaskPageGitHubStatusStateDraft,
+  resolveTaskPageGitHubStatusStateDraft,
+  updateTaskPageGitHubStatusLocalState
+} from '@/components/task-page-github-status-state'
 import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-summary'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
@@ -731,13 +736,27 @@ function GHStatusCell({
   repo: Repo | null
 }): React.JSX.Element {
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const [localState, setLocalState] = useState(item.state)
+  const [statusStateDraft, setStatusStateDraft] = useState(() =>
+    createTaskPageGitHubStatusStateDraft(item)
+  )
   const [open, setOpen] = useState(false)
   const reqRef = useRef(0)
 
-  useEffect(() => {
-    setLocalState(item.state)
-  }, [item.state])
+  const resolvedStatusStateDraft = resolveTaskPageGitHubStatusStateDraft(statusStateDraft, item)
+  if (resolvedStatusStateDraft !== statusStateDraft) {
+    // Why: item rows can refresh from the GitHub cache while this cell is still
+    // mounted; reconcile before paint instead of showing one stale status frame.
+    setStatusStateDraft(resolvedStatusStateDraft)
+  }
+  const localState = resolvedStatusStateDraft.localState
+  const updateLocalState = useCallback(
+    (nextState: GitHubWorkItem['state']) => {
+      setStatusStateDraft((current) =>
+        updateTaskPageGitHubStatusLocalState(current, item, nextState)
+      )
+    },
+    [item]
+  )
 
   const handleStateChange = useCallback(
     (newState: 'open' | 'closed') => {
@@ -746,7 +765,7 @@ function GHStatusCell({
       }
       reqRef.current += 1
       const reqId = reqRef.current
-      setLocalState(newState)
+      updateLocalState(newState)
       patchWorkItem(item.id, { state: newState }, item.repoId)
       const target = getActiveRuntimeTarget(useAppStore.getState().settings)
       const updatePromise =
@@ -770,7 +789,7 @@ function GHStatusCell({
           }
           const typed = result as { ok?: boolean; error?: string }
           if (typed && typed.ok === false) {
-            setLocalState(newState === 'closed' ? 'open' : 'closed')
+            updateLocalState(newState === 'closed' ? 'open' : 'closed')
             patchWorkItem(
               item.id,
               { state: newState === 'closed' ? 'open' : 'closed' },
@@ -783,12 +802,12 @@ function GHStatusCell({
           if (reqId !== reqRef.current) {
             return
           }
-          setLocalState(newState === 'closed' ? 'open' : 'closed')
+          updateLocalState(newState === 'closed' ? 'open' : 'closed')
           patchWorkItem(item.id, { state: newState === 'closed' ? 'open' : 'closed' }, item.repoId)
           toast.error('Failed to update state')
         })
     },
-    [item.id, item.number, item.repoId, item.type, localState, repo, patchWorkItem]
+    [item, localState, repo, patchWorkItem, updateLocalState]
   )
 
   if (item.type !== 'issue' || !repo) {
