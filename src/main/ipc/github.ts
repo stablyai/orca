@@ -49,6 +49,7 @@ import {
   starOrca
 } from '../github/client'
 import {
+  clearVisiblePRRefreshWindow,
   enqueuePRRefresh,
   refreshPRNow,
   reportVisiblePRRefreshCandidates,
@@ -97,6 +98,8 @@ import type {
 import { appStarSourceSchema } from '../../shared/gh-star-source'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
+
+const prRefreshVisibilityCleanupRegistered = new Set<number>()
 
 // Why: notify every renderer (each window has its own SWR cache instance)
 // that a work item was mutated locally so they can drop their cached entry
@@ -248,6 +251,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   ipcMain.handle(
     'gh:reportVisiblePRRefreshCandidates',
     (event, args: { candidates: GitHubPRRefreshCandidate[]; generation: number }) => {
+      const senderId = event.sender.id
+      if (!prRefreshVisibilityCleanupRegistered.has(senderId)) {
+        prRefreshVisibilityCleanupRegistered.add(senderId)
+        event.sender.once('destroyed', () => {
+          prRefreshVisibilityCleanupRegistered.delete(senderId)
+          clearVisiblePRRefreshWindow(senderId)
+        })
+      }
       const candidates = args.candidates.map((candidate) => {
         const repo = assertRegisteredRepo(candidate.repoPath, store)
         return {
@@ -258,7 +269,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
           connectionState: repo.connectionId ? 'connected' : candidate.connectionState
         }
       })
-      reportVisiblePRRefreshCandidates(candidates, args.generation, event.sender.id)
+      reportVisiblePRRefreshCandidates(candidates, args.generation, senderId)
       return true
     }
   )
