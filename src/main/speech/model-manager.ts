@@ -28,15 +28,20 @@ export class ModelManager {
   private modelsDir: string
   private activeDownloads = new Map<string, DownloadHandle>()
   private modelStates = new Map<string, SpeechModelState>()
-  private progressCallback: ProgressCallback | null = null
+  private progressCallbacks = new Set<ProgressCallback>()
 
   constructor(customModelsDir?: string) {
     this.modelsDir = customModelsDir || join(app.getPath('userData'), 'speech-models')
     mkdirSync(this.modelsDir, { recursive: true })
   }
 
-  setProgressCallback(cb: ProgressCallback): void {
-    this.progressCallback = cb
+  setProgressCallback(cb: ProgressCallback): () => void {
+    // Why: concurrent settings windows can observe the same download; a
+    // returned unsubscribe prevents one window from replacing another.
+    this.progressCallbacks.add(cb)
+    return () => {
+      this.progressCallbacks.delete(cb)
+    }
   }
 
   getModelsDir(): string {
@@ -226,7 +231,10 @@ export class ModelManager {
     this.modelStates.set(modelId, state)
     // Why: notify the renderer on every state change (not just download
     // progress) so the UI updates for extracting/ready/error transitions.
-    this.progressCallback?.(modelId, progress ?? (status === 'extracting' ? 0.95 : -1))
+    const progressValue = progress ?? (status === 'extracting' ? 0.95 : -1)
+    for (const callback of this.progressCallbacks) {
+      callback(modelId, progressValue)
+    }
   }
 
   private downloadFile(
