@@ -168,4 +168,29 @@ describe('hosted review cache revalidation', () => {
 
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
   })
+
+  it('bounds cached hosted review branches by evicting the oldest entries', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    mockApi.hostedReview.forBranch.mockImplementation(async ({ branch }: { branch: string }) => ({
+      ...review,
+      number: Number(branch.replace('feature/cache-', '')) || review.number,
+      title: branch
+    }))
+    const store = makeStore()
+
+    for (let i = 0; i < 501; i += 1) {
+      vi.setSystemTime(1_000 + i)
+      await store.getState().fetchHostedReviewForBranch('/repo', `feature/cache-${i}`)
+    }
+
+    expect(
+      store.getState().hostedReviewCache[getHostedReviewCacheKey('/repo', 'feature/cache-0')]
+    ).toBeUndefined()
+    expect(
+      store.getState().hostedReviewCache[getHostedReviewCacheKey('/repo', 'feature/cache-500')]
+        ?.data
+    ).toMatchObject({ title: 'feature/cache-500' })
+    expect(Object.keys(store.getState().hostedReviewCache)).toHaveLength(500)
+  })
 })
