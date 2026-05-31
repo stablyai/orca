@@ -615,6 +615,7 @@ type RuntimePtyWorktreeRecord = {
   tabId: string | null
   paneKey: string | null
   connected: boolean
+  disconnectedAt: number | null
   lastExitCode: number | null
   lastAgentStatus: AgentStatus | null
   lastOscTitle: string | null
@@ -2332,6 +2333,7 @@ export class OrcaRuntimeService {
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
       pty.connected = true
+      pty.disconnectedAt = null
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.connected = true
@@ -2392,6 +2394,7 @@ export class OrcaRuntimeService {
     let ptyTailAfter: ReturnType<typeof appendNormalizedToTailBuffer> | null = null
     if (pty) {
       pty.connected = true
+      pty.disconnectedAt = null
       pty.lastOutputAt = at
       const nextTail = appendNormalizedToTailBuffer(
         pty.tailBuffer,
@@ -3565,6 +3568,7 @@ export class OrcaRuntimeService {
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       pty.connected = false
+      pty.disconnectedAt = Date.now()
       pty.lastExitCode = exitCode
       this.resolvePtyExitWaiters(pty, ptyId)
       this.pruneDisconnectedPtyTranscript(pty)
@@ -3578,6 +3582,7 @@ export class OrcaRuntimeService {
       this.resolveExitWaiters(leaf)
       this.failActiveDispatchOnExit(leaf, exitCode)
     }
+    this.pruneDisconnectedPtyRecords()
   }
 
   // ─── Driver state (mobile-presence lock) ──────────────────────────
@@ -10915,6 +10920,7 @@ export class OrcaRuntimeService {
         tabId: state.tabId ?? null,
         paneKey: state.paneKey ?? null,
         connected: state.connected ?? true,
+        disconnectedAt: state.connected === false ? Date.now() : null,
         lastExitCode: null,
         lastAgentStatus: null,
         lastOscTitle: null,
@@ -10942,6 +10948,7 @@ export class OrcaRuntimeService {
     }
     if (state.connected !== undefined) {
       pty.connected = state.connected
+      pty.disconnectedAt = state.connected ? null : (pty.disconnectedAt ?? Date.now())
     }
     if (state.lastOutputAt !== undefined) {
       pty.lastOutputAt = maxTimestamp(pty.lastOutputAt, state.lastOutputAt)
@@ -11004,8 +11011,10 @@ export class OrcaRuntimeService {
     for (const pty of this.ptysById.values()) {
       if (!livePtyIds.has(pty.ptyId) && !this.leafExistsForPty(pty.ptyId)) {
         pty.connected = false
+        pty.disconnectedAt ??= Date.now()
       }
     }
+    this.pruneDisconnectedPtyRecords()
   }
 
   private pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void {
@@ -11018,6 +11027,35 @@ export class OrcaRuntimeService {
     pty.tailPartialLine = ''
     pty.tailTruncated = false
     pty.tailLinesTotal = 0
+  }
+
+  private pruneDisconnectedPtyRecords(): void {
+    const retained = [...this.ptysById.values()]
+      .filter((pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId))
+      .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
+    while (retained.length > DISCONNECTED_PTY_RECORD_MAX) {
+      const stale = retained.shift()
+      if (!stale) {
+        return
+      }
+      // Why: exited runtime-owned PTYs stay readable after exit, but long-lived
+      // runtimes can churn through many background sessions. Bound the archive.
+      this.dropDisconnectedPtyRecord(stale.ptyId)
+    }
+  }
+
+  private dropDisconnectedPtyRecord(ptyId: string): void {
+    this.ptysById.delete(ptyId)
+    this.recentPtyOutputById.delete(ptyId)
+    this.ptyOutputSequenceById.delete(ptyId)
+    const handle = this.handleByPtyId.get(ptyId)
+    if (handle) {
+      this.handleByPtyId.delete(ptyId)
+      const record = this.handles.get(handle)
+      if (record?.tabId.startsWith('pty:')) {
+        this.handles.delete(handle)
+      }
+    }
   }
 
   private leafExistsForPty(ptyId: string): boolean {
@@ -12816,6 +12854,7 @@ const DEFAULT_REPO_SEARCH_REFS_LIMIT = 25
 const DEFAULT_TERMINAL_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_PS_LIMIT = 200
+const DISCONNECTED_PTY_RECORD_MAX = 128
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
 const PTY_CONTROLLER_LIST_TIMEOUT_MS = 3000

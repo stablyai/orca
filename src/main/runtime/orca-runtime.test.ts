@@ -3249,6 +3249,42 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('bounds disconnected background PTY records and their synthetic handles', async () => {
+    let nextPtyIndex = 0
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockImplementation(async () => ({ id: `pty-bg-${nextPtyIndex++}` })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    const handles: string[] = []
+    for (let index = 0; index < 140; index += 1) {
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      handles.push(handle)
+      runtime.onPtyExit(`pty-bg-${index}`, 0)
+    }
+
+    const internals = runtime as unknown as {
+      ptysById: Map<string, unknown>
+      handles: Map<string, unknown>
+      handleByPtyId: Map<string, string>
+    }
+    expect(internals.ptysById.size).toBeLessThanOrEqual(128)
+    expect(internals.ptysById.has('pty-bg-0')).toBe(false)
+    expect(internals.ptysById.has('pty-bg-139')).toBe(true)
+    expect(internals.handleByPtyId.has('pty-bg-0')).toBe(false)
+    expect(internals.handles.has(handles[0]!)).toBe(false)
+
+    await expect(runtime.readTerminal(handles[0]!)).rejects.toThrow('terminal_handle_stale')
+    await expect(runtime.readTerminal(handles.at(-1)!)).resolves.toMatchObject({
+      status: 'exited'
+    })
+  })
+
   it('keeps retained PTY transcript memory when controller refresh omits a record', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
