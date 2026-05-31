@@ -16,7 +16,10 @@ export function findReusableAutomationSession(args: {
   worktreeId: string
   currentRunId: string
   runs: AutomationRun[]
-  state: Pick<AppState, 'agentStatusByPaneKey' | 'ptyIdsByTabId' | 'unifiedTabsByWorktree'>
+  state: Pick<
+    AppState,
+    'agentStatusByPaneKey' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'unifiedTabsByWorktree'
+  >
 }): ReusableAutomationSession | null {
   const { automationId, agentId, worktreeId, currentRunId, runs, state } = args
   const worktreeTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
@@ -40,24 +43,24 @@ export function findReusableAutomationSession(args: {
     if (!tabId) {
       continue
     }
-    const ptyId = state.ptyIdsByTabId[tabId]?.[0]
+    const pane = findReusablePane(state.agentStatusByPaneKey, tabId, agentId)
+    if (!pane) {
+      continue
+    }
+    const ptyId = getReusablePanePtyId(state, tabId, pane.leafId)
     if (!ptyId) {
       continue
     }
-    const paneKey = findReusablePaneKey(state.agentStatusByPaneKey, tabId, agentId)
-    if (!paneKey) {
-      continue
-    }
-    return { tabId, ptyId, paneKey }
+    return { tabId, ptyId, paneKey: pane.paneKey }
   }
   return null
 }
 
-function findReusablePaneKey(
+function findReusablePane(
   entries: Record<string, AgentStatusEntry>,
   tabId: string,
   agentId: TuiAgent
-): string | null {
+): { paneKey: string; leafId: string } | null {
   for (const [paneKey, entry] of Object.entries(entries)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId !== tabId || entry.state !== 'done') {
@@ -66,7 +69,21 @@ function findReusablePaneKey(
     if (entry.agentType && entry.agentType !== 'unknown' && entry.agentType !== agentId) {
       continue
     }
-    return paneKey
+    return { paneKey, leafId: parsed.leafId }
   }
   return null
+}
+
+function getReusablePanePtyId(
+  state: Pick<AppState, 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>,
+  tabId: string,
+  leafId: string
+): string | null {
+  const ptyIdsByLeafId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId
+  if (ptyIdsByLeafId && Object.keys(ptyIdsByLeafId).length > 0) {
+    // Why: split terminal tabs can contain multiple PTYs; reuse must observe
+    // the PTY assigned to the idle agent pane's stable leaf.
+    return ptyIdsByLeafId[leafId] ?? null
+  }
+  return state.ptyIdsByTabId[tabId]?.[0] ?? null
 }
