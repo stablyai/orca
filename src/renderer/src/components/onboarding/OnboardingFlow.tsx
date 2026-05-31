@@ -11,7 +11,7 @@ import { AgentFeatureSetupStep } from './AgentFeatureSetupStep'
 import { IntegrationsStep } from './IntegrationsStep'
 import { RepoStep } from './RepoStep'
 import { OnboardingTourStep } from './OnboardingTourStep'
-import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
+import { useOnboardingFlow } from './use-onboarding-flow'
 import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
 import { OnboardingFooter } from './OnboardingFooter'
 import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
@@ -36,8 +36,8 @@ const stepCopy = {
     subtitle: 'Turn on advanced Orca capabilities for agents.'
   },
   integrations: {
-    title: 'Connect your task sources',
-    subtitle: 'Connect GitHub or Linear to:'
+    title: 'Set up GitHub tasks',
+    subtitle: 'Install the GitHub CLI to:'
   },
   tour: {
     title: 'Explore Orca',
@@ -214,9 +214,9 @@ export default function OnboardingFlow({
           ) : (
             <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
               <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-                {STEPS.map((step, idx) => {
-                  const isActive = idx === stepIndex
-                  const isDone = idx < stepIndex
+                {flow.visibleSteps.map(({ step, index: realStepIndex }, visibleIdx) => {
+                  const isActive = realStepIndex === stepIndex
+                  const isDone = realStepIndex < stepIndex
                   return (
                     <Tooltip key={step.id}>
                       <TooltipTrigger asChild>
@@ -232,9 +232,9 @@ export default function OnboardingFlow({
                                 ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
                                 : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
                           )}
-                          aria-label={`Go to onboarding step ${step.stepNumber}: ${stepCopy[step.id].title}`}
+                          aria-label={`Go to onboarding step ${visibleIdx + 1}: ${stepCopy[step.id].title}`}
                           aria-current={isActive ? 'step' : undefined}
-                          onClick={() => flow.jumpToStep(idx)}
+                          onClick={() => flow.jumpToStep(realStepIndex)}
                         />
                       </TooltipTrigger>
                       <TooltipContent side="top" sideOffset={8} style={{ zIndex: 110 }}>
@@ -245,7 +245,7 @@ export default function OnboardingFlow({
                 })}
               </TooltipProvider>
               <span className="ml-3 text-xs font-medium text-muted-foreground">
-                {stepIndex + 1} of {STEPS.length}
+                {flow.visibleStepIndex + 1} of {flow.visibleSteps.length}
               </span>
             </div>
           )}

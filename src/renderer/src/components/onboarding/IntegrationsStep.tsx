@@ -167,20 +167,18 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
 }
 
 const CAPABILITIES = [
-  'Start a workspace from any issue, PR, or Linear ticket, prefilled with its title and context',
-  'Browse your assigned tasks in the Tasks view without leaving Orca',
-  'See issue state, PR review status, and CI checks on every worktree',
+  'Start a workspace from any GitHub issue or pull request, prefilled with its title and context',
+  'Browse GitHub issues and pull requests in the Tasks view without leaving Orca',
+  'See issue state, review status, and CI checks on every worktree',
   'Read, comment on, and merge pull requests without leaving Orca'
 ] as const
 
 export function IntegrationsStep(): React.JSX.Element {
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
-  const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
 
   useEffect(() => {
     void refreshPreflightStatus()
-    void checkLinearConnection()
-  }, [checkLinearConnection, refreshPreflightStatus])
+  }, [refreshPreflightStatus])
 
   return (
     <div className="space-y-6">
@@ -195,15 +193,14 @@ export function IntegrationsStep(): React.JSX.Element {
 
       <div className="space-y-3">
         <GitHubRow />
-        <LinearRow />
-        <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-muted/10 px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <span className="text-[14px] font-medium text-foreground/70">Jira</span>
-            <span className="text-[13px] text-muted-foreground">
-              Issues, sprints, and assignees.
+        <div className="mt-4 rounded-xl border border-border bg-muted/10 px-5 py-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-[14px] font-medium text-foreground/70">More task sources</span>
+            <span className="text-[13px] leading-relaxed text-muted-foreground">
+              Linear, GitLab, Bitbucket, Azure DevOps, Gitea, and Jira live in Settings &gt;
+              Integrations.
             </span>
           </div>
-          <IntegrationStatusPill tone="neutral">Coming soon</IntegrationStatusPill>
         </div>
       </div>
     </div>
