@@ -353,7 +353,9 @@ describe('NotesSendMenu', () => {
 
     expect(hookRuntime.states[0]).toBe(false)
     expect(findByType(tree, 'DropdownMenu').props.open).toBe(false)
-    ;(findByType(tree, 'button').props.ref as (node: HTMLButtonElement | null) => void)(null)
+    for (const cleanup of hookRuntime.cleanups) {
+      cleanup()
+    }
     expect(storeMocks.closeAgentSendPopoverTargetMode).toHaveBeenCalledWith(
       buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])
     )
