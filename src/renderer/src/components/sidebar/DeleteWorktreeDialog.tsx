@@ -132,26 +132,20 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     () => (canDeleteAllLineage ? lineageDelete.deleteAllTargets : worktrees),
     [canDeleteAllLineage, lineageDelete.deleteAllTargets, worktrees]
   )
-  const dirtyDeleteSummary = useMemo(() => {
-    let worktreeCount = 0
-    let changeCount = 0
+  const dirtyChangeCountsByWorktreeId = useMemo(() => {
+    const result = new Map<string, number>()
     for (const item of deleteTargets) {
       if (item.isMainWorktree || getIsFolderWorkspaceDelete(repoMap, item)) {
         continue
       }
       const statusEntries = gitStatusByWorktree[item.id]
-      const isDirty =
-        (statusEntries?.length ?? 0) > 0 ||
-        (deleteStateByWorktreeId[item.id]?.canForceDelete ?? false)
-      if (!isDirty) {
-        continue
+      if ((statusEntries?.length ?? 0) > 0) {
+        result.set(item.id, statusEntries?.length ?? 0)
+      } else if (deleteStateByWorktreeId[item.id]?.canForceDelete) {
+        result.set(item.id, 0)
       }
-      worktreeCount += 1
-      changeCount += statusEntries?.length ?? 0
     }
-    return worktreeCount > 0
-      ? { worktreeCount, changeCount, targetCount: deleteTargets.length }
-      : null
+    return result
   }, [deleteStateByWorktreeId, deleteTargets, gitStatusByWorktree, repoMap])
 
   if (!isOpen && dontAskAgain) {
@@ -394,17 +388,20 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           worktree={worktree}
           worktrees={worktrees}
           deleteStateByWorktreeId={deleteStateByWorktreeId}
+          dirtyChangeCountsByWorktreeId={dirtyChangeCountsByWorktreeId}
         />
 
         {hasLineageChildren && (
-          <DeleteWorktreeLineageNotice descendants={lineageDelete.descendants} />
+          <DeleteWorktreeLineageNotice
+            descendants={lineageDelete.descendants}
+            dirtyChangeCountsByWorktreeId={dirtyChangeCountsByWorktreeId}
+          />
         )}
 
         <DeleteWorktreeWarningPanels
           isMainWorktree={isMainWorktree}
           mainWorktreeBlocker={deleteCopy.mainWorktreeBlocker}
           deleteError={deleteError}
-          dirtyDeleteSummary={dirtyDeleteSummary}
         />
 
         <DeleteWorktreeSkipConfirmOption

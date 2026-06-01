@@ -57,6 +57,12 @@ vi.mock('@/components/ui/scroll-area', () => ({
   ScrollArea: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  TooltipContent: ({ children }: { children: ReactNode }) => <span>{children}</span>
+}))
+
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
@@ -168,7 +174,12 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     )
     const { DeleteWorktreeLineageNotice } = await import('./DeleteWorktreeLineageNotice')
 
-    const markup = renderToStaticMarkup(<DeleteWorktreeLineageNotice descendants={[child]} />)
+    const markup = renderToStaticMarkup(
+      <DeleteWorktreeLineageNotice
+        descendants={[child]}
+        dirtyChangeCountsByWorktreeId={new Map()}
+      />
+    )
 
     expect(markup).toContain('min-w-0 max-w-full overflow-hidden rounded-md')
     expect(markup).toContain('mt-2 min-w-0 max-w-full space-y-1 overflow-hidden')
@@ -201,7 +212,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     expect(markup).not.toContain('including uncommitted or untracked files')
   })
 
-  it('shows a warning note when the workspace has uncommitted or untracked changes', async () => {
+  it('shows an inline warning when the workspace has uncommitted or untracked changes', async () => {
     const workspace = makeWorktree('Feature workspace', '/workspaces/feature')
     mocks.state.modalData = { worktreeId: workspace.id }
     mocks.state.allWorktrees.mockReturnValue([workspace])
@@ -215,8 +226,8 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
     const markup = renderToStaticMarkup(<DeleteWorktreeDialog />)
 
-    expect(markup).toContain('Uncommitted or untracked changes')
-    expect(markup).toContain('This workspace has 2 uncommitted or untracked changes.')
+    expect(markup).toContain('2 uncommitted or untracked changes')
+    expect(markup).toContain('Deleting this workspace permanently removes these changes from disk.')
     expect(markup).not.toContain('Also delete local branch')
   })
 
