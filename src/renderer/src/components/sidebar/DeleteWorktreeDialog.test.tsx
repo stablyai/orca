@@ -134,9 +134,11 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     expect(markup).toContain('Child workspaces will be deleted')
     expect(markup).toContain('Deleting this workspace also deletes 1 child workspace.')
     expect(markup).toContain('Child workspace')
-    expect(markup).toContain('from git and delete their workspace folders.')
+    expect(markup).toContain(
+      'from git and delete their workspace folders, including uncommitted or untracked files.'
+    )
     expect(markup).not.toContain('from git and delete its workspace folder.')
-    expect(markup).toContain('Delete All 2')
+    expect(markup).toContain('Delete 2 Workspaces')
     expect(markup).not.toContain('Delete Parent Only')
     expect(markup).not.toContain('Don&apos;t ask again')
 
@@ -145,13 +147,15 @@ describe('DeleteWorktreeDialog lineage copy', () => {
       buttonText(props).includes('Delete Parent Only')
     )
 
-    expect(destructiveButton ? buttonText(destructiveButton) : '').toContain('Delete All 2')
+    expect(destructiveButton ? buttonText(destructiveButton) : '').toContain('Delete 2 Workspaces')
     expect(parentOnlyButton).toBeUndefined()
 
     const deleteAllButton = destructiveButton as { onClick?: () => void } | undefined
     deleteAllButton?.onClick?.()
 
     expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([child, parent], {
+      force: true,
+      forceDeletePreservedBranch: false,
       onForceDeleted: expect.any(Function)
     })
   })
@@ -193,7 +197,24 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     const markup = renderToStaticMarkup(<DeleteWorktreeDialog />)
 
     expect(markup).toContain('from Orca. The project folder on disk will not be deleted.')
-    expect(markup).not.toContain('from git and delete its workspace folder.')
+    expect(markup).not.toContain('including uncommitted or untracked files')
+  })
+
+  it('offers preserved branch cleanup in the first delete confirmation', async () => {
+    const workspace = makeWorktree('Feature workspace', '/workspaces/feature')
+    workspace.branch = 'feature/delete-flow'
+    mocks.state.modalData = { worktreeId: workspace.id }
+    mocks.state.allWorktrees.mockReturnValue([workspace])
+
+    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
+    const markup = renderToStaticMarkup(<DeleteWorktreeDialog />)
+
+    expect(markup).toContain(
+      'Also delete local branch &quot;feature/delete-flow&quot; if Git keeps it'
+    )
+    expect(markup).toContain(
+      'This only force-deletes branches Git protects because they may contain unmerged local commits.'
+    )
   })
 
   it('notifies the dialog caller after a toast force delete succeeds', async () => {
@@ -212,6 +233,8 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     deleteButton?.onClick?.(undefined as never)
 
     expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([workspace], {
+      force: true,
+      forceDeletePreservedBranch: false,
       onForceDeleted: expect.any(Function)
     })
     const options = vi.mocked(runWorktreeDeletesInParallel).mock.calls[0]?.[1] as

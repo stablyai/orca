@@ -1118,7 +1118,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
   },
 
-  removeWorktree: async (worktreeId, force) => {
+  removeWorktree: async (worktreeId, force, options) => {
     set((s) => ({
       deleteStateByWorktreeId: {
         ...s.deleteStateByWorktreeId,
@@ -1365,11 +1365,29 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
       get().removeWorkspaceSpaceWorktrees?.([worktreeId])
-      showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
-        void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
-      })
-      return removalResult?.preservedBranch
-        ? { ok: true as const, preservedBranch: removalResult.preservedBranch }
+      const preservedBranch = removalResult?.preservedBranch
+      let preservedBranchDeleted = false
+      if (preservedBranch && options?.forceDeletePreservedBranch && preservedBranch.head) {
+        // Why: the delete confirmation can explicitly include branch cleanup,
+        // avoiding a second branch prompt while still using the expected-head guard.
+        const branchResult = await get().forceDeletePreservedBranch(
+          worktreeId,
+          preservedBranch.branchName,
+          preservedBranch.head
+        )
+        preservedBranchDeleted = branchResult.ok
+        if (!branchResult.ok) {
+          showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
+            void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
+          })
+        }
+      } else {
+        showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
+          void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
+        })
+      }
+      return preservedBranch && !preservedBranchDeleted
+        ? { ok: true as const, preservedBranch }
         : { ok: true as const }
     } catch (err) {
       // Why: git refusing a non-force delete for dirty/untracked files is a
