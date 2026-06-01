@@ -54,6 +54,7 @@ export function createAgentCompletionCoordinator(
   let pendingTitleTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTitle: string | null = null
+  let pendingHookDonePayload: ParsedAgentStatusPayload | null = null
   let pendingTitleSequence = 0
   let pendingTitle: {
     id: number
@@ -89,6 +90,7 @@ export function createAgentCompletionCoordinator(
       pendingHookDoneTimer = null
     }
     pendingHookDoneTitle = null
+    pendingHookDonePayload = null
   }
 
   function establishAgentEvidence(): void {
@@ -117,7 +119,7 @@ export function createAgentCompletionCoordinator(
   function dispatchCompletion(
     source: CompletionSource,
     title: string,
-    optionsOverride: { quietedHookDone?: boolean } = {}
+    optionsOverride: { quietedHookDone?: boolean; agentStatus?: ParsedAgentStatusPayload } = {}
   ): void {
     if (source !== 'hook' && pendingHookDoneTimer !== null) {
       return
@@ -141,15 +143,17 @@ export function createAgentCompletionCoordinator(
     if (optionsOverride.quietedHookDone === true) {
       options.dispatchCompletion(title, {
         source,
-        quietedHookDone: true
+        quietedHookDone: true,
+        ...(optionsOverride.agentStatus ? { agentStatus: optionsOverride.agentStatus } : {})
       })
     } else {
       options.dispatchCompletion(title)
     }
   }
 
-  function scheduleHookDoneCompletion(title: string): void {
+  function scheduleHookDoneCompletion(title: string, payload: ParsedAgentStatusPayload): void {
     pendingHookDoneTitle = title
+    pendingHookDonePayload = payload
     if (pendingHookDoneTimer !== null) {
       return
     }
@@ -158,9 +162,14 @@ export function createAgentCompletionCoordinator(
     pendingHookDoneTimer = setTimeout(() => {
       pendingHookDoneTimer = null
       const pendingTitle = pendingHookDoneTitle
+      const pendingPayload = pendingHookDonePayload
       pendingHookDoneTitle = null
+      pendingHookDonePayload = null
       if (pendingTitle) {
-        dispatchCompletion('hook', pendingTitle, { quietedHookDone: true })
+        dispatchCompletion('hook', pendingTitle, {
+          quietedHookDone: true,
+          ...(pendingPayload ? { agentStatus: pendingPayload } : {})
+        })
       }
     }, HOOK_DONE_QUIET_MS)
   }
@@ -464,7 +473,7 @@ export function createAgentCompletionCoordinator(
         currentTurn += 1
       }
       if (payload.state === 'done' && workingStatusObserved) {
-        scheduleHookDoneCompletion(payload.agentType ?? options.paneKey)
+        scheduleHookDoneCompletion(payload.agentType ?? options.paneKey, payload)
         return
       }
       dispatchCompletion('hook', payload.agentType ?? options.paneKey)

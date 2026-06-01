@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this e2e shares one Electron notification spy and hook endpoint setup across related notification regressions. */
 import { test, expect } from './helpers/orca-app'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { getRendererTitleLog, installRendererTitleLog } from './helpers/terminal-title-log'
@@ -138,6 +139,20 @@ async function getRendererOrCachedAgentStatuses(page: Page): Promise<AgentStatus
   return [...rendererStatuses, ...cachedStatuses]
 }
 
+async function isWorktreeUnread(page: Page, worktreeId: string): Promise<boolean> {
+  return page.evaluate((targetWorktreeId) => {
+    const store = window.__store
+    if (!store) {
+      return false
+    }
+    return (
+      Object.values(store.getState().worktreesByRepo)
+        .flat()
+        .find((worktree) => worktree.id === targetWorktreeId)?.isUnread === true
+    )
+  }, worktreeId)
+}
+
 test.describe('Droid notifications', () => {
   test('Codex hook completion dispatches while its worktree is inactive', async ({
     orcaPage,
@@ -229,6 +244,13 @@ test.describe('Droid notifications', () => {
           agentLastAssistantMessage: finalMessage
         })
       ])
+
+    await expect
+      .poll(async () => isWorktreeUnread(orcaPage, worktreeId), {
+        timeout: 10_000,
+        message: 'Codex hook Stop did not mark the inactive worktree unread'
+      })
+      .toBe(true)
   })
 
   test('recognized agent title completion dispatches one task-complete notification', async ({

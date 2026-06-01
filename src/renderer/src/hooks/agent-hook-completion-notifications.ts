@@ -12,6 +12,8 @@ type CoordinatorEntry = {
   coordinator: AgentCompletionCoordinator
 }
 
+type StoreSnapshot = ReturnType<typeof useAppStore.getState>
+
 const coordinatorsByPaneKey = new Map<string, CoordinatorEntry>()
 const paneKeysRequiringFreshWorking = new Set<string>()
 let wasAgentTaskCompleteNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
@@ -27,12 +29,12 @@ function pruneClosedPaneCoordinators(): void {
   // Why: hook-completion coordinators are module-scoped and may outlive a pane
   // unless liveness changes from close/sleep paths evict them here.
   for (const paneKey of coordinatorsByPaneKey.keys()) {
-    if (!paneHasLivePty(paneKey)) {
+    if (!paneCanReceiveHookCompletion(paneKey)) {
       disposeCoordinatorForPaneKey(paneKey)
     }
   }
   for (const paneKey of paneKeysRequiringFreshWorking) {
-    if (!paneHasLivePty(paneKey)) {
+    if (!paneCanReceiveHookCompletion(paneKey)) {
       paneKeysRequiringFreshWorking.delete(paneKey)
     }
   }
@@ -99,6 +101,36 @@ function paneHasLivePty(paneKey: string): boolean {
   return getPtyIdForPaneKey(paneKey) !== null
 }
 
+function paneKeyHasUnsuppressedPtyHint(state: StoreSnapshot, paneKey: string): boolean {
+  const parsed = parsePaneKey(paneKey)
+  if (!parsed) {
+    return false
+  }
+  const tab = Object.values(state.tabsByWorktree ?? {})
+    .flat()
+    .find((candidate) => candidate.id === parsed.tabId)
+  if (!tab) {
+    return false
+  }
+  const layout = state.terminalLayoutsByTabId?.[parsed.tabId]
+  if (layout?.root && !collectLeafIdsInOrder(layout.root).includes(parsed.leafId)) {
+    return false
+  }
+  const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
+  // Why: sleep/shutdown preserves tab records while marking their PTYs
+  // suppressed. Missing hints are allowed because inactive-worktree hydration
+  // can accept hook status before the renderer restores tab PTY metadata.
+  const ptyHints = [tab.ptyId, leafPtyId].filter((ptyId): ptyId is string => Boolean(ptyId))
+  return ptyHints.length === 0 || ptyHints.some((ptyId) => !state.suppressedPtyExitIds?.[ptyId])
+}
+
+function paneCanReceiveHookCompletion(paneKey: string): boolean {
+  const state = useAppStore.getState()
+  // Why: native hook IPC is itself a live status signal. Inactive worktrees can
+  // have accepted hook updates before their renderer PTY map catches up.
+  return paneKeyHasUnsuppressedPtyHint(state, paneKey) || paneHasLivePty(paneKey)
+}
+
 function createCoordinator(paneKey: string, worktreeId: string): AgentCompletionCoordinator {
   return createAgentCompletionCoordinator({
     paneKey,
@@ -108,14 +140,15 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
       foregroundProcess: null,
       hasChildProcesses: false
     }),
-    dispatchCompletion: (title) => {
+    dispatchCompletion: (title, meta) => {
       dispatchTerminalNotification(worktreeId, {
         source: 'agent-task-complete',
         terminalTitle: title,
-        paneKey
+        paneKey,
+        ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       })
     },
-    isLive: () => paneHasLivePty(paneKey)
+    isLive: () => paneCanReceiveHookCompletion(paneKey)
   })
 }
 
@@ -129,7 +162,7 @@ export function observeAgentHookCompletionForNotification({
   payload: ParsedAgentStatusPayload
 }): void {
   pruneClosedPaneCoordinators()
-  if (!paneHasLivePty(paneKey)) {
+  if (!paneCanReceiveHookCompletion(paneKey)) {
     return
   }
 
