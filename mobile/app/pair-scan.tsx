@@ -59,7 +59,9 @@ export default function PairScanScreen() {
 
   const handleBarCodeScanned = useCallback(
     ({ data }: { data: string }) => {
-      if (processingRef.current) return
+      if (processingRef.current) {
+        return
+      }
       processingRef.current = true
 
       const offer = decodePairingUrl(data)
@@ -77,7 +79,9 @@ export default function PairScanScreen() {
 
   const handlePasteSubmit = useCallback((input: string) => {
     setPasteVisible(false)
-    if (processingRef.current) return
+    if (processingRef.current) {
+      return
+    }
     processingRef.current = true
 
     const offer = parsePairingCode(input)
@@ -111,7 +115,9 @@ export default function PairScanScreen() {
     try {
       client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64, {
         onLog: (entry) => {
-          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) return
+          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
+            return
+          }
           logsRef.current = [...logsRef.current, entry]
           setLogs(logsRef.current)
         }
@@ -122,7 +128,9 @@ export default function PairScanScreen() {
       if (activePairingAttemptRef.current === attempt) {
         activePairingAttemptRef.current = null
       }
-      if (!mountedRef.current || !attemptIsCurrent) return
+      if (!mountedRef.current || !attemptIsCurrent) {
+        return
+      }
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
@@ -130,7 +138,9 @@ export default function PairScanScreen() {
       if (activePairingAttemptRef.current === attempt) {
         activePairingAttemptRef.current = null
       }
-      if (!mountedRef.current || !attemptIsCurrent) return
+      if (!mountedRef.current || !attemptIsCurrent) {
+        return
+      }
       console.warn('[pair] connect failed', err)
       setStatus('error')
       setErrorMessage(
@@ -143,7 +153,9 @@ export default function PairScanScreen() {
     }
 
     if (!response.ok) {
-      if (!mountedRef.current) return
+      if (!mountedRef.current) {
+        return
+      }
       if (response.error.code === 'unauthorized') {
         setStatus('error')
         setErrorMessage('Authentication failed — token may be expired')
@@ -167,10 +179,14 @@ export default function PairScanScreen() {
         publicKeyB64: offer.publicKeyB64,
         lastConnected: Date.now()
       })
-      if (!mountedRef.current) return
+      if (!mountedRef.current) {
+        return
+      }
       router.replace(`/h/${hostId}`)
     } catch (err) {
-      if (!mountedRef.current) return
+      if (!mountedRef.current) {
+        return
+      }
       console.warn('[pair] save failed', err)
       setStatus('error')
       setErrorMessage(

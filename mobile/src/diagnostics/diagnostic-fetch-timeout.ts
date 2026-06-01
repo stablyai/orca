@@ -15,7 +15,9 @@ export function startDiagnosticFetchTimeout(timeoutMs: number): DiagnosticFetchT
   }, timeoutMs)
 
   function dispose() {
-    if (disposed) return
+    if (disposed) {
+      return
+    }
     disposed = true
     if (timer) {
       clearTimeout(timer)

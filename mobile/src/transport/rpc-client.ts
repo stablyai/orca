@@ -149,7 +149,9 @@ export function connect(
   const onLog = options.onLog
   let logCounter = 0
   function emitLog(level: ConnectionLogLevel, message: string, detail?: string) {
-    if (!onLog) return
+    if (!onLog) {
+      return
+    }
     onLog({
       id: `log-${++logCounter}-${Date.now()}`,
       ts: Date.now(),
@@ -216,7 +218,9 @@ export function connect(
   }
 
   function setState(next: ConnectionState) {
-    if (state === next) return
+    if (state === next) {
+      return
+    }
     const prev = state
     const dwelt = Date.now() - stateEnteredAt
     state = next
@@ -258,8 +262,12 @@ export function connect(
   }
 
   function waitForConnected(timeoutMs?: number): Promise<void> {
-    if (state === 'connected') return Promise.resolve()
-    if (intentionallyClosed) return Promise.reject(new Error('Client closed'))
+    if (state === 'connected') {
+      return Promise.resolve()
+    }
+    if (intentionallyClosed) {
+      return Promise.reject(new Error('Client closed'))
+    }
     if (state === 'reconnecting' && reconnectAttempt >= GIVE_UP_AFTER_ATTEMPTS && !reconnectTimer) {
       // Why: after the retry cap there is no future state transition to
       // release callers waiting before their per-request timeout starts.
@@ -290,7 +298,9 @@ export function connect(
   }
 
   function openConnection() {
-    if (intentionallyClosed) return
+    if (intentionallyClosed) {
+      return
+    }
 
     const now = Date.now()
     wsConstructionCounter++
@@ -644,10 +654,14 @@ export function connect(
           event,
           (_k, v) => {
             if (typeof v === 'object' && v !== null) {
-              if (seen.has(v as object)) return '[circular]'
+              if (seen.has(v as object)) {
+                return '[circular]'
+              }
               seen.add(v as object)
             }
-            if (typeof v === 'function') return '[fn]'
+            if (typeof v === 'function') {
+              return '[fn]'
+            }
             return v
           },
           0
@@ -696,10 +710,14 @@ export function connect(
           event,
           (_k, v) => {
             if (typeof v === 'object' && v !== null) {
-              if (seen.has(v as object)) return '[circular]'
+              if (seen.has(v as object)) {
+                return '[circular]'
+              }
               seen.add(v as object)
             }
-            if (typeof v === 'function') return '[fn]'
+            if (typeof v === 'function') {
+              return '[fn]'
+            }
             return v
           },
           0
@@ -798,7 +816,9 @@ export function connect(
       // Why: only probe while the channel is actually in 'connected'. The
       // sendRequest path itself waits for connected, but a probe scheduled
       // during a reconnect would just stack up timeouts and confuse logs.
-      if (state !== 'connected' || !ws) return
+      if (state !== 'connected' || !ws) {
+        return
+      }
       const probeWs = ws
       // Why: short timeout (8s) — server's heartbeat is 15s, so if we
       // don't see *anything* back within 8s the link is almost certainly
@@ -823,11 +843,15 @@ export function connect(
       }, 8_000)
       pending.set(id, {
         resolve: () => {
-          if (timedOut) return
+          if (timedOut) {
+            return
+          }
           clearTimeout(timeout)
         },
         reject: () => {
-          if (timedOut) return
+          if (timedOut) {
+            return
+          }
           clearTimeout(timeout)
         }
       })

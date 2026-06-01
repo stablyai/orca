@@ -236,8 +236,12 @@ function formatBranchEntryMeta(entry: MobileGitBranchChangeEntry): string | null
 }
 
 function diffLinePrefix(kind: MobileDiffLine['kind']): string {
-  if (kind === 'add') return '+'
-  if (kind === 'delete') return '-'
+  if (kind === 'add') {
+    return '+'
+  }
+  if (kind === 'delete') {
+    return '-'
+  }
   return ' '
 }
 
@@ -336,7 +340,9 @@ export default function MobileSourceControlScreen() {
       setBranchCompareState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
       try {
         const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
-        if (!isCurrentLoad()) return false
+        if (!isCurrentLoad()) {
+          return false
+        }
         if (!baseRef) {
           setBranchCompareState({ kind: 'idle' })
           return true
@@ -345,7 +351,9 @@ export default function MobileSourceControlScreen() {
           worktree: `id:${worktreeId}`,
           baseRef
         })
-        if (!isCurrentLoad()) return false
+        if (!isCurrentLoad()) {
+          return false
+        }
         if (!response.ok) {
           if (isMobileGitUnavailable(response.error?.code, response.error?.message)) {
             setBranchCompareState({ kind: 'idle' })
@@ -359,7 +367,9 @@ export default function MobileSourceControlScreen() {
         })
         return true
       } catch (err) {
-        if (!isCurrentLoad()) return false
+        if (!isCurrentLoad()) {
+          return false
+        }
         const message = err instanceof Error ? err.message : 'Unable to load committed changes'
         setBranchCompareState((prev) => {
           if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
@@ -404,14 +414,18 @@ export default function MobileSourceControlScreen() {
           }
           return false
         }
-        if (!isCurrentLoad()) return false
+        if (!isCurrentLoad()) {
+          return false
+        }
         setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
         try {
           for (let attempt = 0; attempt <= SELECTOR_RETRY_COUNT; attempt += 1) {
             const response = await client.sendRequest('git.status', {
               worktree: `id:${worktreeId}`
             })
-            if (!isCurrentLoad()) return false
+            if (!isCurrentLoad()) {
+              return false
+            }
             if (response.ok) {
               const result = (response as RpcSuccess).result as MobileGitStatusResult
               setScreenState({ kind: 'ready', status: result })
@@ -433,13 +447,17 @@ export default function MobileSourceControlScreen() {
               isMobileGitTransientRefreshError(response.error?.code, response.error?.message)
             if (shouldRetry && attempt < SELECTOR_RETRY_COUNT) {
               await wait(SELECTOR_RETRY_DELAY_MS)
-              if (!isCurrentLoad()) return false
+              if (!isCurrentLoad()) {
+                return false
+              }
               continue
             }
             throw new Error(response.error?.message || 'Unable to load source control')
           }
         } catch (err) {
-          if (!isCurrentLoad()) return false
+          if (!isCurrentLoad()) {
+            return false
+          }
           const message = err instanceof Error ? err.message : 'Unable to load source control'
           setScreenState((prev) => {
             // Why: git mutations can succeed while the immediate status refresh
@@ -590,13 +608,17 @@ export default function MobileSourceControlScreen() {
       runner: () => Promise<void>,
       options?: { clearCommitMessage?: boolean }
     ) => {
-      if (busyActionRef.current) return false
+      if (busyActionRef.current) {
+        return false
+      }
       busyActionRef.current = actionId
       setBusyAction(actionId)
       setActionError(null)
       try {
         await runner()
-        if (!mountedRef.current) return false
+        if (!mountedRef.current) {
+          return false
+        }
         if (options?.clearCommitMessage) {
           setCommitMessage('')
         }
@@ -604,7 +626,9 @@ export default function MobileSourceControlScreen() {
         await loadStatus({ preserveReadyOnFailure: true, force: true })
         return true
       } catch (err) {
-        if (!mountedRef.current) return false
+        if (!mountedRef.current) {
+          return false
+        }
         triggerError()
         setActionError(err instanceof Error ? err.message : 'Source control action failed')
         return false
@@ -655,19 +679,25 @@ export default function MobileSourceControlScreen() {
 
   const stageAll = useCallback(async () => {
     const filePaths = stageablePaths
-    if (filePaths.length === 0) return
+    if (filePaths.length === 0) {
+      return
+    }
     await runGitAction('stage-all', 'git.bulkStage', { filePaths })
   }, [runGitAction, stageablePaths])
 
   const unstageAll = useCallback(async () => {
     const filePaths = unstageablePaths
-    if (filePaths.length === 0) return
+    if (filePaths.length === 0) {
+      return
+    }
     await runGitAction('unstage-all', 'git.bulkUnstage', { filePaths })
   }, [runGitAction, unstageablePaths])
 
   const commit = useCallback(async () => {
     const message = commitMessage.trim()
-    if (!message) return false
+    if (!message) {
+      return false
+    }
     return await runGitWorkflow(
       'commit',
       async () => {
@@ -680,8 +710,12 @@ export default function MobileSourceControlScreen() {
   const runCommitFollowUps = useCallback(
     async (actionId: string, afterCommit: () => Promise<void>) => {
       const message = commitMessage.trim()
-      if (!message) return false
-      if (busyActionRef.current) return false
+      if (!message) {
+        return false
+      }
+      if (busyActionRef.current) {
+        return false
+      }
       busyActionRef.current = actionId
       setBusyAction(actionId)
       setActionError(null)
@@ -690,13 +724,17 @@ export default function MobileSourceControlScreen() {
         await sendCommitRequest(message)
         didCommit = true
         await afterCommit()
-        if (!mountedRef.current) return false
+        if (!mountedRef.current) {
+          return false
+        }
         setCommitMessage('')
         triggerSuccess()
         await loadStatus({ preserveReadyOnFailure: true, force: true })
         return true
       } catch (err) {
-        if (!mountedRef.current) return false
+        if (!mountedRef.current) {
+          return false
+        }
         triggerError()
         const message = err instanceof Error ? err.message : 'Source control action failed'
         if (didCommit) {
@@ -778,10 +816,16 @@ export default function MobileSourceControlScreen() {
 
   const openFile = useCallback(
     async (entry: MobileGitStatusEntry) => {
-      if (entry.status === 'deleted' || entry.conflictStatus === 'unresolved') return
-      if (openingPathRef.current || busyActionRef.current) return
+      if (entry.status === 'deleted' || entry.conflictStatus === 'unresolved') {
+        return
+      }
+      if (openingPathRef.current || busyActionRef.current) {
+        return
+      }
       if (!client || connState !== 'connected') {
-        if (!mountedRef.current) return
+        if (!mountedRef.current) {
+          return
+        }
         setActionError('Waiting for desktop...')
         return
       }
@@ -803,7 +847,9 @@ export default function MobileSourceControlScreen() {
         if (!response.ok) {
           throw new Error(response.error?.message || 'Unable to open diff')
         }
-        if (!mountedRef.current) return
+        if (!mountedRef.current) {
+          return
+        }
         triggerSelection()
         if (origin === 'session') {
           router.back()
@@ -818,7 +864,9 @@ export default function MobileSourceControlScreen() {
           `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}${query ? `?${query}` : ''}`
         )
       } catch (err) {
-        if (!mountedRef.current) return
+        if (!mountedRef.current) {
+          return
+        }
         triggerError()
         setActionError(err instanceof Error ? err.message : 'Unable to open diff')
       } finally {
@@ -835,9 +883,13 @@ export default function MobileSourceControlScreen() {
 
   const openBranchDiff = useCallback(
     async (entry: MobileGitBranchChangeEntry) => {
-      if (openingBranchPathRef.current || openingPathRef.current || busyActionRef.current) return
+      if (openingBranchPathRef.current || openingPathRef.current || busyActionRef.current) {
+        return
+      }
       if (!client || connState !== 'connected') {
-        if (!mountedRef.current) return
+        if (!mountedRef.current) {
+          return
+        }
         setActionError('Waiting for desktop...')
         return
       }
@@ -872,7 +924,9 @@ export default function MobileSourceControlScreen() {
           throw new Error('Binary branch diff preview unavailable on mobile')
         }
         const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
-        if (!mountedRef.current) return
+        if (!mountedRef.current) {
+          return
+        }
         setBranchDiffPreview({
           kind: 'ready',
           entry,
@@ -882,7 +936,9 @@ export default function MobileSourceControlScreen() {
         })
         triggerSelection()
       } catch (err) {
-        if (!mountedRef.current) return
+        if (!mountedRef.current) {
+          return
+        }
         triggerError()
         setBranchDiffPreview({
           kind: 'error',

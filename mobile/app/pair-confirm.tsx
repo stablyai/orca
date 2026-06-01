@@ -73,7 +73,9 @@ export default function PairConfirmScreen() {
   }, [])
 
   async function confirm() {
-    if (!offer) return
+    if (!offer) {
+      return
+    }
     setStatus('connecting')
     logsRef.current = []
     setLogs([])
@@ -92,7 +94,9 @@ export default function PairConfirmScreen() {
     try {
       client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64, {
         onLog: (entry) => {
-          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) return
+          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
+            return
+          }
           logsRef.current = [...logsRef.current, entry]
           setLogs(logsRef.current)
         }
@@ -103,7 +107,9 @@ export default function PairConfirmScreen() {
       if (activePairingAttemptRef.current === attempt) {
         activePairingAttemptRef.current = null
       }
-      if (!mountedRef.current || !attemptIsCurrent) return
+      if (!mountedRef.current || !attemptIsCurrent) {
+        return
+      }
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
@@ -111,7 +117,9 @@ export default function PairConfirmScreen() {
       if (activePairingAttemptRef.current === attempt) {
         activePairingAttemptRef.current = null
       }
-      if (!mountedRef.current || !attemptIsCurrent) return
+      if (!mountedRef.current || !attemptIsCurrent) {
+        return
+      }
       console.warn('[pair-confirm] connect failed', err)
       setStatus('error')
       setErrorMessage(
@@ -123,7 +131,9 @@ export default function PairConfirmScreen() {
     }
 
     if (!response.ok) {
-      if (!mountedRef.current) return
+      if (!mountedRef.current) {
+        return
+      }
       setStatus('error')
       setErrorMessage(
         response.error.code === 'unauthorized'
@@ -144,10 +154,14 @@ export default function PairConfirmScreen() {
         publicKeyB64: offer.publicKeyB64,
         lastConnected: Date.now()
       })
-      if (!mountedRef.current) return
+      if (!mountedRef.current) {
+        return
+      }
       router.replace(`/h/${hostId}`)
     } catch (err) {
-      if (!mountedRef.current) return
+      if (!mountedRef.current) {
+        return
+      }
       console.warn('[pair-confirm] save failed', err)
       setStatus('error')
       setErrorMessage(

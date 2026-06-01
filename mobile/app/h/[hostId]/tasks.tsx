@@ -897,11 +897,17 @@ function taskTime(value: string): number {
 
 function formatUpdatedAt(value: string): string {
   const time = taskTime(value)
-  if (!time) return ''
+  if (!time) {
+    return ''
+  }
   const minutes = Math.max(0, Math.floor((Date.now() - time) / 60_000))
-  if (minutes < 60) return `${minutes}m`
+  if (minutes < 60) {
+    return `${minutes}m`
+  }
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h`
+  if (hours < 24) {
+    return `${hours}h`
+  }
   return `${Math.floor(hours / 24)}d`
 }
 
@@ -942,8 +948,12 @@ function normalizeLinearFilter(value: unknown): LinearFilter {
 }
 
 function githubKindFromQuery(query: string, fallbackPreset: GitHubPreset): GitHubTaskKind {
-  if (/\bis:pr\b/i.test(query)) return 'prs'
-  if (/\bis:issue\b/i.test(query)) return 'issues'
+  if (/\bis:pr\b/i.test(query)) {
+    return 'prs'
+  }
+  if (/\bis:issue\b/i.test(query)) {
+    return 'issues'
+  }
   return fallbackPreset === 'prs' || fallbackPreset === 'my-prs' || fallbackPreset === 'review'
     ? 'prs'
     : 'issues'
@@ -957,18 +967,24 @@ function parseProjectInput(
   input: string
 ): { owner: string; number: number; viewNumber?: number } | null {
   const trimmed = input.trim()
-  if (!trimmed) return null
+  if (!trimmed) {
+    return null
+  }
   const short = /^([A-Za-z0-9][A-Za-z0-9-]*)\/(\d+)$/.exec(trimmed)
   if (short) {
     return { owner: short[1]!, number: Number(short[2]) }
   }
   try {
     const url = new URL(trimmed)
-    if (url.hostname !== 'github.com') return null
+    if (url.hostname !== 'github.com') {
+      return null
+    }
     const parts = url.pathname.split('/').filter(Boolean)
     if ((parts[0] === 'orgs' || parts[0] === 'users') && parts[2] === 'projects' && parts[3]) {
       const number = Number(parts[3])
-      if (!Number.isInteger(number) || number < 1) return null
+      if (!Number.isInteger(number) || number < 1) {
+        return null
+      }
       const viewNumber =
         parts[4] === 'views' && parts[5] && Number.isInteger(Number(parts[5]))
           ? Number(parts[5])
@@ -986,8 +1002,12 @@ function parseProjectInput(
 }
 
 function projectRowType(row: GitHubProjectRow): 'issue' | 'pr' | null {
-  if (row.itemType === 'ISSUE') return 'issue'
-  if (row.itemType === 'PULL_REQUEST') return 'pr'
+  if (row.itemType === 'ISSUE') {
+    return 'issue'
+  }
+  if (row.itemType === 'PULL_REQUEST') {
+    return 'pr'
+  }
   return null
 }
 
@@ -1014,33 +1034,55 @@ const GITHUB_PROJECT_OPTION_COLORS: Record<string, string> = {
 }
 
 function githubProjectOptionColor(color: string | null | undefined): string {
-  if (!color) return colors.textMuted
+  if (!color) {
+    return colors.textMuted
+  }
   const upper = color.toUpperCase()
   const mapped = GITHUB_PROJECT_OPTION_COLORS[upper]
-  if (mapped) return mapped
+  if (mapped) {
+    return mapped
+  }
   const hex = color.startsWith('#') ? color : `#${color}`
   return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : colors.textMuted
 }
 
 function projectRowStatusLabel(row: GitHubProjectRow): string {
-  if (row.itemType === 'DRAFT_ISSUE') return 'Draft'
-  if (row.itemType === 'REDACTED') return 'Redacted'
-  if (row.content.isDraft) return 'Draft'
-  if (row.content.state === 'MERGED') return 'Merged'
-  if (row.content.state === 'CLOSED') return 'Closed'
+  if (row.itemType === 'DRAFT_ISSUE') {
+    return 'Draft'
+  }
+  if (row.itemType === 'REDACTED') {
+    return 'Redacted'
+  }
+  if (row.content.isDraft) {
+    return 'Draft'
+  }
+  if (row.content.state === 'MERGED') {
+    return 'Merged'
+  }
+  if (row.content.state === 'CLOSED') {
+    return 'Closed'
+  }
   return 'Open'
 }
 
 function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
   const trimmed = query.trim()
-  if (!trimmed) return getTaskPresetQuery(kind === 'prs' ? 'prs' : 'issues')
-  if (/\bis:(?:issue|pr)\b/i.test(trimmed)) return trimmed
+  if (!trimmed) {
+    return getTaskPresetQuery(kind === 'prs' ? 'prs' : 'issues')
+  }
+  if (/\bis:(?:issue|pr)\b/i.test(trimmed)) {
+    return trimmed
+  }
   return `${kind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
 }
 
 function gitHubStatusLabel(item: GitHubWorkItem): string {
-  if (item.state === 'merged') return 'Merged'
-  if (item.state === 'draft') return 'Draft'
+  if (item.state === 'merged') {
+    return 'Merged'
+  }
+  if (item.state === 'draft') {
+    return 'Draft'
+  }
   return item.state === 'closed' ? 'Closed' : 'Open'
 }
 
@@ -1062,9 +1104,15 @@ function createGitHubTask(repo: RepoSummary, item: Omit<GitHubWorkItem, 'repoId'
 }
 
 function gitLabStatusLabel(item: GitLabWorkItem): string {
-  if (item.state === 'opened') return 'Open'
-  if (item.state === 'merged') return 'Merged'
-  if (item.state === 'draft') return 'Draft'
+  if (item.state === 'opened') {
+    return 'Open'
+  }
+  if (item.state === 'merged') {
+    return 'Merged'
+  }
+  if (item.state === 'draft') {
+    return 'Draft'
+  }
   return item.state === 'closed' ? 'Closed' : 'Locked'
 }
 
@@ -1082,15 +1130,25 @@ function createGitLabTask(repo: RepoSummary, item: Omit<GitLabWorkItem, 'repoId'
 }
 
 function gitLabTodoTargetLabel(todo: Pick<GitLabTodo, 'targetType'>): string {
-  if (todo.targetType === 'MergeRequest') return 'Merge request'
-  if (todo.targetType === 'Issue') return 'Issue'
+  if (todo.targetType === 'MergeRequest') {
+    return 'Merge request'
+  }
+  if (todo.targetType === 'Issue') {
+    return 'Issue'
+  }
   return 'GitLab todo'
 }
 
 function gitLabTodoTargetRef(todo: Pick<GitLabTodo, 'targetType' | 'targetIid'>): string {
-  if (!todo.targetIid) return ''
-  if (todo.targetType === 'MergeRequest') return `!${todo.targetIid}`
-  if (todo.targetType === 'Issue') return `#${todo.targetIid}`
+  if (!todo.targetIid) {
+    return ''
+  }
+  if (todo.targetType === 'MergeRequest') {
+    return `!${todo.targetIid}`
+  }
+  if (todo.targetType === 'Issue') {
+    return `#${todo.targetIid}`
+  }
   return String(todo.targetIid)
 }
 
@@ -1133,7 +1191,9 @@ function reconcileRepoSelection(
   repos: RepoSummary[],
   persisted: string[] | null | undefined
 ): Set<string> {
-  if (!persisted || persisted.length === 0) return new Set()
+  if (!persisted || persisted.length === 0) {
+    return new Set()
+  }
   const availableIds = new Set(repos.filter(isHostedTaskRepo).map((repo) => repo.id))
   const selected = persisted.filter((id) => availableIds.has(id))
   return selected.length === 0 ? new Set() : new Set(selected)
@@ -1191,7 +1251,9 @@ function getGitHubReviewerRows(item: {
   const byLogin = new Map<string, GitHubPRReviewerRow>()
   for (const user of item.reviewRequests ?? []) {
     const login = user.login.trim()
-    if (!login) continue
+    if (!login) {
+      continue
+    }
     byLogin.set(login.toLowerCase(), {
       login,
       name: user.name,
@@ -1202,7 +1264,9 @@ function getGitHubReviewerRows(item: {
   for (const review of item.latestReviews ?? []) {
     const login = review.login.trim()
     const key = login.toLowerCase()
-    if (!login || byLogin.has(key)) continue
+    if (!login || byLogin.has(key)) {
+      continue
+    }
     byLogin.set(key, {
       login,
       name: null,
@@ -1218,11 +1282,19 @@ function getGitHubReviewSummary(item: {
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]
 }): string {
-  if (item.reviewDecision === 'APPROVED') return 'Approved'
-  if (item.reviewDecision === 'CHANGES_REQUESTED') return 'Changes requested'
+  if (item.reviewDecision === 'APPROVED') {
+    return 'Approved'
+  }
+  if (item.reviewDecision === 'CHANGES_REQUESTED') {
+    return 'Changes requested'
+  }
   const rows = getGitHubReviewerRows(item)
-  if (rows.length === 0) return 'No reviewers'
-  if (rows.length === 1) return `${rows[0]!.login} - ${rows[0]!.stateLabel}`
+  if (rows.length === 0) {
+    return 'No reviewers'
+  }
+  if (rows.length === 1) {
+    return `${rows[0]!.login} - ${rows[0]!.stateLabel}`
+  }
   return `${rows[0]!.login} +${rows.length - 1}`
 }
 
@@ -1299,8 +1371,12 @@ function getGitHubMergeLabel(item: GitHubWorkItem): string {
 }
 
 function getHostedReviewMergeMethodLabel(method: HostedReviewMergeMethod): string {
-  if (method === 'squash') return 'Squash and merge'
-  if (method === 'rebase') return 'Rebase and merge'
+  if (method === 'squash') {
+    return 'Squash and merge'
+  }
+  if (method === 'rebase') {
+    return 'Rebase and merge'
+  }
   return 'Create merge commit'
 }
 
@@ -1377,22 +1453,38 @@ function getGitHubPRSignalTone(
   signal: 'review' | 'checks' | 'merge'
 ): 'neutral' | 'success' | 'warning' | 'danger' {
   if (signal === 'review') {
-    if (item.reviewDecision === 'APPROVED') return 'success'
-    if (item.reviewDecision === 'CHANGES_REQUESTED') return 'danger'
-    if (item.reviewRequests && item.reviewRequests.length > 0) return 'warning'
+    if (item.reviewDecision === 'APPROVED') {
+      return 'success'
+    }
+    if (item.reviewDecision === 'CHANGES_REQUESTED') {
+      return 'danger'
+    }
+    if (item.reviewRequests && item.reviewRequests.length > 0) {
+      return 'warning'
+    }
     return 'neutral'
   }
   if (signal === 'checks') {
-    if (item.checksSummary?.state === 'success') return 'success'
-    if (item.checksSummary?.state === 'failure') return 'danger'
-    if (item.checksSummary?.state === 'pending') return 'warning'
+    if (item.checksSummary?.state === 'success') {
+      return 'success'
+    }
+    if (item.checksSummary?.state === 'failure') {
+      return 'danger'
+    }
+    if (item.checksSummary?.state === 'pending') {
+      return 'warning'
+    }
     return 'neutral'
   }
-  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'BLOCKED') return 'danger'
+  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'BLOCKED') {
+    return 'danger'
+  }
   if (item.mergeStateStatus === 'BEHIND' || item.checksSummary?.state === 'pending') {
     return 'warning'
   }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') return 'success'
+  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
+    return 'success'
+  }
   return 'neutral'
 }
 
@@ -1403,7 +1495,9 @@ function mergeGitHubAssignableUsers(
   const byLogin = new Map<string, GitHubAssignableUser>()
   for (const user of [...users, ...seeds]) {
     const login = user.login.trim()
-    if (!login || byLogin.has(login.toLowerCase())) continue
+    if (!login || byLogin.has(login.toLowerCase())) {
+      continue
+    }
     byLogin.set(login.toLowerCase(), { ...user, login })
   }
   return [...byLogin.values()]
@@ -1417,7 +1511,9 @@ function getGitHubReviewerSeedUsers(item: {
   const byLogin = new Map<string, GitHubAssignableUser>()
   const add = (user: GitHubAssignableUser): void => {
     const login = user.login.trim()
-    if (!login || byLogin.has(login.toLowerCase())) return
+    if (!login || byLogin.has(login.toLowerCase())) {
+      return
+    }
     byLogin.set(login.toLowerCase(), { ...user, login })
   }
   for (const user of item.reviewRequests ?? []) {
@@ -1532,15 +1628,21 @@ function linearIssueSecondaryParts(
   displayProperties: ReadonlySet<LinearDisplayProperty>
 ): string[] {
   const parts = [issue.identifier]
-  if (displayProperties.has('priority')) parts.push(getLinearPriorityLabel(issue.priority))
+  if (displayProperties.has('priority')) {
+    parts.push(getLinearPriorityLabel(issue.priority))
+  }
   if (displayProperties.has('assignee') && issue.assignee?.displayName) {
     parts.push(issue.assignee.displayName)
   }
-  if (displayProperties.has('team')) parts.push(issue.team.name)
+  if (displayProperties.has('team')) {
+    parts.push(issue.team.name)
+  }
   if (displayProperties.has('labels') && issue.labels.length > 0) {
     parts.push(issue.labels.slice(0, 2).join(', '))
   }
-  if (displayProperties.has('updated')) parts.push(formatUpdatedAt(issue.updatedAt))
+  if (displayProperties.has('updated')) {
+    parts.push(formatUpdatedAt(issue.updatedAt))
+  }
   return parts
 }
 
@@ -1580,14 +1682,30 @@ function editableProjectFields(table: GitHubProjectTable | null): GitHubProjectF
 
 function projectFieldValueLabel(row: GitHubProjectRow, field: GitHubProjectField): string {
   const value = row.fieldValuesByFieldId?.[field.id]
-  if (!value) return 'Empty'
-  if (value.kind === 'single-select') return value.name
-  if (value.kind === 'iteration') return value.title
-  if (value.kind === 'text') return value.text || 'Empty'
-  if (value.kind === 'number') return String(value.number)
-  if (value.kind === 'date') return value.date
-  if (value.kind === 'labels') return value.labels.map((label) => label.name).join(', ') || 'Empty'
-  if (value.kind === 'users') return value.users.map((user) => user.login).join(', ') || 'Empty'
+  if (!value) {
+    return 'Empty'
+  }
+  if (value.kind === 'single-select') {
+    return value.name
+  }
+  if (value.kind === 'iteration') {
+    return value.title
+  }
+  if (value.kind === 'text') {
+    return value.text || 'Empty'
+  }
+  if (value.kind === 'number') {
+    return String(value.number)
+  }
+  if (value.kind === 'date') {
+    return value.date
+  }
+  if (value.kind === 'labels') {
+    return value.labels.map((label) => label.name).join(', ') || 'Empty'
+  }
+  if (value.kind === 'users') {
+    return value.users.map((user) => user.login).join(', ') || 'Empty'
+  }
   return 'Empty'
 }
 
@@ -1622,7 +1740,9 @@ function projectSummaryFields(table: GitHubProjectTable | null): GitHubProjectFi
 }
 
 function projectFieldVisibilityKey(table: GitHubProjectTable | null): string | null {
-  if (!table) return null
+  if (!table) {
+    return null
+  }
   // Why: desktop scopes column visibility to project + view; matching that
   // avoids hiding fields across unrelated Project views with colliding IDs.
   return `${table.project.id}:${table.selectedView.id}`
@@ -1630,10 +1750,18 @@ function projectFieldVisibilityKey(table: GitHubProjectTable | null): string | n
 
 function projectFieldDraftValue(row: GitHubProjectRow, field: GitHubProjectField): string {
   const value = row.fieldValuesByFieldId?.[field.id]
-  if (!value) return ''
-  if (value.kind === 'text') return value.text
-  if (value.kind === 'number') return String(value.number)
-  if (value.kind === 'date') return value.date
+  if (!value) {
+    return ''
+  }
+  if (value.kind === 'text') {
+    return value.text
+  }
+  if (value.kind === 'number') {
+    return String(value.number)
+  }
+  if (value.kind === 'date') {
+    return value.date
+  }
   return ''
 }
 
@@ -1714,14 +1842,22 @@ function optimisticProjectFieldValue(
       duration: iteration?.duration ?? 0
     }
   }
-  if (value.kind === 'number') return { kind: 'number', fieldId: field.id, number: value.number }
-  if (value.kind === 'date') return { kind: 'date', fieldId: field.id, date: value.date }
+  if (value.kind === 'number') {
+    return { kind: 'number', fieldId: field.id, number: value.number }
+  }
+  if (value.kind === 'date') {
+    return { kind: 'date', fieldId: field.id, date: value.date }
+  }
   return { kind: 'text', fieldId: field.id, text: value.kind === 'text' ? value.text : '' }
 }
 
 function taskKindLabel(item: TaskItem): string {
-  if (item.provider === 'github') return item.source.type === 'pr' ? 'Pull request' : 'Issue'
-  if (item.provider === 'gitlab') return item.source.type === 'mr' ? 'Merge request' : 'Issue'
+  if (item.provider === 'github') {
+    return item.source.type === 'pr' ? 'Pull request' : 'Issue'
+  }
+  if (item.provider === 'gitlab') {
+    return item.source.type === 'mr' ? 'Merge request' : 'Issue'
+  }
   if (item.provider === 'gitlabTodo') {
     return `${gitLabTodoTargetLabel(item.source)} todo`
   }
@@ -1729,8 +1865,12 @@ function taskKindLabel(item: TaskItem): string {
 }
 
 function taskExternalOpenLabel(item: TaskItem): string {
-  if (item.provider === 'github') return 'Open in GitHub'
-  if (item.provider === 'gitlab' || item.provider === 'gitlabTodo') return 'Open in GitLab'
+  if (item.provider === 'github') {
+    return 'Open in GitHub'
+  }
+  if (item.provider === 'gitlab' || item.provider === 'gitlabTodo') {
+    return 'Open in GitLab'
+  }
   return 'Open in Linear'
 }
 
@@ -1753,15 +1893,21 @@ function commentAuthor(comment: DetailComment): string {
 }
 
 function commentDate(value: string | undefined): string {
-  if (!value) return ''
+  if (!value) {
+    return ''
+  }
   const time = Date.parse(value)
   return Number.isFinite(time) ? new Date(time).toLocaleDateString() : ''
 }
 
 function formatDurationSeconds(value: number | null | undefined): string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return ''
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return ''
+  }
   const seconds = Math.max(0, Math.floor(value))
-  if (seconds >= 60) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+  if (seconds >= 60) {
+    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+  }
   return `${seconds}s`
 }
 
@@ -1788,7 +1934,9 @@ function groupDetailComments(comments: DetailComment[]): DetailCommentGroup[] {
   const emittedThreads = new Set<string>()
 
   for (const comment of comments) {
-    if (!comment.threadId) continue
+    if (!comment.threadId) {
+      continue
+    }
     const existing = threads.get(comment.threadId)
     if (existing) {
       existing.replies.push(comment)
@@ -1802,10 +1950,14 @@ function groupDetailComments(comments: DetailComment[]): DetailCommentGroup[] {
       groups.push({ kind: 'standalone', comment })
       continue
     }
-    if (emittedThreads.has(comment.threadId)) continue
+    if (emittedThreads.has(comment.threadId)) {
+      continue
+    }
     emittedThreads.add(comment.threadId)
     const thread = threads.get(comment.threadId)
-    if (thread) groups.push({ kind: 'thread', threadId: comment.threadId, ...thread })
+    if (thread) {
+      groups.push({ kind: 'thread', threadId: comment.threadId, ...thread })
+    }
   }
 
   return groups
@@ -1828,13 +1980,17 @@ function isResolvedDetailCommentGroup(group: DetailCommentGroup): boolean {
 }
 
 function discussionSummary(count: number): string {
-  if (count === 0) return 'No comments yet'
+  if (count === 0) {
+    return 'No comments yet'
+  }
   return `${count} ${count === 1 ? 'comment' : 'comments'}`
 }
 
 function renderCommentReactions(comment: DetailComment): ReactNode {
   const reactions = (comment.reactions ?? []).filter((reaction) => reaction.count > 0)
-  if (reactions.length === 0) return null
+  if (reactions.length === 0) {
+    return null
+  }
   return (
     <View style={styles.reactionRow}>
       {reactions.map((reaction) => (
@@ -1853,8 +2009,12 @@ function formatDiffLineNumber(value: number | undefined): string {
 }
 
 function diffLinePrefix(kind: GitHubPrFileDiffLine['kind']): string {
-  if (kind === 'added') return '+'
-  if (kind === 'removed') return '-'
+  if (kind === 'added') {
+    return '+'
+  }
+  if (kind === 'removed') {
+    return '-'
+  }
   return ' '
 }
 
@@ -1971,7 +2131,9 @@ function buildPartialRepositoryNotice(failedCount: number, totalCount: number): 
 function repoColor(name: string): string {
   const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
   let hash = 0
-  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0
+  }
   return palette[Math.abs(hash) % palette.length]!
 }
 
@@ -1980,8 +2142,12 @@ function getRepoBadgeColor(repo: RepoSummary | undefined, fallbackName: string):
 }
 
 function setupSourceLabel(source: string | null): string {
-  if (source === 'orca.yaml') return 'orca.yaml'
-  if (source === 'legacy') return 'local hooks'
+  if (source === 'orca.yaml') {
+    return 'orca.yaml'
+  }
+  if (source === 'legacy') {
+    return 'local hooks'
+  }
   return 'repository hooks'
 }
 
@@ -2343,7 +2509,9 @@ export default function MobileTasksScreen() {
     [githubProjectTable, githubRepoSlugCache, hostedRepos]
   )
   const visibleGitHubProjectGroups = useMemo<ProjectGroup[]>(() => {
-    if (!githubProjectTable) return []
+    if (!githubProjectTable) {
+      return []
+    }
     const normalizedTable = normalizeProjectTableForMobileSort(
       githubProjectTable,
       visibleGitHubProjectRows,
@@ -2365,7 +2533,9 @@ export default function MobileTasksScreen() {
     return visibleGitHubProjectGroups.flatMap((group) => {
       const collapsed = collapsedGitHubProjectGroups.has(group.key)
       const header: ProjectListEntry = { type: 'group', group, collapsed }
-      if (collapsed) return [header]
+      if (collapsed) {
+        return [header]
+      }
       return [
         header,
         ...group.rows.map((row) => ({
@@ -2545,13 +2715,17 @@ export default function MobileTasksScreen() {
     const logins = new Set<string>()
     for (const assignee of projectRowItem?.content.assignees ?? []) {
       const login = assignee.login.trim()
-      if (login) logins.add(login)
+      if (login) {
+        logins.add(login)
+      }
     }
     for (const reviewer of projectRowDetail?.provider === 'github'
       ? getGitHubReviewerSeedUsers(projectRowDetail)
       : []) {
       const login = reviewer.login.trim()
-      if (login) logins.add(login)
+      if (login) {
+        logins.add(login)
+      }
     }
     return [...logins].sort().join(',')
   }, [projectRowDetail, projectRowItem?.content.assignees])
@@ -2564,7 +2738,9 @@ export default function MobileTasksScreen() {
 
   const persistTaskResumeState = useCallback(
     (updates: Partial<TaskResumeState>) => {
-      if (!client || !taskUiReady) return
+      if (!client || !taskUiReady) {
+        return
+      }
       const next = { ...taskResumeRef.current, ...updates }
       taskResumeRef.current = next
       void client.sendRequest('ui.set', { taskResumeState: next }).catch(() => {
@@ -2576,7 +2752,9 @@ export default function MobileTasksScreen() {
 
   const toggleGitHubProjectFieldVisibility = useCallback(
     (fieldId: string) => {
-      if (!githubProjectFieldVisibilityScope) return
+      if (!githubProjectFieldVisibilityScope) {
+        return
+      }
       setGithubProjectHiddenFieldIdsByView((current) => {
         const hidden = new Set(current[githubProjectFieldVisibilityScope] ?? [])
         if (hidden.has(fieldId)) {
@@ -2599,7 +2777,9 @@ export default function MobileTasksScreen() {
 
   const persistTaskSource = useCallback(
     (nextProvider: TaskProvider) => {
-      if (!client || !taskUiReady) return
+      if (!client || !taskUiReady) {
+        return
+      }
       void client.sendRequest('settings.update', { defaultTaskSource: nextProvider }).catch(() => {
         // Best-effort: a failed settings write should not block switching views.
       })
@@ -2609,7 +2789,9 @@ export default function MobileTasksScreen() {
 
   const persistRepoSelection = useCallback(
     (selection: Set<string>, allRepos: RepoSummary[]) => {
-      if (!client || !taskUiReady) return
+      if (!client || !taskUiReady) {
+        return
+      }
       const nextSelection =
         selection.size === 0 || selection.size === allRepos.length ? null : [...selection]
       defaultRepoSelectionRef.current = nextSelection
@@ -2625,7 +2807,9 @@ export default function MobileTasksScreen() {
   const persistDefaultGitHubPreset = useCallback(
     (preset: GitHubPreset) => {
       setDefaultGitHubPreset(preset)
-      if (!client || !taskUiReady) return
+      if (!client || !taskUiReady) {
+        return
+      }
       void client.sendRequest('settings.update', { defaultTaskViewPreset: preset }).catch(() => {
         // Best-effort: the current session still uses the selected preset.
       })
@@ -2636,7 +2820,9 @@ export default function MobileTasksScreen() {
   const persistGitHubProjectSettings = useCallback(
     (nextSettings: GitHubProjectSettings) => {
       setGithubProjectSettings(nextSettings)
-      if (!client || !taskUiReady) return
+      if (!client || !taskUiReady) {
+        return
+      }
       void client.sendRequest('settings.update', { githubProjects: nextSettings }).catch(() => {
         // Best-effort: project selection can still work for the current session.
       })
@@ -2646,7 +2832,9 @@ export default function MobileTasksScreen() {
 
   const persistSetupHookTrust = useCallback(
     async (repoId: string, contentHash: string, alwaysTrust: boolean): Promise<void> => {
-      if (!client) return
+      if (!client) {
+        return
+      }
       const next = trustedOrcaHooksWithSetupApproval({
         trust: trustedOrcaHooks,
         repoId,
@@ -2788,7 +2976,9 @@ export default function MobileTasksScreen() {
 
     const hydrateTaskState = async (): Promise<void> => {
       const statusResponse = await client.sendRequest('status.get')
-      if (stale) return
+      if (stale) {
+        return
+      }
       if (!isSuccess(statusResponse)) {
         throw new Error(statusResponse.error.message)
       }
@@ -2849,7 +3039,9 @@ export default function MobileTasksScreen() {
           client.sendRequest('preflight.check'),
           client.sendRequest('linear.status')
         ])
-      if (stale) return
+      if (stale) {
+        return
+      }
 
       const settings = isSuccess(settingsResponse)
         ? (((settingsResponse.result as { settings?: RuntimeTaskSettings }).settings ??
@@ -2935,7 +3127,9 @@ export default function MobileTasksScreen() {
     }
 
     void hydrateTaskState().catch((err) => {
-      if (stale) return
+      if (stale) {
+        return
+      }
       setError(err instanceof Error ? err.message : 'Failed to load Tasks settings')
       setTaskStateHydrated(false)
     })
@@ -2946,12 +3140,16 @@ export default function MobileTasksScreen() {
   }, [client, connState, requestedTaskSource, resetWorkspaceCreateState])
 
   useEffect(() => {
-    if (visibleProviders.includes(provider)) return
+    if (visibleProviders.includes(provider)) {
+      return
+    }
     setProvider(resolveVisibleTaskProvider(provider, visibleProviders))
   }, [provider, visibleProviders])
 
   const loadRepos = useCallback(async (): Promise<RepoSummary[]> => {
-    if (!client || connState !== 'connected') return []
+    if (!client || connState !== 'connected') {
+      return []
+    }
     const response = await client.sendRequest('repo.list')
     if (!isSuccess(response)) {
       throw new Error(response.error.message)
@@ -2964,7 +3162,9 @@ export default function MobileTasksScreen() {
       setSelectedRepoIds(reconcileRepoSelection(result.repos, defaultRepoSelectionRef.current))
     } else {
       setSelectedRepoIds((current) => {
-        if (current.size === 0) return current
+        if (current.size === 0) {
+          return current
+        }
         const availableIds = new Set(result.repos.filter(isHostedTaskRepo).map((repo) => repo.id))
         const next = new Set([...current].filter((id) => availableIds.has(id)))
         return next.size === current.size ? current : next
@@ -2974,7 +3174,9 @@ export default function MobileTasksScreen() {
   }, [client, connState])
 
   const loadLinearContext = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected' || !tasksSupported) return
+    if (!client || connState !== 'connected' || !tasksSupported) {
+      return
+    }
     const statusResponse = await client.sendRequest('linear.status')
     if (!isSuccess(statusResponse)) {
       throw new Error(statusResponse.error.message)
@@ -3007,7 +3209,9 @@ export default function MobileTasksScreen() {
 
   const persistLinearTeamSelection = useCallback(
     (teamIds: Set<string>, allTeams: LinearTeam[]) => {
-      if (!client || !taskUiReady) return
+      if (!client || !taskUiReady) {
+        return
+      }
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
       void client
@@ -3142,15 +3346,20 @@ export default function MobileTasksScreen() {
 
   const loadTasks = useCallback(
     async (options: { silent?: boolean } = {}): Promise<void> => {
-      if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) return
+      if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
+        return
+      }
       const generation = loadGenerationRef.current + 1
       loadGenerationRef.current = generation
       const requestClient = client
       const isCurrent = () =>
         loadGenerationRef.current === generation && clientRef.current === requestClient
       setError('')
-      if (options.silent) setRefreshing(true)
-      else setLoading(true)
+      if (options.silent) {
+        setRefreshing(true)
+      } else {
+        setLoading(true)
+      }
       try {
         if (provider !== 'github' || githubMode !== 'items') {
           setGithubPages([])
@@ -3168,7 +3377,9 @@ export default function MobileTasksScreen() {
           return
         }
         const currentRepos = reposRef.current.length > 0 ? reposRef.current : await loadRepos()
-        if (!isCurrent()) return
+        if (!isCurrent()) {
+          return
+        }
         if (provider === 'github' || provider === 'gitlab') {
           const supportedRepos = currentRepos.filter(isHostedTaskRepo)
           const queriedRepos =
@@ -3176,7 +3387,9 @@ export default function MobileTasksScreen() {
               ? supportedRepos
               : supportedRepos.filter((repo) => selectedRepoIds.has(repo.id))
           if (queriedRepos.length === 0) {
-            if (!isCurrent()) return
+            if (!isCurrent()) {
+              return
+            }
             setItems([])
             setGithubPages([])
             setGithubCurrentPage(0)
@@ -3187,7 +3400,9 @@ export default function MobileTasksScreen() {
           }
           if (provider === 'github') {
             const page = await fetchGitHubItemsPage(requestClient, queriedRepos)
-            if (!isCurrent()) return
+            if (!isCurrent()) {
+              return
+            }
             setGithubRepoSources((current) => ({ ...current, ...page.sourcesByRepoId }))
             setGithubSourceErrors(page.sourceErrors)
             setGithubSourceFallbacks(page.sourceFallbacks)
@@ -3227,7 +3442,9 @@ export default function MobileTasksScreen() {
             if (!isSuccess(response)) {
               throw new Error(response.error.message)
             }
-            if (!isCurrent()) return
+            if (!isCurrent()) {
+              return
+            }
             setItems(
               ((response.result as GitLabTodo[]) ?? [])
                 .map(createGitLabTodoTask)
@@ -3272,7 +3489,9 @@ export default function MobileTasksScreen() {
               }
             }
           )
-          if (!isCurrent()) return
+          if (!isCurrent()) {
+            return
+          }
           const failedCount = results.filter((result) => result.error).length
           if (failedCount === queriedRepos.length) {
             throw new Error(
@@ -3311,11 +3530,15 @@ export default function MobileTasksScreen() {
               ? issues.filter((issue) => selectedLinearTeamIds.has(issue.team.id))
               : issues
           const sorted = [...filtered].sort((a, b) => compareLinearIssues(a, b, linearOrderBy))
-          if (!isCurrent()) return
+          if (!isCurrent()) {
+            return
+          }
           setItems(sorted.map(createLinearTask))
         }
       } catch (err) {
-        if (!isCurrent()) return
+        if (!isCurrent()) {
+          return
+        }
         setItems([])
         setGithubSourceErrors([])
         setGithubSourceFallbacks([])
@@ -3350,9 +3573,13 @@ export default function MobileTasksScreen() {
   )
 
   const connectLinearAccount = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected' || !taskUiReady) return
+    if (!client || connState !== 'connected' || !taskUiReady) {
+      return
+    }
     const apiKey = linearApiKeyDraft.trim()
-    if (!apiKey || linearConnectState === 'connecting') return
+    if (!apiKey || linearConnectState === 'connecting') {
+      return
+    }
     setLinearConnectState('connecting')
     setLinearConnectError('')
     try {
@@ -3508,7 +3735,9 @@ export default function MobileTasksScreen() {
   )
 
   const loadGitHubProjects = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected' || !tasksSupported) return
+    if (!client || connState !== 'connected' || !tasksSupported) {
+      return
+    }
     setGithubProjectError('')
     setGithubProjectPartialFailures([])
     const response = await client.sendRequest('github.project.listAccessible', {})
@@ -3531,7 +3760,9 @@ export default function MobileTasksScreen() {
 
   const loadGitHubProjectViews = useCallback(
     async (project: GitHubProjectRef): Promise<GitHubProjectViewSummary[]> => {
-      if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) return []
+      if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
+        return []
+      }
       const response = await client.sendRequest('github.project.listViews', {
         owner: project.owner,
         ownerType: project.ownerType,
@@ -3637,7 +3868,9 @@ export default function MobileTasksScreen() {
 
   const selectGitHubProject = useCallback(
     async (project: GitHubProjectRef, options: { viewNumber?: number } = {}): Promise<void> => {
-      if (!tasksSupported || !taskStateHydrated) return
+      if (!tasksSupported || !taskStateHydrated) {
+        return
+      }
       setGithubProjectLoading(true)
       setGithubProjectError('')
       try {
@@ -3697,7 +3930,9 @@ export default function MobileTasksScreen() {
   )
 
   const resolveGitHubProjectFromInput = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) return
+    if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
+      return
+    }
     const input = githubProjectPasteInput.trim()
     if (!parseProjectInput(input)) {
       setGithubProjectPasteError('Expected a project URL or owner/number.')
@@ -3750,7 +3985,9 @@ export default function MobileTasksScreen() {
   ])
 
   useEffect(() => {
-    if (!taskStateHydrated) return
+    if (!taskStateHydrated) {
+      return
+    }
     const timer = setTimeout(() => {
       setAppliedQuery(
         provider === 'github' ? scopeGitHubTaskSearch(query, githubKind) : query.trim()
@@ -3769,7 +4006,9 @@ export default function MobileTasksScreen() {
   }, [])
 
   useEffect(() => {
-    if (!taskUiReady || provider !== 'github' || githubMode !== 'items') return
+    if (!taskUiReady || provider !== 'github' || githubMode !== 'items') {
+      return
+    }
     const trimmed = appliedQuery.trim()
     persistTaskResumeState({
       githubMode: 'items',
@@ -3779,7 +4018,9 @@ export default function MobileTasksScreen() {
   }, [appliedQuery, githubMode, githubPreset, persistTaskResumeState, provider, taskUiReady])
 
   useEffect(() => {
-    if (!taskUiReady || provider !== 'linear') return
+    if (!taskUiReady || provider !== 'linear') {
+      return
+    }
     persistTaskResumeState({
       linearPreset: linearFilter,
       linearQuery: appliedQuery.trim()
@@ -3787,19 +4028,25 @@ export default function MobileTasksScreen() {
   }, [appliedQuery, linearFilter, persistTaskResumeState, provider, taskUiReady])
 
   useEffect(() => {
-    if (connState !== 'connected' || !taskStateHydrated) return
+    if (connState !== 'connected' || !taskStateHydrated) {
+      return
+    }
     void loadTasks()
   }, [connState, loadTasks, taskStateHydrated])
 
   useEffect(() => {
-    if (!taskStateHydrated || provider !== 'linear' || !linearConnected) return
+    if (!taskStateHydrated || provider !== 'linear' || !linearConnected) {
+      return
+    }
     void loadLinearContext().catch((err) => {
       setError(err instanceof Error ? err.message : 'Failed to load Linear context')
     })
   }, [linearConnected, loadLinearContext, provider, taskStateHydrated])
 
   useEffect(() => {
-    if (!taskUiReady || provider !== 'github' || githubMode !== 'project') return
+    if (!taskUiReady || provider !== 'github' || githubMode !== 'project') {
+      return
+    }
     persistTaskResumeState({ githubMode: 'project' })
     if (activeGitHubProject && activeGitHubProjectViewId) {
       void loadGitHubProjectTable({ queryOverride: appliedGithubProjectSearch })
@@ -3824,14 +4071,18 @@ export default function MobileTasksScreen() {
   ])
 
   useEffect(() => {
-    if (!taskUiReady || !showGitHubProjectPicker) return
+    if (!taskUiReady || !showGitHubProjectPicker) {
+      return
+    }
     void loadGitHubProjects().catch((err) => {
       setGithubProjectError(err instanceof Error ? err.message : 'Failed to load projects')
     })
   }, [loadGitHubProjects, showGitHubProjectPicker, taskUiReady])
 
   useEffect(() => {
-    if (!tasksSupported || !taskStateHydrated || !showCreateTask) return
+    if (!tasksSupported || !taskStateHydrated || !showCreateTask) {
+      return
+    }
     setCreatingTask(false)
     if (provider === 'github' || provider === 'gitlab') {
       setCreateRepoId((current) =>
@@ -3841,13 +4092,17 @@ export default function MobileTasksScreen() {
       )
       return
     }
-    if (!client) return
+    if (!client) {
+      return
+    }
     let stale = false
     setCreateTeamId(null)
     void client
       .sendRequest('linear.listTeams')
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (isSuccess(response)) {
           const teams = response.result as LinearTeam[]
           setLinearTeams(teams)
@@ -3886,7 +4141,9 @@ export default function MobileTasksScreen() {
     void client
       .sendRequest('linear.teamStates', baseParams)
       .then((statesResponse) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (isSuccess(statesResponse)) {
           setLinearStates(statesResponse.result as LinearState[])
         } else {
@@ -3899,7 +4156,9 @@ export default function MobileTasksScreen() {
         }
       })
       .finally(() => {
-        if (!stale) setLinearStatesLoading(false)
+        if (!stale) {
+          setLinearStatesLoading(false)
+        }
       })
     return () => {
       stale = true
@@ -3973,7 +4232,9 @@ export default function MobileTasksScreen() {
           { timeoutMs: 30_000 }
         )
         .then((response) => {
-          if (stale) return
+          if (stale) {
+            return
+          }
           if (!isSuccess(response)) {
             throw new Error(response.error.message)
           }
@@ -3985,7 +4246,9 @@ export default function MobileTasksScreen() {
           }
         })
         .finally(() => {
-          if (!stale) setItemLabelsLoading(false)
+          if (!stale) {
+            setItemLabelsLoading(false)
+          }
         })
     } else {
       setItemAvailableLabels([])
@@ -4003,7 +4266,9 @@ export default function MobileTasksScreen() {
         { timeoutMs: 30_000 }
       )
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
@@ -4017,7 +4282,9 @@ export default function MobileTasksScreen() {
         }
       })
       .finally(() => {
-        if (!stale) setItemAssignableUsersLoading(false)
+        if (!stale) {
+          setItemAssignableUsersLoading(false)
+        }
       })
 
     return () => {
@@ -4076,7 +4343,9 @@ export default function MobileTasksScreen() {
             viewerViewedState?: 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
           }>
         } | null
-        if (!details) throw new Error('Details not found')
+        if (!details) {
+          throw new Error('Details not found')
+        }
         if (!stale) {
           setDetailPayload({
             provider: 'github',
@@ -4125,7 +4394,9 @@ export default function MobileTasksScreen() {
             duration?: number | null
           }>
         } | null
-        if (!details) throw new Error('Details not found')
+        if (!details) {
+          throw new Error('Details not found')
+        }
         if (!stale) {
           setDetailPayload({
             provider: 'gitlab',
@@ -4164,7 +4435,9 @@ export default function MobileTasksScreen() {
       const comments = isSuccess(commentsResponse)
         ? ((commentsResponse.result as DetailComment[]) ?? [])
         : []
-      if (!issue) throw new Error('Details not found')
+      if (!issue) {
+        throw new Error('Details not found')
+      }
       if (!stale) {
         setDetailPayload({
           provider: 'linear',
@@ -4199,7 +4472,9 @@ export default function MobileTasksScreen() {
         }
       })
       .finally(() => {
-        if (!stale) setDetailLoading(false)
+        if (!stale) {
+          setDetailLoading(false)
+        }
       })
 
     return () => {
@@ -4269,7 +4544,9 @@ export default function MobileTasksScreen() {
         { timeoutMs: 30_000 }
       )
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
@@ -4327,7 +4604,9 @@ export default function MobileTasksScreen() {
         }
       })
       .finally(() => {
-        if (!stale) setProjectRowDetailLoading(false)
+        if (!stale) {
+          setProjectRowDetailLoading(false)
+        }
       })
 
     return () => {
@@ -4355,7 +4634,9 @@ export default function MobileTasksScreen() {
         { timeoutMs: 30_000 }
       )
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
@@ -4373,7 +4654,9 @@ export default function MobileTasksScreen() {
         }
       })
       .finally(() => {
-        if (!stale) setProjectLabelsLoading(false)
+        if (!stale) {
+          setProjectLabelsLoading(false)
+        }
       })
 
     return () => {
@@ -4405,7 +4688,9 @@ export default function MobileTasksScreen() {
         { timeoutMs: 30_000 }
       )
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
@@ -4425,7 +4710,9 @@ export default function MobileTasksScreen() {
         }
       })
       .finally(() => {
-        if (!stale) setProjectAssignableUsersLoading(false)
+        if (!stale) {
+          setProjectAssignableUsersLoading(false)
+        }
       })
 
     return () => {
@@ -4453,7 +4740,9 @@ export default function MobileTasksScreen() {
         { timeoutMs: 30_000 }
       )
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
@@ -4473,7 +4762,9 @@ export default function MobileTasksScreen() {
         }
       })
       .finally(() => {
-        if (!stale) setProjectIssueTypesLoading(false)
+        if (!stale) {
+          setProjectIssueTypesLoading(false)
+        }
       })
 
     return () => {
@@ -4688,7 +4979,9 @@ export default function MobileTasksScreen() {
     void client
       .sendRequest('repo.sparsePresets', { repo: `id:${workspaceCreateTargetRepo.id}` })
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
@@ -4710,7 +5003,9 @@ export default function MobileTasksScreen() {
         }
       })
       .finally(() => {
-        if (!stale) setWorkspaceSparsePresetsLoading(false)
+        if (!stale) {
+          setWorkspaceSparsePresetsLoading(false)
+        }
       })
 
     return () => {
@@ -4755,7 +5050,9 @@ export default function MobileTasksScreen() {
         { timeoutMs: 30_000 }
       )
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
@@ -4777,7 +5074,9 @@ export default function MobileTasksScreen() {
         }
       })
       .finally(() => {
-        if (!stale) setWorkspaceBaseBranchLoading(false)
+        if (!stale) {
+          setWorkspaceBaseBranchLoading(false)
+        }
       })
 
     return () => {
@@ -4893,7 +5192,9 @@ export default function MobileTasksScreen() {
     void client
       .sendRequest('ssh.getState', { targetId: workspaceCreateTargetConnectionId })
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
@@ -5010,13 +5311,17 @@ export default function MobileTasksScreen() {
       : client.sendRequest('preflight.detectAgents')
     void request
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         setWorkspaceDetectedAgentIds(
           isSuccess(response) ? new Set(response.result as string[]) : new Set()
         )
       })
       .catch(() => {
-        if (!stale) setWorkspaceDetectedAgentIds(new Set())
+        if (!stale) {
+          setWorkspaceDetectedAgentIds(new Set())
+        }
       })
     return () => {
       stale = true
@@ -5069,7 +5374,9 @@ export default function MobileTasksScreen() {
           setupTrust?: RepoHooksResponse['setupTrust']
         }
     > => {
-      if (!client || !tasksSupported) return { kind: 'decision', decision: override ?? 'inherit' }
+      if (!client || !tasksSupported) {
+        return { kind: 'decision', decision: override ?? 'inherit' }
+      }
       const response = await client.sendRequest('repo.hooks', { repo: `id:${repo.id}` })
       if (!isSuccess(response)) {
         throw new Error(response.error.message)
@@ -5109,7 +5416,9 @@ export default function MobileTasksScreen() {
       sparseCheckoutOverride?: { directories: string[]; presetId?: string },
       approvedSetupContentHash?: string
     ): Promise<void> => {
-      if (!client || !tasksSupported || !taskStateHydrated) return
+      if (!client || !tasksSupported || !taskStateHydrated) {
+        return
+      }
       setCreatingKey(item.key)
       setError('')
       try {
@@ -5348,7 +5657,9 @@ export default function MobileTasksScreen() {
 
   const createWorkspaceFromProjectRow = useCallback(
     async (row: GitHubProjectRow): Promise<void> => {
-      if (!tasksSupported) return
+      if (!tasksSupported) {
+        return
+      }
       const kind = projectRowType(row)
       const repo = findProjectRowRepo(row)
       if (!kind || !row.content.number || !row.content.url) {
@@ -5403,7 +5714,9 @@ export default function MobileTasksScreen() {
       row: GitHubProjectRow,
       updates: { title?: string; body?: string; state?: 'open' | 'closed' }
     ): Promise<void> => {
-      if (!client || projectMutating) return
+      if (!client || projectMutating) {
+        return
+      }
       const type = projectRowType(row)
       const slug = splitRepositorySlug(row.content.repository)
       if (!type || !slug || !row.content.number) {
@@ -5432,7 +5745,9 @@ export default function MobileTasksScreen() {
           throw new Error(result.error?.message ?? 'Failed to update GitHub item')
         }
         setProjectRowItem((current) => {
-          if (!current || current.id !== row.id) return current
+          if (!current || current.id !== row.id) {
+            return current
+          }
           return {
             ...current,
             content: {
@@ -5483,10 +5798,14 @@ export default function MobileTasksScreen() {
 
   const addProjectRowComment = useCallback(
     async (row: GitHubProjectRow): Promise<void> => {
-      if (!client || projectMutating) return
+      if (!client || projectMutating) {
+        return
+      }
       const slug = splitRepositorySlug(row.content.repository)
       const body = projectCommentDraft.trim()
-      if (!slug || !row.content.number || !body) return
+      if (!slug || !row.content.number || !body) {
+        return
+      }
       setProjectMutating(true)
       try {
         const response = await client.sendRequest(
@@ -5527,7 +5846,9 @@ export default function MobileTasksScreen() {
 
   const updateProjectRowComment = useCallback(
     async (row: GitHubProjectRow, comment: DetailComment): Promise<void> => {
-      if (!client || projectMutating) return
+      if (!client || projectMutating) {
+        return
+      }
       const slug = splitRepositorySlug(row.content.repository)
       const commentId = Number(comment.id)
       const body = projectEditingCommentDraft.trim()
@@ -5585,7 +5906,9 @@ export default function MobileTasksScreen() {
 
   const deleteProjectRowComment = useCallback(
     async (row: GitHubProjectRow, comment: DetailComment): Promise<void> => {
-      if (!client || projectMutating) return
+      if (!client || projectMutating) {
+        return
+      }
       const slug = splitRepositorySlug(row.content.repository)
       const commentId = Number(comment.id)
       if (!slug || !Number.isInteger(commentId) || commentId <= 0) {
@@ -5696,10 +6019,14 @@ export default function MobileTasksScreen() {
   const replyToProjectGitHubComment = useCallback(
     async (row: GitHubProjectRow, comment: DetailComment): Promise<void> => {
       const repo = findProjectRowRepo(row)
-      if (!client || projectMutating || !repo || !row.content.number) return
+      if (!client || projectMutating || !repo || !row.content.number) {
+        return
+      }
       const key = String(comment.id)
       const body = (itemReplyDrafts[key] ?? '').trim()
-      if (!body) return
+      if (!body) {
+        return
+      }
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
@@ -5781,7 +6108,9 @@ export default function MobileTasksScreen() {
         removeAssignees?: string[]
       }
     ): Promise<void> => {
-      if (!client || projectMutating) return
+      if (!client || projectMutating) {
+        return
+      }
       const slug = splitRepositorySlug(row.content.repository)
       if (!slug || !row.content.number) {
         setProjectRowDetailError('This project item cannot be edited from mobile.')
@@ -5809,16 +6138,24 @@ export default function MobileTasksScreen() {
         const applyContentUpdate = (candidate: GitHubProjectRow): GitHubProjectRow => {
           const labels = new Map(candidate.content.labels.map((label) => [label.name, label]))
           for (const label of updates.addLabels ?? []) {
-            if (!labels.has(label)) labels.set(label, { name: label, color: '808080' })
+            if (!labels.has(label)) {
+              labels.set(label, { name: label, color: '808080' })
+            }
           }
-          for (const label of updates.removeLabels ?? []) labels.delete(label)
+          for (const label of updates.removeLabels ?? []) {
+            labels.delete(label)
+          }
           const assignees = new Map(
             candidate.content.assignees.map((assignee) => [assignee.login, assignee])
           )
           for (const login of updates.addAssignees ?? []) {
-            if (!assignees.has(login)) assignees.set(login, { login, name: null })
+            if (!assignees.has(login)) {
+              assignees.set(login, { login, name: null })
+            }
           }
-          for (const login of updates.removeAssignees ?? []) assignees.delete(login)
+          for (const login of updates.removeAssignees ?? []) {
+            assignees.delete(login)
+          }
           return {
             ...candidate,
             content: {
@@ -5879,7 +6216,9 @@ export default function MobileTasksScreen() {
       field: GitHubProjectField,
       value: GitHubProjectFieldMutationValue | null
     ): Promise<void> => {
-      if (!client || !githubProjectTable || projectMutating) return
+      if (!client || !githubProjectTable || projectMutating) {
+        return
+      }
       setProjectMutating(true)
       try {
         const response = await client.sendRequest(
@@ -5943,7 +6282,9 @@ export default function MobileTasksScreen() {
 
   const mutateProjectRowIssueType = useCallback(
     async (row: GitHubProjectRow, issueType: GitHubIssueType | null): Promise<void> => {
-      if (!client || projectMutating) return
+      if (!client || projectMutating) {
+        return
+      }
       const slug = splitRepositorySlug(row.content.repository)
       if (row.itemType !== 'ISSUE' || !slug || !row.content.number) {
         setProjectRowDetailError('This project issue type cannot be edited from mobile.')
@@ -5997,9 +6338,13 @@ export default function MobileTasksScreen() {
   const requestProjectGitHubReviewers = useCallback(
     async (row: GitHubProjectRow, logins?: string[]): Promise<void> => {
       const repo = findProjectRowRepo(row)
-      if (!client || projectMutating || row.itemType !== 'PULL_REQUEST' || !repo) return
+      if (!client || projectMutating || row.itemType !== 'PULL_REQUEST' || !repo) {
+        return
+      }
       const reviewers = logins ?? splitReviewerList(projectReviewersDraft)
-      if (reviewers.length === 0 || !row.content.number) return
+      if (reviewers.length === 0 || !row.content.number) {
+        return
+      }
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
@@ -6025,7 +6370,9 @@ export default function MobileTasksScreen() {
             ? projectRowDetail.reviewRequests
             : []) {
             const login = reviewer.login.trim()
-            if (login) byLogin.set(login.toLowerCase(), reviewer)
+            if (login) {
+              byLogin.set(login.toLowerCase(), reviewer)
+            }
           }
           for (const login of reviewers) {
             const normalized = login.trim().replace(/^@/, '')
@@ -6145,7 +6492,9 @@ export default function MobileTasksScreen() {
   const toggleProjectGitHubFileViewed = useCallback(
     async (row: GitHubProjectRow, file: GitHubDetailFile): Promise<void> => {
       const repo = findProjectRowRepo(row)
-      if (!client || projectMutating || row.itemType !== 'PULL_REQUEST' || !repo) return
+      if (!client || projectMutating || row.itemType !== 'PULL_REQUEST' || !repo) {
+        return
+      }
       if (projectRowDetail?.provider !== 'github' || !projectRowDetail.pullRequestId) {
         setProjectRowDetailError('Unable to sync viewed state for this pull request.')
         return
@@ -6268,7 +6617,9 @@ export default function MobileTasksScreen() {
       }
       const draftKey = `${file.path}:${line}`
       const body = (prFileCommentDrafts[draftKey] ?? '').trim()
-      if (!body) return
+      if (!body) {
+        return
+      }
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
@@ -6388,7 +6739,9 @@ export default function MobileTasksScreen() {
 
   const toggleGitHubStatus = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>): Promise<void> => {
-      if (!client || mutatingStatus || item.source.state === 'merged') return
+      if (!client || mutatingStatus || item.source.state === 'merged') {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       const nextState = item.source.state === 'closed' ? 'open' : 'closed'
@@ -6427,7 +6780,9 @@ export default function MobileTasksScreen() {
 
   const toggleGitLabStatus = useCallback(
     async (item: Extract<TaskItem, { provider: 'gitlab' }>): Promise<void> => {
-      if (!client || mutatingStatus || item.source.state === 'merged') return
+      if (!client || mutatingStatus || item.source.state === 'merged') {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       const nextState = item.source.state === 'closed' ? 'opened' : 'closed'
@@ -6476,7 +6831,9 @@ export default function MobileTasksScreen() {
         removeAssignees?: string[]
       }
     ): Promise<void> => {
-      if (!client || mutatingStatus) return
+      if (!client || mutatingStatus) {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -6578,9 +6935,13 @@ export default function MobileTasksScreen() {
       item: Extract<TaskItem, { provider: 'github' }>,
       updates: { title?: string; body?: string }
     ): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') return
+      if (!client || mutatingStatus || item.source.type !== 'pr') {
+        return
+      }
       const nextTitle = updates.title?.trim()
-      if (updates.title !== undefined && !nextTitle) return
+      if (updates.title !== undefined && !nextTitle) {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -6652,7 +7013,9 @@ export default function MobileTasksScreen() {
         removeAssignees?: string[]
       }
     ): Promise<void> => {
-      if (!client || mutatingStatus) return
+      if (!client || mutatingStatus) {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -6766,9 +7129,13 @@ export default function MobileTasksScreen() {
     async (
       item: Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }>
     ): Promise<void> => {
-      if (!client || mutatingStatus) return
+      if (!client || mutatingStatus) {
+        return
+      }
       const body = itemCommentDraft.trim()
-      if (!body) return
+      if (!body) {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -6857,9 +7224,13 @@ export default function MobileTasksScreen() {
 
   const requestGitHubReviewers = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>, logins?: string[]): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') return
+      if (!client || mutatingStatus || item.source.type !== 'pr') {
+        return
+      }
       const reviewers = logins ?? splitReviewerList(itemReviewersDraft)
-      if (reviewers.length === 0) return
+      if (reviewers.length === 0) {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -6885,7 +7256,9 @@ export default function MobileTasksScreen() {
             ? detailPayload.reviewRequests
             : (item.source.reviewRequests ?? [])) {
             const login = reviewer.login.trim()
-            if (login) byLogin.set(login.toLowerCase(), reviewer)
+            if (login) {
+              byLogin.set(login.toLowerCase(), reviewer)
+            }
           }
           for (const login of reviewers) {
             const normalized = login.trim().replace(/^@/, '')
@@ -6936,7 +7309,9 @@ export default function MobileTasksScreen() {
 
   const refreshGitHubChecks = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') return
+      if (!client || mutatingStatus || item.source.type !== 'pr') {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -6990,7 +7365,9 @@ export default function MobileTasksScreen() {
 
   const rerunGitHubChecks = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>, failedOnly: boolean): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') return
+      if (!client || mutatingStatus || item.source.type !== 'pr') {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -7026,7 +7403,9 @@ export default function MobileTasksScreen() {
       item: Extract<TaskItem, { provider: 'github' }>,
       file: NonNullable<Extract<DetailPayload, { provider: 'github' }>['files'][number]>
     ): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') return
+      if (!client || mutatingStatus || item.source.type !== 'pr') {
+        return
+      }
       if (detailPayload?.provider !== 'github' || !detailPayload.pullRequestId) {
         setError('Unable to sync viewed state for this pull request.')
         return
@@ -7077,7 +7456,9 @@ export default function MobileTasksScreen() {
       item: Extract<TaskItem, { provider: 'github' }>,
       comment: DetailComment
     ): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr' || !comment.threadId) return
+      if (!client || mutatingStatus || item.source.type !== 'pr' || !comment.threadId) {
+        return
+      }
       const resolve = !comment.isResolved
       setMutatingStatus(true)
       setError('')
@@ -7179,14 +7560,18 @@ export default function MobileTasksScreen() {
       file: GitHubDetailFile,
       line: number
     ): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') return
+      if (!client || mutatingStatus || item.source.type !== 'pr') {
+        return
+      }
       if (detailPayload?.provider !== 'github' || !detailPayload.headSha) {
         setError('Unable to comment without the PR head SHA.')
         return
       }
       const draftKey = `${file.path}:${line}`
       const body = (prFileCommentDrafts[draftKey] ?? '').trim()
-      if (!body) return
+      if (!body) {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -7245,10 +7630,14 @@ export default function MobileTasksScreen() {
       item: Extract<TaskItem, { provider: 'github' }>,
       comment: DetailComment
     ): Promise<void> => {
-      if (!client || mutatingStatus) return
+      if (!client || mutatingStatus) {
+        return
+      }
       const key = String(comment.id)
       const body = (itemReplyDrafts[key] ?? '').trim()
-      if (!body) return
+      if (!body) {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -7325,9 +7714,15 @@ export default function MobileTasksScreen() {
       item: Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }>,
       method: HostedReviewMergeMethod
     ): Promise<void> => {
-      if (!client || mutatingStatus) return
-      if (item.provider === 'github' && item.source.type !== 'pr') return
-      if (item.provider === 'gitlab' && item.source.type !== 'mr') return
+      if (!client || mutatingStatus) {
+        return
+      }
+      if (item.provider === 'github' && item.source.type !== 'pr') {
+        return
+      }
+      if (item.provider === 'gitlab' && item.source.type !== 'mr') {
+        return
+      }
       if (item.provider === 'github' && isGitHubPrMergeBlocked(item)) {
         setError('GitHub reports merge conflicts. Open in GitHub to continue.')
         return
@@ -7380,7 +7775,9 @@ export default function MobileTasksScreen() {
       state: LinearState,
       options: { closeDetail?: boolean } = {}
     ): Promise<void> => {
-      if (!client || !taskUiReady || mutatingStatus) return
+      if (!client || !taskUiReady || mutatingStatus) {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -7428,9 +7825,13 @@ export default function MobileTasksScreen() {
 
   const addLinearComment = useCallback(
     async (item: Extract<TaskItem, { provider: 'linear' }>): Promise<void> => {
-      if (!client || mutatingStatus) return
+      if (!client || mutatingStatus) {
+        return
+      }
       const body = linearCommentDraft.trim()
-      if (!body) return
+      if (!body) {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -7473,7 +7874,9 @@ export default function MobileTasksScreen() {
 
   const openLinearSubIssue = useCallback(
     async (child: LinearIssueChild, workspaceId?: string): Promise<void> => {
-      if (!client || mutatingStatus) return
+      if (!client || mutatingStatus) {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -7501,9 +7904,13 @@ export default function MobileTasksScreen() {
 
   const createLinearSubIssue = useCallback(
     async (item: Extract<TaskItem, { provider: 'linear' }>): Promise<void> => {
-      if (!client || mutatingStatus) return
+      if (!client || mutatingStatus) {
+        return
+      }
       const title = linearSubIssueTitle.trim()
-      if (!title) return
+      if (!title) {
+        return
+      }
       setMutatingStatus(true)
       setError('')
       try {
@@ -7559,9 +7966,13 @@ export default function MobileTasksScreen() {
   )
 
   const createTask = useCallback(async (): Promise<void> => {
-    if (!client || !tasksSupported || !taskStateHydrated || creatingTask) return
+    if (!client || !tasksSupported || !taskStateHydrated || creatingTask) {
+      return
+    }
     const title = createTitle.trim()
-    if (!title) return
+    if (!title) {
+      return
+    }
     setCreatingTask(true)
     setError('')
     try {
@@ -7694,7 +8105,9 @@ export default function MobileTasksScreen() {
 
   const setGitHubIssueSourcePreference = useCallback(
     async (repo: RepoSummary, preference: 'upstream' | 'origin'): Promise<void> => {
-      if (!client || !taskUiReady) return
+      if (!client || !taskUiReady) {
+        return
+      }
       setError('')
       try {
         const response = await client.sendRequest(
@@ -8095,10 +8508,18 @@ export default function MobileTasksScreen() {
         : `${selectedLinearTeamIds.size} teams`
   const effectiveLinearDisplayProperties = useMemo(() => {
     const next = new Set(linearDisplayProperties)
-    if (linearGroupBy === 'status') next.delete('state')
-    if (linearGroupBy === 'assignee') next.delete('assignee')
-    if (linearGroupBy === 'priority') next.delete('priority')
-    if (linearGroupBy === 'team') next.delete('team')
+    if (linearGroupBy === 'status') {
+      next.delete('state')
+    }
+    if (linearGroupBy === 'assignee') {
+      next.delete('assignee')
+    }
+    if (linearGroupBy === 'priority') {
+      next.delete('priority')
+    }
+    if (linearGroupBy === 'team') {
+      next.delete('team')
+    }
     if (selectedLinearTeamIds.size <= 1 && !linearTeamPropertyTouched) {
       next.delete('team')
     } else if (selectedLinearTeamIds.size > 1 && !linearTeamPropertyTouched) {
@@ -8192,8 +8613,12 @@ export default function MobileTasksScreen() {
       ...githubProjectSettings.recent.map(githubProjectKey)
     ])
     return githubProjects.filter((project) => {
-      if (pinnedOrRecentKeys.has(githubProjectKey(project))) return false
-      if (!queryText) return true
+      if (pinnedOrRecentKeys.has(githubProjectKey(project))) {
+        return false
+      }
+      if (!queryText) {
+        return true
+      }
       return (
         project.title.toLowerCase().includes(queryText) ||
         project.owner.toLowerCase().includes(queryText) ||
@@ -8262,7 +8687,9 @@ export default function MobileTasksScreen() {
             style={styles.iconButton}
             disabled={!taskUiReady || loading || refreshing || githubProjectLoading}
             onPress={() => {
-              if (!taskUiReady) return
+              if (!taskUiReady) {
+                return
+              }
               if (provider === 'github' && githubMode === 'project') {
                 void loadGitHubProjectTable({ queryOverride: appliedGithubProjectSearch })
                 return
@@ -8277,7 +8704,9 @@ export default function MobileTasksScreen() {
               style={styles.iconButton}
               disabled={!taskUiReady}
               onPress={() => {
-                if (!taskUiReady) return
+                if (!taskUiReady) {
+                  return
+                }
                 if (provider === 'linear' && !linearConnected) {
                   setLinearApiKeyDraft('')
                   setLinearConnectState('idle')
@@ -8305,7 +8734,9 @@ export default function MobileTasksScreen() {
             style={styles.segmentButton}
             disabled={!taskUiReady}
             onPress={() => {
-              if (!taskUiReady) return
+              if (!taskUiReady) {
+                return
+              }
               setShowProviderPicker(true)
             }}
           >
@@ -8318,7 +8749,9 @@ export default function MobileTasksScreen() {
               style={styles.segmentButton}
               disabled={!taskUiReady}
               onPress={() => {
-                if (!taskUiReady) return
+                if (!taskUiReady) {
+                  return
+                }
                 setShowRepoPicker(true)
               }}
             >
@@ -8345,7 +8778,9 @@ export default function MobileTasksScreen() {
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
-                  if (!taskUiReady) return
+                  if (!taskUiReady) {
+                    return
+                  }
                   setShowGitHubKindPicker(true)
                 }}
               >
@@ -8357,7 +8792,9 @@ export default function MobileTasksScreen() {
                     style={styles.segmentButton}
                     disabled={!taskUiReady}
                     onPress={() => {
-                      if (!taskUiReady) return
+                      if (!taskUiReady) {
+                        return
+                      }
                       setShowGitHubPresetPicker(true)
                     }}
                   >
@@ -8368,7 +8805,9 @@ export default function MobileTasksScreen() {
                       style={styles.segmentButton}
                       disabled={!taskUiReady}
                       onPress={() => {
-                        if (!taskUiReady) return
+                        if (!taskUiReady) {
+                          return
+                        }
                         setShowGitHubIssueSourcePicker(true)
                       }}
                     >
@@ -8384,7 +8823,9 @@ export default function MobileTasksScreen() {
                     style={styles.segmentButton}
                     disabled={!taskUiReady}
                     onPress={() => {
-                      if (!taskUiReady) return
+                      if (!taskUiReady) {
+                        return
+                      }
                       setShowGitHubProjectPicker(true)
                     }}
                   >
@@ -8395,7 +8836,9 @@ export default function MobileTasksScreen() {
                       style={styles.segmentButton}
                       disabled={!taskUiReady}
                       onPress={() => {
-                        if (!taskUiReady) return
+                        if (!taskUiReady) {
+                          return
+                        }
                         setShowGitHubProjectViewPicker(true)
                       }}
                     >
@@ -8409,7 +8852,9 @@ export default function MobileTasksScreen() {
                       style={styles.segmentButton}
                       disabled={!taskUiReady}
                       onPress={() => {
-                        if (!taskUiReady) return
+                        if (!taskUiReady) {
+                          return
+                        }
                         setShowGitHubProjectSortPicker(true)
                       }}
                     >
@@ -8423,7 +8868,9 @@ export default function MobileTasksScreen() {
                       style={styles.segmentButton}
                       disabled={!taskUiReady}
                       onPress={() => {
-                        if (!taskUiReady) return
+                        if (!taskUiReady) {
+                          return
+                        }
                         setShowGitHubProjectFieldsPicker(true)
                       }}
                     >
@@ -8446,7 +8893,9 @@ export default function MobileTasksScreen() {
                       style={styles.segmentIconButton}
                       disabled={!taskUiReady}
                       onPress={() => {
-                        if (!taskUiReady) return
+                        if (!taskUiReady) {
+                          return
+                        }
                         void Linking.openURL(selectedGitHubProjectViewUrl)
                       }}
                     >
@@ -8464,7 +8913,9 @@ export default function MobileTasksScreen() {
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
-                  if (!taskUiReady) return
+                  if (!taskUiReady) {
+                    return
+                  }
                   setShowGitLabViewPicker(true)
                 }}
               >
@@ -8477,7 +8928,9 @@ export default function MobileTasksScreen() {
                   style={styles.segmentButton}
                   disabled={!taskUiReady}
                   onPress={() => {
-                    if (!taskUiReady) return
+                    if (!taskUiReady) {
+                      return
+                    }
                     setShowGitLabFilterPicker(true)
                   }}
                 >
@@ -8494,7 +8947,9 @@ export default function MobileTasksScreen() {
                   style={styles.segmentButton}
                   disabled={!taskUiReady}
                   onPress={() => {
-                    if (!taskUiReady) return
+                    if (!taskUiReady) {
+                      return
+                    }
                     setShowLinearWorkspacePicker(true)
                   }}
                 >
@@ -8505,7 +8960,9 @@ export default function MobileTasksScreen() {
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
-                  if (!taskUiReady) return
+                  if (!taskUiReady) {
+                    return
+                  }
                   setShowLinearTeamPicker(true)
                 }}
               >
@@ -8515,7 +8972,9 @@ export default function MobileTasksScreen() {
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
-                  if (!taskUiReady) return
+                  if (!taskUiReady) {
+                    return
+                  }
                   setShowLinearFilterPicker(true)
                 }}
               >
@@ -8525,7 +8984,9 @@ export default function MobileTasksScreen() {
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
-                  if (!taskUiReady) return
+                  if (!taskUiReady) {
+                    return
+                  }
                   setShowLinearViewPicker(true)
                 }}
               >
@@ -8535,7 +8996,9 @@ export default function MobileTasksScreen() {
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
-                  if (!taskUiReady) return
+                  if (!taskUiReady) {
+                    return
+                  }
                   setShowLinearGroupPicker(true)
                 }}
               >
@@ -8545,7 +9008,9 @@ export default function MobileTasksScreen() {
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
-                  if (!taskUiReady) return
+                  if (!taskUiReady) {
+                    return
+                  }
                   setShowLinearOrderPicker(true)
                 }}
               >
@@ -8555,7 +9020,9 @@ export default function MobileTasksScreen() {
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
-                  if (!taskUiReady) return
+                  if (!taskUiReady) {
+                    return
+                  }
                   setShowLinearDisplayPicker(true)
                 }}
               >
@@ -8569,7 +9036,9 @@ export default function MobileTasksScreen() {
               style={styles.segmentButton}
               disabled={!taskUiReady}
               onPress={() => {
-                if (!taskUiReady) return
+                if (!taskUiReady) {
+                  return
+                }
                 setShowSortPicker(true)
               }}
             >
@@ -8603,7 +9072,9 @@ export default function MobileTasksScreen() {
               autoCorrect={false}
               returnKeyType="search"
               onSubmitEditing={() => {
-                if (!taskUiReady) return
+                if (!taskUiReady) {
+                  return
+                }
                 if (provider === 'github' && githubMode === 'project') {
                   applyGitHubProjectSearch()
                   return
@@ -8755,7 +9226,9 @@ export default function MobileTasksScreen() {
             style={[styles.targetButton, styles.centerActionButton]}
             disabled={!taskUiReady}
             onPress={() => {
-              if (!taskUiReady) return
+              if (!taskUiReady) {
+                return
+              }
               setLinearApiKeyDraft('')
               setLinearConnectState('idle')
               setLinearConnectError('')
@@ -8777,7 +9250,9 @@ export default function MobileTasksScreen() {
               style={[styles.targetButton, styles.centerActionButton]}
               disabled={!taskUiReady}
               onPress={() => {
-                if (!taskUiReady) return
+                if (!taskUiReady) {
+                  return
+                }
                 setShowGitHubProjectPicker(true)
               }}
             >
@@ -8816,8 +9291,11 @@ export default function MobileTasksScreen() {
                     onPress={() =>
                       setCollapsedGitHubProjectGroups((current) => {
                         const next = new Set(current)
-                        if (next.has(entry.group.key)) next.delete(entry.group.key)
-                        else next.add(entry.group.key)
+                        if (next.has(entry.group.key)) {
+                          next.delete(entry.group.key)
+                        } else {
+                          next.add(entry.group.key)
+                        }
                         return next
                       })
                     }
@@ -9139,7 +9617,9 @@ export default function MobileTasksScreen() {
                   style={styles.paginationLabelButton}
                   disabled={githubPaginationLoading}
                   onPress={() => {
-                    if (!taskUiReady) return
+                    if (!taskUiReady) {
+                      return
+                    }
                     setShowGitHubPagePicker(true)
                   }}
                 >
@@ -9814,7 +10294,9 @@ export default function MobileTasksScreen() {
             setPendingGitHubProjectViewSelection(null)
             return
           }
-          if (!activeGitHubProject || !activeGitHubProjectKey) return
+          if (!activeGitHubProject || !activeGitHubProjectKey) {
+            return
+          }
           commitGitHubProjectView(activeGitHubProject, viewId)
         }}
         onClose={() => {
@@ -10043,7 +10525,9 @@ export default function MobileTasksScreen() {
                     style={styles.repoPickerRow}
                     disabled={mutatingStatus}
                     onPress={() => {
-                      if (!linearStatusPickerItem) return
+                      if (!linearStatusPickerItem) {
+                        return
+                      }
                       void setLinearStatus(linearStatusPickerItem, state, {
                         closeDetail: false
                       }).then(() => setLinearStatusPickerItem(null))
@@ -10176,7 +10660,9 @@ export default function MobileTasksScreen() {
             style={styles.targetButton}
             disabled={!taskUiReady}
             onPress={() => {
-              if (!taskUiReady) return
+              if (!taskUiReady) {
+                return
+              }
               setShowCreateTargetPicker(true)
             }}
           >
@@ -10298,8 +10784,11 @@ export default function MobileTasksScreen() {
             : ((selectedCreateTarget as LinearTeam | null)?.id ?? '')
         }
         onSelect={(value) => {
-          if (provider === 'github' || provider === 'gitlab') setCreateRepoId(value)
-          else setCreateTeamId(value)
+          if (provider === 'github' || provider === 'gitlab') {
+            setCreateRepoId(value)
+          } else {
+            setCreateTeamId(value)
+          }
         }}
         onClose={() => setShowCreateTargetPicker(false)}
       />
@@ -10307,7 +10796,9 @@ export default function MobileTasksScreen() {
       <BottomDrawer
         visible={taskUiReady && showLinearConnect}
         onClose={() => {
-          if (linearConnectState !== 'connecting') setShowLinearConnect(false)
+          if (linearConnectState !== 'connecting') {
+            setShowLinearConnect(false)
+          }
         }}
       >
         <View style={styles.sheetHeader}>
@@ -10810,7 +11301,9 @@ export default function MobileTasksScreen() {
       <BottomDrawer
         visible={taskUiReady && workspaceCreateDraft != null && workspaceSparseDraft != null}
         onClose={() => {
-          if (!workspaceSparseSaving) setWorkspaceSparseDraft(null)
+          if (!workspaceSparseSaving) {
+            setWorkspaceSparseDraft(null)
+          }
         }}
         zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 2}
       >
@@ -11103,7 +11596,9 @@ export default function MobileTasksScreen() {
                 <Pressable
                   style={styles.actionRow}
                   onPress={() => {
-                    if (projectRepoNotInOrca.url) void Linking.openURL(projectRepoNotInOrca.url)
+                    if (projectRepoNotInOrca.url) {
+                      void Linking.openURL(projectRepoNotInOrca.url)
+                    }
                   }}
                 >
                   <ExternalLink size={16} color={colors.textPrimary} />
@@ -11750,7 +12245,9 @@ export default function MobileTasksScreen() {
                                 style={styles.fileActionRow}
                                 disabled={!check.url}
                                 onPress={() => {
-                                  if (check.url) void Linking.openURL(check.url)
+                                  if (check.url) {
+                                    void Linking.openURL(check.url)
+                                  }
                                 }}
                               >
                                 <Text style={styles.detailLine} numberOfLines={2}>
@@ -12695,7 +13192,9 @@ export default function MobileTasksScreen() {
                             style={styles.fileActionRow}
                             disabled={!check.url}
                             onPress={() => {
-                              if (check.url) void Linking.openURL(check.url)
+                              if (check.url) {
+                                void Linking.openURL(check.url)
+                              }
                             }}
                           >
                             <Text style={styles.detailLine} numberOfLines={2}>
@@ -12811,7 +13310,9 @@ export default function MobileTasksScreen() {
                               style={styles.fileCard}
                               disabled={!job.webUrl}
                               onPress={() => {
-                                if (job.webUrl) void Linking.openURL(job.webUrl)
+                                if (job.webUrl) {
+                                  void Linking.openURL(job.webUrl)
+                                }
                               }}
                             >
                               <View style={styles.fileActionRow}>
@@ -13155,7 +13656,9 @@ export default function MobileTasksScreen() {
           pendingHostedMerge ? getHostedReviewMergeMethodLabel(pendingHostedMerge.method) : 'Merge'
         }
         onConfirm={() => {
-          if (!taskUiReady || !pendingHostedMerge) return
+          if (!taskUiReady || !pendingHostedMerge) {
+            return
+          }
           void mergeHostedReview(pendingHostedMerge.item, pendingHostedMerge.method)
         }}
         onCancel={() => setPendingHostedMerge(null)}
@@ -13174,7 +13677,9 @@ export default function MobileTasksScreen() {
             : 'Merge'
         }
         onConfirm={() => {
-          if (!taskUiReady || !pendingProjectGitHubMerge) return
+          if (!taskUiReady || !pendingProjectGitHubMerge) {
+            return
+          }
           void mergeProjectGitHubPullRequest(
             pendingProjectGitHubMerge.row,
             pendingProjectGitHubMerge.method
@@ -13201,7 +13706,9 @@ export default function MobileTasksScreen() {
         }
         destructive={pendingHostedStateChange?.nextState === 'closed'}
         onConfirm={() => {
-          if (!taskUiReady || !pendingHostedStateChange) return
+          if (!taskUiReady || !pendingHostedStateChange) {
+            return
+          }
           if (pendingHostedStateChange.source === 'task') {
             if (pendingHostedStateChange.item.provider === 'gitlab') {
               void toggleGitLabStatus(pendingHostedStateChange.item)
@@ -14614,9 +15121,15 @@ const styles = StyleSheet.create({
 })
 
 function getPrSignalToneStyle(tone: 'neutral' | 'success' | 'warning' | 'danger') {
-  if (tone === 'success') return styles.prSignalSuccess
-  if (tone === 'warning') return styles.prSignalWarning
-  if (tone === 'danger') return styles.prSignalDanger
+  if (tone === 'success') {
+    return styles.prSignalSuccess
+  }
+  if (tone === 'warning') {
+    return styles.prSignalWarning
+  }
+  if (tone === 'danger') {
+    return styles.prSignalDanger
+  }
   return null
 }
 

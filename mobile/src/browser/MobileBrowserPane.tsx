@@ -430,7 +430,9 @@ export function MobileBrowserPane({
     busyRef.current = true
     setBusy(true)
     let startupTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      if (streamGenerationRef.current !== generation) return
+      if (streamGenerationRef.current !== generation) {
+        return
+      }
       busyRef.current = false
       setBusy(false)
       setError('Browser stream timed out.')
@@ -449,7 +451,9 @@ export function MobileBrowserPane({
         ...streamRequest
       },
       (payload) => {
-        if (streamGenerationRef.current !== generation) return
+        if (streamGenerationRef.current !== generation) {
+          return
+        }
         const event = payload as {
           type?: string
           message?: string
@@ -509,7 +513,9 @@ export function MobileBrowserPane({
       },
       {
         onBinaryFrame: (frame) => {
-          if (streamGenerationRef.current !== generation) return
+          if (streamGenerationRef.current !== generation) {
+            return
+          }
           clearStartupTimer()
           if (cacheKey) {
             applyFrameThrottled(frame, cacheKey)
@@ -758,9 +764,13 @@ export function MobileBrowserPane({
       clearLongPressTimer()
       longPressTimerRef.current = setTimeout(() => {
         const start = startPointRef.current
-        if (!start) return
+        if (!start) {
+          return
+        }
         const point = mapTouchPoint(start.x, start.y)
-        if (!point) return
+        if (!point) {
+          return
+        }
         rightClickSentRef.current = true
         void sendPointerClick(point, 'right')
         onToast('Right click')

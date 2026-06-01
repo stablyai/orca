@@ -52,7 +52,9 @@ export default function RootLayout() {
     }
 
     void Linking.getInitialURL().then((url) => {
-      if (url) handleUrl(url)
+      if (url) {
+        handleUrl(url)
+      }
     })
 
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url))

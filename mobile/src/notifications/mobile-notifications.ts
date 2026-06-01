@@ -58,10 +58,14 @@ function configureNotificationChannel(): void {
 
 async function showLocalNotification(event: NotificationEvent, hostId: string): Promise<void> {
   const enabled = await loadPushNotificationsEnabled()
-  if (!enabled) return
+  if (!enabled) {
+    return
+  }
 
   const granted = await ensureNotificationPermissions()
-  if (!granted) return
+  if (!granted) {
+    return
+  }
 
   await Notifications.scheduleNotificationAsync({
     content: {
@@ -99,10 +103,14 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       return
     }
     if (event.type === 'end') {
-      if (disposed) unsubscribeStream()
+      if (disposed) {
+        unsubscribeStream()
+      }
       return
     }
-    if (disposed) return
+    if (disposed) {
+      return
+    }
     if (event.type === 'notification') {
       void showLocalNotification(event as NotificationEvent, hostId)
     }

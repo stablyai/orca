@@ -47,9 +47,13 @@ const AUTO_RESTORE_FIT_OPTIONS: (PickerOption<RestoreValue> & { ms: number | nul
 ]
 
 function valueFromMs(ms: number | null | undefined): RestoreValue {
-  if (ms == null) return 'indefinite'
+  if (ms == null) {
+    return 'indefinite'
+  }
   const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
-  if (exact) return exact.value
+  if (exact) {
+    return exact.value
+  }
   // Why: server may return a non-preset ms (custom value, future preset,
   // or server-side clamp). Snap to the closest finite preset so the
   // picker's selected radio agrees with the row sublabel rendered by
@@ -57,7 +61,9 @@ function valueFromMs(ms: number | null | undefined): RestoreValue {
   let closest: (typeof AUTO_RESTORE_FIT_OPTIONS)[number] | null = null
   let bestDelta = Infinity
   for (const opt of AUTO_RESTORE_FIT_OPTIONS) {
-    if (opt.ms == null) continue
+    if (opt.ms == null) {
+      continue
+    }
     const delta = Math.abs(opt.ms - ms)
     if (delta < bestDelta) {
       bestDelta = delta
@@ -68,8 +74,12 @@ function valueFromMs(ms: number | null | undefined): RestoreValue {
 }
 
 function autoRestoreSummary(ms: number | null | undefined): string {
-  if (ms === undefined) return '…'
-  if (ms === null) return AUTO_RESTORE_FIT_OPTIONS[0]!.label
+  if (ms === undefined) {
+    return '…'
+  }
+  if (ms === null) {
+    return AUTO_RESTORE_FIT_OPTIONS[0]!.label
+  }
   const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
   return exact ? exact.label : `After ${Math.round(ms / 1000)}s`
 }
@@ -174,7 +184,9 @@ export default function TerminalSettingsScreen() {
   const refreshShortcutLayout = useCallback(() => {
     const refreshSeq = layoutWriteSeqRef.current
     void loadTerminalAccessoryLayout().then((layout) => {
-      if (pendingLayoutWritesRef.current > 0 || refreshSeq !== layoutWriteSeqRef.current) return
+      if (pendingLayoutWritesRef.current > 0 || refreshSeq !== layoutWriteSeqRef.current) {
+        return
+      }
       setVisibleBuiltInIds(layout.visibleBuiltInIds)
     })
   }, [])
@@ -230,11 +242,15 @@ export default function TerminalSettingsScreen() {
     let cancelled = false
     for (const host of hosts) {
       const client = hostClientsById.get(host.id) ?? null
-      if (!client) continue
+      if (!client) {
+        continue
+      }
       void client
         .sendRequest('terminal.getAutoRestoreFit')
         .then((resp) => {
-          if (cancelled) return
+          if (cancelled) {
+            return
+          }
           const value = (resp as { ms?: number | null } | null)?.ms
           // Why: reconnect/status ticks can replay the same value; preserving
           // object identity avoids rerendering every settings row again.
@@ -253,9 +269,13 @@ export default function TerminalSettingsScreen() {
 
   async function selectValue(hostId: string, value: RestoreValue) {
     const client = hostClientsById.get(hostId) ?? null
-    if (!client) return
+    if (!client) {
+      return
+    }
     const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === value)
-    if (!opt) return
+    if (!opt) {
+      return
+    }
     setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, opt.ms))
     try {
       const resp = (await client.sendRequest('terminal.setAutoRestoreFit', {
@@ -397,7 +417,9 @@ export default function TerminalSettingsScreen() {
         options={AUTO_RESTORE_FIT_OPTIONS}
         selected={valueFromMs(pickerHost ? hostMs[pickerHost.id] : null)}
         onSelect={(v) => {
-          if (pickerHost) void selectValue(pickerHost.id, v)
+          if (pickerHost) {
+            void selectValue(pickerHost.id, v)
+          }
         }}
         onClose={() => setPickerHostId(null)}
       />

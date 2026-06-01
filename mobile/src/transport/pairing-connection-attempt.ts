@@ -16,13 +16,17 @@ export function startPairingConnectionAttempt({
   let timer: ReturnType<typeof setTimeout> | null = null
 
   function closeClientOnce() {
-    if (clientClosed) return
+    if (clientClosed) {
+      return
+    }
     clientClosed = true
     closeClient()
   }
 
   function dispose() {
-    if (disposed) return
+    if (disposed) {
+      return
+    }
     disposed = true
     if (timer) {
       clearTimeout(timer)

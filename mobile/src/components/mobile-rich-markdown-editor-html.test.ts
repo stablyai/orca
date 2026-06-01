@@ -18,10 +18,14 @@ function extractFunctionSource(script: string, name: string): string {
   let depth = 0
   for (let index = bodyStart; index < script.length; index += 1) {
     const char = script[index]
-    if (char === '{') depth += 1
+    if (char === '{') {
+      depth += 1
+    }
     if (char === '}') {
       depth -= 1
-      if (depth === 0) return script.slice(start, index + 1)
+      if (depth === 0) {
+        return script.slice(start, index + 1)
+      }
     }
   }
   throw new Error(`Could not extract ${name}`)

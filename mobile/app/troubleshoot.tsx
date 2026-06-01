@@ -160,7 +160,9 @@ export default function TroubleshootScreen() {
       results.push({ label: 'Paired hosts', status: 'warn', detail: 'Could not read host data' })
     }
 
-    if (!isCurrentRun()) return
+    if (!isCurrentRun()) {
+      return
+    }
     setChecks([...results])
 
     const internetCheck = startDiagnosticFetchTimeout(5000)
@@ -169,14 +171,18 @@ export default function TroubleshootScreen() {
       const resp = await fetch('https://dns.google/resolve?name=example.com&type=A', {
         signal: internetCheck.signal
       })
-      if (!isCurrentRun()) return
+      if (!isCurrentRun()) {
+        return
+      }
       results.push(
         resp.ok
           ? { label: 'Internet', status: 'pass', detail: 'Connected' }
           : { label: 'Internet', status: 'warn', detail: 'Unexpected response' }
       )
     } catch {
-      if (!isCurrentRun()) return
+      if (!isCurrentRun()) {
+        return
+      }
       results.push({ label: 'Internet', status: 'fail', detail: 'No connection' })
     } finally {
       internetCheck.dispose()
@@ -185,15 +191,21 @@ export default function TroubleshootScreen() {
       }
     }
 
-    if (!isCurrentRun()) return
+    if (!isCurrentRun()) {
+      return
+    }
     setChecks([...results])
 
     try {
       const hosts = await loadHosts()
       for (const host of hosts) {
-        if (!isCurrentRun()) return
+        if (!isCurrentRun()) {
+          return
+        }
         const reachable = await testHostReachability(host.endpoint)
-        if (!isCurrentRun()) return
+        if (!isCurrentRun()) {
+          return
+        }
         results.push({
           label: host.name,
           status: reachable ? 'pass' : 'fail',
@@ -207,7 +219,9 @@ export default function TroubleshootScreen() {
       results.push({ label: 'Hosts', status: 'warn', detail: 'Could not test' })
     }
 
-    if (!isCurrentRun()) return
+    if (!isCurrentRun()) {
+      return
+    }
 
     results.push({
       label: 'Platform',

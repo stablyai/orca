@@ -79,7 +79,9 @@ type SetupTrustPrompt = {
 function repoColor(name: string): string {
   const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
   let hash = 0
-  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0
+  }
   return palette[Math.abs(hash) % palette.length]!
 }
 
@@ -230,7 +232,9 @@ export function NewWorktreeModal({
       setShowAgentPicker(false)
       return
     }
-    if (!client) return
+    if (!client) {
+      return
+    }
     let stale = false
     setName('')
     setNote('')
@@ -262,7 +266,9 @@ export function NewWorktreeModal({
           client.sendRequest('settings.get'),
           client.sendRequest('ui.get')
         ])
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (settingsResponse.ok) {
           const result = (settingsResponse as RpcSuccess).result as { settings: RuntimeSettings }
           setRuntimeSettings(result.settings)
@@ -283,9 +289,13 @@ export function NewWorktreeModal({
           }
         }
       } catch {
-        if (!stale) setRepos([])
+        if (!stale) {
+          setRepos([])
+        }
       } finally {
-        if (!stale) setLoading(false)
+        if (!stale) {
+          setLoading(false)
+        }
       }
     })()
     return () => {
@@ -303,7 +313,9 @@ export function NewWorktreeModal({
     void client
       .sendRequest('ssh.getState', { targetId: selectedRepoConnectionId })
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (!response.ok) {
           throw new Error(response.error.message)
         }
@@ -333,7 +345,9 @@ export function NewWorktreeModal({
   }, [client, selectedRepoConnectionId, visible])
 
   useEffect(() => {
-    if (!visible || !client) return
+    if (!visible || !client) {
+      return
+    }
     if (selectedRepoConnectionId && sshGate.status !== 'connected') {
       setDetectedAgentIds(null)
       return
@@ -347,12 +361,16 @@ export function NewWorktreeModal({
               connectionId: selectedRepoConnectionId
             })
           : await client.sendRequest('preflight.detectAgents')
-        if (stale) return
+        if (stale) {
+          return
+        }
         setDetectedAgentIds(
           response.ok ? new Set((response as RpcSuccess).result as string[]) : new Set()
         )
       } catch {
-        if (!stale) setDetectedAgentIds(new Set())
+        if (!stale) {
+          setDetectedAgentIds(new Set())
+        }
       }
     })()
     return () => {
@@ -373,7 +391,9 @@ export function NewWorktreeModal({
         const response = await client.sendRequest('repo.hooks', {
           repo: `id:${selectedRepo.id}`
         })
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (response.ok) {
           const result = (response as RpcSuccess).result as RepoHooksResponse
           const cmd = result.hooks?.scripts?.setup?.trim() || null
@@ -404,7 +424,9 @@ export function NewWorktreeModal({
   }, [client, selectedRepo])
 
   async function connectSelectedSshRepo(): Promise<void> {
-    if (!client || !selectedRepoConnectionId) return
+    if (!client || !selectedRepoConnectionId) {
+      return
+    }
     setSshConnecting(true)
     setSshState({
       targetId: selectedRepoConnectionId,
@@ -447,7 +469,9 @@ export function NewWorktreeModal({
     contentHash: string,
     alwaysTrust: boolean
   ): Promise<void> {
-    if (!client) return
+    if (!client) {
+      return
+    }
     const next = trustedOrcaHooksWithSetupApproval({
       trust: trustedOrcaHooks,
       repoId,
@@ -462,7 +486,9 @@ export function NewWorktreeModal({
   }
 
   async function handleCreate(options: CreateOptions = {}) {
-    if (!client || !selectedRepo) return
+    if (!client || !selectedRepo) {
+      return
+    }
     setCreating(true)
     setError('')
 
@@ -566,8 +592,12 @@ export function NewWorktreeModal({
           setupDecision,
           name: candidateName
         }
-        if (selectedAgent.id !== '__blank__') params.createdWithAgent = selectedAgent.id
-        if (note.trim()) params.comment = note.trim()
+        if (selectedAgent.id !== '__blank__') {
+          params.createdWithAgent = selectedAgent.id
+        }
+        if (note.trim()) {
+          params.comment = note.trim()
+        }
 
         const response = await client.sendRequest('worktree.create', params, {
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
@@ -715,7 +745,9 @@ export function NewWorktreeModal({
                 autoFocus={repos.length <= 1}
                 returnKeyType="done"
                 onSubmitEditing={() => {
-                  if (canCreate) void handleCreate()
+                  if (canCreate) {
+                    void handleCreate()
+                  }
                 }}
               />
             </View>

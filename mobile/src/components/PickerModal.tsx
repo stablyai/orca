@@ -79,14 +79,18 @@ function PickerModalContent<T extends string = string>({
                 opt.disabled && styles.rowDisabled
               ]}
               onPress={() => {
-                if (opt.disabled) return
+                if (opt.disabled) {
+                  return
+                }
                 onSelect(opt.value)
                 onClose()
               }}
               onLongPress={
                 onLongSelect
                   ? () => {
-                      if (opt.disabled) return
+                      if (opt.disabled) {
+                        return
+                      }
                       onLongSelect(opt.value)
                       onClose()
                     }

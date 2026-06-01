@@ -8,7 +8,9 @@ import { PairingOfferSchema, type PairingOffer } from './types'
 export function decodePairingUrl(url: string): PairingOffer | null {
   try {
     const code = extractPairingCodeFromUrl(url)
-    if (!code) return null
+    if (!code) {
+      return null
+    }
     return decodePairingBase64(code)
   } catch {
     return null
@@ -19,7 +21,9 @@ export function decodePairingUrl(url: string): PairingOffer | null {
 // extraction here makes QR scan, paste, and external deep-link flows
 // accept the same URL shapes.
 export function extractPairingCodeFromUrl(url: string): string | null {
-  if (!url.startsWith('orca://pair')) return null
+  if (!url.startsWith('orca://pair')) {
+    return null
+  }
   const queryIndex = url.indexOf('?')
   if (queryIndex !== -1) {
     const query = url.slice(queryIndex + 1).split('#')[0] ?? ''
@@ -41,7 +45,9 @@ export function extractPairingCodeFromUrl(url: string): string | null {
 // copied from desktop.
 export function parsePairingCode(input: string): PairingOffer | null {
   const trimmed = input.trim()
-  if (!trimmed) return null
+  if (!trimmed) {
+    return null
+  }
   try {
     if (trimmed.startsWith('orca://pair')) {
       return decodePairingUrl(trimmed)

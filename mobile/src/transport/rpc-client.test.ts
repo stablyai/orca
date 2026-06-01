@@ -34,7 +34,9 @@ class MockWebSocket {
   emitCloseOnClose = true
   sent: string[] = []
   close = vi.fn(() => {
-    if (this.readyState === MockWebSocket.CLOSED) return
+    if (this.readyState === MockWebSocket.CLOSED) {
+      return
+    }
     this.readyState = MockWebSocket.CLOSED
     if (this.emitCloseOnClose) {
       this.onclose?.()

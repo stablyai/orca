@@ -23,7 +23,9 @@ function defaultPreference(ids = builtInIds()): TerminalAccessoryLayoutPreferenc
 }
 
 function stringArray(value: unknown): string[] | null {
-  if (!Array.isArray(value)) return null
+  if (!Array.isArray(value)) {
+    return null
+  }
   return value.every((item): item is string => typeof item === 'string') ? value : null
 }
 
@@ -31,7 +33,9 @@ function dedupeKnownIds(ids: string[], builtInSet: Set<string>): string[] {
   const seen = new Set<string>()
   const out: string[] = []
   for (const id of ids) {
-    if (!builtInSet.has(id) || seen.has(id)) continue
+    if (!builtInSet.has(id) || seen.has(id)) {
+      continue
+    }
     seen.add(id)
     out.push(id)
   }
@@ -47,7 +51,9 @@ export function normalizeTerminalAccessoryLayoutPreference(
   currentBuiltInIds = builtInIds()
 ): TerminalAccessoryLayoutPreference {
   const fallback = defaultPreference(currentBuiltInIds)
-  if (!value || typeof value !== 'object') return fallback
+  if (!value || typeof value !== 'object') {
+    return fallback
+  }
 
   const candidate = value as {
     version?: unknown
@@ -56,7 +62,9 @@ export function normalizeTerminalAccessoryLayoutPreference(
   }
   const visibleInput = stringArray(candidate.visibleBuiltInIds)
   const knownInput = stringArray(candidate.knownBuiltInIds)
-  if (candidate.version !== 1 || !visibleInput || !knownInput) return fallback
+  if (candidate.version !== 1 || !visibleInput || !knownInput) {
+    return fallback
+  }
 
   const builtInSet = new Set(currentBuiltInIds)
   const knownInputSet = new Set(knownInput.filter((id) => builtInSet.has(id)))
@@ -124,7 +132,9 @@ export function getVisibleTerminalAccessoryKeys(
 export async function loadTerminalAccessoryLayout(): Promise<TerminalAccessoryLayoutPreference> {
   try {
     const raw = await AsyncStorage.getItem(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY)
-    if (!raw) return defaultPreference()
+    if (!raw) {
+      return defaultPreference()
+    }
     return normalizeTerminalAccessoryLayoutPreference(JSON.parse(raw))
   } catch {
     return defaultPreference()

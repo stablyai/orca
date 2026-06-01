@@ -640,7 +640,9 @@ function DiffLineRow({
             ]}
             disabled={commentsBusy}
             onPress={() => {
-              if (commentLine !== undefined) onStartComment(commentLine)
+              if (commentLine !== undefined) {
+                onStartComment(commentLine)
+              }
             }}
             accessibilityLabel={`Add note on line ${commentLine}`}
           >
@@ -697,7 +699,9 @@ function DiffLineRow({
               ]}
               disabled={!commentDraft.trim() || commentsBusy}
               onPress={() => {
-                if (commentLine !== undefined) onSubmitComment(commentLine)
+                if (commentLine !== undefined) {
+                  onSubmitComment(commentLine)
+                }
               }}
             >
               <Text style={styles.diffCommentPrimaryText}>Save note</Text>
@@ -769,7 +773,9 @@ function FileReader({
 
   const submitComment = useCallback(
     (lineNumber: number) => {
-      if (!diffCommentActions) return
+      if (!diffCommentActions) {
+        return
+      }
       void diffCommentActions.onAdd(relativePath, lineNumber, commentDraft).then((added) => {
         if (added) {
           setActiveCommentLine(null)
@@ -797,7 +803,9 @@ function FileReader({
         onDraftChange={setCommentDraft}
         onSubmitComment={submitComment}
         onDeleteComment={(commentId) => {
-          if (diffCommentActions) void diffCommentActions.onDelete(commentId)
+          if (diffCommentActions) {
+            void diffCommentActions.onDelete(commentId)
+          }
         }}
       />
     ),
@@ -1134,7 +1142,9 @@ export default function SessionScreen() {
   }, [])
 
   const clearToastHideTimer = useCallback(() => {
-    if (!toastHideTimerRef.current) return
+    if (!toastHideTimerRef.current) {
+      return
+    }
     clearTimeout(toastHideTimerRef.current)
     toastHideTimerRef.current = null
   }, [])
@@ -1150,7 +1160,9 @@ export default function SessionScreen() {
         duration: 150,
         useNativeDriver: true
       }).start(({ finished }) => {
-        if (!finished || toastSeqRef.current !== seq) return
+        if (!finished || toastSeqRef.current !== seq) {
+          return
+        }
         toastHideTimerRef.current = setTimeout(() => {
           toastHideTimerRef.current = null
           Animated.timing(toastOpacityRef.current, {
@@ -1226,7 +1238,9 @@ export default function SessionScreen() {
   // auto-fit the PTY without a separate RPC round-trip.
   const measureViewportOnce = useCallback(
     async (handle: string) => {
-      if (viewportMeasuredRef.current) return
+      if (viewportMeasuredRef.current) {
+        return
+      }
       const dims = await getTerminalRef(handle)?.measureFitDimensions(
         terminalFrameHeightRef.current || undefined
       )
@@ -1240,9 +1254,15 @@ export default function SessionScreen() {
 
   const subscribeToTerminal = useCallback(
     (handle: string) => {
-      if (!client) return
-      if (terminalUnsubsRef.current.has(handle)) return
-      if (subscribingHandlesRef.current.has(handle)) return
+      if (!client) {
+        return
+      }
+      if (terminalUnsubsRef.current.has(handle)) {
+        return
+      }
+      if (subscribingHandlesRef.current.has(handle)) {
+        return
+      }
       if (!getTerminalRef(handle)) {
         return
       }
@@ -1267,7 +1287,9 @@ export default function SessionScreen() {
           capabilities: { terminalBinaryStream: 1 }
         },
         (result) => {
-          if (subscribeSeqRef.current.get(handle) !== seq) return
+          if (subscribeSeqRef.current.get(handle) !== seq) {
+            return
+          }
           const data = result as Record<string, unknown>
           // Why: stale-event filter. Server-side state machine bumps a
           // monotonic seq on every applyLayout. Drop `resized` events
@@ -1364,7 +1386,9 @@ export default function SessionScreen() {
                 // phone dims. See log dump 2026-05-06 confirming the
                 // race + measure-result null pattern.
                 await getTerminalRef(handle)?.awaitReady()
-                if (subscribeSeqRef.current.get(handle) !== seq) return
+                if (subscribeSeqRef.current.get(handle) !== seq) {
+                  return
+                }
                 const dims = await getTerminalRef(handle)?.measureFitDimensions(
                   terminalFrameHeightRef.current || undefined
                 )
@@ -1374,8 +1398,12 @@ export default function SessionScreen() {
                 // its own subscription. Tearing it down here would reset
                 // the freshly-armed initialized flag and re-subscribe a
                 // stale generation.
-                if (subscribeSeqRef.current.get(handle) !== seq) return
-                if (!getTerminalRef(handle)) return
+                if (subscribeSeqRef.current.get(handle) !== seq) {
+                  return
+                }
+                if (!getTerminalRef(handle)) {
+                  return
+                }
                 // Why: we just got `scrollback` with cols=80 (server's
                 // default fallback for null viewport). That means the
                 // server-side subscriber record was registered before we
@@ -1452,8 +1480,12 @@ export default function SessionScreen() {
   const toggleInFlightRef = useRef<Set<string>>(new Set())
   const toggleDisplayMode = useCallback(
     async (handle: string) => {
-      if (!client) return
-      if (toggleInFlightRef.current.has(handle)) return
+      if (!client) {
+        return
+      }
+      if (toggleInFlightRef.current.has(handle)) {
+        return
+      }
       const current = terminalModes.get(handle) ?? 'auto'
       // Why: 'phone' on the wire is an observation ("currently phone-fitted"),
       // not a setting. The toggle only ever requests 'auto' or 'desktop'.
@@ -1488,8 +1520,12 @@ export default function SessionScreen() {
 
   const fetchTerminals = useCallback(
     async (opts: { allowEmptyLoaded?: boolean } = {}) => {
-      if (!client) return
-      if (fetchTerminalsInFlightRef.current) return
+      if (!client) {
+        return
+      }
+      if (fetchTerminalsInFlightRef.current) {
+        return
+      }
       fetchTerminalsInFlightRef.current = true
       const allowEmptyLoaded = opts.allowEmptyLoaded ?? true
 
@@ -1520,7 +1556,9 @@ export default function SessionScreen() {
               terminalRefs.current.delete(handle)
               initializedHandlesRef.current.delete(handle)
               setTerminalKeyboardMetrics((prev) => {
-                if (!prev.has(handle)) return prev
+                if (!prev.has(handle)) {
+                  return prev
+                }
                 const next = new Map(prev)
                 next.delete(handle)
                 return next
@@ -1535,7 +1573,9 @@ export default function SessionScreen() {
           // for the tab strip, and createParams puts new tabs at the end.
           const seen = new Set<string>()
           const deduped = result.terminals.filter((t) => {
-            if (seen.has(t.handle)) return false
+            if (seen.has(t.handle)) {
+              return false
+            }
             seen.add(t.handle)
             return true
           })
@@ -1690,7 +1730,9 @@ export default function SessionScreen() {
 
   const readMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
-      if (!client) return
+      if (!client) {
+        return
+      }
       setMarkdownDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
       try {
         const response = await client.sendRequest('markdown.readTab', {
@@ -1733,7 +1775,9 @@ export default function SessionScreen() {
 
   const readFileTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'file' }>) => {
-      if (!client) return
+      if (!client) {
+        return
+      }
       setFileDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
       try {
         if (tab.diffSource === 'staged' || tab.diffSource === 'unstaged') {
@@ -1847,7 +1891,9 @@ export default function SessionScreen() {
 
   const addDiffCommentForFile = useCallback(
     async (filePath: string, lineNumber: number, body: string): Promise<boolean> => {
-      if (diffCommentBusy) return false
+      if (diffCommentBusy) {
+        return false
+      }
       const nextId = `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
       const result = addMobileDiffComment(diffCommentsRef.current, {
         id: nextId,
@@ -1857,7 +1903,9 @@ export default function SessionScreen() {
         body,
         createdAt: Date.now()
       })
-      if (!result.comment) return false
+      if (!result.comment) {
+        return false
+      }
       const previous = diffCommentsRef.current
       setDiffCommentBusy(true)
       setDiffComments(result.comments)
@@ -1880,10 +1928,14 @@ export default function SessionScreen() {
 
   const deleteDiffCommentForFile = useCallback(
     async (commentId: string): Promise<void> => {
-      if (diffCommentBusy) return
+      if (diffCommentBusy) {
+        return
+      }
       const previous = diffCommentsRef.current
       const next = removeMobileDiffComments(previous, new Set([commentId]))
-      if (next.length === previous.length) return
+      if (next.length === previous.length) {
+        return
+      }
       setDiffCommentBusy(true)
       setDiffComments(next)
       try {
@@ -1902,7 +1954,9 @@ export default function SessionScreen() {
 
   const copyDiffCommentsToClipboard = useCallback(async (): Promise<void> => {
     const comments = diffCommentsRef.current
-    if (comments.length === 0) return
+    if (comments.length === 0) {
+      return
+    }
     try {
       await Clipboard.setStringAsync(formatDiffComments(comments))
       triggerSuccess()
@@ -1915,7 +1969,9 @@ export default function SessionScreen() {
 
   const sendDiffCommentsToAgent = useCallback((): void => {
     const comments = diffCommentsRef.current.filter((comment) => !comment.sentAt)
-    if (comments.length === 0) return
+    if (comments.length === 0) {
+      return
+    }
     setPendingDiffNotesDelivery({
       comments: [...comments],
       prompt: formatDiffComments(comments)
@@ -1926,7 +1982,9 @@ export default function SessionScreen() {
     async (delivered: readonly DiffComment[]): Promise<void> => {
       const previous = diffCommentsRef.current
       const next = removeDeliveredMobileDiffComments(previous, delivered)
-      if (next.length === previous.length) return
+      if (next.length === previous.length) {
+        return
+      }
       setDiffCommentBusy(true)
       setDiffComments(next)
       try {
@@ -1943,7 +2001,9 @@ export default function SessionScreen() {
   const updateMarkdownLocalContent = useCallback((tabId: string, content: string) => {
     setMarkdownDocs((prev) => {
       const current = prev.get(tabId)
-      if (current?.status !== 'ready') return prev
+      if (current?.status !== 'ready') {
+        return prev
+      }
       const next = new Map(prev)
       next.set(tabId, {
         ...current,
@@ -1958,7 +2018,9 @@ export default function SessionScreen() {
   const copyMarkdownLocalContent = useCallback(
     async (tabId: string) => {
       const current = markdownDocs.get(tabId)
-      if (current?.status !== 'ready') return
+      if (current?.status !== 'ready') {
+        return
+      }
       await Clipboard.setStringAsync(current.localContent)
       triggerSuccess()
       showToast('Copied')
@@ -2008,7 +2070,9 @@ export default function SessionScreen() {
   const discardMarkdownLocalContent = useCallback(
     (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
       const current = markdownDocs.get(tab.id)
-      if (current?.status !== 'ready') return
+      if (current?.status !== 'ready') {
+        return
+      }
       if (!current.isDirty) {
         void readMarkdownTab(tab)
         return
@@ -2029,16 +2093,24 @@ export default function SessionScreen() {
 
   const saveMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
-      if (!client) return
+      if (!client) {
+        return
+      }
       const current = markdownDocs.get(tab.id)
-      if (current?.status !== 'ready' || current.saving || !current.editable) return
-      if (markdownSaveInFlightRef.current.has(tab.id)) return
+      if (current?.status !== 'ready' || current.saving || !current.editable) {
+        return
+      }
+      if (markdownSaveInFlightRef.current.has(tab.id)) {
+        return
+      }
       markdownSaveInFlightRef.current.add(tab.id)
       const saveSeq = (markdownSaveSeqRef.current.get(tab.id) ?? 0) + 1
       markdownSaveSeqRef.current.set(tab.id, saveSeq)
       setMarkdownDocs((prev) => {
         const existing = prev.get(tab.id)
-        if (existing?.status !== 'ready') return prev
+        if (existing?.status !== 'ready') {
+          return prev
+        }
         return new Map(prev).set(tab.id, { ...existing, saving: true, saveError: undefined })
       })
       try {
@@ -2080,7 +2152,9 @@ export default function SessionScreen() {
         }
         setMarkdownDocs((prev) => {
           const existing = prev.get(tab.id)
-          if (existing?.status !== 'ready') return prev
+          if (existing?.status !== 'ready') {
+            return prev
+          }
           return new Map(prev).set(tab.id, {
             ...existing,
             saving: false,
@@ -2097,14 +2171,20 @@ export default function SessionScreen() {
   const fetchSessionTabsInFlightRef = useRef(false)
 
   const fetchSessionTabs = useCallback(async () => {
-    if (!client) return
-    if (fetchSessionTabsInFlightRef.current) return
+    if (!client) {
+      return
+    }
+    if (fetchSessionTabsInFlightRef.current) {
+      return
+    }
     fetchSessionTabsInFlightRef.current = true
     try {
       const response = await client.sendRequest('session.tabs.list', {
         worktree: `id:${worktreeId}`
       })
-      if (!response.ok) return
+      if (!response.ok) {
+        return
+      }
       const result = (response as RpcSuccess).result as SessionTabsResult
       applySessionTabs(result)
     } catch {
@@ -2115,9 +2195,13 @@ export default function SessionScreen() {
   }, [applySessionTabs, client, worktreeId])
 
   useEffect(() => {
-    if (connState === 'connected') return
+    if (connState === 'connected') {
+      return
+    }
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
-      if (queued.timer) clearTimeout(queued.timer)
+      if (queued.timer) {
+        clearTimeout(queued.timer)
+      }
     }
     terminalGestureInputQueuesRef.current.clear()
     terminalGestureInputInFlightRef.current.clear()
@@ -2132,14 +2216,18 @@ export default function SessionScreen() {
     void client
       .sendRequest('status.get')
       .then((response) => {
-        if (stale || !response.ok) return
+        if (stale || !response.ok) {
+          return
+        }
         const status = (response as RpcSuccess).result as RuntimeStatusResult
         setBrowserScreencastSupported(
           status.capabilities?.includes('browser.screencast.v1') === true
         )
       })
       .catch(() => {
-        if (!stale) setBrowserScreencastSupported(false)
+        if (!stale) {
+          setBrowserScreencastSupported(false)
+        }
       })
     return () => {
       stale = true
@@ -2151,12 +2239,18 @@ export default function SessionScreen() {
   // The shared client itself stays alive across screens; we just need
   // the token alongside the client.
   useEffect(() => {
-    if (!hostId) return
+    if (!hostId) {
+      return
+    }
     let stale = false
     void loadHosts().then((hosts) => {
-      if (stale) return
+      if (stale) {
+        return
+      }
       const host = hosts.find((h) => h.id === hostId)
-      if (host) deviceTokenRef.current = host.deviceToken
+      if (host) {
+        deviceTokenRef.current = host.deviceToken
+      }
     })
     return () => {
       stale = true
@@ -2171,7 +2265,9 @@ export default function SessionScreen() {
     useCallback(() => {
       let stale = false
       void loadTerminalAccessoryLayout().then((layout) => {
-        if (!stale) setVisibleBuiltInIds(layout.visibleBuiltInIds)
+        if (!stale) {
+          setVisibleBuiltInIds(layout.visibleBuiltInIds)
+        }
       })
       return () => {
         stale = true
@@ -2183,11 +2279,15 @@ export default function SessionScreen() {
     let mounted = true
     const refresh = () => {
       void loadTerminalAccessoryLayout().then((layout) => {
-        if (mounted) setVisibleBuiltInIds(layout.visibleBuiltInIds)
+        if (mounted) {
+          setVisibleBuiltInIds(layout.visibleBuiltInIds)
+        }
       })
     }
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
-      if (s === 'active') refresh()
+      if (s === 'active') {
+        refresh()
+      }
     })
     return () => {
       mounted = false
@@ -2202,17 +2302,27 @@ export default function SessionScreen() {
   // and the server phone-fits to dims a few rows too tall).
   const refitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scheduleViewportRefit = useCallback(() => {
-    if (refitTimerRef.current) clearTimeout(refitTimerRef.current)
+    if (refitTimerRef.current) {
+      clearTimeout(refitTimerRef.current)
+    }
     refitTimerRef.current = setTimeout(() => {
       const handle = activeHandleRef.current
-      if (!handle) return
+      if (!handle) {
+        return
+      }
       const ref = terminalRefs.current.get(handle)
-      if (!ref) return
+      if (!ref) {
+        return
+      }
       void (async () => {
         const dims = await ref.measureFitDimensions(terminalFrameHeightRef.current || undefined)
-        if (!dims) return
+        if (!dims) {
+          return
+        }
         const prev = viewportRef.current
-        if (prev && prev.cols === dims.cols && prev.rows === dims.rows) return
+        if (prev && prev.cols === dims.cols && prev.rows === dims.rows) {
+          return
+        }
         viewportRef.current = dims
         viewportMeasuredRef.current = true
         // Why: prefer the in-place viewport update RPC over the legacy
@@ -2229,7 +2339,9 @@ export default function SessionScreen() {
               client: { id: deviceToken, type: 'mobile' as const },
               viewport: dims
             })
-            if (response.ok) return
+            if (response.ok) {
+              return
+            }
           } catch {
             // Fall through to legacy resubscribe.
           }
@@ -2253,7 +2365,9 @@ export default function SessionScreen() {
     const showSub = Keyboard.addListener(showEvent, onShow)
     const hideSub = Keyboard.addListener(hideEvent, onHide)
     return () => {
-      if (refitTimerRef.current) clearTimeout(refitTimerRef.current)
+      if (refitTimerRef.current) {
+        clearTimeout(refitTimerRef.current)
+      }
       showSub.remove()
       hideSub.remove()
     }
@@ -2270,7 +2384,9 @@ export default function SessionScreen() {
   const tabStripVisible = terminals.length > 1
   const prevTabStripVisibleRef = useRef(tabStripVisible)
   useEffect(() => {
-    if (prevTabStripVisibleRef.current === tabStripVisible) return
+    if (prevTabStripVisibleRef.current === tabStripVisible) {
+      return
+    }
     prevTabStripVisibleRef.current = tabStripVisible
     viewportMeasuredRef.current = false
     scheduleViewportRefit()
@@ -2307,7 +2423,9 @@ export default function SessionScreen() {
     pendingActiveTerminalHandleRef.current = null
     initialEmptySessionAutoCreateRef.current = null
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
-      if (queued.timer) clearTimeout(queued.timer)
+      if (queued.timer) {
+        clearTimeout(queued.timer)
+      }
     }
     terminalGestureInputQueuesRef.current.clear()
     terminalGestureInputInFlightRef.current.clear()
@@ -2327,7 +2445,9 @@ export default function SessionScreen() {
   }, [clearDelayedActionTimers, clearTerminalCache, worktreeId])
 
   useEffect(() => {
-    if (connState !== 'connected') return
+    if (connState !== 'connected') {
+      return
+    }
     // Why: the RPC client auto-resends terminal.subscribe on reconnect.
     // Keep the current xterm visible while the binary snapshot hydrates,
     // instead of clearing to a blank "Loading terminals" surface.
@@ -2344,7 +2464,9 @@ export default function SessionScreen() {
     let disposed = false
     const timers: ReturnType<typeof setTimeout>[] = []
     function addTimer(fn: () => void, ms: number) {
-      if (disposed) return
+      if (disposed) {
+        return
+      }
       timers.push(setTimeout(fn, ms))
     }
     void (async () => {
@@ -2355,23 +2477,33 @@ export default function SessionScreen() {
           })
           .catch(() => null)
       }
-      if (disposed) return
+      if (disposed) {
+        return
+      }
       await fetchSessionTabs().catch(() => null)
-      if (disposed) return
+      if (disposed) {
+        return
+      }
       await fetchTerminals({ allowEmptyLoaded: false })
-      if (disposed) return
+      if (disposed) {
+        return
+      }
       addTimer(() => void fetchTerminals({ allowEmptyLoaded: false }), 750)
       addTimer(() => void fetchTerminals({ allowEmptyLoaded: true }), 1500)
       if (client && created === '1') {
         addTimer(() => {
-          if (activeHandleRef.current) return
+          if (activeHandleRef.current) {
+            return
+          }
           void (async () => {
             await client
               .sendRequest('worktree.activate', {
                 worktree: `id:${worktreeId}`
               })
               .catch(() => null)
-            if (disposed) return
+            if (disposed) {
+              return
+            }
             await fetchTerminals({ allowEmptyLoaded: true })
             addTimer(() => void fetchTerminals({ allowEmptyLoaded: true }), 750)
           })()
@@ -2380,12 +2512,16 @@ export default function SessionScreen() {
     })()
     return () => {
       disposed = true
-      for (const t of timers) clearTimeout(t)
+      for (const t of timers) {
+        clearTimeout(t)
+      }
     }
   }, [client, connState, created, fetchSessionTabs, fetchTerminals, worktreeId])
 
   useEffect(() => {
-    if (!client || connState !== 'connected') return
+    if (!client || connState !== 'connected') {
+      return
+    }
     const unsubscribe = client.subscribe(
       'session.tabs.subscribe',
       { worktree: `id:${worktreeId}` },
@@ -2416,7 +2552,9 @@ export default function SessionScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (connState !== 'connected') return
+      if (connState !== 'connected') {
+        return
+      }
       void fetchSessionTabs()
       void fetchTerminals()
       // Why: the live tab subscription stays mounted for stream ownership,
@@ -2598,7 +2736,9 @@ export default function SessionScreen() {
   )
 
   useEffect(() => {
-    if (activeSessionTab?.type !== 'markdown') return
+    if (activeSessionTab?.type !== 'markdown') {
+      return
+    }
     const doc = markdownDocs.get(activeSessionTab.id)
     if (!doc) {
       void readMarkdownTab(activeSessionTab)
@@ -2606,7 +2746,9 @@ export default function SessionScreen() {
   }, [activeSessionTab, markdownDocs, readMarkdownTab])
 
   useEffect(() => {
-    if (activeSessionTab?.type !== 'file') return
+    if (activeSessionTab?.type !== 'file') {
+      return
+    }
     const doc = fileDocs.get(activeSessionTab.id)
     if (!doc) {
       void readFileTab(activeSessionTab)
@@ -2614,7 +2756,9 @@ export default function SessionScreen() {
   }, [activeSessionTab, fileDocs, readFileTab])
 
   async function handleSend() {
-    if (!client || !activeHandle || sendingRef.current) return
+    if (!client || !activeHandle || sendingRef.current) {
+      return
+    }
     sendingRef.current = true
 
     const text = input
@@ -2640,7 +2784,9 @@ export default function SessionScreen() {
   }
 
   async function handleAccessoryKey(bytes: string) {
-    if (!client || !activeHandle || !canSend) return
+    if (!client || !activeHandle || !canSend) {
+      return
+    }
 
     try {
       await client.sendRequest('terminal.send', {
@@ -2658,7 +2804,9 @@ export default function SessionScreen() {
 
   const sendLiveTerminalInput = useCallback(
     (handle: string, bytes: string) => {
-      if (bytes.length === 0) return
+      if (bytes.length === 0) {
+        return
+      }
       if (!isTerminalLiveInputWithinByteLimit(bytes)) {
         triggerError()
         showToast('Input too large (max 256 KiB)', 1500)
@@ -2690,20 +2838,26 @@ export default function SessionScreen() {
   )
 
   const focusLiveInput = useCallback(() => {
-    if (!canSend || !liveInputEnabled) return
+    if (!canSend || !liveInputEnabled) {
+      return
+    }
     liveInputRef.current?.focus()
   }, [canSend, liveInputEnabled])
 
   const handleTerminalTap = useCallback(
     (handle: string) => {
-      if (handle !== activeHandleRef.current) return
+      if (handle !== activeHandleRef.current) {
+        return
+      }
       focusLiveInput()
     },
     [focusLiveInput]
   )
 
   const toggleLiveInput = useCallback(() => {
-    if (!activeHandle) return
+    if (!activeHandle) {
+      return
+    }
     const nextEnabled = !liveInputTerminalHandles.has(activeHandle)
     setLiveInputTerminalHandles((prev) => {
       const next = new Set(prev)
@@ -2749,10 +2903,16 @@ export default function SessionScreen() {
 
   const handleLiveInputKeyPress = useCallback(
     (event: { nativeEvent: { key: string } }) => {
-      if (!activeHandle) return
-      if (!liveInputTerminalHandles.has(activeHandle)) return
+      if (!activeHandle) {
+        return
+      }
+      if (!liveInputTerminalHandles.has(activeHandle)) {
+        return
+      }
       const bytes = getTerminalLiveSpecialKeyBytes(event.nativeEvent.key)
-      if (!bytes) return
+      if (!bytes) {
+        return
+      }
       sendLiveTerminalInput(activeHandle, bytes)
       setLiveInputCapture('')
       liveInputRef.current?.setNativeProps({ text: '' })
@@ -2761,8 +2921,12 @@ export default function SessionScreen() {
   )
 
   const handleLiveInputSubmit = useCallback(() => {
-    if (!activeHandle) return
-    if (!liveInputTerminalHandles.has(activeHandle)) return
+    if (!activeHandle) {
+      return
+    }
+    if (!liveInputTerminalHandles.has(activeHandle)) {
+      return
+    }
     sendLiveTerminalInput(activeHandle, '\r')
     setLiveInputCapture('')
     liveInputRef.current?.setNativeProps({ text: '' })
@@ -2799,19 +2963,25 @@ export default function SessionScreen() {
 
   const flushTerminalGestureInput = useCallback(async (handle: string) => {
     const queued = terminalGestureInputQueuesRef.current.get(handle)
-    if (!queued) return
+    if (!queued) {
+      return
+    }
     if (queued.timer) {
       clearTimeout(queued.timer)
       queued.timer = null
     }
-    if (terminalGestureInputInFlightRef.current.has(handle)) return
+    if (terminalGestureInputInFlightRef.current.has(handle)) {
+      return
+    }
 
     terminalGestureInputQueuesRef.current.delete(handle)
     const isActive =
       handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
     const isFresh = Date.now() - queued.lastUpdatedMs <= TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
     const rpc = clientRef.current
-    if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) return
+    if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) {
+      return
+    }
 
     terminalGestureInputInFlightRef.current.add(handle)
     try {
@@ -2830,7 +3000,9 @@ export default function SessionScreen() {
       const next = terminalGestureInputQueuesRef.current.get(handle)
       if (next) {
         if (Date.now() - next.lastUpdatedMs > TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS) {
-          if (next.timer) clearTimeout(next.timer)
+          if (next.timer) {
+            clearTimeout(next.timer)
+          }
           terminalGestureInputQueuesRef.current.delete(handle)
         } else {
           void flushTerminalGestureInput(handle)
@@ -2854,7 +3026,9 @@ export default function SessionScreen() {
       }
 
       if (current) {
-        if (current.timer) clearTimeout(current.timer)
+        if (current.timer) {
+          clearTimeout(current.timer)
+        }
         if (!terminalGestureInputInFlightRef.current.has(handle)) {
           void flushTerminalGestureInput(handle)
         } else {
@@ -2892,23 +3066,34 @@ export default function SessionScreen() {
 
   const handleTerminalInput = useCallback(
     async (handle: string, bytes: string) => {
-      if (!client || connState !== 'connected' || bytes.length === 0) return
-      if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal')
+      if (!client || connState !== 'connected' || bytes.length === 0) {
         return
+      }
+      if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal') {
+        return
+      }
       const modes = ptyModesRef.current.get(handle)
       // Why: WebView gesture bytes can become PTY input here, so mouse-aware
       // reports stay behind validation and SSH-safe rate limiting.
-      if (!modes?.altScreen && !isGestureMouseTrackingMode(modes?.mouseTrackingMode)) return
+      if (!modes?.altScreen && !isGestureMouseTrackingMode(modes?.mouseTrackingMode)) {
+        return
+      }
       const sequenceCount = countTerminalGestureInputSequences(bytes)
-      if (sequenceCount == null) return
-      if (!allowTerminalGestureInput(handle, sequenceCount)) return
+      if (sequenceCount == null) {
+        return
+      }
+      if (!allowTerminalGestureInput(handle, sequenceCount)) {
+        return
+      }
       enqueueTerminalGestureInput(handle, bytes, sequenceCount)
     },
     [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput]
   )
 
   async function handleClearTerminal(target: Terminal) {
-    if (!client) return
+    if (!client) {
+      return
+    }
     getTerminalRef(target.handle)?.clear()
     try {
       await client.sendRequest('terminal.clearBuffer', {
@@ -2974,14 +3159,20 @@ export default function SessionScreen() {
   )
 
   const handleSelectionMode = useCallback((handle: string, active: boolean) => {
-    if (handle !== activeHandleRef.current) return
+    if (handle !== activeHandleRef.current) {
+      return
+    }
     setSelectModeActive(active)
-    if (active) Keyboard.dismiss()
+    if (active) {
+      Keyboard.dismiss()
+    }
   }, [])
 
   const handleSelectionCopy = useCallback(
     async (handle: string, text: string) => {
-      if (handle !== activeHandleRef.current) return
+      if (handle !== activeHandleRef.current) {
+        return
+      }
       if (!text || text.length === 0) {
         terminalRefs.current.get(handle)?.cancelSelect()
         return
@@ -2993,7 +3184,9 @@ export default function SessionScreen() {
         // every clipboard write, so our toast would be redundant; iOS shows
         // nothing on copy (it only banners on paste), so the in-app toast is
         // the only success signal there.
-        if (Platform.OS === 'ios') showToast('Copied')
+        if (Platform.OS === 'ios') {
+          showToast('Copied')
+        }
         terminalRefs.current.get(handle)?.cancelSelect()
       } catch (e) {
         triggerError()
@@ -3011,7 +3204,9 @@ export default function SessionScreen() {
 
   const handleSelectionEvicted = useCallback(
     (handle: string) => {
-      if (handle !== activeHandleRef.current) return
+      if (handle !== activeHandleRef.current) {
+        return
+      }
       // eslint-disable-next-line no-console
       console.warn('[mobile-clip] selection evicted')
       showToast('Selection cleared (scrolled out of buffer)', 1500)
@@ -3044,17 +3239,26 @@ export default function SessionScreen() {
   )
 
   const handleHaptic = useCallback((kind: 'selection' | 'success' | 'error' | 'edge-bump') => {
-    if (kind === 'selection') triggerSelection()
-    else if (kind === 'success') triggerSuccess()
-    else if (kind === 'error') triggerError()
-    else if (kind === 'edge-bump') triggerEdgeBump()
+    if (kind === 'selection') {
+      triggerSelection()
+    } else if (kind === 'success') {
+      triggerSuccess()
+    } else if (kind === 'error') {
+      triggerError()
+    } else if (kind === 'edge-bump') {
+      triggerEdgeBump()
+    }
   }, [])
 
   const handlePaste = useCallback(async () => {
-    if (!client || !activeHandle || !canSend) return
+    if (!client || !activeHandle || !canSend) {
+      return
+    }
     try {
       const text = await Clipboard.getStringAsync()
-      if (text.length === 0) return
+      if (text.length === 0) {
+        return
+      }
       const modes = ptyModesRef.current.get(activeHandle) || {
         bracketedPasteMode: false,
         altScreen: false,
@@ -3094,7 +3298,9 @@ export default function SessionScreen() {
       const isDisconnected = connState !== 'connected'
       // eslint-disable-next-line no-console
       console.warn('[mobile-clip] paste failed', { name: err.name, message: err.message })
-      if (isDisconnected) showToast('Paste failed (disconnected)', 1500)
+      if (isDisconnected) {
+        showToast('Paste failed (disconnected)', 1500)
+      }
     }
   }, [client, activeHandle, canSend, connState, showToast])
 
@@ -3103,13 +3309,16 @@ export default function SessionScreen() {
     let mounted = true
     const refresh = () => {
       void Clipboard.hasStringAsync().then((has) => {
-        if (mounted) setCanPaste(has)
+        if (mounted) {
+          setCanPaste(has)
+        }
       })
     }
     refresh()
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
-      if (s === 'active') refresh()
-      else if (selectModeActive && activeHandleRef.current) {
+      if (s === 'active') {
+        refresh()
+      } else if (selectModeActive && activeHandleRef.current) {
         terminalRefs.current.get(activeHandleRef.current)?.cancelSelect()
       }
     })
@@ -3191,7 +3400,9 @@ export default function SessionScreen() {
     agent?: MobileNewTabAgentOption['agent'],
     options?: { initialPrompt?: string; onPromptSent?: () => void }
   ) {
-    if (!client || creating) return
+    if (!client || creating) {
+      return
+    }
 
     setCreating(true)
     setCreateError('')
@@ -3293,7 +3504,9 @@ export default function SessionScreen() {
   }
 
   async function handleCreateMarkdownNote() {
-    if (!client || creatingMarkdown) return
+    if (!client || creatingMarkdown) {
+      return
+    }
 
     setCreatingMarkdown(true)
     setCreateError('')
@@ -3337,7 +3550,9 @@ export default function SessionScreen() {
   }
 
   async function handleCreateBrowser(rawUrl = 'about:blank'): Promise<boolean> {
-    if (!client || creatingBrowser) return false
+    if (!client || creatingBrowser) {
+      return false
+    }
     if (browserScreencastSupported !== true) {
       showToast('Desktop update required for mobile browser streaming', 1600)
       return false
@@ -3404,7 +3619,9 @@ export default function SessionScreen() {
   }
 
   async function handleRenameTerminal(value: string) {
-    if (!client || !renameTarget) return
+    if (!client || !renameTarget) {
+      return
+    }
     const target = renameTarget
     setRenameTarget(null)
 
@@ -3432,7 +3649,9 @@ export default function SessionScreen() {
   }
 
   async function handleCloseTerminal(target: Terminal) {
-    if (!client) return
+    if (!client) {
+      return
+    }
 
     try {
       const response = await client.sendRequest('terminal.close', {
@@ -3462,7 +3681,9 @@ export default function SessionScreen() {
   }
 
   async function handleCloseSessionTab(tab: MobileSessionTab) {
-    if (!client) return
+    if (!client) {
+      return
+    }
     try {
       const response = await client.sendRequest('session.tabs.close', {
         worktree: `id:${worktreeId}`,
@@ -3489,7 +3710,9 @@ export default function SessionScreen() {
   }
 
   const isPhoneMode = (handle: string | null): boolean => {
-    if (!handle) return false
+    if (!handle) {
+      return false
+    }
     const mode = terminalModes.get(handle)
     return mode === 'auto' || mode === 'phone' || mode === undefined
   }
@@ -3543,7 +3766,9 @@ export default function SessionScreen() {
         : keyboardHeight
       : 0
   const activeTerminalKeyboardLift = (() => {
-    if (keyboardLift <= 0 || !activeHandle) return 0
+    if (keyboardLift <= 0 || !activeHandle) {
+      return 0
+    }
     const metrics = terminalKeyboardMetrics.get(activeHandle)
     if (!metrics || metrics.rows <= 0 || terminalFrameHeightRef.current <= 0) {
       return keyboardLift
@@ -3625,7 +3850,9 @@ export default function SessionScreen() {
               onPress: () => {
                 const delivery = pendingDiffNotesDelivery
                 setPendingDiffNotesDelivery(null)
-                if (!delivery) return
+                if (!delivery) {
+                  return
+                }
                 void handleCreateTerminal(option.agent, {
                   initialPrompt: delivery.prompt,
                   onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
@@ -4031,15 +4258,21 @@ export default function SessionScreen() {
                     ]}
                     disabled={!canSend}
                     onPressIn={() => {
-                      if (!key.repeatable) return
+                      if (!key.repeatable) {
+                        return
+                      }
                       void handleAccessoryKey(key.bytes)
                       startAccessoryRepeat(key.bytes)
                     }}
                     onPressOut={() => {
-                      if (key.repeatable) stopAccessoryRepeat()
+                      if (key.repeatable) {
+                        stopAccessoryRepeat()
+                      }
                     }}
                     onPress={() => {
-                      if (key.repeatable) return
+                      if (key.repeatable) {
+                        return
+                      }
                       void handleAccessoryKey(key.bytes)
                     }}
                     accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
@@ -4241,7 +4474,9 @@ export default function SessionScreen() {
             onPress: () => {
               const delivery = pendingDiffNotesDelivery
               setPendingDiffNotesDelivery(null)
-              if (!delivery) return
+              if (!delivery) {
+                return
+              }
               void Clipboard.setStringAsync(delivery.prompt)
                 .then(() => {
                   triggerSuccess()

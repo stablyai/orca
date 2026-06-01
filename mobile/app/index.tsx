@@ -105,9 +105,13 @@ function formatDuration(ms: number): string {
   const totalHours = Math.floor(totalMinutes / 60)
   const days = Math.floor(totalHours / 24)
   const hours = totalHours % 24
-  if (days > 0) return `${days}d ${hours}h`
+  if (days > 0) {
+    return `${days}d ${hours}h`
+  }
   const minutes = totalMinutes % 60
-  if (totalHours > 0) return `${totalHours}h ${minutes}m`
+  if (totalHours > 0) {
+    return `${totalHours}h ${minutes}m`
+  }
   return `${totalMinutes}m`
 }
 
@@ -134,7 +138,9 @@ function fetchStats(
   client
     .sendRequest('stats.summary')
     .then((response) => {
-      if (disposed()) return
+      if (disposed()) {
+        return
+      }
       if (response.ok) {
         setStats(response.result as StatsSummary)
       }
@@ -157,7 +163,9 @@ function fetchWorktreeInfo(
   // momentarily flip to "0 worktrees" / disappear during reconnects.
   const markLoadedIfMissing = () => {
     setInfo((prev) => {
-      if (prev[hostId]) return prev
+      if (prev[hostId]) {
+        return prev
+      }
       return {
         ...prev,
         [hostId]: {
@@ -173,7 +181,9 @@ function fetchWorktreeInfo(
   client
     .sendRequest('worktree.ps')
     .then((response) => {
-      if (disposed()) return
+      if (disposed()) {
+        return
+      }
       if (response.ok) {
         const result = response.result as { worktrees: WorktreeSummary[] }
         const worktrees = result.worktrees ?? []
@@ -195,7 +205,9 @@ function fetchWorktreeInfo(
       }
     })
     .catch(() => {
-      if (!disposed()) markLoadedIfMissing()
+      if (!disposed()) {
+        markLoadedIfMissing()
+      }
     })
 }
 
@@ -210,7 +222,9 @@ function fetchAccountsSnapshot(
   client
     .sendRequest('accounts.list')
     .then((response) => {
-      if (disposed()) return
+      if (disposed()) {
+        return
+      }
       if (response.ok) {
         const snapshot = response.result as AccountsSnapshot
         setSnapshots((prev) => ({ ...prev, [hostId]: snapshot }))
@@ -233,7 +247,9 @@ function fetchTaskProviders(
     client.sendRequest('linear.status')
   ])
     .then(([settingsResponse, preflightResponse, linearResponse]) => {
-      if (disposed()) return
+      if (disposed()) {
+        return
+      }
       const settings = settingsResponse.ok
         ? (((settingsResponse.result as { settings?: HomeTaskSettings }).settings ??
             {}) as HomeTaskSettings)
@@ -252,7 +268,9 @@ function fetchTaskProviders(
       setProviders((prev) => ({ ...prev, [hostId]: providers }))
     })
     .catch(() => {
-      if (disposed()) return
+      if (disposed()) {
+        return
+      }
       setProviders((prev) => (prev[hostId] ? prev : { ...prev, [hostId]: ['github'] }))
     })
 }
@@ -302,7 +320,9 @@ export default function HomeScreen() {
   // openEntry on cold start (which serialised behind the first one and
   // showed up as multi-second connect latency).
   useEffect(() => {
-    if (hosts.length > 0) primeHosts(hosts)
+    if (hosts.length > 0) {
+      primeHosts(hosts)
+    }
   }, [hosts, primeHosts])
   const allClientsRef = useRef<Array<{ hostId: string; client: RpcClient }>>([])
   // Why: the focus callback stays stable to avoid refetching on every
@@ -318,11 +338,15 @@ export default function HomeScreen() {
   // Stream/list responses overwrite this seed in place when they arrive.
   const hydratedRef = useRef(false)
   useEffect(() => {
-    if (hydratedRef.current) return
+    if (hydratedRef.current) {
+      return
+    }
     hydratedRef.current = true
     let cancelled = false
     void loadHomeSnapshot().then((snap) => {
-      if (cancelled || !snap) return
+      if (cancelled || !snap) {
+        return
+      }
       setWorktreeInfo((prev) => (Object.keys(prev).length > 0 ? prev : snap.worktreeInfo))
       setAccountsByHost((prev) => (Object.keys(prev).length > 0 ? prev : snap.accountsByHost))
       for (const [hostId, info] of Object.entries(snap.worktreeInfo)) {
@@ -357,10 +381,14 @@ export default function HomeScreen() {
     useCallback(() => {
       let stale = false
       void loadHosts().then((h) => {
-        if (!stale) setHosts(h)
+        if (!stale) {
+          setHosts(h)
+        }
       })
       void AsyncStorage.getItem('orca:last-visited-worktree').then((raw) => {
-        if (stale || !raw) return
+        if (stale || !raw) {
+          return
+        }
         try {
           setLastVisited(JSON.parse(raw))
         } catch {}
@@ -427,7 +455,9 @@ export default function HomeScreen() {
       // already tracked — otherwise the initial-acquire frame (entry not
       // yet materialised) would briefly flip every host to 'disconnected'.
       for (const host of hosts) {
-        if (liveIds.has(host.id)) continue
+        if (liveIds.has(host.id)) {
+          continue
+        }
         if (!host.publicKeyB64 || !host.deviceToken) {
           if (next[host.id] !== 'auth-failed') {
             next[host.id] = 'auth-failed'
@@ -470,7 +500,9 @@ export default function HomeScreen() {
           }
           if (!unsubAccounts) {
             unsubAccounts = entry.client.subscribe('accounts.subscribe', null, (payload) => {
-              if (!payload || typeof payload !== 'object') return
+              if (!payload || typeof payload !== 'object') {
+                return
+              }
               const evt = payload as { type?: string; snapshot?: AccountsSnapshot }
               if ((evt.type === 'ready' || evt.type === 'snapshot') && evt.snapshot) {
                 setAccountsByHost((prev) => ({ ...prev, [entry.hostId]: evt.snapshot! }))
@@ -503,7 +535,9 @@ export default function HomeScreen() {
       })
     }
     return () => {
-      for (const c of cleanups) c()
+      for (const c of cleanups) {
+        c()
+      }
     }
     // Why: depend on the host-id set AND each entry's client identity, so
     // resubscriptions don't fire on every render that produces a new
@@ -538,10 +572,14 @@ export default function HomeScreen() {
     if (lastVisited && hostStates[lastVisited.hostId] === 'connected') {
       const cached = getCachedWorktrees(lastVisited.hostId) as WorktreeSummary[] | null
       const match = cached?.find((w) => w.worktreeId === lastVisited.worktreeId)
-      if (match) return { hostId: lastVisited.hostId, worktree: match }
+      if (match) {
+        return { hostId: lastVisited.hostId, worktree: match }
+      }
     }
     for (const host of sortedHosts) {
-      if (hostStates[host.id] !== 'connected') continue
+      if (hostStates[host.id] !== 'connected') {
+        continue
+      }
       const info = worktreeInfo[host.id]
       if (info?.lastActiveWorktree) {
         return { hostId: host.id, worktree: info.lastActiveWorktree }
@@ -556,12 +594,18 @@ export default function HomeScreen() {
   const accountsHosts = useMemo(() => {
     const items: Array<{ host: HostProfile; snapshot: AccountsSnapshot }> = []
     for (const host of sortedHosts) {
-      if (hostStates[host.id] !== 'connected') continue
+      if (hostStates[host.id] !== 'connected') {
+        continue
+      }
       const snap = accountsByHost[host.id]
-      if (!snap) continue
+      if (!snap) {
+        continue
+      }
       const hasClaude = snap.claude.accounts.length > 0
       const hasCodex = snap.codex.accounts.length > 0
-      if (hasClaude || hasCodex) items.push({ host, snapshot: snap })
+      if (hasClaude || hasCodex) {
+        items.push({ host, snapshot: snap })
+      }
     }
     return items
   }, [sortedHosts, hostStates, accountsByHost])
@@ -575,7 +619,9 @@ export default function HomeScreen() {
     : []
   const openTasks = useCallback(
     (provider?: TaskProvider) => {
-      if (!primaryConnectedHost) return
+      if (!primaryConnectedHost) {
+        return
+      }
       const suffix = provider ? `?taskSource=${provider}` : ''
       router.push(`/h/${primaryConnectedHost.id}/tasks${suffix}`)
     },
@@ -636,7 +682,9 @@ export default function HomeScreen() {
   )
 
   async function handleRename(newName: string) {
-    if (!renameTarget) return
+    if (!renameTarget) {
+      return
+    }
     try {
       await renameHost(renameTarget.id, newName)
       setRenameTarget(null)
@@ -647,7 +695,9 @@ export default function HomeScreen() {
   }
 
   async function handleRemove() {
-    if (!confirmRemove) return
+    if (!confirmRemove) {
+      return
+    }
     try {
       // Why: close the shared client first so the WebSocket is gone
       // before the host record disappears from loadHosts().
@@ -921,7 +971,9 @@ export default function HomeScreen() {
                             provider === 'claude'
                               ? snapshot.claude.accounts
                               : snapshot.codex.accounts
-                          if (accounts.length === 0) return null
+                          if (accounts.length === 0) {
+                            return null
+                          }
                           const limits = getActiveProviderRateLimits(snapshot, provider)
                           const isFetching =
                             limits?.status === 'fetching' || limits?.status === 'idle'
@@ -977,7 +1029,9 @@ export default function HomeScreen() {
         message={actionTarget ? endpointLabel(actionTarget.endpoint) : undefined}
         actions={(() => {
           const host = actionTarget
-          if (!host) return []
+          if (!host) {
+            return []
+          }
           const state = hostStates[host.id] ?? 'connecting'
           const isLive =
             state === 'connected' ||
