@@ -544,6 +544,9 @@ export class CodexRuntimeHomeService {
       '/codex-runtime-home/active/wsl/home'
     )
     const nextLinuxPath = `${activeLinuxPath}.next-${process.pid}-${Date.now()}`
+    const activeLinuxParentPath = this.dirnameLinuxPath(activeLinuxPath)
+    // Why: WSL drops bash argv here and login-shell cleanup can turn explicit
+    // `exit 0` into status 1, so keep this script literal and fall-through.
     execFileSync(
       'wsl.exe',
       [
@@ -554,20 +557,27 @@ export class CodexRuntimeHomeService {
         '-lc',
         [
           'set -e',
-          'if [ ! -e "$2" ] && [ ! -L "$2" ]; then exit 0; fi',
-          'if [ -e "$2" ] && [ ! -L "$2" ]; then exit 0; fi',
-          'mkdir -p "$(dirname "$2")"',
-          'rm -rf -- "$3"',
-          'ln -s -- "$1" "$3"',
-          'mv -Tf -- "$3" "$2"'
-        ].join('; '),
-        'sh',
-        runtimeWsl.linuxPath,
-        activeLinuxPath,
-        nextLinuxPath
+          `if [ ! -e ${this.quoteBashString(activeLinuxPath)} ] && [ ! -L ${this.quoteBashString(activeLinuxPath)} ]; then :`,
+          `elif [ -e ${this.quoteBashString(activeLinuxPath)} ] && [ ! -L ${this.quoteBashString(activeLinuxPath)} ]; then :`,
+          'else',
+          `mkdir -p ${this.quoteBashString(activeLinuxParentPath)}`,
+          `rm -rf -- ${this.quoteBashString(nextLinuxPath)}`,
+          `ln -s -- ${this.quoteBashString(runtimeWsl.linuxPath)} ${this.quoteBashString(nextLinuxPath)}`,
+          `mv -Tf -- ${this.quoteBashString(nextLinuxPath)} ${this.quoteBashString(activeLinuxPath)}`,
+          'fi'
+        ].join('\n')
       ],
       { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 }
     )
+  }
+
+  private dirnameLinuxPath(value: string): string {
+    const index = value.lastIndexOf('/')
+    return index > 0 ? value.slice(0, index) : '/'
+  }
+
+  private quoteBashString(value: string): string {
+    return `'${value.replace(/'/g, `'\\''`)}'`
   }
 
   private joinWslPath(basePath: string, ...segments: string[]): string {

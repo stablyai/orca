@@ -370,6 +370,61 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(getLegacyActiveHostCodexHomePath())).toBe(false)
   })
 
+  it('builds a valid WSL legacy active-home migration shell command', async () => {
+    const execFileSyncMock = vi.fn()
+    vi.doMock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(
+        createStore(createSettings()) as never
+      ) as unknown as {
+        migrateLegacyWslActiveHomePointer(distro: string, runtimeHomePath: string): void
+      }
+
+      service.migrateLegacyWslActiveHomePointer(
+        'Ubuntu',
+        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-runtime-home\\home'
+      )
+
+      expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+      const firstCall = execFileSyncMock.mock.calls[0]
+      expect(firstCall).toBeDefined()
+      const [command, args] = firstCall as [string, string[]]
+      expect(command).toBe('wsl.exe')
+      expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'bash', '-lc'])
+      expect(args).toHaveLength(6)
+
+      const shellCommand = args[5]
+      expect(shellCommand).toContain(
+        "if [ ! -e '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ] && [ ! -L '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ]; then :"
+      )
+      expect(shellCommand).toContain(
+        "elif [ -e '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ] && [ ! -L '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ]; then :"
+      )
+      expect(shellCommand).toContain(
+        "mkdir -p '/home/alice/.local/share/orca/codex-runtime-home/active/wsl'"
+      )
+      expect(shellCommand).toContain(
+        "ln -s -- '/home/alice/.local/share/orca/codex-runtime-home/home' '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home.next-"
+      )
+      expect(shellCommand).toContain(
+        "mv -Tf -- '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home.next-"
+      )
+      expect(shellCommand).toContain(
+        "' '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home'"
+      )
+      expect(shellCommand).not.toContain('[! -L')
+      expect(shellCommand).not.toContain('mv -Tf--')
+      expect(shellCommand).not.toContain('$1')
+      expect(shellCommand).not.toContain('$2')
+      expect(shellCommand).not.toContain('$3')
+      expect(shellCommand).not.toContain('exit 0')
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
+
   it('restores the system-default snapshot when no managed account is selected', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
