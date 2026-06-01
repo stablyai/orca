@@ -111,7 +111,7 @@ yay -S stably-orca-git
 </p>
 
 - **iOS:** [App Store에서 다운로드](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [GH release에서 다운로드(최신 mobile 릴리스를 찾으세요)](https://github.com/stablyai/orca/releases)
+- **Android:** [GitHub Releases에서 APK 다운로드](https://github.com/stablyai/orca/releases/download/mobile-v0.0.10/app-release.apk)
 
 ---
 
