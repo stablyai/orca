@@ -94,6 +94,10 @@ function defaultProjectGroupNameForPath(path: string): string {
   )
 }
 
+function createNestedRepoScanId(): string {
+  return `nested-repo-scan-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 function getGitHubTaskSourceStatus(
   status: ReturnType<typeof useAppStore.getState>['preflightStatus'],
   loading: boolean
@@ -182,6 +186,7 @@ export function useOnboardingFlow(
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
+  const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
   const importNestedRepos = useAppStore((s) => s.importNestedRepos)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -233,6 +238,8 @@ export function useOnboardingFlow(
   const [nestedRuntimeKind, setNestedRuntimeKind] = useState<NestedRepoTelemetryRuntimeKind | null>(
     null
   )
+  const [nestedScanInProgress, setNestedScanInProgress] = useState(false)
+  const nestedScanIdRef = useRef<string | null>(null)
   const [tourStarted, setTourStarted] = useState(false)
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -687,13 +694,15 @@ export function useOnboardingFlow(
       scan: NestedRepoScanResult,
       selectedPath: string,
       attemptId: string,
-      runtimeKind: NestedRepoTelemetryRuntimeKind
+      runtimeKind: NestedRepoTelemetryRuntimeKind,
+      inProgress = false
     ) => {
       setNestedScan(scan)
       setNestedSelectedPaths(new Set(scan.repos.map((repo) => repo.path)))
       setNestedGroupName(defaultProjectGroupNameForPath(selectedPath))
       setNestedAttemptId(attemptId)
       setNestedRuntimeKind(runtimeKind)
+      setNestedScanInProgress(inProgress)
     },
     []
   )
@@ -782,6 +791,8 @@ export function useOnboardingFlow(
           setError(err instanceof Error ? err.message : String(err))
           track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'invalid_path' })
         } finally {
+          nestedScanIdRef.current = null
+          setNestedScanInProgress(false)
           setBusyLabel(null)
         }
         return
@@ -798,7 +809,27 @@ export function useOnboardingFlow(
         if ('error' in result && result.error.includes('Not a valid git repository')) {
           setBusyLabel('Scanning for repositories...')
           const attemptId = createNestedRepoTelemetryAttemptId()
-          const scan = await scanNestedRepos(path)
+          const scanId = createNestedRepoScanId()
+          nestedScanIdRef.current = scanId
+          setNestedScanInProgress(true)
+          const scan = await scanNestedRepos(path, undefined, {
+            scanId,
+            onProgress: (progressScan) => {
+              if (
+                nestedScanIdRef.current !== scanId ||
+                progressScan.selectedPathKind !== 'non_git_folder' ||
+                progressScan.repos.length === 0
+              ) {
+                return
+              }
+              showNestedRepoReview(progressScan, path, attemptId, 'local', true)
+            }
+          })
+          if (nestedScanIdRef.current !== scanId) {
+            return
+          }
+          nestedScanIdRef.current = null
+          setNestedScanInProgress(false)
           track(
             'add_repo_nested_scan_result',
             buildNestedRepoScanTelemetry({
@@ -809,7 +840,7 @@ export function useOnboardingFlow(
             })
           )
           if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
-            showNestedRepoReview(scan, path, attemptId, 'local')
+            showNestedRepoReview(scan, path, attemptId, 'local', false)
             return
           }
           result = await window.api.repos.add({ path, kind: 'folder' })
@@ -822,6 +853,8 @@ export function useOnboardingFlow(
         setError(err instanceof Error ? err.message : String(err))
         track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'invalid_path' })
       } finally {
+        nestedScanIdRef.current = null
+        setNestedScanInProgress(false)
         setBusyLabel(null)
       }
     },
@@ -956,6 +989,8 @@ export function useOnboardingFlow(
     setNestedGroupName('')
     setNestedAttemptId(null)
     setNestedRuntimeKind(null)
+    setNestedScanInProgress(false)
+    nestedScanIdRef.current = null
     setError(null)
   }, [
     nestedAttemptId,
@@ -968,11 +1003,22 @@ export function useOnboardingFlow(
   // Why: lets the user back out of the nested-repo step in onboarding to
   // re-pick a folder/clone target. Mirrors the dialog's left-aligned Back.
   const cancelNested = useCallback(() => {
-    if (busyLabel !== null) {
+    if (busyLabel !== null && !nestedScanInProgress) {
       return
     }
+    if (nestedScanInProgress && nestedScanIdRef.current) {
+      void cancelNestedRepoScan(nestedScanIdRef.current)
+    }
     trackNestedBackAndClear()
-  }, [busyLabel, trackNestedBackAndClear])
+  }, [busyLabel, cancelNestedRepoScan, nestedScanInProgress, trackNestedBackAndClear])
+
+  const stopNestedScan = useCallback(() => {
+    const scanId = nestedScanIdRef.current
+    if (!scanId) {
+      return
+    }
+    void cancelNestedRepoScan(scanId)
+  }, [cancelNestedRepoScan])
 
   const canImportNestedForTelemetry = useCallback((): boolean => {
     return Boolean(nestedScan && nestedAttemptId && nestedSelectedPaths.size > 0)
@@ -1364,12 +1410,14 @@ export function useOnboardingFlow(
     cloneUrl,
     setCloneUrl,
     nestedScan,
+    nestedScanInProgress,
     nestedSelectedPaths,
     setNestedSelectedPaths,
     nestedGroupName,
     setNestedGroupName,
     importNested,
     cancelNested,
+    stopNestedScan,
     canImportNestedForTelemetry,
     hasExistingProject,
     serverPath,

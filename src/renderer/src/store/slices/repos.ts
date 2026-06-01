@@ -42,6 +42,11 @@ type RepoUpdate = Partial<
   >
 >
 
+type NestedRepoScanControls = {
+  scanId?: string
+  onProgress?: (scan: NestedRepoScanResult) => void
+}
+
 function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   const sanitized = { ...updates }
   if ('badgeColor' in sanitized) {
@@ -97,7 +102,12 @@ export type RepoSlice = {
   addRepo: () => Promise<Repo | null>
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
-  scanNestedRepos: (path: string, connectionId?: string) => Promise<NestedRepoScanResult | null>
+  scanNestedRepos: (
+    path: string,
+    connectionId?: string,
+    controls?: NestedRepoScanControls
+  ) => Promise<NestedRepoScanResult | null>
+  cancelNestedRepoScan: (scanId: string) => Promise<boolean>
   importNestedRepos: (args: {
     parentPath: string
     groupName: string
@@ -183,23 +193,45 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  scanNestedRepos: async (path, connectionId) => {
+  scanNestedRepos: async (path, connectionId, controls) => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
-      return target.kind === 'local'
-        ? await window.api.projectGroups.scanNested({
+      if (target.kind === 'local') {
+        const unsubscribe =
+          controls?.scanId && controls.onProgress
+            ? window.api.projectGroups.onNestedScanProgress(({ scanId, scan }) => {
+                if (scanId === controls.scanId) {
+                  controls.onProgress?.(scan)
+                }
+              })
+            : undefined
+        try {
+          return await window.api.projectGroups.scanNested({
             path,
-            connectionId
+            connectionId,
+            scanId: controls?.scanId
           })
-        : await callRuntimeRpc<NestedRepoScanResult>(
-            target,
-            'projectGroup.scanNested',
-            { path },
-            { timeoutMs: 15_000 }
-          )
+        } finally {
+          unsubscribe?.()
+        }
+      }
+      return await callRuntimeRpc<NestedRepoScanResult>(target, 'projectGroup.scanNested', { path })
     } catch (err) {
       console.error('Failed to scan nested repos:', err)
       return null
+    }
+  },
+
+  cancelNestedRepoScan: async (scanId) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      if (target.kind !== 'local') {
+        return false
+      }
+      return await window.api.projectGroups.cancelNestedScan({ scanId })
+    } catch (err) {
+      console.error('Failed to cancel nested repo scan:', err)
+      return false
     }
   },
 

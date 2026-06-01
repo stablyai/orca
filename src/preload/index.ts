@@ -31,6 +31,7 @@ import type {
   NotificationSoundDataResult,
   NotificationSoundPathResult,
   NotificationSoundResult,
+  NestedRepoScanResult,
   OnboardingState,
   FloatingTerminalCwdRequest,
   MarkdownDocument,
@@ -505,6 +506,15 @@ const api = {
     delete: (args) => ipcRenderer.invoke('projectGroups:delete', args),
     moveProject: (args) => ipcRenderer.invoke('projectGroups:moveProject', args),
     scanNested: (args) => ipcRenderer.invoke('projectGroups:scanNested', args),
+    cancelNestedScan: (args) => ipcRenderer.invoke('projectGroups:cancelNestedScan', args),
+    onNestedScanProgress: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { scanId: string; scan: NestedRepoScanResult }
+      ) => callback(data)
+      ipcRenderer.on('projectGroups:scanNestedProgress', listener)
+      return () => ipcRenderer.removeListener('projectGroups:scanNestedProgress', listener)
+    },
     importNested: (args) => ipcRenderer.invoke('projectGroups:importNested', args)
   } satisfies PreloadApi['projectGroups'],
 

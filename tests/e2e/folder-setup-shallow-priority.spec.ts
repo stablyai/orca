@@ -84,7 +84,7 @@ test('prioritizes shallow sibling repositories in a bounded nested scan', async 
 
   const importDialog = orcaPage.getByRole('dialog', { name: /Import as project group/i })
   await expect(importDialog.getByText('Found 100 git repositories in this folder.')).toBeVisible()
-  await expect(importDialog.getByText('Showing partial results from a bounded scan.')).toBeVisible()
+  await expect(importDialog.getByText('Showing partial scan results.')).toBeVisible()
   await expect(importDialog.getByText('z-web-client', { exact: true }).first()).toBeVisible()
 
   await importDialog.getByLabel('Deselect all').click()

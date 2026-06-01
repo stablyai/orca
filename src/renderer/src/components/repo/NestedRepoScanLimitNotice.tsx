@@ -10,13 +10,17 @@ function formatTimeout(timeoutMs: number): string {
 }
 
 export function nestedRepoScanLimitText(scan: NestedRepoScanResult): string {
-  return `Scan stops after ${scan.maxDepth} folder levels, ${scan.maxRepos} repositories, or ${formatTimeout(scan.timeoutMs)}.`
+  const automaticStops = [`${scan.maxDepth} folder levels`, `${scan.maxRepos} repositories`]
+  if (scan.timeoutMs !== null) {
+    automaticStops.push(formatTimeout(scan.timeoutMs))
+  }
+  return `Scan stops after ${automaticStops.join(' or ')}. You can stop scanning early and import repositories found so far.`
 }
 
 export function NestedRepoScanLimitNotice({ scan }: { scan: NestedRepoScanResult }) {
   return (
     <div className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-      <span>Showing partial results from a bounded scan.</span>
+      <span>{scan.stopped ? 'Scan stopped early.' : 'Showing partial scan results.'}</span>
       <Tooltip>
         <TooltipTrigger asChild>
           <button

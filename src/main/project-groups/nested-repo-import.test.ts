@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createNestedProjectGroupResolver, resolveNestedRepoSelection } from './nested-repo-import'
+import {
+  createNestedProjectGroupResolver,
+  resolveNestedRepoImportPaths,
+  resolveNestedRepoSelection
+} from './nested-repo-import'
 import type { ProjectGroup } from '../../shared/types'
 
 describe('createNestedProjectGroupResolver', () => {
@@ -127,15 +131,34 @@ describe('createNestedProjectGroupResolver', () => {
         ],
         truncated: false,
         timedOut: false,
+        stopped: false,
         durationMs: 1,
         maxDepth: 3,
         maxRepos: 100,
-        timeoutMs: 8_000
+        timeoutMs: null
       },
       projectPaths: ['c:/workspace/services/api', 'C:/workspace/services/api', 'D:/other/repo']
     })
 
     expect(selection.selectedPaths).toEqual(['C:\\workspace\\Services\\API'])
     expect(selection.rejectedPaths).toEqual(['D:/other/repo'])
+  })
+
+  it('accepts stopped-scan import paths inside the selected parent without rescanning', () => {
+    const selection = resolveNestedRepoImportPaths({
+      parentPath: '/workspace/platform',
+      projectPaths: [
+        '/workspace/platform/api',
+        '/workspace/platform/api',
+        '/workspace/platform/apps/web',
+        '/workspace/other/repo'
+      ]
+    })
+
+    expect(selection.selectedPaths).toEqual([
+      '/workspace/platform/api',
+      '/workspace/platform/apps/web'
+    ])
+    expect(selection.rejectedPaths).toEqual(['/workspace/other/repo'])
   })
 })

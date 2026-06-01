@@ -279,6 +279,49 @@ describe('projectGroups IPC validation', () => {
     )
   })
 
+  it('returns partial SSH scan results after cancellation', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git' || path === '/srv/platform/web/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform'
+        ? [
+            { name: 'api', isDirectory: true, isSymlink: false },
+            { name: 'web', isDirectory: true, isSymlink: false }
+          ]
+        : []
+    )
+    const event = {
+      sender: {
+        send: vi.fn((_channel: string, data: { scanId: string; scan: { repos: unknown[] } }) => {
+          if (data.scan.repos.length === 1) {
+            handlers.get('projectGroups:cancelNestedScan')!(null, { scanId: data.scanId })
+          }
+        })
+      }
+    }
+
+    const result = await handlers.get('projectGroups:scanNested')!(event, {
+      path: '/srv/platform',
+      connectionId: 'conn-1',
+      scanId: 'scan-1'
+    })
+
+    expect(result).toMatchObject({
+      selectedPath: '/srv/platform',
+      stopped: true,
+      repos: [{ path: '/srv/platform/api' }]
+    })
+    expect(event.sender.send).toHaveBeenCalledWith(
+      'projectGroups:scanNestedProgress',
+      expect.objectContaining({ scanId: 'scan-1' })
+    )
+  })
+
   it('rejects local nested scans with relative paths', async () => {
     await expect(
       handlers.get('projectGroups:scanNested')!(null, {

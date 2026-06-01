@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: repo IPC is intentionally centralized so SSH
 routing, clone lifecycle, and store persistence stay behind a single audited
 boundary. Splitting by line count would scatter tightly coupled repo behavior. */
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import { z } from 'zod'
@@ -37,7 +37,7 @@ import { getNextProjectGroupOrder } from '../../shared/project-groups'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
-  resolveNestedRepoSelection
+  resolveNestedRepoImportPaths
 } from '../project-groups/nested-repo-import'
 import {
   isGitRepo,
@@ -111,6 +111,7 @@ let nextCloneGeneration = 1
 const latestCloneGenerationByPath = new Map<string, number>()
 const pendingAbortCleanupByPath = new Map<string, Promise<void>>()
 const cloneInFlightByPath = new Map<string, Promise<void>>()
+const activeNestedRepoScans = new Map<string, AbortController>()
 
 const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -142,7 +143,12 @@ const ProjectGroupMoveProjectArgs = z.object({
 const ProjectGroupScanNestedArgs = z.object({
   path: z.string().min(1),
   connectionId: z.string().min(1).optional(),
+  scanId: z.string().min(1).optional(),
   options: z.unknown().optional()
+})
+
+const ProjectGroupCancelNestedScanArgs = z.object({
+  scanId: z.string().min(1)
 })
 
 const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
@@ -270,10 +276,17 @@ async function scanNestedReposForIpc(args: {
   path: string
   connectionId?: string
   options?: unknown
+  signal?: AbortSignal
+  onProgress?: (scan: NestedRepoScanResult) => void
 }): Promise<NestedRepoScanResult> {
   validateNestedRepoScanRoot(args.path, args.connectionId)
   if (!args.connectionId) {
-    return scanNestedRepos({ path: args.path, options: args.options })
+    return scanNestedRepos({
+      path: args.path,
+      options: args.options,
+      signal: args.signal,
+      onProgress: args.onProgress
+    })
   }
   const gitProvider = getSshGitProvider(args.connectionId)
   const fsProvider = getSshFilesystemProvider(args.connectionId)
@@ -284,6 +297,8 @@ async function scanNestedReposForIpc(args: {
   return scanNestedRepos({
     path: resolvedPath,
     options: args.options,
+    signal: args.signal,
+    onProgress: args.onProgress,
     filesystem: {
       readDirectory: async (dirPath) =>
         (await fsProvider.readDir(dirPath)).map((entry) => ({
@@ -320,6 +335,36 @@ async function scanNestedReposForIpc(args: {
   })
 }
 
+async function runNestedRepoScanForIpc(
+  event: IpcMainInvokeEvent,
+  args: z.infer<typeof ProjectGroupScanNestedArgs>
+): Promise<NestedRepoScanResult> {
+  const controller = args.scanId ? new AbortController() : undefined
+  if (args.scanId && controller) {
+    activeNestedRepoScans.get(args.scanId)?.abort()
+    activeNestedRepoScans.set(args.scanId, controller)
+  }
+
+  try {
+    return await scanNestedReposForIpc({
+      ...args,
+      signal: controller?.signal,
+      onProgress: args.scanId
+        ? (scan) => {
+            event.sender.send('projectGroups:scanNestedProgress', {
+              scanId: args.scanId,
+              scan
+            })
+          }
+        : undefined
+    })
+  } finally {
+    if (args.scanId && activeNestedRepoScans.get(args.scanId) === controller) {
+      activeNestedRepoScans.delete(args.scanId)
+    }
+  }
+}
+
 export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
@@ -334,6 +379,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('projectGroups:delete')
   ipcMain.removeHandler('projectGroups:moveProject')
   ipcMain.removeHandler('projectGroups:scanNested')
+  ipcMain.removeHandler('projectGroups:cancelNestedScan')
   ipcMain.removeHandler('projectGroups:importNested')
   ipcMain.removeHandler('repos:pickFolder')
   ipcMain.removeHandler('repos:pickDirectory')
@@ -412,15 +458,29 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle(
     'projectGroups:scanNested',
-    async (_event, rawArgs: unknown): Promise<NestedRepoScanResult> => {
+    async (event, rawArgs: unknown): Promise<NestedRepoScanResult> => {
       const args = parseProjectGroupIpcArgs(
         ProjectGroupScanNestedArgs,
         rawArgs,
         'invalid_project_group_scan_nested_args'
       )
-      return scanNestedReposForIpc(args)
+      return runNestedRepoScanForIpc(event, args)
     }
   )
+
+  ipcMain.handle('projectGroups:cancelNestedScan', (_event, rawArgs: unknown): boolean => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupCancelNestedScanArgs,
+      rawArgs,
+      'invalid_project_group_cancel_nested_scan_args'
+    )
+    const controller = activeNestedRepoScans.get(args.scanId)
+    if (!controller) {
+      return false
+    }
+    controller.abort()
+    return true
+  })
 
   ipcMain.handle(
     'projectGroups:importNested',
@@ -431,13 +491,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         'invalid_project_group_import_nested_args'
       )
       const requestedPaths = args.projectPaths
-      const scan = await scanNestedReposForIpc({
-        path: args.parentPath,
-        connectionId: args.connectionId
+      const selection = resolveNestedRepoImportPaths({
+        parentPath: args.parentPath,
+        projectPaths: requestedPaths
       })
-      const selection = resolveNestedRepoSelection({ scan, projectPaths: requestedPaths })
       const groupResolver = createNestedProjectGroupResolver({
-        parentPath: scan.selectedPath,
+        parentPath: args.parentPath,
         groupName: args.groupName ?? '',
         mode: args.mode,
         createGroup: (input) => store.createProjectGroup(input)

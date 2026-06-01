@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  CircleStop,
   FolderOpen,
   FolderTree,
   GitBranch,
@@ -16,12 +17,14 @@ type RepoStepProps = {
   cloneUrl: string
   onCloneUrlChange: (value: string) => void
   nestedScan: NestedRepoScanResult | null
+  nestedScanInProgress: boolean
   nestedSelectedPaths: Set<string>
   onNestedSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
   nestedGroupName: string
   onNestedGroupNameChange: (value: string) => void
   onImportNested: (mode: 'group' | 'separate') => void
   onCancelNested: () => void
+  onStopNestedScan: () => void
   onOpenFolder: () => void
   onOpenServerFolder: (kind: 'git' | 'folder') => void
   onClone: () => void
@@ -40,12 +43,14 @@ export function RepoStep({
   cloneUrl,
   onCloneUrlChange,
   nestedScan,
+  nestedScanInProgress,
   nestedSelectedPaths,
   onNestedSelectedPathsChange,
   nestedGroupName,
   onNestedGroupNameChange,
   onImportNested,
   onCancelNested,
+  onStopNestedScan,
   onOpenFolder,
   onOpenServerFolder,
   onClone,
@@ -60,6 +65,7 @@ export function RepoStep({
   error
 }: RepoStepProps) {
   const disabled = Boolean(busyLabel)
+  const nestedImportDisabled = disabled || nestedScanInProgress
   if (nestedScan) {
     return (
       <div className="flex h-full min-h-0 min-w-0 flex-col gap-3">
@@ -71,7 +77,7 @@ export function RepoStep({
             <div className="min-w-0 flex-1">
               <div className="text-base font-semibold text-foreground">Import as project group</div>
               <div className="mt-0.5 truncate text-[13px] text-muted-foreground">
-                {`Found ${nestedScan.repos.length} git ${
+                {`${nestedScanInProgress ? 'Scanning...' : 'Found'} ${nestedScan.repos.length} git ${
                   nestedScan.repos.length === 1 ? 'repository' : 'repositories'
                 } in this folder.`}
               </div>
@@ -85,7 +91,7 @@ export function RepoStep({
             <input
               className="w-full min-w-0 rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground/50 focus:ring-2 focus:ring-foreground/15"
               value={nestedGroupName}
-              disabled={disabled}
+              disabled={nestedImportDisabled}
               onChange={(event) => onNestedGroupNameChange(event.target.value)}
             />
           </div>
@@ -93,10 +99,13 @@ export function RepoStep({
             scan={nestedScan}
             selectedPaths={nestedSelectedPaths}
             onSelectedPathsChange={onNestedSelectedPathsChange}
-            disabled={disabled}
+            disabled={nestedImportDisabled}
             className="mt-3 flex-1"
           />
-          {nestedScan.truncated || nestedScan.timedOut ? (
+          {nestedScanInProgress ||
+          nestedScan.truncated ||
+          nestedScan.timedOut ||
+          nestedScan.stopped ? (
             <div className="mt-2 shrink-0">
               <NestedRepoScanLimitNotice scan={nestedScan} />
             </div>
@@ -105,17 +114,27 @@ export function RepoStep({
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded-lg px-3 py-3 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
-              disabled={disabled}
+              disabled={disabled && !nestedScanInProgress}
               onClick={onCancelNested}
             >
               <ArrowLeft className="size-3.5" />
               Back
             </button>
             <div className="ml-auto flex items-center gap-2">
+              {nestedScanInProgress ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/60 disabled:opacity-40"
+                  onClick={onStopNestedScan}
+                >
+                  <CircleStop className="size-3.5" />
+                  Stop scan
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/60 disabled:opacity-40"
-                disabled={disabled || nestedSelectedPaths.size === 0}
+                disabled={nestedImportDisabled || nestedSelectedPaths.size === 0}
                 onClick={() => onImportNested('separate')}
               >
                 Import separately
@@ -123,7 +142,9 @@ export function RepoStep({
               <button
                 type="button"
                 className="rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
-                disabled={disabled || nestedSelectedPaths.size === 0 || !nestedGroupName.trim()}
+                disabled={
+                  nestedImportDisabled || nestedSelectedPaths.size === 0 || !nestedGroupName.trim()
+                }
                 onClick={() => onImportNested('group')}
               >
                 Import as project group
@@ -299,8 +320,18 @@ export function RepoStep({
       </div>
 
       {busyLabel && (
-        <div className="rounded-lg border border-blue-400/30 bg-blue-400/10 px-4 py-2.5 text-sm text-blue-700 dark:text-blue-200">
-          {busyLabel}
+        <div className="flex items-center gap-2 rounded-lg border border-blue-400/30 bg-blue-400/10 px-4 py-2.5 text-sm text-blue-700 dark:text-blue-200">
+          <span className="min-w-0 flex-1">{busyLabel}</span>
+          {nestedScanInProgress ? (
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60"
+              onClick={onStopNestedScan}
+            >
+              <CircleStop className="size-3.5" />
+              Stop scan
+            </button>
+          ) : null}
         </div>
       )}
       {error && (

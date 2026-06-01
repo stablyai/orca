@@ -416,7 +416,7 @@ import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
-  resolveNestedRepoSelection
+  resolveNestedRepoImportPaths
 } from '../project-groups/nested-repo-import'
 
 function sanitizeNestedRepoRuntimeImportError(context: string, error: unknown): string {
@@ -5341,10 +5341,12 @@ export class OrcaRuntimeService {
     if (!isAbsolute(args.parentPath)) {
       throw new Error('Project path must be an absolute path')
     }
-    const scan = await scanNestedRepos({ path: args.parentPath })
-    const selection = resolveNestedRepoSelection({ scan, projectPaths: args.projectPaths })
+    const selection = resolveNestedRepoImportPaths({
+      parentPath: args.parentPath,
+      projectPaths: args.projectPaths
+    })
     const groupResolver = createNestedProjectGroupResolver({
-      parentPath: scan.selectedPath,
+      parentPath: args.parentPath,
       groupName: args.groupName,
       mode: args.mode,
       createGroup: (input) => this.store!.createProjectGroup!(input)

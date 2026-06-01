@@ -15,6 +15,8 @@ function renderRepoStep(overrides: Partial<ComponentProps<typeof RepoStep>> = {}
       onNestedGroupNameChange={vi.fn()}
       onImportNested={vi.fn()}
       onCancelNested={vi.fn()}
+      onStopNestedScan={vi.fn()}
+      nestedScanInProgress={false}
       onOpenFolder={vi.fn()}
       onOpenServerFolder={vi.fn()}
       onClone={vi.fn()}
@@ -49,10 +51,11 @@ describe('RepoStep', () => {
         repos: [{ path: '/workspace/platform/apps/web', displayName: 'web', depth: 2 }],
         truncated: false,
         timedOut: false,
+        stopped: false,
         durationMs: 4,
         maxDepth: 3,
         maxRepos: 100,
-        timeoutMs: 8_000
+        timeoutMs: null
       },
       nestedGroupName: 'platform'
     })

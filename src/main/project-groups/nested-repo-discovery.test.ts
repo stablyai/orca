@@ -63,10 +63,37 @@ describe('scanNestedRepos', () => {
     const result = await scanNestedRepos({ path: root })
 
     expect(result.selectedPathKind).toBe('non_git_folder')
+    expect(result.timeoutMs).toBeNull()
+    expect(result.timedOut).toBe(false)
     expect(result.repos.map((repo) => repo.displayName)).toEqual([
       'auth-service',
       'billing-service'
     ])
+  })
+
+  it('returns repositories found before a stopped scan', async () => {
+    const directories = new Map([['/workspace', ['api', 'web']]])
+    const gitRepos = new Set(['/workspace/api', '/workspace/web'])
+    const controller = new AbortController()
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      signal: controller.signal,
+      onProgress: (scan) => {
+        if (scan.repos.length === 1) {
+          controller.abort()
+        }
+      },
+      filesystem: posixTestFilesystem({ directories, gitRepos })
+    })
+
+    expect(result).toMatchObject({
+      selectedPathKind: 'non_git_folder',
+      stopped: true,
+      timedOut: false,
+      truncated: false
+    })
+    expect(result.repos.map((repo) => repo.path)).toEqual(['/workspace/api'])
   })
 
   it('does not scan inside an already discovered repo', async () => {

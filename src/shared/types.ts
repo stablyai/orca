@@ -133,7 +133,7 @@ export type ProjectGroup = {
 export type NestedRepoScanOptions = {
   maxDepth?: number
   maxRepos?: number
-  timeoutMs?: number
+  timeoutMs?: number | null
 }
 
 export type NestedRepoCandidate = {
@@ -148,10 +148,11 @@ export type NestedRepoScanResult = {
   repos: NestedRepoCandidate[]
   truncated: boolean
   timedOut: boolean
+  stopped: boolean
   durationMs: number
   maxDepth: number
   maxRepos: number
-  timeoutMs: number
+  timeoutMs: number | null
 }
 
 export type ProjectGroupImportMode = 'group' | 'separate'

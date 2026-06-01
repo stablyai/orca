@@ -10,14 +10,15 @@ describe('nestedRepoScanLimitText', () => {
       repos: [],
       truncated: true,
       timedOut: false,
+      stopped: false,
       durationMs: 100,
       maxDepth: 3,
       maxRepos: 100,
-      timeoutMs: 8_000
+      timeoutMs: null
     }
 
     expect(nestedRepoScanLimitText(scan)).toBe(
-      'Scan stops after 3 folder levels, 100 repositories, or 8 seconds.'
+      'Scan stops after 3 folder levels or 100 repositories. You can stop scanning early and import repositories found so far.'
     )
   })
 })

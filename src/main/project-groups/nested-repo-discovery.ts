@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: scanner traversal, ignore matching, and filesystem
+abstraction stay together so local, SSH, and runtime scans cannot drift. */
 import { readFile, readdir, stat } from 'fs/promises'
 import { basename, join } from 'path'
 import type {
@@ -35,9 +37,14 @@ type TraversalFolder = {
   ignoreRules: IgnoreRule[]
 }
 
+type NormalizedNestedRepoScanOptions = {
+  maxDepth: number
+  maxRepos: number
+  timeoutMs: number | null
+}
+
 const DEFAULT_MAX_DEPTH = 3
 const DEFAULT_MAX_REPOS = 100
-const DEFAULT_TIMEOUT_MS = 8_000
 
 const SKIPPED_DIRS = new Set([
   'node_modules',
@@ -53,7 +60,7 @@ const SKIPPED_DIRS = new Set([
 
 const VCS_METADATA_DIRS = new Set(['.git', '.svn', '.hg', '.jj', '.sl', '.repo', 'CVS'])
 
-function normalizeScanOptions(options: unknown): Required<NestedRepoScanOptions> {
+function normalizeScanOptions(options: unknown): NormalizedNestedRepoScanOptions {
   const raw = options && typeof options === 'object' ? (options as NestedRepoScanOptions) : {}
   return {
     maxDepth:
@@ -65,9 +72,11 @@ function normalizeScanOptions(options: unknown): Required<NestedRepoScanOptions>
         ? Math.max(1, Math.min(500, Math.floor(raw.maxRepos)))
         : DEFAULT_MAX_REPOS,
     timeoutMs:
-      typeof raw.timeoutMs === 'number' && Number.isFinite(raw.timeoutMs)
-        ? Math.max(500, Math.min(30_000, Math.floor(raw.timeoutMs)))
-        : DEFAULT_TIMEOUT_MS
+      raw.timeoutMs === null
+        ? null
+        : typeof raw.timeoutMs === 'number' && Number.isFinite(raw.timeoutMs)
+          ? Math.max(500, Math.min(30_000, Math.floor(raw.timeoutMs)))
+          : null
   }
 }
 
@@ -196,12 +205,15 @@ export async function scanNestedRepos(args: {
   path: string
   options?: unknown
   filesystem?: NestedRepoScanFilesystem
+  signal?: AbortSignal
+  onProgress?: (scan: NestedRepoScanResult) => void
 }): Promise<NestedRepoScanResult> {
   const startedAt = Date.now()
   const options = normalizeScanOptions(args.options)
   const repos: NestedRepoCandidate[] = []
   let truncated = false
   let timedOut = false
+  let stopped = false
   const filesystem = args.filesystem ?? {
     readDirectory: readLocalDirectory,
     readTextFile: (path: string) => readFile(path, 'utf8'),
@@ -210,19 +222,34 @@ export async function scanNestedRepos(args: {
     hasGitMarker,
     isSelectedPathGitRepo: async (path: string) => isGitRepo(path) || (await hasGitMarker(path))
   }
+  const buildResult = (selectedPathKind: NestedRepoScanResult['selectedPathKind']) => ({
+    selectedPath: args.path,
+    selectedPathKind,
+    repos: [...repos],
+    truncated,
+    timedOut,
+    stopped,
+    durationMs: Date.now() - startedAt,
+    maxDepth: options.maxDepth,
+    maxRepos: options.maxRepos,
+    timeoutMs: options.timeoutMs
+  })
+  const noteAbort = (): boolean => {
+    if (!args.signal?.aborted) {
+      return false
+    }
+    stopped = true
+    return true
+  }
+  const emitProgress = (): void => {
+    args.onProgress?.(buildResult('non_git_folder'))
+  }
 
   if (await filesystem.isSelectedPathGitRepo(args.path)) {
-    return {
-      selectedPath: args.path,
-      selectedPathKind: 'git_repo',
-      repos: [],
-      truncated: false,
-      timedOut: false,
-      durationMs: Date.now() - startedAt,
-      maxDepth: options.maxDepth,
-      maxRepos: options.maxRepos,
-      timeoutMs: options.timeoutMs
-    }
+    return buildResult('git_repo')
+  }
+  if (noteAbort()) {
+    return buildResult('non_git_folder')
   }
 
   const foldersToTraverse: TraversalFolder[] = [
@@ -235,8 +262,11 @@ export async function scanNestedRepos(args: {
       truncated = true
       break
     }
-    if (Date.now() - startedAt > options.timeoutMs) {
+    if (options.timeoutMs !== null && Date.now() - startedAt > options.timeoutMs) {
       timedOut = true
+      break
+    }
+    if (noteAbort()) {
       break
     }
     const currentFolder = foldersToTraverse[nextFolderIndex++]
@@ -249,6 +279,9 @@ export async function scanNestedRepos(args: {
       entries = await filesystem.readDirectory(currentFolder.path)
     } catch {
       continue
+    }
+    if (noteAbort()) {
+      break
     }
     const currentIgnoreRules = [
       ...currentFolder.ignoreRules,
@@ -269,8 +302,11 @@ export async function scanNestedRepos(args: {
         truncated = true
         break
       }
-      if (Date.now() - startedAt > options.timeoutMs) {
+      if (options.timeoutMs !== null && Date.now() - startedAt > options.timeoutMs) {
         timedOut = true
+        break
+      }
+      if (noteAbort()) {
         break
       }
       const childSegments = [...currentFolder.segments, name]
@@ -280,12 +316,17 @@ export async function scanNestedRepos(args: {
       const childPath = filesystem.joinPath(currentFolder.path, name)
       // Why: broad scans should use cheap filesystem markers instead of
       // spawning Git for every candidate directory, especially over SSH.
-      if (await filesystem.hasGitMarker(childPath)) {
+      const childHasGitMarker = await filesystem.hasGitMarker(childPath)
+      if (noteAbort()) {
+        break
+      }
+      if (childHasGitMarker) {
         repos.push({
           path: childPath,
           displayName: filesystem.basename(childPath),
           depth: currentFolder.depth + 1
         })
+        emitProgress()
         // Project Groups organize sibling repos; nested repos stay hidden until a
         // later UI can explain and select submodule-style layouts explicitly.
         continue
@@ -303,15 +344,5 @@ export async function scanNestedRepos(args: {
     }
   }
 
-  return {
-    selectedPath: args.path,
-    selectedPathKind: 'non_git_folder',
-    repos,
-    truncated,
-    timedOut,
-    durationMs: Date.now() - startedAt,
-    maxDepth: options.maxDepth,
-    maxRepos: options.maxRepos,
-    timeoutMs: options.timeoutMs
-  }
+  return buildResult('non_git_folder')
 }

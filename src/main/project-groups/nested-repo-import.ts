@@ -1,5 +1,6 @@
 import type { NestedRepoScanResult, ProjectGroup, ProjectGroupImportMode } from '../../shared/types'
 import {
+  isPathInsideOrEqual,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../shared/cross-platform-path'
@@ -138,6 +139,35 @@ export function resolveNestedRepoSelection(args: {
       // callers must not smuggle unrelated paths into the group hierarchy.
       rejectedPaths.push(repoPath)
     }
+  }
+
+  return { selectedPaths, rejectedPaths }
+}
+
+export function resolveNestedRepoImportPaths(args: {
+  parentPath: string
+  projectPaths: readonly string[]
+}): ResolvedNestedRepoSelection {
+  const selectedPaths: string[] = []
+  const rejectedPaths: string[] = []
+  const seen = new Set<string>()
+
+  for (const repoPath of args.projectPaths) {
+    const normalizedPath = normalizeRuntimePathForComparison(repoPath)
+    if (seen.has(normalizedPath)) {
+      continue
+    }
+    seen.add(normalizedPath)
+    if (
+      normalizedPath === normalizeRuntimePathForComparison(args.parentPath) ||
+      !isPathInsideOrEqual(args.parentPath, repoPath)
+    ) {
+      // Why: stopped scans import a caller-provided partial selection, so the
+      // parent boundary still has to block unrelated paths without rescanning.
+      rejectedPaths.push(repoPath)
+      continue
+    }
+    selectedPaths.push(repoPath)
   }
 
   return { selectedPaths, rejectedPaths }

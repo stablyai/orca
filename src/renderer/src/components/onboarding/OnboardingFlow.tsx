@@ -338,12 +338,14 @@ export default function OnboardingFlow({
                 cloneUrl={flow.cloneUrl}
                 onCloneUrlChange={flow.setCloneUrl}
                 nestedScan={flow.nestedScan}
+                nestedScanInProgress={flow.nestedScanInProgress}
                 nestedSelectedPaths={flow.nestedSelectedPaths}
                 onNestedSelectedPathsChange={flow.setNestedSelectedPaths}
                 nestedGroupName={flow.nestedGroupName}
                 onNestedGroupNameChange={flow.setNestedGroupName}
                 onImportNested={(mode) => void flow.importNested(mode)}
                 onCancelNested={flow.cancelNested}
+                onStopNestedScan={flow.stopNestedScan}
                 onOpenFolder={() => void flow.openFolder()}
                 onOpenServerFolder={(kind) => void flow.openFolder(kind)}
                 onClone={() => void flow.clone()}
