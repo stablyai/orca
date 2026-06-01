@@ -5,6 +5,7 @@ import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-termina
 export type AgentCompletionDispatchMeta = {
   source: 'hook' | 'title' | 'process-exit'
   quietedHookDone: boolean
+  agentStatus?: ParsedAgentStatusPayload
 }
 
 export type AgentCompletionCoordinatorOptions = {

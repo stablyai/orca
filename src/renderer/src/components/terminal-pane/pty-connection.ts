@@ -54,7 +54,10 @@ import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  ParsedAgentStatusPayload
+} from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
   createAgentInterruptInference,
@@ -672,7 +675,8 @@ export function connectPanePty(
     inspectProcess: inspectRuntimeTerminalProcess,
     dispatchCompletion: (title, meta) =>
       scheduleAgentTaskCompleteNotification(title, {
-        allowDoneDetailAfterGrace: meta?.quietedHookDone
+        allowDoneDetailAfterGrace: meta?.quietedHookDone,
+        ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       }),
     shouldPollProcessCadence: () =>
       isAgentTaskCompleteNotificationEnabled() && deps.isVisibleRef.current,
@@ -964,7 +968,10 @@ export function connectPanePty(
 
   const scheduleAgentTaskCompleteNotification = (
     title: string,
-    options: { allowDoneDetailAfterGrace?: boolean } = {}
+    options: {
+      allowDoneDetailAfterGrace?: boolean
+      agentStatusSnapshot?: ParsedAgentStatusPayload
+    } = {}
   ): void => {
     if (!syncAgentTaskCompleteNotificationEnabled()) {
       return
@@ -989,7 +996,8 @@ export function connectPanePty(
       deps.dispatchNotification({
         source: 'agent-task-complete',
         terminalTitle: title,
-        paneKey: cacheKey
+        paneKey: cacheKey,
+        ...(options.agentStatusSnapshot ? { agentStatusSnapshot: options.agentStatusSnapshot } : {})
       })
     }
 

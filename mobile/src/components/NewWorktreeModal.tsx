@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -61,6 +61,19 @@ type RepoHooksResponse = {
   source: string | null
   setupRunPolicy?: SetupRunPolicy
   setupTrust?: SetupHookTrust
+}
+
+type SetupHookDetails = {
+  repoId: string
+  command: string | null
+  source: string | null
+  trust: SetupHookTrust | null
+  runPolicy: SetupRunPolicy
+}
+
+type DetectedAgentIdsState = {
+  connectionId: string | null
+  ids: Set<string>
 }
 
 type CreateOptions = {
@@ -168,25 +181,57 @@ export function NewWorktreeModal({
   onCreated,
   onClose
 }: Props) {
+  const openEpochRef = useRef(0)
+  const wasVisibleRef = useRef(false)
+  const clientEpochRef = useRef({ client, epoch: 0 })
+
+  // Why: each drawer opening is a fresh form session; remounting resets local
+  // form state before paint instead of clearing it in a visible-prop Effect.
+  if (visible && !wasVisibleRef.current) {
+    openEpochRef.current += 1
+  }
+  wasVisibleRef.current = visible
+  if (clientEpochRef.current.client !== client) {
+    clientEpochRef.current = { client, epoch: clientEpochRef.current.epoch + 1 }
+  }
+
+  return (
+    <NewWorktreeModalContent
+      key={`${openEpochRef.current}:${clientEpochRef.current.epoch}`}
+      visible={visible}
+      client={client}
+      existingWorktreePaths={existingWorktreePaths}
+      onCreated={onCreated}
+      onClose={onClose}
+    />
+  )
+}
+
+function NewWorktreeModalContent({
+  visible,
+  client,
+  existingWorktreePaths,
+  onCreated,
+  onClose
+}: Props) {
   const [repos, setRepos] = useState<Repo[]>([])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
   const [showRepoPicker, setShowRepoPicker] = useState(false)
   const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings | null>(null)
-  const [detectedAgentIds, setDetectedAgentIds] = useState<Set<string> | null>(null)
+  const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
+    null
+  )
   const [agentOverriddenState, setAgentOverridden] = useState(false)
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [sshState, setSshState] = useState<SshConnectionState | null>(null)
-  const [sshConnecting, setSshConnecting] = useState(false)
+  const [sshConnectingTargetId, setSshConnectingTargetId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [note, setNote] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [setupCommand, setSetupCommand] = useState<string | null>(null)
-  const [setupSource, setSetupSource] = useState<string | null>(null)
-  const [setupTrust, setSetupTrust] = useState<SetupHookTrust | null>(null)
+  const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
   const [setupTrustPrompt, setSetupTrustPrompt] = useState<SetupTrustPrompt | null>(null)
-  const [setupRunPolicy, setSetupRunPolicy] = useState<SetupRunPolicy>('run-by-default')
   const [setupDecisionChoice, setSetupDecisionChoice] = useState<Exclude<
     SetupDecision,
     'inherit'
@@ -206,8 +251,19 @@ export function NewWorktreeModal({
   const sshGate = deriveWorkspaceSshGate({
     connectionId: selectedRepoConnectionId,
     state: sshState,
-    connecting: sshConnecting
+    connecting: sshConnectingTargetId === selectedRepoConnectionId
   })
+  const detectedAgentIds =
+    detectedAgentIdsState?.connectionId === selectedRepoConnectionId &&
+    (selectedRepoConnectionId === null || sshGate.status === 'connected')
+      ? detectedAgentIdsState.ids
+      : null
+  const activeSetupHookDetails =
+    selectedRepo && setupHookDetails?.repoId === selectedRepo.id ? setupHookDetails : null
+  const setupCommand = activeSetupHookDetails?.command ?? null
+  const setupSource = activeSetupHookDetails?.source ?? null
+  const setupTrust = activeSetupHookDetails?.trust ?? null
+  const setupRunPolicy = activeSetupHookDetails?.runPolicy ?? 'run-by-default'
   const selectedAgentResolution = resolveNewWorktreeAgentSelection({
     visible,
     selectedAgent: selectedAgentState,
@@ -227,37 +283,10 @@ export function NewWorktreeModal({
   const selectedAgent = selectedAgentResolution.selectedAgent
 
   useEffect(() => {
-    if (!visible) {
-      setShowRepoPicker(false)
-      setShowAgentPicker(false)
-      return
-    }
-    if (!client) {
+    if (!visible || !client) {
       return
     }
     let stale = false
-    setName('')
-    setNote('')
-    setShowAdvanced(false)
-    setSetupCommand(null)
-    setSetupSource(null)
-    setSetupTrust(null)
-    setTrustedOrcaHooks({})
-    setSetupTrustPrompt(null)
-    setSetupRunPolicy('run-by-default')
-    setSetupDecisionChoice(null)
-    setRunSetup(true)
-    setError('')
-    setCreating(false)
-    setShowRepoPicker(false)
-    setShowAgentPicker(false)
-    setRuntimeSettings(null)
-    setDetectedAgentIds(null)
-    setAgentOverridden(false)
-    setSshState(null)
-    setSshConnecting(false)
-    setSelectedAgent(AGENT_OPTIONS[0]!)
-    setLoading(true)
 
     void (async () => {
       try {
@@ -305,8 +334,6 @@ export function NewWorktreeModal({
 
   useEffect(() => {
     if (!visible || !client || !selectedRepoConnectionId) {
-      setSshState(null)
-      setSshConnecting(false)
       return
     }
     let stale = false
@@ -349,11 +376,9 @@ export function NewWorktreeModal({
       return
     }
     if (selectedRepoConnectionId && sshGate.status !== 'connected') {
-      setDetectedAgentIds(null)
       return
     }
     let stale = false
-    setDetectedAgentIds(null)
     void (async () => {
       try {
         const response = selectedRepoConnectionId
@@ -364,12 +389,13 @@ export function NewWorktreeModal({
         if (stale) {
           return
         }
-        setDetectedAgentIds(
-          response.ok ? new Set((response as RpcSuccess).result as string[]) : new Set()
-        )
+        setDetectedAgentIdsState({
+          connectionId: selectedRepoConnectionId,
+          ids: response.ok ? new Set((response as RpcSuccess).result as string[]) : new Set()
+        })
       } catch {
         if (!stale) {
-          setDetectedAgentIds(new Set())
+          setDetectedAgentIdsState({ connectionId: selectedRepoConnectionId, ids: new Set() })
         }
       }
     })()
@@ -380,9 +406,6 @@ export function NewWorktreeModal({
 
   useEffect(() => {
     if (!client || !selectedRepo) {
-      setSetupCommand(null)
-      setSetupSource(null)
-      setSetupTrust(null)
       return
     }
     let stale = false
@@ -398,10 +421,13 @@ export function NewWorktreeModal({
           const result = (response as RpcSuccess).result as RepoHooksResponse
           const cmd = result.hooks?.scripts?.setup?.trim() || null
           const policy = result.setupRunPolicy ?? 'run-by-default'
-          setSetupCommand(cmd)
-          setSetupSource(result.source)
-          setSetupTrust(normalizeSetupHookTrust(result.setupTrust))
-          setSetupRunPolicy(policy)
+          setSetupHookDetails({
+            repoId: selectedRepo.id,
+            command: cmd,
+            source: result.source,
+            trust: normalizeSetupHookTrust(result.setupTrust),
+            runPolicy: policy
+          })
           setSetupDecisionChoice(null)
           setRunSetup(policy !== 'skip-by-default')
           if (cmd && policy === 'ask') {
@@ -410,10 +436,13 @@ export function NewWorktreeModal({
         }
       } catch {
         if (!stale) {
-          setSetupCommand(null)
-          setSetupSource(null)
-          setSetupTrust(null)
-          setSetupRunPolicy('run-by-default')
+          setSetupHookDetails({
+            repoId: selectedRepo.id,
+            command: null,
+            source: null,
+            trust: null,
+            runPolicy: 'run-by-default'
+          })
           setSetupDecisionChoice(null)
         }
       }
@@ -427,7 +456,7 @@ export function NewWorktreeModal({
     if (!client || !selectedRepoConnectionId) {
       return
     }
-    setSshConnecting(true)
+    setSshConnectingTargetId(selectedRepoConnectionId)
     setSshState({
       targetId: selectedRepoConnectionId,
       status: 'connecting',
@@ -460,7 +489,7 @@ export function NewWorktreeModal({
         reconnectAttempt: 0
       })
     } finally {
-      setSshConnecting(false)
+      setSshConnectingTargetId((current) => (current === selectedRepoConnectionId ? null : current))
     }
   }
 

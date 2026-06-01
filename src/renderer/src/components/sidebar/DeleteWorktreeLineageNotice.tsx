@@ -1,13 +1,16 @@
 import { Workflow } from 'lucide-react'
 import type { JSX } from 'react'
 import type { Worktree } from '../../../../shared/types'
+import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
 
 type DeleteWorktreeLineageNoticeProps = {
   descendants: readonly Worktree[]
+  dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
 }
 
 export function DeleteWorktreeLineageNotice({
-  descendants
+  descendants,
+  dirtyChangeCountsByWorktreeId
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
   const childWorkspaceCount = descendants.length
   if (childWorkspaceCount === 0) {
@@ -32,6 +35,9 @@ export function DeleteWorktreeLineageNotice({
               <div key={child.id} className="min-w-0 overflow-hidden">
                 <div className="truncate font-medium text-foreground">{child.displayName}</div>
                 <div className="truncate text-muted-foreground">{child.path}</div>
+                <DeleteWorktreeDirtyChangeHint
+                  changeCount={dirtyChangeCountsByWorktreeId.get(child.id)}
+                />
               </div>
             ))}
             {descendants.length > 4 ? (

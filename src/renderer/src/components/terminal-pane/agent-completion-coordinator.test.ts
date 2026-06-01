@@ -355,10 +355,17 @@ describe('agent completion coordinator', () => {
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-    expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
-      source: 'hook',
-      quietedHookDone: true
-    })
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        quietedHookDone: true,
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          agentType: 'codex'
+        })
+      })
+    )
   })
 
   it('ignores stale working title state after a hook completion already notified', () => {
@@ -640,10 +647,18 @@ describe('agent completion coordinator', () => {
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-    expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
-      source: 'hook',
-      quietedHookDone: true
-    })
+    expect(dispatchCompletion).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        quietedHookDone: true,
+        agentStatus: expect.objectContaining({
+          state: 'done',
+          prompt: 'run the goal',
+          agentType: 'codex'
+        })
+      })
+    )
   })
 
   it('cancels a hook completion when title tracking observes resumed work before quiet', () => {

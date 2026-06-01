@@ -4402,11 +4402,13 @@ describe('connectPanePty', () => {
     })
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
 
-    expect(deps.dispatchNotification).toHaveBeenCalledWith({
-      source: 'agent-task-complete',
-      terminalTitle: 'codex',
-      paneKey: makePaneKey('tab-1', LEAF_1)
-    })
+    expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        terminalTitle: 'codex',
+        paneKey: makePaneKey('tab-1', LEAF_1)
+      })
+    )
   })
 
   it('lets delayed hook completion notifications win over concurrent terminal bells', async () => {
@@ -4459,11 +4461,19 @@ describe('connectPanePty', () => {
       expect.objectContaining({ source: 'terminal-bell' })
     )
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
-    expect(deps.dispatchNotification).toHaveBeenCalledWith({
-      source: 'agent-task-complete',
-      terminalTitle: 'codex',
-      paneKey: makePaneKey('tab-1', LEAF_1)
-    })
+    expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        terminalTitle: 'codex',
+        paneKey: makePaneKey('tab-1', LEAF_1),
+        agentStatusSnapshot: expect.objectContaining({
+          state: 'done',
+          prompt: 'finish the implementation',
+          agentType: 'codex',
+          lastAssistantMessage: 'Done.'
+        })
+      })
+    )
     expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
       expect.objectContaining({ source: 'terminal-bell' })
     )

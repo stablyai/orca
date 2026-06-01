@@ -12,6 +12,8 @@
   "scripts": {
     "format": "oxfmt --write .",
     "lint": "oxlint && pnpm run lint:switch-exhaustiveness && node config/scripts/check-styled-scrollbars.mjs",
+    "lint:react-doctor": "oxlint --config config/oxlint-react-doctor.json",
+    "lint:react-doctor:changed": "node config/scripts/lint-react-doctor-changed.mjs",
     "lint:switch-exhaustiveness": "oxlint --type-aware --config config/oxlint-switch-exhaustiveness.json src/main src/preload src/shared src/relay src/cli src/renderer/src config tests --quiet",
     "prepare": "husky",
     "test": "node config/scripts/ensure-native-runtime.mjs --runtime=node && vitest run --config config/vitest.config.ts",
@@ -139,6 +141,7 @@
     "monaco-editor": "^0.55.1",
     "oxfmt": "^0.52.0",
     "oxlint": "^1.67.0",
+    "oxlint-plugin-react-doctor": "0.2.10",
     "oxlint-tsgolint": "0.23.0",
     "pdfjs-dist": "^5.7.284",
     "radix-ui": "^1.4.3",
@@ -178,6 +181,7 @@
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mts,cts}": [
       "oxlint",
+      "oxlint --config config/oxlint-react-doctor.json --deny-warnings",
       "oxfmt --write"
     ],
     "*.{json,css}": [

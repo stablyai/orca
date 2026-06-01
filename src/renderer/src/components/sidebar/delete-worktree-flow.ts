@@ -16,6 +16,7 @@ type WorktreeBatchDeleteOptions = {
 }
 
 type WorktreeDeleteWithToastOptions = {
+  force?: boolean
   onForceDeleted?: (worktreeId: string) => void
 }
 
@@ -110,7 +111,7 @@ export function runWorktreeDeleteWithToast(
 ): Promise<boolean> {
   const removeWorktree = useAppStore.getState().removeWorktree
 
-  return removeWorktree(worktreeId, false)
+  return removeWorktree(worktreeId, options.force === true)
     .then((result) => {
       if (result.ok) {
         return true

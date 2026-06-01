@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: dispatch guards are interdependent, so these notification liveness and unread regressions stay together with one store mock. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
@@ -5,8 +6,9 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 
 type MockState = {
   activeWorktreeId: string | null
-  tabsByWorktree: Record<string, { id: string }[]>
+  tabsByWorktree: Record<string, { id: string; ptyId?: string | null }[]>
   ptyIdsByTabId: Record<string, string[]>
+  suppressedPtyExitIds: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   browserTabsByWorktree: Record<string, unknown[]>
   retainedAgentsByPaneKey: Record<string, { worktreeId: string }>
@@ -85,11 +87,12 @@ describe('dispatchTerminalNotification', () => {
     mockState = {
       activeWorktreeId: 'wt-secondary',
       tabsByWorktree: {
-        'wt-primary': [{ id: 'tab-1' }]
+        'wt-primary': [{ id: 'tab-1', ptyId: 'pty-1' }]
       },
       ptyIdsByTabId: {
         'tab-1': ['pty-1']
       },
+      suppressedPtyExitIds: {},
       terminalLayoutsByTabId: {
         'tab-1': {
           root: { type: 'leaf', leafId: liveLeafId },
@@ -288,8 +291,92 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
   })
 
-  it('still drops stale notifications when neither worktree nor pane has a live pty', () => {
+  it('uses a fresh hook snapshot when inactive PTY liveness has not caught up', () => {
     mockState.ptyIdsByTabId = {}
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey,
+        agentType: 'codex',
+        agentState: 'done',
+        agentPrompt: 'codex-hook-notify',
+        agentLastAssistantMessage: 'Done.'
+      })
+    )
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+  })
+
+  it('uses the accepted hook snapshot when the live store row is gone before dispatch', () => {
+    mockState.ptyIdsByTabId = {}
+    mockState.agentStatusByPaneKey = {}
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'codex-hook-notify',
+        agentType: 'codex',
+        lastAssistantMessage: 'Done.'
+      }
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey,
+        agentType: 'codex',
+        agentState: 'done',
+        agentPrompt: 'codex-hook-notify',
+        agentLastAssistantMessage: 'Done.'
+      })
+    )
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+  })
+
+  it('drops accepted hook snapshots for an intentionally suppressed pty', () => {
+    mockState.ptyIdsByTabId = {}
+    mockState.agentStatusByPaneKey = {}
+    mockState.suppressedPtyExitIds = { 'pty-1': true }
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'codex-hook-notify',
+        agentType: 'codex',
+        lastAssistantMessage: 'Done.'
+      }
+    })
+
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
+  })
+
+  it('still drops stale notifications when neither pty liveness nor fresh hook status exists', () => {
+    mockState.ptyIdsByTabId = {}
+    mockState.agentStatusByPaneKey[paneKey] = {
+      ...makeAgentStatus(paneKey),
+      updatedAt: Date.now() - 11_000
+    }
 
     dispatchTerminalNotification('wt-primary', {
       source: 'agent-task-complete',

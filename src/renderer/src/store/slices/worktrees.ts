@@ -1365,12 +1365,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
       get().removeWorkspaceSpaceWorktrees?.([worktreeId])
-      showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
-        void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
-      })
-      return removalResult?.preservedBranch
-        ? { ok: true as const, preservedBranch: removalResult.preservedBranch }
-        : { ok: true as const }
+      const preservedBranch = removalResult?.preservedBranch
+      if (preservedBranch) {
+        showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
+          void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
+        })
+      }
+      return preservedBranch ? { ok: true as const, preservedBranch } : { ok: true as const }
     } catch (err) {
       // Why: git refusing a non-force delete for dirty/untracked files is a
       // handled user decision point surfaced by the delete toast, not an app error.
