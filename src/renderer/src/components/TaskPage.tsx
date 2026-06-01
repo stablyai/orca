@@ -48,6 +48,13 @@ import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList
+} from '@/components/ui/command'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -771,6 +778,48 @@ function getJiraStatusTone(categoryKey: string): string {
 
 function getJiraProjectSelectionKey(project: JiraProject): string {
   return `${project.siteId ?? 'selected'}:${project.id}`
+}
+
+const jiraProjectLabelCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base'
+})
+
+function getJiraProjectDisplayLabel(project: JiraProject, includeSiteName: boolean): string {
+  const projectLabel = `${project.name} (${project.key})`
+  if (includeSiteName && project.siteName) {
+    return `${project.siteName} · ${projectLabel}`
+  }
+  return projectLabel
+}
+
+function compareJiraProjectsByDisplayLabel(
+  a: JiraProject,
+  b: JiraProject,
+  includeSiteName: boolean
+): number {
+  const siteComparison = includeSiteName
+    ? jiraProjectLabelCollator.compare(a.siteName ?? '', b.siteName ?? '')
+    : 0
+  if (siteComparison !== 0) {
+    return siteComparison
+  }
+  const nameComparison = jiraProjectLabelCollator.compare(a.name, b.name)
+  if (nameComparison !== 0) {
+    return nameComparison
+  }
+  return jiraProjectLabelCollator.compare(a.key, b.key)
+}
+
+function getJiraProjectSearchText(project: JiraProject, includeSiteName: boolean): string {
+  return [
+    getJiraProjectDisplayLabel(project, includeSiteName),
+    project.key,
+    project.name,
+    project.siteName ?? ''
+  ]
+    .join(' ')
+    .toLocaleLowerCase()
 }
 
 const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set(['project', 'issuetype', 'summary', 'description'])
@@ -3991,8 +4040,12 @@ export default function TaskPage(): React.JSX.Element {
   const [newJiraIssueTitle, setNewJiraIssueTitle] = useState('')
   const [newJiraIssueBody, setNewJiraIssueBody] = useState('')
   const [newJiraIssueProjectId, setNewJiraIssueProjectId] = useState<string | null>(null)
+  const [newJiraIssueProjectComboboxOpen, setNewJiraIssueProjectComboboxOpen] = useState(false)
+  const [newJiraIssueProjectQuery, setNewJiraIssueProjectQuery] = useState('')
+  const [newJiraIssueProjectCommandValue, setNewJiraIssueProjectCommandValue] = useState('')
   const [newJiraIssueTypeId, setNewJiraIssueTypeId] = useState<string | null>(null)
   const [newJiraIssueSubmitting, setNewJiraIssueSubmitting] = useState(false)
+  const newJiraIssueProjectSearchInputRef = useRef<HTMLInputElement | null>(null)
   const [availableJiraIssueTypes, setAvailableJiraIssueTypes] = useState<JiraIssueType[]>([])
   const [jiraIssueTypesLoading, setJiraIssueTypesLoading] = useState(false)
   const [jiraCreateFields, setJiraCreateFields] = useState<JiraCreateField[]>([])
@@ -4007,16 +4060,43 @@ export default function TaskPage(): React.JSX.Element {
   const [jiraApiTokenDraft, setJiraApiTokenDraft] = useState('')
   const [jiraConnectState, setJiraConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
   const [jiraConnectError, setJiraConnectError] = useState<string | null>(null)
+  const includeJiraSiteNameInProjectLabel = selectedJiraSiteId === 'all'
+
+  const sortedAvailableJiraProjects = useMemo(
+    () =>
+      [...availableJiraProjects].sort((a, b) =>
+        compareJiraProjectsByDisplayLabel(a, b, includeJiraSiteNameInProjectLabel)
+      ),
+    [availableJiraProjects, includeJiraSiteNameInProjectLabel]
+  )
+
+  const filteredNewJiraIssueProjects = useMemo(() => {
+    const query = newJiraIssueProjectQuery.trim().toLocaleLowerCase()
+    if (!query) {
+      return sortedAvailableJiraProjects
+    }
+    return sortedAvailableJiraProjects.filter((project) =>
+      getJiraProjectSearchText(project, includeJiraSiteNameInProjectLabel).includes(query)
+    )
+  }, [
+    includeJiraSiteNameInProjectLabel,
+    newJiraIssueProjectQuery,
+    sortedAvailableJiraProjects
+  ])
 
   const newJiraIssueTargetProject = useMemo(
     () =>
-      availableJiraProjects.find(
+      sortedAvailableJiraProjects.find(
         (project) => getJiraProjectSelectionKey(project) === newJiraIssueProjectId
       ) ??
-      availableJiraProjects[0] ??
+      sortedAvailableJiraProjects[0] ??
       null,
-    [availableJiraProjects, newJiraIssueProjectId]
+    [newJiraIssueProjectId, sortedAvailableJiraProjects]
   )
+
+  const newJiraIssueTargetProjectSelectionKey = newJiraIssueTargetProject
+    ? getJiraProjectSelectionKey(newJiraIssueTargetProject)
+    : ''
 
   const newJiraIssueTargetType = useMemo(
     () =>
@@ -4037,6 +4117,66 @@ export default function TaskPage(): React.JSX.Element {
         (field) => !(newJiraIssueCustomFieldValues[field.key] ?? '').trim()
       ),
     [newJiraIssueCustomFieldValues, visibleJiraCreateFields]
+  )
+
+  useEffect(() => {
+    if (!newJiraIssueProjectComboboxOpen) {
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      const input = newJiraIssueProjectSearchInputRef.current
+      if (!input) {
+        return
+      }
+      input.focus()
+      const end = input.value.length
+      input.setSelectionRange(end, end)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [newJiraIssueProjectComboboxOpen])
+
+  const handleNewJiraIssueProjectComboboxOpenChange = useCallback(
+    (open: boolean) => {
+      setNewJiraIssueProjectComboboxOpen(open)
+      if (open) {
+        setNewJiraIssueProjectCommandValue(newJiraIssueTargetProjectSelectionKey)
+        return
+      }
+      setNewJiraIssueProjectQuery('')
+    },
+    [newJiraIssueTargetProjectSelectionKey]
+  )
+
+  const handleNewJiraIssueProjectSelect = useCallback((selectionKey: string) => {
+    setNewJiraIssueProjectId(selectionKey)
+    setNewJiraIssueTypeId(null)
+    setNewJiraIssueProjectCommandValue(selectionKey)
+    setNewJiraIssueProjectComboboxOpen(false)
+    setNewJiraIssueProjectQuery('')
+  }, [])
+
+  const handleNewJiraIssueProjectTriggerKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (newJiraIssueProjectComboboxOpen) {
+        return
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        setNewJiraIssueProjectCommandValue(newJiraIssueTargetProjectSelectionKey)
+        setNewJiraIssueProjectComboboxOpen(true)
+        return
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return
+      }
+      if (event.key.length === 1 && /\S/.test(event.key)) {
+        event.preventDefault()
+        setNewJiraIssueProjectCommandValue(newJiraIssueTargetProjectSelectionKey)
+        setNewJiraIssueProjectQuery(event.key)
+        setNewJiraIssueProjectComboboxOpen(true)
+      }
+    },
+    [newJiraIssueProjectComboboxOpen, newJiraIssueTargetProjectSelectionKey]
   )
 
   useEffect(() => {
@@ -6457,14 +6597,18 @@ export default function TaskPage(): React.JSX.Element {
                                 setNewJiraIssueTitle('')
                                 setNewJiraIssueBody('')
                                 setNewJiraIssueProjectId(
-                                  availableJiraProjects[0]
-                                    ? getJiraProjectSelectionKey(availableJiraProjects[0])
+                                  sortedAvailableJiraProjects[0]
+                                    ? getJiraProjectSelectionKey(sortedAvailableJiraProjects[0])
                                     : null
                                 )
+                                setNewJiraIssueProjectQuery('')
+                                setNewJiraIssueProjectCommandValue('')
                                 setNewJiraIssueTypeId(null)
                                 setNewJiraIssueOpen(true)
                               }}
-                              disabled={availableJiraProjects.length === 0 || jiraProjectsLoading}
+                              disabled={
+                                sortedAvailableJiraProjects.length === 0 || jiraProjectsLoading
+                              }
                               aria-label="New Jira issue"
                               className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
@@ -9135,36 +9279,82 @@ export default function TaskPage(): React.JSX.Element {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-medium text-muted-foreground">Project</label>
-                <Select
-                  value={
-                    newJiraIssueProjectId ??
-                    (newJiraIssueTargetProject
-                      ? getJiraProjectSelectionKey(newJiraIssueTargetProject)
-                      : undefined)
-                  }
-                  onValueChange={(v) => {
-                    setNewJiraIssueProjectId(v)
-                    setNewJiraIssueTypeId(null)
-                  }}
-                  disabled={newJiraIssueSubmitting || availableJiraProjects.length === 0}
+                <Popover
+                  open={newJiraIssueProjectComboboxOpen}
+                  onOpenChange={handleNewJiraIssueProjectComboboxOpenChange}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableJiraProjects.map((project) => (
-                      <SelectItem
-                        key={getJiraProjectSelectionKey(project)}
-                        value={getJiraProjectSelectionKey(project)}
-                      >
-                        {selectedJiraSiteId === 'all' && project.siteName
-                          ? `${project.siteName} · `
-                          : ''}
-                        {project.key} — {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={newJiraIssueProjectComboboxOpen}
+                      onKeyDown={handleNewJiraIssueProjectTriggerKeyDown}
+                      disabled={
+                        newJiraIssueSubmitting || sortedAvailableJiraProjects.length === 0
+                      }
+                      className="h-9 w-full justify-between px-3 text-left text-xs font-normal"
+                    >
+                      {newJiraIssueTargetProject ? (
+                        <span className="min-w-0 truncate">
+                          {getJiraProjectDisplayLabel(
+                            newJiraIssueTargetProject,
+                            includeJiraSiteNameInProjectLabel
+                          )}
+                        </span>
+                      ) : (
+                        <span className="min-w-0 truncate text-muted-foreground">Project</span>
+                      )}
+                      <ChevronDown className="size-3.5 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
+                    onOpenAutoFocus={(event) => event.preventDefault()}
+                  >
+                    <Command
+                      shouldFilter={false}
+                      value={newJiraIssueProjectCommandValue}
+                      onValueChange={setNewJiraIssueProjectCommandValue}
+                    >
+                      <CommandInput
+                        ref={newJiraIssueProjectSearchInputRef}
+                        placeholder="Search projects..."
+                        value={newJiraIssueProjectQuery}
+                        onValueChange={setNewJiraIssueProjectQuery}
+                      />
+                      <CommandList className="max-h-56">
+                        <CommandEmpty>No projects found.</CommandEmpty>
+                        {filteredNewJiraIssueProjects.map((project) => {
+                          const selectionKey = getJiraProjectSelectionKey(project)
+                          const selected = selectionKey === newJiraIssueTargetProjectSelectionKey
+                          return (
+                            <CommandItem
+                              key={selectionKey}
+                              value={selectionKey}
+                              onSelect={() => handleNewJiraIssueProjectSelect(selectionKey)}
+                              className="items-center gap-2 px-3 py-2 text-xs"
+                            >
+                              <Check
+                                className={cn(
+                                  'size-3.5 text-foreground',
+                                  selected ? 'opacity-100' : 'opacity-0'
+                                )}
+                              />
+                              <span className="min-w-0 flex-1 truncate">
+                                {getJiraProjectDisplayLabel(
+                                  project,
+                                  includeJiraSiteNameInProjectLabel
+                                )}
+                              </span>
+                            </CommandItem>
+                          )
+                        })}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-medium text-muted-foreground">Issue type</label>
