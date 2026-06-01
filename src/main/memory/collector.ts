@@ -36,13 +36,15 @@ import type { Store } from '../persistence'
 import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
 import { listRegisteredPtys } from './pty-registry'
 
+export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'>
+
 // ─── Module state ───────────────────────────────────────────────────
 
 let inflight: Promise<MemorySnapshot> | null = null
 
 // ─── Public API ─────────────────────────────────────────────────────
 
-export async function collectMemorySnapshot(store: Store): Promise<MemorySnapshot> {
+export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   // Why: coalescing relies on the persistence store being a process-wide
   // singleton at runtime. Concurrent callers all hand in the same instance,
   // so it is safe to return the existing in-flight promise (which was
@@ -380,7 +382,7 @@ type WorktreeBucket = {
 
 function resolveWorktreeNames(
   worktreeId: string,
-  store: Store
+  store: MemorySnapshotStore
 ): {
   worktreeName: string
   repoId: string
@@ -413,7 +415,7 @@ function makeEmptyBucket(
 
 // ─── Main collection path ───────────────────────────────────────────
 
-async function runSnapshot(store: Store): Promise<MemorySnapshot> {
+async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   const processIndex = await enumerateProcesses()
   const appBuckets = bucketElectronMetrics(processIndex)
   const ptys = listRegisteredPtys()

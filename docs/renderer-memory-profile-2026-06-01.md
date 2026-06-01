@@ -89,3 +89,16 @@ forcing profiling to use the packaged CLI fallback.
 The follow-up fix teaches the installer to recognize only generated Orca Unix
 launcher files as stale and replaceable. Arbitrary regular files at the command
 path remain conflicts.
+
+## Follow-up: Repeatable Memory Diagnostics
+
+The next profiling blocker was repeatability: collecting a useful memory sample
+still required combining Resource Usage IPC, terminal lists, browser tab state,
+and host process output by hand. This branch adds `orca diagnostics memory`,
+which exposes the existing main-process memory collector through runtime RPC.
+
+The command returns the same `MemorySnapshot` shape used by Resource Usage when
+run with `--json`, including host memory, Orca app process buckets, worktree
+terminal memory, per-session process roots, and history samples. Text output
+prints a compact point-in-time summary and the top worktrees by retained
+terminal memory.

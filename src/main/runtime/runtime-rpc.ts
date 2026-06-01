@@ -141,6 +141,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'browser.tabCreate',
   'browser.viewport',
   'clipboard.saveImageAsTempFile',
+  'diagnostics.memory',
   'files.createFile',
   'files.list',
   'files.open',

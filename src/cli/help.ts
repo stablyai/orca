@@ -11,6 +11,9 @@ Startup:
   serve                     Start a headless Orca runtime server
   status                    Show app/runtime/graph readiness
 
+Diagnostics:
+  diagnostics memory        Collect a memory snapshot for Orca and managed terminals
+
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
   environment list          List saved remote Orca runtimes
@@ -161,6 +164,7 @@ Common Commands:
   orca open [--json]
   orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]
   orca status [--json]
+  orca diagnostics memory [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
@@ -254,6 +258,7 @@ Browser Options:
 Examples:
   $ orca open
   $ orca status --json
+  $ orca diagnostics memory --json
   $ orca repo list
   $ orca worktree create --repo name:orca --name cli-test-1 --issue 273
   $ orca worktree show --worktree branch:Jinwoo-H/cli

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { MemorySnapshotStore } from './collector'
 
 type AppMetricFixture = {
   pid: number
@@ -37,7 +37,7 @@ async function loadCollector() {
 const emptyStore = {
   getWorktreeMeta: () => undefined,
   getRepo: () => undefined
-} as unknown as Store
+} satisfies MemorySnapshotStore
 
 describe('parsePsOutput', () => {
   it('parses a well-formed listing into rows', async () => {
