@@ -234,7 +234,7 @@ describe('resolveWorktreeStatus', () => {
           2: 'bash'
         }
       },
-      freshHookLeafIdsByTabId: {
+      agentStatusPaneIdsByTabId: {
         'tab-1': new Set([LEAF_ID_1])
       },
       terminalLayoutsByTabId: {
@@ -259,7 +259,7 @@ describe('resolveWorktreeStatus', () => {
           1: 'codex [working]'
         }
       },
-      freshHookLeafIdsByTabId: {
+      agentStatusPaneIdsByTabId: {
         'tab-1': new Set([LEAF_ID_1])
       },
       hasPermission: false,
@@ -282,7 +282,7 @@ describe('resolveWorktreeStatus', () => {
           2: 'codex [working]'
         }
       },
-      freshHookLeafIdsByTabId: {
+      agentStatusPaneIdsByTabId: {
         'tab-1': new Set([LEAF_ID_1])
       },
       terminalLayoutsByTabId: {

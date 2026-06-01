@@ -102,7 +102,7 @@ function getSectionWorktreeStatus(
     browserTabs: state.browserTabsByWorktree[worktreeId] ?? [],
     ptyIdsByTabId: selectLivePtyIdsForWorktree(state, worktreeId),
     runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, worktreeId),
-    freshHookLeafIdsByTabId: agentSummary.freshHookLeafIdsByTabId,
+    agentStatusPaneIdsByTabId: agentSummary.agentStatusPaneIdsByTabId,
     terminalLayoutsByTabId: selectTerminalLayoutsForWorktree(state, worktreeId),
     hasPermission: agentSummary.hasPermission,
     hasLiveWorking: agentSummary.hasLiveWorking,
