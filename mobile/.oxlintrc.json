@@ -1,4 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "rules": {}
+  "rules": {
+    "curly": "error"
+  }
 }

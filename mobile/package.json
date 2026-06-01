@@ -10,6 +10,7 @@
     "test": "vitest run",
     "lint": "oxlint",
     "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
     "mock-server": "npx tsx scripts/mock-server.ts"
   },
   "dependencies": {
