@@ -4438,6 +4438,28 @@ describe('OrcaRuntimeService', () => {
     expect(appendRecentPtyOutput(undefined, data)).toBe(data.slice(-4096))
   })
 
+  it('applies terminal redraw controls before retaining previews', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'Working\rWorking 1s\rWorking 2s', 100)
+
+    const carriageRead = await runtime.readTerminal(terminal.handle)
+    expect(carriageRead.tail).toEqual(['Working 2s'])
+    expect(carriageRead.latestCursor).toBe('0')
+
+    runtime.onPtyData('pty-1', '\b\b3s', 101)
+    const backspaceRead = await runtime.readTerminal(terminal.handle)
+    expect(backspaceRead.tail).toEqual(['Working 3s'])
+    expect(backspaceRead.latestCursor).toBe('0')
+
+    runtime.onPtyData('pty-1', '\rDone\n', 102)
+    const completedRead = await runtime.readTerminal(terminal.handle)
+    expect(completedRead.tail).toEqual(['Done'])
+    expect(completedRead.latestCursor).toBe('1')
+  })
+
   it('bounds retained partial terminal output before preview reads', async () => {
     const runtime = new OrcaRuntimeService(store)
 

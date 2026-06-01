@@ -46,6 +46,15 @@ describe('renderer crash diagnostics', () => {
         }
       }
     })
+    vi.doMock('../components/browser-pane/webview-registry', () => ({
+      getBrowserWebviewMemoryProfile: () => ({
+        browserWebviewCount: 4,
+        parkedBrowserWebviewCount: 2,
+        registeredBrowserGuestCount: 3,
+        hiddenBrowserWebviewCount: 2,
+        maxParkedBrowserWebviews: 6
+      })
+    }))
     diagnostics = (await import('./crash-diagnostics')) as DiagnosticsModule
   })
 
@@ -74,7 +83,12 @@ describe('renderer crash diagnostics', () => {
         reason: 'startup',
         usedHeapMB: 32,
         totalHeapMB: 64,
-        heapLimitMB: 512
+        heapLimitMB: 512,
+        browserWebviews: 4,
+        parkedBrowserWebviews: 2,
+        registeredBrowserGuests: 3,
+        hiddenBrowserWebviews: 2,
+        maxParkedBrowserWebviews: 6
       }
     })
 

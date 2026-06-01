@@ -320,16 +320,28 @@ export function collectSubtree(index: ProcIndex, root: number): number[] {
 
 type AppBucketsRaw = Omit<AppMemory, 'history'>
 
-function bucketElectronMetrics(): AppBucketsRaw {
+function electronMetricMemoryBytes(
+  proc: ReturnType<typeof app.getAppMetrics>[number],
+  processIndex: ProcIndex
+): number {
+  const hostMemory = processIndex.byPid.get(proc.pid)?.memory
+  if (typeof hostMemory === 'number' && Number.isFinite(hostMemory) && hostMemory > 0) {
+    return hostMemory
+  }
+  // Why: on macOS, app.getAppMetrics().workingSetSize can include large shared
+  // Chromium/Electron mappings. Prefer the host RSS sweep used elsewhere, but
+  // keep workingSetSize as a fallback when the process disappears mid-snapshot.
+  return clampNumber(proc.memory?.workingSetSize) * 1024
+}
+
+function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
   const main = { cpu: 0, memory: 0 }
   const renderer = { cpu: 0, memory: 0 }
   const other = { cpu: 0, memory: 0 }
 
   for (const proc of app.getAppMetrics()) {
     const cpu = clampNumber(proc.cpu?.percentCPUUsage)
-    // Electron reports workingSetSize in KB. Convert up front so every
-    // memory value in the snapshot is in bytes.
-    const memoryBytes = clampNumber(proc.memory?.workingSetSize) * 1024
+    const memoryBytes = electronMetricMemoryBytes(proc, processIndex)
 
     // Why: lowercase once so future Electron versions emitting different
     // casing ('browser' vs 'Browser') still bucket correctly.
@@ -403,7 +415,7 @@ function makeEmptyBucket(
 
 async function runSnapshot(store: Store): Promise<MemorySnapshot> {
   const processIndex = await enumerateProcesses()
-  const appBuckets = bucketElectronMetrics()
+  const appBuckets = bucketElectronMetrics(processIndex)
   const ptys = listRegisteredPtys()
 
   // Why: when two PTYs share an ancestor in the process tree (e.g. a

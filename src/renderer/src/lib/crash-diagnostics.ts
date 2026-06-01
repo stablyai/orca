@@ -2,6 +2,7 @@ import type {
   CrashReportBreadcrumbData,
   CrashReportDetailValue
 } from '../../../shared/crash-reporting'
+import { getBrowserWebviewMemoryProfile } from '../components/browser-pane/webview-registry'
 
 const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 const BYTES_PER_MEGABYTE = 1024 * 1024
@@ -98,6 +99,7 @@ function recordRendererMemory(reason: string): void {
   if (!memory) {
     return
   }
+  const browserWebviews = getBrowserWebviewMemoryProfile()
 
   recordRendererCrashBreadcrumb(
     'renderer_memory',
@@ -105,7 +107,12 @@ function recordRendererMemory(reason: string): void {
       reason,
       usedHeapMB: toMegabytes(memory.usedJSHeapSize),
       totalHeapMB: toMegabytes(memory.totalJSHeapSize),
-      heapLimitMB: toMegabytes(memory.jsHeapSizeLimit)
+      heapLimitMB: toMegabytes(memory.jsHeapSizeLimit),
+      browserWebviews: browserWebviews.browserWebviewCount,
+      parkedBrowserWebviews: browserWebviews.parkedBrowserWebviewCount,
+      registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount,
+      hiddenBrowserWebviews: browserWebviews.hiddenBrowserWebviewCount,
+      maxParkedBrowserWebviews: browserWebviews.maxParkedBrowserWebviews
     })
   )
 }

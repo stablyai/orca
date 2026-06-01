@@ -250,11 +250,7 @@ function Terminal(): React.JSX.Element | null {
 
   // Why: the TabBar is rendered into the titlebar via a portal so tabs share
   // the same row as the "Orca" title. The target element is created by App.tsx.
-  // Uses useEffect because the DOM element doesn't exist during the render phase.
-  const [titlebarTabsTarget, setTitlebarTabsTarget] = useState<HTMLElement | null>(null)
-  useEffect(() => {
-    setTitlebarTabsTarget(document.getElementById('titlebar-tabs'))
-  }, [])
+  const titlebarTabsTarget = document.getElementById('titlebar-tabs')
 
   useEffect(() => {
     if (!activeWorktreeId) {
@@ -1765,9 +1761,9 @@ function Terminal(): React.JSX.Element | null {
               })}
           </div>
 
-          {/* Browser panes container — all browser panes for the active worktree
-              stay mounted so webview DOM state (scroll position, form inputs, etc.)
-              survives tab switches. BrowserPagePane uses isActive + CSS to show/hide. */}
+          {/* Browser panes container — only the active pane mounts so inactive
+              webviews park into the bounded registry instead of keeping hidden
+              Electron guest renderers alive indefinitely. */}
           <div
             className={`relative flex-1 min-h-0 overflow-hidden ${
               activeTabType !== 'browser' ? 'hidden' : ''
@@ -1798,7 +1794,9 @@ function Terminal(): React.JSX.Element | null {
                         key={browserTab.id}
                         className={`absolute inset-0${isBrowserActive ? '' : ' pointer-events-none hidden'}`}
                       >
-                        <BrowserPane browserTab={browserTab} isActive={isBrowserActive} />
+                        {isBrowserActive ? (
+                          <BrowserPane browserTab={browserTab} isActive={isBrowserActive} />
+                        ) : null}
                       </div>
                     )
                   })}

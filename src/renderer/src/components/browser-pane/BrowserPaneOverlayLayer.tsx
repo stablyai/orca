@@ -7,11 +7,11 @@ import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 import { useBrowserAutomationVisibilityForAny } from './browser-automation-visibility'
 
 // Why: Electron `<webview>` destroys its guest contents whenever its DOM
-// parent changes. Rendering one BrowserPane per tab at the worktree level
-// (keyed only by browserTab.id) means moving a tab between groups never
-// remounts the pane and never reparents the webview — it only updates the
-// overlay's CSS `position-anchor` so the pane tracks the new owning group's
-// body via native CSS anchor positioning.
+// parent changes. Rendering paintable BrowserPanes at the worktree level
+// (keyed only by browserTab.id) means moving an active tab between groups
+// never reparents the webview — it only updates the overlay's CSS
+// `position-anchor` so the pane tracks the new owning group's body via
+// native CSS anchor positioning.
 
 type BrowserOverlayAssignment = {
   groupId: string
@@ -26,7 +26,7 @@ type BrowserOverlaySlotProps = {
   browserTab: BrowserTabState
   // Why: `undefined` means this browser tab has no owning group (an "orphan" —
   // present in `browserTabs` but not referenced by any group's unified-tab
-  // list). See the fallback branch below for why we keep such tabs mounted.
+  // list). See the fallback branch below for why these slots remain hidden.
   groupId: string | undefined
   isActive: boolean
   // Why: the legacy architecture rendered BrowserPane inside TabGroupPanel, so
@@ -67,10 +67,8 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   // groups, only `positionAnchor` changes and the browser relayouts on its
   // own — no measurement or state updates.
   //
-  // The orphan branch (no anchorName) keeps the pane mounted at 0×0
-  // display:none so the DOM parent stays stable and the `<webview>` guest
-  // survives until the tab is reassigned (e.g. mid-move) or explicitly
-  // destroyed via `closeBrowserTab`.
+  // The orphan branch (no anchorName) stays display:none until the tab is
+  // reassigned (e.g. mid-move) or explicitly destroyed via `closeBrowserTab`.
   const style: React.CSSProperties = useMemo(
     () =>
       anchorName
@@ -109,7 +107,10 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
       onPointerDown={handleFocus}
       onFocusCapture={handleFocus}
     >
-      <BrowserPane browserTab={browserTab} isActive={isActive} />
+      {/* Why: inactive BrowserPane subtrees keep Electron guest renderers alive.
+          Unmounting parks the webview in the registry, where eviction enforces
+          the small recent-tab cap; automation-visible panes stay paintable. */}
+      {isPaintable ? <BrowserPane browserTab={browserTab} isActive={isActive} /> : null}
     </div>
   )
 })
@@ -159,14 +160,12 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
 
   // Map each browser tab to the group that owns it (if any) and whether it's
   // the currently active tab in that group. Tabs that exist in `browserTabs`
-  // but are not referenced by any group's unified-tab list are "orphans": we
-  // still render the pane (at 0×0 display:none — see fallback branch below)
-  // so the `<webview>` survives until the tab is either reassigned or
-  // explicitly destroyed. In normal flows this is a transient mid-move
-  // state, not a steady state: closing a tab calls `closeBrowserTab` which
-  // removes it from `browserTabs` (and `destroyPersistentWebview` tears
-  // down the guest), and "Close Group" closes each browser tab before
-  // collapsing the group shell — no follow-to-sibling migration happens.
+  // but are not referenced by any group's unified-tab list are "orphans". In
+  // normal flows this is a transient mid-move state, not a steady state:
+  // closing a tab calls `closeBrowserTab` which removes it from `browserTabs`
+  // (and `destroyPersistentWebview` tears down the guest), and "Close Group"
+  // closes each browser tab before collapsing the group shell — no
+  // follow-to-sibling migration happens.
   const assignments = useMemo(() => {
     const entries = new Map<string, BrowserOverlayAssignment>()
     for (const tab of unifiedTabs) {

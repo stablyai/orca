@@ -13106,7 +13106,12 @@ export function appendNormalizedToTailBuffer(
   // larger line transcript for pagination, but keep partial-line work bounded.
   const previousPartialWasCapped = previousPartialLine.length > MAX_TAIL_PARTIAL_CHARS
   const boundedPreviousPartialLine = previousPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
-  const pieces = `${boundedPreviousPartialLine}${normalizedChunk}`.split('\n')
+  // Why: status UIs redraw a single line with CR/backspace controls. Terminal
+  // previews are text, not a full screen model, so retain the latest visible
+  // redraw segment instead of appending every spinner frame.
+  const pieces = `${boundedPreviousPartialLine}${normalizedChunk}`
+    .split('\n')
+    .map(applyTerminalLineControls)
   const nextPartialLine = (pieces.pop() ?? '').replace(/[ \t]+$/g, '')
   const retainedPartialLine = nextPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
   const newCompleteLines = pieces.length
@@ -13144,6 +13149,25 @@ export function appendNormalizedToTailBuffer(
     truncated,
     newCompleteLines
   }
+}
+
+function applyTerminalLineControls(line: string): string {
+  const carriageIndex = line.lastIndexOf('\r')
+  const latestRedraw = carriageIndex >= 0 ? line.slice(carriageIndex + 1) : line
+  if (!latestRedraw.includes('\u0008')) {
+    return latestRedraw
+  }
+
+  const chars: string[] = []
+  for (let index = 0; index < latestRedraw.length; index += 1) {
+    const char = latestRedraw[index]
+    if (char === '\u0008') {
+      chars.pop()
+    } else {
+      chars.push(char)
+    }
+  }
+  return chars.join('')
 }
 
 function tailStateMatches(
@@ -13658,12 +13682,10 @@ function normalizeTerminalChunk(chunk: string): string {
   }
   return chunk
     .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
     .replace(/\x1b[@-_]/g, '')
-    .replace(/\u0008/g, '')
-    .replace(/[^\x09\x0a\x20-\x7e]/g, '')
+    .replace(/[^\x08\x09\x0a\x0d\x20-\x7e]/g, '')
 }
 
 function terminalChunkNeedsNormalization(chunk: string): boolean {

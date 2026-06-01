@@ -1,0 +1,78 @@
+# Renderer Memory Profile, 2026-06-01
+
+## Scope
+
+This profile investigated high Orca renderer memory while working in
+`/Users/nwparker/orca/workspaces/orca/goal`. The user suspected the browser
+might not actually have an open tab, so the investigation checked browser,
+renderer, terminal, and Resource Usage attribution paths separately.
+
+## Live Evidence
+
+- Orca runtime was reachable through the packaged CLI fallback. The public
+  `/usr/local/bin/orca` shim pointed at a removed development app path, so it
+  failed before contacting the runtime.
+- `orca tab list --worktree all --json` returned `tabs: []`. There were no live
+  Orca browser tabs in the measured session.
+- The live packaged app had one renderer process and no separate browser guest
+  renderer process. A later `ps` sample showed:
+  - main process: 390 MB RSS
+  - renderer process: 460 MB RSS, about 40 percent CPU
+  - GPU process: 145 MB RSS
+  - network service: 59 MB RSS
+  - audio service: 48 MB RSS
+- `sample` on the renderer showed V8, IPC, and deserialization stacks while the
+  renderer was busy. It did not show browser guest activity.
+- `vmmap -summary` on the renderer showed about 218 MB physical footprint and a
+  373 MB peak, while total resident accounting was about 1.7 GB. Most of that
+  larger number was shared Electron/Chromium mappings, especially read-only
+  library mappings.
+- `orca terminal list --worktree active --json` showed the active Codex terminal
+  preview retaining repeated status redraw fragments such as repeated
+  `Working` text. The retained terminal tail buffers were bounded, but the
+  text normalization path was treating redraw controls as append-only text.
+
+## Findings
+
+1. Browser tabs were not the live-session memory source. The session had no
+   browser tabs and no browser guest renderer process.
+2. The browser-pane retention fix is still useful: inactive worktree browser
+   webviews are now unmounted so Chromium can release guest renderers. Browser
+   state remains in Orca, and automation-visible webviews stay mounted so
+   agent-browser can keep driving them.
+3. Resource Usage was using `app.getAppMetrics().memory.workingSetSize` for
+   Orca app buckets. On macOS this can count large shared Electron/Chromium
+   mappings and make the renderer look much larger than its private footprint.
+4. The active terminal path was producing noisy previews from TUI redraws. This
+   explains the high active renderer churn observed during the profile, even
+   though the terminal memory buffers were already capped.
+
+## Changes Made
+
+- Browser panes now mount their backing webview only when the pane is active or
+  automation-visible. This sleeps inactive worktree browser guest renderers
+  without sleeping the main Orca renderer.
+- Browser crash breadcrumbs now include webview counts, parked webview counts,
+  hidden webviews, and registered browser guest counts.
+- The memory collector now prefers the existing host process RSS sweep for
+  Electron app bucket memory, falling back to Electron working-set data only
+  when a host row is missing.
+- Terminal preview retention now applies carriage-return and backspace redraw
+  controls before appending text to the retained preview tail.
+
+## Validation
+
+- Browser overlay, webview registry, and crash diagnostics tests passed.
+- Browser tab e2e tests passed.
+- Memory collector tests passed, including host RSS preference and fallback
+  coverage.
+- Runtime terminal tests passed for carriage-return and backspace redraw
+  normalization, plus the existing bounded partial-tail coverage.
+
+## Remaining Risk
+
+The current packaged Orca app was not running this worktree's patched code
+during the live profile. The fixes are covered by unit and e2e tests, but the
+next packaged build should be re-profiled under the same active Codex TUI load
+to confirm the Resource Usage display and terminal previews match the expected
+lower-churn behavior.
