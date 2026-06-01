@@ -88,6 +88,7 @@ function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefi
 
 function showPreservedBranchToast(
   result: RemoveWorktreeResult | undefined,
+  worktree: Pick<Worktree, 'displayName' | 'isMainWorktree'> | undefined,
   onForceDelete: (branchName: string, expectedHead: string) => void
 ): void {
   const preservedBranch = result?.preservedBranch
@@ -95,6 +96,10 @@ function showPreservedBranchToast(
   if (!branch) {
     return
   }
+  const targetTitle = worktree?.isMainWorktree ? 'Workspace' : 'Worktree'
+  const targetLabel = targetTitle.toLowerCase()
+  const targetName = worktree?.displayName?.trim()
+  const deletedTarget = targetName ? ` after deleting ${targetLabel} "${targetName}"` : ''
   const expectedHead = preservedBranch.head
   const action = expectedHead
     ? {
@@ -102,8 +107,8 @@ function showPreservedBranchToast(
         onClick: () => onForceDelete(branch, expectedHead)
       }
     : undefined
-  toast.warning('Workspace deleted, branch kept', {
-    description: `Git could not safely delete "${branch}", so Orca kept it to avoid losing local commits.`,
+  toast.warning(`${targetTitle} deleted, branch kept`, {
+    description: `Git could not safely delete branch "${branch}"${deletedTarget}, so Orca kept it to avoid losing local commits.`,
     ...(action ? { action } : {})
   })
 }
@@ -1108,6 +1113,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const trustDecision = await ensureHooksConfirmed(get(), repoIdForTrust, 'archive')
       const skipArchive = trustDecision === 'skip'
 
+      const worktreeBeforeRemoval = get()
+        .allWorktrees()
+        .find((entry) => entry.id === worktreeId)
       const target = getActiveRuntimeTarget(get().settings)
       const removalResult = await (target.kind === 'local'
         ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
@@ -1118,10 +1126,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             { timeoutMs: 60_000 }
           ))
 
-      const worktreeDisplayName = get()
-        .allWorktrees()
-        .find((entry) => entry.id === worktreeId)
-        ?.displayName?.trim()
+      const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()
       if (worktreeDisplayName) {
         try {
           await window.api.automations?.snapshotWorkspaceName?.({
@@ -1338,7 +1343,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
       get().removeWorkspaceSpaceWorktrees?.([worktreeId])
-      showPreservedBranchToast(removalResult, (branch, expectedHead) => {
+      showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
         void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
       })
       return removalResult?.preservedBranch

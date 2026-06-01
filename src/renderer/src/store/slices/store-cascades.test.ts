@@ -170,7 +170,14 @@ describe('removeWorktree cascade', () => {
 
     seedStore(store, {
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            displayName: 'Review cleanup'
+          })
+        ]
       }
     })
 
@@ -180,9 +187,9 @@ describe('removeWorktree cascade', () => {
       ok: true,
       preservedBranch: { branchName: 'feature/test', head: 'def456' }
     })
-    expect(toast.warning).toHaveBeenCalledWith('Workspace deleted, branch kept', {
+    expect(toast.warning).toHaveBeenCalledWith('Worktree deleted, branch kept', {
       description:
-        'Git could not safely delete "feature/test", so Orca kept it to avoid losing local commits.',
+        'Git could not safely delete branch "feature/test" after deleting worktree "Review cleanup", so Orca kept it to avoid losing local commits.',
       action: {
         label: 'Force Delete Branch',
         onClick: expect.any(Function)
