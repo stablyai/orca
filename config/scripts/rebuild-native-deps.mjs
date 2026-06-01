@@ -59,7 +59,11 @@ const forceRebuild =
 
 ensureElectronPackageInstalled()
 
-if (!forceRebuild) {
+const patchedNodePtyRebuildReason = forceRebuild ? null : getPatchedNodePtyRebuildReason()
+
+if (patchedNodePtyRebuildReason) {
+  console.log(`[rebuild] ${patchedNodePtyRebuildReason}`)
+} else if (!forceRebuild) {
   // Why: Windows cannot unlink a loaded .node DLL, so avoid @electron/rebuild
   // when the current install already works with Electron's ABI.
   const probe = probeElectronNativeModules(onlyModules)
@@ -337,6 +341,45 @@ function getElectronExecutablePath() {
     : resolve(electronPackageDir, 'dist', platformPath)
 }
 
+function getPatchedNodePtyRebuildReason() {
+  if (!requiresPatchedNodePtySourceBuild()) {
+    return null
+  }
+
+  // Why: Orca patches node-pty's native Unix spawn path; upstream prebuilds can
+  // load successfully in Electron while missing the patched fd/error handling.
+  const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
+  const missingArtifact = [
+    resolve(nodePtyDir, 'build', 'Release', 'pty.node'),
+    resolve(nodePtyDir, 'build', 'Release', 'spawn-helper')
+  ].find((artifactPath) => !existsSync(artifactPath))
+
+  if (!missingArtifact) {
+    return null
+  }
+
+  return 'Patched node-pty build artifacts are missing; rebuilding from source.'
+}
+
+function requiresPatchedNodePtySourceBuild() {
+  if (!onlyModules.includes('node-pty')) {
+    return false
+  }
+  if (rebuildPlatform === 'win32') {
+    return false
+  }
+  if (rebuildPlatform !== osPlatform() || rebuildArch !== process.arch) {
+    return false
+  }
+
+  const nodePtyPatchPath = resolve(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch')
+  if (!existsSync(nodePtyPatchPath)) {
+    return false
+  }
+
+  return existsSync(resolve(projectDir, 'node_modules', 'node-pty'))
+}
+
 function probeElectronNativeModules(moduleNames) {
   if (!electronPackageIsUsable()) {
     return { ok: false, status: null, stderr: 'Electron package binary is unavailable.' }
@@ -349,6 +392,7 @@ const { release } = require('node:os')
 const { resolve } = require('node:path')
 const projectRequire = createRequire(resolve(process.cwd(), 'package.json'))
 const moduleNames = ${JSON.stringify(moduleNames)}
+const requirePatchedNodePtySourceBuild = ${JSON.stringify(requiresPatchedNodePtySourceBuild())}
 const failures = []
 
 for (const moduleName of moduleNames) {
@@ -368,10 +412,21 @@ function loadNativeModule(moduleName) {
   if (moduleName === 'node-pty') {
     projectRequire('node-pty')
     const { loadNativeModule } = projectRequire('node-pty/lib/utils')
-    loadNativeModule(getNodePtyNativeModuleName())
+    const native = loadNativeModule(getNodePtyNativeModuleName())
+    if (requirePatchedNodePtySourceBuild && !isNodePtyReleaseBuildDir(native.dir)) {
+      throw new Error(
+        'node-pty resolved to ' +
+          native.dir +
+          '; expected build/Release so Orca\\'s node-pty patch is active'
+      )
+    }
     return
   }
   projectRequire(moduleName)
+}
+
+function isNodePtyReleaseBuildDir(nativeDir) {
+  return typeof nativeDir === 'string' && nativeDir.replace(/\\\\/g, '/').includes('build/Release/')
 }
 
 function getNodePtyNativeModuleName() {
