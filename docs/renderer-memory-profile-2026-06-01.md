@@ -102,3 +102,17 @@ run with `--json`, including host memory, Orca app process buckets, worktree
 terminal memory, per-session process roots, and history samples. Text output
 prints a compact point-in-time summary and the top worktrees by retained
 terminal memory.
+
+## Follow-up: Agent-Browser Paintability Guard
+
+The browser parking fix depends on automation-visible panes staying paintable
+without activating the user's worktree. The renderer bridge previously waited
+for two animation frames before creating the automation visibility lease, so the
+paint wait happened while the parked webview was still hidden. Non-screenshot
+agent-browser commands could therefore start immediately after the lease was
+created, before React had made the hidden pane paintable.
+
+The follow-up changes the order: create the automation visibility lease first,
+then wait for paint while the pane is actually visible to automation. A
+renderer-side timeout releases the lease if paint never arrives, so a hung RAF
+does not pin an inactive browser pane indefinitely.
