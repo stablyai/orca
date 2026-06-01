@@ -1457,6 +1457,47 @@ function ResolvedCommentGroupAccordion({
   )
 }
 
+function findVerticalScrollParent(element: HTMLElement): HTMLElement | null {
+  let parent = element.parentElement
+  while (parent) {
+    const style = window.getComputedStyle(parent)
+    const canScroll = style.overflowY === 'auto' || style.overflowY === 'scroll'
+    if (canScroll && parent.scrollHeight > parent.clientHeight) {
+      return parent
+    }
+    parent = parent.parentElement
+  }
+  return null
+}
+
+function scrollElementBottomIntoView(element: HTMLElement): void {
+  const scrollParent = findVerticalScrollParent(element)
+  if (!scrollParent) {
+    element.scrollIntoView({ block: 'end', behavior: 'smooth' })
+    return
+  }
+
+  const padding = 8
+  const parentRect = scrollParent.getBoundingClientRect()
+  const elementRect = element.getBoundingClientRect()
+  const bottomOverflow = elementRect.bottom - parentRect.bottom + padding
+  if (bottomOverflow > 0) {
+    scrollParent.scrollTo({
+      top: scrollParent.scrollTop + bottomOverflow,
+      behavior: 'smooth'
+    })
+    return
+  }
+
+  const topOverflow = elementRect.top - parentRect.top - padding
+  if (topOverflow < 0) {
+    scrollParent.scrollTo({
+      top: Math.max(0, scrollParent.scrollTop + topOverflow),
+      behavior: 'smooth'
+    })
+  }
+}
+
 /** Renders the PR comments section below checks. */
 export function PRCommentsList({
   comments,
@@ -1478,12 +1519,81 @@ export function PRCommentsList({
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [replyingGroupId, setReplyingGroupId] = useState<string | null>(null)
   const [isAddingComment, setIsAddingComment] = useState(false)
+  const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
+  const shouldScrollAddCommentRef = useRef(false)
   const commentCounts = React.useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = React.useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
     [commentFilter, comments]
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
+  useEffect(() => {
+    if (!isAddingComment || !shouldScrollAddCommentRef.current) {
+      return
+    }
+    shouldScrollAddCommentRef.current = false
+    let secondFrame: number | null = null
+    const scrollComposerIntoView = (): void => {
+      const surface = addCommentSurfaceRef.current
+      if (surface) {
+        scrollElementBottomIntoView(surface)
+      }
+    }
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(scrollComposerIntoView)
+    })
+    // Why: the composer expands and focuses in separate layout passes; the
+    // timeout catches the final height so the footer is visible in short panels.
+    const settledTimer = window.setTimeout(scrollComposerIntoView, 120)
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      if (secondFrame !== null) {
+        window.cancelAnimationFrame(secondFrame)
+      }
+      window.clearTimeout(settledTimer)
+    }
+  }, [isAddingComment])
+
+  const startAddComment = useCallback(() => {
+    shouldScrollAddCommentRef.current = true
+    setIsAddingComment(true)
+  }, [])
+
+  const cancelAddComment = useCallback(() => {
+    shouldScrollAddCommentRef.current = false
+    setIsAddingComment(false)
+  }, [])
+
+  const renderAddCommentSurface = (empty: boolean): React.JSX.Element => (
+    <div
+      ref={addCommentSurfaceRef}
+      className={cn(empty ? 'px-3 py-2' : 'border-t border-border px-3 py-2')}
+    >
+      {isAddingComment ? (
+        <RightPanelCommentComposer
+          placeholder={empty ? 'Start conversation...' : 'Add a PR comment'}
+          submitLabel="Comment"
+          autoFocus
+          disabled={commentsDisabled}
+          disabledReason={commentsDisabledReason}
+          onCancel={cancelAddComment}
+          onSubmit={onAddComment ?? (async () => ({ ok: false, error: 'Commenting unavailable.' }))}
+        />
+      ) : (
+        // Why: the empty comments state should be a single composer affordance;
+        // duplicating "no comments" copy or the header icon makes the panel noisy.
+        <button
+          type="button"
+          disabled={commentsDisabled}
+          title={commentsDisabled ? commentsDisabledReason : undefined}
+          className="flex h-10 w-full min-w-0 items-center rounded-md border border-input bg-background px-3 text-left text-[12px] text-muted-foreground shadow-xs transition-colors hover:border-ring/50 hover:bg-accent/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={startAddComment}
+        >
+          <span className="truncate">{empty ? 'Start conversation...' : 'Add a comment...'}</span>
+        </button>
+      )}
+    </div>
+  )
 
   return (
     <div className="border-t border-border">
@@ -1530,11 +1640,11 @@ export function PRCommentsList({
         <div className="flex items-center justify-center py-6">
           <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
         </div>
+      ) : comments.length === 0 && onAddComment ? (
+        renderAddCommentSurface(true)
       ) : comments.length === 0 ? (
-        // Why: with the composer pinned below as the call to action, the empty
-        // state stays a quiet caption instead of competing for attention.
         <div className="flex items-center justify-center py-5 text-[11px] text-muted-foreground">
-          {onAddComment ? 'No comments yet — start the conversation below.' : 'No comments'}
+          No comments
         </div>
       ) : visibleComments.length === 0 ? (
         <div className="flex items-center justify-center py-5 text-[11px] text-muted-foreground">
@@ -1574,34 +1684,7 @@ export function PRCommentsList({
           })}
         </div>
       )}
-      {onAddComment && (
-        <div className="border-t border-border px-3 py-2">
-          {isAddingComment ? (
-            <RightPanelCommentComposer
-              placeholder="Add a PR comment"
-              submitLabel="Comment"
-              autoFocus
-              disabled={commentsDisabled}
-              disabledReason={commentsDisabledReason}
-              onCancel={() => setIsAddingComment(false)}
-              onSubmit={onAddComment}
-            />
-          ) : (
-            // Quiet full-width affordance that reads as a composer field, not a
-            // lonely button; clicking expands the markdown editor in place.
-            <button
-              type="button"
-              disabled={commentsDisabled}
-              title={commentsDisabled ? commentsDisabledReason : undefined}
-              className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-background px-2.5 text-left text-[12px] text-muted-foreground transition-colors hover:border-ring/50 hover:bg-accent/30 disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => setIsAddingComment(true)}
-            >
-              <MessageSquare className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate">Add a comment…</span>
-            </button>
-          )}
-        </div>
-      )}
+      {onAddComment && comments.length > 0 && renderAddCommentSurface(false)}
     </div>
   )
 }

@@ -81,7 +81,6 @@ export function RightPanelCommentComposer({
   const autoFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMac = navigator.userAgent.includes('Mac')
-  const modLabel = isMac ? '⌘' : 'Ctrl'
 
   useEffect(() => {
     const textarea = textareaRef.current
@@ -176,7 +175,10 @@ export function RightPanelCommentComposer({
 
   return (
     <div
-      className={cn('min-w-0 rounded-md border border-border bg-background', className)}
+      className={cn(
+        'min-w-0 overflow-hidden rounded-md border border-border bg-background',
+        className
+      )}
       onClick={stopPropagation}
       onMouseDown={stopPropagation}
     >
@@ -219,39 +221,43 @@ export function RightPanelCommentComposer({
           {error}
         </div>
       )}
-      <div className="flex min-w-0 items-center justify-between gap-2 border-t border-border px-2 py-1.5">
-        <ShortcutKeyCombo
-          keys={[modLabel, 'Enter']}
-          className="shrink text-[10px] [&_span]:min-w-0 [&_span]:px-1"
-          separatorClassName="mx-0 text-[10px] text-muted-foreground"
-        />
-        <div className="flex shrink-0 items-center gap-1">
-          {onCancel && (
+      <div className="flex min-w-0 items-center justify-end gap-1 border-t border-border px-2 py-1.5">
+        {onCancel && (
+          <Button type="button" variant="ghost" size="xs" disabled={submitting} onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
             <Button
               type="button"
-              variant="ghost"
               size="xs"
-              disabled={submitting}
-              onClick={onCancel}
+              disabled={disabled || submitting || body.trim().length === 0}
+              onClick={() => void submit()}
             >
-              Cancel
+              {submitting ? (
+                <LoaderCircle className="size-3 animate-spin" />
+              ) : (
+                <Send className="size-3" />
+              )}
+              {submitLabel}
             </Button>
-          )}
-          <Button
-            type="button"
-            size="xs"
-            disabled={disabled || submitting || body.trim().length === 0}
-            title={disabled ? disabledReason : undefined}
-            onClick={() => void submit()}
-          >
-            {submitting ? (
-              <LoaderCircle className="size-3 animate-spin" />
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {disabled && disabledReason ? (
+              <span>{disabledReason}</span>
             ) : (
-              <Send className="size-3" />
+              <span className="flex items-center gap-2">
+                <span>{submitLabel}</span>
+                <ShortcutKeyCombo
+                  keys={[isMac ? '⌘' : 'Ctrl', 'Enter']}
+                  className="shrink text-[10px] [&_span]:min-w-0 [&_span]:px-1"
+                  separatorClassName="mx-0 text-[10px] text-muted-foreground"
+                />
+              </span>
             )}
-            {submitLabel}
-          </Button>
-        </div>
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )

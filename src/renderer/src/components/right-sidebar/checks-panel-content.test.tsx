@@ -122,8 +122,25 @@ describe('PRCommentsList', () => {
       })
     )
 
-    expect(markup.indexOf('Existing review context')).toBeLessThan(markup.indexOf('Add a comment…'))
+    expect(markup.indexOf('Existing review context')).toBeLessThan(
+      markup.indexOf('Add a comment...')
+    )
     expect(markup).not.toContain('Add a PR comment')
+  })
+
+  it('uses the collapsed composer as the empty comments state', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(PRCommentsList, {
+        comments: [],
+        commentsLoading: false,
+        onAddComment: () => Promise.resolve({ ok: true as const })
+      })
+    )
+
+    expect(markup).toContain('Start conversation...')
+    expect(markup).not.toContain('No comments yet')
+    expect(markup).not.toContain('Add a comment')
+    expect((markup.match(/lucide-message-square/g) ?? []).length).toBe(1)
   })
 })
 
