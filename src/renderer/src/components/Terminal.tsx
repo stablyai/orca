@@ -178,8 +178,11 @@ function getKeybindingContext(target: EventTarget | null): KeybindingContext {
 }
 
 function Terminal(): React.JSX.Element | null {
+  const mountedWorktreeIdsRef = useRef(new Set<string>())
+  const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
   const allWorktrees = useAllWorktrees()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const renderedActiveWorktreeId = activeWorktreeId
   const activeView = useAppStore((s) => s.activeView)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
@@ -227,7 +230,9 @@ function Terminal(): React.JSX.Element | null {
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const setTabBarOrder = useAppStore((s) => s.setTabBarOrder)
   const tabBarOrderByWorktree = useAppStore((s) => s.tabBarOrderByWorktree)
-  const tabBarOrder = activeWorktreeId ? tabBarOrderByWorktree[activeWorktreeId] : undefined
+  const tabBarOrder = renderedActiveWorktreeId
+    ? tabBarOrderByWorktree[renderedActiveWorktreeId]
+    : undefined
   // Why (anchored to selected thread, not active tab): the activity page
   // publishes the full {target, worktreeId, tabId} descriptor sourced from
   // its selectedThread. Deriving worktreeId/tabId from activeWorktreeId/
@@ -239,8 +244,8 @@ function Terminal(): React.JSX.Element | null {
   )
 
   const tabs = useMemo(
-    () => (activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []),
-    [activeWorktreeId, tabsByWorktree]
+    () => (renderedActiveWorktreeId ? (tabsByWorktree[renderedActiveWorktreeId] ?? []) : []),
+    [renderedActiveWorktreeId, tabsByWorktree]
   )
 
   // Why: the TabBar is rendered into the titlebar via a portal so tabs share
@@ -262,22 +267,22 @@ function Terminal(): React.JSX.Element | null {
   }, [activeWorktreeId, ensureWorktreeRootGroup])
 
   // Filter editor files to only show those belonging to the active worktree
-  const worktreeFiles = activeWorktreeId
-    ? openFiles.filter((f) => f.worktreeId === activeWorktreeId)
+  const worktreeFiles = renderedActiveWorktreeId
+    ? openFiles.filter((f) => f.worktreeId === renderedActiveWorktreeId)
     : []
-  const worktreeBrowserTabs = activeWorktreeId
-    ? (browserTabsByWorktree[activeWorktreeId] ?? [])
+  const worktreeBrowserTabs = renderedActiveWorktreeId
+    ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? [])
     : []
   const getEffectiveLayoutForWorktree = useCallback(
     (worktreeId: string) =>
       getEffectiveLayout(worktreeId, layoutByWorktree, groupsByWorktree, activeGroupIdByWorktree),
     [activeGroupIdByWorktree, groupsByWorktree, layoutByWorktree]
   )
-  const effectiveActiveLayout = activeWorktreeId
-    ? getEffectiveLayoutForWorktree(activeWorktreeId)
+  const effectiveActiveLayout = renderedActiveWorktreeId
+    ? getEffectiveLayoutForWorktree(renderedActiveWorktreeId)
     : undefined
-  const activeWorktreeBrowserTabIdsKey = activeWorktreeId
-    ? (browserTabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id).join(',')
+  const activeWorktreeBrowserTabIdsKey = renderedActiveWorktreeId
+    ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
 
   // Save confirmation dialog state
@@ -631,8 +636,6 @@ function Terminal(): React.JSX.Element | null {
   // Track which worktrees have been activated during this app session.
   // Only mount TerminalPanes for visited worktrees to prevent mass PTY
   // spawning when restoring a session with many saved worktree tabs.
-  const mountedWorktreeIdsRef = useRef(new Set<string>())
-  const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
   const measurableBackgroundWorktreeTimersRef = useRef(new Map<string, number>())
   const [, setBackgroundMountRevision] = useState(0)
   useEffect(() => {
@@ -689,8 +692,8 @@ function Terminal(): React.JSX.Element | null {
   // Without this gate, Phase 1 (hydrateWorkspaceSession) sets activeWorktreeId
   // with ptyId: null, and TerminalPane would call connectPanePty → pty:spawn,
   // creating a duplicate PTY for the same tab.
-  if (activeWorktreeId && workspaceSessionReady) {
-    mountedWorktreeIdsRef.current.add(activeWorktreeId)
+  if (renderedActiveWorktreeId && workspaceSessionReady) {
+    mountedWorktreeIdsRef.current.add(renderedActiveWorktreeId)
   }
   // Prune IDs of worktrees that no longer exist (deleted/removed)
   const allWorktreeIds = new Set(allWorktrees.map((wt) => wt.id))
@@ -1547,12 +1550,12 @@ function Terminal(): React.JSX.Element | null {
   // because calling Zustand mutations during render interferes with React's
   // render cycle and causes blank screens when creating new tabs.
   useEffect(() => {
-    const activeWorktreeBrowserTabs = activeWorktreeId
-      ? (useAppStore.getState().browserTabsByWorktree[activeWorktreeId] ?? [])
+    const activeWorktreeBrowserTabs = renderedActiveWorktreeId
+      ? (useAppStore.getState().browserTabsByWorktree[renderedActiveWorktreeId] ?? [])
       : []
     if (
       activeTabType === 'browser' &&
-      activeWorktreeId &&
+      renderedActiveWorktreeId &&
       (!activeBrowserTabId ||
         !activeWorktreeBrowserTabs.some((tab) => tab.id === activeBrowserTabId))
     ) {
@@ -1565,7 +1568,7 @@ function Terminal(): React.JSX.Element | null {
     }
   }, [
     activeTabType,
-    activeWorktreeId,
+    renderedActiveWorktreeId,
     activeBrowserTabId,
     activeWorktreeBrowserTabIdsKey,
     setActiveBrowserTab,
@@ -1574,21 +1577,22 @@ function Terminal(): React.JSX.Element | null {
 
   return (
     <div
-      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${activeWorktreeId ? '' : ' hidden'}`}
+      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${renderedActiveWorktreeId ? '' : ' hidden'}`}
+      data-rendered-active-worktree-id={renderedActiveWorktreeId ?? undefined}
     >
       <EditorAutosaveController />
 
       {/* Why: once split groups are enabled, each group owns its own tab strip
           inline. The old titlebar portal stays only as a fallback
           before the root-group layout has been established. */}
-      {activeWorktreeId &&
+      {renderedActiveWorktreeId &&
         !effectiveActiveLayout &&
         titlebarTabsTarget &&
         createPortal(
           <TabBar
             tabs={tabs}
             activeTabId={activeTabId}
-            worktreeId={activeWorktreeId}
+            worktreeId={renderedActiveWorktreeId}
             onActivate={handleActivateTab}
             onClose={handleCloseTab}
             onCloseOthers={handleCloseOthers}
@@ -1643,7 +1647,8 @@ function Terminal(): React.JSX.Element | null {
               }
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so the terminal/browser surface hides on the tasks page too.
-              const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
+              const isVisible =
+                activeView === 'terminal' && worktree.id === renderedActiveWorktreeId
               const shouldMeasureHiddenWorktree =
                 !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktree.id)
               return (
@@ -1701,7 +1706,8 @@ function Terminal(): React.JSX.Element | null {
               .map((worktree) => {
                 // Why: use strict equality with 'terminal' instead of !== 'settings'
                 // so the terminal/browser surface hides on the tasks page too.
-                const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
+                const isVisible =
+                  activeView === 'terminal' && worktree.id === renderedActiveWorktreeId
                 const shouldMeasureHiddenWorktree =
                   !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktree.id)
                 return (
@@ -1772,7 +1778,7 @@ function Terminal(): React.JSX.Element | null {
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so browser panes also hide on the tasks page.
               const isVisibleWorktree =
-                activeView === 'terminal' && worktree.id === activeWorktreeId
+                activeView === 'terminal' && worktree.id === renderedActiveWorktreeId
               if (browserTabs.length === 0) {
                 return null
               }
@@ -1801,7 +1807,7 @@ function Terminal(): React.JSX.Element | null {
             })}
           </div>
 
-          {activeWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
+          {renderedActiveWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
             <Suspense
               fallback={
                 <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">

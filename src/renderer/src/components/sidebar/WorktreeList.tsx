@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import React, { useMemo, useCallback, useRef, useState, useEffect, useLayoutEffect } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   measureElement as measureVirtualElementSize,
   useVirtualizer
@@ -19,6 +20,7 @@ import {
   Workflow
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   getAllWorktreesFromState,
   useAllWorktrees,
@@ -64,7 +66,6 @@ import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
 import {
-  type GroupHeaderRow,
   type ProjectGroupOrdering,
   type Row,
   type WorktreeGroupBy,
@@ -103,14 +104,17 @@ import {
 } from './visible-worktrees'
 import {
   getVisibleWorktreeBrowserActivityTabs,
-  getVisibleWorktreeTerminalActivityTabs
+  getVisibleWorktreeTerminalActivityTabs,
+  getWorktreeSectionTerminalActivityTabs
 } from './visible-worktree-activity-inputs'
+import { selectTerminalLayoutRootsForWorktrees } from './worktree-card-status-inputs'
 import {
   VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
   useVirtualizedScrollAnchor,
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT } from '@/lib/scroll-to-current-workspace-status'
 import { useRepoHeaderDrag } from './project-header-drag'
@@ -205,6 +209,9 @@ type ProjectGroupDeleteDialogState = {
 const SORT_SETTLE_MS = 3_000
 const USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 500
 const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
+const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
+const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
+const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 300
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // Why: TanStack Virtual owns scroll correction. Native browser anchoring can
@@ -277,6 +284,35 @@ function getWorktreeOptionId(worktreeId: string): string {
   return `worktree-list-option-${encodeURIComponent(worktreeId)}`
 }
 
+function markSidebarWorktreeActiveImmediately(worktreeId: string): void {
+  const nextOption = document.getElementById(getWorktreeOptionId(worktreeId))
+  if (!nextOption) {
+    return
+  }
+
+  const sidebar =
+    nextOption.closest<HTMLElement>('[data-worktree-sidebar]') ??
+    document.querySelector<HTMLElement>('[data-worktree-sidebar]')
+  const previousOption = sidebar?.querySelector<HTMLElement>('[role="option"][aria-current="page"]')
+  if (previousOption && previousOption !== nextOption) {
+    previousOption.removeAttribute('aria-current')
+  }
+
+  nextOption.setAttribute('aria-current', 'page')
+  sidebar
+    ?.querySelectorAll<HTMLElement>(
+      '[data-worktree-card-surface][data-worktree-card-active="true"]'
+    )
+    .forEach((surface) => {
+      if (!nextOption.contains(surface)) {
+        surface.removeAttribute('data-worktree-card-active')
+      }
+    })
+  nextOption
+    .querySelector<HTMLElement>('[data-worktree-card-surface]')
+    ?.setAttribute('data-worktree-card-active', 'true')
+}
+
 function revealMountedWorktreeElement(
   container: HTMLElement,
   worktreeId: string,
@@ -333,6 +369,7 @@ type VirtualizedWorktreeViewportProps = {
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onImmediateWorktreeActivate: (worktreeId: string) => void
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
@@ -674,6 +711,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   selectedWorktreeIds,
   selectedWorktrees,
   onSelectionGesture,
+  onImmediateWorktreeActivate,
   onContextMenuSelect,
   repoMap,
   worktreeMap,
@@ -2882,8 +2920,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     nativeDragEnabled={false}
                     contentIndent={nested ? 0 : paddingLeft}
                     flushSurface={!nested}
+                    onImmediateActivate={onImmediateWorktreeActivate}
                     onSelectionGesture={onSelectionGesture}
-                    onContextMenuSelect={(event) => onContextMenuSelect(event, itemRow.worktree)}
+                    onContextMenuSelect={onContextMenuSelect}
                     onCardDragStart={handleWorktreeCardDragStart}
                     onCardDragEnd={clearWorktreeDrag}
                     hideRepoBadge={groupBy === 'repo'}
@@ -2915,7 +2954,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 if (selectionOnly) {
                   return
                 }
-                activateAndRevealWorktree(child.worktree.id)
+                onImmediateWorktreeActivate(child.worktree.id)
+                activateWorktreeFromSidebar(child.worktree.id)
                 if (child.repo?.connectionId) {
                   const sshStatus =
                     useAppStore.getState().sshConnectionStates.get(child.repo.connectionId)
@@ -2941,6 +2981,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       role="option"
                       aria-selected={selectedWorktreeIds.has(child.worktree.id)}
                       aria-current={isActive ? 'page' : undefined}
+                      data-worktree-card-surface="true"
+                      data-worktree-card-active={isActive ? 'true' : undefined}
                       className={cn(
                         'relative flex cursor-pointer items-start gap-1.5 rounded-md border border-transparent px-2 py-1.5 transition-colors',
                         highlightedRevealWorktreeId === child.worktree.id && [
@@ -3188,6 +3230,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const currentSidebarWorktreeId = activeWorktreeId
   const groupBy = useAppStore((s) => s.groupBy)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -3208,10 +3251,20 @@ const WorktreeList = React.memo(function WorktreeList({
   const revealWorktreeInSidebar = useAppStore((s) => s.revealWorktreeInSidebar)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
   const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
-  const agentTargetStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
-  const agentTargetStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  const agentTargetTabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const agentTargetTerminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
+  // Why: agent-send eligibility only matters while the picker is open. When it
+  // is closed, avoid subscribing WorktreeList to wake-time terminal layout churn.
+  const agentTargetStatusByPaneKey = useAppStore((s) =>
+    agentSendPopoverTargetMode ? s.agentStatusByPaneKey : EMPTY_AGENT_STATUS_BY_PANE_KEY
+  )
+  const agentTargetStatusEpoch = useAppStore((s) =>
+    agentSendPopoverTargetMode ? s.agentStatusEpoch : 0
+  )
+  const agentTargetTabsByWorktree = useAppStore((s) =>
+    agentSendPopoverTargetMode ? s.tabsByWorktree : EMPTY_TABS_BY_WORKTREE
+  )
+  const agentTargetTerminalLayoutsByTabId = useAppStore((s) =>
+    agentSendPopoverTargetMode ? s.terminalLayoutsByTabId : EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID
+  )
   const agentSendTargetWorktreeId = useMemo(() => {
     void agentTargetStatusEpoch
     if (!agentSendPopoverTargetMode) {
@@ -3256,11 +3309,14 @@ const WorktreeList = React.memo(function WorktreeList({
     groupBy === 'pr-status' || cardProps.includes('pr') ? s.prCache : null
   )
   const settings = useAppStore((s) => s.settings)
-  const sectionActivityTabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const sectionActivityBrowserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
+  const sectionActivityTabsByWorktree = useAppStore((s) =>
+    getWorktreeSectionTerminalActivityTabs(s.tabsByWorktree)
+  )
+  const sectionActivityBrowserTabsByWorktree = useAppStore((s) =>
+    getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree)
+  )
   const sectionActivityPtyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const sectionActivityRuntimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
-  const sectionActivityTerminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const sectionActivityAgentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const sectionActivityMigrationUnsupportedByPtyId = useAppStore(
     (s) => s.migrationUnsupportedByPtyId
@@ -3546,6 +3602,13 @@ const WorktreeList = React.memo(function WorktreeList({
   ])
 
   const worktrees = visibleWorktrees
+  const sectionActivityWorktreeIds = useMemo(
+    () => visibleWorktrees.map((worktree) => worktree.id),
+    [visibleWorktrees]
+  )
+  const sectionActivityTerminalLayoutRootsByTabId = useAppStore(
+    useShallow((s) => selectTerminalLayoutRootsForWorktrees(s, sectionActivityWorktreeIds))
+  )
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
 
@@ -3652,7 +3715,7 @@ const WorktreeList = React.memo(function WorktreeList({
       browserTabsByWorktree: sectionActivityBrowserTabsByWorktree,
       ptyIdsByTabId: sectionActivityPtyIdsByTabId,
       runtimePaneTitlesByTabId: sectionActivityRuntimePaneTitlesByTabId,
-      terminalLayoutsByTabId: sectionActivityTerminalLayoutsByTabId,
+      terminalLayoutRootsByTabId: sectionActivityTerminalLayoutRootsByTabId,
       agentStatusEpoch: sectionActivityAgentStatusEpoch,
       // Why: agentStatusByPaneKey can tick for same-state tool details. The
       // section counts only need structural status transitions, tracked by
@@ -3667,8 +3730,8 @@ const WorktreeList = React.memo(function WorktreeList({
     sectionActivityMigrationUnsupportedByPtyId,
     sectionActivityPtyIdsByTabId,
     sectionActivityRetainedAgentsByPaneKey,
+    sectionActivityTerminalLayoutRootsByTabId,
     sectionActivityRuntimePaneTitlesByTabId,
-    sectionActivityTerminalLayoutsByTabId,
     sectionActivityTabsByWorktree
   ])
   const sectionActivityByGroupKey = useMemo(
@@ -3735,17 +3798,9 @@ const WorktreeList = React.memo(function WorktreeList({
       importedWorktreesByRepo
     ]
   )
-  // Why: header/mode changes can shift entire groups, so remount the
-  // virtualizer for those broad structure changes. Do not key on rows.length:
-  // add/delete must keep the same row DOM long enough for the remaining rows
-  // to animate upward and for the scroll anchor to hold the viewport steady.
-  const viewportResetKey = useMemo(() => {
-    const headers = rows
-      .filter((r): r is GroupHeaderRow => r.type === 'header')
-      .map((r) => r.key)
-      .join(',')
-    return `${groupBy}:lineage:${headers}`
-  }, [groupBy, rows])
+  // Why: status headers change during wake (inactive -> active). Key only on
+  // the grouping mode so row identity survives those ordinary status moves.
+  const viewportResetKey = `group:${groupBy}:lineage`
 
   // Why: derive the rendered item order from the post-buildRows() row list,
   // not the flat `worktrees` array, because grouping (groupBy: 'repo' or
@@ -3839,10 +3894,17 @@ const WorktreeList = React.memo(function WorktreeList({
     [selectedWorktreeIds, selectedWorktrees]
   )
 
+  const handleImmediateWorktreeActivate = useCallback((worktreeId: string) => {
+    // Why: React-rendering the full virtualized sidebar on the pointer path is
+    // visible latency. Mutate only the selected-row affordance; store state
+    // reconciles the same attributes after activation settles.
+    markSidebarWorktreeActiveImmediately(worktreeId)
+  }, [])
+
   // Why: full-page navigation views are not scoped to one worktree, so no
   // sidebar card should appear selected while one of them is active.
   const selectedSidebarWorktreeId =
-    activeView === 'tasks' || activeView === 'activity' ? null : activeWorktreeId
+    activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
 
   // Why layout effect instead of effect: the global Cmd/Ctrl+1–9 key handler
   // can fire immediately after React commits the new grouped/collapsed order.
@@ -4245,7 +4307,7 @@ const WorktreeList = React.memo(function WorktreeList({
         key={viewportResetKey}
         rows={rows}
         activeWorktreeId={selectedSidebarWorktreeId}
-        currentWorktreeId={activeWorktreeId}
+        currentWorktreeId={currentSidebarWorktreeId}
         groupBy={groupBy}
         projectGroupOrdering={projectGroupOrdering}
         toggleGroup={toggleGroup}
@@ -4270,6 +4332,7 @@ const WorktreeList = React.memo(function WorktreeList({
         selectedWorktreeIds={selectedWorktreeIds}
         selectedWorktrees={selectedWorktrees}
         onSelectionGesture={updateSelectionForGesture}
+        onImmediateWorktreeActivate={handleImmediateWorktreeActivate}
         onContextMenuSelect={selectForContextMenu}
         repoMap={repoMap}
         worktreeMap={worktreeMap}
