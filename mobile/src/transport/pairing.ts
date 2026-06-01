@@ -21,21 +21,30 @@ export function decodePairingUrl(url: string): PairingOffer | null {
 // extraction here makes QR scan, paste, and external deep-link flows
 // accept the same URL shapes.
 export function extractPairingCodeFromUrl(url: string): string | null {
-  if (!url.startsWith('orca://pair')) {
+  const trimmed = url.trim()
+  const match = /^orca:\/\/([^/?#]*)([^?#]*)?/i.exec(trimmed)
+  if (!match) {
     return null
   }
-  const queryIndex = url.indexOf('?')
+  const host = match[1]?.toLowerCase()
+  const pathname = match[2] ?? ''
+  if (host !== 'pair' || (pathname !== '' && pathname !== '/')) {
+    return null
+  }
+
+  const rest = trimmed.slice(match[0].length)
+  const queryIndex = rest.indexOf('?')
   if (queryIndex !== -1) {
-    const query = url.slice(queryIndex + 1).split('#')[0] ?? ''
+    const query = rest.slice(queryIndex + 1).split('#')[0] ?? ''
     const params = new URLSearchParams(query)
     const code = params.get('code')
     if (code) {
       return code
     }
   }
-  const hashIndex = url.indexOf('#')
+  const hashIndex = rest.indexOf('#')
   if (hashIndex !== -1) {
-    return url.slice(hashIndex + 1) || null
+    return rest.slice(hashIndex + 1) || null
   }
   return null
 }
@@ -49,7 +58,7 @@ export function parsePairingCode(input: string): PairingOffer | null {
     return null
   }
   try {
-    if (trimmed.startsWith('orca://pair')) {
+    if (/^orca:\/\//i.test(trimmed)) {
       return decodePairingUrl(trimmed)
     }
     return decodePairingBase64(trimmed)
@@ -59,7 +68,17 @@ export function parsePairingCode(input: string): PairingOffer | null {
 }
 
 function decodePairingBase64(base64url: string): PairingOffer {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
+  // Why: desktop intentionally strips base64 padding from QR payloads. Some
+  // mobile JS runtimes reject unpadded atob input, so restore it before decode.
+  const base64 = padBase64(base64url.replace(/-/g, '+').replace(/_/g, '/'))
   const json = atob(base64)
   return PairingOfferSchema.parse(JSON.parse(json))
+}
+
+function padBase64(base64: string): string {
+  const remainder = base64.length % 4
+  if (remainder === 0) {
+    return base64
+  }
+  return `${base64}${'='.repeat(4 - remainder)}`
 }

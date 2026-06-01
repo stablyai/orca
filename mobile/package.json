@@ -23,6 +23,7 @@
     "expo-clipboard": "^55.0.13",
     "expo-constants": "^55.0.16",
     "expo-crypto": "^55.0.14",
+    "expo-dev-client": "~55.0.35",
     "expo-haptics": "^55.0.14",
     "expo-linking": "^55.0.15",
     "expo-modules-core": "~55.0.25",

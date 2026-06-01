@@ -21,7 +21,15 @@
         "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your local network.",
         "NSMicrophoneUsageDescription": "Allow Orca to record voice dictation and transcribe it on your paired desktop.",
         "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true
+          "NSAllowsLocalNetworking": true,
+          "NSExceptionDomains": {
+            "100.64.0.0/10": {
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            },
+            "fd7a:115c:a1e0::/48": {
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            }
+          }
         },
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -76,6 +84,9 @@
       [
         "expo-build-properties",
         {
+          "ios": {
+            "buildReactNativeFromSource": true
+          },
           "android": {
             "usesCleartextTraffic": true
           }
