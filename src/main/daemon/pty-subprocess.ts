@@ -394,6 +394,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // propagates to std::terminate, killing the entire daemon process.
   let dead = false
   let disposed = false
+  let nodePtyKillIssued = false
   proc.onExit(() => {
     dead = true
     // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`
@@ -454,6 +455,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return
       }
       try {
+        nodePtyKillIssued = true
         proc.kill()
       } catch {
         dead = true
@@ -471,6 +473,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         process.kill(proc.pid, 'SIGKILL')
       } catch {
         try {
+          nodePtyKillIssued = true
           proc.kill()
         } catch {
           // Process may already be dead
@@ -517,6 +520,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // ConPTY agent. The SIGHUP hazard is POSIX-only, so the guard is too.
       if (process.platform !== 'win32') {
         ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+      } else if (nodePtyKillIssued) {
+        // Why: WindowsTerminal.destroy() calls kill() internally. If this
+        // daemon handle already used node-pty's kill(), destroying here can
+        // close the same ConPTY handle twice and trip Windows heap corruption.
+        return
       }
       try {
         ;(proc as unknown as { destroy?: () => void }).destroy?.()
