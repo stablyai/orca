@@ -76,3 +76,16 @@ during the live profile. The fixes are covered by unit and e2e tests, but the
 next packaged build should be re-profiled under the same active Codex TUI load
 to confirm the Resource Usage display and terminal previews match the expected
 lower-churn behavior.
+
+## Follow-up: CLI Profiling Blocker
+
+Continuing the profile after this change confirmed the public
+`/usr/local/bin/orca` command was still broken because it was a regular
+generated launcher file pointing at a removed development build. The CLI
+installer previously self-healed stale symlinks, but treated regular files as
+conflicts. That meant Settings could not replace an Orca-owned stale launcher,
+forcing profiling to use the packaged CLI fallback.
+
+The follow-up fix teaches the installer to recognize only generated Orca Unix
+launcher files as stale and replaceable. Arbitrary regular files at the command
+path remain conflicts.

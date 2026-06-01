@@ -436,6 +436,86 @@ describe('CliInstaller', () => {
     }
   )
 
+  // Why: old dev/package experiments wrote a generated Orca launcher file
+  // directly into /usr/local/bin/orca. That broke profiling because Settings
+  // treated the regular file as a hard conflict and would not self-heal it.
+  it.skipIf(process.platform === 'win32')(
+    'replaces stale generated Unix launcher files',
+    async () => {
+      const fixture = await makeFixture()
+      const commandDir = join(fixture.root, 'bin')
+      const installPath = join(commandDir, 'orca')
+      const resourcesPath = join(fixture.root, 'Current.app', 'Contents', 'Resources')
+      const launcherPath = join(resourcesPath, 'bin', 'orca')
+      const oldCliPath = join(fixture.root, 'OldWorktree', 'out', 'cli', 'index.js')
+      await mkdir(commandDir, { recursive: true })
+      await mkdir(join(resourcesPath, 'bin'), { recursive: true })
+      await writeFile(launcherPath, '#!/usr/bin/env bash\n', 'utf8')
+      await writeFile(
+        installPath,
+        [
+          '#!/usr/bin/env bash',
+          'set -euo pipefail',
+          "ELECTRON='/tmp/Old.app/Contents/MacOS/Electron'",
+          `CLI='${oldCliPath}'`,
+          'export ORCA_NODE_OPTIONS="${NODE_OPTIONS-}"',
+          'export ORCA_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"',
+          'unset NODE_OPTIONS',
+          'unset NODE_REPL_EXTERNAL_MODULE',
+          'ELECTRON_RUN_AS_NODE=1 "$ELECTRON" "$CLI" "$@"',
+          ''
+        ].join('\n'),
+        'utf8'
+      )
+
+      const installer = new CliInstaller({
+        platform: 'darwin',
+        isPackaged: true,
+        resourcesPath,
+        commandPathOverride: installPath,
+        processPathEnv: commandDir
+      })
+
+      await expect(installer.getStatus()).resolves.toMatchObject({
+        state: 'stale',
+        currentTarget: oldCliPath
+      })
+      await expect(installer.install()).resolves.toMatchObject({ state: 'installed' })
+      await expect(readlink(installPath)).resolves.toBe(launcherPath)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps arbitrary regular files at the command path as conflicts',
+    async () => {
+      const fixture = await makeFixture()
+      const commandDir = join(fixture.root, 'bin')
+      const installPath = join(commandDir, 'orca')
+      const resourcesPath = await createPackagedMacLauncher(fixture.root)
+      await mkdir(commandDir, { recursive: true })
+      await writeFile(
+        installPath,
+        '#!/usr/bin/env bash\nELECTRON_RUN_AS_NODE=1 /tmp/not-orca "$@"\n',
+        'utf8'
+      )
+
+      const installer = new CliInstaller({
+        platform: 'darwin',
+        isPackaged: true,
+        resourcesPath,
+        commandPathOverride: installPath,
+        processPathEnv: commandDir
+      })
+
+      await expect(installer.getStatus()).resolves.toMatchObject({
+        state: 'conflict',
+        currentTarget: null
+      })
+      await expect(installer.install()).rejects.toThrow('Refusing to replace non-Orca command')
+      await expect(readFile(installPath, 'utf8')).resolves.toContain('/tmp/not-orca')
+    }
+  )
+
   // Why: a dev build can temporarily own the public command on developer
   // machines; packaged Orca should treat that as stale, not a hard conflict.
   it.skipIf(process.platform === 'win32')(

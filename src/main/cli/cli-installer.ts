@@ -476,6 +476,22 @@ export class CliInstaller {
     try {
       const stats = await lstat(commandPath)
       if (!stats.isSymbolicLink()) {
+        if (stats.isFile()) {
+          const currentContent = await readFile(commandPath, 'utf8')
+          const managedTarget = extractManagedUnixLauncherTarget(currentContent)
+          if (managedTarget) {
+            return this.buildStatus({
+              commandPath,
+              launcherPath,
+              installMethod: 'symlink',
+              supported: true,
+              state: 'stale',
+              currentTarget: managedTarget,
+              detail: `${commandPath} contains an older Orca launcher.`
+            })
+          }
+        }
+
         return this.buildStatus({
           commandPath,
           launcherPath,
@@ -839,6 +855,36 @@ setlocal
 set "ORCA_LAUNCHER=${escapeWindowsBatchValue(launcherPath)}"
 "%ORCA_LAUNCHER%" %*
 `
+}
+
+function extractManagedUnixLauncherTarget(content: string): string | null {
+  if (
+    !content.includes('ELECTRON_RUN_AS_NODE=1') ||
+    !content.includes('ORCA_NODE_OPTIONS') ||
+    !content.includes('NODE_REPL_EXTERNAL_MODULE')
+  ) {
+    return null
+  }
+
+  const cliPath = extractShellAssignment(content, 'CLI')
+  if (!cliPath) {
+    return null
+  }
+
+  // Why: older dev installs wrote a generated shell launcher directly to
+  // /usr/local/bin/orca. Treat only Orca's compiled CLI entrypoints as managed;
+  // arbitrary user scripts that happen to launch Electron must stay conflicts.
+  return /(?:^|[/\\])(?:out|app\.asar\.unpacked[/\\]out)[/\\]cli[/\\]index\.js$/.test(cliPath)
+    ? cliPath
+    : null
+}
+
+function extractShellAssignment(content: string, name: string): string | null {
+  const match = new RegExp(`^${name}=('([^']*)'|"([^"]*)"|([^\\n]+))$`, 'm').exec(content)
+  if (!match) {
+    return null
+  }
+  return (match[2] ?? match[3] ?? match[4] ?? '').trim()
 }
 
 function splitPathEntries(platform: NodeJS.Platform, value: string | null): string[] {
