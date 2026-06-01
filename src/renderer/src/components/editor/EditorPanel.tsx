@@ -22,11 +22,13 @@ import { useUntitledFileRename } from './useUntitledFileRename'
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
   activeViewStateId: activeViewStateIdProp,
-  markdownAnnotationsEnabled = true
+  markdownAnnotationsEnabled = true,
+  isWorkspaceActive = true
 }: {
   activeFileId?: string | null
   activeViewStateId?: string | null
   markdownAnnotationsEnabled?: boolean
+  isWorkspaceActive?: boolean
 } = {}): React.JSX.Element | null {
   const openFiles = useAppStore((s) => s.openFiles)
   const globalActiveFileId = useAppStore((s) => s.activeFileId)
@@ -319,6 +321,7 @@ function EditorPanelInner({
       diffContents={diffContents}
       editorDrafts={editorDrafts}
       pendingEditorReveal={pendingEditorReveal}
+      isWorkspaceActive={isWorkspaceActive}
       renameDialogFile={renameDialogFile}
       renameError={renameError}
       disableRenameBrowse={disableRenameBrowse}

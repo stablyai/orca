@@ -1,6 +1,7 @@
-/* eslint-disable max-lines -- Why: MonacoEditor centralizes Monaco setup,
-source-mode markdown annotations, persistence-safe content sync, reveal
-handling, and editor-local UI overlays so split-pane state remains coherent. */
+/* eslint-disable max-lines -- Why: MonacoEditor centralizes retained-model lifecycle,
+source-mode markdown annotations, scroll/cursor restore, markdown links, copy
+behavior, and LSP registration around one editor instance so cleanup ordering
+stays explicit. */
 import React, { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
@@ -10,6 +11,7 @@ import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-ca
 import '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
+import { registerMonacoLspDocument, updateMonacoLspDocumentContent } from '@/lib/monaco-lsp'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
@@ -56,13 +58,17 @@ type MonacoEditorProps = {
   relativePath: string
   content: string
   language: string
+  worktreeId: string
+  worktreePath: string | null
+  connectionId?: string
+  runtimeEnvironmentId?: string
+  lspEnabled: boolean
   onContentChange: (content: string) => void
   onSave: (content: string) => void
   revealLine?: number
   revealColumn?: number
   revealMatchLength?: number
   markdownDocuments?: MarkdownDocument[]
-  worktreeId?: string
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
@@ -80,13 +86,17 @@ export default function MonacoEditor({
   relativePath,
   content,
   language,
+  worktreeId,
+  worktreePath,
+  connectionId,
+  runtimeEnvironmentId,
+  lspEnabled,
   onContentChange,
   onSave,
   revealLine,
   revealColumn,
   revealMatchLength,
   markdownDocuments,
-  worktreeId,
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
@@ -96,11 +106,13 @@ export default function MonacoEditor({
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
+  const monacoRef = useRef<Parameters<OnMount>[1] | null>(null)
   const modelKeyRef = useRef<string | null>(null)
   const languageRef = useRef(language)
   languageRef.current = language
   const markdownDocLinkDecorationsRef = useRef<MarkdownDocLinkDecorationController | null>(null)
   const conflictDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
+  const lspDisposeRef = useRef<(() => void) | null>(null)
   const revealDecorationRef = useRef<editor.IEditorDecorationsCollection | null>(null)
   const revealHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealRafRef = useRef<number | null>(null)
@@ -173,6 +185,7 @@ export default function MonacoEditor({
   const [commentPopover, setCommentPopover] = useState<MarkdownCommentPopoverState | null>(null)
   const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
     useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
+  const [monacoReadyVersion, setMonacoReadyVersion] = useState(0)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -315,6 +328,8 @@ export default function MonacoEditor({
     (editorInstance, monaco) => {
       editorRef.current = editorInstance
       setMountedEditor(editorInstance)
+      monacoRef.current = monaco
+      setMonacoReadyVersion((version) => version + 1)
       let autoHeightSub: { dispose: () => void } | null = null
       let autoHeightFrame: number | null = null
       const updateAutoHeight = (): void => {
@@ -600,6 +615,10 @@ export default function MonacoEditor({
           return
         }
         lastSyncedContentRef.current = value
+        const modelUri = editorRef.current?.getModel()?.uri.toString()
+        if (modelUri) {
+          updateMonacoLspDocumentContent(modelUri, value)
+        }
         onContentChange(value)
       }
     },
@@ -620,11 +639,53 @@ export default function MonacoEditor({
     try {
       syncContentUpdate(ed, content)
       lastSyncedContentRef.current = content
+      const modelUri = ed.getModel()?.uri.toString()
+      if (modelUri) {
+        updateMonacoLspDocumentContent(modelUri, content)
+      }
     } finally {
       isApplyingProgrammaticContentRef.current = false
       endProgrammaticContentSync(filePath)
     }
   }, [content, filePath])
+
+  useEffect(() => {
+    const editorInstance = editorRef.current
+    const monaco = monacoRef.current
+    lspDisposeRef.current?.()
+    lspDisposeRef.current = null
+    if (!lspEnabled || !editorInstance || !monaco || !worktreePath) {
+      return
+    }
+
+    // Why: worktree metadata can arrive after Monaco mounts, especially for
+    // newly added folder/SSH worktrees. Also gate on the visible workspace so
+    // retained hidden editors do not keep language servers hot after a switch.
+    lspDisposeRef.current = registerMonacoLspDocument(monaco, {
+      modelUri: editorInstance.getModel()?.uri.toString() ?? filePath,
+      worktreeId,
+      worktreePath,
+      filePath,
+      languageId: languageRef.current,
+      content: contentRef.current,
+      connectionId,
+      runtimeEnvironmentId
+    })
+
+    return () => {
+      lspDisposeRef.current?.()
+      lspDisposeRef.current = null
+    }
+  }, [
+    connectionId,
+    filePath,
+    language,
+    lspEnabled,
+    monacoReadyVersion,
+    runtimeEnvironmentId,
+    worktreeId,
+    worktreePath
+  ])
 
   // Snapshot scroll position synchronously on unmount so tab switches always
   // capture the latest value, even if the trailing throttle hasn't fired yet.
@@ -702,6 +763,8 @@ export default function MonacoEditor({
       if (modelKeyRef.current) {
         clearMarkdownDocCompletionDocuments(modelKeyRef.current)
       }
+      lspDisposeRef.current?.()
+      lspDisposeRef.current = null
       markdownDocLinkDecorationsRef.current?.dispose()
       markdownDocLinkDecorationsRef.current = null
       conflictDecorationsRef.current?.clear()

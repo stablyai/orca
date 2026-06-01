@@ -38,6 +38,7 @@ import { RelayContext } from './context'
 import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
+import { LspHandler } from './lsp-handler'
 import { PreflightHandler } from './preflight-handler'
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
@@ -405,6 +406,8 @@ async function main(): Promise<void> {
   // so we hold the reference only for potential future disposal.
   const _gitHandler = new GitHandler(dispatcher, context)
   void _gitHandler
+
+  const lspHandler = new LspHandler(dispatcher)
 
   const _preflightHandler = new PreflightHandler(dispatcher)
   const _externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
@@ -896,7 +899,7 @@ async function main(): Promise<void> {
     )
     ptyHandler.startGraceTimer(() => {
       process.stderr.write(`[relay] Grace expired (${reason}); shutting down\n`)
-      shutdown()
+      void shutdown()
     }, timeoutMs)
   }
 
@@ -936,7 +939,12 @@ async function main(): Promise<void> {
     })
   }
 
-  function shutdown(): void {
+  let shuttingDown = false
+  async function shutdown(): Promise<void> {
+    if (shuttingDown) {
+      return
+    }
+    shuttingDown = true
     process.stderr.write(
       `[relay] Shutdown: ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}, ownsSocket=${ownsSocketPath}\n`
     )
@@ -945,6 +953,7 @@ async function main(): Promise<void> {
     dispatcher.dispose()
     ptyHandler.dispose()
     fsHandler.dispose()
+    await lspHandler.dispose().catch(() => undefined)
     hookServer.stop()
     // Why: Node's Unix server.close() can unlink the listen path. If the path
     // was externally removed and rebound by a newer relay, closing this older
@@ -956,8 +965,8 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  process.on('SIGTERM', shutdown)
-  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', () => void shutdown())
+  process.on('SIGINT', () => void shutdown())
   // Why: when the SSH session drops, the OS sends SIGHUP to the relay's
   // process group. Node's default SIGHUP behavior is to exit immediately,
   // which kills all PTYs before the grace period can start. Ignoring

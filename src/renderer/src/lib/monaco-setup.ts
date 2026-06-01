@@ -11,6 +11,7 @@ import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
+import { ensureMonacoLspProviders } from './monaco-lsp'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -73,6 +74,7 @@ registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
 installMonacoDiffEditorDisposalGuard(monaco)
+ensureMonacoLspProviders(monaco)
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })

@@ -9,6 +9,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { Button } from '@/components/ui/button'
 import { ChangesModeView } from './ChangesModeView'
 import {
@@ -105,6 +106,7 @@ export function EditorContent({
   mdViewMode,
   isChangesMode,
   sideBySide,
+  isWorkspaceActive = true,
   showMarkdownTableOfContents = false,
   onCloseMarkdownTableOfContents = () => {},
   markdownAnnotationsEnabled = true,
@@ -131,6 +133,7 @@ export function EditorContent({
   mdViewMode: MarkdownViewMode
   isChangesMode: boolean
   sideBySide: boolean
+  isWorkspaceActive?: boolean
   showMarkdownTableOfContents?: boolean
   onCloseMarkdownTableOfContents?: () => void
   markdownAnnotationsEnabled?: boolean
@@ -163,6 +166,22 @@ export function EditorContent({
     Record<string, number>
   >({})
   const md = useMarkdownDocuments(activeFile, isMarkdown, mdViewMode, handleSave)
+  const worktreePath = useAppStore(
+    (s) => findWorktreeById(s.worktreesByRepo, activeFile.worktreeId)?.path ?? null
+  )
+  // Why: repo metadata can hydrate after the editor mounts. Wait until the repo
+  // is known so SSH worktrees cannot briefly register LSP as local sessions.
+  const lspTransport = useAppStore((s) => {
+    const worktree = findWorktreeById(s.worktreesByRepo, activeFile.worktreeId)
+    if (!worktree) {
+      return { resolved: false, connectionId: undefined }
+    }
+    const repo = s.repos?.find((repo) => repo.id === worktree.repoId)
+    if (!repo) {
+      return { resolved: false, connectionId: undefined }
+    }
+    return { resolved: true, connectionId: repo.connectionId ?? undefined }
+  })
   const activeConflictEntry =
     worktreeEntries.find((entry) => entry.path === activeFile.relativePath) ?? null
   const selectedConflictReviewFile =
@@ -286,9 +305,16 @@ export function EditorContent({
       relativePath={activeFile.relativePath}
       content={editBuffers[activeFile.id] ?? fc.content}
       language={monacoLanguage}
+      worktreeId={activeFile.worktreeId}
+      worktreePath={worktreePath}
+      connectionId={lspTransport.connectionId}
+      runtimeEnvironmentId={activeFile.runtimeEnvironmentId ?? undefined}
+      // Why: runtime environments need their own process launcher. Until the
+      // relay can spawn inside the selected runtime, enabling LSP would return
+      // completions/diagnostics from the host workspace instead.
+      lspEnabled={isWorkspaceActive && lspTransport.resolved && !activeFile.runtimeEnvironmentId}
       onContentChange={handleContentChange}
       onSave={isMarkdown ? md.mdSave : handleSave}
-      worktreeId={activeFile.worktreeId}
       markdownAnnotationsEnabled={markdownAnnotationsEnabled && isMarkdown}
       conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
       revealLine={
@@ -534,6 +560,8 @@ export function EditorContent({
             }
             onSave={readOnly ? () => {} : (content) => handleSaveForFile(contentFile, content)}
             worktreeId={contentFile.worktreeId}
+            worktreePath={worktreePath}
+            lspEnabled={false}
             markdownAnnotationsEnabled={false}
             conflictDecorationsEnabled={contentFile.conflict?.conflictStatus === 'unresolved'}
             readOnly={readOnly}

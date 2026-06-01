@@ -317,6 +317,17 @@ import type {
   AutomationUpdateInput
 } from '../shared/automations-types'
 import type {
+  LspCompletionResult,
+  LspDiagnosticsEvent,
+  LspDocumentChange,
+  LspDocumentContext,
+  LspDocumentIdentity,
+  LspHover,
+  LspLocation,
+  LspRequestContext,
+  LspServerStatus
+} from '../shared/lsp-types'
+import type {
   WorkspaceCleanupDismissArgs,
   WorkspaceCleanupLocalProcessArgs,
   WorkspaceCleanupLocalProcessResult,
@@ -1644,6 +1655,20 @@ export type PreloadApi = {
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
+  lsp: {
+    getStatus: (args: LspDocumentIdentity) => Promise<LspServerStatus>
+    openDocument: (args: LspDocumentContext) => Promise<LspServerStatus>
+    changeDocument: (args: LspDocumentChange) => Promise<void>
+    closeDocument: (args: Omit<LspDocumentChange, 'content'>) => Promise<void>
+    completion: (args: LspRequestContext) => Promise<LspCompletionResult | null>
+    hover: (args: LspRequestContext) => Promise<LspHover | null>
+    definition: (args: LspRequestContext) => Promise<LspLocation[]>
+    getStats: () => Promise<{
+      activeSessions: number
+      sessions: Record<string, unknown>[]
+    }>
+    onDiagnostics: (callback: (event: LspDiagnosticsEvent) => void) => () => void
+  }
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {

@@ -92,6 +92,22 @@ export function getRegisteredSshState(targetId: string): SshConnectionState | un
 // (multiplexer, providers, abort controller, state machine). Eliminates the
 // scattered Maps/Sets that previously tracked this state independently.
 const activeSessions = new Map<string, SshRelaySession>()
+const activeMultiplexerReadyListeners = new Set<(connectionId: string) => void>()
+
+export function onActiveMultiplexerReady(listener: (connectionId: string) => void): () => void {
+  activeMultiplexerReadyListeners.add(listener)
+  return () => activeMultiplexerReadyListeners.delete(listener)
+}
+
+function notifyActiveMultiplexerReady(connectionId: string): void {
+  for (const listener of activeMultiplexerReadyListeners) {
+    try {
+      listener(connectionId)
+    } catch (error) {
+      console.warn(`[ssh] Active multiplexer ready listener failed for ${connectionId}:`, error)
+    }
+  }
+}
 
 function relayGracePeriodForTarget(target: SshTarget | null | undefined): number | undefined {
   return target?.relayGracePeriodSeconds
@@ -745,6 +761,122 @@ export function registerSshHandlers(
         reconnectAttempt: 0
       })
 
+      // Why: the relay exec channel can close independently of the SSH
+      // connection (e.g. --connect bridge exits, relay process crashes).
+      // When that happens, the mux is disposed but onStateChange never
+      // fires because the SSH connection is still alive. This callback
+      // triggers session.reconnect() using the live SSH connection.
+      // Set before establish() so the callback is in place if the relay
+      // dies during the deploy/connect sequence.
+      // Why: a wire-handshake mismatch (typed RelayVersionMismatchError) means
+      // the local client and remote daemon are at different code versions —
+      // no amount of backoff will reconcile them. Skip the relay-lost loop
+      // entirely and surface a terminal "please reconnect manually" error.
+      session.setOnTerminalRelayError((tid, err) => {
+        clearRelayLostBackoff(tid)
+        console.warn(
+          `[ssh] Terminal relay error for ${tid}: ${err.message}; skipping reconnect backoff.`
+        )
+        const win = getMainWindow()
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('ssh:state-changed', {
+            targetId: tid,
+            state: {
+              targetId: tid,
+              status: 'error',
+              error: err.message,
+              reconnectAttempt: 0
+            }
+          })
+        }
+      })
+
+      session.setOnRelayLost((tid) => {
+        const s = activeSessions.get(tid)
+        if (!s) {
+          return
+        }
+        const c = connectionManager?.getConnection(tid)
+        if (!c) {
+          return
+        }
+        const t = sshStore?.getTarget(tid)
+
+        // Why: bounded exponential backoff. Without this, a remote-side bug
+        // that closes every fresh --connect channel turns into an infinite
+        // tight loop spawning relay deploys until the user force-quits.
+        const state = relayLostBackoff.get(tid) ?? {
+          attempts: 0,
+          lastAttemptStartedAt: 0,
+          pendingTimer: null
+        }
+        if (state.pendingTimer) {
+          // A retry is already scheduled — coalesce this burst.
+          return
+        }
+        if (state.attempts >= RELAY_LOST_MAX_ATTEMPTS) {
+          console.warn(
+            `[ssh] Relay channel for ${tid} kept dying across ${state.attempts} attempts; giving up. User must reconnect manually.`
+          )
+          relayLostBackoff.delete(tid)
+          // Why: surface the failure so the renderer can prompt the user.
+          // A still-live SSH connection with a dead relay is otherwise an
+          // invisible failure — typing in remote terminals just stops working.
+          const win = getMainWindow()
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('ssh:state-changed', {
+              targetId: tid,
+              state: {
+                targetId: tid,
+                status: 'error',
+                error: 'Relay channel kept dropping. Please reconnect.',
+                reconnectAttempt: 0
+              }
+            })
+          }
+          return
+        }
+        const delay = Math.min(
+          RELAY_LOST_BASE_DELAY_MS * 2 ** state.attempts,
+          RELAY_LOST_MAX_DELAY_MS
+        )
+        state.attempts += 1
+        state.pendingTimer = setTimeout(() => {
+          state.pendingTimer = null
+          state.lastAttemptStartedAt = Date.now()
+          relayLostBackoff.set(tid, state)
+          const liveConn = connectionManager?.getConnection(tid)
+          if (!liveConn || !activeSessions.has(tid)) {
+            return
+          }
+          void s.reconnect(liveConn, relayGracePeriodForTarget(t))
+        }, delay)
+        relayLostBackoff.set(tid, state)
+        console.warn(
+          `[ssh] Relay channel for ${tid} lost; reconnect attempt ${state.attempts}/${RELAY_LOST_MAX_ATTEMPTS} in ${delay}ms`
+        )
+      })
+
+      // Why: fires after both establish() and reconnect() reach 'ready'.
+      // Re-creates persisted port forwards so they survive app restarts
+      // and network blips without manual re-configuration. We also clear
+      // the relay-lost backoff state so a subsequent genuine drop starts
+      // from a fresh attempt counter — but only if the session had a chance
+      // to stabilize, otherwise rapid `ready → lost → ready → lost` flaps
+      // would silently keep retrying forever.
+      session.setOnReady((tid) => {
+        const state = relayLostBackoff.get(tid)
+        if (state) {
+          const stabilized =
+            state.lastAttemptStartedAt === 0 ||
+            Date.now() - state.lastAttemptStartedAt >= RELAY_LOST_STABILIZED_MS
+          if (stabilized) {
+            relayLostBackoff.delete(tid)
+          }
+        }
+        void restorePortForwards(tid, getMainWindow)
+        notifyActiveMultiplexerReady(tid)
+      })
       await session.establish(conn, relayGracePeriodForTarget(target))
 
       // Why: we manually pushed `deploying-relay` above, so the renderer's
