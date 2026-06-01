@@ -154,6 +154,16 @@ export function activateAndRevealWorktree(
   if (!wt) {
     return false
   }
+  const hasActivationWork = Boolean(
+    opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
+  )
+  // Why: a plain reselect of the already-visible workspace should still reveal
+  // the sidebar row, but it must not restamp focus recency and wake persistence.
+  const isPlainAlreadyActiveTerminal =
+    !hasActivationWork &&
+    state.activeRepoId === wt.repoId &&
+    state.activeWorktreeId === worktreeId &&
+    state.activeView === 'terminal'
 
   // 1. Set activeRepoId if crossing repos
   if (wt.repoId !== state.activeRepoId) {
@@ -181,14 +191,16 @@ export function activateAndRevealWorktree(
   // flips, so the recency stamp must land with the same guarantee. Separate
   // from recordWorktreeVisit (nav-history) and from worktree.lastActivityAt
   // (background signal) on purpose — see docs/cmd-j-empty-query-ordering.md.
-  state.markWorktreeVisited(worktreeId)
+  if (!isPlainAlreadyActiveTerminal) {
+    state.markWorktreeVisited(worktreeId)
+  }
 
   // Why: activateAndRevealWorktree always ends in 'terminal' view (step 2),
   // and Settings/Tasks transitions do not pass through this function, so no
   // view-guard is needed here. The guard skips re-recording when the caller
   // is goBackWorktree/goForwardWorktree, which mutate the history index
   // directly instead of treating the target as a new visit.
-  if (!state.isNavigatingHistory) {
+  if (!isPlainAlreadyActiveTerminal && !state.isNavigatingHistory) {
     state.recordWorktreeVisit(worktreeId)
   }
 

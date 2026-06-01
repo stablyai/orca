@@ -142,3 +142,15 @@ The follow-up preserves the existing state reference when all derived active
 fields, unread state, and first-activation bookkeeping are unchanged. A
 regression test subscribes to the store and asserts that reselecting the
 already-active reconciled worktree does not notify subscribers.
+
+## Follow-up: Activation Helper Visit Writes
+
+After the store-level no-op fix, the higher-level `activateAndRevealWorktree`
+helper could still restamp focus-recency and append navigation history for a
+plain reselect of the already-active worktree in terminal view. That path did
+not change the visible workspace, but the recency stamp is part of the persisted
+session payload and can still wake the session writer.
+
+The follow-up skips only that true no-op visit write. Activations that switch
+repo, leave another app view, or carry startup/setup/default-tab work still
+record the visit, and the sidebar reveal still runs for the no-op case.
