@@ -1,0 +1,5 @@
+{
+  "rules": {
+    "react-doctor/js-combine-iterations": "off"
+  }
+}
