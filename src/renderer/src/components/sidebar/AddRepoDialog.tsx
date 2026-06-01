@@ -873,7 +873,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             <DialogHeader>
               <DialogTitle>Add a server project</DialogTitle>
               <DialogDescription>
-                Add a Git repository or folder that already exists on the selected runtime server.
+                Add a Git repository or folder by entering its path on the active server.
               </DialogDescription>
             </DialogHeader>
 
@@ -883,13 +883,13 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                   htmlFor="server-project-path"
                   className="text-[11px] font-medium text-muted-foreground block"
                 >
-                  Server path
+                  Path on active server
                 </label>
                 <Input
                   id="server-project-path"
                   value={serverPath}
                   onChange={(event) => setServerPath(event.target.value)}
-                  placeholder="/home/user/project"
+                  placeholder="/path/to/project"
                   className="h-11 text-sm font-mono"
                   disabled={isAddingServerPath}
                   autoFocus

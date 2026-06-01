@@ -416,8 +416,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     const target = getActiveRuntimeTarget(get().settings)
     if (target.kind !== 'local') {
       // Why: OS folder pickers return client-local paths. Remote environments
-      // need an explicit server path, which the Add Project dialog handles.
-      toast.error('Use a server path to add projects from a remote runtime.')
+      // need the Add Project dialog's server-path flow instead of the legacy
+      // convenience picker.
+      get().openModal('add-repo')
       return null
     }
     const path = await window.api.repos.pickFolder()

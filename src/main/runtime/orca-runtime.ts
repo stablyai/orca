@@ -899,6 +899,21 @@ function listRuntimeFolderWorkspaces(
   })
 }
 
+async function pathIsDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory()
+  } catch (error) {
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : ''
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return false
+    }
+    throw error
+  }
+}
+
 function parseExactWorktreeIdSelector(selector: string): RuntimeWorktreeRemovalTarget | null {
   const worktreeId = selector.startsWith('id:') ? selector.slice(3) : selector
   const parsed = splitWorktreeId(worktreeId)
@@ -5473,6 +5488,9 @@ export class OrcaRuntimeService {
     if (existing) {
       return existing
     }
+    if (kind === 'folder' && !(await pathIsDirectory(path))) {
+      throw new Error(`Project path must be an existing directory: ${path}`)
+    }
 
     const repoIcon = await detectRepoIcon({ repoPath: path, kind })
     const repo: Repo = {
@@ -7169,6 +7187,14 @@ export class OrcaRuntimeService {
   async listDetectedManagedWorktrees(repoSelector: string): Promise<DetectedWorktreeListResult> {
     const repo = await this.resolveRepoSelector(repoSelector)
     if (isFolderRepo(repo)) {
+      if (!(await pathIsDirectory(repo.path))) {
+        return {
+          repoId: repo.id,
+          authoritative: true,
+          source: 'git',
+          worktrees: []
+        }
+      }
       const worktrees = listRuntimeFolderWorkspaces(this.requireStore(), repo)
       return {
         repoId: repo.id,

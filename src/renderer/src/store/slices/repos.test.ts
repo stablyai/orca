@@ -156,7 +156,7 @@ describe('repo slice runtime routing', () => {
     expect(reposPickFolder).not.toHaveBeenCalled()
   })
 
-  it('does not open the client folder picker when a remote runtime environment is active', async () => {
+  it('opens the server-aware add dialog when a remote runtime environment is active', async () => {
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never
@@ -164,6 +164,7 @@ describe('repo slice runtime routing', () => {
 
     await expect(store.getState().addRepo()).resolves.toBeNull()
 
+    expect(store.getState().activeModal).toBe('add-repo')
     expect(reposPickFolder).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })

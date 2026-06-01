@@ -36,6 +36,7 @@ function openExternalUrl(url: string): void {
 
 const SidebarToolbar = React.memo(function SidebarToolbar() {
   const openModal = useAppStore((s) => s.openModal)
+  const activeRuntimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
@@ -102,7 +103,9 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            Open folder picker to add a project
+            {activeRuntimeEnvironmentId?.trim()
+              ? 'Add a project from the active server'
+              : 'Open folder picker to add a project'}
           </TooltipContent>
         </Tooltip>
         <div className="flex items-center gap-1">

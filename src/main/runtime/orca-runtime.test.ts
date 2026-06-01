@@ -2497,6 +2497,7 @@ describe('OrcaRuntimeService', () => {
 
   it('defaults runtime addRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
     const added: Record<string, unknown>[] = []
+    const repoPath = await mkdtemp(join(tmpdir(), 'runtime-add-default-'))
     const colorStore = {
       ...store,
       getRepos: () => [...added] as never,
@@ -2507,10 +2508,49 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(colorStore as never)
 
-    const repo = await runtime.addRepo('/tmp/runtime-add-default', 'folder')
+    try {
+      const repo = await runtime.addRepo(repoPath, 'folder')
 
-    expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
-    expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+      expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
+      expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects runtime folder repo paths that do not exist', async () => {
+    const runtime = new OrcaRuntimeService(store as never)
+    const missingPath = join(tmpdir(), `runtime-missing-folder-${Date.now()}`)
+
+    await expect(runtime.addRepo(missingPath, 'folder')).rejects.toThrow(
+      `Project path must be an existing directory: ${missingPath}`
+    )
+  })
+
+  it('does not publish a folder workspace for a missing runtime folder path', async () => {
+    const folderRepo = {
+      id: 'missing-folder-repo',
+      path: join(tmpdir(), `runtime-missing-folder-${Date.now()}`),
+      displayName: 'missing-folder',
+      badgeColor: 'blue',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const setWorktreeMeta = vi.fn()
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => [folderRepo],
+      getRepo: (id: string) => (id === folderRepo.id ? folderRepo : undefined),
+      getAllWorktreeMeta: () => ({}),
+      setWorktreeMeta
+    } as never)
+
+    await expect(runtime.listDetectedManagedWorktrees(folderRepo.id)).resolves.toMatchObject({
+      repoId: folderRepo.id,
+      authoritative: true,
+      worktrees: []
+    })
+    expect(setWorktreeMeta).not.toHaveBeenCalled()
   })
 
   it('defaults runtime createRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {

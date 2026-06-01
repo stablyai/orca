@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
+import { RuntimeServersSection } from './RuntimeServersSection'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
@@ -76,6 +77,7 @@ function Sidebar({
           <>
             {/* Fixed controls */}
             <SidebarNav />
+            <RuntimeServersSection />
             <SidebarHeader />
 
             <WorktreeList

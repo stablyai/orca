@@ -11,6 +11,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { selectRefreshedNetworkAddress } from './mobile-network-interface-selection'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 
 const LOOPBACK_ADDRESS = '127.0.0.1'
@@ -180,6 +181,13 @@ export function RuntimePairingUrlGenerator({
         const result = await window.api.mobile.listNetworkInterfaces()
         if (mountedRef.current && loadId === networkInterfaceLoadIdRef.current) {
           setNetworkInterfaces(result.interfaces)
+          const nextAddress =
+            selectRefreshedNetworkAddress(
+              runtimePairingUrlCache.selectedAddress,
+              result.interfaces
+            ) ?? LOOPBACK_ADDRESS
+          runtimePairingUrlCache.selectedAddress = nextAddress
+          setSelectedAddress(nextAddress)
         }
       } catch {
         if (
