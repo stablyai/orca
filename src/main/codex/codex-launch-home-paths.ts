@@ -775,6 +775,7 @@ function markLaunchEntry(
 ): void {
   const markerPath = getLaunchEntryMarkerPath(launchHomePath, entryName)
   mkdirSync(dirname(markerPath), { recursive: true })
+  const shouldTrackDigests = MUTABLE_SHARED_FILE_ENTRIES.has(entryName)
   writeFileSync(
     markerPath,
     `${JSON.stringify(
@@ -782,8 +783,10 @@ function markLaunchEntry(
         version: LAUNCH_HOME_MARKER_VERSION,
         sourcePath,
         mode,
-        sourceDigest: digestPathIfFile(sourcePath),
-        targetDigest: digestPathIfFile(join(launchHomePath, entryName))
+        // Why: digests are only used to reconcile mutable config-style files;
+        // hashing SQLite databases on every PTY launch can read gigabytes.
+        sourceDigest: shouldTrackDigests ? digestPathIfFile(sourcePath) : null,
+        targetDigest: shouldTrackDigests ? digestPathIfFile(join(launchHomePath, entryName)) : null
       } satisfies LaunchEntryMarker,
       null,
       2
