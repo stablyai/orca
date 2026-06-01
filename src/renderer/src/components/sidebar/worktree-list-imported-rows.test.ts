@@ -84,12 +84,12 @@ describe('imported worktree virtual rows', () => {
     ).toEqual([{ key: 'repo:repo-1', worktreeIds: ['main', 'feature'] }])
   })
 
-  it('suppresses keep-hidden actions for force-visible rollback failure cards', () => {
+  it('only allows keep-hidden actions for repo-group cards that are not forced visible', () => {
     expect(canKeepImportedWorktreesHidden(makeImportedCardRow(), undefined)).toBe(true)
     expect(
       canKeepImportedWorktreesHidden(makeImportedCardRow(), {
         pending: false,
-        error: 'Could not show imported worktrees.',
+        error: 'Could not show discovered worktrees.',
         forceVisible: true
       })
     ).toBe(false)
