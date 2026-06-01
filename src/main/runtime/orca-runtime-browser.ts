@@ -62,7 +62,7 @@ import {
   importCookiesFromBrowser,
   selectBrowserProfile
 } from '../browser/browser-cookie-import'
-import { waitForTabRegistration } from '../ipc/browser'
+import { waitForTabRegistration, waitForWorktreeTabRegistration } from '../ipc/browser'
 
 export type BrowserCommandTargetParams = {
   worktree?: string
@@ -171,9 +171,7 @@ export class RuntimeBrowserCommands {
       const bridge = this.host.getAgentBrowserBridge()
       if (bridge && bridge.getRegisteredTabs().size === 0) {
         try {
-          const win = this.host.getAuthoritativeWindow()
-          win.webContents.send('browser:activateView', {})
-          await new Promise((resolve) => setTimeout(resolve, 500))
+          await this.ensureBrowserWorktreeActive(undefined)
         } catch {
           // Window may not exist yet (e.g. during startup or in tests)
         }
@@ -251,12 +249,13 @@ export class RuntimeBrowserCommands {
   // and registerGuest fires, but automation must not steal the user's visible
   // worktree/browser pane. Ask the renderer to background-mount the worktree and
   // acquire a hidden automation visibility lease instead of activating the UI.
-  private async ensureBrowserWorktreeActive(worktreeId: string): Promise<void> {
+  private async ensureBrowserWorktreeActive(worktreeId: string | undefined): Promise<void> {
     const win = this.host.getAuthoritativeWindow()
-    win.webContents.send('browser:activateView', { worktreeId })
-    // Why: give the renderer time to mount the hidden paintable webview.
-    // The webview needs to attach and fire dom-ready before registerGuest runs.
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    win.webContents.send('browser:activateView', worktreeId ? { worktreeId } : {})
+    // Why: parked/restored browser panes become operable only after the
+    // renderer's webview mounts and calls registerGuest. Waiting on that IPC is
+    // both faster and less flaky than sleeping for an arbitrary fixed delay.
+    await waitForWorktreeTabRegistration(worktreeId)
   }
 
   // Why: agent-browser drives navigation via CDP, which bypasses Electron's

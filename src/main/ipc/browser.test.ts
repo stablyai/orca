@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: browser IPC tests share one mocked trust-boundary handler registry plus registration waiters; splitting would duplicate setup and weaken coverage. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -6,6 +7,7 @@ const {
   registerGuestMock,
   unregisterGuestMock,
   getGuestWebContentsIdMock,
+  getWebContentsIdByTabIdMock,
   getWorktreeIdForTabMock,
   openDevToolsMock,
   setAnnotationViewportBridgeMock,
@@ -20,6 +22,7 @@ const {
   registerGuestMock: vi.fn(),
   unregisterGuestMock: vi.fn(),
   getGuestWebContentsIdMock: vi.fn(),
+  getWebContentsIdByTabIdMock: vi.fn(() => new Map()),
   getWorktreeIdForTabMock: vi.fn(),
   openDevToolsMock: vi.fn().mockResolvedValue(true),
   setAnnotationViewportBridgeMock: vi.fn().mockResolvedValue(true),
@@ -48,6 +51,7 @@ vi.mock('../browser/browser-manager', () => ({
     registerGuest: registerGuestMock,
     unregisterGuest: unregisterGuestMock,
     getGuestWebContentsId: getGuestWebContentsIdMock,
+    getWebContentsIdByTabId: getWebContentsIdByTabIdMock,
     getWorktreeIdForTab: getWorktreeIdForTabMock,
     openDevTools: openDevToolsMock,
     setAnnotationViewportBridge: setAnnotationViewportBridgeMock,
@@ -60,7 +64,9 @@ vi.mock('../browser/browser-manager', () => ({
 import {
   registerBrowserHandlers,
   setAgentBrowserBridgeRef,
-  waitForTabRegistration
+  waitForAnyTabRegistration,
+  waitForTabRegistration,
+  waitForWorktreeTabRegistration
 } from './browser'
 
 describe('registerBrowserHandlers', () => {
@@ -71,6 +77,8 @@ describe('registerBrowserHandlers', () => {
     registerGuestMock.mockReset()
     unregisterGuestMock.mockReset()
     getGuestWebContentsIdMock.mockReset()
+    getWebContentsIdByTabIdMock.mockReset()
+    getWebContentsIdByTabIdMock.mockReturnValue(new Map())
     getWorktreeIdForTabMock.mockReset()
     openDevToolsMock.mockReset()
     setAnnotationViewportBridgeMock.mockReset()
@@ -217,6 +225,71 @@ describe('registerBrowserHandlers', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('resolves worktree and any-tab registration waiters when a guest registers', async () => {
+    vi.useFakeTimers()
+    try {
+      getWebContentsIdByTabIdMock.mockReturnValue(new Map())
+      const worktreeWait = waitForWorktreeTabRegistration('worktree-1', 1000)
+      const anyWait = waitForAnyTabRegistration(1000)
+      const settled = Promise.allSettled([worktreeWait, anyWait])
+
+      registerBrowserHandlers()
+
+      const registerHandler = handleMock.mock.calls.find(
+        ([channel]) => channel === 'browser:registerGuest'
+      )?.[1] as (
+        event: { sender: Electron.WebContents },
+        args: {
+          browserPageId: string
+          workspaceId: string
+          worktreeId: string
+          webContentsId: number
+        }
+      ) => boolean
+
+      const result = registerHandler(
+        {
+          sender: {
+            id: 91,
+            isDestroyed: () => false,
+            getType: () => 'window',
+            getURL: () => 'file:///renderer/index.html'
+          } as Electron.WebContents
+        },
+        {
+          browserPageId: 'page-worktree-1',
+          workspaceId: 'workspace-1',
+          worktreeId: 'worktree-1',
+          webContentsId: 123
+        }
+      )
+
+      expect(result).toBe(true)
+      await vi.advanceTimersByTimeAsync(1001)
+      expect(await settled).toEqual([
+        { status: 'fulfilled', value: undefined },
+        { status: 'fulfilled', value: undefined }
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resolves worktree registration waits immediately when a tab is already registered', async () => {
+    getWebContentsIdByTabIdMock.mockReturnValue(new Map([['page-1', 123]]))
+    getWorktreeIdForTabMock.mockReturnValue('worktree-1')
+
+    await expect(waitForWorktreeTabRegistration('worktree-1', 1000)).resolves.toBeUndefined()
+
+    expect(getWorktreeIdForTabMock).toHaveBeenCalledWith('page-1')
+  })
+
+  it('resolves any-tab registration waits immediately when a tab is already registered', async () => {
+    getWebContentsIdByTabIdMock.mockReturnValue(new Map([['page-1', 123]]))
+
+    await expect(waitForAnyTabRegistration(1000)).resolves.toBeUndefined()
   })
 
   it('validates annotation viewport bridge requests before syncing to the guest', async () => {

@@ -116,3 +116,16 @@ The follow-up changes the order: create the automation visibility lease first,
 then wait for paint while the pane is actually visible to automation. A
 renderer-side timeout releases the lease if paint never arrives, so a hung RAF
 does not pin an inactive browser pane indefinitely.
+
+## Follow-up: Browser Registration Readiness
+
+One remaining automation race was the wake path for parked or restored browser
+tabs. Runtime browser commands asked the renderer to mount a hidden browser
+pane, then waited a fixed 500 ms before reading the agent-browser tab registry.
+On slow webview startup, that could still race `registerGuest` and make
+agent-browser report no tab even though the tab was in the process of mounting.
+
+The follow-up extends the existing tab-registration wait from page-specific
+creation to worktree/global wake flows. Runtime commands now wait for the
+renderer's actual `browser:registerGuest` IPC before routing automation, with
+the same timeout fallback used by tab creation.
