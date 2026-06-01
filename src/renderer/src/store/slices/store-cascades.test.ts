@@ -212,45 +212,6 @@ describe('removeWorktree cascade', () => {
     })
   })
 
-  it('can force-delete a preserved local branch from the same confirmed delete', async () => {
-    const store = createTestStore()
-    const worktreeId = 'repo1::/path/wt1'
-    mockApi.worktrees.remove.mockResolvedValueOnce({
-      preservedBranch: { branchName: 'feature/test', head: 'def456' }
-    })
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [
-          makeWorktree({
-            id: worktreeId,
-            repoId: 'repo1',
-            path: '/path/wt1',
-            displayName: 'Review cleanup'
-          })
-        ]
-      }
-    })
-
-    const result = await store.getState().removeWorktree(worktreeId, true, {
-      forceDeletePreservedBranch: true
-    })
-
-    expect(result).toEqual({ ok: true })
-    expect(toast.warning).not.toHaveBeenCalledWith(
-      'Worktree deleted, branch kept',
-      expect.anything()
-    )
-    expect(mockApi.worktrees.forceDeletePreservedBranch).toHaveBeenCalledWith({
-      worktreeId,
-      branchName: 'feature/test',
-      expectedHead: 'def456'
-    })
-    expect(toast.success).toHaveBeenCalledWith('Local branch deleted', {
-      description: 'Deleted "feature/test".'
-    })
-  })
-
   it('sets delete state with dirty/untracked error and canForceDelete=true on failure', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'

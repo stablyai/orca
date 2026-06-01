@@ -8,12 +8,13 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
-import { branchName } from '@/lib/git-utils'
 import { toast } from 'sonner'
+import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
 import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
-import { DeleteWorktreeConfirmationOptions } from './DeleteWorktreeConfirmationOptions'
+import { DeleteWorktreeSkipConfirmOption } from './DeleteWorktreeSkipConfirmOption'
 import { DeleteWorktreeDialogFooter } from './DeleteWorktreeDialogFooter'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 import { DeleteWorktreeWarningPanels } from './DeleteWorktreeWarningPanels'
@@ -36,6 +37,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const settings = useAppStore((s) => s.settings)
+  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const setGitStatus = useAppStore((s) => s.setGitStatus)
 
   const isOpen = activeModal === 'delete-worktree'
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
@@ -124,34 +128,36 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const allowSkipConfirm =
     !isBatchDelete && modalData.allowSkipConfirm !== false && childWorkspaceCount === 0
   const [dontAskAgain, setDontAskAgain] = useState(false)
-  const [forceDeletePreservedBranches, setForceDeletePreservedBranches] = useState(false)
   const deleteTargets = useMemo(
     () => (canDeleteAllLineage ? lineageDelete.deleteAllTargets : worktrees),
     [canDeleteAllLineage, lineageDelete.deleteAllTargets, worktrees]
   )
-  const branchDeleteTargets = useMemo(
-    () =>
-      deleteTargets.filter(
-        (item) =>
-          !item.isMainWorktree &&
-          Boolean(item.branch?.trim()) &&
-          !getIsFolderWorkspaceDelete(repoMap, item)
-      ),
-    [deleteTargets, repoMap]
-  )
-  const branchDeleteTargetCount = branchDeleteTargets.length
-  const singleBranchDeleteName =
-    branchDeleteTargetCount === 1 ? branchName(branchDeleteTargets[0]?.branch?.trim() ?? '') : ''
-  const shouldForceDeletePreservedBranches =
-    forceDeletePreservedBranches && branchDeleteTargetCount > 0
+  const dirtyDeleteSummary = useMemo(() => {
+    let worktreeCount = 0
+    let changeCount = 0
+    for (const item of deleteTargets) {
+      if (item.isMainWorktree || getIsFolderWorkspaceDelete(repoMap, item)) {
+        continue
+      }
+      const statusEntries = gitStatusByWorktree[item.id]
+      const isDirty =
+        (statusEntries?.length ?? 0) > 0 ||
+        (deleteStateByWorktreeId[item.id]?.canForceDelete ?? false)
+      if (!isDirty) {
+        continue
+      }
+      worktreeCount += 1
+      changeCount += statusEntries?.length ?? 0
+    }
+    return worktreeCount > 0
+      ? { worktreeCount, changeCount, targetCount: deleteTargets.length }
+      : null
+  }, [deleteStateByWorktreeId, deleteTargets, gitStatusByWorktree, repoMap])
 
   if (!isOpen && dontAskAgain) {
     // Why: this checkbox is a one-shot dialog intent; reset it as soon as the
     // dialog is closed so a later delete never inherits a cancelled choice.
     setDontAskAgain(false)
-  }
-  if (!isOpen && forceDeletePreservedBranches) {
-    setForceDeletePreservedBranches(false)
   }
 
   useEffect(() => {
@@ -170,6 +176,42 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     worktreeIds.length,
     worktrees.length
   ])
+
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+    const statusTargets = deleteTargets.filter(
+      (item) =>
+        !item.isMainWorktree &&
+        !getIsFolderWorkspaceDelete(repoMap, item) &&
+        gitStatusByWorktree[item.id] === undefined
+    )
+    if (statusTargets.length === 0) {
+      return
+    }
+    let cancelled = false
+    for (const item of statusTargets) {
+      void getRuntimeGitStatus({
+        settings,
+        worktreeId: item.id,
+        worktreePath: item.path,
+        connectionId: getConnectionId(item.id) ?? undefined
+      })
+        .then((status) => {
+          if (!cancelled) {
+            setGitStatus(item.id, status)
+          }
+        })
+        .catch(() => {
+          // Best-effort only: delete itself still performs the authoritative
+          // backend check and will surface failures through the normal toast.
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [deleteTargets, gitStatusByWorktree, isOpen, repoMap, setGitStatus, settings])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -240,9 +282,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         // inside the dialog — it runs the destructive retry directly without
         // the shared toast wrapper. Close immediately because workspace cards
         // already show the deleting state while the retry runs.
-        const deletePromise = shouldForceDeletePreservedBranches
-          ? removeWorktree(worktreeId, true, { forceDeletePreservedBranch: true })
-          : removeWorktree(worktreeId, true)
+        const deletePromise = removeWorktree(worktreeId, true)
         closeModal()
         deletePromise
           .then((result) => {
@@ -265,7 +305,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         // a redundant Force Delete toast after the user already confirmed.
         const deletePromise = runWorktreeDeletesInParallel(worktrees, {
           force: true,
-          forceDeletePreservedBranch: shouldForceDeletePreservedBranches,
           onForceDeleted: handleForceDeletedFromToast
         })
         // Why: the workspace card owns the in-progress feedback, so the
@@ -286,7 +325,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       onDeleted,
       persistDontAskAgainPreference,
       removeWorktree,
-      shouldForceDeletePreservedBranches,
       worktreeIds.length,
       worktreeId,
       worktrees
@@ -301,7 +339,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     // dirty child workspaces should not create per-workspace force prompts.
     const deletePromise = runWorktreeDeletesInParallel(lineageDelete.deleteAllTargets, {
       force: true,
-      forceDeletePreservedBranch: shouldForceDeletePreservedBranches,
       onForceDeleted: handleForceDeletedFromToast
     })
     // Why: deletion progress is shown on the workspace cards; the modal should
@@ -312,13 +349,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         onDeleted?.(deletedIds)
       }
     })
-  }, [
-    closeModal,
-    handleForceDeletedFromToast,
-    lineageDelete.deleteAllTargets,
-    onDeleted,
-    shouldForceDeletePreservedBranches
-  ])
+  }, [closeModal, handleForceDeletedFromToast, lineageDelete.deleteAllTargets, onDeleted])
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -373,15 +404,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           isMainWorktree={isMainWorktree}
           mainWorktreeBlocker={deleteCopy.mainWorktreeBlocker}
           deleteError={deleteError}
+          dirtyDeleteSummary={dirtyDeleteSummary}
         />
 
-        <DeleteWorktreeConfirmationOptions
-          branchDeleteTargetCount={isMainWorktree ? 0 : branchDeleteTargetCount}
-          singleBranchDeleteName={singleBranchDeleteName}
-          forceDeletePreservedBranches={forceDeletePreservedBranches}
-          onToggleForceDeletePreservedBranches={() =>
-            setForceDeletePreservedBranches((prev) => !prev)
-          }
+        <DeleteWorktreeSkipConfirmOption
           showDontAskAgain={!isMainWorktree && allowSkipConfirm && !canForceDelete}
           dontAskAgain={dontAskAgain}
           onToggleDontAskAgain={() => setDontAskAgain((prev) => !prev)}

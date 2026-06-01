@@ -32,10 +32,6 @@ export type WorktreeMetaUpdateOptions = {
   shouldApply?: WorktreeMetaUpdateGuard
 }
 
-export type RemoveWorktreeOptions = {
-  forceDeletePreservedBranch?: boolean
-}
-
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
@@ -114,8 +110,7 @@ export type WorktreeSlice = {
   prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
   removeWorktree: (
     worktreeId: string,
-    force?: boolean,
-    options?: RemoveWorktreeOptions
+    force?: boolean
   ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
   markWorktreesDeleting: (worktreeIds: readonly string[]) => void
   forceDeletePreservedBranch: (

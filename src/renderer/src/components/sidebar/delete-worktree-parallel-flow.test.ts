@@ -132,21 +132,17 @@ describe('runWorktreeDeletesInParallel', () => {
     expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'parent', false)
   })
 
-  it('passes confirmed force and branch cleanup options to each delete', async () => {
+  it('passes confirmed force to each delete', async () => {
     await runWorktreeDeletesInParallel(
       [
         { id: 'wt-1', displayName: 'one', repoId: 'repo-a', path: '/workspaces/one' },
         { id: 'wt-2', displayName: 'two', repoId: 'repo-b', path: '/workspaces/two' }
       ],
-      { force: true, forceDeletePreservedBranch: true }
+      { force: true }
     )
 
-    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(1, 'wt-1', true, {
-      forceDeletePreservedBranch: true
-    })
-    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'wt-2', true, {
-      forceDeletePreservedBranch: true
-    })
+    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(1, 'wt-1', true)
+    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'wt-2', true)
   })
 
   it('clears a pending ancestor when a nested descendant delete fails', async () => {

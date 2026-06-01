@@ -17,7 +17,6 @@ type WorktreeBatchDeleteOptions = {
 
 type WorktreeDeleteWithToastOptions = {
   force?: boolean
-  forceDeletePreservedBranch?: boolean
   onForceDeleted?: (worktreeId: string) => void
 }
 
@@ -111,15 +110,8 @@ export function runWorktreeDeleteWithToast(
   options: WorktreeDeleteWithToastOptions = {}
 ): Promise<boolean> {
   const removeWorktree = useAppStore.getState().removeWorktree
-  const removeOptions = options.forceDeletePreservedBranch
-    ? { forceDeletePreservedBranch: true }
-    : undefined
-  const remove = (force: boolean) =>
-    removeOptions
-      ? removeWorktree(worktreeId, force, removeOptions)
-      : removeWorktree(worktreeId, force)
 
-  return remove(options.force === true)
+  return removeWorktree(worktreeId, options.force === true)
     .then((result) => {
       if (result.ok) {
         return true
@@ -139,12 +131,9 @@ export function runWorktreeDeleteWithToast(
           ? {
               label: 'Force Delete',
               onClick: () => {
-                const forceDeletePromise = options.forceDeletePreservedBranch
-                  ? useAppStore
-                      .getState()
-                      .removeWorktree(worktreeId, true, { forceDeletePreservedBranch: true })
-                  : useAppStore.getState().removeWorktree(worktreeId, true)
-                forceDeletePromise
+                useAppStore
+                  .getState()
+                  .removeWorktree(worktreeId, true)
                   .then((forceResult) => {
                     if (!forceResult.ok) {
                       toast.error('Force delete failed', {

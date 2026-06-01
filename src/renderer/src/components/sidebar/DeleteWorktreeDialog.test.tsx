@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => {
     updateSettings: vi.fn(),
     openSettingsTarget: vi.fn(),
     openSettingsPage: vi.fn(),
+    settings: null,
+    gitStatusByWorktree: {} as Record<string, { path: string; status: 'modified' }[]>,
+    setGitStatus: vi.fn(),
     deleteStateByWorktreeId: {}
   }
   return { state, buttonProps: [] as Record<string, unknown>[] }
@@ -114,6 +117,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     mocks.state.allWorktrees.mockReturnValue([])
     mocks.state.repos = []
     mocks.state.worktreeLineageById = {}
+    mocks.state.gitStatusByWorktree = {}
     mocks.state.deleteStateByWorktreeId = {}
     mocks.buttonProps = []
     vi.mocked(runWorktreeDeletesInParallel).mockResolvedValue([])
@@ -134,9 +138,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     expect(markup).toContain('Child workspaces will be deleted')
     expect(markup).toContain('Deleting this workspace also deletes 1 child workspace.')
     expect(markup).toContain('Child workspace')
-    expect(markup).toContain(
-      'from git and delete their workspace folders, including uncommitted or untracked files.'
-    )
+    expect(markup).toContain('from git and delete their workspace folders.')
     expect(markup).not.toContain('from git and delete its workspace folder.')
     expect(markup).toContain('Delete 2 Workspaces')
     expect(markup).not.toContain('Delete Parent Only')
@@ -155,7 +157,6 @@ describe('DeleteWorktreeDialog lineage copy', () => {
 
     expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([child, parent], {
       force: true,
-      forceDeletePreservedBranch: false,
       onForceDeleted: expect.any(Function)
     })
   })
@@ -200,21 +201,23 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     expect(markup).not.toContain('including uncommitted or untracked files')
   })
 
-  it('offers preserved branch cleanup in the first delete confirmation', async () => {
+  it('shows a warning note when the workspace has uncommitted or untracked changes', async () => {
     const workspace = makeWorktree('Feature workspace', '/workspaces/feature')
-    workspace.branch = 'feature/delete-flow'
     mocks.state.modalData = { worktreeId: workspace.id }
     mocks.state.allWorktrees.mockReturnValue([workspace])
+    mocks.state.gitStatusByWorktree = {
+      [workspace.id]: [
+        { path: 'src/file.ts', status: 'modified' },
+        { path: 'notes.md', status: 'modified' }
+      ]
+    }
 
     const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
     const markup = renderToStaticMarkup(<DeleteWorktreeDialog />)
 
-    expect(markup).toContain(
-      'Also delete local branch &quot;feature/delete-flow&quot; if Git keeps it'
-    )
-    expect(markup).toContain(
-      'This only force-deletes branches Git protects because they may contain unmerged local commits.'
-    )
+    expect(markup).toContain('Uncommitted or untracked changes')
+    expect(markup).toContain('This workspace has 2 uncommitted or untracked changes.')
+    expect(markup).not.toContain('Also delete local branch')
   })
 
   it('notifies the dialog caller after a toast force delete succeeds', async () => {
@@ -234,7 +237,6 @@ describe('DeleteWorktreeDialog lineage copy', () => {
 
     expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([workspace], {
       force: true,
-      forceDeletePreservedBranch: false,
       onForceDeleted: expect.any(Function)
     })
     const options = vi.mocked(runWorktreeDeletesInParallel).mock.calls[0]?.[1] as

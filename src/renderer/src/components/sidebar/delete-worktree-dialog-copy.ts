@@ -52,11 +52,11 @@ export function getDeleteWorktreeDialogCopy(args: {
       ? allFolderWorkspaceDeletes
         ? 'from Orca. Project folders on disk will not be deleted.'
         : mixedFolderWorkspaceDeletes
-          ? 'from Orca. Git worktree folders and any uncommitted or untracked files inside them will be deleted; folder workspaces will only remove the Orca workspace entry.'
-          : 'from git and delete their workspace folders, including uncommitted or untracked files.'
+          ? 'from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.'
+          : 'from git and delete their workspace folders.'
       : args.isFolderWorkspaceDelete
         ? 'from Orca. The project folder on disk will not be deleted.'
-        : 'from git and delete its workspace folder, including uncommitted or untracked files.',
+        : 'from git and delete its workspace folder.',
     mainWorktreeBlocker: args.isFolderWorkspaceDelete
       ? 'Remove the folder project instead of deleting this workspace.'
       : 'Git does not allow removing the main worktree.'
@@ -84,7 +84,7 @@ export function getDeleteWorktreeLineageDialogCopy(args: {
     descriptionSuffix: allFolderWorkspaceDeletes
       ? 'from Orca. Project folders on disk will not be deleted.'
       : mixedFolderWorkspaceDeletes
-        ? 'from Orca. Git worktree folders and any uncommitted or untracked files inside them will be deleted; folder workspaces will only remove the Orca workspace entry.'
-        : 'from git and delete their workspace folders, including uncommitted or untracked files.'
+        ? 'from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.'
+        : 'from git and delete their workspace folders.'
   }
 }

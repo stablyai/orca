@@ -1118,7 +1118,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
   },
 
-  removeWorktree: async (worktreeId, force, options) => {
+  removeWorktree: async (worktreeId, force) => {
     set((s) => ({
       deleteStateByWorktreeId: {
         ...s.deleteStateByWorktreeId,
@@ -1366,29 +1366,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       })
       get().removeWorkspaceSpaceWorktrees?.([worktreeId])
       const preservedBranch = removalResult?.preservedBranch
-      let preservedBranchDeleted = false
-      if (preservedBranch && options?.forceDeletePreservedBranch && preservedBranch.head) {
-        // Why: the delete confirmation can explicitly include branch cleanup,
-        // avoiding a second branch prompt while still using the expected-head guard.
-        const branchResult = await get().forceDeletePreservedBranch(
-          worktreeId,
-          preservedBranch.branchName,
-          preservedBranch.head
-        )
-        preservedBranchDeleted = branchResult.ok
-        if (!branchResult.ok) {
-          showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
-            void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
-          })
-        }
-      } else {
+      if (preservedBranch) {
         showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
           void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
         })
       }
-      return preservedBranch && !preservedBranchDeleted
-        ? { ok: true as const, preservedBranch }
-        : { ok: true as const }
+      return preservedBranch ? { ok: true as const, preservedBranch } : { ok: true as const }
     } catch (err) {
       // Why: git refusing a non-force delete for dirty/untracked files is a
       // handled user decision point surfaced by the delete toast, not an app error.
