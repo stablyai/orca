@@ -518,6 +518,7 @@ function getLaunchHomeHookTrustSourcePath(launchHomePath: string): string {
 
 export function trustCodexLaunchHomeHooks(launchHomePath: string): void {
   const runtimeConfigPath = getConfigPath()
+  const runtimeTomlPath = getCodexConfigTomlPath()
   const launchHooksPath = join(launchHomePath, 'hooks.json')
   const launchTrustSourcePath = getLaunchHomeHookTrustSourcePath(launchHomePath)
   const tomlPath = getLaunchHomeCodexConfigTomlPath(launchHomePath)
@@ -526,7 +527,10 @@ export function trustCodexLaunchHomeHooks(launchHomePath: string): void {
     return
   }
 
-  const trustEntries = readHookTrustEntries(tomlPath)
+  // Why: account launch homes isolate auth.json, but hook trust is shared
+  // runtime config. A launch config.toml can be a stale mutable copy, while
+  // Codex keys trust by the selected launch home's hooks.json path.
+  const trustEntries = readHookTrustEntries(runtimeTomlPath)
   const launchTrustBlocks: { key: string; trustedHash: string }[] = []
   const launchTrustStates: { key: string; enabled: boolean }[] = []
   for (const [eventName, definitions] of Object.entries(config.hooks)) {

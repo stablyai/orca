@@ -74,6 +74,10 @@ function hookTrustHeader(key: string): string {
   return `[hooks.state."${escapeTomlBasicString(canonicalizeHookTrustKeyForTest(key))}"]`
 }
 
+function literalHookTrustHeader(key: string): string {
+  return `[hooks.state."${escapeTomlBasicString(key)}"]`
+}
+
 function canonicalizeHookTrustKeyForTest(key: string): string {
   const lastColon = key.lastIndexOf(':')
   const secondLast = lastColon === -1 ? -1 : key.lastIndexOf(':', lastColon - 1)
@@ -1050,8 +1054,35 @@ describe('CodexHookService', () => {
 
     const trustConfig = readFileSync(join(launchHome, 'config.toml'), 'utf-8')
     const launchHooksTrustPath = join(realpathSync.native(launchHome), 'hooks.json')
-    expect(trustConfig).toContain(hookTrustHeader(`${launchHooksTrustPath}:session_start:0:0`))
+    expect(trustConfig).toContain(
+      literalHookTrustHeader(`${launchHooksTrustPath}:session_start:0:0`)
+    )
     expect(trustConfig).toContain(hookTrustHeader(`${managedHooksPath}:session_start:0:0`))
+  })
+
+  it('mirrors runtime hook trust when launch-home config is stale', () => {
+    const service = new CodexHookService()
+    expect(service.install().state).toBe('installed')
+
+    const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
+    const managedHooksPath = join(managedCodexHome, 'hooks.json')
+    const launchHome = join(userDataDir, 'codex-runtime-home', 'launch', 'host', 'system', 'home')
+    mkdirSync(launchHome, { recursive: true })
+    if (process.platform === 'win32') {
+      writeFileSync(join(launchHome, 'hooks.json'), readFileSync(managedHooksPath, 'utf-8'))
+    } else {
+      symlinkSync(managedHooksPath, join(launchHome, 'hooks.json'))
+    }
+    writeFileSync(join(launchHome, 'config.toml'), 'model = "stale-launch-config"\n', 'utf-8')
+
+    trustCodexLaunchHomeHooks(launchHome)
+
+    const trustConfig = readFileSync(join(launchHome, 'config.toml'), 'utf-8')
+    const launchHooksTrustPath = join(realpathSync.native(launchHome), 'hooks.json')
+    expect(trustConfig).toContain('model = "stale-launch-config"')
+    expect(trustConfig).toContain(
+      literalHookTrustHeader(`${launchHooksTrustPath}:session_start:0:0`)
+    )
   })
 
   it('repairs duplicate managed SessionStart trust tables on restart install', () => {
