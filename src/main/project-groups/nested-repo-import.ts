@@ -1,8 +1,10 @@
 import type { NestedRepoScanResult, ProjectGroup, ProjectGroupImportMode } from '../../shared/types'
 import {
   isPathInsideOrEqual,
+  isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
-  relativePathInsideRoot
+  relativePathInsideRoot,
+  resolveRuntimePath
 } from '../../shared/cross-platform-path'
 
 type CreateGroupInput = {
@@ -21,6 +23,13 @@ type NestedProjectGroupResolver = {
 export type ResolvedNestedRepoSelection = {
   selectedPaths: string[]
   rejectedPaths: string[]
+}
+
+function canonicalizeImportPath(path: string): string | null {
+  if (!isRuntimePathAbsolute(path)) {
+    return null
+  }
+  return resolveRuntimePath(path, path)
 }
 
 function trimPathSeparators(path: string): string {
@@ -151,23 +160,33 @@ export function resolveNestedRepoImportPaths(args: {
   const selectedPaths: string[] = []
   const rejectedPaths: string[] = []
   const seen = new Set<string>()
+  const canonicalParentPath = canonicalizeImportPath(args.parentPath)
+
+  if (!canonicalParentPath) {
+    return { selectedPaths, rejectedPaths: [...args.projectPaths] }
+  }
+  const normalizedParentPath = normalizeRuntimePathForComparison(canonicalParentPath)
 
   for (const repoPath of args.projectPaths) {
-    const normalizedPath = normalizeRuntimePathForComparison(repoPath)
+    const canonicalRepoPath = canonicalizeImportPath(repoPath)
+    const normalizedPath = canonicalRepoPath
+      ? normalizeRuntimePathForComparison(canonicalRepoPath)
+      : normalizeRuntimePathForComparison(repoPath)
     if (seen.has(normalizedPath)) {
       continue
     }
     seen.add(normalizedPath)
     if (
-      normalizedPath === normalizeRuntimePathForComparison(args.parentPath) ||
-      !isPathInsideOrEqual(args.parentPath, repoPath)
+      !canonicalRepoPath ||
+      normalizedPath === normalizedParentPath ||
+      !isPathInsideOrEqual(canonicalParentPath, canonicalRepoPath)
     ) {
       // Why: stopped scans import a caller-provided partial selection, so the
-      // parent boundary still has to block unrelated paths without rescanning.
+      // parent boundary still blocks dot-segment escapes without rescanning.
       rejectedPaths.push(repoPath)
       continue
     }
-    selectedPaths.push(repoPath)
+    selectedPaths.push(canonicalRepoPath)
   }
 
   return { selectedPaths, rejectedPaths }

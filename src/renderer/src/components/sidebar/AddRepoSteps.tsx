@@ -159,12 +159,13 @@ export function useRemoteRepo(
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return
       }
-      setRemoteNestedScanId(null)
       onNestedScanResult?.(scan ?? null, attemptId)
       if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
-        showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId, attemptId, false, null)
+        showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId, attemptId, false, scanId)
+        setRemoteNestedScanId(null)
         return
       }
+      setRemoteNestedScanId(null)
       const result = await window.api.repos.addRemote({
         connectionId: selectedTargetId,
         remotePath: trimmedRemotePath

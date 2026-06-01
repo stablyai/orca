@@ -6,10 +6,13 @@ import {
   FolderTree,
   GitBranch,
   Lightbulb,
+  Loader2,
   Server
 } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
+import { Button } from '@/components/ui/button'
 import { NestedRepoTreePreview } from '@/components/repo/NestedRepoTreePreview'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { NestedRepoScanResult } from '../../../../shared/types'
 import { NestedRepoScanLimitNotice } from '../repo/NestedRepoScanLimitNotice'
 
@@ -76,10 +79,35 @@ export function RepoStep({
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-base font-semibold text-foreground">Import as project group</div>
-              <div className="mt-0.5 truncate text-[13px] text-muted-foreground">
-                {`${nestedScanInProgress ? 'Scanning...' : 'Found'} ${nestedScan.repos.length} git ${
-                  nestedScan.repos.length === 1 ? 'repository' : 'repositories'
-                } in this folder.`}
+              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
+                {nestedScanInProgress ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
+                        aria-label="Stop scan"
+                        title="Stop scanning"
+                        onClick={onStopNestedScan}
+                      >
+                        <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
+                        <CircleStop className="hidden size-3.5 group-hover:block group-focus-visible:block" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={4}>
+                      Scanning repositories. Click to stop.
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+                <span className="min-w-0 truncate">
+                  {`${nestedScanInProgress ? 'Scanning... ' : ''}Found ${
+                    nestedScan.repos.length
+                  } git ${
+                    nestedScan.repos.length === 1 ? 'repository' : 'repositories'
+                  } in this folder.`}
+                </span>
               </div>
               <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
                 {nestedScan.selectedPath}
@@ -110,7 +138,7 @@ export function RepoStep({
               <NestedRepoScanLimitNotice scan={nestedScan} />
             </div>
           ) : null}
-          <div className="mt-4 flex shrink-0 items-center gap-2">
+          <div className="mt-4 flex shrink-0 flex-wrap items-center gap-2">
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded-lg px-3 py-3 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
@@ -120,17 +148,7 @@ export function RepoStep({
               <ArrowLeft className="size-3.5" />
               Back
             </button>
-            <div className="ml-auto flex items-center gap-2">
-              {nestedScanInProgress ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/60 disabled:opacity-40"
-                  onClick={onStopNestedScan}
-                >
-                  <CircleStop className="size-3.5" />
-                  Stop scan
-                </button>
-              ) : null}
+            <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
               <button
                 type="button"
                 className="rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/60 disabled:opacity-40"
@@ -323,14 +341,25 @@ export function RepoStep({
         <div className="flex items-center gap-2 rounded-lg border border-blue-400/30 bg-blue-400/10 px-4 py-2.5 text-sm text-blue-700 dark:text-blue-200">
           <span className="min-w-0 flex-1">{busyLabel}</span>
           {nestedScanInProgress ? (
-            <button
-              type="button"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60"
-              onClick={onStopNestedScan}
-            >
-              <CircleStop className="size-3.5" />
-              Stop scan
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
+                  aria-label="Stop scan"
+                  title="Stop scanning"
+                  onClick={onStopNestedScan}
+                >
+                  <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
+                  <CircleStop className="hidden size-3.5 group-hover:block group-focus-visible:block" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                Scanning repositories. Click to stop.
+              </TooltipContent>
+            </Tooltip>
           ) : null}
         </div>
       )}

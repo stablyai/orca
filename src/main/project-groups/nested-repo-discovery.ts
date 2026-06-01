@@ -12,6 +12,7 @@ import { isGitRepo } from '../git/repo'
 type NestedRepoDirectoryEntry = {
   name: string
   isDirectory: boolean
+  isSymlink?: boolean
 }
 
 type NestedRepoScanFilesystem = {
@@ -198,7 +199,11 @@ async function readLocalDirectory(dirPath: string): Promise<NestedRepoDirectoryE
   // Why: Dirent data avoids one stat per child and keeps symlinked directories
   // from expanding the scan outside the selected folder.
   const entries = await readdir(dirPath, { withFileTypes: true })
-  return entries.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory() }))
+  return entries.map((entry) => ({
+    name: entry.name,
+    isDirectory: entry.isDirectory(),
+    isSymlink: entry.isSymbolicLink()
+  }))
 }
 
 export async function scanNestedRepos(args: {
@@ -294,7 +299,7 @@ export async function scanNestedRepos(args: {
     ]
 
     const dirs = entries
-      .filter((entry) => entry.isDirectory)
+      .filter((entry) => entry.isDirectory && !entry.isSymlink)
       .sort((left, right) => left.name.localeCompare(right.name))
     for (const entry of dirs) {
       const name = entry.name

@@ -190,6 +190,27 @@ describe('scanNestedRepos', () => {
     expect(result.repos.map((repo) => repo.displayName)).toEqual(['service'])
   })
 
+  it('skips symlinked directories reported by remote filesystems', async () => {
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      filesystem: {
+        readDirectory: async (dirPath) =>
+          dirPath === '/workspace'
+            ? [
+                { name: 'linked-outside', isDirectory: true, isSymlink: true },
+                { name: 'api', isDirectory: true, isSymlink: false }
+              ]
+            : [],
+        joinPath: (parentPath, childName) => `${parentPath}/${childName}`,
+        basename: (path) => path.split('/').at(-1) ?? path,
+        hasGitMarker: (path) => path === '/workspace/api',
+        isSelectedPathGitRepo: () => false
+      }
+    })
+
+    expect(result.repos.map((repo) => repo.path)).toEqual(['/workspace/api'])
+  })
+
   it('prefers shallow sibling repos before descending into non-repo folders', async () => {
     const directories = new Map([
       ['/workspace', ['archive', 'z-web-client']],

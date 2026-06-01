@@ -87,8 +87,8 @@ describe('RepoStep', () => {
       nestedGroupName: 'platform'
     })
 
-    expect(html).toContain('Scanning... 1 git repository in this folder.')
-    expect(html).toContain('Stop scan')
+    expect(html).toContain('Scanning... Found 1 git repository in this folder.')
+    expect(html).toContain('aria-label="Stop scan"')
     expect(html).toContain('Showing partial scan results.')
     expect(html.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(3)
   })

@@ -37,7 +37,7 @@ import { getNextProjectGroupOrder } from '../../shared/project-groups'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
-  resolveNestedRepoImportPaths
+  resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
 import {
   isGitRepo,
@@ -112,6 +112,13 @@ const latestCloneGenerationByPath = new Map<string, number>()
 const pendingAbortCleanupByPath = new Map<string, Promise<void>>()
 const cloneInFlightByPath = new Map<string, Promise<void>>()
 const activeNestedRepoScans = new Map<string, AbortController>()
+type CompletedNestedRepoScan = {
+  scan: NestedRepoScanResult
+  parentPath: string
+  connectionId: string | null
+}
+const completedNestedRepoScans = new Map<string, CompletedNestedRepoScan>()
+const MAX_COMPLETED_NESTED_SCAN_RESULTS = 50
 
 const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -157,6 +164,7 @@ const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
     groupName: z.string().min(1),
     projectPaths: z.array(z.string()),
     connectionId: z.string().min(1).optional(),
+    scanId: z.string().min(1).optional(),
     mode: z.literal('group')
   }),
   z.object({
@@ -164,6 +172,7 @@ const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
     groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     connectionId: z.string().min(1).optional(),
+    scanId: z.string().min(1).optional(),
     mode: z.literal('separate')
   })
 ])
@@ -183,6 +192,50 @@ function validateNestedRepoScanRoot(path: string, connectionId?: string): void {
   if (!isAbsolute(path)) {
     throw new Error('Repo path must be an absolute path')
   }
+}
+
+function rememberCompletedNestedRepoScan(
+  scanId: string | undefined,
+  context: { parentPath: string; connectionId?: string },
+  scan: NestedRepoScanResult
+): void {
+  if (!scanId) {
+    return
+  }
+  completedNestedRepoScans.set(scanId, {
+    scan,
+    parentPath: scan.selectedPath,
+    connectionId: context.connectionId ?? null
+  })
+  while (completedNestedRepoScans.size > MAX_COMPLETED_NESTED_SCAN_RESULTS) {
+    const oldestScanId = completedNestedRepoScans.keys().next().value
+    if (!oldestScanId) {
+      break
+    }
+    completedNestedRepoScans.delete(oldestScanId)
+  }
+}
+
+function getCompletedNestedRepoScan(args: {
+  scanId?: string
+  parentPath: string
+  connectionId?: string
+}): NestedRepoScanResult | undefined {
+  if (!args.scanId) {
+    return undefined
+  }
+  const completed = completedNestedRepoScans.get(args.scanId)
+  if (!completed) {
+    return undefined
+  }
+  if (
+    completed.connectionId !== (args.connectionId ?? null) ||
+    normalizeRuntimePathForComparison(completed.parentPath) !==
+      normalizeRuntimePathForComparison(args.parentPath)
+  ) {
+    return undefined
+  }
+  return completed.scan
 }
 
 async function cleanupOwnedCloneTarget(metadata: ActiveCloneMetadata): Promise<void> {
@@ -303,7 +356,8 @@ async function scanNestedReposForIpc(args: {
       readDirectory: async (dirPath) =>
         (await fsProvider.readDir(dirPath)).map((entry) => ({
           name: entry.name,
-          isDirectory: entry.isDirectory
+          isDirectory: entry.isDirectory,
+          isSymlink: entry.isSymlink
         })),
       readTextFile: async (filePath) => (await fsProvider.readFile(filePath)).content,
       joinPath: (parentPath, childName) => posix.join(parentPath, childName),
@@ -346,7 +400,7 @@ async function runNestedRepoScanForIpc(
   }
 
   try {
-    return await scanNestedReposForIpc({
+    const scan = await scanNestedReposForIpc({
       ...args,
       signal: controller?.signal,
       onProgress: args.scanId
@@ -358,6 +412,12 @@ async function runNestedRepoScanForIpc(
           }
         : undefined
     })
+    rememberCompletedNestedRepoScan(
+      args.scanId,
+      { parentPath: args.path, connectionId: args.connectionId },
+      scan
+    )
+    return scan
   } finally {
     if (args.scanId && activeNestedRepoScans.get(args.scanId) === controller) {
       activeNestedRepoScans.delete(args.scanId)
@@ -491,12 +551,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         'invalid_project_group_import_nested_args'
       )
       const requestedPaths = args.projectPaths
-      const selection = resolveNestedRepoImportPaths({
-        parentPath: args.parentPath,
-        projectPaths: requestedPaths
-      })
+      const completedScan = getCompletedNestedRepoScan(args)
+      const scan =
+        completedScan ??
+        (await scanNestedReposForIpc({
+          path: args.parentPath,
+          connectionId: args.connectionId,
+          options: { timeoutMs: 15_000 }
+        }))
+      const selection = resolveNestedRepoSelection({ scan, projectPaths: requestedPaths })
       const groupResolver = createNestedProjectGroupResolver({
-        parentPath: args.parentPath,
+        parentPath: scan.selectedPath,
         groupName: args.groupName ?? '',
         mode: args.mode,
         createGroup: (input) => store.createProjectGroup(input)

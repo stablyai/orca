@@ -239,6 +239,7 @@ export function useOnboardingFlow(
     null
   )
   const [nestedScanInProgress, setNestedScanInProgress] = useState(false)
+  const [nestedImportScanId, setNestedImportScanId] = useState<string | null>(null)
   const nestedScanIdRef = useRef<string | null>(null)
   const [tourStarted, setTourStarted] = useState(false)
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
@@ -695,7 +696,8 @@ export function useOnboardingFlow(
       selectedPath: string,
       attemptId: string,
       runtimeKind: NestedRepoTelemetryRuntimeKind,
-      inProgress = false
+      inProgress = false,
+      scanId: string | null = null
     ) => {
       setNestedScan(scan)
       setNestedSelectedPaths(new Set(scan.repos.map((repo) => repo.path)))
@@ -703,6 +705,7 @@ export function useOnboardingFlow(
       setNestedAttemptId(attemptId)
       setNestedRuntimeKind(runtimeKind)
       setNestedScanInProgress(inProgress)
+      setNestedImportScanId(scanId)
     },
     []
   )
@@ -822,7 +825,7 @@ export function useOnboardingFlow(
               ) {
                 return
               }
-              showNestedRepoReview(progressScan, path, attemptId, 'local', true)
+              showNestedRepoReview(progressScan, path, attemptId, 'local', true, scanId)
             }
           })
           if (nestedScanIdRef.current !== scanId) {
@@ -840,7 +843,7 @@ export function useOnboardingFlow(
             })
           )
           if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
-            showNestedRepoReview(scan, path, attemptId, 'local', false)
+            showNestedRepoReview(scan, path, attemptId, 'local', false, scanId)
             return
           }
           result = await window.api.repos.add({ path, kind: 'folder' })
@@ -905,6 +908,7 @@ export function useOnboardingFlow(
           parentPath: nestedScan.selectedPath,
           groupName: nestedGroupName,
           projectPaths: [...nestedSelectedPaths],
+          ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
           mode
         })
         track(
@@ -965,6 +969,7 @@ export function useOnboardingFlow(
       nestedAttemptId,
       nestedScan,
       nestedSelectedPaths,
+      nestedImportScanId,
       nestedRuntimeKind,
       onboardingNestedRepoRuntimeKind
     ]
@@ -990,7 +995,9 @@ export function useOnboardingFlow(
     setNestedAttemptId(null)
     setNestedRuntimeKind(null)
     setNestedScanInProgress(false)
+    setNestedImportScanId(null)
     nestedScanIdRef.current = null
+    setBusyLabel(null)
     setError(null)
   }, [
     nestedAttemptId,

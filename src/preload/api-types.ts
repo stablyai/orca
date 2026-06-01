@@ -735,6 +735,7 @@ export type PreloadApi = {
       groupName: string
       projectPaths: string[]
       connectionId?: string
+      scanId?: string
       mode: ProjectGroupImportMode
     }) => Promise<ProjectGroupImportResult>
   }

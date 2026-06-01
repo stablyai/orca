@@ -20,6 +20,7 @@ import {
   DialogDescription
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
 import { NestedRepoTreePreview } from '@/components/repo/NestedRepoTreePreview'
 import { track } from '@/lib/telemetry'
@@ -114,6 +115,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   )
   const [nestedScanInProgress, setNestedScanInProgress] = useState(false)
   const [nestedScanId, setNestedScanId] = useState<string | null>(null)
+  const [nestedImportScanId, setNestedImportScanId] = useState<string | null>(null)
   const nestedScanIdRef = useRef<string | null>(null)
 
   const getNestedRepoRuntimeKind = useCallback(
@@ -134,6 +136,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       attemptId: string
       runtimeKind: NestedRepoTelemetryRuntimeKind
       inProgress: boolean
+      scanId: string | null
     }) => {
       setNestedScan(args.scan)
       setNestedSelectedPaths(new Set(args.scan.repos.map((repo) => repo.path)))
@@ -144,6 +147,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       setNestedAttemptId(args.attemptId)
       setNestedRuntimeKind(args.runtimeKind)
       setNestedScanInProgress(args.inProgress)
+      setNestedImportScanId(args.scanId)
       setStep('nested')
     },
     []
@@ -206,14 +210,15 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setExistingWorkspaceSource,
     scanNestedRepos,
     (scan, selectedPath, connectionId, attemptId, inProgress, scanId) => {
-      setActiveNestedScanId(scanId)
+      setActiveNestedScanId(inProgress ? scanId : null)
       showNestedRepoReview({
         scan,
         selectedPath,
         connectionId,
         attemptId,
         runtimeKind: 'ssh',
-        inProgress
+        inProgress,
+        scanId
       })
     },
     (scan, attemptId) => {
@@ -336,6 +341,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setNestedAttemptId(null)
     setNestedRuntimeKind(null)
     setNestedScanInProgress(false)
+    setNestedImportScanId(null)
     setActiveNestedScanId(null)
     resetCreateState()
     resetRemoteState()
@@ -387,7 +393,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               connectionId: null,
               attemptId,
               runtimeKind: 'local',
-              inProgress: true
+              inProgress: true,
+              scanId
             })
           }
         })
@@ -412,7 +419,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             connectionId: null,
             attemptId,
             runtimeKind: 'local',
-            inProgress: false
+            inProgress: false,
+            scanId
           })
           return
         }
@@ -518,6 +526,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           groupName: nestedGroupName,
           projectPaths: [...nestedSelectedPaths],
           ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
+          ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
           mode
         })
         track(
@@ -601,6 +610,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       nestedAttemptId,
       nestedScan,
       nestedSelectedPaths,
+      nestedImportScanId,
       nestedConnectionId,
       nestedRuntimeKind,
       getNestedRepoRuntimeKind,
@@ -647,7 +657,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                       connectionId: null,
                       attemptId,
                       runtimeKind,
-                      inProgress: true
+                      inProgress: true,
+                      scanId
                     })
                   }
                 }
@@ -674,7 +685,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               connectionId: null,
               attemptId,
               runtimeKind,
-              inProgress: false
+              inProgress: false,
+              scanId
             })
             return
           }
@@ -1162,16 +1174,25 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 <Loader2 className="size-3.5 shrink-0 animate-spin" />
                 <span className="min-w-0 flex-1">{addProjectBusyLabel}</span>
                 {nestedScanInProgress && nestedScanId ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 shrink-0 text-xs"
-                    onClick={handleStopNestedScan}
-                  >
-                    <CircleStop className="size-3.5" />
-                    Stop scan
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
+                        aria-label="Stop scan"
+                        title="Stop scanning"
+                        onClick={handleStopNestedScan}
+                      >
+                        <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
+                        <CircleStop className="hidden size-3.5 group-hover:block group-focus-visible:block" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={4}>
+                      Scanning repositories. Click to stop.
+                    </TooltipContent>
+                  </Tooltip>
                 ) : null}
               </div>
             ) : null}
@@ -1247,11 +1268,36 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           <>
             <DialogHeader>
               <DialogTitle>Import as project group</DialogTitle>
-              <DialogDescription>
-                {`${nestedScanInProgress ? 'Scanning...' : 'Found'} ${nestedScan.repos.length} git ${
-                  nestedScan.repos.length === 1 ? 'repository' : 'repositories'
-                } in this folder.`}
-              </DialogDescription>
+              <div className="flex min-w-0 items-center gap-1.5">
+                {nestedScanInProgress ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
+                        aria-label="Stop scan"
+                        title="Stop scanning"
+                        onClick={handleStopNestedScan}
+                      >
+                        <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
+                        <CircleStop className="hidden size-3.5 group-hover:block group-focus-visible:block" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={4}>
+                      Scanning repositories. Click to stop.
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+                <DialogDescription className="min-w-0 truncate">
+                  {`${nestedScanInProgress ? 'Scanning... ' : ''}Found ${
+                    nestedScan.repos.length
+                  } git ${
+                    nestedScan.repos.length === 1 ? 'repository' : 'repositories'
+                  } in this folder.`}
+                </DialogDescription>
+              </div>
             </DialogHeader>
 
             <div className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-hidden pt-1">
@@ -1274,6 +1320,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 <Input
                   value={nestedGroupName}
                   onChange={(event) => setNestedGroupName(event.target.value)}
+                  disabled={nestedScanInProgress}
                   className="h-9"
                 />
               </div>
@@ -1291,7 +1338,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               nestedScan.stopped ? (
                 <NestedRepoScanLimitNotice scan={nestedScan} />
               ) : null}
-              <div className="shrink-0 flex items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <Button
                   onClick={handleBack}
                   disabled={isAdding && !nestedScanInProgress}
@@ -1300,13 +1347,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                   <ArrowLeft className="size-3.5" />
                   Back
                 </Button>
-                <div className="ml-auto flex items-center gap-2">
-                  {nestedScanInProgress ? (
-                    <Button type="button" variant="outline" onClick={handleStopNestedScan}>
-                      <CircleStop className="size-3.5" />
-                      Stop scan
-                    </Button>
-                  ) : null}
+                <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
                   <Button
                     onClick={() => void handleImportNestedRepos('separate')}
                     disabled={isAdding || nestedScanInProgress || nestedSelectedPaths.size === 0}

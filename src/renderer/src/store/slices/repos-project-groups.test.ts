@@ -210,6 +210,45 @@ describe('project group store routing', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('normalizes older runtime nested scan results and keeps the RPC bounded', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-scan',
+      ok: true,
+      result: {
+        selectedPath: '/platform',
+        selectedPathKind: 'non_git_folder',
+        repos: [{ path: '/platform/api', displayName: 'api', depth: 1 }],
+        truncated: true,
+        timedOut: false,
+        durationMs: 10,
+        maxDepth: 3
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+
+    await expect(store.getState().scanNestedRepos('/platform')).resolves.toEqual({
+      selectedPath: '/platform',
+      selectedPathKind: 'non_git_folder',
+      repos: [{ path: '/platform/api', displayName: 'api', depth: 1 }],
+      truncated: true,
+      timedOut: false,
+      stopped: false,
+      durationMs: 10,
+      maxDepth: 3,
+      maxRepos: 100,
+      timeoutMs: null
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'projectGroup.scanNested',
+      params: { path: '/platform' },
+      timeoutMs: 20_000
+    })
+  })
+
   it('moves local repos to a group using the preload projectId contract', async () => {
     const movedRepo = { ...remoteRepo, projectGroupId: projectGroup.id, projectGroupOrder: 3 }
     projectGroupsMoveProject.mockResolvedValue(movedRepo)
