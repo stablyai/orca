@@ -218,5 +218,10 @@
       "@xterm/addon-ligatures@0.11.0-beta.220": "config/patches/@xterm__addon-ligatures@0.11.0-beta.220.patch",
       "@xterm/addon-webgl@0.20.0-beta.219": "config/patches/@xterm__addon-webgl@0.20.0-beta.219.patch"
     }
+  },
+  "reactDoctor": {
+    "rules": {
+      "react-doctor/js-combine-iterations": "off"
+    }
   }
 }
