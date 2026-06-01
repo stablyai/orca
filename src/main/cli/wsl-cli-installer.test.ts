@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- WSL CLI tests cover one installer state machine with shared
+   runner fixtures; splitting would duplicate the fake WSL filesystem setup. */
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -156,6 +158,30 @@ describe('WslCliInstaller', () => {
       state: 'installed',
       pathConfigured: false,
       detail: expect.stringContaining('not on PATH')
+    })
+  })
+
+  it('accepts current managed WSL scripts with an extra heredoc trailing newline', async () => {
+    const launcher = `${_internals.buildWslLauncher(
+      'C:\\Orca\\orca.cmd',
+      '/home/alice/.local/share/orca/orca-wsl-bridge.ps1'
+    )}\n`
+    const wsl = createWslRunner(launcher)
+    const installer = new WslCliInstaller({
+      platform: 'win32',
+      distro: 'Ubuntu',
+      hostInstaller: { getStatus: async () => makeHostStatus('C:\\Orca\\orca.cmd') },
+      wslRunner: async (distro, command) => {
+        if (command.includes('cat /home/alice/.local/share/orca/orca-wsl-bridge.ps1')) {
+          return `${_internals.buildWslBridgeScript()}\n`
+        }
+        return wsl.runner(distro, command)
+      }
+    })
+
+    await expect(installer.getStatus()).resolves.toMatchObject({
+      state: 'installed',
+      currentTarget: 'C:\\Orca\\orca.cmd'
     })
   })
 

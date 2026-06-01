@@ -33,6 +33,11 @@ export type SkillDiscoveryResult = {
   scannedAt: number
 }
 
+export type SkillDiscoveryTarget = {
+  runtime?: 'host' | 'wsl'
+  wslDistro?: string | null
+}
+
 export type SkillFrontmatterSummary = {
   name: string | null
   description: string | null

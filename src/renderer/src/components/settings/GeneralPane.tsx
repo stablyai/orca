@@ -226,9 +226,18 @@ function resolveOpenInApplicationsDraftState(
 type GeneralPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  wslSupportedPlatform?: boolean
+  wslAvailable?: boolean
+  wslCapabilitiesLoading?: boolean
 }
 
-export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): React.JSX.Element {
+export function GeneralPane({
+  settings,
+  updateSettings,
+  wslSupportedPlatform,
+  wslAvailable,
+  wslCapabilitiesLoading
+}: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const mountedRef = useMountedRef()
@@ -897,6 +906,11 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
       <CliSection
         key="cli"
         currentPlatform={getDesktopPlatformFromUserAgent(navigator.userAgent)}
+        settings={settings}
+        updateSettings={updateSettings}
+        wslSupportedPlatform={wslSupportedPlatform}
+        wslAvailable={wslAvailable}
+        wslCapabilitiesLoading={wslCapabilitiesLoading}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_CACHE_TIMER_SEARCH_ENTRIES) ? (

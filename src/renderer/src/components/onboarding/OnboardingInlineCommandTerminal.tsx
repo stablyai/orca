@@ -23,6 +23,7 @@ type OnboardingInlineCommandTerminalProps = {
   descriptionPaddingClassName?: string
   autoScrollIntoView?: boolean
   worktreeId?: string
+  shellOverride?: string
   onOpened?: () => void
   onInteracted?: (method: 'keyboard' | 'pointer', event?: KeyboardEvent<HTMLElement>) => void
 }
@@ -37,6 +38,7 @@ export function OnboardingInlineCommandTerminal({
   descriptionPaddingClassName = 'px-4 py-3',
   autoScrollIntoView = true,
   worktreeId = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
+  shellOverride,
   onOpened,
   onInteracted
 }: OnboardingInlineCommandTerminalProps): React.JSX.Element {
@@ -77,7 +79,7 @@ export function OnboardingInlineCommandTerminal({
   }, [])
 
   useEffect(() => {
-    const tab = createTab(worktreeId, undefined, undefined, {
+    const tab = createTab(worktreeId, undefined, shellOverride, {
       activate: false,
       recordInteraction: false
     })
@@ -89,7 +91,15 @@ export function OnboardingInlineCommandTerminal({
       // the backing tab so installer shells do not keep running invisibly.
       closeTab(tab.id, { recordInteraction: false })
     }
-  }, [closeTab, createTab, setActiveTabForWorktree, setTabCustomTitle, title, worktreeId])
+  }, [
+    closeTab,
+    createTab,
+    setActiveTabForWorktree,
+    setTabCustomTitle,
+    shellOverride,
+    title,
+    worktreeId
+  ])
 
   useEffect(() => {
     if (!autoScrollIntoView) {

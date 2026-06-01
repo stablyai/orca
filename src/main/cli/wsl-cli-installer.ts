@@ -23,6 +23,14 @@ const WSL_COMMAND_NAME = 'orca-ide'
 const LEGACY_WSL_COMMAND_NAME = 'orca'
 const WSL_COMMAND_TIMEOUT_MS = 10_000
 
+function normalizeManagedScriptContent(content: string): string {
+  return content.replace(/\n+$/u, '\n')
+}
+
+function managedScriptMatches(content: string, expected: string, managed: boolean): boolean {
+  return content === expected || (managed && normalizeManagedScriptContent(content) === expected)
+}
+
 type WslCliInstallerOptions = {
   platform?: NodeJS.Platform
   distro?: string | null
@@ -77,10 +85,15 @@ export class WslCliInstaller {
     const expected = buildWslLauncher(ready.launcherPath, ready.bridgePath)
     const managed = content.includes(MANAGED_MARKER)
     const currentTarget = managed ? parseManagedLauncherTarget(content) : null
-    if (content === expected) {
+    if (managedScriptMatches(content, expected, managed)) {
       const bridgeContent = await this.readCommandFile(ready.distro, ready.bridgePath)
       const expectedBridge = buildWslBridgeScript()
-      if (bridgeContent === expectedBridge) {
+      const bridgeManaged =
+        typeof bridgeContent === 'string' && bridgeContent.includes(BRIDGE_MANAGED_MARKER)
+      if (
+        typeof bridgeContent === 'string' &&
+        managedScriptMatches(bridgeContent, expectedBridge, bridgeManaged)
+      ) {
         return this.buildStatus({
           distro: ready.distro,
           commandPath: ready.commandPath,
@@ -92,8 +105,6 @@ export class WslCliInstaller {
         })
       }
 
-      const bridgeManaged =
-        typeof bridgeContent === 'string' && bridgeContent.includes(BRIDGE_MANAGED_MARKER)
       return this.buildStatus({
         distro: ready.distro,
         commandPath: ready.commandPath,

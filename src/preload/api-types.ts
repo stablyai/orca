@@ -205,7 +205,7 @@ import type {
   CommitMessageModelCapability
 } from '../shared/commit-message-agent-spec'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
-import type { SkillDiscoveryResult } from '../shared/skills'
+import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
   CrashReportBreadcrumbData,
   CrashReportRecord,
@@ -1558,7 +1558,7 @@ export type PreloadApi = {
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
   }
   skills: {
-    discover: () => Promise<SkillDiscoveryResult>
+    discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
   }
   pet: {
     import: () => Promise<CustomPet | null>

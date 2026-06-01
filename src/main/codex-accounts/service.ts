@@ -780,8 +780,12 @@ export class CodexAccountService {
   }
 
   private async runCodexLogin(managedHomePath: string): Promise<void> {
+    const wslInfo = parseWslUncPath(managedHomePath)
+    if (wslInfo) {
+      this.assertWslCodexCliAvailable(wslInfo)
+    }
+
     await new Promise<void>((resolvePromise, rejectPromise) => {
-      const wslInfo = parseWslUncPath(managedHomePath)
       const spawnConfig = wslInfo
         ? {
             command: 'wsl.exe',
@@ -898,6 +902,28 @@ export class CodexAccountService {
       child.on('error', onError)
       child.on('close', onClose)
     })
+  }
+
+  private assertWslCodexCliAvailable(wslInfo: { distro: string; linuxPath: string }): void {
+    try {
+      execFileSync(
+        'wsl.exe',
+        [
+          '-d',
+          wslInfo.distro,
+          '--',
+          'bash',
+          '-lc',
+          buildEncodedWslBashCommand('command -v codex >/dev/null 2>&1')
+        ],
+        { encoding: 'utf-8', timeout: 5000 }
+      )
+    } catch (error) {
+      throw new Error(
+        `Codex CLI is not available in WSL ${wslInfo.distro}. Install Codex in that distro or switch Account location to Windows.`,
+        { cause: error }
+      )
+    }
   }
 
   private readIdentityFromHome(managedHomePath: string): ResolvedCodexIdentity {
