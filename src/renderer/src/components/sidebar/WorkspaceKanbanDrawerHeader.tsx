@@ -2,18 +2,13 @@ import React from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import type {
-  WorkspaceBoardColumnLayout,
-  WorkspaceStatusDefinition
-} from '../../../../shared/types'
+import type { WorkspaceStatusDefinition } from '../../../../shared/types'
 import SidebarFilter from './SidebarFilter'
 import WorkspaceKanbanSettingsMenu from './WorkspaceKanbanSettingsMenu'
 
 type WorkspaceKanbanDrawerHeaderProps = {
   selectedCount: number
-  columnLayout: WorkspaceBoardColumnLayout
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  onColumnLayoutChange: (layout: WorkspaceBoardColumnLayout) => void
   onRenameStatus: (statusId: string, label: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
@@ -26,9 +21,7 @@ type WorkspaceKanbanDrawerHeaderProps = {
 
 export default function WorkspaceKanbanDrawerHeader({
   selectedCount,
-  columnLayout,
   workspaceStatuses,
-  onColumnLayoutChange,
   onRenameStatus,
   onChangeStatusColor,
   onChangeStatusIcon,
@@ -62,9 +55,7 @@ export default function WorkspaceKanbanDrawerHeader({
           onMenuOpenChange={onFilterMenuOpenChange}
         />
         <WorkspaceKanbanSettingsMenu
-          columnLayout={columnLayout}
           workspaceStatuses={workspaceStatuses}
-          onColumnLayoutChange={onColumnLayoutChange}
           onRenameStatus={onRenameStatus}
           onChangeStatusColor={onChangeStatusColor}
           onChangeStatusIcon={onChangeStatusIcon}

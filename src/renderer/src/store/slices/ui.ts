@@ -18,7 +18,6 @@ import type {
   TaskViewPresetId,
   TuiAgent,
   UpdateStatus,
-  WorkspaceBoardColumnLayout,
   WorkspaceStatusDefinition,
   AgentActivityDisplayMode,
   WorktreeCardProperty
@@ -52,12 +51,10 @@ import {
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
-  WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT,
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   cloneDefaultWorkspaceStatuses,
-  normalizeWorkspaceBoardColumnLayout,
   normalizeWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
@@ -631,8 +628,6 @@ export type UISlice = {
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
   workspaceBoardOpacity: number
   setWorkspaceBoardOpacity: (opacity: number) => void
-  workspaceBoardColumnLayout: WorkspaceBoardColumnLayout
-  setWorkspaceBoardColumnLayout: (layout: WorkspaceBoardColumnLayout) => void
   workspaceBoardColumnWidth: number
   setWorkspaceBoardColumnWidth: (width: number) => void
   statusBarItems: StatusBarItem[]
@@ -1348,13 +1343,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceBoardOpacity: clamped })
   },
 
-  workspaceBoardColumnLayout: WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT,
-  setWorkspaceBoardColumnLayout: (layout) => {
-    const normalized = normalizeWorkspaceBoardColumnLayout(layout)
-    window.api.ui.set({ workspaceBoardColumnLayout: normalized }).catch(console.error)
-    set({ workspaceBoardColumnLayout: normalized })
-  },
-
   workspaceBoardColumnWidth: WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
   setWorkspaceBoardColumnWidth: (width) => {
     const clamped = clampWorkspaceBoardColumnWidth(width)
@@ -1531,9 +1519,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
-        workspaceBoardColumnLayout: normalizeWorkspaceBoardColumnLayout(
-          ui.workspaceBoardColumnLayout
-        ),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
         statusBarItems,
         statusBarVisible: ui.statusBarVisible ?? true,
