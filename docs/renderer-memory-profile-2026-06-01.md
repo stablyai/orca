@@ -154,3 +154,18 @@ session payload and can still wake the session writer.
 The follow-up skips only that true no-op visit write. Activations that switch
 repo, leave another app view, or carry startup/setup/default-tab work still
 record the visit, and the sidebar reveal still runs for the no-op case.
+
+## Follow-up: ANSI Terminal Redraw Controls
+
+The installed app used for the continuation profile still predates the merged
+memory diagnostics and terminal-preview fixes, but its live active terminal
+preview continued to show redraw noise and there were still no browser tabs.
+That kept the remaining source-backed target on retained terminal previews.
+
+The previous preview fix handled carriage-return and backspace redraws, but
+not ANSI CSI erase/cursor sequences commonly emitted by spinner-style TUIs.
+The follow-up extends the retained-preview line model to strip formatting/OSC
+metadata and apply line erase plus horizontal cursor movement before retaining
+the text tail. The regression test covers cursor-left overwrite, erase-line
+without a carriage return, SGR/private cursor controls, OSC title metadata, and
+the existing terminal read cursor metadata.
