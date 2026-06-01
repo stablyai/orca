@@ -81,10 +81,9 @@ import {
   type SourceControlTreeNode
 } from './source-control-tree'
 import {
-  getDiscardAreaConfirmationCopy,
-  getDiscardEntryConfirmationCopy,
-  type DiscardConfirmationCopy
-} from './source-control-discard-confirmation'
+  SourceControlDiscardDialog,
+  type PendingDiscardConfirmation
+} from './source-control-discard-dialog'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { toast } from 'sonner'
 import {
@@ -422,10 +421,6 @@ export function requestSourceControlViewModePreferenceWrite({
 
   return next
 }
-
-type PendingDiscardConfirmation =
-  | { kind: 'entry'; entry: GitStatusEntry }
-  | { kind: 'area'; area: DiscardAllArea; paths: readonly string[] }
 
 type GitStatusSourceControlTreeNode = SourceControlTreeNode<
   GitStatusEntry,
@@ -1776,16 +1771,6 @@ function SourceControlInner(): React.JSX.Element {
   }, [collapsedSections, flatEntries, sourceControlViewMode, visibleTreeRowsByArea])
 
   const [isExecutingBulk, setIsExecutingBulk] = useState(false)
-  const pendingDiscardCopy = useMemo<DiscardConfirmationCopy | null>(() => {
-    if (!pendingDiscard) {
-      return null
-    }
-    if (pendingDiscard.kind === 'entry') {
-      return getDiscardEntryConfirmationCopy(pendingDiscard.entry)
-    }
-    return getDiscardAreaConfirmationCopy(pendingDiscard.area, pendingDiscard.paths.length)
-  }, [pendingDiscard])
-
   const unresolvedConflicts = useMemo(
     () => entries.filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind),
     [entries]
@@ -4153,7 +4138,6 @@ function SourceControlInner(): React.JSX.Element {
   const showGenericEmptyState =
     !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
   const currentWorktreeId = activeWorktree.id
-  const PendingDiscardIcon = pendingDiscardCopy?.confirmLabel.startsWith('Delete') ? Trash : Undo2
 
   return (
     <>
@@ -4854,45 +4838,11 @@ function SourceControlInner(): React.JSX.Element {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={pendingDiscard !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingDiscard(null)
-          }
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              {pendingDiscardCopy?.title ?? 'Discard changes?'}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              {pendingDiscardCopy?.description ?? 'This cannot be undone.'}
-            </DialogDescription>
-          </DialogHeader>
-          {pendingDiscard?.kind === 'area' ? (
-            <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs text-muted-foreground">
-              {pendingDiscard.paths.length} {pendingDiscard.paths.length === 1 ? 'file' : 'files'}
-            </div>
-          ) : pendingDiscard?.kind === 'entry' ? (
-            <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
-              <div className="break-all font-medium text-foreground">
-                {pendingDiscard.entry.path}
-              </div>
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setPendingDiscard(null)}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={confirmPendingDiscard}>
-              <PendingDiscardIcon className="size-4" />
-              {pendingDiscardCopy?.confirmLabel ?? 'Discard'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SourceControlDiscardDialog
+        pendingDiscard={pendingDiscard}
+        onCancel={() => setPendingDiscard(null)}
+        onConfirm={confirmPendingDiscard}
+      />
 
       <Dialog open={baseRefDialogOpen} onOpenChange={setBaseRefDialogOpen}>
         <DialogContent className="max-w-xl">
