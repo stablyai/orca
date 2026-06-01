@@ -73,6 +73,7 @@ import {
   getSelectedRepoSshGate,
   isSshConnectInProgress
 } from '@/lib/new-workspace-ssh-gate'
+import { getComposerEligibleRepos, resolveComposerRepoId } from '@/lib/new-workspace-composer-repo'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
@@ -275,6 +276,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       closeModal: s.closeModal,
       openSettingsPage: s.openSettingsPage,
       openSettingsTarget: s.openSettingsTarget,
+      prefetchWorktreeCreateBase: s.prefetchWorktreeCreateBase,
       prefetchWorkItems: s.prefetchWorkItems,
       fetchSparsePresets: s.fetchSparsePresets
     }))
@@ -288,6 +290,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     closeModal,
     openSettingsPage,
     openSettingsTarget,
+    prefetchWorktreeCreateBase,
     prefetchWorkItems,
     fetchSparsePresets
   } = actions
@@ -301,7 +304,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
-  const eligibleRepos = useMemo(() => repos.filter((repo) => Boolean(repo.path)), [repos])
+  const eligibleRepos = useMemo(() => getComposerEligibleRepos(repos), [repos])
   const draftRepoId = persistDraft ? (newWorkspaceDraft?.repoId ?? null) : null
   const resolvedInitialWorkspaceStatus = useMemo(
     () =>
@@ -311,14 +314,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [initialWorkspaceStatus, workspaceStatuses]
   )
 
-  const resolvedInitialRepoId =
-    draftRepoId && eligibleRepos.some((repo) => repo.id === draftRepoId)
-      ? draftRepoId
-      : initialRepoId && eligibleRepos.some((repo) => repo.id === initialRepoId)
-        ? initialRepoId
-        : activeRepoId && eligibleRepos.some((repo) => repo.id === activeRepoId)
-          ? activeRepoId
-          : (eligibleRepos[0]?.id ?? '')
+  const resolvedInitialRepoId = resolveComposerRepoId({
+    eligibleRepos,
+    draftRepoId,
+    initialRepoId,
+    activeRepoId
+  })
 
   const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)
   const repoId = repoIdOverride ?? internalRepoId
@@ -947,6 +948,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   })
   const prefetchSshConnectedGeneration =
     selectedRepoConnectionId && selectedRepoSshStatus === 'connected' ? sshConnectedGeneration : 0
+  useEffect(() => {
+    if (!repoId || !selectedRepoIsGit || !canPrefetchSelectedRepoWorkItems) {
+      return
+    }
+    void prefetchWorktreeCreateBase(repoId, baseBranch)
+  }, [
+    baseBranch,
+    canPrefetchSelectedRepoWorkItems,
+    prefetchSshConnectedGeneration,
+    prefetchWorktreeCreateBase,
+    repoId,
+    selectedRepoIsGit
+  ])
   useEffect(() => {
     if (!selectedRepoIsGit || !selectedRepo?.path || !canPrefetchSelectedRepoWorkItems) {
       return

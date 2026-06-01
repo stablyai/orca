@@ -128,6 +128,27 @@ describe('worktree RPC methods', () => {
     )
   })
 
+  it('routes create-base prefetches to the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      prefetchManagedWorktreeCreateBase: vi.fn().mockResolvedValue(undefined)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.prefetchCreateBase', {
+        repo: 'repo-1',
+        baseBranch: 'origin/main'
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true, result: null })
+    expect(runtime.prefetchManagedWorktreeCreateBase).toHaveBeenCalledWith({
+      repoSelector: 'repo-1',
+      baseBranch: 'origin/main'
+    })
+  })
+
   it('maps unknown telemetry sources to the runtime default instead of rejecting create', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

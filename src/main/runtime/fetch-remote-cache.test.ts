@@ -165,7 +165,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     )
   })
 
-  it('shares an in-flight remote-tracking base refresh without using freshness cache', async () => {
+  it('shares an in-flight remote-tracking base refresh and reuses exact-base freshness', async () => {
     let resolveFetch!: () => void
     const pending = new Promise<{ stdout: string; stderr: string }>((resolve) => {
       resolveFetch = () => resolve({ stdout: '', stderr: '' })
@@ -187,6 +187,50 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     resolveFetch()
     await Promise.all([first, second])
     await runtime.getOrStartRemoteTrackingBaseRefresh('/repo/g', base)
+
+    expect(fetchCallCount()).toBe(1)
+  })
+
+  it('does not advance exact-base freshness when a remote-tracking refresh fails', async () => {
+    mockFetchResults([Promise.reject(new Error('network down')), { stdout: '', stderr: '' }])
+    const runtime = new OrcaRuntimeService(null)
+    const base = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+
+    await expect(
+      runtime.getOrStartRemoteTrackingBaseRefresh('/repo/g-fail', base)
+    ).resolves.toEqual({
+      ok: false,
+      errorKind: 'git_error'
+    })
+    await expect(
+      runtime.getOrStartRemoteTrackingBaseRefresh('/repo/g-fail', base)
+    ).resolves.toEqual({ ok: true })
+
+    expect(fetchCallCount()).toBe(2)
+  })
+
+  it('does not treat a recent full remote fetch as exact-base freshness', async () => {
+    mockFetchResults([
+      { stdout: '', stderr: '' },
+      { stdout: '', stderr: '' }
+    ])
+    const runtime = new OrcaRuntimeService(null)
+    const base = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+
+    await runtime.getOrStartRemoteFetch('/repo/g-full', 'origin')
+    await expect(
+      runtime.getOrStartRemoteTrackingBaseRefresh('/repo/g-full', base)
+    ).resolves.toEqual({ ok: true })
 
     expect(fetchCallCount()).toBe(2)
   })
@@ -237,7 +281,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     ])
   })
 
-  it('queues an exact base refresh behind an in-flight full remote fetch', async () => {
+  it('runs a queued exact base refresh after an in-flight full remote fetch succeeds', async () => {
     let resolveFullFetch!: () => void
     let resolveBaseFetch!: () => void
     const pendingFullFetch = new Promise<{ stdout: string; stderr: string }>((resolve) => {
@@ -279,6 +323,52 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       [
         ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
         { cwd: '/repo/i' }
+      ]
+    ])
+  })
+
+  it('runs a queued exact base refresh when an in-flight full remote fetch fails', async () => {
+    let rejectFullFetch!: () => void
+    let resolveBaseFetch!: () => void
+    const pendingFullFetch = new Promise<{ stdout: string; stderr: string }>((_resolve, reject) => {
+      rejectFullFetch = () => reject(new Error('network unavailable'))
+    })
+    const pendingBaseFetch = new Promise<{ stdout: string; stderr: string }>((resolve) => {
+      resolveBaseFetch = () => resolve({ stdout: '', stderr: '' })
+    })
+    mockFetchResults([pendingFullFetch, pendingBaseFetch])
+    const runtime = new OrcaRuntimeService(null)
+    const base = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+
+    const fullFetch = runtime.getOrStartRemoteFetch('/repo/i-fail', 'origin')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(fetchCallCount()).toBe(1)
+
+    const baseRefresh = runtime.getOrStartRemoteTrackingBaseRefresh('/repo/i-fail', base)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(fetchCallCount()).toBe(1)
+
+    rejectFullFetch()
+    await vi.waitFor(() => expect(fetchCallCount()).toBe(2))
+    resolveBaseFetch()
+
+    await expect(Promise.all([fullFetch, baseRefresh])).resolves.toEqual([
+      { ok: false, errorKind: 'git_error' },
+      { ok: true }
+    ])
+    const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(
+      ([argv]) => Array.isArray(argv) && argv[0] === 'fetch'
+    )
+    expect(fetchCalls).toEqual([
+      [['fetch', 'origin'], { cwd: '/repo/i-fail' }],
+      [
+        ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
+        { cwd: '/repo/i-fail' }
       ]
     ])
   })

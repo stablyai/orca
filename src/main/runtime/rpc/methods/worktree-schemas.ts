@@ -116,6 +116,14 @@ export const WorktreeCreate = z
     }
   })
 
+export const WorktreePrefetchCreateBase = z.object({
+  repo: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing repo selector')),
+  baseBranch: OptionalString
+})
+
 export const WorktreeSet = WorktreeSelector.extend({
   displayName: OptionalString,
   // Why: empty comments are meaningful metadata updates, so use the plain

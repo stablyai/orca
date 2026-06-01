@@ -4,6 +4,7 @@ import {
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
+  WorktreePrefetchCreateBase,
   WorktreePsParams,
   WorktreeRemove,
   WorktreeResolveMrBase,
@@ -91,6 +92,17 @@ export const WORKTREE_METHODS: RpcMethod[] = [
           orchestrationContext: params.orchestrationContext
         }
       })
+  }),
+  defineMethod({
+    name: 'worktree.prefetchCreateBase',
+    params: WorktreePrefetchCreateBase,
+    handler: async (params, { runtime }) => {
+      await runtime.prefetchManagedWorktreeCreateBase({
+        repoSelector: params.repo,
+        baseBranch: params.baseBranch
+      })
+      return null
+    }
   }),
   defineMethod({
     name: 'worktree.set',

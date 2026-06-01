@@ -203,6 +203,7 @@ vi.mock('./pty', () => ({
   getLocalPtyProvider: getLocalPtyProviderMock
 }))
 
+import { __resetSshWorktreeCreateFetchCacheForTests } from './worktree-remote'
 import { registerWorktreeHandlers } from './worktrees'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
@@ -241,6 +242,7 @@ describe('registerWorktreeHandlers', () => {
   }
 
   beforeEach(() => {
+    __resetSshWorktreeCreateFetchCacheForTests()
     for (const m of [
       handleMock,
       removeHandlerMock,
@@ -416,6 +418,40 @@ describe('registerWorktreeHandlers', () => {
   it('clears the GitLab MR base handler before re-registering IPC handlers', () => {
     expect(removeHandlerMock).toHaveBeenCalledWith('worktrees:resolveMrBase')
     expect(handlers['worktrees:resolveMrBase']).toBeDefined()
+  })
+
+  it('prefetches the local default create base through the runtime refresh cache', async () => {
+    const remoteBase = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+
+    await handlers['worktrees:prefetchCreateBase'](null, { repoId: 'repo-1' })
+
+    expect(runtimeStub.resolveRemoteTrackingBase).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'origin/main'
+    )
+    expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
+      '/workspace/repo',
+      remoteBase
+    )
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('uses the runtime remote fetch cache when prefetching a local branch base', async () => {
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
+
+    await handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-1',
+      baseBranch: 'main'
+    })
+
+    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(addWorktreeMock).not.toHaveBeenCalled()
   })
 
   function mockKnownFeatureWorktree(
@@ -2025,6 +2061,274 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
+  it('reuses a fresh SSH remote-tracking base refresh for repeated creates', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            path: '/remote/first-worktree',
+            head: 'abc123',
+            branch: 'refs/heads/first-worktree',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ])
+        .mockResolvedValueOnce([
+          {
+            path: '/remote/second-worktree',
+            head: 'def456',
+            branch: 'refs/heads/second-worktree',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'first-worktree'
+    })
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'second-worktree'
+    })
+
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledTimes(1)
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      '/remote/repo',
+      'origin',
+      'main',
+      'refs/remotes/origin/main'
+    )
+    expect(provider.addWorktree).toHaveBeenCalledTimes(2)
+  })
+
+  it('shares an in-flight SSH create-base prefetch with create', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    let resolveFetch!: () => void
+    const pendingFetch = new Promise<void>((resolve) => {
+      resolveFetch = resolve
+    })
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockReturnValue(pendingFetch),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/prefetched-worktree',
+          head: 'abc123',
+          branch: 'refs/heads/prefetched-worktree',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const prefetch = handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-ssh'
+    }) as Promise<void>
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledTimes(1)
+
+    const create = handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'prefetched-worktree'
+    }) as Promise<unknown>
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledTimes(1)
+    expect(provider.addWorktree).not.toHaveBeenCalled()
+
+    resolveFetch()
+    await prefetch
+    await create
+
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledTimes(1)
+    expect(provider.addWorktree).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares in-flight SSH create-base resolution with create', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    let resolveRemoteList!: () => void
+    const pendingRemoteList = new Promise<{ stdout: string; stderr: string }>((resolve) => {
+      resolveRemoteList = () => resolve({ stdout: 'origin\n', stderr: '' })
+    })
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return pendingRemoteList
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/prefetched-worktree',
+          head: 'abc123',
+          branch: 'refs/heads/prefetched-worktree',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const prefetch = handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-ssh'
+    }) as Promise<void>
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(provider.exec.mock.calls.filter(([args]) => args[0] === 'remote')).toHaveLength(1)
+
+    const create = handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'prefetched-worktree'
+    }) as Promise<unknown>
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(provider.exec.mock.calls.filter(([args]) => args[0] === 'remote')).toHaveLength(1)
+    expect(provider.fetchRemoteTrackingRef).not.toHaveBeenCalled()
+    expect(provider.addWorktree).not.toHaveBeenCalled()
+
+    resolveRemoteList()
+    await prefetch
+    await create
+
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledTimes(1)
+    expect(provider.addWorktree).toHaveBeenCalledTimes(1)
+  })
+
+  it('queues different SSH create-base fetch shapes on the same remote', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    let resolveExactFetch!: () => void
+    const pendingExactFetch = new Promise<void>((resolve) => {
+      resolveExactFetch = resolve
+    })
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockReturnValue(pendingExactFetch),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/local-base-worktree',
+          head: 'abc123',
+          branch: 'refs/heads/local-base-worktree',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const prefetch = handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-ssh'
+    }) as Promise<void>
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledTimes(1)
+
+    const create = handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'local-base-worktree',
+      baseBranch: 'local-base'
+    }) as Promise<unknown>
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(provider.exec.mock.calls.filter(([args]) => args[0] === 'fetch')).toHaveLength(0)
+    expect(provider.addWorktree).not.toHaveBeenCalled()
+
+    resolveExactFetch()
+    await vi.waitFor(() =>
+      expect(provider.exec.mock.calls.filter(([args]) => args[0] === 'fetch')).toHaveLength(1)
+    )
+    await prefetch
+    await create
+
+    expect(provider.addWorktree).toHaveBeenCalledTimes(1)
+  })
+
   it('prunes stale child lineage after a successful SSH worktree scan proves the child is missing', async () => {
     const repo = {
       id: 'repo-ssh',
@@ -2201,7 +2505,7 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
   })
 
-  it('refreshes before create even when the remote-tracking base was recently fetched', async () => {
+  it('delegates remote-tracking base freshness to the runtime before create', async () => {
     const remoteBase = {
       remote: 'origin',
       branch: 'main',

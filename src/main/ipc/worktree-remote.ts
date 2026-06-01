@@ -71,6 +71,152 @@ import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
 
+const SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS = 30_000
+const SSH_WORKTREE_CREATE_FETCH_CACHE_MAX = 512
+const sshWorktreeCreateFetchInflight = new Map<string, Promise<void>>()
+const sshWorktreeCreateFetchCompletedAt = new Map<string, number>()
+const sshWorktreeCreateFetchQueueTail = new Map<string, Promise<void>>()
+const sshWorktreeCreateBasePlanInflight = new Map<
+  string,
+  Promise<RemoteWorktreeCreateBasePlan | null>
+>()
+
+type RemoteWorktreeCreateBasePlan = {
+  baseBranch: string
+  remoteTrackingBase: RemoteTrackingBase | null
+}
+
+function setBoundedSshWorktreeCreateFetchEntry(
+  map: Map<string, number>,
+  key: string,
+  value: number
+): void {
+  if (map.has(key)) {
+    map.delete(key)
+  }
+  map.set(key, value)
+  while (map.size > SSH_WORKTREE_CREATE_FETCH_CACHE_MAX) {
+    const oldest = map.keys().next()
+    if (oldest.done) {
+      return
+    }
+    map.delete(oldest.value)
+  }
+}
+
+function getSshWorktreeCreateBaseFetchKey(repo: Repo, base: RemoteTrackingBase): string {
+  return `${repo.connectionId ?? 'ssh'}::${repo.path}::base:${base.remote}:${base.branch}`
+}
+
+function getSshWorktreeCreateRemoteFetchKey(repo: Repo, remote: string): string {
+  return `${repo.connectionId ?? 'ssh'}::${repo.path}::remote:${remote}`
+}
+
+function getSshWorktreeCreateRemoteQueueKey(repo: Repo, remote: string): string {
+  return `${repo.connectionId ?? 'ssh'}::${repo.path}::queue:${remote}`
+}
+
+function getSshWorktreeCreateBasePlanKey(
+  repo: Repo,
+  requestedBaseBranch: string | undefined
+): string {
+  const baseKey = requestedBaseBranch || repo.worktreeBaseRef || 'default'
+  return `${repo.connectionId ?? 'ssh'}::${repo.path}::plan:${baseKey}`
+}
+
+function getFreshSshWorktreeCreateFetchCompletedAt(key: string): number | null {
+  const lastAt = sshWorktreeCreateFetchCompletedAt.get(key)
+  if (lastAt === undefined) {
+    return null
+  }
+  if (Date.now() - lastAt < SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS) {
+    setBoundedSshWorktreeCreateFetchEntry(sshWorktreeCreateFetchCompletedAt, key, lastAt)
+    return lastAt
+  }
+  sshWorktreeCreateFetchCompletedAt.delete(key)
+  return null
+}
+
+function rememberSshWorktreeCreateFetchCompletedAt(key: string): void {
+  setBoundedSshWorktreeCreateFetchEntry(sshWorktreeCreateFetchCompletedAt, key, Date.now())
+}
+
+function enqueueSshWorktreeCreateFetch(
+  queueKey: string,
+  fetch: () => Promise<void>
+): Promise<void> {
+  const previous = sshWorktreeCreateFetchQueueTail.get(queueKey)
+  const promise = previous ? previous.then(fetch, fetch) : fetch()
+  sshWorktreeCreateFetchQueueTail.set(queueKey, promise)
+  const clearQueueTail = (): void => {
+    if (sshWorktreeCreateFetchQueueTail.get(queueKey) === promise) {
+      sshWorktreeCreateFetchQueueTail.delete(queueKey)
+    }
+  }
+  promise.then(clearQueueTail, clearQueueTail)
+  return promise
+}
+
+async function getOrStartSshWorktreeCreateFetch(
+  key: string,
+  queueKey: string,
+  fetch: () => Promise<void>
+): Promise<void> {
+  if (getFreshSshWorktreeCreateFetchCompletedAt(key) !== null) {
+    return
+  }
+  const existing = sshWorktreeCreateFetchInflight.get(key)
+  if (existing) {
+    return existing
+  }
+  const promise = enqueueSshWorktreeCreateFetch(queueKey, async () => {
+    if (getFreshSshWorktreeCreateFetchCompletedAt(key) !== null) {
+      return
+    }
+    await fetch()
+    // Why: SSH creation has no OrcaRuntimeService instance to share, but
+    // repeated creates on the same target should still reuse recent fetches.
+    rememberSshWorktreeCreateFetchCompletedAt(key)
+  }).finally(() => {
+    if (sshWorktreeCreateFetchInflight.get(key) === promise) {
+      sshWorktreeCreateFetchInflight.delete(key)
+    }
+  })
+  sshWorktreeCreateFetchInflight.set(key, promise)
+  return promise
+}
+
+async function refreshRemoteTrackingBaseForWorktreeCreate(
+  provider: SshGitProvider,
+  repo: Repo,
+  base: RemoteTrackingBase
+): Promise<void> {
+  return getOrStartSshWorktreeCreateFetch(
+    getSshWorktreeCreateBaseFetchKey(repo, base),
+    getSshWorktreeCreateRemoteQueueKey(repo, base.remote),
+    () => provider.fetchRemoteTrackingRef(repo.path, base.remote, base.branch, base.ref)
+  )
+}
+
+async function fetchRemoteForWorktreeCreate(
+  provider: SshGitProvider,
+  repo: Repo,
+  remote: string
+): Promise<void> {
+  return getOrStartSshWorktreeCreateFetch(
+    getSshWorktreeCreateRemoteFetchKey(repo, remote),
+    getSshWorktreeCreateRemoteQueueKey(repo, remote),
+    () => provider.exec(['fetch', remote], repo.path).then(() => undefined)
+  )
+}
+
+export function __resetSshWorktreeCreateFetchCacheForTests(): void {
+  sshWorktreeCreateFetchInflight.clear()
+  sshWorktreeCreateFetchCompletedAt.clear()
+  sshWorktreeCreateFetchQueueTail.clear()
+  sshWorktreeCreateBasePlanInflight.clear()
+}
+
 async function unsetRemoteWorktreeCreationBase(
   provider: SshGitProvider,
   worktreePath: string,
@@ -798,6 +944,85 @@ async function resolveRemoteTrackingBaseSsh(
   }
 }
 
+async function resolveRemoteWorktreeCreateBase(
+  provider: SshGitProvider,
+  repo: Repo,
+  requestedBaseBranch: string | undefined
+): Promise<string | null> {
+  let baseBranch = requestedBaseBranch || repo.worktreeBaseRef
+  if (baseBranch) {
+    return baseBranch
+  }
+  try {
+    const { stdout } = await provider.exec(
+      ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short'],
+      repo.path
+    )
+    baseBranch = stdout.trim()
+  } catch {
+    return null
+  }
+  return baseBranch || null
+}
+
+async function resolveRemoteWorktreeCreateBasePlan(
+  provider: SshGitProvider,
+  repo: Repo,
+  requestedBaseBranch: string | undefined
+): Promise<RemoteWorktreeCreateBasePlan | null> {
+  const baseBranch = await resolveRemoteWorktreeCreateBase(provider, repo, requestedBaseBranch)
+  if (!baseBranch) {
+    return null
+  }
+  return {
+    baseBranch,
+    remoteTrackingBase: await resolveRemoteTrackingBaseSsh(provider, repo.path, baseBranch)
+  }
+}
+
+function getOrStartRemoteWorktreeCreateBasePlan(
+  provider: SshGitProvider,
+  repo: Repo,
+  requestedBaseBranch: string | undefined
+): Promise<RemoteWorktreeCreateBasePlan | null> {
+  const key = getSshWorktreeCreateBasePlanKey(repo, requestedBaseBranch)
+  const existing = sshWorktreeCreateBasePlanInflight.get(key)
+  if (existing) {
+    return existing
+  }
+  const promise = resolveRemoteWorktreeCreateBasePlan(provider, repo, requestedBaseBranch).finally(
+    () => {
+      if (sshWorktreeCreateBasePlanInflight.get(key) === promise) {
+        sshWorktreeCreateBasePlanInflight.delete(key)
+      }
+    }
+  )
+  sshWorktreeCreateBasePlanInflight.set(key, promise)
+  return promise
+}
+
+export async function prefetchRemoteWorktreeCreateBase(
+  provider: SshGitProvider,
+  repo: Repo,
+  args: { baseBranch?: string }
+): Promise<void> {
+  const basePlan = await getOrStartRemoteWorktreeCreateBasePlan(provider, repo, args.baseBranch)
+  if (!basePlan) {
+    return
+  }
+  if (basePlan.remoteTrackingBase) {
+    await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, basePlan.remoteTrackingBase)
+    return
+  }
+
+  // Why: mirrors createRemoteWorktree's legacy local-base fallback so
+  // prefetch and create share one process-local SSH fetch cache.
+  const fallbackRemote = basePlan.baseBranch.includes('/')
+    ? basePlan.baseBranch.split('/')[0]
+    : 'origin'
+  await fetchRemoteForWorktreeCreate(provider, repo, fallbackRemote)
+}
+
 async function refreshLocalBaseRefForRemoteWorktreeCreate(
   provider: SshGitProvider,
   repoPath: string,
@@ -909,23 +1134,13 @@ export async function createRemoteWorktree(
   // not exist on the remote (e.g. repos whose primary branch is master or
   // develop), producing an opaque git error. Fail here with a clear
   // message so the UI can surface it and prompt the user to pick a base.
-  let baseBranch = args.baseBranch || repo.worktreeBaseRef
-  if (!baseBranch) {
-    try {
-      const { stdout } = await provider.exec(
-        ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short'],
-        repo.path
-      )
-      baseBranch = stdout.trim()
-    } catch {
-      // Fall through — baseBranch stays unset.
-    }
-  }
-  if (!baseBranch) {
+  const basePlan = await getOrStartRemoteWorktreeCreateBasePlan(provider, repo, args.baseBranch)
+  if (!basePlan) {
     throw new Error(
       'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
     )
   }
+  const { baseBranch, remoteTrackingBase } = basePlan
 
   const checkoutExistingBranch = await canCheckoutExistingLocalBranchSsh(
     provider,
@@ -994,15 +1209,9 @@ export async function createRemoteWorktree(
     }
   }
 
-  const remoteTrackingBase = await resolveRemoteTrackingBaseSsh(provider, repo.path, baseBranch)
   if (remoteTrackingBase) {
     try {
-      await provider.fetchRemoteTrackingRef(
-        repo.path,
-        remoteTrackingBase.remote,
-        remoteTrackingBase.branch,
-        remoteTrackingBase.ref
-      )
+      await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, remoteTrackingBase)
     } catch {
       throw new Error(
         `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
@@ -1014,7 +1223,7 @@ export async function createRemoteWorktree(
     // because creating from them after a failed refresh silently makes stale worktrees.
     const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
     try {
-      await provider.exec(['fetch', fallbackRemote], repo.path)
+      await fetchRemoteForWorktreeCreate(provider, repo, fallbackRemote)
     } catch {
       /* best-effort */
     }

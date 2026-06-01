@@ -50,6 +50,7 @@ function makeDetectedResult(
 const mockApi = {
   worktrees: {
     create: vi.fn(),
+    prefetchCreateBase: vi.fn().mockResolvedValue(undefined),
     list: worktreeListMock,
     listDetected: vi.fn(async ({ repoId }: { repoId: string }) =>
       makeDetectedResult(repoId, await worktreeListMock({ repoId }))
@@ -1057,6 +1058,36 @@ describe('createWorktree base status merge', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
+  })
+
+  it('prefetches create base through desktop IPC on the local runtime target', async () => {
+    const store = createTestStore()
+
+    await store.getState().prefetchWorktreeCreateBase('repo1', 'origin/main')
+
+    expect(mockApi.worktrees.prefetchCreateBase).toHaveBeenCalledWith({
+      repoId: 'repo1',
+      baseBranch: 'origin/main'
+    })
+    expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalled()
+  })
+
+  it('prefetches create base through runtime RPC for remote runtime targets', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'remote-runtime' }
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValue({ id: 'req', ok: true, result: null })
+
+    await store.getState().prefetchWorktreeCreateBase('repo1')
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'remote-runtime',
+      method: 'worktree.prefetchCreateBase',
+      params: { repo: 'repo1' },
+      timeoutMs: 30_000
+    })
+    expect(mockApi.worktrees.prefetchCreateBase).not.toHaveBeenCalled()
   })
 
   it('passes linked work item and creation agent metadata through the create IPC payload', async () => {

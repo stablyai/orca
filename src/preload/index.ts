@@ -532,6 +532,8 @@ const api = {
 
     create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
+    prefetchCreateBase: (args) => ipcRenderer.invoke('worktrees:prefetchCreateBase', args),
+
     resolvePrBase: (args) => ipcRenderer.invoke('worktrees:resolvePrBase', args),
 
     resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),

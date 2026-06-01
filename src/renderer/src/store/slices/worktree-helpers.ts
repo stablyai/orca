@@ -101,6 +101,7 @@ export type WorktreeSlice = {
     linkedGitLabIssue?: number,
     startup?: WorktreeStartupLaunch
   ) => Promise<CreateWorktreeResult>
+  prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
   removeWorktree: (
     worktreeId: string,
     force?: boolean

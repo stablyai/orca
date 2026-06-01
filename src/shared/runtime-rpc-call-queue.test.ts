@@ -5,6 +5,7 @@ describe('runtime RPC call queue', () => {
   it('classifies per-worktree decoration lookups as background work', () => {
     expect(isBackgroundRuntimeMethod('github.prForBranch')).toBe(true)
     expect(isBackgroundRuntimeMethod('hostedReview.forBranch')).toBe(true)
+    expect(isBackgroundRuntimeMethod('worktree.prefetchCreateBase')).toBe(true)
     expect(isBackgroundRuntimeMethod('terminal.send')).toBe(false)
     expect(isBackgroundRuntimeMethod('worktree.create')).toBe(false)
   })

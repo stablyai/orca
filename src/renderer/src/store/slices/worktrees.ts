@@ -1008,6 +1008,28 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }))
   },
 
+  prefetchWorktreeCreateBase: async (repoId, baseBranch) => {
+    try {
+      const target = getActiveRuntimeTarget(get().settings)
+      if (target.kind === 'local') {
+        await window.api.worktrees.prefetchCreateBase({
+          repoId,
+          ...(baseBranch ? { baseBranch } : {})
+        })
+        return
+      }
+      await callRuntimeRpc(
+        target,
+        'worktree.prefetchCreateBase',
+        { repo: repoId, ...(baseBranch ? { baseBranch } : {}) },
+        { timeoutMs: 30_000 }
+      )
+    } catch {
+      // Why: prefetch is only a latency hedge. The create path awaits the same
+      // backend refresh and owns user-visible error reporting.
+    }
+  },
+
   createWorktree: async (
     repoId,
     name,
