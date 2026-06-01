@@ -3,6 +3,7 @@ import type {
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
+  RuntimeTerminalNote,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
   RuntimeTerminalSend,
@@ -17,6 +18,7 @@ import {
   formatTerminalCreate,
   formatTerminalFocus,
   formatTerminalList,
+  formatTerminalNote,
   formatTerminalRead,
   formatTerminalRename,
   formatTerminalSend,
@@ -122,6 +124,24 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       title: getOptionalStringFlag(flags, 'title') ?? null
     })
     printResult(result, json, formatTerminalRename)
+  },
+  'terminal note': async ({ flags, client, cwd, json }) => {
+    const clear = flags.get('clear') === true
+    const comment = getOptionalStringFlag(flags, 'comment')
+    // Why: require an explicit intent — set text or clear — so a bare
+    // `terminal note` can't silently wipe an existing note.
+    if (!clear && comment === undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Pass --comment <text> to set a note or --clear to remove it.'
+      )
+    }
+    const result = await client.call<{ note: RuntimeTerminalNote }>('terminal.note', {
+      terminal: await getTerminalHandle(flags, cwd, client),
+      comment: clear ? undefined : comment,
+      clear
+    })
+    printResult(result, json, formatTerminalNote)
   },
   'terminal create': async ({ flags, client, cwd, json }) => {
     if (client.isRemote && !flags.has('worktree')) {

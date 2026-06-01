@@ -327,7 +327,11 @@ export function mergeWorktree(
     // shared/types) and forwarded verbatim so the renderer store mirrors
     // on-disk state. `undefined` here means the worktree has no comments yet.
     diffComments: meta?.diffComments,
-    mobileDiffReview: meta?.mobileDiffReview
+    mobileDiffReview: meta?.mobileDiffReview,
+    // Why: per-terminal notes live on WorktreeMeta keyed by leafId; forward
+    // them so the renderer can surface each terminal's note. Undefined when
+    // no terminal in the worktree has a note.
+    ...(meta?.terminalComments !== undefined ? { terminalComments: meta.terminalComments } : {})
   }
 }
 

@@ -3834,3 +3834,67 @@ describe('orca cli worktree awareness', () => {
     })
   })
 })
+
+describe('orca cli terminal note', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+    delete process.env.ORCA_TERMINAL_HANDLE
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('sends terminal.note with the comment when --comment is passed', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_note', {
+        note: { handle: 'term_abc', leafId: 'pane:1', comment: 'running tests' }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['terminal', 'note', '--terminal', 'term_abc', '--comment', 'running tests', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.note', {
+      terminal: 'term_abc',
+      comment: 'running tests',
+      clear: false
+    })
+  })
+
+  it('sends terminal.note with clear=true when --clear is passed', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_clear', { note: { handle: 'term_abc', leafId: 'pane:1', comment: null } })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['terminal', 'note', '--terminal', 'term_abc', '--clear', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('terminal.note', {
+      terminal: 'term_abc',
+      comment: undefined,
+      clear: true
+    })
+  })
+
+  it('errors without an RPC call when neither --comment nor --clear is passed', async () => {
+    const priorExitCode = process.exitCode
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['terminal', 'note', '--terminal', 'term_abc', '--json'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument' }
+    })
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+})

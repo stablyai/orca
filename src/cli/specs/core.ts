@@ -278,6 +278,20 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['terminal', 'note'],
+    summary: "Set or clear a terminal's note (per-terminal comment)",
+    usage: 'orca terminal note [--terminal <handle>] --comment <text>|--clear [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'comment', 'clear'],
+    notes: [
+      'Omit --terminal to target the active terminal in the current worktree.',
+      'Pass --comment <text> to set the note, or --clear to remove it. The note survives reconnect.'
+    ],
+    examples: [
+      'orca terminal note --terminal term_abc123 --comment "running test suite"',
+      'orca terminal note --terminal term_abc123 --clear'
+    ]
+  },
+  {
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',
     usage:

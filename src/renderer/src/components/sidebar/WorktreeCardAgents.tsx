@@ -9,6 +9,7 @@ import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
+import { StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -42,10 +43,36 @@ function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
 
 type Props = {
   worktreeId: string
+  /** Per-terminal notes keyed by leafId (from `worktree.terminalComments`).
+   *  Rendered inline under each terminal's row so a terminal can self-declare
+   *  its state in the sidebar. */
+  terminalComments?: Record<string, string>
   /** Controls spacing from the card body above. Passed in so the parent can
    *  decide whether a divider is appropriate — e.g. suppressed when the card
    *  chrome already provides visual separation. */
   className?: string
+}
+
+// Why: surface a terminal's self-declared note inline under its sidebar row,
+// styled like the worktree comment (StickyNote + one muted line). Whitespace is
+// normalized so multi-line notes preview on a single truncated line, keeping
+// the row height stable (mirrors PR #3341's worktree-comment treatment).
+function TerminalNoteLine({ note }: { note: string | undefined }): React.JSX.Element | null {
+  const preview = note?.trim().replace(/\s+/g, ' ') ?? ''
+  if (preview.length === 0) {
+    return null
+  }
+  return (
+    <div
+      className="flex min-w-0 items-center gap-1 pl-5 text-muted-foreground"
+      data-terminal-note=""
+    >
+      <StickyNote className="size-3 shrink-0" />
+      <span className="min-w-0 truncate text-[11px] leading-none" title={preview}>
+        {preview}
+      </span>
+    </div>
+  )
 }
 
 /**
@@ -58,6 +85,7 @@ type Props = {
  */
 const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   worktreeId,
+  terminalComments,
   className
 }: Props) {
   const agents = useWorktreeAgentRows(worktreeId)
@@ -67,18 +95,27 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   // Why: gate the 30s tick behind non-empty rows by mounting the inner body
   // only when there's something to show. The setInterval lives in the inner
   // component's useNow, so idle worktrees don't pay per-card timer cost.
-  return <WorktreeCardAgentsBody worktreeId={worktreeId} agents={agents} className={className} />
+  return (
+    <WorktreeCardAgentsBody
+      worktreeId={worktreeId}
+      agents={agents}
+      terminalComments={terminalComments}
+      className={className}
+    />
+  )
 })
 
 type BodyProps = {
   worktreeId: string
   agents: DashboardAgentRowData[]
+  terminalComments?: Record<string, string>
   className?: string
 }
 
 const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   worktreeId,
   agents,
+  terminalComments,
   className
 }: BodyProps) {
   const agentActivityDisplayMode =
@@ -327,6 +364,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           // chevron-shifted column and read as floating fragments.
           hideLineageConnectors
         />
+        <TerminalNoteLine note={terminalComments?.[parsePaneKey(agent.paneKey)?.leafId ?? '']} />
         {hasChildAgents && expanded ? (
           <div className="worktree-agent-lineage-children">
             {childAgents.map((childAgent) =>
@@ -365,6 +403,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
         />
+        <TerminalNoteLine note={terminalComments?.[parsePaneKey(agent.paneKey)?.leafId ?? '']} />
         {hasChildAgents ? (
           <CompactAgentExpansion expanded={expanded}>
             <div className="worktree-agent-lineage-children flex flex-col gap-0.5">

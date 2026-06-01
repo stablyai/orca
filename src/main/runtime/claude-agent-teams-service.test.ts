@@ -53,6 +53,7 @@ function createServiceWithLeader(): {
       tabId: 'tab-1',
       leafId: 'leaf-1',
       title: null,
+      comment: null,
       connected: true,
       writable: true,
       lastOutputAt: null,

@@ -305,6 +305,8 @@ export type RuntimeTerminalSummary = {
   tabId: string
   leafId: string
   title: string | null
+  /** User-authored per-terminal note, keyed by leafId on the worktree. Null when unset. */
+  comment: string | null
   connected: boolean
   writable: boolean
   lastOutputAt: number | null
@@ -341,6 +343,12 @@ export type RuntimeTerminalRename = {
   handle: string
   tabId: string
   title: string | null
+}
+
+export type RuntimeTerminalNote = {
+  handle: string
+  leafId: string
+  comment: string | null
 }
 
 export type RuntimeTerminalSend = {
@@ -407,10 +415,19 @@ export type RuntimeWorktreePsSummary = {
   isPinned: boolean
   unread: boolean
   liveTerminalCount: number
+  /** Live renderer-backed terminals in this worktree, each with its per-terminal note. */
+  terminals: RuntimeWorktreePsTerminal[]
   hasAttachedPty: boolean
   lastOutputAt: number | null
   preview: string
   status: RuntimeWorktreeStatus
+}
+
+export type RuntimeWorktreePsTerminal = {
+  handle: string
+  leafId: string
+  title: string | null
+  comment: string | null
 }
 
 export type RuntimeWorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'

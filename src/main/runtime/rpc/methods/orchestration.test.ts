@@ -182,6 +182,7 @@ describe('orchestration RPC methods', () => {
         tabId: opts.tabId ?? 'tab_1',
         leafId: opts.leafId ?? handle,
         title: opts.title ?? null,
+        comment: opts.comment ?? null,
         connected: opts.connected ?? true,
         writable: opts.writable ?? true,
         lastOutputAt: opts.lastOutputAt ?? null,

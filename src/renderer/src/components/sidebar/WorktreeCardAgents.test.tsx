@@ -167,6 +167,42 @@ describe('WorktreeCardAgents', () => {
     expect(markup).not.toContain('aria-expanded')
   })
 
+  it('renders a per-terminal note line, whitespace-normalized, for a terminal with a note', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    mockAgents = [mockAgent({ paneKey: `tab-1:${leafId}` })]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCardAgents
+        worktreeId="wt-1"
+        terminalComments={{ [leafId]: '  running\n\n  tests  ' }}
+      />
+    )
+
+    expect(markup).toContain('data-terminal-note')
+    // Multi-line/whitespace collapses to one truncated preview line.
+    expect(markup).toContain('running tests')
+    expect(markup).not.toContain('running\n')
+  })
+
+  it('omits the note line for a terminal without a note', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    mockAgents = [mockAgent({ paneKey: `tab-1:${leafId}` })]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCardAgents
+        worktreeId="wt-1"
+        terminalComments={{ '22222222-2222-4222-8222-222222222222': 'someone elses note' }}
+      />
+    )
+
+    expect(markup).not.toContain('data-terminal-note')
+    expect(markup).not.toContain('someone elses note')
+  })
+
   it('uses compact mode when the display preference is absent', async () => {
     mockAgents = [mockAgent({ agentType: 'codex', startedAt: 1000, prompt: 'Run tests' })]
     const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')

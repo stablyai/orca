@@ -1352,6 +1352,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         {showInlineAgentList && (
           <WorktreeCardAgents
             worktreeId={worktree.id}
+            terminalComments={worktree.terminalComments}
             className={hasMetaRow || remoteBranchConflict ? 'mt-0' : '-mt-1'}
           />
         )}

@@ -429,6 +429,13 @@ const TerminalRename = TerminalHandle.extend({
   })
 })
 
+// Why: `--comment` sets the note; `--clear` (or an empty/whitespace comment)
+// removes it. Both optional here — the CLI enforces that one is provided.
+const TerminalNote = TerminalHandle.extend({
+  comment: OptionalString,
+  clear: z.unknown().optional()
+})
+
 const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),
@@ -662,6 +669,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalRename,
     handler: async (params, { runtime }) => ({
       rename: await runtime.renameTerminal(params.terminal, params.title || null)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.note',
+    params: TerminalNote,
+    handler: async (params, { runtime }) => ({
+      note: await runtime.setTerminalComment(
+        params.terminal,
+        params.clear === true ? null : (params.comment ?? null)
+      )
     })
   }),
   defineMethod({
