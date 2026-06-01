@@ -17,12 +17,13 @@ const {
   getAppPathMock,
   isPackagedMock,
   probeSocketExistsMock,
+  writeFileSyncMock,
   netConnectMock,
   forkMock,
   healthCheckDaemonMock,
   getMacDaemonSystemResolverHealthMock,
   getDaemonLaunchIdentityMock,
-  isDaemonOlderThanPathMtimeMock,
+  isDaemonStaleForCurrentBundleMock,
   killStaleDaemonMock,
   getProcessStartedAtMsMock,
   daemonClientMock,
@@ -37,6 +38,7 @@ const {
   const isPackagedMock = vi.fn(() => false)
 
   const probeSocketExistsMock = vi.fn((_path?: string) => false)
+  const writeFileSyncMock = vi.fn()
   const forkMock = vi.fn()
   const netConnectMock = vi.fn(() => {
     // Why: the real probeSocket() in daemon-init connects to the socket and
@@ -66,7 +68,7 @@ const {
   const healthCheckDaemonMock = vi.fn(async () => true)
   const getMacDaemonSystemResolverHealthMock = vi.fn(() => 'healthy')
   const getDaemonLaunchIdentityMock = vi.fn(() => 'match')
-  const isDaemonOlderThanPathMtimeMock = vi.fn(() => false)
+  const isDaemonStaleForCurrentBundleMock = vi.fn(() => false)
   const killStaleDaemonMock = vi.fn(async () => true)
   const getProcessStartedAtMsMock = vi.fn(() => 1_000_000)
 
@@ -94,12 +96,13 @@ const {
     getAppPathMock,
     isPackagedMock,
     probeSocketExistsMock,
+    writeFileSyncMock,
     netConnectMock,
     forkMock,
     healthCheckDaemonMock,
     getMacDaemonSystemResolverHealthMock,
     getDaemonLaunchIdentityMock,
-    isDaemonOlderThanPathMtimeMock,
+    isDaemonStaleForCurrentBundleMock,
     killStaleDaemonMock,
     getProcessStartedAtMsMock,
     daemonClientMock,
@@ -149,7 +152,8 @@ vi.mock('electron', () => ({
       return isPackagedMock()
     },
     getPath: getPathMock,
-    getAppPath: getAppPathMock
+    getAppPath: getAppPathMock,
+    getVersion: () => '1.2.3'
   }
 }))
 
@@ -157,7 +161,7 @@ vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
   existsSync: (p: string) => probeSocketExistsMock(p) || p.includes('.pid'),
   unlinkSync: vi.fn(),
-  writeFileSync: vi.fn()
+  writeFileSync: writeFileSyncMock
 }))
 
 vi.mock('child_process', () => ({ fork: forkMock }))
@@ -168,7 +172,7 @@ vi.mock('./daemon-health', () => ({
   getDaemonLaunchIdentity: getDaemonLaunchIdentityMock,
   getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock,
   healthCheckDaemon: healthCheckDaemonMock,
-  isDaemonOlderThanPathMtime: isDaemonOlderThanPathMtimeMock,
+  isDaemonStaleForCurrentBundle: isDaemonStaleForCurrentBundleMock,
   killStaleDaemon: killStaleDaemonMock,
   getProcessStartedAtMs: getProcessStartedAtMsMock
 }))
@@ -260,8 +264,8 @@ async function importFresh() {
   getMacDaemonSystemResolverHealthMock.mockReset()
   getMacDaemonSystemResolverHealthMock.mockReturnValue('healthy')
   getDaemonLaunchIdentityMock.mockClear()
-  isDaemonOlderThanPathMtimeMock.mockReset()
-  isDaemonOlderThanPathMtimeMock.mockReturnValue(false)
+  isDaemonStaleForCurrentBundleMock.mockReset()
+  isDaemonStaleForCurrentBundleMock.mockReturnValue(false)
   killStaleDaemonMock.mockClear()
   getAppPathMock.mockReset()
   getAppPathMock.mockReturnValue('/fake/app')
@@ -270,6 +274,7 @@ async function importFresh() {
   isPackagedMock.mockReturnValue(false)
   daemonClientMock.mockClear()
   probeSocketExistsMock.mockClear()
+  writeFileSyncMock.mockClear()
   // Why: importing daemon-init *after* resetModules means the module-level
   // `spawner`/`adapter`/`restartInFlight` start fresh for every test, which is
   // the only way to reliably exercise the "first-time init" path and the
@@ -1059,6 +1064,16 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(handlers.exit).toHaveLength(0)
     expect(child.disconnect).toHaveBeenCalledOnce()
     expect(child.unref).toHaveBeenCalledOnce()
+    expect(writeFileSyncMock).toHaveBeenCalledWith(
+      `/fake/daemon/daemon-v${PROTOCOL_VERSION}.pid`,
+      JSON.stringify({
+        pid: 12345,
+        startedAtMs: 1_000_000,
+        entryPath: '/fake/app/out/main/daemon-entry.js',
+        appVersion: '1.2.3'
+      }),
+      { mode: 0o600 }
+    )
   })
 
   it('removes detached daemon startup listeners after startup error', async () => {
@@ -1127,11 +1142,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       '/fake/token',
       '/fake/app/out/main/daemon-entry.js'
     )
-    expect(isDaemonOlderThanPathMtimeMock).toHaveBeenCalledWith(
+    expect(isDaemonStaleForCurrentBundleMock).toHaveBeenCalledWith(
       '/fake/userData/daemon',
       '/fake/socket',
       '/fake/token',
-      '/fake/app/out/main/daemon-entry.js'
+      '1.2.3'
     )
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()
@@ -1146,7 +1161,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
     isPackagedMock.mockReturnValue(true)
-    isDaemonOlderThanPathMtimeMock.mockReturnValueOnce(true)
+    isDaemonStaleForCurrentBundleMock.mockReturnValueOnce(true)
     forkMock.mockImplementationOnce(() => {
       const handlers: Record<string, ((arg?: unknown) => void)[]> = {
         message: [],
@@ -1173,11 +1188,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     await launcher('/fake/socket', '/fake/token')
 
-    expect(isDaemonOlderThanPathMtimeMock).toHaveBeenCalledWith(
+    expect(isDaemonStaleForCurrentBundleMock).toHaveBeenCalledWith(
       '/fake/userData/daemon',
       '/fake/socket',
       '/fake/token',
-      '/fake/app/out/main/daemon-entry.js'
+      '1.2.3'
     )
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
       '/fake/userData/daemon',
@@ -1217,15 +1232,15 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
     isPackagedMock.mockReturnValue(true)
-    isDaemonOlderThanPathMtimeMock.mockReturnValueOnce(true)
+    isDaemonStaleForCurrentBundleMock.mockReturnValueOnce(true)
 
     await launcher('/fake/socket', '/fake/token')
 
-    expect(isDaemonOlderThanPathMtimeMock).toHaveBeenCalledWith(
+    expect(isDaemonStaleForCurrentBundleMock).toHaveBeenCalledWith(
       '/fake/userData/daemon',
       '/fake/socket',
       '/fake/token',
-      '/fake/app/out/main/daemon-entry.js'
+      '1.2.3'
     )
     expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
     expect(disconnectMock).toHaveBeenCalledOnce()

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawn } from 'child_process'
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { createServer, connect, type Server } from 'net'
@@ -9,7 +8,6 @@ import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
   getProcessStartedAtMs,
   healthCheckDaemon,
-  isDaemonOlderThanPathMtime,
   killStaleDaemon,
   parseDaemonPidFile,
   startTimeMatches
@@ -124,20 +122,23 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile(serialized)).toEqual({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 
-  it('parses JSON pid files with entryPath', () => {
+  it('parses JSON pid files with launch metadata', () => {
     const serialized = serializeDaemonPidFile({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: '/repo/out/main/daemon-entry.js'
+      entryPath: '/repo/out/main/daemon-entry.js',
+      appVersion: '1.2.3'
     })
     expect(parseDaemonPidFile(serialized)).toEqual({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: '/repo/out/main/daemon-entry.js'
+      entryPath: '/repo/out/main/daemon-entry.js',
+      appVersion: '1.2.3'
     })
   })
 
@@ -147,7 +148,8 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile('{"pid":9999}')).toEqual({
       pid: 9999,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 
@@ -158,12 +160,14 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile('12345')).toEqual({
       pid: 12345,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
     expect(parseDaemonPidFile('  12345\n')).toEqual({
       pid: 12345,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 
@@ -263,63 +267,6 @@ describe('killStaleDaemon pid identity guards', () => {
       expect(terminationSignals).toEqual([])
     } finally {
       killSpy.mockRestore()
-    }
-  })
-})
-
-describe('isDaemonOlderThanPathMtime', () => {
-  let dir: string
-  let socketPath: string
-  let tokenPath: string
-
-  beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'daemon-health-mtime-test-'))
-    socketPath = join(dir, 'daemon.sock')
-    tokenPath = join(dir, 'daemon.token')
-  })
-
-  afterEach(() => {
-    rmSync(dir, { recursive: true, force: true })
-  })
-
-  it('detects a daemon that started before the current bundle entry was written', async () => {
-    if (process.platform === 'win32') {
-      return
-    }
-
-    const child = spawn(
-      process.execPath,
-      [
-        '-e',
-        'setTimeout(() => {}, 30000)',
-        'daemon-entry',
-        '--socket',
-        socketPath,
-        '--token',
-        tokenPath
-      ],
-      { stdio: 'ignore' }
-    )
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      const startedAtMs = getProcessStartedAtMs(child.pid!)
-      if (startedAtMs === null) {
-        return
-      }
-
-      const entryPath = join(dir, 'daemon-entry.js')
-      writeFileSync(entryPath, '', 'utf8')
-      const future = new Date(startedAtMs + 10_000)
-      utimesSync(entryPath, future, future)
-      writeFileSync(
-        getDaemonPidPath(dir),
-        serializeDaemonPidFile({ pid: child.pid!, startedAtMs, entryPath }),
-        { mode: 0o600 }
-      )
-
-      expect(isDaemonOlderThanPathMtime(dir, socketPath, tokenPath, entryPath)).toBe(true)
-    } finally {
-      child.kill('SIGKILL')
     }
   })
 })

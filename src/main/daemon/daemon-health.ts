@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines -- Why: pid validation shares process-identity
 helpers with kill escalation so the SIGKILL safety checks stay co-located. */
 import { execFileSync } from 'child_process'
-import { existsSync, readFileSync, statSync, unlinkSync } from 'fs'
+import { existsSync, readFileSync, unlinkSync } from 'fs'
 import { connect, type Socket } from 'net'
 import { encodeNdjson } from './ndjson'
 import { getDaemonPidPath } from './daemon-spawner'
@@ -23,6 +23,7 @@ type ParsedDaemonPid = {
   pid: number
   startedAtMs: number | null
   entryPath: string | null
+  appVersion: string | null
 }
 
 function canConnectSocket(socketPath: string): Promise<boolean> {
@@ -286,6 +287,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
       pid?: unknown
       startedAtMs?: unknown
       entryPath?: unknown
+      appVersion?: unknown
     }
     if (typeof parsed.pid === 'number' && Number.isFinite(parsed.pid)) {
       return {
@@ -294,7 +296,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
           typeof parsed.startedAtMs === 'number' && Number.isFinite(parsed.startedAtMs)
             ? parsed.startedAtMs
             : null,
-        entryPath: typeof parsed.entryPath === 'string' ? parsed.entryPath : null
+        entryPath: typeof parsed.entryPath === 'string' ? parsed.entryPath : null,
+        appVersion: typeof parsed.appVersion === 'string' ? parsed.appVersion : null
       }
     }
   } catch {
@@ -302,7 +305,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
   }
 
   const pid = Number(trimmed)
-  return Number.isFinite(pid) ? { pid, startedAtMs: null, entryPath: null } : null
+  return Number.isFinite(pid) ? { pid, startedAtMs: null, entryPath: null, appVersion: null } : null
 }
 
 function getLinuxProcessStartedAtMs(pid: number): number | null {
@@ -470,16 +473,8 @@ export function getDaemonLaunchIdentity(
   expectedEntryPath: string,
   protocolVersion = PROTOCOL_VERSION
 ): DaemonLaunchIdentity {
-  let parsedPid: ParsedDaemonPid | null
-  try {
-    parsedPid = parseDaemonPidFile(
-      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
-    )
-  } catch {
-    return 'unknown'
-  }
-
-  if (!parsedPid || !isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs)) {
+  const parsedPid = readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath, protocolVersion)
+  if (!parsedPid) {
     return 'unknown'
   }
 
@@ -498,36 +493,48 @@ export function getDaemonLaunchIdentity(
   return commandLine.includes(expectedEntryPath) ? 'match' : 'mismatch'
 }
 
-export function isDaemonOlderThanPathMtime(
+function readVerifiedDaemonPid(
   runtimeDir: string,
   socketPath: string,
   tokenPath: string,
-  path: string,
   protocolVersion = PROTOCOL_VERSION
-): boolean {
+): ParsedDaemonPid | null {
   let parsedPid: ParsedDaemonPid | null
   try {
     parsedPid = parseDaemonPidFile(
       readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
     )
   } catch {
-    return false
+    return null
   }
 
   if (!parsedPid || !isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs)) {
+    return null
+  }
+
+  return parsedPid
+}
+
+export function isDaemonStaleForCurrentBundle(
+  runtimeDir: string,
+  socketPath: string,
+  tokenPath: string,
+  currentAppVersion: string,
+  protocolVersion = PROTOCOL_VERSION
+): boolean {
+  const parsedPid = readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath, protocolVersion)
+  if (!parsedPid) {
     return false
   }
 
-  const startedAtMs = parsedPid.startedAtMs ?? getProcessStartedAtMs(parsedPid.pid)
-  if (startedAtMs === null) {
-    return false
+  if (parsedPid.appVersion !== null) {
+    return parsedPid.appVersion !== currentAppVersion
   }
 
-  try {
-    return startedAtMs + START_TIME_TOLERANCE_MS < statSync(path).mtimeMs
-  } catch {
-    return false
-  }
+  // Why: older packaged daemons do not carry a reliable build-generation
+  // marker. Replacing them once prevents archive-preserved mtimes from
+  // reusing stale native modules across the first metadata-aware upgrade.
+  return true
 }
 
 export async function killStaleDaemon(

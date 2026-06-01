@@ -32,7 +32,7 @@ import {
   getDaemonLaunchIdentity,
   getProcessStartedAtMs,
   healthCheckDaemon,
-  isDaemonOlderThanPathMtime,
+  isDaemonStaleForCurrentBundle,
   killStaleDaemon
 } from './daemon-health'
 import {
@@ -186,7 +186,8 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         // /Applications/Orca.app path is replaced during update.
         const identity = getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
         const stalePackagedBundle =
-          app.isPackaged && isDaemonOlderThanPathMtime(runtimeDir, socketPath, tokenPath, entryPath)
+          app.isPackaged &&
+          isDaemonStaleForCurrentBundle(runtimeDir, socketPath, tokenPath, app.getVersion())
         if (identity === 'mismatch' || stalePackagedBundle) {
           // Why: replacing a healthy daemon kills its child PTYs; defer code
           // freshness until no live terminal sessions would be lost.
@@ -280,7 +281,8 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
               serializeDaemonPidFile({
                 pid: child.pid,
                 startedAtMs: getProcessStartedAtMs(child.pid),
-                entryPath
+                entryPath,
+                appVersion: app.getVersion()
               }),
               { mode: 0o600 }
             )
