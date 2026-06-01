@@ -2145,12 +2145,33 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ? applyDetectedWorktreeUpdates(s.detectedWorktreesByRepo, worktreeId, metaUpdates)
         : s.detectedWorktreesByRepo
 
+      const nextActiveTabTypeByWorktree =
+        s.activeTabTypeByWorktree[worktreeId] === activeTabType
+          ? s.activeTabTypeByWorktree
+          : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
+      const hasStateChange =
+        s.activeWorktreeId !== worktreeId ||
+        s.activeFileId !== activeFileId ||
+        s.activeBrowserTabId !== activeBrowserTabId ||
+        s.activeTabType !== activeTabType ||
+        s.activeTabId !== activeTabId ||
+        nextActiveTabTypeByWorktree !== s.activeTabTypeByWorktree ||
+        nextEverActivated !== s.everActivatedWorktreeIds ||
+        nextWorktrees !== s.worktreesByRepo ||
+        nextDetectedWorktrees !== s.detectedWorktreesByRepo
+      if (!hasStateChange) {
+        // Why: repeated activation of the already-active worktree can come from
+        // clicks, IPC, and automation restore paths. Preserve the root Zustand
+        // reference so session persistence/runtime sync do not fan out on a no-op.
+        return s
+      }
+
       return {
         activeWorktreeId: worktreeId,
         activeFileId,
         activeBrowserTabId,
         activeTabType,
-        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType },
+        activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
         activeTabId,
         everActivatedWorktreeIds: nextEverActivated,
         ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),

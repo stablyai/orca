@@ -129,3 +129,16 @@ The follow-up extends the existing tab-registration wait from page-specific
 creation to worktree/global wake flows. Runtime commands now wait for the
 renderer's actual `browser:registerGuest` IPC before routing automation, with
 the same timeout fallback used by tab creation.
+
+## Follow-up: Worktree Activation No-Op Fanout
+
+The next renderer-store check found that repeated activation of an already
+active, already-reconciled worktree could still publish a new Zustand root state
+because `setActiveWorktree` rebuilt `activeTabTypeByWorktree` even when its
+stored value was unchanged. That woke every store subscriber, including session
+persistence and runtime graph sync, for a visible no-op.
+
+The follow-up preserves the existing state reference when all derived active
+fields, unread state, and first-activation bookkeeping are unchanged. A
+regression test subscribes to the store and asserts that reselecting the
+already-active reconciled worktree does not notify subscribers.
