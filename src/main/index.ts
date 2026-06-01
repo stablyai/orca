@@ -68,6 +68,7 @@ import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
+import { focusExistingMainWindow } from './window/focus-existing-window'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
 import {
@@ -245,27 +246,12 @@ if (startupDiagnosticsEnabled) {
 }
 
 function focusExistingWindow(): void {
-  // Why: the second-instance event fires on the *primary* Electron process
-  // after another launch tries (and fails) to acquire the lock. Bring the
-  // existing window forward so the user sees the same focus behaviour as
-  // re-clicking the dock/taskbar icon, rather than a silent no-op.
-  //
-  // Why show() as well as restore() + focus(): isMinimized() only covers the
-  // dock-minimised case. A hidden window (close-to-tray on macOS via Cmd+W,
-  // or a window on a different macOS Space) is NOT minimised, so focus()
-  // alone is a silent no-op. show() handles those plus Windows taskbar
-  // focus-steal, which focus() alone does not reliably trigger.
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) {
-      mainWindow.restore()
-    }
-    if (!mainWindow.isVisible()) {
-      mainWindow.show()
-    }
-    mainWindow.focus()
-  }
-  // Pre-window case: the primary is still booting and will call
-  // openMainWindow() from whenReady(). No action needed here.
+  focusExistingMainWindow({
+    app,
+    getWindow: () => mainWindow,
+    openWindow: openMainWindow,
+    warn: console.warn
+  })
 }
 
 function markExpectedRendererReload(webContentsId: number, durationMs = 10_000): void {
