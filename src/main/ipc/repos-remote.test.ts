@@ -11,6 +11,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { isGitRepo } from '../git/repo'
 
 const {
   handleMock,
@@ -143,6 +144,8 @@ describe('projectGroups IPC validation', () => {
     mockFilesystemProvider.stat.mockRejectedValue(new Error('not found'))
     mockGitProvider.isGitRepoAsync.mockReset()
     mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: true, rootPath: null })
+    vi.mocked(isGitRepo).mockReset()
+    vi.mocked(isGitRepo).mockReturnValue(true)
     mockMultiplexer.notify.mockReset()
     mockMultiplexer.request.mockReset()
 
@@ -320,6 +323,42 @@ describe('projectGroups IPC validation', () => {
       'projectGroups:scanNestedProgress',
       expect.objectContaining({ scanId: 'scan-1' })
     )
+  })
+
+  it('returns partial local scan results after cancellation', async () => {
+    vi.mocked(isGitRepo).mockReturnValue(false)
+    const root = await mkdtemp(join(tmpdir(), 'orca-nested-local-cancel-'))
+    try {
+      await mkdir(join(root, 'api', '.git'), { recursive: true })
+      await mkdir(join(root, 'web', '.git'), { recursive: true })
+      const event = {
+        sender: {
+          send: vi.fn((_channel: string, data: { scanId: string; scan: { repos: unknown[] } }) => {
+            if (data.scan.repos.length === 1) {
+              handlers.get('projectGroups:cancelNestedScan')!(null, { scanId: data.scanId })
+            }
+          })
+        }
+      }
+
+      const result = await handlers.get('projectGroups:scanNested')!(event, {
+        path: root,
+        scanId: 'local-scan-1'
+      })
+
+      expect(result).toMatchObject({
+        selectedPath: root,
+        selectedPathKind: 'non_git_folder',
+        stopped: true,
+        repos: [{ path: join(root, 'api') }]
+      })
+      expect(event.sender.send).toHaveBeenCalledWith(
+        'projectGroups:scanNestedProgress',
+        expect.objectContaining({ scanId: 'local-scan-1' })
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('rejects local nested scans with relative paths', async () => {

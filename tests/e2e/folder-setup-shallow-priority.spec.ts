@@ -47,6 +47,28 @@ async function createShallowPriorityTruncationFixture(): Promise<{
   }
 }
 
+async function createCancellableScanFixture(): Promise<{
+  parentPath: string
+  apiPath: string
+  webPath: string
+  groupName: string
+}> {
+  const parentPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-cancellable-scan-'))
+  tempRoots.push(parentPath)
+  const apiPath = path.join(parentPath, 'api')
+  const webPath = path.join(parentPath, 'web')
+
+  initializeGitRepo(apiPath)
+  initializeGitRepo(webPath)
+
+  return {
+    parentPath,
+    apiPath,
+    webPath,
+    groupName: path.basename(parentPath)
+  }
+}
+
 async function chooseFolderInNativeDialog(
   electronApp: ElectronApplication,
   folderPath: string
@@ -58,6 +80,56 @@ async function chooseFolderInNativeDialog(
       bookmarks: []
     })
   }, folderPath)
+}
+
+async function installCancellableNestedScanMock(
+  electronApp: ElectronApplication,
+  scan: {
+    selectedPath: string
+    selectedPathKind: 'non_git_folder'
+    repos: { path: string; displayName: string; depth: number }[]
+    truncated: boolean
+    timedOut: boolean
+    stopped: boolean
+    durationMs: number
+    maxDepth: number
+    maxRepos: number
+    timeoutMs: number | null
+  }
+): Promise<void> {
+  await electronApp.evaluate(({ ipcMain }, mockedScan) => {
+    const pendingScans = new Map<string, () => void>()
+    ipcMain.removeHandler('projectGroups:scanNested')
+    ipcMain.removeHandler('projectGroups:cancelNestedScan')
+    ipcMain.handle('projectGroups:scanNested', async (event, rawArgs: unknown) => {
+      const args = rawArgs as { scanId?: string }
+      const scanId = args.scanId ?? 'missing-scan-id'
+      return await new Promise((resolve) => {
+        pendingScans.set(scanId, () =>
+          resolve({
+            ...mockedScan,
+            stopped: true,
+            durationMs: mockedScan.durationMs + 1
+          })
+        )
+        event.sender.send('projectGroups:scanNestedProgress', {
+          scanId,
+          scan: { ...mockedScan, stopped: false }
+        })
+      })
+    })
+    ipcMain.handle('projectGroups:cancelNestedScan', (_event, rawArgs: unknown) => {
+      const args = rawArgs as { scanId?: string }
+      const scanId = args.scanId ?? ''
+      const resolveScan = pendingScans.get(scanId)
+      if (!resolveScan) {
+        return false
+      }
+      pendingScans.delete(scanId)
+      resolveScan()
+      return true
+    })
+  }, scan)
 }
 
 test.afterEach(() => {
@@ -140,4 +212,74 @@ test('prioritizes shallow sibling repositories in a bounded nested scan', async 
   })
   await expect(orcaPage.getByText(fixture.groupName)).toBeVisible()
   await expect(orcaPage.getByText('z-web-client').first()).toBeVisible()
+})
+
+test('can stop a nested repo scan and import repositories found so far', async ({
+  electronApp,
+  orcaPage
+}) => {
+  await waitForSessionReady(orcaPage)
+  const fixture = await createCancellableScanFixture()
+  await installCancellableNestedScanMock(electronApp, {
+    selectedPath: fixture.parentPath,
+    selectedPathKind: 'non_git_folder',
+    repos: [{ path: fixture.apiPath, displayName: 'api', depth: 1 }],
+    truncated: false,
+    timedOut: false,
+    stopped: false,
+    durationMs: 25,
+    maxDepth: 3,
+    maxRepos: 100,
+    timeoutMs: null
+  })
+  await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
+
+  await orcaPage
+    .getByRole('button', { name: /Add Project/i })
+    .first()
+    .click()
+  const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
+  await dialog.getByRole('button', { name: /Browse folder/i }).click()
+
+  const importDialog = orcaPage.getByRole('dialog', { name: /Import as project group/i })
+  await expect(importDialog.getByText('Scanning... 1 git repository in this folder.')).toBeVisible()
+  await expect(
+    importDialog.getByRole('button', { name: /Import as project group/i })
+  ).toBeDisabled()
+  await importDialog.getByRole('button', { name: /Stop scan/i }).click()
+  await expect(importDialog.getByText('Scan stopped early.')).toBeVisible()
+  await expect(importDialog.getByText('Found 1 git repository in this folder.')).toBeVisible()
+  await expect(importDialog.getByRole('button', { name: /Import as project group/i })).toBeEnabled()
+
+  await importDialog.getByRole('button', { name: /Import as project group/i }).click()
+
+  await expect
+    .poll(
+      () =>
+        orcaPage.evaluate((args) => {
+          const state = window.__store?.getState()
+          if (!state) {
+            return null
+          }
+          const group = state.projectGroups.find((entry) => entry.parentPath === args.parentPath)
+          const apiRepo = state.repos.find((repo) => repo.path === args.apiPath)
+          const webRepo = state.repos.find((repo) => repo.path === args.webPath)
+          return {
+            groupName: group?.name ?? null,
+            importedApiPath: apiRepo?.path ?? null,
+            apiInCreatedGroup: group !== undefined && apiRepo?.projectGroupId === group.id,
+            importedWebPath: webRepo?.path ?? null
+          }
+        }, fixture),
+      {
+        timeout: 20_000,
+        message: 'stopped nested scan partial result was not imported'
+      }
+    )
+    .toEqual({
+      groupName: fixture.groupName,
+      importedApiPath: fixture.apiPath,
+      apiInCreatedGroup: true,
+      importedWebPath: null
+    })
 })

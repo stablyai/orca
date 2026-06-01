@@ -1,7 +1,9 @@
+/* eslint-disable max-lines -- Why: nested scan behavior is intentionally covered in one
+suite so traversal order, ignore rules, cancellation, and filesystem fixtures stay aligned. */
 import { mkdtemp, mkdir, writeFile, rm, symlink } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanNestedRepos } from './nested-repo-discovery'
 
 let tempDirs: string[] = []
@@ -48,6 +50,7 @@ function posixTestFilesystem(args: {
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })))
   tempDirs = []
 })
@@ -94,6 +97,86 @@ describe('scanNestedRepos', () => {
       truncated: false
     })
     expect(result.repos.map((repo) => repo.path)).toEqual(['/workspace/api'])
+  })
+
+  it('returns stopped with no repos when cancelled before traversal', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      signal: controller.signal,
+      filesystem: posixTestFilesystem({
+        directories: new Map([['/workspace', ['api']]]),
+        gitRepos: new Set(['/workspace/api'])
+      })
+    })
+
+    expect(result).toMatchObject({
+      selectedPathKind: 'non_git_folder',
+      repos: [],
+      stopped: true,
+      timedOut: false,
+      truncated: false
+    })
+  })
+
+  it('emits immutable progress snapshots as repositories are discovered', async () => {
+    const progress: { repos: { path: string }[] }[] = []
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      onProgress: (scan) => progress.push(scan),
+      filesystem: posixTestFilesystem({
+        directories: new Map([['/workspace', ['api', 'web']]]),
+        gitRepos: new Set(['/workspace/api', '/workspace/web'])
+      })
+    })
+
+    expect(result.repos.map((repo) => repo.path)).toEqual(['/workspace/api', '/workspace/web'])
+    expect(progress.map((scan) => scan.repos.map((repo) => repo.path))).toEqual([
+      ['/workspace/api'],
+      ['/workspace/api', '/workspace/web']
+    ])
+    expect(progress[0].repos).toHaveLength(1)
+  })
+
+  it('does not time out by default even when elapsed time grows', async () => {
+    vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(60_000)
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      filesystem: posixTestFilesystem({
+        directories: new Map([['/workspace', ['api']]]),
+        gitRepos: new Set(['/workspace/api'])
+      })
+    })
+
+    expect(result).toMatchObject({
+      timedOut: false,
+      timeoutMs: null,
+      repos: [{ path: '/workspace/api' }]
+    })
+  })
+
+  it('still honors an explicit timeout option for callers that request one', async () => {
+    vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(1_000)
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      options: { timeoutMs: 500 },
+      filesystem: posixTestFilesystem({
+        directories: new Map([['/workspace', ['api']]]),
+        gitRepos: new Set(['/workspace/api'])
+      })
+    })
+
+    expect(result).toMatchObject({
+      repos: [],
+      stopped: false,
+      timedOut: true,
+      timeoutMs: 500
+    })
   })
 
   it('does not scan inside an already discovered repo', async () => {
