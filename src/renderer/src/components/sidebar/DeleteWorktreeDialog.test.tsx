@@ -119,7 +119,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     vi.mocked(runWorktreeDeletesInParallel).mockResolvedValue([])
   })
 
-  it('shows parent-only copy and a delete-all action when the workspace has children', async () => {
+  it('shows child-delete copy and only a delete-all action when the workspace has children', async () => {
     const parent = makeWorktree('Parent workspace', '/workspaces/parent')
     const child = makeWorktree('Child workspace', '/workspaces/child')
     mocks.state.modalData = { worktreeId: parent.id }
@@ -131,11 +131,13 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
     const markup = renderToStaticMarkup(<DeleteWorktreeDialog />)
 
-    expect(markup).toContain('Child workspaces won')
-    expect(markup).toContain('1 child workspace will stay in Orca and on disk.')
+    expect(markup).toContain('Child workspaces will be deleted')
+    expect(markup).toContain('Deleting this workspace also deletes 1 child workspace.')
     expect(markup).toContain('Child workspace')
+    expect(markup).toContain('from git and delete their workspace folders.')
+    expect(markup).not.toContain('from git and delete its workspace folder.')
     expect(markup).toContain('Delete All 2')
-    expect(markup).toContain('Delete Parent Only')
+    expect(markup).not.toContain('Delete Parent Only')
     expect(markup).not.toContain('Don&apos;t ask again')
 
     const destructiveButton = mocks.buttonProps.find((props) => props.variant === 'destructive')
@@ -144,7 +146,14 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     )
 
     expect(destructiveButton ? buttonText(destructiveButton) : '').toContain('Delete All 2')
-    expect(parentOnlyButton?.variant).toBe('outline')
+    expect(parentOnlyButton).toBeUndefined()
+
+    const deleteAllButton = destructiveButton as { onClick?: () => void } | undefined
+    deleteAllButton?.onClick?.()
+
+    expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([child, parent], {
+      onForceDeleted: expect.any(Function)
+    })
   })
 
   it('keeps long child workspace paths constrained inside the lineage notice', async () => {

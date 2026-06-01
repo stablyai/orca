@@ -18,6 +18,7 @@ import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 import {
   countFolderWorkspaceDeletes,
   getDeleteWorktreeDialogCopy,
+  getDeleteWorktreeLineageDialogCopy,
   isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
 } from './delete-worktree-dialog-copy'
 
@@ -109,6 +110,15 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const hasLineageChildren = childWorkspaceCount > 0
   const canDeleteAllLineage =
     !isMainWorktree && !isBatchDelete && lineageDelete.deleteAllTargets.length > 1
+  const lineageFolderWorkspaceDeleteCount = useMemo(
+    () => countFolderWorkspaceDeletes(repoMap, lineageDelete.deleteAllTargets),
+    [lineageDelete.deleteAllTargets, repoMap]
+  )
+  const lineageDeleteCopy = getDeleteWorktreeLineageDialogCopy({
+    childWorkspaceCount,
+    deleteTargetCount: lineageDelete.deleteAllTargets.length,
+    folderWorkspaceDeleteCount: lineageFolderWorkspaceDeleteCount
+  })
   const allowSkipConfirm =
     !isBatchDelete && modalData.allowSkipConfirm !== false && childWorkspaceCount === 0
   const [dontAskAgain, setDontAskAgain] = useState(false)
@@ -257,8 +267,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     const deletePromise = runWorktreeDeletesInParallel(lineageDelete.deleteAllTargets, {
       onForceDeleted: handleForceDeletedFromToast
     })
-    // Why: like the parent-only path, deletion progress is shown on the
-    // workspace cards; the modal should not sit on top of that in-progress UI.
+    // Why: deletion progress is shown on the workspace cards; the modal should
+    // not sit on top of that in-progress UI.
     closeModal()
     void deletePromise.then((deletedIds) => {
       if (deletedIds.length > 0) {
@@ -289,8 +299,19 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             {isBatchDelete ? 'Delete Workspaces' : 'Delete Workspace'}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Remove <span className={deleteCopy.targetClassName}>{deleteCopy.targetLabel}</span>{' '}
-            {deleteCopy.descriptionSuffix}
+            Remove <span className={deleteCopy.targetClassName}>{deleteCopy.targetLabel}</span>
+            {canDeleteAllLineage ? (
+              <>
+                {' '}
+                and{' '}
+                <span className="font-medium text-foreground">
+                  {lineageDeleteCopy.childTargetLabel}
+                </span>{' '}
+                {lineageDeleteCopy.descriptionSuffix}
+              </>
+            ) : (
+              <> {deleteCopy.descriptionSuffix}</>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -399,41 +420,21 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                 {isDeleting ? 'Force Deleting…' : 'Force Delete'}
               </Button>
             ) : (
-              <>
-                {canDeleteAllLineage ? (
-                  <Button
-                    ref={confirmButtonRef}
-                    variant="destructive"
-                    onClick={handleDeleteAll}
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
-                    {isDeleting
-                      ? 'Deleting…'
-                      : `Delete All ${lineageDelete.deleteAllTargets.length}`}
-                  </Button>
-                ) : null}
-                <Button
-                  ref={canDeleteAllLineage ? undefined : confirmButtonRef}
-                  variant={canDeleteAllLineage ? 'outline' : 'destructive'}
-                  className={
-                    canDeleteAllLineage
-                      ? 'border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive'
-                      : undefined
-                  }
-                  onClick={() => handleDelete(false)}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
-                  {isDeleting
-                    ? 'Deleting…'
-                    : isBatchDelete
-                      ? `Delete ${worktrees.length}`
-                      : canDeleteAllLineage
-                        ? 'Delete Parent Only'
-                        : 'Delete'}
-                </Button>
-              </>
+              <Button
+                ref={confirmButtonRef}
+                variant="destructive"
+                onClick={canDeleteAllLineage ? handleDeleteAll : () => handleDelete(false)}
+                disabled={isDeleting}
+              >
+                {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
+                {isDeleting
+                  ? 'Deleting…'
+                  : isBatchDelete
+                    ? `Delete ${worktrees.length}`
+                    : canDeleteAllLineage
+                      ? `Delete All ${lineageDelete.deleteAllTargets.length}`
+                      : 'Delete'}
+              </Button>
             ))}
         </DialogFooter>
       </DialogContent>

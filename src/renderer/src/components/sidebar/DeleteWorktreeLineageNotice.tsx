@@ -19,12 +19,11 @@ export function DeleteWorktreeLineageNotice({
       <div className="flex items-start gap-2">
         <Workflow className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <div className="font-medium text-foreground">Child workspaces won&apos;t be deleted</div>
+          <div className="font-medium text-foreground">Child workspaces will be deleted</div>
           <div className="mt-1 text-muted-foreground">
-            Deleting this workspace only removes the parent.{' '}
             {childWorkspaceCount === 1
-              ? '1 child workspace will stay in Orca and on disk.'
-              : `${childWorkspaceCount} child workspaces will stay in Orca and on disk.`}
+              ? 'Deleting this workspace also deletes 1 child workspace.'
+              : `Deleting this workspace also deletes ${childWorkspaceCount} child workspaces.`}
           </div>
           {/* Why: long nowrap paths can otherwise give this grid child an
              intrinsic width wider than the modal. */}
