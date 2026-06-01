@@ -105,16 +105,16 @@ describe('terminal accessory layout', () => {
     ).toEqual(['escape'])
   })
 
-  it('migrates Space into old personalized layouts without reordering existing visible keys', () => {
+  it('migrates Space into old personalized layouts using current built-in order', () => {
     const oldBuiltInIds = oldBuiltInIdsBeforeSpace()
 
     expect(
       normalizeTerminalAccessoryLayoutPreference({
         version: 1,
-        visibleBuiltInIds: ['tab', 'enter', 'shiftTab'],
+        visibleBuiltInIds: ['escape', 'tab', 'enter', 'shiftTab', 'backspace', 'delete'],
         knownBuiltInIds: oldBuiltInIds
       }).visibleBuiltInIds
-    ).toEqual(['tab', 'enter', 'shiftTab', 'space'])
+    ).toEqual(['escape', 'tab', 'enter', 'shiftTab', 'space', 'backspace', 'delete'])
   })
 
   it('shows Space once for an all-hidden old layout', () => {

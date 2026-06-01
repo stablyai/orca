@@ -38,6 +38,11 @@ function dedupeKnownIds(ids: string[], builtInSet: Set<string>): string[] {
   return out
 }
 
+function orderBuiltInIds(ids: Set<string>, currentBuiltInIds: string[]): string[] {
+  // Why: migrated terminal bars should match the Settings -> Terminal order.
+  return currentBuiltInIds.filter((id) => ids.has(id))
+}
+
 export function getDefaultTerminalAccessoryBuiltInIds(): string[] {
   return builtInIds()
 }
@@ -60,17 +65,17 @@ export function normalizeTerminalAccessoryLayoutPreference(
 
   const builtInSet = new Set(currentBuiltInIds)
   const knownInputSet = new Set(knownInput.filter((id) => builtInSet.has(id)))
-  const visibleBuiltInIds = dedupeKnownIds(visibleInput, builtInSet)
+  const visibleBuiltInSet = new Set(dedupeKnownIds(visibleInput, builtInSet))
 
   for (const id of currentBuiltInIds) {
-    if (!knownInputSet.has(id) && !visibleBuiltInIds.includes(id)) {
-      visibleBuiltInIds.push(id)
+    if (!knownInputSet.has(id)) {
+      visibleBuiltInSet.add(id)
     }
   }
 
   return {
     version: 1,
-    visibleBuiltInIds,
+    visibleBuiltInIds: orderBuiltInIds(visibleBuiltInSet, currentBuiltInIds),
     knownBuiltInIds: [...currentBuiltInIds]
   }
 }
