@@ -447,7 +447,7 @@ jobs:
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
-      - name: Create draft release with auto-generated notes
+      - name: Create draft release with bounded generated notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
@@ -457,15 +457,7 @@ jobs:
             exit 0
           fi
 
-          is_rc=false
-          if [[ "$TAG" == *"-rc."* ]]; then
-            is_rc=true
-          fi
-
-          gh release create "$TAG" \
-            --draft \
-            --generate-notes \
-            --prerelease="$is_rc"
+          node config/scripts/create-draft-release.mjs "$TAG"
 
   # Why: tag-scoped E2E gives release visibility, but the suite is flaky enough
   # that publish-release must not depend on it.
