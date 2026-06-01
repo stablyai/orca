@@ -35,11 +35,16 @@ import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview
 import { toast } from 'sonner'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { branchName } from '@/lib/git-utils'
+import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
 // UI hydration parity this slice used before `worktree.detectedList` existed.
 const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
+const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
+const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
+const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
+const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
   if (!node) {
@@ -58,6 +63,10 @@ function getActivationSpawnSuppression(layout: TerminalLayoutSnapshot | undefine
     Object.keys(layout?.ptyIdsByLeafId ?? {}).length
   )
   return paneCount === 1 ? true : paneCount
+}
+
+function shouldDeferActivationTerminalPrep(): boolean {
+  return typeof window !== 'undefined' && import.meta.env.MODE !== 'test'
 }
 
 function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefined): void {
@@ -1365,12 +1374,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
       get().removeWorkspaceSpaceWorktrees?.([worktreeId])
-      showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
-        void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
-      })
-      return removalResult?.preservedBranch
-        ? { ok: true as const, preservedBranch: removalResult.preservedBranch }
-        : { ok: true as const }
+      const preservedBranch = removalResult?.preservedBranch
+      if (preservedBranch) {
+        showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
+          void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
+        })
+      }
+      return preservedBranch ? { ok: true as const, preservedBranch } : { ok: true as const }
     } catch (err) {
       // Why: git refusing a non-force delete for dirty/untracked files is a
       // handled user decision point surfaced by the delete toast, not an app error.
@@ -1956,6 +1966,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   setActiveWorktree: (worktreeId) => {
+    if (worktreeId && shouldDeferActivationTerminalPrep()) {
+      markInputQuietSchedulerInput()
+    }
+
     if (get().activeWorktreeId !== worktreeId) {
       moveFocusToRendererBeforeFocusedWebviewHidden()
     }
@@ -1963,6 +1977,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       ? get().reconcileWorktreeTabModel(worktreeId).activeRenderableTabId
       : null
     let shouldClearUnread = false
+    let shouldPrepareTerminalTabs = false
+    let shouldTagTerminalTabs = false
     set((s) => {
       if (!worktreeId) {
         return {
@@ -2088,12 +2104,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // PTY lifecycle and explicit edits still flow through bumpWorktreeActivity.
       const metaUpdates: Partial<WorktreeMeta> = shouldClearUnread ? { isUnread: false } : {}
 
-      // Why: the generation bump for dead-PTY tabs MUST happen in the same
-      // set() as the activation. Two separate set() calls let React/Zustand
-      // render the old (dead-transport) TerminalPane as visible for one frame
-      // before the generation bump unmounts it — that intermediate render
-      // resumes the pane with a transport stuck at connected=false/ptyId=null,
-      // and user input is silently dropped.
+      // Why: dead-PTY terminal prep must complete before the workspace shell
+      // renders that tab. The shell render is deferred below, so terminal prep
+      // can wait for input quiet instead of blocking the activation click.
       //
       // Why pendingActivationSpawn + first-activation check: the first time a
       // worktree is activated in this session, its TerminalPane mounts and
@@ -2118,32 +2131,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
       const isFirstActivation = worktreeId != null && !s.everActivatedWorktreeIds.has(worktreeId)
       const shouldTagTabs = worktreeId != null && tabs.length > 0 && isFirstActivation
+      shouldPrepareTerminalTabs = Boolean(
+        worktreeId && tabs.length > 0 && (allDead || shouldTagTabs)
+      )
+      shouldTagTerminalTabs = shouldTagTabs
       const nextEverActivated = isFirstActivation
         ? new Set([...s.everActivatedWorktreeIds, worktreeId!])
         : s.everActivatedWorktreeIds
-      const tabsByWorktreeUpdate =
-        allDead || shouldTagTabs
-          ? {
-              tabsByWorktree: {
-                ...s.tabsByWorktree,
-                [worktreeId!]: tabs.map((tab) => ({
-                  ...tab,
-                  ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
-                  // Why: the allDead generation bump remounts panes and may
-                  // fresh-spawn PTYs — click side-effects, not real activity.
-                  // Split layouts remount several panes, so count the expected
-                  // pane events instead of suppressing only the first one.
-                  ...(allDead || shouldTagTabs
-                    ? {
-                        pendingActivationSpawn: getActivationSpawnSuppression(
-                          s.terminalLayoutsByTabId[tab.id]
-                        )
-                      }
-                    : {})
-                }))
-              }
-            }
-          : {}
       const nextWorktrees = shouldClearUnread
         ? applyWorktreeUpdates(s.worktreesByRepo, worktreeId, metaUpdates)
         : s.worktreesByRepo
@@ -2162,10 +2156,59 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
         ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
           ? { detectedWorktreesByRepo: nextDetectedWorktrees }
-          : {}),
-        ...tabsByWorktreeUpdate
+          : {})
       }
     })
+
+    if (worktreeId && shouldPrepareTerminalTabs) {
+      const prepareTerminalTabs = (): void => {
+        pendingActivationTerminalPrepCancels.delete(worktreeId)
+        set((s) => {
+          if (s.activeWorktreeId !== worktreeId) {
+            return {}
+          }
+          const tabs = s.tabsByWorktree[worktreeId] ?? []
+          if (tabs.length === 0) {
+            return {}
+          }
+          const allDead = tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
+          if (!allDead && !shouldTagTerminalTabs) {
+            return {}
+          }
+          return {
+            tabsByWorktree: {
+              ...s.tabsByWorktree,
+              [worktreeId]: tabs.map((tab) => ({
+                ...tab,
+                ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
+                // Why: slept terminal remount/spawn is click-driven wake work.
+                // Tag the resulting PTY updates so they do not reshuffle Recent.
+                pendingActivationSpawn: getActivationSpawnSuppression(
+                  s.terminalLayoutsByTabId[tab.id]
+                )
+              }))
+            }
+          }
+        })
+      }
+
+      const cancelExistingPrep = pendingActivationTerminalPrepCancels.get(worktreeId)
+      if (cancelExistingPrep) {
+        cancelExistingPrep()
+      }
+      if (shouldDeferActivationTerminalPrep()) {
+        pendingActivationTerminalPrepCancels.set(
+          worktreeId,
+          scheduleAfterInputQuiet(prepareTerminalTabs, {
+            delayMs: ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS,
+            quietMs: ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS,
+            idleTimeoutMs: ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS
+          })
+        )
+      } else {
+        prepareTerminalTabs()
+      }
+    }
 
     // Why: activation is explicit enough to revalidate PR state immediately;
     // the GitHub coordinator still coalesces requests and applies rate guards.

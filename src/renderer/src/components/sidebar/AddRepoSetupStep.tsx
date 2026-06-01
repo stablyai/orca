@@ -20,7 +20,7 @@ type ProjectAddedContentProps = {
 
 type SetupStepProps = ProjectAddedContentProps
 
-const DEFAULT_PROJECT_ADDED_WORKTREE_NAME = 'new-workspace-1'
+const DEFAULT_PROJECT_ADDED_WORKTREE_NAME = 'new-worktree-1'
 const EXISTING_WORKTREE_DEFAULT_LIMIT = 10
 
 export function getInitialProjectAddedWorktreeName(
@@ -290,7 +290,7 @@ export function ProjectAddedContent({
               onArrowNav={cycleChoice}
               icon={<GitBranchPlus className="size-4" />}
               title="Create a new worktree"
-              caption="Start a fresh workspace from this project."
+              caption="Start a fresh worktree from this project."
             />
           </div>
         ) : null}
@@ -301,7 +301,7 @@ export function ProjectAddedContent({
               htmlFor="project-added-worktree-name"
               className="block text-[11px] font-medium text-muted-foreground"
             >
-              Workspace name
+              Worktree name
             </label>
             <Input
               id="project-added-worktree-name"
@@ -311,7 +311,7 @@ export function ProjectAddedContent({
                 markCreateChoiceSelected()
                 setWorktreeName(event.target.value)
               }}
-              placeholder="new-workspace"
+              placeholder="new-worktree"
               className="h-9"
             />
           </div>

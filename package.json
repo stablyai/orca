@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.36-rc.15",
+  "version": "1.4.36-rc.16",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -217,6 +217,11 @@
       "node-pty@1.1.0": "config/patches/node-pty@1.1.0.patch",
       "@xterm/addon-ligatures@0.11.0-beta.220": "config/patches/@xterm__addon-ligatures@0.11.0-beta.220.patch",
       "@xterm/addon-webgl@0.20.0-beta.219": "config/patches/@xterm__addon-webgl@0.20.0-beta.219.patch"
+    }
+  },
+  "reactDoctor": {
+    "rules": {
+      "react-doctor/js-combine-iterations": "off"
     }
   }
 }

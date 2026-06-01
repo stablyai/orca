@@ -8,10 +8,10 @@ import {
 } from './AddRepoSetupStep'
 
 describe('getInitialProjectAddedWorktreeName', () => {
-  it('fills the project-added setup input with a default workspace name', () => {
-    expect(getInitialProjectAddedWorktreeName(undefined)).toBe('new-workspace-1')
-    expect(getInitialProjectAddedWorktreeName('')).toBe('new-workspace-1')
-    expect(getInitialProjectAddedWorktreeName('   ')).toBe('new-workspace-1')
+  it('fills the project-added setup input with a default worktree name', () => {
+    expect(getInitialProjectAddedWorktreeName(undefined)).toBe('new-worktree-1')
+    expect(getInitialProjectAddedWorktreeName('')).toBe('new-worktree-1')
+    expect(getInitialProjectAddedWorktreeName('   ')).toBe('new-worktree-1')
   })
 
   it('preserves caller-provided defaults', () => {

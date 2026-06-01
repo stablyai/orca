@@ -22,7 +22,7 @@ import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { cn } from '@/lib/utils'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type {
@@ -71,8 +71,12 @@ type WorktreeCardProps = {
   lineageChildren?: React.ReactNode
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
   onActivate?: () => void
+  onImmediateActivate?: (worktreeId: string) => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
-  onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
+  onContextMenuSelect?: (
+    event: React.MouseEvent<HTMLElement>,
+    worktree: Worktree
+  ) => readonly Worktree[]
   onCardDragStart?: (
     event: React.DragEvent<HTMLDivElement>,
     worktreeId: string,
@@ -103,6 +107,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   revealHighlightTone = 'default',
   selectedWorktrees,
   onActivate,
+  onImmediateActivate,
   onSelectionGesture,
   onContextMenuSelect,
   onCardDragStart,
@@ -400,13 +405,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
       // Why: route sidebar clicks through the shared activation path so the
       // back/forward stack stays complete for the primary worktree navigation
       // surface instead of only recording palette-driven switches.
-      activateAndRevealWorktree(worktree.id)
+      onImmediateActivate?.(worktree.id)
+      activateWorktreeFromSidebar(worktree.id)
       if (isSshDisconnected) {
         setShowDisconnectedDialog(true)
       }
       onActivate?.()
     },
-    [worktree.id, isSshDisconnected, onActivate, onSelectionGesture]
+    [worktree.id, isSshDisconnected, onActivate, onImmediateActivate, onSelectionGesture]
   )
 
   const handleRenameTitle = useCallback(
@@ -480,6 +486,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
       onCardDragStart?.(event, worktree.id, Array.isArray(dragIds) ? dragIds : [dragIds])
     },
     [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree.id]
+  )
+
+  const handleContextMenuSelect = useCallback(
+    (event: React.MouseEvent<HTMLElement>) => onContextMenuSelect?.(event, worktree) ?? [worktree],
+    [onContextMenuSelect, worktree]
   )
 
   const stopQuickActionPointerPropagation = useCallback(
@@ -680,6 +691,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
         isSshDisconnected && !isDeleting && 'opacity-60'
       )}
+      data-worktree-card-surface="true"
+      data-worktree-card-active={isActiveSurface ? 'true' : undefined}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       draggable={nativeDragEnabled && !isDeleting && !titleRenaming}
@@ -974,7 +987,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       <WorktreeContextMenu
         worktree={worktree}
         selectedWorktrees={selectedWorktrees}
-        onContextMenuSelect={onContextMenuSelect}
+        onContextMenuSelect={handleContextMenuSelect}
       >
         {cardBody}
       </WorktreeContextMenu>

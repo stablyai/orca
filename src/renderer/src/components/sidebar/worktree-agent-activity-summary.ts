@@ -25,17 +25,20 @@ const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
 }
 
+type AgentActivityTabsByWorktree = Record<string, readonly { id: string }[]>
+
 export type AgentActivityInput = Pick<
   AppState,
-  | 'tabsByWorktree'
   | 'agentStatusEpoch'
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
->
+> & {
+  tabsByWorktree: AgentActivityTabsByWorktree
+}
 
 type AgentActivityCache = {
-  tabsByWorktree: AppState['tabsByWorktree']
+  tabsByWorktree: AgentActivityTabsByWorktree
   agentStatusEpoch: number
   migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId']
   retainedAgentsByPaneKey: AppState['retainedAgentsByPaneKey']

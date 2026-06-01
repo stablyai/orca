@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { useActiveWorktree, useAllWorktrees, useRepoById, useRepoMap } from '@/store/selectors'
+import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeById } from '@/store/selectors'
 import type { GitConflictOperation } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
@@ -13,9 +13,9 @@ import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
 const POLL_INTERVAL_MS = 3000
 
 export function useGitStatusPolling(): void {
-  const activeWorktree = useActiveWorktree()
-  const allWorktrees = useAllWorktrees()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorktree = useWorktreeById(activeWorktreeId)
+  const allWorktrees = useAllWorktrees()
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)

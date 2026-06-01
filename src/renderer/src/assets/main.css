@@ -830,6 +830,17 @@
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
+[data-worktree-card-surface][data-worktree-card-active='true'] {
+  border-color: color-mix(in srgb, var(--sidebar-border) 40%, transparent);
+  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+}
+
+.dark [data-worktree-card-surface][data-worktree-card-active='true'] {
+  background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 3%, transparent);
+}
+
 .worktree-agent-row-hover:hover {
   background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
 }
