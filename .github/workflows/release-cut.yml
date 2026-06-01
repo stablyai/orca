@@ -349,6 +349,33 @@ jobs:
                 echo "::error::Refusing to cut $KIND $new: not greater than latest stable $latest_stable." >&2
                 exit 1
               fi
+
+              # Why: a stale orphan stable tag can exist from an older release
+              # ref after main has moved on. If it cannot be recovered for the
+              # current ref, advance to the next stable version instead of
+              # wedging every future patch cut on the same collision.
+              for _ in {1..100}; do
+                candidate_tag="v$new"
+                if ! git rev-parse "$candidate_tag" >/dev/null 2>&1; then
+                  break
+                fi
+
+                candidate_release_state="$(release_draft_state "$candidate_tag")"
+                case "$candidate_release_state" in
+                  missing|true)
+                    recover_unpublished_tag "$candidate_tag" "tag collision" || true
+                    new="$(bump "$new" "$KIND")"
+                    ;;
+                  false)
+                    echo "::error::Tag $candidate_tag already exists with a published release. Refusing to skip over a shipped version." >&2
+                    exit 1
+                    ;;
+                  *)
+                    echo "::error::Unexpected release state for $candidate_tag: $candidate_release_state" >&2
+                    exit 1
+                    ;;
+                esac
+              done
               ;;
             *)
               echo "::error::Unknown kind: $KIND" >&2
