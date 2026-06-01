@@ -38,9 +38,15 @@ describe('resolveAgentStatusTerminalTitle', () => {
     ).toBe('Cursor ready')
   })
 
-  it('does not rewrite titles for agents without synthetic title profiles', () => {
+  it('replaces stale Codex spinner titles when hook state finishes', () => {
     expect(
       resolveAgentStatusTerminalTitle({ agentType: 'codex', state: 'done' }, '\u280b Codex')
-    ).toBe('\u280b Codex')
+    ).toBe('Codex ready')
+  })
+
+  it('uses permission titles for Codex when hook state waits on user input', () => {
+    expect(
+      resolveAgentStatusTerminalTitle({ agentType: 'codex', state: 'waiting' }, '\u280b Codex')
+    ).toBe('Codex - action required')
   })
 })

@@ -2297,6 +2297,7 @@ export function useIpcEvents(): void {
         updatedAt: data.receivedAt,
         stateStartedAt: data.stateStartedAt
       })
+      applyResolvedAgentTerminalTitleToTab(store, data.paneKey, title, terminalTitle)
       const statusWorktreeId = data.worktreeId ?? owningWorktreeId
       if (options?.replay !== true && statusWorktreeId) {
         // Why: local Codex/Claude hooks arrive through this main-process IPC
@@ -2541,6 +2542,28 @@ export function useIpcEvents(): void {
       resetAgentHookCompletionNotificationCoordinators()
     }
   }, [])
+}
+
+function applyResolvedAgentTerminalTitleToTab(
+  store: ReturnType<typeof useAppStore.getState>,
+  paneKey: string,
+  previousTitle: string | undefined,
+  nextTitle: string | undefined
+): void {
+  if (!nextTitle || nextTitle === previousTitle) {
+    return
+  }
+  const parsed = parsePaneKey(paneKey)
+  if (!parsed) {
+    return
+  }
+  const layout = store.terminalLayoutsByTabId?.[parsed.tabId]
+  if (layout?.root && layout.activeLeafId && layout.activeLeafId !== parsed.leafId) {
+    return
+  }
+  // Why: hook completion can arrive while the pane transport is unmounted.
+  // Keep the active terminal tab label in sync with the resolved state title.
+  store.updateTabTitle(parsed.tabId, nextTitle)
 }
 
 /** Resolve a paneKey (tabId:leafId) to both a liveness check and the current

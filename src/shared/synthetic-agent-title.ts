@@ -4,9 +4,18 @@ export type SyntheticAgentTitleProfile = {
   workingLabel: string
   permissionLabel: string
   idleLabel: string
+  synthesizeWorkingTitle?: boolean
 }
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
+  codex: {
+    workingLabel: 'Codex',
+    permissionLabel: 'Codex - action required',
+    idleLabel: 'Codex ready',
+    // Why: Codex emits working OSC titles but can miss the final frame.
+    // Only synthesize terminal states so native spinner behavior stays intact.
+    synthesizeWorkingTitle: false
+  },
   cursor: {
     workingLabel: 'Cursor Agent',
     permissionLabel: 'Cursor - action required',
@@ -47,4 +56,15 @@ export function getSyntheticAgentTerminalTitle(
     return null
   }
   return state === 'blocked' || state === 'waiting' ? profile.permissionLabel : profile.idleLabel
+}
+
+export function shouldDriveSyntheticAgentTitleFromHook(
+  agentType: AgentType | null | undefined,
+  state: AgentStatusState
+): boolean {
+  const profile = getSyntheticAgentTitleProfile(agentType)
+  if (!profile) {
+    return false
+  }
+  return state !== 'working' || profile.synthesizeWorkingTitle !== false
 }

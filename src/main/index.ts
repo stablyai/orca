@@ -112,7 +112,8 @@ import {
 import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
 import { isCrashReportReason } from '../shared/crash-reporting'
 import {
-  SYNTHETIC_AGENT_TITLE_PROFILES,
+  getSyntheticAgentTitleProfile,
+  shouldDriveSyntheticAgentTitleFromHook,
   type SyntheticAgentTitleProfile
 } from '../shared/synthetic-agent-title'
 import type { AgentStatusState } from '../shared/agent-status-types'
@@ -622,16 +623,10 @@ function openMainWindow(): BrowserWindow {
         ...(orchestration ? { orchestration } : {})
       })
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
-      // Why: cursor-agent's OSC title stays "Cursor Agent" for the whole turn,
-      // and opencode's stays bare "OpenCode" — neither carries a working/idle
-      // signal the title heuristic can read. Synthesize an OSC title update
-      // from the hook state and inject it into the pane's data stream so the
-      // existing renderer-side title tracker (which drives the sidebar
-      // spinner, unread badge, and worktree status dot for every other agent)
-      // lights up for these panes too. Braille prefix → working keyword path;
-      // "action required" → permission; bare label → idle.
-      const profile = SYNTHETIC_AGENT_TITLE_PROFILES[payload.agentType ?? '']
-      if (profile) {
+      // Why: some native OSC titles miss terminal idle/permission frames.
+      // Inject hook-derived frames so the renderer title tracker updates too.
+      const profile = getSyntheticAgentTitleProfile(payload.agentType)
+      if (profile && shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state)) {
         driveSyntheticTitleFromHook(paneKey, payload.state, profile)
       }
     }
