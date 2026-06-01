@@ -686,7 +686,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().workspaceBoardColumnLayout).toBe('fit')
   })
 
-  it('defaults invalid workspace board column layout to full width', () => {
+  it('defaults invalid workspace board column layout to partial width', () => {
     const store = createUIStore()
 
     store.getState().hydratePersistedUI(
@@ -695,7 +695,7 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().workspaceBoardColumnLayout).toBe('full')
+    expect(store.getState().workspaceBoardColumnLayout).toBe('fit')
   })
 
   it('hydrates a valid Kagi session link', () => {

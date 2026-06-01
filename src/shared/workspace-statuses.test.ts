@@ -252,10 +252,11 @@ describe('workspace status visuals', () => {
     expect(clampWorkspaceBoardColumnWidth(900)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MAX)
   })
 
-  it('defaults workspace board column layout to full width', () => {
-    expect(normalizeWorkspaceBoardColumnLayout(undefined)).toBe('full')
+  it('defaults workspace board column layout to partial width', () => {
+    expect(normalizeWorkspaceBoardColumnLayout(undefined)).toBe('fit')
+    expect(normalizeWorkspaceBoardColumnLayout('full')).toBe('full')
     expect(normalizeWorkspaceBoardColumnLayout('fit')).toBe('fit')
-    expect(normalizeWorkspaceBoardColumnLayout('compact')).toBe('full')
+    expect(normalizeWorkspaceBoardColumnLayout('compact')).toBe('fit')
   })
 
   it('fits workspace board columns inside the visible panel without exceeding saved width', () => {

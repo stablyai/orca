@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowDown, ArrowUp, Plus, Settings, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Maximize2, PanelLeft, Plus, Settings, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -91,16 +91,18 @@ export default function WorkspaceKanbanSettingsMenu({
             aria-label="Workspace board column layout"
           >
             <ToggleGroupItem
-              value="full"
-              className="h-7 grow basis-0 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+              value="fit"
+              className="h-7 grow basis-0 gap-1.5 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
             >
-              Full width
+              <PanelLeft className="size-3 shrink-0" />
+              Partial Width
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="fit"
-              className="h-7 grow basis-0 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+              value="full"
+              className="h-7 grow basis-0 gap-1.5 px-1.5 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
             >
-              Fit panel
+              <Maximize2 className="size-3 shrink-0" />
+              Full width
             </ToggleGroupItem>
           </ToggleGroup>
         </div>

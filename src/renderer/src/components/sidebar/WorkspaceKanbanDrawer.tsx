@@ -32,7 +32,6 @@ import {
 } from './worktree-manual-order'
 import type { WorkspaceStatus, WorktreeMeta } from '../../../../shared/types'
 import {
-  WORKSPACE_BOARD_COLUMN_GAP,
   fitWorkspaceBoardColumnWidth,
   makeWorkspaceStatusId
 } from '../../../../shared/workspace-statuses'
@@ -504,16 +503,9 @@ export default function WorkspaceKanbanDrawer({
     ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
     : '0px'
   const fitPanelBoardWidthCss = `min(calc(100vw - ${drawerLeftCss}), 1294px)`
-  // Why: full-width mode keeps user-sized columns and expands the companion
-  // board over adjacent panes; fit mode preserves the older fixed panel.
-  const boardContentWidth =
-    workspaceStatuses.length * columnWidth +
-    Math.max(0, workspaceStatuses.length - 1) * WORKSPACE_BOARD_COLUMN_GAP +
-    24
-  const fullBoardWidthCss = `min(calc(100vw - ${drawerLeftCss}), ${Math.max(
-    boardContentWidth,
-    1294
-  )}px)`
+  // Why: full-width mode should visibly fill the remaining app viewport; the
+  // lanes keep their user-sized widths and scroll when they exceed it.
+  const fullBoardWidthCss = `calc(100vw - ${drawerLeftCss})`
   const boardWidthCss =
     workspaceBoardColumnLayout === 'fit' ? fitPanelBoardWidthCss : fullBoardWidthCss
 

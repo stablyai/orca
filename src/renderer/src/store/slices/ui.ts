@@ -52,6 +52,7 @@ import {
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
+  WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT,
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -1347,7 +1348,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceBoardOpacity: clamped })
   },
 
-  workspaceBoardColumnLayout: 'full',
+  workspaceBoardColumnLayout: WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT,
   setWorkspaceBoardColumnLayout: (layout) => {
     const normalized = normalizeWorkspaceBoardColumnLayout(layout)
     window.api.ui.set({ workspaceBoardColumnLayout: normalized }).catch(console.error)

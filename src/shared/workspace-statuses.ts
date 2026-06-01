@@ -30,7 +30,7 @@ export const WORKSPACE_BOARD_COLUMN_WIDTH_STEP = 20
 // Why: keep this aligned with the `gap-3` lane gap in WorkspaceKanbanLaneGrid;
 // layout calculations need the actual rendered gap between status columns.
 export const WORKSPACE_BOARD_COLUMN_GAP = 12
-export const WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT: WorkspaceBoardColumnLayout = 'full'
+export const WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT: WorkspaceBoardColumnLayout = 'fit'
 
 export const WORKSPACE_STATUS_COLOR_IDS = [
   'neutral',
@@ -245,7 +245,7 @@ export function clampWorkspaceBoardOpacity(value: unknown): number {
 }
 
 export function normalizeWorkspaceBoardColumnLayout(value: unknown): WorkspaceBoardColumnLayout {
-  return value === 'fit' ? 'fit' : WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT
+  return value === 'full' || value === 'fit' ? value : WORKSPACE_BOARD_COLUMN_LAYOUT_DEFAULT
 }
 
 export function clampWorkspaceBoardColumnWidth(value: unknown): number {
