@@ -480,13 +480,16 @@ function Settings(): React.JSX.Element {
     settings?.activeRuntimeEnvironmentId
   )
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
-    isWindows &&
+    (isWindows || isWebClient) &&
       (neededSectionIds.has('terminal') ||
         neededSectionIds.has('accounts') ||
         neededSectionIds.has('agents')),
     true,
     windowsTerminalCapabilityOwnerKey
   )
+  // Why: WSL can be unsupported on macOS/Linux, or supported-but-unavailable on Windows.
+  // Only the latter should render disabled WSL controls.
+  const wslSupportedPlatform = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
 
   if ([...neededSectionIds].some((id) => !mountedSectionIds.has(id))) {
     // Why: lazy Settings sections are remembered for the session; record newly
@@ -811,6 +814,7 @@ function Settings(): React.JSX.Element {
                     <AgentsPane
                       settings={settings}
                       updateSettings={updateSettings}
+                      wslSupportedPlatform={wslSupportedPlatform}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
@@ -829,6 +833,7 @@ function Settings(): React.JSX.Element {
                     <AccountsPane
                       settings={settings}
                       updateSettings={updateSettings}
+                      wslSupportedPlatform={wslSupportedPlatform}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}

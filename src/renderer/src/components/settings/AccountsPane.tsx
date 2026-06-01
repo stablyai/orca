@@ -46,6 +46,7 @@ export { ACCOUNTS_PANE_SEARCH_ENTRIES }
 type AccountsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
@@ -205,11 +206,12 @@ function accountMatchesRuntime(
 
 function getSelectedAccountRuntime(
   settings: GlobalSettings,
+  wslSupportedPlatform: boolean,
   wslAvailable: boolean,
   wslDistros: string[],
   wslCapabilitiesLoading: boolean
 ): LocalAccountRuntime {
-  if (settings.localAccountRuntime === 'wsl') {
+  if (wslSupportedPlatform && settings.localAccountRuntime === 'wsl') {
     if (!wslAvailable && !wslCapabilitiesLoading) {
       return { runtime: 'wsl', label: 'WSL' }
     }
@@ -230,6 +232,7 @@ function getSelectedAccountRuntime(
 export function AccountsPane({
   settings,
   updateSettings,
+  wslSupportedPlatform = false,
   wslAvailable = false,
   wslDistros = [],
   wslCapabilitiesLoading = false
@@ -242,6 +245,7 @@ export function AccountsPane({
   const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
   const accountRuntime = getSelectedAccountRuntime(
     settings,
+    wslSupportedPlatform,
     wslAvailable,
     wslDistros,
     wslCapabilitiesLoading
@@ -358,7 +362,7 @@ export function AccountsPane({
     })
   }
 
-  const accountRuntimeControls = (
+  const accountRuntimeControls = wslSupportedPlatform ? (
     <SearchableSetting
       title="Account Location"
       description={`Choose whether provider accounts are inspected and added in ${getHostRuntimeLabel()} or WSL.`}
@@ -381,14 +385,18 @@ export function AccountsPane({
               equalWidth
               options={[
                 { value: 'host', label: getHostRuntimeLabel() },
-                {
-                  value: 'wsl',
-                  label: 'WSL',
-                  disabled: wslCapabilitiesLoading || !wslAvailable
-                }
+                ...(wslSupportedPlatform
+                  ? [
+                      {
+                        value: 'wsl',
+                        label: 'WSL',
+                        disabled: wslCapabilitiesLoading || !wslAvailable
+                      } as const
+                    ]
+                  : [])
               ]}
             />
-            {accountRuntime.runtime === 'wsl' ? (
+            {wslSupportedPlatform && accountRuntime.runtime === 'wsl' ? (
               <Select
                 value={accountRuntime.wslDistro ?? '__default__'}
                 onValueChange={(value) =>
@@ -418,7 +426,7 @@ export function AccountsPane({
         }
       />
     </SearchableSetting>
-  )
+  ) : null
 
   const runCodexAccountAction = async (
     action: typeof codexAction,
@@ -488,7 +496,7 @@ export function AccountsPane({
   }
 
   const visibleSections = [
-    matchesSettingsSearch(searchQuery, ACCOUNTS_LOCATION_SEARCH_ENTRIES) ? (
+    wslSupportedPlatform && matchesSettingsSearch(searchQuery, ACCOUNTS_LOCATION_SEARCH_ENTRIES) ? (
       <section key="account-runtime" id="accounts-runtime" className="space-y-3 scroll-mt-6">
         {accountRuntimeControls}
       </section>

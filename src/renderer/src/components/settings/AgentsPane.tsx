@@ -33,6 +33,7 @@ export { AGENTS_PANE_SEARCH_ENTRIES } from './agents-search'
 type AgentsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
@@ -357,6 +358,7 @@ function DefaultAgentPill({ active, onClick, children }: DefaultAgentPillProps):
 export function AgentsPane({
   settings,
   updateSettings,
+  wslSupportedPlatform = false,
   wslAvailable = false,
   wslDistros = [],
   wslCapabilitiesLoading = false
@@ -428,6 +430,7 @@ export function AgentsPane({
         settings={settings}
         updateSettings={updateSettings}
         refresh={refresh}
+        wslSupportedPlatform={wslSupportedPlatform}
         wslAvailable={wslAvailable}
         wslDistros={wslDistros}
         wslCapabilitiesLoading={wslCapabilitiesLoading}
