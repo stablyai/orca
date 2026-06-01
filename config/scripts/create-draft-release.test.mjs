@@ -62,7 +62,6 @@ describe('createDraftRelease', () => {
     const createBody = JSON.parse(fetchImpl.mock.calls[1][1].body)
     expect(createBody).toMatchObject({
       tag_name: 'v1.4.36',
-      target_commitish: 'v1.4.36',
       name: 'v1.4.36',
       draft: true,
       prerelease: false

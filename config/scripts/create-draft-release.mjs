@@ -80,12 +80,12 @@ export async function createDraftRelease({
   const prerelease = tag.includes('-rc.')
 
   // Why: GitHub's generated release notes can exceed the release body API
-  // limit, so create with a bounded generated body instead of --generate-notes.
+  // limit, so create with a bounded body. Omit target_commitish because the
+  // release-cut tag already exists and GitHub rejects the tag name there.
   await githubJson(fetchImpl, `https://api.github.com/repos/${repo}/releases`, token, {
     method: 'POST',
     body: JSON.stringify({
       tag_name: tag,
-      target_commitish: tag,
       name,
       body,
       draft: true,
