@@ -3,9 +3,15 @@ import type {
   RuntimeTerminalSend,
   RuntimeTerminalWait
 } from '../../../shared/runtime-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry
+} from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { makePaneKey, isTerminalLeafId } from '../../../shared/stable-pane-id'
+import { isExplicitAgentStatusFresh } from './agent-status'
 
 const ACTIVE_AGENT_SEND_TIMEOUT_MS = 8000
 const ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS = 15000
@@ -34,7 +40,12 @@ type ActiveTerminalNoteTargetState = {
   activeTabId: AppState['activeTabId']
   activeTabIdByWorktree: AppState['activeTabIdByWorktree']
   tabsByWorktree: Record<string, readonly { id: string }[] | undefined>
-  terminalLayoutsByTabId: Record<string, { activeLeafId: string | null } | undefined>
+  ptyIdsByTabId?: Record<string, readonly string[] | undefined>
+  terminalLayoutsByTabId: Record<
+    string,
+    { activeLeafId: string | null; ptyIdsByLeafId?: Record<string, string | undefined> } | undefined
+  >
+  agentStatusByPaneKey?: Record<string, AgentStatusEntry | undefined>
 }
 
 export function getActiveTerminalNoteTarget(
@@ -58,7 +69,32 @@ export function getActiveTerminalNoteTarget(
 }
 
 export function useCanSendNotesToActiveTerminal(worktreeId: string): boolean {
-  return useAppStore((state) => getActiveTerminalNoteTarget(state, worktreeId) !== null)
+  return useAppStore((state) => getActiveAgentNoteTarget(state, worktreeId) !== null)
+}
+
+export function getActiveAgentNoteTarget(
+  state: ActiveTerminalNoteTargetState,
+  worktreeId: string,
+  now = Date.now()
+): ActiveTerminalNoteTarget | null {
+  const noteTarget = getActiveTerminalNoteTarget(state, worktreeId)
+  if (!noteTarget || !isTerminalLeafId(noteTarget.leafId)) {
+    return null
+  }
+
+  const activePtyId = getActivePanePtyId(state, noteTarget)
+  if (!activePtyId) {
+    return null
+  }
+
+  const entry = state.agentStatusByPaneKey?.[makePaneKey(noteTarget.tabId, noteTarget.leafId)]
+  // Why: an active terminal can be a regular shell; only explicit hook-backed
+  // agent state is enough to offer the destructive "submit with Enter" target.
+  if (!entry || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    return null
+  }
+
+  return noteTarget
 }
 
 export async function sendNotesToActiveAgentSession({
@@ -163,6 +199,25 @@ async function findActiveRuntimeTerminal(
       (terminal) => terminal.tabId === noteTarget.tabId && terminal.leafId === noteTarget.leafId
     ) ?? null
   )
+}
+
+function getActivePanePtyId(
+  state: ActiveTerminalNoteTargetState,
+  noteTarget: ActiveTerminalNoteTarget
+): string | null {
+  const livePtyIds = state.ptyIdsByTabId?.[noteTarget.tabId] ?? []
+  if (livePtyIds.length === 0) {
+    return null
+  }
+
+  const ptyIdsByLeafId = state.terminalLayoutsByTabId[noteTarget.tabId]?.ptyIdsByLeafId
+  if (ptyIdsByLeafId && Object.keys(ptyIdsByLeafId).length > 0) {
+    const activeLeafPtyId = ptyIdsByLeafId[noteTarget.leafId]
+    // Why: layout maps can survive sleep/reconnect; ptyIdsByTabId is the live
+    // PTY source of truth for whether submitting with Enter is currently safe.
+    return activeLeafPtyId && livePtyIds.includes(activeLeafPtyId) ? activeLeafPtyId : null
+  }
+  return livePtyIds[0] ?? null
 }
 
 function isRuntimeTimeout(error: unknown): boolean {

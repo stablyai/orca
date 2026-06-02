@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { CornerDownLeft, User } from 'lucide-react'
+import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
@@ -124,13 +124,7 @@ export function DiffCommentPopover({
       onMouseDown={(ev) => ev.stopPropagation()}
       onClick={(ev) => ev.stopPropagation()}
     >
-      {/* Left Column: Avatar */}
-      <div className="orca-diff-comment-avatar-col">
-        <span className="orca-diff-comment-avatar orca-diff-comment-avatar-local">
-          <User className="size-3" />
-        </span>
-      </div>
-      {/* Right Column: Content */}
+      {/* Content */}
       <div className="orca-diff-comment-content-col" style={{ gap: '8px' }}>
         <div id={labelId} className="orca-diff-comment-popover-label">
           {title ??

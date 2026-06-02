@@ -2652,14 +2652,6 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
     0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
-/* Avatar Column */
-.orca-diff-comment-avatar-col {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
 /* Content Column */
 .orca-diff-comment-content-col {
   flex: 1 1 auto;
@@ -2751,37 +2743,6 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   flex-shrink: 0;
 }
 
-/* Avatar design */
-.orca-diff-comment-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-  object-fit: cover;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.orca-diff-comment-avatar-fallback,
-.orca-diff-comment-avatar-local {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--primary) 8%, var(--muted));
-  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
-  color: var(--primary);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.orca-diff-comment-avatar-local {
-  background: color-mix(in srgb, var(--foreground) 6%, var(--muted));
-  border-color: color-mix(in srgb, var(--foreground) 12%, transparent);
-  color: var(--muted-foreground);
-}
-
 /* Quote/Reference block: Warm, gorgeous Notion-like callout */
 .orca-diff-comment-quote {
   display: flex;
@@ -2831,8 +2792,6 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   box-shadow:
     0 10px 32px rgba(0, 0, 0, 0.12),
     0 4px 12px rgba(0, 0, 0, 0.08);
-  display: flex;
-  gap: 12px;
 }
 
 .dark .orca-diff-comment-popover {
@@ -2873,13 +2832,18 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 }
 
 .dark .orca-diff-comment-popover-textarea {
-  border-color: color-mix(in srgb, var(--foreground) 16%, var(--border));
+  border-color: color-mix(in srgb, var(--foreground) 10%, var(--border));
   background: color-mix(in srgb, var(--foreground) 3%, var(--editor-surface));
 }
 
 .orca-diff-comment-popover-textarea:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent);
+  border-color: color-mix(in srgb, var(--ring) 70%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.dark .orca-diff-comment-popover-textarea:focus {
+  border-color: color-mix(in srgb, var(--ring) 70%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 12%, transparent);
 }
 
 .orca-diff-comment-popover-textarea::-webkit-scrollbar {
