@@ -18,6 +18,7 @@ import type {
   LinearWorkspaceSelection
 } from '../../../../shared/types'
 import type { CacheEntry } from './github'
+import { clampLinearPlainIssueListLimit } from '../../../../shared/linear-issue-list-limits'
 import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'
 import {
   linearConnect,
@@ -104,6 +105,11 @@ type InflightLinearListRequest = {
   force: boolean
   generation: number
 }
+type InflightLinearPlainListRequest = {
+  promise: Promise<LinearCollectionResult<LinearIssue>>
+  force: boolean
+  generation: number
+}
 type InflightLinearCollectionRequest<T> = {
   promise: Promise<LinearCollectionResult<T>>
   force: boolean
@@ -115,7 +121,7 @@ type InflightLinearDetailRequest<T> = {
 }
 
 const inflightSearchRequests = new Map<string, InflightLinearListRequest>()
-const inflightListRequests = new Map<string, InflightLinearListRequest>()
+const inflightListRequests = new Map<string, InflightLinearPlainListRequest>()
 type InflightLinearTeamRequest = {
   promise: Promise<LinearTeam[]>
   force: boolean
@@ -314,6 +320,7 @@ export type LinearSlice = {
   linearStatusChecked: boolean
   linearIssueCache: Record<string, CacheEntry<LinearIssue>>
   linearSearchCache: Record<string, CacheEntry<LinearIssue[]>>
+  linearListCache: Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>
   linearTeamCache: Record<string, CacheEntry<LinearTeam[]>>
   linearProjectCache: Record<string, CacheEntry<LinearCollectionResult<LinearProjectSummary>>>
   linearProjectDetailCache: Record<string, CacheEntry<LinearProjectDetail | null>>
@@ -337,7 +344,9 @@ export type LinearSlice = {
   disconnectLinear: () => Promise<void>
   disconnectLinearWorkspace: (workspaceId: string) => Promise<void>
   fetchLinearIssue: (id: string, workspaceId?: string | null) => Promise<LinearIssue | null>
-  getCachedLinearIssues: (args: LinearIssueReadArgs) => LinearIssue[] | null
+  getCachedLinearIssues: (
+    args: LinearIssueReadArgs
+  ) => LinearIssue[] | LinearCollectionResult<LinearIssue> | null
   prefetchLinearIssues: (args: LinearIssueReadArgs) => void
   searchLinearIssues: (
     query: string,
@@ -348,7 +357,7 @@ export type LinearSlice = {
     filter?: 'assigned' | 'created' | 'all' | 'completed',
     limit?: number,
     options?: LinearFetchOptions
-  ) => Promise<LinearIssue[]>
+  ) => Promise<LinearCollectionResult<LinearIssue>>
   getCachedLinearTeams: (workspaceId?: LinearWorkspaceSelection | null) => LinearTeam[] | null
   listLinearTeams: (
     workspaceId?: LinearWorkspaceSelection | null,
@@ -413,6 +422,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   linearStatusChecked: false,
   linearIssueCache: {},
   linearSearchCache: {},
+  linearListCache: {},
   linearTeamCache: {},
   linearProjectCache: {},
   linearProjectDetailCache: {},
@@ -447,6 +457,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearStatus: typedStatus,
             linearIssueCache: {},
             linearSearchCache: {},
+            linearListCache: {},
             linearTeamCache: {},
             linearProjectCache: {},
             linearProjectDetailCache: {},
@@ -474,6 +485,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearStatus: { connected: false, viewer: null },
             linearIssueCache: {},
             linearSearchCache: {},
+            linearListCache: {},
             linearTeamCache: {},
             linearProjectCache: {},
             linearProjectDetailCache: {},
@@ -512,6 +524,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearStatus: status,
             linearIssueCache: {},
             linearSearchCache: {},
+            linearListCache: {},
             linearTeamCache: {},
             linearProjectCache: {},
             linearProjectDetailCache: {},
@@ -542,6 +555,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         set({
           linearIssueCache: {},
           linearSearchCache: {},
+          linearListCache: {},
           linearTeamCache: {},
           linearProjectCache: {},
           linearProjectDetailCache: {},
@@ -578,6 +592,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearStatus: status,
       linearIssueCache: {},
       linearSearchCache: {},
+      linearListCache: {},
       linearTeamCache: {},
       linearProjectCache: {},
       linearProjectDetailCache: {},
@@ -601,6 +616,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearStatus: { connected: false, viewer: null },
       linearIssueCache: {},
       linearSearchCache: {},
+      linearListCache: {},
       linearTeamCache: {},
       linearProjectCache: {},
       linearProjectDetailCache: {},
@@ -625,6 +641,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearStatus: status,
       linearIssueCache: {},
       linearSearchCache: {},
+      linearListCache: {},
       linearTeamCache: {},
       linearProjectCache: {},
       linearProjectDetailCache: {},
@@ -687,33 +704,36 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   getCachedLinearIssues: (args) => {
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
-    const limit = args.limit ?? 20
-    const cacheKey =
-      args.kind === 'search'
-        ? linearSearchCacheKey(workspaceId, args.query, limit)
-        : linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
-    return get().linearSearchCache[cacheKey]?.data ?? null
+    if (args.kind === 'search') {
+      const cacheKey = linearSearchCacheKey(workspaceId, args.query, args.limit ?? 20)
+      return get().linearSearchCache[cacheKey]?.data ?? null
+    }
+    const limit = clampLinearPlainIssueListLimit(args.limit)
+    const cacheKey = linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
+    return get().linearListCache[cacheKey]?.data ?? null
   },
 
   prefetchLinearIssues: (args) => {
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
-    const limit = args.limit ?? 20
-    const cacheKey =
-      args.kind === 'search'
-        ? linearSearchCacheKey(workspaceId, args.query, limit)
-        : linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
-    if (
-      isFresh(get().linearSearchCache[cacheKey]) ||
-      inflightSearchRequests.has(cacheKey) ||
-      inflightListRequests.has(cacheKey)
-    ) {
+    if (args.kind === 'search') {
+      const limit = args.limit ?? 20
+      const cacheKey = linearSearchCacheKey(workspaceId, args.query, limit)
+      if (isFresh(get().linearSearchCache[cacheKey]) || inflightSearchRequests.has(cacheKey)) {
+        return
+      }
+      void get()
+        .searchLinearIssues(args.query, limit)
+        .catch(() => {})
       return
     }
-    const promise =
-      args.kind === 'search'
-        ? get().searchLinearIssues(args.query, limit)
-        : get().listLinearIssues(args.filter, limit)
-    void promise.catch(() => {})
+    const limit = clampLinearPlainIssueListLimit(args.limit)
+    const cacheKey = linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
+    if (isFresh(get().linearListCache[cacheKey]) || inflightListRequests.has(cacheKey)) {
+      return
+    }
+    void get()
+      .listLinearIssues(args.filter, limit)
+      .catch(() => {})
   },
 
   searchLinearIssues: async (query: string, limit = 20, options) => {
@@ -776,10 +796,11 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   listLinearIssues: async (filter = 'assigned', limit = 20, options) => {
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
-    const cacheKey = linearListCacheKey(workspaceId, filter, limit)
-    const cached = get().linearSearchCache[cacheKey]
+    const effectiveLimit = clampLinearPlainIssueListLimit(limit)
+    const cacheKey = linearListCacheKey(workspaceId, filter, effectiveLimit)
+    const cached = get().linearListCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
-      return cached.data ?? []
+      return cached.data ?? emptyLinearCollection<LinearIssue>()
     }
 
     const inflight = inflightListRequests.get(cacheKey)
@@ -787,18 +808,23 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return inflight.promise
     }
 
-    let entry: InflightLinearListRequest
+    let entry: InflightLinearPlainListRequest
     const requestCacheGeneration = linearCacheGeneration
-    const promise = linearListIssues(get().settings, filter, limit, workspaceId)
-      .then((issues) => {
-        const data = issues as LinearIssue[]
+    const promise: Promise<LinearCollectionResult<LinearIssue>> = linearListIssues(
+      get().settings,
+      filter,
+      effectiveLimit,
+      workspaceId
+    )
+      .then((result) => {
+        const data = result as LinearCollectionResult<LinearIssue>
         if (
           inflightListRequests.get(cacheKey) === entry &&
           requestCacheGeneration === linearCacheGeneration
         ) {
           set((s) => ({
-            linearSearchCache: evictStaleEntries({
-              ...s.linearSearchCache,
+            linearListCache: evictStaleEntries({
+              ...s.linearListCache,
               [cacheKey]: { data, fetchedAt: Date.now() }
             })
           }))
@@ -811,9 +837,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           if (!shouldRefreshStatusAfterRead(workspaceId)) {
             void get().checkLinearConnection(true)
           }
-          return []
+          return emptyLinearCollection<LinearIssue>()
         }
-        return get().linearSearchCache[cacheKey]?.data ?? []
+        return get().linearListCache[cacheKey]?.data ?? emptyLinearCollection<LinearIssue>()
       })
       .finally(() => {
         if (inflightListRequests.get(cacheKey) === entry) {
@@ -1304,6 +1330,11 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         changed = true
       }
 
+      const nextListCache = patchLinearIssueCollectionCache(s.linearListCache, issueId, patch)
+      if (nextListCache.changed) {
+        changed = true
+      }
+
       const nextProjectIssueCache = patchLinearIssueCollectionCache(
         s.linearProjectIssueCache,
         issueId,
@@ -1326,6 +1357,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         ? {
             linearIssueCache: nextIssueCache,
             linearSearchCache: nextSearchCache,
+            linearListCache: nextListCache.changed ? nextListCache.cache : s.linearListCache,
             linearProjectIssueCache: nextProjectIssueCache.changed
               ? nextProjectIssueCache.cache
               : s.linearProjectIssueCache,

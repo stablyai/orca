@@ -1326,7 +1326,7 @@ export type PreloadApi = {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
       workspaceId?: LinearWorkspaceSelection
-    }) => Promise<LinearIssue[]>
+    }) => Promise<LinearCollectionResult<LinearIssue>>
     createIssue: (args: {
       teamId: string
       title: string

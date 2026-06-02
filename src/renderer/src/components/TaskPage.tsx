@@ -171,6 +171,10 @@ import type {
   TaskProvider,
   TaskViewPresetId
 } from '../../../shared/types'
+import {
+  LINEAR_PLAIN_ISSUE_LIST_MAX,
+  clampLinearPlainIssueListLimit
+} from '../../../shared/linear-issue-list-limits'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import {
@@ -2761,12 +2765,14 @@ export default function TaskPage(): React.JSX.Element {
   const linearCacheSnapshot = useAppStore(
     useShallow((s) => ({
       issueCache: s.linearIssueCache,
-      searchCache: s.linearSearchCache
+      searchCache: s.linearSearchCache,
+      listCache: s.linearListCache
     }))
   )
   const cachedSelectedLinearIssue = findTaskPageLinearIssue(
     linearCacheSnapshot.issueCache,
     linearCacheSnapshot.searchCache,
+    linearCacheSnapshot.listCache,
     selectedLinearIssueId
   )
   const selectedLinearIssue = selectedLinearIssueId
@@ -2836,6 +2842,8 @@ export default function TaskPage(): React.JSX.Element {
   // Linear tab state
   const [linearMode, setLinearMode] = useState<LinearMode>('issues')
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
+  const [linearIssueLimit, setLinearIssueLimit] = useState(LINEAR_ITEM_LIMIT)
+  const [linearIssuesHasMore, setLinearIssuesHasMore] = useState(false)
   const [linearLoading, setLinearLoading] = useState(false)
   const [linearError, setLinearError] = useState<string | null>(null)
   const [linearSearchInput, setLinearSearchInput] = useState('')
@@ -3361,6 +3369,19 @@ export default function TaskPage(): React.JSX.Element {
     : selectedLinearCustomView?.model === 'issue'
       ? `View: ${selectedLinearCustomView.name}`
       : null
+  const canLoadMorePlainLinearIssues =
+    !activeLinearIssueContextLabel &&
+    appliedLinearSearch.trim().length === 0 &&
+    linearIssuesHasMore &&
+    linearIssueLimit < LINEAR_PLAIN_ISSUE_LIST_MAX
+  const handleLoadMoreLinearIssues = useCallback(() => {
+    setLinearIssueLimit((limit) =>
+      Math.min(
+        clampLinearPlainIssueListLimit(limit) + LINEAR_ITEM_LIMIT,
+        LINEAR_PLAIN_ISSUE_LIST_MAX
+      )
+    )
+  }, [])
 
   const displayedLinearIssues = useMemo(
     () =>
@@ -3369,10 +3390,16 @@ export default function TaskPage(): React.JSX.Element {
           findTaskPageLinearIssue(
             linearCacheSnapshot.issueCache,
             linearCacheSnapshot.searchCache,
+            linearCacheSnapshot.listCache,
             issue.id
           ) ?? issue
       ),
-    [activeLinearIssues, linearCacheSnapshot.issueCache, linearCacheSnapshot.searchCache]
+    [
+      activeLinearIssues,
+      linearCacheSnapshot.issueCache,
+      linearCacheSnapshot.listCache,
+      linearCacheSnapshot.searchCache
+    ]
   )
 
   const linearIssueTeams = useMemo(() => {
@@ -4674,6 +4701,18 @@ export default function TaskPage(): React.JSX.Element {
     setTaskResumeState({ linearQuery: appliedLinearSearch.trim() })
   }, [appliedLinearSearch, setTaskResumeState, taskResumeApplied])
 
+  useEffect(() => {
+    setLinearIssueLimit(LINEAR_ITEM_LIMIT)
+  }, [
+    activeLinearPreset,
+    appliedLinearSearch,
+    linearMode,
+    selectedLinearCustomView?.id,
+    selectedLinearProject?.id,
+    selectedLinearWorkspaceId,
+    taskSource
+  ])
+
   // Why: fetch Linear issues when the tab is active and the account is
   // connected. An empty search falls back to `listLinearIssues` (assigned
   // issues) so the default view shows the user's own work.
@@ -4695,19 +4734,29 @@ export default function TaskPage(): React.JSX.Element {
     setLinearError(null)
 
     const trimmed = appliedLinearSearch.trim()
+    const effectiveLinearIssueLimit = clampLinearPlainIssueListLimit(linearIssueLimit)
     const readArgs =
       trimmed.length > 0
         ? ({ kind: 'search', query: trimmed, limit: LINEAR_ITEM_LIMIT } as const)
-        : ({ kind: 'list', filter: activeLinearPreset, limit: LINEAR_ITEM_LIMIT } as const)
-    const cachedIssues = getCachedLinearIssues(readArgs)
-    if (cachedIssues) {
-      setLinearIssues(cachedIssues)
+        : ({ kind: 'list', filter: activeLinearPreset, limit: effectiveLinearIssueLimit } as const)
+    const cachedResult = getCachedLinearIssues(readArgs)
+    if (readArgs.kind === 'search') {
+      setLinearIssuesHasMore(false)
+      if (cachedResult) {
+        setLinearIssues(cachedResult as LinearIssue[])
+      }
+    } else if (cachedResult) {
+      const collection = cachedResult as LinearCollectionResult<LinearIssue>
+      setLinearIssues(collection.items)
+      setLinearIssuesHasMore(
+        Boolean(collection.hasMore) && effectiveLinearIssueLimit < LINEAR_PLAIN_ISSUE_LIST_MAX
+      )
     }
 
     const requestSignature =
       trimmed.length > 0
-        ? `${selectedLinearWorkspaceId ?? 'default'}::search::${trimmed}`
-        : `${selectedLinearWorkspaceId ?? 'default'}::list::${activeLinearPreset}`
+        ? `${selectedLinearWorkspaceId ?? 'default'}::search::${trimmed}::${LINEAR_ITEM_LIMIT}`
+        : `${selectedLinearWorkspaceId ?? 'default'}::list::${activeLinearPreset}::${effectiveLinearIssueLimit}`
     const previousRequest = lastLinearRequestRef.current
     const forceRefresh =
       linearRefreshNonce > 0 &&
@@ -4716,7 +4765,7 @@ export default function TaskPage(): React.JSX.Element {
     lastLinearRequestRef.current = { nonce: linearRefreshNonce, signature: requestSignature }
     const shouldProbeOnLanding =
       !forceRefresh &&
-      cachedIssues !== null &&
+      cachedResult !== null &&
       !landingLinearRefreshKeysRef.current.has(requestSignature)
     if (shouldProbeOnLanding) {
       landingLinearRefreshKeysRef.current = new Set([
@@ -4727,33 +4776,55 @@ export default function TaskPage(): React.JSX.Element {
 
     // Why: cached rows should remain visible on navigation. Only an explicit
     // refresh or a true cache miss needs the blocking loading state.
-    setLinearLoading(forceRefresh || cachedIssues === null)
+    setLinearLoading(forceRefresh || cachedResult === null)
 
     const request =
       readArgs.kind === 'search'
         ? searchLinearIssues(readArgs.query, LINEAR_ITEM_LIMIT, {
             force: forceRefresh || shouldProbeOnLanding
           })
-        : listLinearIssues(readArgs.filter, LINEAR_ITEM_LIMIT, {
+        : listLinearIssues(readArgs.filter, effectiveLinearIssueLimit, {
             force: forceRefresh || shouldProbeOnLanding
           })
 
     void request
-      .then((issues) => {
-        if (cancelled) {
+      .then((result) => {
+        if (
+          cancelled ||
+          lastLinearRequestRef.current?.signature !== requestSignature ||
+          lastLinearRequestRef.current?.nonce !== linearRefreshNonce
+        ) {
           return
         }
-        if (shouldProbeOnLanding) {
-          setLinearIssues((current) =>
-            reconcileTaskPageLinearIssuesAfterLandingRefresh(current, issues)
-          )
+        if (readArgs.kind === 'search') {
+          const issues = result as LinearIssue[]
+          setLinearIssuesHasMore(false)
+          if (shouldProbeOnLanding) {
+            setLinearIssues((current) =>
+              reconcileTaskPageLinearIssuesAfterLandingRefresh(current, issues)
+            )
+          } else {
+            setLinearIssues(issues)
+          }
         } else {
-          setLinearIssues(issues)
+          const collection = result as LinearCollectionResult<LinearIssue>
+          setLinearIssuesHasMore(
+            Boolean(collection.hasMore) && effectiveLinearIssueLimit < LINEAR_PLAIN_ISSUE_LIST_MAX
+          )
+          setLinearIssues((current) =>
+            shouldProbeOnLanding
+              ? reconcileTaskPageLinearIssuesAfterLandingRefresh(current, collection.items)
+              : collection.items
+          )
         }
         setLinearLoading(false)
       })
       .catch((err) => {
-        if (cancelled) {
+        if (
+          cancelled ||
+          lastLinearRequestRef.current?.signature !== requestSignature ||
+          lastLinearRequestRef.current?.nonce !== linearRefreshNonce
+        ) {
           return
         }
         setLinearError(err instanceof Error ? err.message : 'Failed to load Linear issues.')
@@ -4773,6 +4844,7 @@ export default function TaskPage(): React.JSX.Element {
     selectedLinearWorkspaceId,
     appliedLinearSearch,
     activeLinearPreset,
+    linearIssueLimit,
     linearRefreshNonce,
     taskResumeApplied,
     getCachedLinearIssues
@@ -7377,7 +7449,15 @@ export default function TaskPage(): React.JSX.Element {
                   count={linearCustomViewIssuesResult.items.length}
                   label="view issues"
                 />
-              ) : null}
+              ) : (
+                <LinearCollectionNotice
+                  hasMore={canLoadMorePlainLinearIssues}
+                  count={linearIssues.length}
+                  label="issues"
+                  onLoadMore={handleLoadMoreLinearIssues}
+                  loading={linearLoading}
+                />
+              )}
             </div>
           )}
         </div>

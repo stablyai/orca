@@ -137,10 +137,10 @@ export async function linearListIssues(
   filter?: LinearIssueFilter,
   limit?: number,
   workspaceId?: LinearWorkspaceSelection | null
-): Promise<LinearIssue[]> {
+): Promise<LinearCollectionResult<LinearIssue>> {
   const target = getActiveRuntimeTarget(settings)
   return target.kind === 'environment'
-    ? callRuntimeRpc<LinearIssue[]>(
+    ? callRuntimeRpc<LinearCollectionResult<LinearIssue>>(
         target,
         'linear.listIssues',
         { filter, limit, workspaceId: workspaceId ?? undefined },

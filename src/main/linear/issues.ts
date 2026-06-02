@@ -5,8 +5,10 @@ import type {
   LinearIssue,
   LinearIssueUpdate,
   LinearComment,
+  LinearCollectionResult,
   LinearWorkspaceSelection
 } from '../../shared/types'
+import { clampLinearPlainIssueListLimit } from '../../shared/linear-issue-list-limits'
 import {
   acquire,
   release,
@@ -49,10 +51,17 @@ type LinearIssueNode = {
 
 type LinearIssueConnectionResponse = {
   searchIssues?: { nodes?: LinearIssueNode[] }
-  issues?: { nodes?: LinearIssueNode[] }
+  issues?: LinearIssueConnection
   viewer?: {
-    assignedIssues?: { nodes?: LinearIssueNode[] }
-    createdIssues?: { nodes?: LinearIssueNode[] }
+    assignedIssues?: LinearIssueConnection
+    createdIssues?: LinearIssueConnection
+  }
+}
+
+type LinearIssueConnection = {
+  nodes?: LinearIssueNode[]
+  pageInfo?: {
+    hasNextPage?: boolean
   }
 }
 
@@ -107,6 +116,9 @@ const ALL_ISSUES_QUERY = `
       nodes {
         ${LINEAR_ISSUE_NODE_FIELDS}
       }
+      pageInfo {
+        hasNextPage
+      }
     }
   }
 `
@@ -121,6 +133,9 @@ const VIEWER_ASSIGNED_ISSUES_QUERY = `
       assignedIssues(first: $first, filter: $filter, orderBy: $orderBy) {
         nodes {
           ${LINEAR_ISSUE_NODE_FIELDS}
+        }
+        pageInfo {
+          hasNextPage
         }
       }
     }
@@ -137,6 +152,9 @@ const VIEWER_CREATED_ISSUES_QUERY = `
       createdIssues(first: $first, filter: $filter, orderBy: $orderBy) {
         nodes {
           ${LINEAR_ISSUE_NODE_FIELDS}
+        }
+        pageInfo {
+          hasNextPage
         }
       }
     }
@@ -160,6 +178,19 @@ function sortAndLimitIssues(issues: LinearIssue[], limit: number): LinearIssue[]
   return issues
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, limit)
+}
+
+function sortLimitAndDescribeIssues(
+  issues: LinearIssue[],
+  limit: number
+): { items: LinearIssue[]; clipped: boolean } {
+  const sorted = issues.sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
+  return {
+    items: sorted.slice(0, limit),
+    clipped: sorted.length > limit
+  }
 }
 
 function mapRawIssueForWorkspace(
@@ -292,10 +323,11 @@ export async function listIssues(
   filter: LinearListFilter = 'assigned',
   limit = 20,
   workspaceId?: LinearWorkspaceSelection | null
-): Promise<LinearIssue[]> {
+): Promise<LinearCollectionResult<LinearIssue>> {
+  const effectiveLimit = clampLinearPlainIssueListLimit(limit)
   const entries = getClients(workspaceId)
   if (entries.length === 0) {
-    return []
+    return { items: [] }
   }
 
   const results = await Promise.all(
@@ -303,16 +335,18 @@ export async function listIssues(
       await acquire()
       try {
         const orderBy = 'updatedAt'
-        const variables = { first: limit, orderBy }
+        const variables = { first: effectiveLimit, orderBy }
 
         if (filter === 'assigned') {
           const result = await entry.client.client.rawRequest<
             LinearIssueConnectionResponse,
             LinearRawVariables
           >(VIEWER_ASSIGNED_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
-          return (result.data?.viewer?.assignedIssues?.nodes ?? []).map((issue) =>
-            mapRawIssueForWorkspace(entry, issue)
-          )
+          const connection = result.data?.viewer?.assignedIssues
+          return {
+            items: (connection?.nodes ?? []).map((issue) => mapRawIssueForWorkspace(entry, issue)),
+            hasMore: Boolean(connection?.pageInfo?.hasNextPage)
+          }
         }
 
         if (filter === 'created') {
@@ -320,9 +354,11 @@ export async function listIssues(
             LinearIssueConnectionResponse,
             LinearRawVariables
           >(VIEWER_CREATED_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
-          return (result.data?.viewer?.createdIssues?.nodes ?? []).map((issue) =>
-            mapRawIssueForWorkspace(entry, issue)
-          )
+          const connection = result.data?.viewer?.createdIssues
+          return {
+            items: (connection?.nodes ?? []).map((issue) => mapRawIssueForWorkspace(entry, issue)),
+            hasMore: Boolean(connection?.pageInfo?.hasNextPage)
+          }
         }
 
         if (filter === 'completed') {
@@ -330,9 +366,11 @@ export async function listIssues(
             LinearIssueConnectionResponse,
             LinearRawVariables
           >(VIEWER_ASSIGNED_ISSUES_QUERY, { ...variables, filter: COMPLETED_STATE_FILTER })
-          return (result.data?.viewer?.assignedIssues?.nodes ?? []).map((issue) =>
-            mapRawIssueForWorkspace(entry, issue)
-          )
+          const connection = result.data?.viewer?.assignedIssues
+          return {
+            items: (connection?.nodes ?? []).map((issue) => mapRawIssueForWorkspace(entry, issue)),
+            hasMore: Boolean(connection?.pageInfo?.hasNextPage)
+          }
         }
 
         // 'all' — all active issues across the workspace
@@ -340,9 +378,11 @@ export async function listIssues(
           LinearIssueConnectionResponse,
           LinearRawVariables
         >(ALL_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
-        return (result.data?.issues?.nodes ?? []).map((issue) =>
-          mapRawIssueForWorkspace(entry, issue)
-        )
+        const connection = result.data?.issues
+        return {
+          items: (connection?.nodes ?? []).map((issue) => mapRawIssueForWorkspace(entry, issue)),
+          hasMore: Boolean(connection?.pageInfo?.hasNextPage)
+        }
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
@@ -352,13 +392,18 @@ export async function listIssues(
         } else {
           console.warn('[linear] listIssues failed:', error)
         }
-        return []
+        return { items: [], hasMore: false }
       } finally {
         release()
       }
     })
   )
-  return sortAndLimitIssues(results.flat(), limit)
+  const merged = results.flatMap((result) => result.items)
+  const limited = sortLimitAndDescribeIssues(merged, effectiveLimit)
+  return {
+    items: limited.items,
+    hasMore: results.some((result) => result.hasMore) || limited.clipped
+  }
 }
 
 export async function createIssue(

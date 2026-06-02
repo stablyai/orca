@@ -37,7 +37,7 @@ describe('linear RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       linearSearchIssues: vi.fn().mockResolvedValue([{ id: 'issue-1' }]),
-      linearListIssues: vi.fn().mockResolvedValue([{ id: 'issue-2' }]),
+      linearListIssues: vi.fn().mockResolvedValue({ items: [{ id: 'issue-2' }], hasMore: true }),
       linearGetIssue: vi.fn().mockResolvedValue({ id: 'issue-3' }),
       linearCreateIssue: vi.fn().mockResolvedValue({ ok: true, id: 'issue-4' }),
       linearUpdateIssue: vi.fn().mockResolvedValue({ ok: true }),
