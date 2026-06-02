@@ -44,6 +44,12 @@ const PICKER_TRIGGER_CLASS =
 const MODE_TOGGLE_ITEM_CLASS =
   'w-full border-input bg-input/30 shadow-xs hover:bg-accent/60 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90 dark:bg-input/30 dark:data-[state=on]:bg-primary dark:data-[state=on]:text-primary-foreground dark:data-[state=on]:hover:bg-primary/90'
 
+function resolveProjectScopeLaunchTarget(
+  launchTarget: AutomationLaunchTarget
+): AutomationLaunchTarget {
+  return launchTarget === 'floating' ? 'selected_worktree' : launchTarget
+}
+
 export type AutomationDraft = {
   name: string
   prompt: string
@@ -411,9 +417,9 @@ export function AutomationEditorDialog({
                       scope: trigger === 'app_launch' ? current.scope : 'project',
                       launchTarget:
                         trigger === 'app_launch'
-                          ? current.launchTarget === 'selected_worktree'
-                            ? 'main'
-                            : current.launchTarget
+                          ? current.scope === 'global'
+                            ? 'floating'
+                            : resolveProjectScopeLaunchTarget(current.launchTarget)
                           : 'selected_worktree'
                     }))
                   }
@@ -471,7 +477,10 @@ export function AutomationEditorDialog({
                     onDraftChange((current) => ({
                       ...current,
                       scope: scope as AutomationScope,
-                      launchTarget: scope === 'global' ? 'floating' : current.launchTarget
+                      launchTarget:
+                        scope === 'global'
+                          ? 'floating'
+                          : resolveProjectScopeLaunchTarget(current.launchTarget)
                     }))
                   }
                 >
@@ -503,6 +512,7 @@ export function AutomationEditorDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+                    <SelectItem value="selected_worktree">Selected worktree</SelectItem>
                     <SelectItem value="main">Main worktree</SelectItem>
                     <SelectItem value="open_worktrees">Open worktrees</SelectItem>
                     <SelectItem value="main_and_open_worktrees">Main + open worktrees</SelectItem>

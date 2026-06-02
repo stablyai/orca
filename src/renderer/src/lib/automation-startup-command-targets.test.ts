@@ -44,6 +44,26 @@ const makeTab = (overrides: Partial<TerminalTab>): TerminalTab => ({
 })
 
 describe('resolveStartupCommandTargets', () => {
+  it('targets the selected project worktree', () => {
+    const main = makeWorktree({ id: 'repo-1::/repo', path: '/repo', isMainWorktree: true })
+    const selected = makeWorktree({
+      id: 'repo-1::/repo-orchestra',
+      path: '/repo-orchestra',
+      displayName: 'orca-orchestra',
+      isMainWorktree: false
+    })
+
+    const targets = resolveStartupCommandTargets({
+      projectId: 'repo-1',
+      launchTarget: 'selected_worktree',
+      worktrees: [main, selected],
+      tabsByWorktree: {},
+      selectedWorktreeId: selected.id
+    })
+
+    expect(targets.map((worktree) => worktree.id)).toEqual([selected.id])
+  })
+
   it('targets the main worktree and open project worktrees without duplicates', () => {
     const main = makeWorktree({ id: 'repo-1::/repo', path: '/repo', isMainWorktree: true })
     const openFeature = makeWorktree({
