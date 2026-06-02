@@ -1,6 +1,7 @@
 import type { Session } from 'electron'
 
 const FIDO_HID_USAGE_PAGE = 0xf1d0
+const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 
 function isSecureBrowserOrigin(rawOrigin: string | undefined): boolean {
   if (!rawOrigin) {
@@ -8,12 +9,7 @@ function isSecureBrowserOrigin(rawOrigin: string | undefined): boolean {
   }
   try {
     const origin = new URL(rawOrigin)
-    return (
-      origin.protocol === 'https:' ||
-      origin.hostname === 'localhost' ||
-      origin.hostname === '127.0.0.1' ||
-      origin.hostname === '::1'
-    )
+    return origin.protocol === 'https:' || LOCALHOST_HOSTNAMES.has(origin.hostname)
   } catch {
     return false
   }

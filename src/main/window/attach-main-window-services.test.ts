@@ -468,6 +468,13 @@ describe('attachMainWindowServices', () => {
     expect(
       devicePermissionHandler({
         deviceType: 'hid',
+        origin: 'http://[::1]:5173',
+        device: { collections: [{ usagePage: 0xf1d0 }] }
+      })
+    ).toBe(true)
+    expect(
+      devicePermissionHandler({
+        deviceType: 'hid',
         origin: 'https://github.com',
         device: { collections: [{ usagePage: 1 }] }
       })
