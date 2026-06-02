@@ -190,10 +190,11 @@ export function LinearCollectionNotice({
       ) : null}
       {hasMore ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span>
-            Showing first {count} {label}.
-            {onLoadMore ? ' Fetch more in Orca.' : ' Search or open Linear for the full set.'}
-          </span>
+          {onLoadMore ? null : (
+            <span>
+              Showing first {count} {label}. Search or open Linear for the full set.
+            </span>
+          )}
           {onLoadMore ? (
             <Button
               type="button"
