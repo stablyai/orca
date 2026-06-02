@@ -10,7 +10,6 @@ import {
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
 import { RepoIconGlyph } from '../repo/repo-icon'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -60,20 +59,32 @@ type SettingsSidebarProps = {
 type SettingsSetupGuideRowProps = {
   progress: SettingsSetupGuideProgress
   setupActive: boolean
-  onOpen: () => void
+  onSelect: (modifiers: {
+    metaKey: boolean
+    ctrlKey: boolean
+    shiftKey: boolean
+    altKey: boolean
+  }) => void
 }
 
 function SettingsSetupGuideNavRow({
   progress,
   setupActive,
-  onOpen
+  onSelect
 }: SettingsSetupGuideRowProps): React.JSX.Element {
   return (
     <button
       type="button"
       aria-current={setupActive ? 'page' : undefined}
-      aria-label={`Get started with Orca, ${progress.doneCount} of ${progress.total} done. Open setup guide.`}
-      onClick={onOpen}
+      aria-label={`Get started with Orca, ${progress.doneCount} of ${progress.total} done. Show setup guide.`}
+      onClick={(event) =>
+        onSelect({
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+          shiftKey: event.shiftKey,
+          altKey: event.altKey
+        })
+      }
       className={cn(
         'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
         setupActive
@@ -103,16 +114,8 @@ export function SettingsSidebar({
   onSearchChange,
   onSelectSection
 }: SettingsSidebarProps): React.JSX.Element {
-  const activeModal = useAppStore((s) => s.activeModal)
-  const openModal = useAppStore((s) => s.openModal)
   const setupGuideProgress = useSettingsSetupGuideProgress(true)
-  const setupActive = activeModal === 'setup-guide'
-  const openSetupGuide = (): void => {
-    openModal('setup-guide', {
-      setupStepId: setupGuideProgress.firstIncompleteStepId ?? undefined,
-      telemetrySource: 'settings'
-    })
-  }
+  const setupActive = activeSectionId === 'setup-guide'
   const searchShortcutHint = useShortcutLabel('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
@@ -166,39 +169,41 @@ export function SettingsSidebar({
                   <SettingsSetupGuideNavRow
                     progress={setupGuideProgress}
                     setupActive={setupActive}
-                    onOpen={openSetupGuide}
+                    onSelect={(modifiers) => onSelectSection('setup-guide', modifiers)}
                   />
                 ) : null}
 
-                {group.sections.map((section) => {
-                  const Icon = section.icon
-                  const isActive = activeSectionId === section.id
+                {group.sections
+                  .filter((section) => section.id !== 'setup-guide')
+                  .map((section) => {
+                    const Icon = section.icon
+                    const isActive = activeSectionId === section.id
 
-                  return (
-                    <button
-                      key={section.id}
-                      aria-current={isActive ? 'page' : undefined}
-                      data-current={isActive ? 'true' : undefined}
-                      onClick={(event) =>
-                        onSelectSection(section.id, {
-                          metaKey: event.metaKey,
-                          ctrlKey: event.ctrlKey,
-                          shiftKey: event.shiftKey,
-                          altKey: event.altKey
-                        })
-                      }
-                      className={navItemClassName(isActive)}
-                    >
-                      <Icon className="size-4 shrink-0" />
-                      <span className="truncate">{section.title}</span>
-                      {section.badge ? (
-                        <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                          {section.badge}
-                        </span>
-                      ) : null}
-                    </button>
-                  )
-                })}
+                    return (
+                      <button
+                        key={section.id}
+                        aria-current={isActive ? 'page' : undefined}
+                        data-current={isActive ? 'true' : undefined}
+                        onClick={(event) =>
+                          onSelectSection(section.id, {
+                            metaKey: event.metaKey,
+                            ctrlKey: event.ctrlKey,
+                            shiftKey: event.shiftKey,
+                            altKey: event.altKey
+                          })
+                        }
+                        className={navItemClassName(isActive)}
+                      >
+                        <Icon className="size-4 shrink-0" />
+                        <span className="truncate">{section.title}</span>
+                        {section.badge ? (
+                          <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                            {section.badge}
+                          </span>
+                        ) : null}
+                      </button>
+                    )
+                  })}
               </div>
             </div>
           ))}

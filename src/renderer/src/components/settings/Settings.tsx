@@ -45,6 +45,7 @@ import { MobileSettingsPane } from './MobileSettingsPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { SettingsSidebar } from './SettingsSidebar'
+import { SettingsSetupGuidePane } from './SettingsSetupGuidePane'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch } from './settings-search'
 import { cn } from '@/lib/utils'
@@ -900,6 +901,16 @@ function Settings(): React.JSX.Element {
                     </SettingsSection>
                   </>
                 ) : null}
+
+                <SettingsSection
+                  id="setup-guide"
+                  title="Get started with Orca"
+                  description="Finish the core workflows that make Orca useful for parallel agent work."
+                  searchEntries={getSectionSearchEntries('setup-guide')}
+                  bodyClassName="overflow-hidden p-0"
+                >
+                  {isSectionMounted('setup-guide') ? <SettingsSetupGuidePane /> : null}
+                </SettingsSection>
 
                 <SettingsSection
                   id="general"
