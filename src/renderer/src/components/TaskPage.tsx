@@ -3122,6 +3122,10 @@ export default function TaskPage(): React.JSX.Element {
   const [linearMode, setLinearMode] = useState<LinearMode>('issues')
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
   const [linearIssueLimit, setLinearIssueLimit] = useState(LINEAR_ITEM_LIMIT)
+  const [linearIssuePage, setLinearIssuePage] = useState(0)
+  const [linearIssueLoadingTargetPage, setLinearIssueLoadingTargetPage] = useState<number | null>(
+    null
+  )
   const [linearIssuesHasMore, setLinearIssuesHasMore] = useState(false)
   const [linearLoading, setLinearLoading] = useState(false)
   const [linearError, setLinearError] = useState<string | null>(null)
@@ -3154,6 +3158,10 @@ export default function TaskPage(): React.JSX.Element {
     LinearCollectionResult<LinearIssue>
   >({ items: [] })
   const [linearProjectIssueLimit, setLinearProjectIssueLimit] = useState(LINEAR_ITEM_LIMIT)
+  const [linearProjectIssuePage, setLinearProjectIssuePage] = useState(0)
+  const [linearProjectIssueLoadingTargetPage, setLinearProjectIssueLoadingTargetPage] = useState<
+    number | null
+  >(null)
   const [linearProjectIssuesLoading, setLinearProjectIssuesLoading] = useState(false)
   const [linearProjectIssuesError, setLinearProjectIssuesError] = useState<string | null>(null)
   const [linearCustomViewModel, setLinearCustomViewModel] = useState<LinearCustomViewModel>('issue')
@@ -3170,6 +3178,9 @@ export default function TaskPage(): React.JSX.Element {
     LinearCollectionResult<LinearIssue>
   >({ items: [] })
   const [linearCustomViewIssueLimit, setLinearCustomViewIssueLimit] = useState(LINEAR_ITEM_LIMIT)
+  const [linearCustomViewIssuePage, setLinearCustomViewIssuePage] = useState(0)
+  const [linearCustomViewIssueLoadingTargetPage, setLinearCustomViewIssueLoadingTargetPage] =
+    useState<number | null>(null)
   const [linearCustomViewProjectsResult, setLinearCustomViewProjectsResult] = useState<
     LinearCollectionResult<LinearProjectSummary>
   >({ items: [] })
@@ -3204,8 +3215,12 @@ export default function TaskPage(): React.JSX.Element {
       setLinearProjectParentView(null)
       setLinearProjectIssuesResult({ items: [] })
       setLinearProjectIssueLimit(LINEAR_ITEM_LIMIT)
+      setLinearProjectIssuePage(0)
+      setLinearProjectIssueLoadingTargetPage(null)
       setLinearCustomViewIssuesResult({ items: [] })
       setLinearCustomViewIssueLimit(LINEAR_ITEM_LIMIT)
+      setLinearCustomViewIssuePage(0)
+      setLinearCustomViewIssueLoadingTargetPage(null)
       setLinearCustomViewProjectsResult({ items: [] })
       setLinearMode(mode)
       setTaskResumeState({ linearMode: mode, linearContext: undefined })
@@ -3230,8 +3245,12 @@ export default function TaskPage(): React.JSX.Element {
       }
       setLinearProjectIssuesResult({ items: [] })
       setLinearProjectIssueLimit(LINEAR_ITEM_LIMIT)
+      setLinearProjectIssuePage(0)
+      setLinearProjectIssueLoadingTargetPage(null)
       setLinearCustomViewIssuesResult({ items: [] })
       setLinearCustomViewIssueLimit(LINEAR_ITEM_LIMIT)
+      setLinearCustomViewIssuePage(0)
+      setLinearCustomViewIssueLoadingTargetPage(null)
       setSelectedLinearProject(project)
       setLinearProjectTab('overview')
       setLinearMode('projects')
@@ -3255,8 +3274,12 @@ export default function TaskPage(): React.JSX.Element {
       setLinearProjectParentView(null)
       setLinearProjectIssuesResult({ items: [] })
       setLinearProjectIssueLimit(LINEAR_ITEM_LIMIT)
+      setLinearProjectIssuePage(0)
+      setLinearProjectIssueLoadingTargetPage(null)
       setLinearCustomViewIssuesResult({ items: [] })
       setLinearCustomViewIssueLimit(LINEAR_ITEM_LIMIT)
+      setLinearCustomViewIssuePage(0)
+      setLinearCustomViewIssueLoadingTargetPage(null)
       setLinearCustomViewProjectsResult({ items: [] })
       setSelectedLinearCustomView(view)
       setLinearMode('views')
@@ -3718,21 +3741,24 @@ export default function TaskPage(): React.JSX.Element {
     selectedLinearCustomView?.model === 'issue' &&
     Boolean(linearCustomViewIssuesResult.hasMore) &&
     linearCustomViewIssueLimit < LINEAR_ISSUE_LIST_MAX
-  const handleLoadMoreLinearIssues = useCallback(() => {
-    setLinearIssueLimit((limit) =>
-      Math.min(clampLinearIssueListLimit(limit) + LINEAR_ITEM_LIMIT, LINEAR_ISSUE_LIST_MAX)
-    )
-  }, [])
-  const handleLoadMoreLinearProjectIssues = useCallback(() => {
-    setLinearProjectIssueLimit((limit) =>
-      Math.min(clampLinearIssueListLimit(limit) + LINEAR_ITEM_LIMIT, LINEAR_ISSUE_LIST_MAX)
-    )
-  }, [])
-  const handleLoadMoreLinearCustomViewIssues = useCallback(() => {
-    setLinearCustomViewIssueLimit((limit) =>
-      Math.min(clampLinearIssueListLimit(limit) + LINEAR_ITEM_LIMIT, LINEAR_ISSUE_LIST_MAX)
-    )
-  }, [])
+  const activeLinearIssuePage =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? linearProjectIssuePage
+      : selectedLinearCustomView?.model === 'issue'
+        ? linearCustomViewIssuePage
+        : linearIssuePage
+  const activeLinearIssueLoadingTargetPage =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? linearProjectIssueLoadingTargetPage
+      : selectedLinearCustomView?.model === 'issue'
+        ? linearCustomViewIssueLoadingTargetPage
+        : linearIssueLoadingTargetPage
+  const activeLinearIssueCanLoadMore =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? canLoadMoreLinearProjectIssues
+      : selectedLinearCustomView?.model === 'issue'
+        ? canLoadMoreLinearCustomViewIssues
+        : canLoadMorePlainLinearIssues
 
   const displayedLinearIssues = useMemo(
     () =>
@@ -3818,6 +3844,124 @@ export default function TaskPage(): React.JSX.Element {
     return displayedLinearIssues.filter((issue) => linearTeamSelection.has(issue.team.id))
   }, [activeLinearIssueContextLabel, displayedLinearIssues, linearTeamSelection])
 
+  const loadedLinearIssuePages = Math.max(
+    1,
+    Math.ceil(filteredLinearIssues.length / LINEAR_ITEM_LIMIT)
+  )
+  const linearIssueTotalPages =
+    filteredLinearIssues.length === 0
+      ? 1
+      : loadedLinearIssuePages + (activeLinearIssueCanLoadMore ? 1 : 0)
+  const visibleLinearIssuePage = Math.min(
+    activeLinearIssuePage,
+    Math.max(0, loadedLinearIssuePages - 1)
+  )
+  const pagedLinearIssues = useMemo(() => {
+    const start = visibleLinearIssuePage * LINEAR_ITEM_LIMIT
+    return filteredLinearIssues.slice(start, start + LINEAR_ITEM_LIMIT)
+  }, [filteredLinearIssues, visibleLinearIssuePage])
+  const showLinearIssuePagination =
+    filteredLinearIssues.length > 0 &&
+    !activeLinearIssueError &&
+    linearIssueTotalPages > 1 &&
+    !(activeLinearIssueLoading && activeLinearIssues.length === 0)
+
+  const setActiveLinearIssuePage = useCallback(
+    (page: number) => {
+      if (selectedLinearProject && linearProjectTab === 'issues') {
+        setLinearProjectIssuePage(page)
+      } else if (selectedLinearCustomView?.model === 'issue') {
+        setLinearCustomViewIssuePage(page)
+      } else {
+        setLinearIssuePage(page)
+      }
+    },
+    [linearProjectTab, selectedLinearCustomView?.model, selectedLinearProject]
+  )
+
+  const setActiveLinearIssueLoadingTargetPage = useCallback(
+    (page: number | null) => {
+      if (selectedLinearProject && linearProjectTab === 'issues') {
+        setLinearProjectIssueLoadingTargetPage(page)
+      } else if (selectedLinearCustomView?.model === 'issue') {
+        setLinearCustomViewIssueLoadingTargetPage(page)
+      } else {
+        setLinearIssueLoadingTargetPage(page)
+      }
+    },
+    [linearProjectTab, selectedLinearCustomView?.model, selectedLinearProject]
+  )
+
+  const ensureActiveLinearIssueLimit = useCallback(
+    (targetLimit: number) => {
+      const nextLimit = Math.min(clampLinearIssueListLimit(targetLimit), LINEAR_ISSUE_LIST_MAX)
+      if (selectedLinearProject && linearProjectTab === 'issues') {
+        setLinearProjectIssueLimit((limit) => Math.max(limit, nextLimit))
+      } else if (selectedLinearCustomView?.model === 'issue') {
+        setLinearCustomViewIssueLimit((limit) => Math.max(limit, nextLimit))
+      } else {
+        setLinearIssueLimit((limit) => Math.max(limit, nextLimit))
+      }
+    },
+    [linearProjectTab, selectedLinearCustomView?.model, selectedLinearProject]
+  )
+
+  const handleLinearIssuePageChange = useCallback(
+    (page: number) => {
+      if (page < loadedLinearIssuePages) {
+        setActiveLinearIssuePage(page)
+        setActiveLinearIssueLoadingTargetPage(null)
+        return
+      }
+
+      // Why: unlike GitHub's cursor pages, Linear reads are cached as an
+      // expanded prefix. Jumping to a new page first expands the prefix, then
+      // commits the page when the fetch returns enough rows.
+      setActiveLinearIssueLoadingTargetPage(page)
+      ensureActiveLinearIssueLimit((page + 1) * LINEAR_ITEM_LIMIT)
+    },
+    [
+      ensureActiveLinearIssueLimit,
+      loadedLinearIssuePages,
+      setActiveLinearIssueLoadingTargetPage,
+      setActiveLinearIssuePage
+    ]
+  )
+
+  useEffect(() => {
+    if (activeLinearIssueLoading || activeLinearIssueLoadingTargetPage === null) {
+      return
+    }
+
+    const maxLoadedPage = Math.max(0, loadedLinearIssuePages - 1)
+    if (activeLinearIssueLoadingTargetPage <= maxLoadedPage || !activeLinearIssueCanLoadMore) {
+      setActiveLinearIssuePage(Math.min(activeLinearIssueLoadingTargetPage, maxLoadedPage))
+      setActiveLinearIssueLoadingTargetPage(null)
+    }
+  }, [
+    activeLinearIssueCanLoadMore,
+    activeLinearIssueLoading,
+    activeLinearIssueLoadingTargetPage,
+    loadedLinearIssuePages,
+    setActiveLinearIssueLoadingTargetPage,
+    setActiveLinearIssuePage
+  ])
+
+  useEffect(() => {
+    if (
+      activeLinearIssueLoadingTargetPage !== null ||
+      activeLinearIssuePage <= visibleLinearIssuePage
+    ) {
+      return
+    }
+    setActiveLinearIssuePage(visibleLinearIssuePage)
+  }, [
+    activeLinearIssueLoadingTargetPage,
+    activeLinearIssuePage,
+    setActiveLinearIssuePage,
+    visibleLinearIssuePage
+  ])
+
   const selectedLinearTeamForExternalLink = useMemo(() => {
     if (linearTeamSelection.size !== 1) {
       return null
@@ -3859,8 +4003,8 @@ export default function TaskPage(): React.JSX.Element {
     [linearIssueGridTemplate]
   )
   const linearIssueSections = useMemo(
-    () => groupLinearIssues(filteredLinearIssues, linearGroupBy, linearOrderBy),
-    [filteredLinearIssues, linearGroupBy, linearOrderBy]
+    () => groupLinearIssues(pagedLinearIssues, linearGroupBy, linearOrderBy),
+    [pagedLinearIssues, linearGroupBy, linearOrderBy]
   )
   const linearIssueListRows = useMemo<LinearIssueListRow[]>(
     () =>
@@ -3884,11 +4028,11 @@ export default function TaskPage(): React.JSX.Element {
   const linearBoardSections = useMemo(
     () =>
       groupLinearIssues(
-        filteredLinearIssues,
+        pagedLinearIssues,
         linearGroupBy === 'none' ? 'status' : linearGroupBy,
         linearOrderBy
       ),
-    [filteredLinearIssues, linearGroupBy, linearOrderBy]
+    [pagedLinearIssues, linearGroupBy, linearOrderBy]
   )
   const linearStatusBoardEnabled = linearGroupBy === 'none' || linearGroupBy === 'status'
 
@@ -5383,6 +5527,8 @@ export default function TaskPage(): React.JSX.Element {
 
   useEffect(() => {
     setLinearIssueLimit(LINEAR_ITEM_LIMIT)
+    setLinearIssuePage(0)
+    setLinearIssueLoadingTargetPage(null)
   }, [
     appliedLinearSearch,
     linearMode,
@@ -8260,7 +8406,7 @@ export default function TaskPage(): React.JSX.Element {
                     </DropdownMenuContent>
                   </DropdownMenu>
                   <div className="text-[11px] text-muted-foreground">
-                    {filteredLinearIssues.length} shown
+                    {pagedLinearIssues.length} shown
                   </div>
                 </div>
               </div>
@@ -8697,31 +8843,61 @@ export default function TaskPage(): React.JSX.Element {
                 )}
               </div>
               {selectedLinearProject && linearProjectTab === 'issues' ? (
-                <LinearCollectionNotice
-                  errors={linearProjectIssuesResult.errors}
-                  hasMore={canLoadMoreLinearProjectIssues}
-                  count={linearProjectIssuesResult.items.length}
-                  label="project issues"
-                  onLoadMore={handleLoadMoreLinearProjectIssues}
-                  loading={linearProjectIssuesLoading}
-                />
+                <>
+                  <LinearCollectionNotice
+                    errors={linearProjectIssuesResult.errors}
+                    hasMore={false}
+                    count={linearProjectIssuesResult.items.length}
+                    label="project issues"
+                  />
+                  {showLinearIssuePagination ? (
+                    <div className="flex-none border-t border-border/50 bg-muted/50">
+                      <PaginationBar
+                        currentPage={visibleLinearIssuePage}
+                        totalPages={linearIssueTotalPages}
+                        loadingTarget={activeLinearIssueLoadingTargetPage}
+                        onPageChange={handleLinearIssuePageChange}
+                      />
+                    </div>
+                  ) : null}
+                </>
               ) : selectedLinearCustomView?.model === 'issue' ? (
-                <LinearCollectionNotice
-                  errors={linearCustomViewIssuesResult.errors}
-                  hasMore={canLoadMoreLinearCustomViewIssues}
-                  count={linearCustomViewIssuesResult.items.length}
-                  label="view issues"
-                  onLoadMore={handleLoadMoreLinearCustomViewIssues}
-                  loading={linearCustomViewContentsLoading}
-                />
+                <>
+                  <LinearCollectionNotice
+                    errors={linearCustomViewIssuesResult.errors}
+                    hasMore={false}
+                    count={linearCustomViewIssuesResult.items.length}
+                    label="view issues"
+                  />
+                  {showLinearIssuePagination ? (
+                    <div className="flex-none border-t border-border/50 bg-muted/50">
+                      <PaginationBar
+                        currentPage={visibleLinearIssuePage}
+                        totalPages={linearIssueTotalPages}
+                        loadingTarget={activeLinearIssueLoadingTargetPage}
+                        onPageChange={handleLinearIssuePageChange}
+                      />
+                    </div>
+                  ) : null}
+                </>
               ) : (
-                <LinearCollectionNotice
-                  hasMore={canLoadMorePlainLinearIssues}
-                  count={linearIssues.length}
-                  label="issues"
-                  onLoadMore={handleLoadMoreLinearIssues}
-                  loading={linearLoading}
-                />
+                <>
+                  <LinearCollectionNotice
+                    hasMore={false}
+                    count={linearIssues.length}
+                    label="issues"
+                  />
+                  {showLinearIssuePagination ? (
+                    <div className="flex-none border-t border-border/50 bg-muted/50">
+                      <PaginationBar
+                        currentPage={visibleLinearIssuePage}
+                        totalPages={linearIssueTotalPages}
+                        loadingTarget={activeLinearIssueLoadingTargetPage}
+                        onPageChange={handleLinearIssuePageChange}
+                      />
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
           )}
