@@ -3854,14 +3854,10 @@ export default function TaskPage(): React.JSX.Element {
     1,
     Math.ceil(filteredLinearIssues.length / LINEAR_ITEM_LIMIT)
   )
-  const loadedLinearIssueLastPageFull =
-    filteredLinearIssues.length > 0 && filteredLinearIssues.length % LINEAR_ITEM_LIMIT === 0
-  const canExposeUnloadedLinearIssuePage =
-    activeLinearIssueCanLoadMore && loadedLinearIssueLastPageFull
   const linearIssueTotalPages =
     filteredLinearIssues.length === 0
       ? 1
-      : loadedLinearIssuePages + (canExposeUnloadedLinearIssuePage ? 1 : 0)
+      : loadedLinearIssuePages + (activeLinearIssueCanLoadMore ? 1 : 0)
   const visibleLinearIssuePage = Math.min(
     activeLinearIssuePage,
     Math.max(0, loadedLinearIssuePages - 1)
@@ -3946,15 +3942,16 @@ export default function TaskPage(): React.JSX.Element {
     const maxLoadedPage = Math.max(0, loadedLinearIssuePages - 1)
     const targetPageLoaded = activeLinearIssueLoadingTargetPage <= maxLoadedPage
     const targetPageCannotLoad =
-      !activeLinearIssueCanLoadMore ||
-      !loadedLinearIssueLastPageFull ||
-      activeLinearIssueLimit >= LINEAR_ISSUE_LIST_MAX
+      !activeLinearIssueCanLoadMore || activeLinearIssueLimit >= LINEAR_ISSUE_LIST_MAX
     if (targetPageLoaded || targetPageCannotLoad) {
       setActiveLinearIssuePage(Math.min(activeLinearIssueLoadingTargetPage, maxLoadedPage))
       setActiveLinearIssueLoadingTargetPage(null)
       return
     }
 
+    // Why: Linear can return more backend rows without immediately filling the
+    // next visible page after local team filtering. Keep expanding the prefix
+    // until the requested page exists or Linear reports exhaustion.
     ensureActiveLinearIssueLimit(activeLinearIssueLimit + LINEAR_ITEM_LIMIT)
   }, [
     activeLinearIssueCanLoadMore,
@@ -3963,7 +3960,6 @@ export default function TaskPage(): React.JSX.Element {
     activeLinearIssueLoadingTargetPage,
     ensureActiveLinearIssueLimit,
     loadedLinearIssuePages,
-    loadedLinearIssueLastPageFull,
     setActiveLinearIssueLoadingTargetPage,
     setActiveLinearIssuePage
   ])

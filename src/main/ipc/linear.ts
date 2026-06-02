@@ -23,6 +23,7 @@ import {
 } from '../linear/projects'
 import { listTeams, getTeamStates, getTeamLabels, getTeamMembers } from '../linear/teams'
 import type { LinearListFilter } from '../linear/issues'
+import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import type {
   LinearCustomViewModel,
   LinearIssueUpdate,
@@ -111,7 +112,7 @@ export function registerLinearHandlers(): void {
       const filter = VALID_FILTERS.has(args?.filter as LinearListFilter)
         ? (args!.filter as LinearListFilter)
         : undefined
-      const limit = Math.min(Math.max(1, args?.limit ?? 20), 50)
+      const limit = clampLinearIssueListLimit(args?.limit)
       return listIssues(filter, limit, normalizeWorkspaceSelection(args?.workspaceId))
     }
   )
@@ -306,7 +307,7 @@ export function registerLinearHandlers(): void {
       if (typeof args?.projectId !== 'string' || !args.projectId.trim()) {
         throw new Error('Project ID is required')
       }
-      const limit = Math.min(Math.max(1, args?.limit ?? 20), 50)
+      const limit = clampLinearIssueListLimit(args?.limit)
       return listProjectIssues(
         args.projectId.trim(),
         limit,
@@ -369,7 +370,7 @@ export function registerLinearHandlers(): void {
       if (typeof args?.viewId !== 'string' || !args.viewId.trim()) {
         throw new Error('Custom view ID is required')
       }
-      const limit = Math.min(Math.max(1, args?.limit ?? 20), 50)
+      const limit = clampLinearIssueListLimit(args?.limit)
       return listCustomViewIssues(
         args.viewId.trim(),
         limit,
