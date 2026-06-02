@@ -14,6 +14,7 @@ import { useAppStore } from '@/store'
 import { RepoIconGlyph } from '../repo/repo-icon'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSettingsSetupGuideProgress } from './settings-setup-guide-progress'
 import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
 
@@ -69,7 +70,6 @@ function SettingsSetupGuideRow({
 }: SettingsSetupGuideRowProps): React.JSX.Element | null {
   const setupGuideSidebarDismissed = useAppStore((s) => s.setupGuideSidebarDismissed)
   const setupComplete = progress.firstIncompleteStepId === null
-  const progressLabel = `${progress.doneCount}/${progress.total}`
 
   if (setupComplete || setupGuideSidebarDismissed) {
     return null
@@ -89,10 +89,11 @@ function SettingsSetupGuideRow({
       >
         <ListChecks className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate font-medium">Get started with Orca</span>
-        <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-ai-action-accent/35 bg-ai-action-accent/10 px-2 py-0.5 font-mono text-[11px] font-semibold leading-none text-ai-action-accent">
-          <span className="size-1.5 rounded-full bg-ai-action-accent" aria-hidden />
-          {progressLabel}
-        </span>
+        <SetupGuideProgressRing
+          done={progress.doneCount}
+          total={progress.total}
+          className="ml-auto"
+        />
       </button>
     </div>
   )
@@ -103,8 +104,6 @@ function SettingsSetupGuideNavRow({
   setupActive,
   onOpen
 }: SettingsSetupGuideRowProps): React.JSX.Element {
-  const progressLabel = `${progress.doneCount}/${progress.total}`
-
   return (
     <button
       type="button"
@@ -120,10 +119,11 @@ function SettingsSetupGuideNavRow({
     >
       <ListChecks className="size-4 shrink-0" />
       <span className="truncate">Get started with Orca</span>
-      <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-ai-action-accent/35 bg-ai-action-accent/10 px-2 py-0.5 font-mono text-[11px] font-semibold leading-none text-ai-action-accent">
-        <span className="size-1.5 rounded-full bg-ai-action-accent" aria-hidden />
-        {progressLabel}
-      </span>
+      <SetupGuideProgressRing
+        done={progress.doneCount}
+        total={progress.total}
+        className="ml-auto"
+      />
     </button>
   )
 }
