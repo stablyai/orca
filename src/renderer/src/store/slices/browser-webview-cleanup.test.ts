@@ -4,9 +4,6 @@ import type { BrowserPage, BrowserWorkspace } from '../../../../shared/types'
 vi.mock('../../components/browser-pane/webview-registry', () => ({
   destroyPersistentWebview: vi.fn()
 }))
-vi.mock('../../components/browser-pane/browser-runtime', () => ({
-  clearEvictedBrowserTab: vi.fn()
-}))
 
 import {
   collectBrowserWebviewIds,
@@ -14,7 +11,6 @@ import {
   destroyWorkspaceWebviews
 } from './browser-webview-cleanup'
 import { destroyPersistentWebview } from '../../components/browser-pane/webview-registry'
-import { clearEvictedBrowserTab } from '../../components/browser-pane/browser-runtime'
 
 function workspace(id: string): BrowserWorkspace {
   return {
@@ -71,13 +67,11 @@ describe('collectBrowserWebviewIds', () => {
 describe('destroyWorkspaceWebviews', () => {
   beforeEach(() => {
     vi.mocked(destroyPersistentWebview).mockClear()
-    vi.mocked(clearEvictedBrowserTab).mockClear()
   })
 
-  it('clears stale eviction notices when the backing page is removed', () => {
+  it('destroys the webview when the backing page is removed', () => {
     destroyRemovedBrowserWebview('page-1')
 
-    expect(clearEvictedBrowserTab).toHaveBeenCalledWith('page-1')
     expect(destroyPersistentWebview).toHaveBeenCalledWith('page-1')
   })
 
@@ -90,8 +84,6 @@ describe('destroyWorkspaceWebviews', () => {
     expect(destroyPersistentWebview).toHaveBeenCalledTimes(2)
     expect(destroyPersistentWebview).toHaveBeenCalledWith('page-1')
     expect(destroyPersistentWebview).toHaveBeenCalledWith('page-2')
-    expect(clearEvictedBrowserTab).toHaveBeenCalledWith('page-1')
-    expect(clearEvictedBrowserTab).toHaveBeenCalledWith('page-2')
   })
 
   it('falls back to the workspace id when no pages exist (legacy sessions)', () => {

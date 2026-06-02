@@ -33,7 +33,7 @@ import type {
   IssueInfo,
   LinearIssue
 } from '../../../../shared/types'
-import { branchDisplayName, CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
+import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
 import {
   WorktreeCardDetailsHover,
   hasWorktreeCardDetails,
@@ -53,6 +53,8 @@ import {
   canShowWorkspaceDeleteQuickAction,
   useWorkspaceDeleteModifierPressed
 } from './workspace-delete-quick-action'
+import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -201,7 +203,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
     repo?.connectionId ? (s.sshTargetLabels.get(repo.connectionId) ?? '') : ''
   )
 
-  const branch = branchDisplayName(worktree.branch)
+  const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
+  const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
+  const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const isFolder = repo ? isFolderRepo(repo) : false
   const hostedReviewCacheKey =
     repo && branch
@@ -589,6 +593,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const cacheTtlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
   const showInlineRepoBadge = compactCards && !!repo && !hideRepoBadge && !isFolder
   const showRepoBadgeInMetaRow = !compactCards && !!repo && !hideRepoBadge
+  const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
   const showBranch =
     !isFolder && branch.length > 0 && (!compactCards || branch !== worktree.displayName)
   // Why: rebases already surface in source control; keep dense cards from
@@ -605,12 +610,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
   const showMetaRowDetails = !compactCards && (hasDetails || hasPorts)
   // Why: detailed cards need a stable metadata lane only when it has content.
-  // Detached git worktrees can have no branch text, and grouped project
-  // views hide the repo badge; don't reserve a blank metadata lane in that case.
+  // Grouped project views can hide the repo badge; don't reserve a blank
+  // metadata lane unless branch or detached-head identity has content.
   const hasDetailedMetaRowContent = Boolean(
     (showRepoBadgeInMetaRow && repo) ||
     isFolder ||
     showBranch ||
+    showDetachedHeadInMetaRow ||
     showConflictOperationBadge ||
     cacheStartedAt != null ||
     showMetaRowDetails
@@ -961,6 +967,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 <span className="min-w-0 text-[11px] text-muted-foreground truncate leading-none">
                   {branch}
                 </span>
+              ) : showDetachedHeadInMetaRow && detachedHeadDisplay ? (
+                <DetachedHeadBadge
+                  display={detachedHeadDisplay}
+                  label="sidebar"
+                  side="right"
+                  className="h-[16px]"
+                />
               ) : null}
 
               {showConflictOperationBadge && (

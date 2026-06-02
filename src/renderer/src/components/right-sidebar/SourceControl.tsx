@@ -43,6 +43,7 @@ import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
+import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -181,6 +182,7 @@ import {
 import type { SourceControlAiOperation } from '../../../../shared/source-control-ai-types'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
 import { getRuntimeGitScope } from '@/runtime/runtime-git-client'
+import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { getRepositorySourceControlAiSectionId } from '@/components/settings/repository-settings-targets'
 import {
   getCommitFailureDialogWorktreeKey,
@@ -1310,7 +1312,9 @@ function SourceControlInner(): React.JSX.Element {
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
-  const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
+  const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
+  const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
+  const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const sourceControlAiDiscoveryHostKey = useMemo(
     () =>
       getCommitMessageModelDiscoveryHostKeyForScope(
@@ -4097,6 +4101,12 @@ function SourceControlInner(): React.JSX.Element {
             </div>
           )}
         </div>
+
+        {detachedHeadDisplay && (
+          <div className="border-b border-border px-3 py-2">
+            <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />
+          </div>
+        )}
 
         {scope === 'all' && shouldShowCompareSummary(branchSummary) && (
           <div className="border-b border-border px-3 py-2">

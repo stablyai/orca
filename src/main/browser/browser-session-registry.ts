@@ -20,6 +20,11 @@ import type { BrowserSessionProfile, BrowserSessionProfileScope } from '../../sh
 import { browserManager } from './browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'
+import {
+  allowsBrowserWebAuthnPermission,
+  clearBrowserWebAuthnAccessHandlers,
+  installBrowserWebAuthnAccessHandlers
+} from './browser-webauthn-access'
 
 type BrowserSessionMeta = {
   defaultSource: BrowserSessionProfile['source']
@@ -533,8 +538,12 @@ class BrowserSessionRegistry {
       if (permission === 'media') {
         return hasSystemMediaAccess(details?.mediaType)
       }
+      if (allowsBrowserWebAuthnPermission(permission, details)) {
+        return true
+      }
       return autoGranted.has(permission)
     })
+    installBrowserWebAuthnAccessHandlers(sess)
     sess.setDisplayMediaRequestHandler((_request, callback) => {
       callback({ video: undefined, audio: undefined })
     })
@@ -548,6 +557,7 @@ class BrowserSessionRegistry {
     // bookkeeping so removed profiles do not leave retained closures behind.
     this.configuredPartitions.delete(partition)
     sess.removeListener('will-download', this.handleWillDownload)
+    clearBrowserWebAuthnAccessHandlers(sess)
     sess.setPermissionRequestHandler(null)
     sess.setPermissionCheckHandler(null)
     sess.setDisplayMediaRequestHandler(null)

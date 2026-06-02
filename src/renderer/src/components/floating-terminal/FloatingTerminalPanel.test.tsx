@@ -299,6 +299,12 @@ vi.mock('./FloatingTerminalWindowControls', () => ({
   }
 }))
 
+vi.mock('@/components/ShortcutKeyCombo', () => ({
+  ShortcutKeyCombo: function ShortcutKeyCombo() {
+    return null
+  }
+}))
+
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
     id: overrides.id ?? 'tab-1',
@@ -670,7 +676,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
   })
 
-  it('clamps saved user bounds into the current viewport and persists the clamped result', async () => {
+  it('clamps saved user bounds into the current viewport without persisting the clamp', async () => {
     const savedBounds = { left: 2000, top: 1200, width: 1000, height: 700 }
     setViewport(800, 600)
     getMockedLocalStorage().getItem.mockImplementation((key: string) =>
@@ -679,16 +685,48 @@ describe('FloatingTerminalPanel close behavior', () => {
     const expectedBounds = clampFloatingTerminalBounds(savedBounds)
 
     let element = await renderPanel(true)
-    expect(getPanelStyleBounds(element)).toEqual(savedBounds)
+    expect(getPanelStyleBounds(element)).toEqual(expectedBounds)
 
     runEffects()
     element = await renderPanel(true)
 
     expect(getPanelStyleBounds(element)).toEqual(expectedBounds)
-    expect(getMockedLocalStorage().setItem).toHaveBeenCalledWith(
-      FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
-      JSON.stringify(expectedBounds)
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+  })
+
+  it('restores anchored saved bounds after a skinny viewport clamp', async () => {
+    const savedBounds = {
+      anchorX: 'right',
+      anchorY: 'bottom',
+      offsetX: 40,
+      offsetY: 84,
+      width: 920,
+      height: 560
+    }
+    setViewport(520, 360)
+    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
+      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
     )
+
+    let element = await renderPanel(true)
+    expect(getPanelStyleBounds(element)).toEqual({
+      left: 8,
+      top: 36,
+      width: 504,
+      height: 316
+    })
+
+    setViewport(1200, 800)
+    runEffects()
+    element = await renderPanel(true)
+
+    expect(getPanelStyleBounds(element)).toEqual({
+      left: 240,
+      top: 156,
+      width: 920,
+      height: 560
+    })
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
   })
 
   it('does not persist a plain click on a default-positioned panel', async () => {
@@ -734,7 +772,44 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     expect(getMockedLocalStorage().setItem).toHaveBeenCalledWith(
       FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
-      JSON.stringify(expectedBounds)
+      JSON.stringify({
+        anchorX: 'right',
+        anchorY: 'bottom',
+        offsetX: 8,
+        offsetY: 72,
+        width: expectedBounds.width,
+        height: expectedBounds.height
+      })
+    )
+  })
+
+  it('previews resize-handle movement without writing storage until commit', async () => {
+    const element = await renderPanel(true)
+    const resizeHandles = findByTypeName(element, 'FloatingTerminalResizeHandles')
+    const startBounds = getDefaultFloatingTerminalBounds()
+    const previewBounds = {
+      ...startBounds,
+      width: startBounds.width - 80,
+      height: startBounds.height - 40
+    }
+
+    ;(resizeHandles.props.onPreviewBounds as (bounds: FloatingTerminalPanelBounds) => void)(
+      previewBounds
+    )
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+
+    ;(resizeHandles.props.onCommitBounds as () => void)()
+
+    expect(getMockedLocalStorage().setItem).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
+      JSON.stringify({
+        anchorX: 'right',
+        anchorY: 'bottom',
+        offsetX: 104,
+        offsetY: 124,
+        width: previewBounds.width,
+        height: previewBounds.height
+      })
     )
   })
 
@@ -757,6 +832,41 @@ describe('FloatingTerminalPanel close behavior', () => {
     element = await renderPanel(true)
 
     expect(getPanelStyleBounds(element)).toEqual(savedBounds)
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+  })
+
+  it('restores committed normal bounds after maximizing from a skinny clamp', async () => {
+    const savedBounds = {
+      anchorX: 'right',
+      anchorY: 'bottom',
+      offsetX: 40,
+      offsetY: 84,
+      width: 920,
+      height: 560
+    }
+    setViewport(520, 360)
+    getMockedLocalStorage().getItem.mockImplementation((key: string) =>
+      key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
+    )
+
+    let element = await renderPanel(true)
+    const controls = findByTypeName(element, 'FloatingTerminalWindowControls')
+    ;(controls.props.onToggleMaximized as () => void)()
+
+    element = await renderPanel(true)
+    expect(getPanelStyleBounds(element)).toEqual(getMaximizedFloatingTerminalBounds())
+
+    setViewport(1200, 800)
+    const restoredControls = findByTypeName(element, 'FloatingTerminalWindowControls')
+    ;(restoredControls.props.onToggleMaximized as () => void)()
+    element = await renderPanel(true)
+
+    expect(getPanelStyleBounds(element)).toEqual({
+      left: 240,
+      top: 156,
+      width: 920,
+      height: 560
+    })
     expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
   })
 

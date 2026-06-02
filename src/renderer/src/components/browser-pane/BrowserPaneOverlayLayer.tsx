@@ -28,7 +28,6 @@ type BrowserOverlaySlotProps = {
   // present in `browserTabs` but not referenced by any group's unified-tab
   // list). See the fallback branch below for why these slots remain hidden.
   groupId: string | undefined
-  isSelectedInGroup: boolean
   isActive: boolean
   // Why: the legacy architecture rendered BrowserPane inside TabGroupPanel, so
   // React events from the pane bubbled through TabGroupPanel's
@@ -50,7 +49,6 @@ type BrowserOverlaySlotProps = {
 const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   browserTab,
   groupId,
-  isSelectedInGroup,
   isActive,
   onFocusOwningGroup
 }: BrowserOverlaySlotProps): React.JSX.Element {
@@ -61,7 +59,6 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
       : [browserTab.activePageId ?? browserTab.id]
   )
   const isPaintable = isActive || automationVisible
-  const shouldMountBrowserPane = isSelectedInGroup || automationVisible
   // Why: each overlay pins itself to the owning TabGroupPanel's body via CSS
   // anchor positioning. `anchor()` resolves top/left relative to the viewport,
   // and the overlay's own `position: absolute` inside a positioned ancestor
@@ -110,12 +107,10 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
       onPointerDown={handleFocus}
       onFocusCapture={handleFocus}
     >
-      {/* Why: inactive BrowserPane subtrees keep Electron guest renderers alive.
-          The selected tab for each mounted worktree stays mounted even while
-          hidden so user DOM state (form text, scroll, SPA state) survives
-          workspace switches. Non-selected tabs still park unless automation
-          needs them paintable. */}
-      {shouldMountBrowserPane ? <BrowserPane browserTab={browserTab} isActive={isActive} /> : null}
+      {/* Why: moving an Electron webview between DOM parents destroys the guest
+          document in some Electron builds. Keep every open browser mounted in
+          its stable overlay slot; CSS decides whether it is paintable. */}
+      <BrowserPane browserTab={browserTab} isActive={isActive} />
     </div>
   )
 })
@@ -195,7 +190,6 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
             key={browserTab.id}
             browserTab={browserTab}
             groupId={assignment?.groupId}
-            isSelectedInGroup={Boolean(assignment?.isActiveInGroup)}
             isActive={isActive}
             onFocusOwningGroup={focusOwningGroup}
           />

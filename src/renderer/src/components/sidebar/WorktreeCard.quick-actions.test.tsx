@@ -203,7 +203,7 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('tabindex="0"')
   })
 
-  it('does not reserve an empty metadata row for detached git worktrees', () => {
+  it('renders detached HEAD identity in detailed card metadata', () => {
     worktreeCardProperties = []
 
     const markup = renderToStaticMarkup(
@@ -216,7 +216,9 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('orca')
-    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('Detached HEAD @ abc123')
+    expect(markup).toContain('Detached HEAD at abc123. You are viewing a commit, not a branch.')
     expect(markup).toContain('tabindex="0"')
   })
 

@@ -76,12 +76,15 @@
       }
     },
     {
-      "files": [
-        "config/scripts/check-styled-scrollbars.mjs",
-        "config/scripts/styled-scrollbars/*.mjs"
-      ],
+      "files": ["**/*.mjs"],
       "rules": {
-        "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "rules": {
+        "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
       }
     }
   ],

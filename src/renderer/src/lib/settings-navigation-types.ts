@@ -3,6 +3,7 @@ import type { LucideProps } from 'lucide-react'
 import type { SettingsSearchEntry } from '@/components/settings/settings-search'
 
 export type SettingsNavIcon = ComponentType<LucideProps>
+export type SettingsNavInstallStatus = 'install' | 'installed' | 'checking'
 
 export type SettingsNavTarget =
   | 'general'
@@ -39,6 +40,7 @@ export type SettingsNavSection = {
   searchEntries: SettingsSearchEntry[]
   group: string
   badge?: string
+  installStatus?: SettingsNavInstallStatus
 }
 
 export type SettingsNavGroup = {

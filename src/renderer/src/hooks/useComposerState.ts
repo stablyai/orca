@@ -59,6 +59,7 @@ import {
   buildLinearIssueLinkedWorkItem,
   isLinearLinkedWorkItem
 } from '@/lib/linear-linked-work-item'
+import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import {
   getFullComposerCreateDisabled,
   getQuickComposerCreateDisabled
@@ -1748,7 +1749,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedWorkItem(buildLinearIssueLinkedWorkItem(issue))
-      const suggestedName = issue.title
+      const suggestedName = getLinearIssueWorkspaceName(issue)
       if (!name.trim() || name === lastAutoNameRef.current) {
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName

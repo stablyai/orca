@@ -1,8 +1,8 @@
 /* eslint-disable max-lines */
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
-import { Info } from 'lucide-react'
 import type { GlobalSettings, OrcaHooks } from '../../../../shared/types'
+import type { SpeechModelState } from '../../../../shared/speech-types'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
@@ -15,7 +15,7 @@ import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/p
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
-import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
+import { DEFAULT_APP_FONT_FAMILY, getDefaultVoiceSettings } from '../../../../shared/constants'
 import { GeneralPane } from './GeneralPane'
 import { BrowserPane } from './BrowserPane'
 import { AppearancePane } from './AppearancePane'
@@ -24,7 +24,6 @@ import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
 import { useGhosttyImport } from './useGhosttyImport'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { RepositoryPane } from './RepositoryPane'
 import { GitPane } from './GitPane'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
@@ -63,9 +62,18 @@ import {
 } from '@/hooks/useSettingsNavigationMetadata'
 import type {
   SettingsNavGroup,
+  SettingsNavInstallStatus,
   SettingsNavSection,
   SettingsNavTarget
 } from '@/lib/settings-navigation-types'
+import {
+  COMPUTER_USE_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME
+} from '@/lib/agent-feature-install-commands'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
 import {
   deriveNeededRepoIds,
   deriveNeededSectionIds,
@@ -97,14 +105,28 @@ function getFallbackVisibleSection(sections: SettingsNavSection[]): SettingsNavS
   return sections.at(0)
 }
 
-function computerUsePlatformLabel(args: { isWindows: boolean; isMac: boolean }): string {
-  if (args.isWindows) {
-    return 'Windows'
+function getSkillNavInstallStatus(skill: {
+  installed: boolean
+  loading: boolean
+}): SettingsNavInstallStatus {
+  if (skill.loading) {
+    return 'checking'
   }
-  if (!args.isMac) {
-    return 'Linux'
+  return skill.installed ? 'installed' : 'install'
+}
+
+function hasReadyVoiceModel(
+  settings: GlobalSettings,
+  modelStates: readonly SpeechModelState[]
+): boolean {
+  const voiceSettings = settings.voice ?? getDefaultVoiceSettings()
+  if (
+    voiceSettings.sttModel !== '' &&
+    modelStates.some((state) => state.id === voiceSettings.sttModel && state.status === 'ready')
+  ) {
+    return true
   }
-  return 'This platform'
+  return modelStates.some((state) => state.status === 'ready')
 }
 
 function getSettingsScrollTarget(
@@ -177,6 +199,8 @@ function Settings(): React.JSX.Element {
   const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
+  const modelStates = useAppStore((s) => s.modelStates)
+  const refreshModelStates = useAppStore((s) => s.refreshModelStates)
 
   const [repoHooksMap, setRepoHooksMap] = useState<
     Record<string, { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
@@ -186,8 +210,14 @@ function Settings(): React.JSX.Element {
   const isMac = isMacUserAgent()
   const isWebClient = isWebClientLocation()
   const showDesktopOnlySettings = !isWebClient
-  const showComputerUsePreviewTooltip = !isMac
-  const computerUsePlatform = computerUsePlatformLabel({ isWindows, isMac })
+  const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
+  const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+    enabled: showDesktopOnlySettings,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
+  const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
   // Why: the Terminal settings section shares one search index with the
   // sidebar. We trim platform-only entries on other platforms so search never
   // reveals controls that the renderer will intentionally hide.
@@ -298,6 +328,25 @@ function Settings(): React.JSX.Element {
     fetchSettings()
     fetchKeybindings()
   }, [fetchKeybindings, fetchSettings])
+
+  useEffect(() => {
+    if (!showDesktopOnlySettings) {
+      setVoiceModelStatesLoading(false)
+      return
+    }
+    let canceled = false
+    // Why: modelStates starts empty, so Voice should not briefly look missing
+    // before the first speech-model scan reports the real installed state.
+    setVoiceModelStatesLoading(true)
+    void refreshModelStates().finally(() => {
+      if (!canceled) {
+        setVoiceModelStatesLoading(false)
+      }
+    })
+    return () => {
+      canceled = true
+    }
+  }, [refreshModelStates, showDesktopOnlySettings])
 
   const runtimeTargetIdentity = getRuntimeTargetIdentity(settings)
 
@@ -441,7 +490,59 @@ function Settings(): React.JSX.Element {
   }, [])
 
   const displayedGitUsername = repos[0]?.gitUsername ?? ''
-  const navSections = useSettingsNavigationMetadata()
+  const baseNavSections = useSettingsNavigationMetadata()
+  const { installed: orchestrationSkillInstalled, loading: orchestrationSkillLoading } =
+    orchestrationSkill
+  const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
+    computerUseSkill
+  const capabilityInstallStatusBySectionId = useMemo(() => {
+    const next = new Map<string, SettingsNavInstallStatus>([
+      [
+        'orchestration',
+        getSkillNavInstallStatus({
+          installed: orchestrationSkillInstalled,
+          loading: orchestrationSkillLoading
+        })
+      ]
+    ])
+    if (showDesktopOnlySettings) {
+      next.set(
+        'computer-use',
+        getSkillNavInstallStatus({
+          installed: computerUseSkillInstalled,
+          loading: computerUseSkillLoading
+        })
+      )
+      if (settings) {
+        next.set(
+          'voice',
+          voiceModelStatesLoading
+            ? 'checking'
+            : hasReadyVoiceModel(settings, modelStates)
+              ? 'installed'
+              : 'install'
+        )
+      }
+    }
+    return next
+  }, [
+    computerUseSkillInstalled,
+    computerUseSkillLoading,
+    modelStates,
+    orchestrationSkillInstalled,
+    orchestrationSkillLoading,
+    settings,
+    showDesktopOnlySettings,
+    voiceModelStatesLoading
+  ])
+  const navSections = useMemo(
+    () =>
+      baseNavSections.map((section) => {
+        const installStatus = capabilityInstallStatusBySectionId.get(section.id)
+        return installStatus ? { ...section, installStatus } : section
+      }),
+    [baseNavSections, capabilityInstallStatusBySectionId]
+  )
   const navSectionById = useMemo(
     () => new Map(navSections.map((section) => [section.id, section] as const)),
     [navSections]
@@ -858,30 +959,6 @@ function Settings(): React.JSX.Element {
                     <SettingsSection
                       id="computer-use"
                       title="Computer Use"
-                      badge="Beta"
-                      badgeAccessory={
-                        showComputerUsePreviewTooltip ? (
-                          <TooltipProvider delayDuration={250}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="text-muted-foreground transition-colors hover:text-foreground"
-                                  aria-label={`${computerUsePlatform} Computer Use preview details`}
-                                >
-                                  <Info className="size-3.5" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" sideOffset={6} className="max-w-72">
-                                <span>
-                                  {computerUsePlatform} Computer Use is an early preview. Some apps
-                                  and desktop environments may behave inconsistently.
-                                </span>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ) : null
-                      }
                       description="Enable agents to control any app on your computer."
                       searchEntries={getSectionSearchEntries('computer-use')}
                     >
@@ -891,7 +968,6 @@ function Settings(): React.JSX.Element {
                     <SettingsSection
                       id="voice"
                       title="Voice"
-                      badge="Beta"
                       description="Local speech-to-text dictation with on-device models."
                       searchEntries={getSectionSearchEntries('voice')}
                     >

@@ -12,6 +12,7 @@ import type {
 } from '../../../../shared/types'
 
 export type FeatureWallSetupProgressInput = {
+  ready?: boolean
   settings: GlobalSettings | null
   featureInteractions: FeatureInteractionState
   hasConnectedTaskSource: boolean
@@ -28,6 +29,7 @@ export type FeatureWallSetupProgressInput = {
 }
 
 export type FeatureWallSetupProgress = {
+  ready: boolean
   stepDone: Record<FeatureWallSetupStepId, boolean>
   coreDoneCount: number
   coreTotal: number
@@ -92,6 +94,7 @@ export function getFeatureWallSetupProgress(
     'setup-script': input.hasSetupScript
   }
   return {
+    ready: input.ready ?? true,
     stepDone,
     coreDoneCount: FEATURE_WALL_SETUP_STEPS.filter((step) => stepDone[step.id]).length,
     coreTotal: FEATURE_WALL_SETUP_STEPS.length

@@ -5,6 +5,8 @@ import type {
   SkillDiscoveryTarget,
   SkillSourceKind
 } from '../../../shared/skills'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
 import { useMountedRef } from './useMountedRef'
 
 const INSTALLED_AGENT_SKILLS_CHANGED_EVENT = 'orca:installed-agent-skills-changed'
@@ -35,6 +37,10 @@ let pendingDiscoverySatisfiesForcedRefreshByTarget = new Map<string, boolean>()
 
 function normalizeSkillName(value: string): string {
   return value.trim().toLowerCase()
+}
+
+function isOrchestrationSkillName(skillName: string): boolean {
+  return normalizeSkillName(skillName) === ORCHESTRATION_SKILL_NAME
 }
 
 function basenameFromPath(pathValue: string): string {
@@ -138,6 +144,7 @@ async function discoverInstalledAgentSkills(
 export const _installedAgentSkillDiscoveryInternalsForTests = {
   discoverInstalledAgentSkills,
   getSkillDiscoveryTargetKey,
+  isOrchestrationSkillName,
   reset(): void {
     cachedDiscoveryByTarget = new Map()
     pendingDiscoveryByTarget = new Map()
@@ -225,6 +232,14 @@ export function useInstalledAgentSkill(
       enabled && result ? hasInstalledAgentSkill(result.skills, skillName, { sourceKinds }) : false,
     [enabled, result, skillName, sourceKinds]
   )
+
+  useEffect(() => {
+    if (installed && isOrchestrationSkillName(skillName)) {
+      // Why: older floating-workspace education still keys off this marker; any
+      // surface that detects the orchestration skill should satisfy setup.
+      markOrchestrationSetupComplete()
+    }
+  }, [installed, skillName])
 
   const forceRefresh = useCallback(() => refresh(true), [refresh])
 

@@ -12,6 +12,7 @@ import {
   isFeatureWallSetupStepId,
   type FeatureWallSetupStepId
 } from '../../../shared/feature-wall-setup-steps'
+import { track } from './telemetry'
 
 const SETUP_GUIDE_TELEMETRY_COMPLETED_STEPS_STORAGE_KEY =
   'orca.setupGuideTelemetryCompletedSteps.v1'
@@ -20,7 +21,6 @@ const SETUP_GUIDE_PARALLEL_WORK_STEP_IDS = new Set<FeatureWallSetupStepId>([
   'split-terminal',
   'two-worktrees'
 ])
-const FEATURE_EDUCATION_TELEMETRY_LOG_LABEL = '[feature-education-telemetry:test-mode]'
 
 type FeatureEducationTelemetryEventName = Extract<
   EventName,
@@ -37,7 +37,7 @@ export function trackContextualTourShown(args: {
   source: string | null | undefined
   wasFeaturePreviouslyInteracted: boolean
 }): void {
-  logFeatureEducationTelemetry('contextual_tour_shown', {
+  emitFeatureEducationTelemetry('contextual_tour_shown', {
     tour_id: args.tourId,
     source: normalizeFeatureEducationSource(args.source),
     was_feature_previously_interacted: args.wasFeaturePreviouslyInteracted
@@ -53,7 +53,7 @@ export function trackContextualTourOutcome(args: {
   furthestStepIndex?: number
   definedStepCount?: number
 }): void {
-  logFeatureEducationTelemetry('contextual_tour_outcome', {
+  emitFeatureEducationTelemetry('contextual_tour_outcome', {
     tour_id: args.tourId,
     source: normalizeFeatureEducationSource(args.source),
     outcome: args.outcome,
@@ -75,7 +75,7 @@ export function trackSetupGuideOpened(args: {
   firstIncompleteStepId: FeatureWallSetupStepId | 'none'
 }): SetupGuideSource {
   const source = normalizeSetupGuideSource(args.source)
-  logFeatureEducationTelemetry('setup_guide_opened', {
+  emitFeatureEducationTelemetry('setup_guide_opened', {
     source,
     initial_completed_count: clampSetupGuideStepCount(args.initialCompletedCount),
     total_steps: 8,
@@ -97,7 +97,7 @@ export function trackSetupGuideClosed(args: {
     initialCompletedCount,
     clampSetupGuideStepCount(args.finalCompletedCount)
   )
-  logFeatureEducationTelemetry('setup_guide_closed', {
+  emitFeatureEducationTelemetry('setup_guide_closed', {
     source: args.source,
     outcome: args.outcome,
     initial_completed_count: initialCompletedCount,
@@ -113,7 +113,7 @@ export function trackSetupGuideStepCompleted(args: {
   totalSteps: number
   setupGuideVisible: boolean
 }): void {
-  logFeatureEducationTelemetry('setup_guide_step_completed', {
+  emitFeatureEducationTelemetry('setup_guide_step_completed', {
     step_id: args.stepId,
     section_id: getSetupGuideStepSection(args.stepId),
     completed_count: clampSetupGuideStepCount(args.completedCount, 1),
@@ -129,7 +129,7 @@ export function trackTerminalPaneSplit(args: {
   if (!reserveTerminalPaneSplitTelemetry(args.source, args.direction)) {
     return
   }
-  logFeatureEducationTelemetry('terminal_pane_split', {
+  emitFeatureEducationTelemetry('terminal_pane_split', {
     source: args.source,
     direction: args.direction
   })
@@ -198,13 +198,11 @@ export function getSetupGuideStepSection(id: FeatureWallSetupStepId): 'parallel-
   return SETUP_GUIDE_PARALLEL_WORK_STEP_IDS.has(id) ? 'parallel-work' : 'setup'
 }
 
-function logFeatureEducationTelemetry<N extends FeatureEducationTelemetryEventName>(
+function emitFeatureEducationTelemetry<N extends FeatureEducationTelemetryEventName>(
   name: N,
   props: EventProps<N>
 ): void {
-  // Why: this branch is validating the new telemetry payloads without sending
-  // product analytics; keep the payload shape exact for reviewer inspection.
-  console.info(FEATURE_EDUCATION_TELEMETRY_LOG_LABEL, name, props)
+  track(name, props)
 }
 
 function clampTourStepCount(value: number, min = 0): number {

@@ -158,7 +158,12 @@ export async function sendNotesToActiveAgentSession({
   const { send } = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
     runtimeTarget,
     'terminal.send',
-    { terminal: terminal.handle, text: trimmedPrompt, enter: true },
+    {
+      terminal: terminal.handle,
+      text: trimmedPrompt,
+      enter: true,
+      client: { id: 'orca-desktop', type: 'desktop' }
+    },
     { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
   )
   return send.accepted ? { status: 'sent' } : { status: 'not-writable' }

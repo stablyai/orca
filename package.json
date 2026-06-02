@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.42-rc.1",
+  "version": "1.4.42-rc.2",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -179,7 +179,7 @@
     "sherpa-onnx-win-x64": "1.12.37"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,mts,cts}": [
+    "*.{ts,tsx,js,jsx,mjs,mts,cts}": [
       "oxlint",
       "oxlint --config config/oxlint-react-doctor.json --deny-warnings",
       "oxfmt --write"

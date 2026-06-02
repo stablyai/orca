@@ -1,5 +1,4 @@
 const liveBrowserUrlByTabId = new Map<string, string>()
-const evictedBrowserTabIds = new Set<string>()
 
 export function rememberLiveBrowserUrl(browserTabId: string, url: string): void {
   liveBrowserUrlByTabId.set(browserTabId, url)
@@ -11,24 +10,4 @@ export function getLiveBrowserUrl(browserTabId: string): string | null {
 
 export function clearLiveBrowserUrl(browserTabId: string): void {
   liveBrowserUrlByTabId.delete(browserTabId)
-}
-
-export function clearEvictedBrowserTab(browserTabId: string): void {
-  evictedBrowserTabIds.delete(browserTabId)
-}
-
-export function markEvictedBrowserTab(browserTabId: string): void {
-  evictedBrowserTabIds.add(browserTabId)
-}
-
-export function consumeEvictedBrowserTab(browserTabId: string): boolean {
-  const wasEvicted = evictedBrowserTabIds.has(browserTabId)
-  if (wasEvicted) {
-    evictedBrowserTabIds.delete(browserTabId)
-  }
-  return wasEvicted
-}
-
-export function _getEvictedBrowserTabCountForTest(): number {
-  return evictedBrowserTabIds.size
 }

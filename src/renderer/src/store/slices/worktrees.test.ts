@@ -1052,6 +1052,108 @@ describe('updateWorktreeGitIdentity', () => {
 
     expect(store.getState().worktreesByRepo.repo1[0].displayName).toBe('My Cool Work')
   })
+
+  it('clears stale branch identity for detached HEAD updates', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      head: 'old-head',
+      branch: 'refs/heads/review-branch',
+      displayName: 'Restore PR review'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 3 } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      head: 'new-head',
+      branch: null
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      head: 'new-head',
+      branch: '',
+      displayName: 'Restore PR review'
+    })
+    expect(store.getState().sortEpoch).toBe(4)
+  })
+
+  it('keeps an auto-derived title when detached HEAD clears the branch', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      head: 'old-head',
+      branch: 'refs/heads/review-branch',
+      displayName: 'review-branch'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      head: 'new-head',
+      branch: null
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      branch: '',
+      displayName: 'review-branch'
+    })
+  })
+
+  it('resumes following branch names after an auto-derived title crosses detached HEAD', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      head: 'old-head',
+      branch: 'refs/heads/review-branch',
+      displayName: 'review-branch'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      head: 'detached-head',
+      branch: null
+    })
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      head: 'reattached-head',
+      branch: 'refs/heads/main'
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      branch: 'refs/heads/main',
+      displayName: 'main'
+    })
+  })
+
+  it('preserves custom detached titles when a branch returns', () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      head: 'detached-head',
+      branch: '',
+      displayName: 'Restore PR review'
+    })
+
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
+      head: 'reattached-head',
+      branch: 'refs/heads/main'
+    })
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      branch: 'refs/heads/main',
+      displayName: 'Restore PR review'
+    })
+  })
 })
 
 describe('createWorktree base status merge', () => {

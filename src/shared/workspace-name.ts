@@ -28,6 +28,21 @@ export function getLinkedWorkItemSuggestedName(item: { title: string }): string 
   return slugifyForWorkspaceName(seed)
 }
 
+export function getLinearIssueWorkspaceName(issue: { identifier: string; title: string }): string {
+  const key = slugifyForWorkspaceName(issue.identifier)
+  const titleSlug = getLinkedWorkItemSuggestedName(issue)
+  if (!key) {
+    return titleSlug
+  }
+  let dedupedTitleSlug = titleSlug
+  if (titleSlug === key) {
+    dedupedTitleSlug = ''
+  } else if (titleSlug.startsWith(`${key}-`)) {
+    dedupedTitleSlug = titleSlug.slice(key.length + 1)
+  }
+  return slugifyForWorkspaceName([key, dedupedTitleSlug].filter(Boolean).join('-'))
+}
+
 export function resolveWorkspaceCreateName(args: {
   draft: string | undefined
   fallback: string

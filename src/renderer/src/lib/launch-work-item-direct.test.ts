@@ -138,4 +138,39 @@ describe('launchWorkItemDirect', () => {
       undefined
     )
   })
+
+  it('uses the Linear identifier in direct-launch workspace names', async () => {
+    await launchWorkItemDirect({
+      repoId: 'repo-1',
+      launchSource: 'task_page',
+      telemetrySource: 'sidebar',
+      openModalFallback: vi.fn(),
+      item: {
+        type: 'issue',
+        number: null,
+        title: 'Ship Linear parity',
+        url: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
+        linearIdentifier: 'ENG-42'
+      }
+    })
+
+    expect(storeState.value.createWorktree).toHaveBeenCalledWith(
+      'repo-1',
+      'eng-42-ship-linear-parity',
+      undefined,
+      'inherit',
+      undefined,
+      'sidebar',
+      'Ship Linear parity',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'ENG-42',
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    )
+  })
 })

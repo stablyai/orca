@@ -61,6 +61,18 @@ describe('settings navigation metadata', () => {
     expect(webIds).toContain('repo-repo-1')
   })
 
+  it('does not mark installable AI capabilities as beta in the sidebar metadata', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: true,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+
+    expect(sections.find((section) => section.id === 'computer-use')?.badge).toBeUndefined()
+    expect(sections.find((section) => section.id === 'voice')?.badge).toBeUndefined()
+  })
+
   it('keeps macOS permissions mac-only', () => {
     expect(ids({ isMac: false })).not.toContain('developer-permissions')
     expect(ids({ isMac: true })).toContain('developer-permissions')

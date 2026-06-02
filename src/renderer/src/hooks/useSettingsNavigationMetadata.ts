@@ -140,8 +140,7 @@ export function buildSettingsNavigationMetadata({
             description: 'Enable agents to control any app on your computer.',
             icon: MousePointerClick,
             searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
-            group: 'capabilities',
-            badge: 'Beta'
+            group: 'capabilities'
           },
           {
             id: 'voice',
@@ -149,8 +148,7 @@ export function buildSettingsNavigationMetadata({
             description: 'Local speech-to-text dictation with on-device models.',
             icon: Mic,
             searchEntries: VOICE_PANE_SEARCH_ENTRIES,
-            group: 'capabilities',
-            badge: 'Beta'
+            group: 'capabilities'
           }
         ]
       : []),

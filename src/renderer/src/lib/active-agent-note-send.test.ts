@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: these note-send routing cases share one mocked app store and RPC harness. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getActiveAgentNoteTarget,
@@ -210,7 +211,12 @@ describe('active agent note send', () => {
     expect(testState.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'local' },
       'terminal.send',
-      { terminal: 'term-1', text: 'File: src/app.ts', enter: true },
+      {
+        terminal: 'term-1',
+        text: 'File: src/app.ts',
+        enter: true,
+        client: { id: 'orca-desktop', type: 'desktop' }
+      },
       { timeoutMs: 15000 }
     )
   })

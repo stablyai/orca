@@ -168,7 +168,7 @@ export type WorktreeSlice = {
   purgeWorktreeTerminalState: (worktreeIds: string[]) => void
   updateWorktreeGitIdentity: (
     worktreeId: string,
-    identity: { head?: string; branch?: string }
+    identity: { head?: string; branch?: string | null }
   ) => void
   updateWorktreeBaseStatus: (event: WorktreeBaseStatusEvent) => void
   updateWorktreeRemoteBranchConflict: (event: WorktreeRemoteBranchConflictEvent) => void
