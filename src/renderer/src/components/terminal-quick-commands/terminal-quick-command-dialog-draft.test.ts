@@ -4,6 +4,7 @@ import {
   createTerminalQuickCommandDialogDraftMemory,
   switchTerminalQuickCommandDialogAction
 } from './terminal-quick-command-dialog-draft'
+import { getQuickCommandProjectScopeRepoId } from './TerminalQuickCommandScopeField'
 
 describe('terminal quick command dialog draft transitions', () => {
   it('keeps agent prompt blank when switching from a terminal command for the first time', () => {
@@ -113,5 +114,21 @@ describe('terminal quick command dialog draft transitions', () => {
       command: 'pnpm vitest',
       appendEnter: true
     })
+  })
+})
+
+describe('terminal quick command dialog scope transitions', () => {
+  const repos = [{ id: 'repo-first' }, { id: 'repo-current' }]
+
+  it('restores the previous project repo instead of falling back to the first repo', () => {
+    expect(getQuickCommandProjectScopeRepoId(repos, 'repo-current')).toBe('repo-current')
+  })
+
+  it('falls back to the first repo only when no previous project repo is known', () => {
+    expect(getQuickCommandProjectScopeRepoId(repos, null)).toBe('repo-first')
+  })
+
+  it('keeps a missing previous project repo so saving does not silently retarget it', () => {
+    expect(getQuickCommandProjectScopeRepoId(repos, 'repo-missing')).toBe('repo-missing')
   })
 })
