@@ -45,6 +45,7 @@ import {
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
 import {
   configureDevUserDataPath,
+  configureOrcaUserDataPathEnv,
   enableMainProcessGpuFeatures,
   installDevParentDisconnectQuit,
   installDevParentSignalQuit,
@@ -233,9 +234,7 @@ if (app.isPackaged && process.platform !== 'win32') {
   })
 }
 configureDevUserDataPath(is.dev)
-// Why: CLI-shared Codex helpers cannot import Electron. Seed the resolved
-// app userData path once Electron has applied dev/e2e overrides.
-process.env.ORCA_USER_DATA_PATH ??= app.getPath('userData')
+configureOrcaUserDataPathEnv()
 const startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
 if (startupDiagnosticsEnabled) {
   logStartupDiagnostic('before-single-instance-lock', {

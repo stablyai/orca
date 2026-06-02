@@ -151,6 +151,30 @@ describe('configureDevUserDataPath', () => {
   })
 })
 
+describe('configureOrcaUserDataPathEnv', () => {
+  it('overwrites stale inherited ORCA_USER_DATA_PATH with Electron userData', async () => {
+    const { app } = await import('electron')
+    const { configureOrcaUserDataPathEnv } = await import('./configure-process')
+    const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
+    process.env.ORCA_USER_DATA_PATH = '/tmp/stale-orca-user-data'
+    app.setPath('userData', '/tmp/current-orca-user-data')
+    let configuredUserDataPath: string | undefined
+
+    try {
+      configureOrcaUserDataPathEnv()
+      configuredUserDataPath = process.env.ORCA_USER_DATA_PATH
+    } finally {
+      if (originalUserDataPath === undefined) {
+        delete process.env.ORCA_USER_DATA_PATH
+      } else {
+        process.env.ORCA_USER_DATA_PATH = originalUserDataPath
+      }
+    }
+
+    expect(configuredUserDataPath).toBe('/tmp/current-orca-user-data')
+  })
+})
+
 describe('shouldInstallManagedHooks', () => {
   it('keeps managed hook auto-install enabled for default dev runs', async () => {
     const { shouldInstallManagedHooks } = await import('./configure-process')

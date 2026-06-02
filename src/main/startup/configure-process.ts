@@ -145,6 +145,13 @@ export function configureDevUserDataPath(isDev: boolean): void {
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
 }
 
+export function configureOrcaUserDataPathEnv(): void {
+  // Why: app relaunches can inherit an ORCA_USER_DATA_PATH from an older CLI or
+  // updater process. Main must canonicalize it before CLI-shared modules build
+  // runtime-home paths, or migrations can bridge two Orca app-data directories.
+  process.env.ORCA_USER_DATA_PATH = app.getPath('userData')
+}
+
 export function shouldInstallManagedHooks(isDev: boolean): boolean {
   void isDev
   // Why: managed hook installation now targets Orca-owned, environment-scoped

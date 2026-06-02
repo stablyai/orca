@@ -361,6 +361,48 @@ describe('CodexRuntimeHomeService', () => {
     )
   })
 
+  it('uses the canonical Electron userData for legacy active host migration', async () => {
+    const staleUserDataDir = mkdtempSync(join(tmpdir(), 'orca-stale-runtime-home-'))
+    const staleRuntimeHomePath = join(staleUserDataDir, 'codex-runtime-home', 'home')
+    try {
+      mkdirSync(staleRuntimeHomePath, { recursive: true })
+      process.env.ORCA_USER_DATA_PATH = staleUserDataDir
+      const legacyLaunchHomePath = join(
+        testState.userDataDir,
+        'codex-runtime-home',
+        'launch',
+        'host',
+        'account-old',
+        'home'
+      )
+      const legacyActiveHomePath = getLegacyActiveHostCodexHomePath()
+      mkdirSync(legacyLaunchHomePath, { recursive: true })
+      mkdirSync(join(legacyActiveHomePath, '..'), { recursive: true })
+      symlinkSync(
+        legacyLaunchHomePath,
+        legacyActiveHomePath,
+        process.platform === 'win32' ? 'junction' : undefined
+      )
+      writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
+      const store = createStore(createSettings())
+
+      const { configureOrcaUserDataPathEnv } = await import('../startup/configure-process')
+      configureOrcaUserDataPathEnv()
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      new CodexRuntimeHomeService(store as never)
+
+      expect(process.env.ORCA_USER_DATA_PATH).toBe(testState.userDataDir)
+      expect(normalizeLinkTarget(readlinkSync(legacyActiveHomePath))).toBe(
+        normalizeLinkTarget(getRuntimeCodexHomePath())
+      )
+      expect(normalizeLinkTarget(readlinkSync(legacyActiveHomePath))).not.toBe(
+        normalizeLinkTarget(staleRuntimeHomePath)
+      )
+    } finally {
+      rmSync(staleUserDataDir, { recursive: true, force: true })
+    }
+  })
+
   it('does not create a legacy active host pointer for fresh shared-home users', async () => {
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
     const store = createStore(createSettings())
