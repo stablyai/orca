@@ -251,6 +251,30 @@ Feature-wall close interpretation:
 - Depth fields are per explicit tour session. Persisted completion state can affect UI progress but must not be interpreted as current-session depth.
 - Missing/null `feature_wall_closed.source` or depth fields mean the row predates the expanded schema, came from an older app version, or failed field coverage. Do not bucket null with `source = 'unknown'`; exclude it from source/depth cohort tiles or show it as a telemetry coverage gap.
 
+### 2026-06-02 - Active Onboarding Step Removal
+
+Scope: active first-run onboarding no longer emits the `agent_setup` or `tour` semantic steps. The removed "Set up Orca for agents" and "Explore Orca" education/setup moments are covered by PR #2734 through contextual feature tours and the Getting started with Orca guide.
+
+This is a product-flow and telemetry-interpretation boundary, not a new event rollout. Historical onboarding schemas still accept seven-step `agent_setup` and `tour` rows so old data remains queryable, but dashboard authors should not expect new active-onboarding rows for those semantic steps after this rollout.
+
+| Field                    | Value                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| PR                       | `#4445`                                                                         |
+| Merge commit             | `TBD`                                                                           |
+| `code_merged_at_utc`     | `TBD`                                                                           |
+| First release            | `TBD`                                                                           |
+| First release commit     | `TBD`                                                                           |
+| `first_released_at_utc`  | `TBD`                                                                           |
+| `first_seen_at_utc`      | N/A                                                                             |
+| `dashboard_ready_at_utc` | Event-dependent; use this as a cutoff only after the PR is merged and released. |
+
+Dashboard caveats:
+
+- Treat `onboarding_step_* { value_kind: 'agent_setup' }`, `onboarding_step_* { value_kind: 'tour' }`, and `onboarding_tour_outcome` as historical first-run onboarding signals after this rollout.
+- Do not use absence of new `agent_setup` or `tour` onboarding rows as a drop-off signal; those steps no longer exist in active onboarding.
+- Segment numeric onboarding step analysis across this boundary. The active final step changed from seven-step onboarding to `ONBOARDING_FINAL_STEP = 5`.
+- Continue using `contextual_tour_shown` and `contextual_tour_outcome` from PR #2734 for current feature-education exposure and outcome analysis.
+
 ## Updating This File
 
 When adding or changing telemetry that dashboard authors will depend on:

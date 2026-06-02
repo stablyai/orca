@@ -157,6 +157,7 @@ import {
   type BrowserDriverState
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
+import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -744,6 +745,9 @@ export default function BrowserPane({
   const setBrowserPageUrl = useAppStore((s) => s.setBrowserPageUrl)
   const runtimeEnvironmentActive = Boolean(activeRuntimeEnvironmentId?.trim())
   const activeBrowserPageId = activeBrowserPage?.id ?? null
+  const activeBrowserPageIsBlank =
+    !runtimeEnvironmentActive &&
+    (activeBrowserPage?.url === 'about:blank' || activeBrowserPage?.url === ORCA_BROWSER_BLANK_URL)
   const browserPageIds = useMemo(() => browserPages.map((page) => page.id), [browserPages])
   const automationVisiblePageIds = useBrowserAutomationVisiblePageIds(browserPageIds)
   const renderedBrowserPages = useMemo(() => {
@@ -783,6 +787,15 @@ export default function BrowserPane({
       }
     })
   }, [activeBrowserPageId, runtimeEnvironmentActive])
+
+  useContextualTour(
+    'browser',
+    isActive &&
+      activeBrowserPage !== null &&
+      !runtimeEnvironmentActive &&
+      !activeBrowserPageIsBlank,
+    'browser_visible'
+  )
 
   const reclaimActiveBrowserForDesktop = useCallback(async (): Promise<void> => {
     if (!activeBrowserPageId) {
@@ -2378,7 +2391,10 @@ function RemoteBrowserPagePane({
             document.body
           )
         : null}
-      <div className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5">
+      <div
+        className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
+        data-contextual-tour-target="browser-toolbar"
+      >
         <Button
           size="icon"
           variant="ghost"
@@ -2739,9 +2755,17 @@ function BrowserPagePane({
     if (!grab.contextMenu) {
       const text = formatGrabPayloadAsText(grab.payload)
       void window.api.ui.writeClipboardText(text)
+      recordFeatureInteraction('browser-grab')
       showGrabToast('Copied', 'success', grab.payload)
     }
-  }, [grab.state, grab.payload, grab.contextMenu, grabIntent, showGrabToast])
+  }, [
+    grab.state,
+    grab.payload,
+    grab.contextMenu,
+    grabIntent,
+    recordFeatureInteraction,
+    showGrabToast
+  ])
 
   useEffect(() => {
     if (grab.state === 'idle' || grab.state === 'error') {
@@ -3720,6 +3744,7 @@ function BrowserPagePane({
         recordFeatureInteraction('browser-annotations')
       }
       setGrabIntent(nextIntent)
+      recordFeatureInteraction(nextIntent === 'annotate' ? 'browser-annotations' : 'browser-grab')
       if (nextIntent === 'copy') {
         setPendingAnnotationPayload(null)
       } else {
@@ -3960,6 +3985,7 @@ function BrowserPagePane({
         createdAt: new Date().toISOString(),
         payload: createBrowserAnnotationPayload(payload)
       })
+      recordFeatureInteraction('browser-annotations')
       setPendingAnnotationPayload(null)
       setBrowserAnnotationTrayOpen(true)
       recordFeatureInteraction('browser-annotations')
@@ -4073,8 +4099,8 @@ function BrowserPagePane({
     }
     clearTimeout(annotationCopyTimerRef.current)
     setBrowserAnnotationsCopied(false)
-    clearBrowserPageAnnotations(browserTab.id)
     recordFeatureInteraction('browser-annotations')
+    clearBrowserPageAnnotations(browserTab.id)
   }, [browserTab.id, clearBrowserPageAnnotations, recordFeatureInteraction])
 
   const handleDeleteBrowserAnnotation = useCallback(
@@ -4420,7 +4446,10 @@ function BrowserPagePane({
           )
         : null}
 
-      <div className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5">
+      <div
+        className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
+        data-contextual-tour-target="browser-toolbar"
+      >
         <Button
           size="icon"
           variant="ghost"
@@ -4487,6 +4516,7 @@ function BrowserPagePane({
                 onClick={() => startGrabIntent('copy')}
                 disabled={isBlankTab}
                 aria-label="Grab page element"
+                data-contextual-tour-target="browser-grab-control"
               >
                 <Crosshair className="size-4" />
               </Button>
@@ -4516,6 +4546,7 @@ function BrowserPagePane({
                 onClick={() => startGrabIntent('annotate')}
                 disabled={isBlankTab}
                 aria-label="Annotate page element"
+                data-contextual-tour-target="browser-annotation-control"
               >
                 <MessageSquarePlus className="size-4" />
                 {browserAnnotations.length > 0 ? (

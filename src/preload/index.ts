@@ -2438,6 +2438,11 @@ const api = {
       ipcRenderer.on('ui:openSettings', listener)
       return () => ipcRenderer.removeListener('ui:openSettings', listener)
     },
+    onOpenSetupGuide: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:openSetupGuide', listener)
+      return () => ipcRenderer.removeListener('ui:openSetupGuide', listener)
+    },
     onOpenFeatureTour: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openFeatureTour', listener)

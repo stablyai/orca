@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { shouldShowAgentsButton, shouldShowMobileButton } from './SidebarNav'
+import {
+  shouldShowAgentsButton,
+  shouldShowMobileButton,
+  shouldShowSetupGuideEntry
+} from './SidebarNav'
 
 describe('SidebarNav', () => {
   it('hides the Agents entry while settings are loading', () => {
@@ -32,5 +36,11 @@ describe('SidebarNav', () => {
 
   it('hides the Mobile entry when the sidebar setting is off', () => {
     expect(shouldShowMobileButton({ showMobileButton: false })).toBe(false)
+  })
+
+  it('shows the setup guide entry only before completion and before explicit hide', () => {
+    expect(shouldShowSetupGuideEntry(false, false)).toBe(true)
+    expect(shouldShowSetupGuideEntry(true, false)).toBe(false)
+    expect(shouldShowSetupGuideEntry(false, true)).toBe(false)
   })
 })

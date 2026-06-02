@@ -745,6 +745,12 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onOpenSetupGuide?.(() => {
+        useAppStore.getState().openModal('setup-guide')
+      }) ?? (() => {})
+    )
+
+    unsubs.push(
       window.api.ui.onOpenFeatureTour(() => {
         useAppStore.getState().openModal('feature-wall', { source: 'help_menu' })
       })

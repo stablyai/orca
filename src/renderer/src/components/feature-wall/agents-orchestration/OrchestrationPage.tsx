@@ -35,6 +35,7 @@ const FIRST_DISPATCH_MS = ORCHESTRATION_CLI_COMMAND_TIMINGS_MS[2]
 export function OrchestrationPage(props: {
   active: boolean
   reducedMotion: boolean
+  onCycleComplete?: () => void
   controlledCreatedChildCount?: number
   loopMs?: number
   showResponseBeats?: boolean
@@ -42,6 +43,7 @@ export function OrchestrationPage(props: {
   const {
     active,
     reducedMotion,
+    onCycleComplete,
     controlledCreatedChildCount,
     loopMs,
     showResponseBeats = true
@@ -244,13 +246,14 @@ export function OrchestrationPage(props: {
       later(next, FIRST_DISPATCH_MS)
     }
 
-    const loop = (): void => {
-      runOnce(() => {
-        const beatCount = showResponseBeats ? PHASE1_BEATS.length : 2
-        const elapsedMs = FIRST_DISPATCH_MS + beatCount * BUBBLE_GAP_MS + 800
-        later(loop, loopMs ? Math.max(0, loopMs - elapsedMs) : 1400)
-      })
-    }
+      const loop = (): void => {
+        runOnce(() => {
+          onCycleComplete?.()
+          const beatCount = showResponseBeats ? PHASE1_BEATS.length : 2
+          const elapsedMs = FIRST_DISPATCH_MS + beatCount * BUBBLE_GAP_MS + 800
+          later(loop, loopMs ? Math.max(0, loopMs - elapsedMs) : 1400)
+        })
+      }
 
     loop()
 
@@ -268,7 +271,7 @@ export function OrchestrationPage(props: {
         cleanupLayer.innerHTML = ''
       }
     }
-  }, [active, reducedMotion, drawArrow, loopMs, showResponseBeats])
+  }, [active, onCycleComplete, reducedMotion, drawArrow, loopMs, showResponseBeats])
 
   return (
     <div

@@ -42,8 +42,21 @@ describe('RepoStep', () => {
     const html = renderRepoStep()
 
     expect(html).not.toContain('Project already added')
-    expect(html).toContain('Open a folder')
+    expect(html).toContain('Browse for a folder')
     expect(html).toContain('Clone a repo')
+  })
+
+  it('presents the local-folder card itself as the browse action', () => {
+    const html = renderRepoStep()
+
+    expect(html).toContain('border-border bg-muted/30')
+    expect(html).toContain('focus:border-foreground/70')
+    expect(html).toContain('focus:ring-2 focus:ring-inset focus:ring-foreground/25')
+    expect(html).toContain('autofocus=""')
+    expect(html).toContain('Browse for a folder')
+    expect(html).toContain('group-hover:translate-x-0.5')
+    expect(html).toContain('w-fit max-w-[calc(100%-3.75rem)]')
+    expect(html).toContain('Want to import many repos at once? Select the parent folder.')
   })
 
   it('disables nested import actions when no repositories are selected', () => {

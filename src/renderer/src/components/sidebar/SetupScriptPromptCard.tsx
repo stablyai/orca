@@ -277,7 +277,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             )
             showSavedInProjectSettingsToast({
               onOpenSettings: () => openLocalCommandSettings(importedRepoId),
-              description: 'Orca will run this command each time a new worktree is created.'
+              description: 'Runs when Orca creates a new worktree.'
             })
           }
           return
@@ -293,8 +293,8 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             onOpenSettings: () => openLocalCommandSettings(importedRepoId),
             description:
               skippedCount > 0
-                ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved locally; move it to orca.yaml later to share it.`
-                : 'Move it to orca.yaml later to share it.'
+                ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved the setup command.`
+                : 'Saved the setup command.'
           })
         }
       } catch (error) {

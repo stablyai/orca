@@ -117,6 +117,7 @@ import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { ContextualTourOverlay } from './components/contextual-tours/ContextualTourOverlay'
 import {
   getFeatureTipsAppOpenDecision,
   isCliFeatureTipCompleted
@@ -221,6 +222,7 @@ const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceCo
 const WorkspaceCleanupDialog = lazy(
   () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
 )
+const SetupGuideModal = lazy(() => import('./components/setup-guide/SetupGuideModal'))
 const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'))
 const FeatureTipsModal = lazy(() => import('./components/feature-tips/FeatureTipsModal'))
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
@@ -297,6 +299,9 @@ function App(): React.JSX.Element {
       openModal: s.openModal,
       closeModal: s.closeModal,
       markFeatureTipsSeen: s.markFeatureTipsSeen,
+      setContextualToursAutoEligible: s.setContextualToursAutoEligible,
+      setContextualToursOnboardingVisible: s.setContextualToursOnboardingVisible,
+      cancelContextualTour: s.cancelContextualTour,
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
@@ -313,6 +318,7 @@ function App(): React.JSX.Element {
   const activeModal = useAppStore((s) => s.activeModal)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
+  const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   // Why: App swaps the sidebar between workspace and landing layouts when the
   // active workspace is slept/deleted. Keep virtualized scroll memory above
@@ -478,6 +484,7 @@ function App(): React.JSX.Element {
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
   const [mountedLazyModalIds, setMountedLazyModalIds] = useState<Set<LazyModalId>>(() => new Set())
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
+  const [onboardingLoaded, setOnboardingLoaded] = useState(false)
   const featureTipsPromptedThisSessionRef = useRef(false)
   const featureTipsSuppressedByOnboardingThisSessionRef = useRef(false)
   const [featureTipCliInstalled, setFeatureTipCliInstalled] = useState<boolean | null>(null)
@@ -520,6 +527,23 @@ function App(): React.JSX.Element {
   useEffect(() => {
     return onOnboardingReopened(setOnboarding)
   }, [])
+
+  useEffect(() => {
+    // Why: `onboarding === null` is the startup loading state. Suppress
+    // contextual tours until the persisted onboarding state is known so a
+    // first-run user cannot have a tour marked seen before onboarding appears.
+    const suppressTours = !onboardingLoaded || shouldShowOnboarding(onboarding)
+    actions.setContextualToursOnboardingVisible(suppressTours)
+  }, [actions, onboarding, onboardingLoaded])
+
+  useEffect(() => {
+    if (!persistedUIReady || !onboardingLoaded || contextualToursAutoEligible !== null) {
+      return
+    }
+    // Why: this rollout is for users who are still in first-run onboarding.
+    // Existing profiles are locally classified once and never auto-toured.
+    actions.setContextualToursAutoEligible(shouldShowOnboarding(onboarding))
+  }, [actions, contextualToursAutoEligible, onboarding, onboardingLoaded, persistedUIReady])
 
   useEffect(() => {
     if (!persistedUIReady) {
@@ -665,6 +689,7 @@ function App(): React.JSX.Element {
           const onboardingState = await window.api.onboarding.get()
           if (!cancelled) {
             setOnboarding(onboardingState)
+            setOnboardingLoaded(true)
           }
 
           // Why: SSH connections must be re-established BEFORE terminal
@@ -1880,6 +1905,16 @@ function App(): React.JSX.Element {
                 <WorktreeJumpPalette />
               </RecoverableRenderErrorBoundary>
             ) : null}
+            {resolvedMountedLazyModalIds.has('setup-guide') ? (
+              <RecoverableRenderErrorBoundary
+                boundaryId="modal.setup-guide"
+                surface="modal"
+                resetKey={activeModal === 'setup-guide'}
+                compact
+              >
+                <SetupGuideModal />
+              </RecoverableRenderErrorBoundary>
+            ) : null}
             {resolvedMountedLazyModalIds.has('feature-wall') ? (
               <RecoverableRenderErrorBoundary
                 boundaryId="modal.feature-wall"
@@ -1901,6 +1936,7 @@ function App(): React.JSX.Element {
               </RecoverableRenderErrorBoundary>
             ) : null}
           </Suspense>
+          <ContextualTourOverlay />
           {/* Why: mount PetOverlay only after persisted UI hydration, with
           both independent pet toggles allowing it; otherwise a hidden pet
           flashes while the store still has default visibility. */}

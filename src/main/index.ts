@@ -642,6 +642,12 @@ function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
   webContents?.send('ui:openFeatureTour')
 }
 
+function sendOpenSetupGuide(targetWindow?: BrowserWindow | null): void {
+  const webContents =
+    targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
+  webContents?.send('ui:openSetupGuide')
+}
+
 function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
   const webContents =
     targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
@@ -1176,6 +1182,11 @@ app.whenReady().then(async () => {
     onOpenSettings: () => {
       recordCrashBreadcrumb('settings_opened')
       mainWindow?.webContents.send('ui:openSettings')
+    },
+    onOpenSetupGuide: (targetWindow) => {
+      recordCrashBreadcrumb('setup_guide_opened')
+      const targetBrowserWindow = targetWindow instanceof BrowserWindow ? targetWindow : null
+      sendOpenSetupGuide(targetBrowserWindow)
     },
     onOpenCrashReport: (targetWindow) => {
       recordCrashBreadcrumb('crash_report_opened')

@@ -412,9 +412,11 @@ export function getDefaultUIState(): PersistedUIState {
     trustedOrcaHooks: {},
     setupScriptPromptDismissedRepoIds: [],
     acknowledgedAgentsByPaneKey: {},
+    setupGuideSidebarDismissed: false,
     workspaceCleanup: { dismissals: {} },
     featureTipsSeenIds: [],
-    featureInteractions: {}
+    featureInteractions: {},
+    contextualToursSeenIds: []
   }
 }
 

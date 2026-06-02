@@ -45,6 +45,7 @@ import { MobileSettingsPane } from './MobileSettingsPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { SettingsSidebar } from './SettingsSidebar'
+import { SettingsSetupGuideCard } from './SettingsSetupGuideCard'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch } from './settings-search'
 import { cn } from '@/lib/utils'
@@ -806,6 +807,8 @@ function Settings(): React.JSX.Element {
               </div>
             ) : (
               <ActiveSettingsSectionProvider value={activeSectionId}>
+                {settingsSearchQuery.trim() === '' ? <SettingsSetupGuideCard /> : null}
+
                 <SettingsSection
                   id="agents"
                   title="Agents"

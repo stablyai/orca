@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FolderPlus,
   HardDrive,
+  ListChecks,
   MessageSquareText,
   RotateCw,
   School,
@@ -163,13 +164,17 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
               </TooltipContent>
             </Tooltip>
             <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-48">
+              <DropdownMenuItem onSelect={() => openModal('setup-guide')}>
+                <ListChecks className="size-3.5" />
+                Getting started with Orca
+              </DropdownMenuItem>
               <DropdownMenuItem
                 className="whitespace-nowrap"
                 onClick={handleShowOnboarding}
                 onSelect={handleShowOnboarding}
               >
                 <School className="size-3.5" />
-                Show Onboarding
+                Explore Orca
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>
                 <MessageSquareText className="size-3.5" />

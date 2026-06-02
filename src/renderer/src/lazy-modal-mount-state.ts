@@ -3,6 +3,7 @@ const LAZY_MODAL_IDS = [
   'worktree-palette',
   'new-workspace-composer',
   'workspace-cleanup',
+  'setup-guide',
   'feature-wall',
   'feature-tips'
 ] as const

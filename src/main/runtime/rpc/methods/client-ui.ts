@@ -195,7 +195,9 @@ const UiUpdate = z
     taskResumeState: TaskResumeState.optional(),
     workspaceCleanup: WorkspaceCleanup.optional(),
     featureTipsSeenIds: FeatureTipIds.optional(),
-    featureInteractions: FeatureInteractions.optional()
+    featureInteractions: FeatureInteractions.optional(),
+    contextualToursSeenIds: StringArray.optional(),
+    contextualToursAutoEligible: z.boolean().optional()
   })
   .strict()
   .default({})

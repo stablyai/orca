@@ -30,6 +30,8 @@ import {
 
 export { AGENTS_PANE_SEARCH_ENTRIES } from './agents-search'
 
+const EMPTY_WSL_DISTROS: string[] = []
+
 type AgentsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
@@ -360,7 +362,7 @@ export function AgentsPane({
   updateSettings,
   wslSupportedPlatform = false,
   wslAvailable = false,
-  wslDistros = [],
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false
 }: AgentsPaneProps): React.JSX.Element {
   const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()

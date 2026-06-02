@@ -1994,6 +1994,7 @@ export type PreloadApi = {
     set: (args: Partial<PersistedUIState>) => Promise<void>
     recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
     onOpenSettings: (callback: () => void) => () => void
+    onOpenSetupGuide: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
     onOpenCrashReport: (callback: () => void) => () => void
     onToggleLeftSidebar: (callback: () => void) => () => void

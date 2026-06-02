@@ -383,6 +383,23 @@ describe('TabsSlice', () => {
       const sourceGroup = store.getState().groupsByWorktree[WT].find((g) => g.id === sourceGroupId)
       expect(sourceGroup?.activeTabId).toBe(t1.id)
     })
+
+    it('records the split-pane command interaction when creating an empty split group', () => {
+      const setMock = vi.mocked(window.api.ui.set)
+      store.getState().hydratePersistedUI(getDefaultUIState())
+      setMock.mockClear()
+      store.getState().createUnifiedTab(WT, 'terminal')
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+
+      store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
+
+      expect(store.getState().featureInteractions['terminal-pane-split']).toMatchObject({
+        interactionCount: 1
+      })
+      expect(store.getState().featureInteractions['terminal-panes']).toMatchObject({
+        interactionCount: 1
+      })
+    })
   })
 
   // ─── activateTab ──────────────────────────────────────────────────

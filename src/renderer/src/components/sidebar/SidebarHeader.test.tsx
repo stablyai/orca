@@ -6,6 +6,7 @@ import type { Repo } from '../../../../shared/types'
 type ButtonCapture = {
   label: string
   ariaLabel?: string
+  dataContextualTourTarget?: string
   size?: string
   onClick?: () => unknown
   disabled?: boolean
@@ -13,6 +14,7 @@ type ButtonCapture = {
 
 type MenuItemCapture = {
   label: string
+  dataContextualTourTarget?: string
   onSelect?: () => unknown
   disabled?: boolean
 }
@@ -70,16 +72,22 @@ vi.mock('@/components/ui/button', () => ({
     disabled?: boolean
     size?: string
     'aria-label'?: string
+    'data-contextual-tour-target'?: string
   }) => {
     mocks.buttons.push({
       label: textContent(children),
       ariaLabel: props['aria-label'],
+      dataContextualTourTarget: props['data-contextual-tour-target'],
       size,
       onClick,
       disabled
     })
     return (
-      <button disabled={disabled} onClick={onClick}>
+      <button
+        data-contextual-tour-target={props['data-contextual-tour-target']}
+        disabled={disabled}
+        onClick={onClick}
+      >
         {children}
       </button>
     )
@@ -102,14 +110,17 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({
     children,
     onSelect,
-    disabled
+    disabled,
+    ...props
   }: {
     children: ReactModule.ReactNode
     onSelect?: () => unknown
     disabled?: boolean
+    'data-contextual-tour-target'?: string
   }) => {
     mocks.menuItems.push({
       label: textContent(children),
+      dataContextualTourTarget: props['data-contextual-tour-target'],
       onSelect,
       disabled
     })
@@ -180,6 +191,28 @@ describe('SidebarHeader', () => {
       'new-workspace-composer',
       expect.anything()
     )
+  })
+
+  it('anchors the workspace creation tour to the visible Add trigger when a worktree can be created', async () => {
+    mocks.state.repos = [
+      {
+        id: 'repo-1',
+        path: '/repo',
+        displayName: 'Repo',
+        badgeColor: 'blue',
+        addedAt: 1
+      }
+    ]
+
+    await render()
+
+    const addToOrca = findButton((b) => b.ariaLabel === 'Add to Orca')
+    expect(addToOrca?.dataContextualTourTarget).toBe('workspace-create-control')
+
+    const newWorkspace = findMenuItem((b) => b.label.includes('New worktree'))
+    // Why: closed dropdown items are not reliable tour anchors; the visible
+    // trigger stays measurable while the handoff remains on this menu action.
+    expect(newWorkspace?.dataContextualTourTarget).toBeUndefined()
   })
 
   it('shows the compact visible Add label under repo grouping', async () => {

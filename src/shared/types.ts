@@ -13,6 +13,7 @@ import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
+import type { ContextualTourId } from './contextual-tours'
 import type { FeatureInteractionState } from './feature-interactions'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
@@ -2543,6 +2544,9 @@ export type PersistedUIState = {
    *  stateStartedAt that beats the old ack via the existing comparison in
    *  WorktreeCardAgents. Renderer-owned, written through ui:set. */
   acknowledgedAgentsByPaneKey?: Record<string, number>
+  /** User-hidden sidebar entry for the setup guide. The Help menu remains
+   *  available so this is a reversible declutter preference, not completion. */
+  setupGuideSidebarDismissed?: boolean
   /** URL to navigate to when a new browser tab is opened. Null means blank tab.
    *  Phase 3 will expand this to a full BrowserSessionProfile per workspace. */
   browserDefaultUrl?: string | null
@@ -2634,6 +2638,12 @@ export type PersistedUIState = {
   /** Local product-state facts: feature ids the user has actually used.
    *  Used by education surfaces to avoid teaching already-discovered features. */
   featureInteractions?: FeatureInteractionState
+  /** Contextual tours already surfaced to the user. Unknown ids are ignored
+   *  during hydration so downgrade/upgrade cycles remain forward-compatible. */
+  contextualToursSeenIds?: ContextualTourId[]
+  /** Whether this profile may receive automatic contextual tours from this
+   *  rollout. Missing means the renderer has not classified the profile yet. */
+  contextualToursAutoEligible?: boolean
 }
 
 export const PET_SIZE_MIN = 60

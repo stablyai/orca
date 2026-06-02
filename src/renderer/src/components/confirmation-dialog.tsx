@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { useAppStore } from '@/store'
 
 type ConfirmationDialogOptions = {
   title: string
@@ -37,6 +38,9 @@ export function ConfirmationDialogProvider({
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
   const activeRequest = queue[0] ?? null
   const activeRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
+  const setContextualToursBlockingSurfaceVisible = useAppStore(
+    (s) => s.setContextualToursBlockingSurfaceVisible
+  )
   const lastDisplayedRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
   activeRequestRef.current = activeRequest
   if (activeRequest) {
@@ -44,6 +48,13 @@ export function ConfirmationDialogProvider({
   }
   // Why: Radix keeps dialog content mounted while closing; keep labels stable without a post-render Effect.
   const displayedRequest = activeRequest ?? lastDisplayedRequestRef.current
+
+  useEffect(() => {
+    // Why: this provider's dialog is not represented by activeModal. Block
+    // contextual tours so they cannot appear behind confirmation prompts.
+    setContextualToursBlockingSurfaceVisible(activeRequest !== null)
+    return () => setContextualToursBlockingSurfaceVisible(false)
+  }, [activeRequest, setContextualToursBlockingSurfaceVisible])
 
   const confirm = useCallback<ConfirmationDialogContextValue>((options) => {
     return new Promise((resolve) => {

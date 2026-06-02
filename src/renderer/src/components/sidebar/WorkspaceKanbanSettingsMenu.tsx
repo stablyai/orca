@@ -41,6 +41,7 @@ export default function WorkspaceKanbanSettingsMenu({
               variant="ghost"
               size="icon-xs"
               aria-label="Workspace board settings"
+              data-contextual-tour-target="workspace-board-settings"
               className="text-muted-foreground"
             >
               <Settings className="size-3.5" />

@@ -4,6 +4,10 @@
 import type { PreloadApi, PreflightStatus, RefreshAgentsResult } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
+  ComputerUsePermissionSetupResult,
+  ComputerUsePermissionStatusResult
+} from '../../../shared/computer-use-permissions-types'
+import type {
   DetectedWorktreeListResult,
   DirEntry,
   ForceDeleteWorktreeBranchResult,
@@ -20,6 +24,7 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../shared/types'
+import type { SkillDiscoveryResult } from '../../../shared/skills'
 import {
   getDefaultOnboardingState,
   getDefaultSettings,
@@ -65,6 +70,7 @@ import {
   type FeatureInteractionId,
   type FeatureInteractionState
 } from '../../../shared/feature-interactions'
+import { normalizeContextualTourIds, type ContextualTourId } from '../../../shared/contextual-tours'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -543,9 +549,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     computerUsePermissions: createComputerUsePermissionsApi(),
     updater: createUpdaterApi(),
     shell: createShellApi(),
-    skills: {
-      discover: () => Promise.resolve({ skills: [], sources: [], scannedAt: Date.now() })
-    },
+    skills: createSkillsApi(),
     pty: createPtyApi(),
     ssh: createSshApi(),
     wsl: {
@@ -1631,6 +1635,10 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
             result.ui.featureInteractions
+          ),
+          contextualToursSeenIds: mergeContextualTourSeenIds(
+            local.contextualToursSeenIds,
+            result.ui.contextualToursSeenIds
           )
         }
         writeJson(UI_STORAGE_KEY, next)
@@ -1676,6 +1684,10 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
             result.ui.featureInteractions
+          ),
+          contextualToursSeenIds: mergeContextualTourSeenIds(
+            local.contextualToursSeenIds,
+            result.ui.contextualToursSeenIds
           )
         }
         writeJson(UI_STORAGE_KEY, next)
@@ -1708,6 +1720,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     isMaximized: () => Promise.resolve(false),
     onOpenSettings: () => noopUnsubscribe,
+    onOpenSetupGuide: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,
     onToggleLeftSidebar: () => noopUnsubscribe,
@@ -1912,20 +1925,23 @@ function createComputerUsePermissionsApi(): NonNullable<
 > {
   return {
     getStatus: () =>
-      Promise.resolve({
-        platform: getBrowserPlatform(),
-        helperAppPath: null,
-        helperUnavailableReason: 'web_client',
-        permissions: []
-      }),
-    openSetup: () =>
-      Promise.resolve({
+      callRuntimeResult<ComputerUsePermissionStatusResult>(
+        'computer.permissionsStatus',
+        {},
+        15_000
+      ),
+    openSetup: (args) =>
+      callRuntimeResult<ComputerUsePermissionSetupResult>(
+        'computer.permissions',
+        args ?? {},
+        15_000
+      ).catch(() => ({
         platform: getBrowserPlatform(),
         helperAppPath: null,
         openedSettings: false,
         launchedHelper: false,
         nextStep: 'Computer-use permissions are managed on the Orca server.'
-      }),
+      })),
     reset: () =>
       Promise.resolve({
         platform: getBrowserPlatform(),
@@ -1934,6 +1950,17 @@ function createComputerUsePermissionsApi(): NonNullable<
         bundleId: null,
         permissions: []
       })
+  }
+}
+
+function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
+  return {
+    discover: () =>
+      callRuntimeResult<SkillDiscoveryResult>('skills.discover', undefined, 15_000).catch(() => ({
+        skills: [],
+        sources: [],
+        scannedAt: Date.now()
+      }))
   }
 }
 
@@ -2374,6 +2401,17 @@ function mergeFeatureInteractionState(
       : incomingRecord
   }
   return merged
+}
+
+function mergeContextualTourSeenIds(
+  current: PersistedUIState['contextualToursSeenIds'],
+  incoming: PersistedUIState['contextualToursSeenIds']
+): ContextualTourId[] {
+  const merged = new Set<ContextualTourId>(normalizeContextualTourIds(current))
+  for (const id of normalizeContextualTourIds(incoming)) {
+    merged.add(id)
+  }
+  return [...merged]
 }
 
 function mergeSettings(base: GlobalSettings, updates: Partial<GlobalSettings>): GlobalSettings {

@@ -88,6 +88,7 @@ import {
 } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
@@ -280,6 +281,23 @@ function Terminal(): React.JSX.Element | null {
   const activeWorktreeBrowserTabIdsKey = renderedActiveWorktreeId
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
+  const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
+  const hasSplitTerminalPane = useAppStore((s) =>
+    Boolean(s.featureInteractions['terminal-pane-split']?.interactionCount)
+  )
+
+  useContextualTour(
+    'workspace-agent-sessions',
+    Boolean(
+      activeWorktreeId &&
+      activeView === 'terminal' &&
+      workspaceSessionReady &&
+      activeTabType === 'terminal' &&
+      Boolean(activeTabId) &&
+      (!hasSplitTerminalPane || activeContextualTourId === 'workspace-agent-sessions')
+    ),
+    'workspace_agent_sessions_visible'
+  )
 
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)

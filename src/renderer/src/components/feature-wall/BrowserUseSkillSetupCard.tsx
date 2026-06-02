@@ -7,6 +7,7 @@ import {
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
+import { useAppStore } from '@/store'
 
 export function BrowserUseSkillSetupCard(props: {
   compact?: boolean
@@ -16,6 +17,7 @@ export function BrowserUseSkillSetupCard(props: {
   const { compact, terminalHeightPx, skill } = props
 
   const handleBeforeOpenTerminal = async (): Promise<void> => {
+    useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
     await ensureOrcaCliAvailableForAgentSkillTerminal()
     localStorage.setItem(BROWSER_USE_ENABLED_STORAGE_KEY, '1')
   }

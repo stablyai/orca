@@ -55,6 +55,8 @@ type FileContent = {
   loadError?: string
 }
 
+const noopCloseMarkdownTableOfContents = (): void => {}
+
 function matchesPendingEditorReveal(
   reveal: PendingEditorReveal | null,
   file: Pick<OpenFile, 'id' | 'filePath'>
@@ -106,7 +108,7 @@ export function EditorContent({
   isChangesMode,
   sideBySide,
   showMarkdownTableOfContents = false,
-  onCloseMarkdownTableOfContents = () => {},
+  onCloseMarkdownTableOfContents = noopCloseMarkdownTableOfContents,
   markdownAnnotationsEnabled = true,
   pendingEditorReveal,
   handleContentChange,

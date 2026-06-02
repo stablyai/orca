@@ -32,6 +32,7 @@ import {
 } from './worktree-manual-order'
 import type { WorkspaceStatus, WorktreeMeta } from '../../../../shared/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
+import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 
 type WorkspaceKanbanDrawerProps = {
   open: boolean
@@ -441,6 +442,7 @@ export default function WorkspaceKanbanDrawer({
 
   useWorkspaceKanbanShiftWheelScroll(boardRef, laneScrollerRef, open, isPointerDragActiveRef)
   useWorkspaceKanbanOutsideDismiss({ open, boardRef, preserveOpenForMenu, onOpenChange })
+  useContextualTour('workspace-board', open, 'workspace_board_visible')
 
   useEffect(() => {
     if (!open || selectedWorktreeIds.size === 0) {
@@ -487,6 +489,7 @@ export default function WorkspaceKanbanDrawer({
             width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`
           } as React.CSSProperties
         }
+        data-contextual-tour-target="workspace-board-surface"
         onOpenAutoFocus={(event) => {
           // Why: Radix focuses the first toolbar button on open, which opens
           // its tooltip without hover and makes the drawer feel noisy.
@@ -562,6 +565,10 @@ export default function WorkspaceKanbanDrawer({
           onPointerDown={handleAreaSelectionPointerDown}
         >
           <WorkspaceKanbanAreaSelectionOverlay ref={areaSelectionOverlayRef} />
+          <div
+            className="pointer-events-none absolute left-1/2 top-1/2 size-6 -translate-x-1/2 -translate-y-1/2"
+            data-contextual-tour-target="workspace-board-center"
+          />
           <WorkspaceKanbanPinDropTarget
             isDragOver={pinDragOver}
             onDragOver={handlePinDragOver}

@@ -15,6 +15,7 @@ import {
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 
 const SidebarHeader = React.memo(function SidebarHeader() {
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
@@ -150,6 +151,9 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 size={isRepoGrouping ? 'xs' : 'icon-xs'}
                 aria-label="Add to Orca"
                 className={isRepoGrouping ? 'gap-1 text-muted-foreground' : 'text-muted-foreground'}
+                data-contextual-tour-target={
+                  canCreateWorkspace ? 'workspace-create-control' : undefined
+                }
               >
                 <Plus className="size-3.5" strokeWidth={2.25} />
                 {isRepoGrouping ? <span className="text-[11px]">Add</span> : null}
@@ -159,13 +163,14 @@ const SidebarHeader = React.memo(function SidebarHeader() {
             <DropdownMenuContent align="end" sideOffset={6} className="w-64">
               <DropdownMenuLabel>Worktree</DropdownMenuLabel>
               <DropdownMenuItem
-                disabled={!canCreateWorkspace}
                 onSelect={() => {
                   if (!canCreateWorkspace) {
                     return
                   }
-                  openModal('new-workspace-composer', { telemetrySource: 'sidebar' })
+                  openWorkspaceCreationComposerWithTourHandoff()
                 }}
+                aria-label="New workspace"
+                disabled={!canCreateWorkspace}
               >
                 <Plus className="size-3.5" />
                 <span className="flex min-w-0 flex-col">

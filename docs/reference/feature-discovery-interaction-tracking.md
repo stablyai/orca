@@ -58,6 +58,7 @@ Do not upload this state as broad analytics. Product analytics should continue t
 Orca also records surface-level interactions for feature areas where opening the surface is itself a meaningful discovery signal:
 
 - `workspace-board`: workspace board opened
+- `workspace-agent-sessions`: workspace terminal surface opened with agent split controls visible
 - `browser`: non-blank browser page viewed
 - `tasks`: Tasks page opened
 - `automations`: Automations page opened

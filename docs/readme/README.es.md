@@ -111,7 +111,7 @@ Controla tus agentes desde el teléfono.
 </p>
 
 - **iOS:** [Descargar desde App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Descargar APK desde GitHub Releases](https://github.com/stablyai/orca/releases/download/mobile-v0.0.10/app-release.apk)
+- **Android:** [Descargar APK desde GitHub Releases](https://github.com/stablyai/orca/releases/download/mobile-v0.0.11/app-release.apk)
 
 ---
 

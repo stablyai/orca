@@ -56,6 +56,7 @@ export default function WorkspaceKanbanLaneGrid({
   return (
     <div
       className="grid h-full min-h-0 min-w-full grid-rows-[minmax(0,1fr)] gap-3"
+      data-contextual-tour-target="workspace-board-lanes"
       style={{
         gridTemplateColumns: `repeat(${statuses.length}, minmax(${columnWidth}px, ${columnWidth}px))`
       }}

@@ -129,38 +129,32 @@ export function SetupScriptPromptBody({
   if (sharedSetupIgnored) {
     return (
       <>
-        This repo is set to ignore <code>orca.yaml</code> setup scripts. Configure a local setup
-        command or change the script source in Settings.
+        This repo ignores shared <code>orca.yaml</code> setup scripts. Add a local command, or
+        change the source in Settings.
       </>
     )
   }
   if (isPackageManagerSuggestion) {
-    return (
-      <>
-        Setup scripts run automatically when you create a new worktree, so you don&apos;t have to
-        run the same command every time.
-      </>
-    )
+    return <>Save the detected command to run it whenever Orca creates a worktree.</>
   }
   if (candidateSource) {
     return (
       <>
-        Detected setup config from <span className="break-words">{candidateSource}</span>. Save it
-        locally so every workspace starts ready automatically. You can move it to{' '}
-        <code>orca.yaml</code> later to share it.
+        Found a setup command in <span className="break-words">{candidateSource}</span>. Save it to
+        run for new worktrees.
       </>
     )
   }
   return (
     <>
-      Add a local setup command so each new workspace starts ready automatically. You can move it to{' '}
-      <code>orca.yaml</code> later to share it for{' '}
+      Add a setup command for{' '}
       <span className="inline-flex items-center gap-1.5 align-baseline px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
         <RepoBadgeMark color={repo.badgeColor} />
         <span className="text-[10px] font-semibold text-foreground truncate max-w-[8rem] leading-none lowercase">
           {repo.displayName}
         </span>
-      </span>
+      </span>{' '}
+      to run when Orca creates new worktrees.
     </>
   )
 }

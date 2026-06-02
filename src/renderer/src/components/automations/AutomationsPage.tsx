@@ -92,6 +92,7 @@ import { AUTOMATION_TEMPLATES, type AutomationTemplate } from './automation-temp
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 import { ExternalAutomationManagers } from './ExternalAutomationManagers'
 import type { FetchExternalAutomationRuns } from './ExternalAutomationRunTable'
+import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 
 const AGENTS = AGENT_CATALOG.map((agent) => agent.id)
 const DEFAULT_TIME = '09:00'
@@ -324,6 +325,11 @@ export default function AutomationsPage(): React.JSX.Element {
     manager: ExternalAutomationManager
     job: ExternalAutomationJob
   } | null>(null)
+  useContextualTour(
+    'automations',
+    !createOpen && !deleteTarget && !externalDeleteTarget,
+    'automations_open'
+  )
   const [editingExternalTarget, setEditingExternalTarget] = useState<{
     manager: ExternalAutomationManager
     job: ExternalAutomationJob
@@ -1047,6 +1053,9 @@ export default function AutomationsPage(): React.JSX.Element {
       await refresh()
       selectAutomationId(automation.id)
       setCreateOpen(false)
+      if (!editingAutomationId) {
+        useAppStore.getState().recordFeatureInteraction('automation-created')
+      }
       toast.success(editingAutomationId ? 'Automation updated.' : 'Automation saved.')
     } catch (error) {
       if (isHermesSave) {
@@ -1117,6 +1126,7 @@ export default function AutomationsPage(): React.JSX.Element {
 
   const runNow = async (automation: Automation): Promise<void> => {
     await window.api.automations.runNow({ id: automation.id })
+    useAppStore.getState().recordFeatureInteraction('automation-run')
     await hydratePersistedUIState()
     await refresh()
     toast.message('Automation run queued.')
@@ -1374,6 +1384,7 @@ export default function AutomationsPage(): React.JSX.Element {
                 aria-label="Add automation"
                 onClick={() => openCreateDialog()}
                 className="border border-border/50 bg-transparent hover:bg-muted/50"
+                data-contextual-tour-target="automations-create"
               >
                 <Plus className="size-4" />
               </Button>
@@ -1560,7 +1571,10 @@ export default function AutomationsPage(): React.JSX.Element {
       </Dialog>
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,360px)_1fr] overflow-hidden border-t border-border/50">
-        <section className="flex min-h-0 flex-col border-r border-border/50 bg-muted/20">
+        <section
+          className="flex min-h-0 flex-col border-r border-border/50 bg-muted/20"
+          data-contextual-tour-target="automations-list"
+        >
           <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-2">
             {automations.length + externalAutomationEntries.length > 0 ? (
               <div className="grid grid-cols-[1fr_auto] gap-2 px-2 pb-2 text-[11px] font-medium uppercase text-muted-foreground">
@@ -1932,7 +1946,10 @@ export default function AutomationsPage(): React.JSX.Element {
               onValueChange={(value) => setActivePaneTab(value as AutomationPaneTab)}
               className="min-h-0 flex-1 gap-0"
             >
-              <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-5 py-2">
+              <div
+                className="flex shrink-0 items-center justify-between border-b border-border/50 px-5 py-2"
+                data-contextual-tour-target="automations-runs"
+              >
                 <TabsList variant="line" className="h-8">
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="runs" disabled={!selected}>

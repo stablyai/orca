@@ -1083,6 +1083,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         activeGroupIdByWorktree: { ...state.activeGroupIdByWorktree, [worktreeId]: newGroupId }
       }
     })
+    get().recordFeatureInteraction?.('terminal-pane-split')
     get().recordFeatureInteraction?.('terminal-panes')
     return newGroupId
   },
