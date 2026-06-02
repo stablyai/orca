@@ -3495,6 +3495,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
   const revealWorktreeInSidebar = useAppStore((s) => s.revealWorktreeInSidebar)
+  const setWorktreesPinnedAndReveal = useAppStore((s) => s.setWorktreesPinnedAndReveal)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
   const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
   // Why: agent-send eligibility only matters while the picker is open. When it
@@ -4384,30 +4385,16 @@ const WorktreeList = React.memo(function WorktreeList({
 
   const pinWorktree = useCallback(
     (worktreeId: string) => {
-      const current = worktreeMap.get(worktreeId)
-      if (!current || current.isPinned) {
-        return
-      }
-      void updateWorktreeMeta(worktreeId, { isPinned: true })
+      setWorktreesPinnedAndReveal([worktreeId], true)
     },
-    [updateWorktreeMeta, worktreeMap]
+    [setWorktreesPinnedAndReveal]
   )
 
   const pinWorktrees = useCallback(
     (worktreeIds: readonly string[]) => {
-      const updates = new Map<string, { isPinned: true }>()
-      for (const worktreeId of worktreeIds) {
-        const current = worktreeMap.get(worktreeId)
-        if (!current || current.isPinned) {
-          continue
-        }
-        updates.set(worktreeId, { isPinned: true })
-      }
-      if (updates.size > 0) {
-        void updateWorktreesMeta(updates)
-      }
+      setWorktreesPinnedAndReveal(worktreeIds, true)
     },
-    [updateWorktreesMeta, worktreeMap]
+    [setWorktreesPinnedAndReveal]
   )
 
   const reorderWorktrees = useCallback(

@@ -128,6 +128,12 @@ export type WorktreeSlice = {
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>
+  /**
+   * Pin/unpin worktrees, then reveal the first changed one. The reveal is the
+   * point: pinning moves the row to the Pinned section (unpinning moves it
+   * back), so without it the viewport stays put and the user loses the row.
+   */
+  setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
   markWorktreeUnread: (worktreeId: string) => void
   observeTerminalGitHubPullRequestLink: (worktreeId: string, link: TerminalGitHubPRLink) => void
   /** Clear the worktree's unread dot. Called on user interaction with any
