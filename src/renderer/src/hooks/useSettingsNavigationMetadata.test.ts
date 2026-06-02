@@ -24,12 +24,13 @@ function ids(args: { isMac?: boolean; isWindows?: boolean; isWebClient?: boolean
 
 describe('settings navigation metadata', () => {
   it('puts AI capability panes at the top on desktop', () => {
-    expect(ids().slice(0, 8)).toEqual([
+    expect(ids().slice(0, 9)).toEqual([
       'agents',
       'accounts',
       'orchestration',
       'computer-use',
       'voice',
+      'setup-guide',
       'general',
       'integrations',
       'git'
@@ -37,10 +38,11 @@ describe('settings navigation metadata', () => {
   })
 
   it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {
-    expect(ids({ isWebClient: true }).slice(0, 6)).toEqual([
+    expect(ids({ isWebClient: true }).slice(0, 7)).toEqual([
       'agents',
       'accounts',
       'orchestration',
+      'setup-guide',
       'general',
       'integrations',
       'git'
