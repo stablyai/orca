@@ -28,6 +28,12 @@ export function getLinkedWorkItemSuggestedName(item: { title: string }): string 
   return slugifyForWorkspaceName(seed)
 }
 
+export function getLinearIssueWorkspaceName(issue: { identifier: string; title: string }): string {
+  const key = slugifyForWorkspaceName(issue.identifier)
+  const titleSlug = getLinkedWorkItemSuggestedName(issue)
+  return titleSlug ? `${key}-${titleSlug}` : key
+}
+
 export function resolveWorkspaceCreateName(args: {
   draft: string | undefined
   fallback: string

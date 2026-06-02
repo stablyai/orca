@@ -76,7 +76,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { AppState } from '../store/types'
 import {
   closeWebRuntimeSessionTab,
@@ -609,7 +609,7 @@ export function buildNewWorkspaceShortcutModalData(
 
   return {
     telemetrySource: 'shortcut',
-    prefilledName: getLinkedWorkItemSuggestedName(linearIssue),
+    prefilledName: getLinearIssueWorkspaceName(linearIssue),
     // Why: Cmd+N from a Linear issue should behave like the issue's Start
     // workspace action; otherwise the agent launches without source context.
     linkedWorkItem: buildLinearIssueLinkedWorkItem(linearIssue)
@@ -1219,16 +1219,18 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onSplitTerminal(({ tabId, paneRuntimeId, direction, command, telemetrySource }) => {
-        const detail: SplitTerminalPaneDetail = {
-          tabId,
-          paneRuntimeId,
-          direction,
-          command,
-          telemetrySource
+      window.api.ui.onSplitTerminal(
+        ({ tabId, paneRuntimeId, direction, command, telemetrySource }) => {
+          const detail: SplitTerminalPaneDetail = {
+            tabId,
+            paneRuntimeId,
+            direction,
+            command,
+            telemetrySource
+          }
+          window.dispatchEvent(new CustomEvent(SPLIT_TERMINAL_PANE_EVENT, { detail }))
         }
-        window.dispatchEvent(new CustomEvent(SPLIT_TERMINAL_PANE_EVENT, { detail }))
-      })
+      )
     )
 
     unsubs.push(

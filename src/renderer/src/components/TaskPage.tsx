@@ -137,6 +137,7 @@ import {
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import {
   buildTaskPageRepoSourceState,
   deriveTaskPageGitHubWorkItemsFetchOptions,
@@ -5879,7 +5880,7 @@ export default function TaskPage(): React.JSX.Element {
       const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue, renderedText)
       openModal('new-workspace-composer', {
         linkedWorkItem,
-        prefilledName: getLinkedWorkItemSuggestedName(issue),
+        prefilledName: getLinearIssueWorkspaceName(issue),
         telemetrySource: 'sidebar'
       })
     },

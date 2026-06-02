@@ -148,7 +148,7 @@ describe('buildNewWorkspaceShortcutModalData', () => {
     } as never)
 
     expect(data.telemetrySource).toBe('shortcut')
-    expect(data.prefilledName).toBe('fix-linear-context-handoff')
+    expect(data.prefilledName).toBe('eng-123-fix-linear-context-handoff')
     expect(data.linkedWorkItem).toMatchObject({
       type: 'issue',
       number: 0,
@@ -1078,7 +1078,12 @@ describe('useIpcEvents updater integration', () => {
             leafId?: string
             splitFromLeafId?: string
             splitDirection?: 'horizontal' | 'vertical'
-            splitTelemetrySource?: 'contextual_tour' | 'keyboard' | 'context_menu' | 'command' | 'unknown'
+            splitTelemetrySource?:
+              | 'contextual_tour'
+              | 'keyboard'
+              | 'context_menu'
+              | 'command'
+              | 'unknown'
           }) => void)
         | null
     } = { current: null }
@@ -1190,7 +1195,12 @@ describe('useIpcEvents updater integration', () => {
               leafId?: string
               splitFromLeafId?: string
               splitDirection?: 'horizontal' | 'vertical'
-              splitTelemetrySource?: 'contextual_tour' | 'keyboard' | 'context_menu' | 'command' | 'unknown'
+              splitTelemetrySource?:
+                | 'contextual_tour'
+                | 'keyboard'
+                | 'context_menu'
+                | 'command'
+                | 'unknown'
             }) => void
           ) => {
             createTerminalListenerRef.current = listener

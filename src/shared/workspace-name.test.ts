@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getLinearIssueWorkspaceName,
   getLinkedWorkItemSuggestedName,
   resolveWorkspaceCreateName,
   slugifyForWorkspaceName
@@ -21,6 +22,17 @@ describe('getLinkedWorkItemSuggestedName', () => {
     expect(getLinkedWorkItemSuggestedName({ title: 'Add mobile drawer (#812)' })).toBe(
       'add-mobile-drawer'
     )
+  })
+})
+
+describe('getLinearIssueWorkspaceName', () => {
+  it('keeps the Linear identifier in the workspace seed', () => {
+    expect(
+      getLinearIssueWorkspaceName({
+        identifier: 'ENG-42',
+        title: 'Ship Linear parity'
+      })
+    ).toBe('eng-42-ship-linear-parity')
   })
 })
 
