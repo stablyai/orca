@@ -1971,7 +1971,7 @@ function PRFilesCombinedDiffViewer({
   )
 
   return (
-    <div className="flex min-h-[520px] flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background/50 px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-2">
           {fileTreeCollapsed && (
@@ -6067,7 +6067,7 @@ export default function GitHubItemDialog({
                     />
                   </TabsContent>
 
-                  <TabsContent value="files" className="mt-0">
+                  <TabsContent value="files" className="mt-0 h-full min-h-0 overflow-hidden">
                     {loading && files.length === 0 ? (
                       <div className="flex items-center justify-center py-10">
                         <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
