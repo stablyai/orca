@@ -1,11 +1,20 @@
 import type { RefObject } from 'react'
-import { ArrowLeft, Search, Server, type LucideIcon, type LucideProps } from 'lucide-react'
+import {
+  ArrowLeft,
+  ListChecks,
+  Search,
+  Server,
+  type LucideIcon,
+  type LucideProps
+} from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import { RepoIconGlyph } from '../repo/repo-icon'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { useSettingsSetupGuideProgress } from './settings-setup-guide-progress'
 
 type NavSection = {
   id: string
@@ -44,6 +53,46 @@ type SettingsSidebarProps = {
       altKey: boolean
     }
   ) => void
+}
+
+function SettingsSetupGuideRow(): React.JSX.Element | null {
+  const activeModal = useAppStore((s) => s.activeModal)
+  const openModal = useAppStore((s) => s.openModal)
+  const settingsSetupProgress = useSettingsSetupGuideProgress(true)
+  const setupComplete = settingsSetupProgress.firstIncompleteStepId === null
+  const setupActive = activeModal === 'setup-guide'
+  const progressLabel = `${settingsSetupProgress.doneCount}/${settingsSetupProgress.total}`
+
+  if (setupComplete) {
+    return null
+  }
+
+  return (
+    <div className="border-b border-border/60 pb-4">
+      <button
+        type="button"
+        aria-current={setupActive ? 'page' : undefined}
+        aria-label={`Get started with Orca, ${settingsSetupProgress.doneCount} of ${settingsSetupProgress.total} done. Open setup guide.`}
+        onClick={() =>
+          openModal('setup-guide', {
+            setupStepId: settingsSetupProgress.firstIncompleteStepId,
+            telemetrySource: 'settings'
+          })
+        }
+        className={cn(
+          'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          setupActive ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-muted/60'
+        )}
+      >
+        <ListChecks className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate font-medium">Get started with Orca</span>
+        <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-ai-action-accent/35 bg-ai-action-accent/10 px-2 py-0.5 font-mono text-[11px] font-semibold leading-none text-ai-action-accent">
+          <span className="size-1.5 rounded-full bg-ai-action-accent" aria-hidden />
+          {progressLabel}
+        </span>
+      </button>
+    </div>
+  )
 }
 
 export function SettingsSidebar({
@@ -100,6 +149,8 @@ export function SettingsSidebar({
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
         <div className="space-y-5">
+          <SettingsSetupGuideRow />
+
           {generalGroups.map((group) => (
             <div key={group.id} className="space-y-2">
               <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
