@@ -15,6 +15,7 @@ import { RepoIconGlyph } from '../repo/repo-icon'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { useSettingsSetupGuideProgress } from './settings-setup-guide-progress'
+import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
 
 type NavSection = {
   id: string
@@ -55,15 +56,22 @@ type SettingsSidebarProps = {
   ) => void
 }
 
-function SettingsSetupGuideRow(): React.JSX.Element | null {
-  const activeModal = useAppStore((s) => s.activeModal)
-  const openModal = useAppStore((s) => s.openModal)
-  const settingsSetupProgress = useSettingsSetupGuideProgress(true)
-  const setupComplete = settingsSetupProgress.firstIncompleteStepId === null
-  const setupActive = activeModal === 'setup-guide'
-  const progressLabel = `${settingsSetupProgress.doneCount}/${settingsSetupProgress.total}`
+type SettingsSetupGuideRowProps = {
+  progress: SettingsSetupGuideProgress
+  setupActive: boolean
+  onOpen: () => void
+}
 
-  if (setupComplete) {
+function SettingsSetupGuideRow({
+  progress,
+  setupActive,
+  onOpen
+}: SettingsSetupGuideRowProps): React.JSX.Element | null {
+  const setupGuideSidebarDismissed = useAppStore((s) => s.setupGuideSidebarDismissed)
+  const setupComplete = progress.firstIncompleteStepId === null
+  const progressLabel = `${progress.doneCount}/${progress.total}`
+
+  if (setupComplete || setupGuideSidebarDismissed) {
     return null
   }
 
@@ -72,13 +80,8 @@ function SettingsSetupGuideRow(): React.JSX.Element | null {
       <button
         type="button"
         aria-current={setupActive ? 'page' : undefined}
-        aria-label={`Get started with Orca, ${settingsSetupProgress.doneCount} of ${settingsSetupProgress.total} done. Open setup guide.`}
-        onClick={() =>
-          openModal('setup-guide', {
-            setupStepId: settingsSetupProgress.firstIncompleteStepId,
-            telemetrySource: 'settings'
-          })
-        }
+        aria-label={`Get started with Orca, ${progress.doneCount} of ${progress.total} done. Open setup guide.`}
+        onClick={onOpen}
         className={cn(
           'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
           setupActive ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-muted/60'
@@ -95,6 +98,36 @@ function SettingsSetupGuideRow(): React.JSX.Element | null {
   )
 }
 
+function SettingsSetupGuideNavRow({
+  progress,
+  setupActive,
+  onOpen
+}: SettingsSetupGuideRowProps): React.JSX.Element {
+  const progressLabel = `${progress.doneCount}/${progress.total}`
+
+  return (
+    <button
+      type="button"
+      aria-current={setupActive ? 'page' : undefined}
+      aria-label={`Get started with Orca, ${progress.doneCount} of ${progress.total} done. Open setup guide.`}
+      onClick={onOpen}
+      className={cn(
+        'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        setupActive
+          ? 'bg-accent font-medium text-accent-foreground'
+          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+      )}
+    >
+      <ListChecks className="size-4 shrink-0" />
+      <span className="truncate">Get started with Orca</span>
+      <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-ai-action-accent/35 bg-ai-action-accent/10 px-2 py-0.5 font-mono text-[11px] font-semibold leading-none text-ai-action-accent">
+        <span className="size-1.5 rounded-full bg-ai-action-accent" aria-hidden />
+        {progressLabel}
+      </span>
+    </button>
+  )
+}
+
 export function SettingsSidebar({
   activeSectionId,
   generalGroups,
@@ -106,6 +139,16 @@ export function SettingsSidebar({
   onSearchChange,
   onSelectSection
 }: SettingsSidebarProps): React.JSX.Element {
+  const activeModal = useAppStore((s) => s.activeModal)
+  const openModal = useAppStore((s) => s.openModal)
+  const setupGuideProgress = useSettingsSetupGuideProgress(true)
+  const setupActive = activeModal === 'setup-guide'
+  const openSetupGuide = (): void => {
+    openModal('setup-guide', {
+      setupStepId: setupGuideProgress.firstIncompleteStepId ?? undefined,
+      telemetrySource: 'settings'
+    })
+  }
   const searchShortcutHint = useShortcutLabel('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
@@ -149,7 +192,11 @@ export function SettingsSidebar({
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
         <div className="space-y-5">
-          <SettingsSetupGuideRow />
+          <SettingsSetupGuideRow
+            progress={setupGuideProgress}
+            setupActive={setupActive}
+            onOpen={openSetupGuide}
+          />
 
           {generalGroups.map((group) => (
             <div key={group.id} className="space-y-2">
@@ -157,6 +204,14 @@ export function SettingsSidebar({
                 {group.title}
               </p>
               <div className="space-y-1">
+                {group.id === 'setup' ? (
+                  <SettingsSetupGuideNavRow
+                    progress={setupGuideProgress}
+                    setupActive={setupActive}
+                    onOpen={openSetupGuide}
+                  />
+                ) : null}
+
                 {group.sections.map((section) => {
                   const Icon = section.icon
                   const isActive = activeSectionId === section.id

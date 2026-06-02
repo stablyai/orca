@@ -753,7 +753,7 @@ function Settings(): React.JSX.Element {
   const generalNavGroups: SettingsNavGroup[] = SETTINGS_NAV_GROUPS.map((group) => ({
     ...group,
     sections: generalNavSections.filter((section) => section.group === group.id)
-  })).filter((group) => group.sections.length > 0)
+  })).filter((group) => group.sections.length > 0 || group.id === 'setup')
   const repoNavSections = visibleNavSections
     .filter((section) => section.id.startsWith('repo-'))
     .map((section) => {
