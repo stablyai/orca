@@ -288,7 +288,7 @@ describe('terminal multiplex RPC', () => {
     await dispatchPromise
   })
 
-  it('drops desktop multiplex input while a mobile client owns the terminal floor', async () => {
+  it('reclaims desktop multiplex input while a mobile client owns the terminal floor', async () => {
     const messages: string[] = []
     const handlers = new Map<
       number,
@@ -312,6 +312,7 @@ describe('terminal multiplex RPC', () => {
         rows: 20
       }),
       getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'phone-1' }),
+      reclaimTerminalForDesktop: vi.fn().mockResolvedValue(true),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
       }),
@@ -383,7 +384,14 @@ describe('terminal multiplex RPC', () => {
       )!
     )
 
-    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(runtime.reclaimTerminalForDesktop).toHaveBeenCalledWith('pty-1'))
+    await vi.waitFor(() =>
+      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
+        text: 'typed while locked',
+        enter: false,
+        interrupt: false
+      })
+    )
     cleanups.get('terminal-multiplex:conn-locked')?.()
     await dispatchPromise
   })
