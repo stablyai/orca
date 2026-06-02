@@ -25,7 +25,8 @@ import {
   getDefaultSettings,
   getDefaultUIState,
   getDefaultWorkspaceSession,
-  normalizeAgentActivityDisplayMode
+  normalizeAgentActivityDisplayMode,
+  ONBOARDING_FLOW_VERSION
 } from '../../../shared/constants'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
@@ -485,6 +486,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         const next: OnboardingState = {
           ...current,
           ...updates,
+          flowVersion: ONBOARDING_FLOW_VERSION,
           checklist: {
             ...current.checklist,
             ...updates.checklist
@@ -2310,6 +2312,7 @@ function getStoredWorkspaceSession(): WorkspaceSessionState {
 function closeWebOnboarding(base: OnboardingState): OnboardingState {
   return {
     ...base,
+    flowVersion: ONBOARDING_FLOW_VERSION,
     closedAt: Date.now(),
     outcome: 'dismissed',
     checklist: {

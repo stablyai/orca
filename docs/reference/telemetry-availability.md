@@ -172,6 +172,8 @@ Dashboard caveats:
 
 Scope: low-cardinality telemetry that makes inline-tour cohort retention dashboards possible.
 
+Current status: the inline first-run onboarding tour was later removed from active onboarding after PR #2734 moved these education/setup moments to contextual feature tours and the Getting started with Orca guide. The historical schemas still accept seven-step `tour`/`agent_setup` onboarding rows for compatibility, but current active onboarding should not emit new `onboarding_step_* { value_kind: 'tour' }` rows.
+
 Added/changed signals:
 
 - `onboarding_tour_outcome` with `outcome`, intro/tour duration fields, optional tour depth fields, `advanced_via`, and injected onboarding `cohort`.
@@ -193,18 +195,18 @@ Added/changed signals:
 
 Required readiness signals:
 
-| Signal                                                                                 | `first_seen_at_utc` |
-| -------------------------------------------------------------------------------------- | ------------------- |
-| `onboarding_tour_outcome` with valid `outcome` and joinable fresh-install start        | `TBD`               |
-| `onboarding_step_viewed { value_kind: 'tour' }`                                        | `TBD`               |
-| `feature_wall_closed` with non-null `source`, `exit_action`, and expected depth fields | `TBD`               |
+| Signal                                                                                 | `first_seen_at_utc`                                                                  |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `onboarding_tour_outcome` with valid `outcome` and joinable fresh-install start        | `TBD`                                                                                |
+| `onboarding_step_viewed { value_kind: 'tour' }`                                        | Historical only; no new active-onboarding rows after the PR #2734 education handoff. |
+| `feature_wall_closed` with non-null `source`, `exit_action`, and expected depth fields | `TBD`                                                                                |
 
 QA/opportunistic signals:
 
-| Signal                                           | `first_seen_at_utc`                                             |
-| ------------------------------------------------ | --------------------------------------------------------------- |
-| `onboarding_step_skipped { value_kind: 'tour' }` | `TBD`; do not gate dashboard readiness on natural skip traffic. |
-| `feature_wall_opened { source: 'onboarding' }`   | `TBD`; surface availability only.                               |
+| Signal                                           | `first_seen_at_utc`                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------------------- |
+| `onboarding_step_skipped { value_kind: 'tour' }` | Historical only; do not gate dashboard readiness on natural skip traffic. |
+| `feature_wall_opened { source: 'onboarding' }`   | `TBD`; surface availability only.                                         |
 
 PostHog evidence checked at `2026-05-23T23:34:32Z`:
 
@@ -228,7 +230,7 @@ Invalid before this rollout's `dashboard_ready_at_utc`:
 
 Primary cohort interpretation:
 
-- Denominator for inline completed/partial/skipped rates: `onboarding_step_viewed { value_kind: 'tour' }` after this rollout's `dashboard_ready_at_utc`.
+- Historical denominator for inline completed/partial/skipped rates: `onboarding_step_viewed { value_kind: 'tour' }` after this rollout's `dashboard_ready_at_utc`. Do not use this as a current active-onboarding readiness signal after the PR #2734 education handoff.
 - `onboarding_tour_outcome.outcome = 'completed_inline'` means the user completed the inline tour during fresh onboarding.
 - `onboarding_tour_outcome.outcome = 'started_partial'` means the user started the inline tour but the fresh onboarding session resolved without inline completion.
 - `onboarding_tour_outcome.outcome = 'skipped_intro'` means the user reached the tour intro and skipped without starting the inline tour.

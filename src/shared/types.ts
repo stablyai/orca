@@ -2406,6 +2406,9 @@ export type OnboardingChecklistState = {
 }
 
 export type OnboardingState = {
+  // Why: numeric step meanings can change when pages are removed; persisted
+  // state needs a version marker so migration does not re-run on new progress.
+  flowVersion: number
   closedAt: number | null
   outcome: OnboardingOutcome | null
   // Sentinel `-1` = not started; `1..5` = highest wizard step the user

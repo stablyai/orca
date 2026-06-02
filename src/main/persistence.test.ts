@@ -25,6 +25,7 @@ import type {
 } from '../shared/types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
+import { ONBOARDING_FLOW_VERSION } from '../shared/constants'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -285,6 +286,69 @@ describe('Store', () => {
     expect(ui.lastActiveRepoId).toBeNull()
     expect(ui.dismissedUpdateVersion).toBeNull()
     expect(ui.lastUpdateCheckAt).toBeNull()
+  })
+
+  it.each([
+    [4, 3],
+    [5, 4],
+    [6, 4],
+    [9, 4]
+  ])(
+    'migrates legacy open onboarding progress %i before applying the current step bound',
+    async (legacyStep, expectedStep) => {
+      writeDataFile({
+        onboarding: {
+          closedAt: null,
+          outcome: null,
+          lastCompletedStep: legacyStep,
+          checklist: {}
+        }
+      })
+
+      const store = await createStore()
+      const onboarding = store.getOnboarding()
+
+      expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
+      expect(onboarding.lastCompletedStep).toBe(expectedStep)
+      expect(onboarding.closedAt).toBeNull()
+      expect(onboarding.outcome).toBeNull()
+    }
+  )
+
+  it('keeps current onboarding progress marked as the five-step flow', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: null,
+        lastCompletedStep: 4,
+        checklist: {}
+      }
+    })
+
+    const store = await createStore()
+    const onboarding = store.getOnboarding()
+
+    expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
+    expect(onboarding.lastCompletedStep).toBe(4)
+  })
+
+  it('migrates legacy completed onboarding progress to the current final step', async () => {
+    writeDataFile({
+      onboarding: {
+        closedAt: 1,
+        outcome: 'completed',
+        lastCompletedStep: 7,
+        checklist: {}
+      }
+    })
+
+    const store = await createStore()
+    const onboarding = store.getOnboarding()
+
+    expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
+    expect(onboarding.outcome).toBe('completed')
+    expect(onboarding.lastCompletedStep).toBe(5)
   })
 
   it('preserves legacy none grouping as ungrouped workspaces', async () => {

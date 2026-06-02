@@ -31,7 +31,6 @@ import {
 } from './nested-repo-telemetry'
 
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
-import { ONBOARDING_FINAL_STEP } from './constants'
 import type {
   DiscoveryStatusEmitted,
   GlobalSettings,
@@ -575,10 +574,11 @@ const agentHookUnattributedSchema = z
 // Closed enums only — no raw paths, repo names, clone URLs, or error
 // strings. The funnel exists to measure activation, not to debug specific
 // user repos.
-// Why: bound is derived from ONBOARDING_FINAL_STEP so adding a wizard step
-// only requires bumping the constant. Zod can't build a literal-union from a
-// numeric constant without runtime gymnastics, so we use a clamped int range.
-const onboardingStepSchema = z.number().int().min(1).max(ONBOARDING_FINAL_STEP)
+// Why: active onboarding now has fewer steps, but these event names already
+// carried seven-step payloads. Keep validation backward-compatible for old rows
+// unless a future versioned event replaces the historical schema.
+const ONBOARDING_TELEMETRY_LEGACY_MAX_STEP = 7
+const onboardingStepSchema = z.number().int().min(1).max(ONBOARDING_TELEMETRY_LEGACY_MAX_STEP)
 const onboardingPathSchema = z.enum(['open_folder', 'clone_url'])
 const onboardingFailureReasonSchema = z.enum([
   'invalid_path',

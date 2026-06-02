@@ -66,6 +66,7 @@ import {
   getDefaultWorkspaceSession,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
+  ONBOARDING_FLOW_VERSION,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
@@ -471,8 +472,32 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
 // merges over current state without wiping previously-true keys. Invalid
 // top-level fields are OMITTED (not coerced to fallbacks) so partial updates
 // don't clobber valid persisted state; the load-path caller spreads defaults.
+type SanitizeOnboardingUpdateOptions = {
+  migrateLegacyProgress?: boolean
+}
+
+function remapLegacyOnboardingLastCompletedStep(
+  lastCompletedStep: number,
+  raw: Record<string, unknown>
+): number {
+  if (raw.outcome === 'completed' && lastCompletedStep >= ONBOARDING_FINAL_STEP) {
+    return ONBOARDING_FINAL_STEP
+  }
+  if (lastCompletedStep === 4) {
+    return 3
+  }
+  if (lastCompletedStep === 5 || lastCompletedStep === 6) {
+    return 4
+  }
+  if (lastCompletedStep > 6) {
+    return 4
+  }
+  return lastCompletedStep
+}
+
 export function sanitizeOnboardingUpdate(
-  input: unknown
+  input: unknown,
+  options: SanitizeOnboardingUpdateOptions = {}
 ): Partial<Omit<OnboardingState, 'checklist'>> & { checklist?: Partial<OnboardingChecklistState> } {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return {}
@@ -503,10 +528,24 @@ export function sanitizeOnboardingUpdate(
     }
     // else: omit.
   }
+  if ('flowVersion' in raw) {
+    const v = raw.flowVersion
+    if (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= ONBOARDING_FLOW_VERSION) {
+      out.flowVersion = v
+    }
+    // else: omit.
+  }
   if ('lastCompletedStep' in raw) {
     const v = raw.lastCompletedStep
-    if (typeof v === 'number' && Number.isInteger(v) && v >= -1 && v <= ONBOARDING_FINAL_STEP) {
-      out.lastCompletedStep = v
+    if (typeof v === 'number' && Number.isInteger(v) && v >= -1) {
+      const isLegacyFlow =
+        options.migrateLegacyProgress && raw.flowVersion !== ONBOARDING_FLOW_VERSION
+      // Why: removing two wizard pages changed numeric meanings. Migrate raw
+      // legacy disk values before the new final-step bound can drop them.
+      const normalized = isLegacyFlow ? remapLegacyOnboardingLastCompletedStep(v, raw) : v
+      if (normalized <= ONBOARDING_FINAL_STEP) {
+        out.lastCompletedStep = normalized
+      }
     }
     // else: omit.
   }
@@ -525,6 +564,9 @@ export function sanitizeOnboardingUpdate(
       }
       out.checklist = checklist
     }
+  }
+  if (options.migrateLegacyProgress) {
+    out.flowVersion = ONBOARDING_FLOW_VERSION
   }
   return out
 }
@@ -1936,7 +1978,9 @@ export class Store {
             // field on disk (string where number expected, unknown checklist
             // key) is dropped or coerced to the default rather than poisoning
             // in-memory state.
-            const sanitized = sanitizeOnboardingUpdate(parsed.onboarding)
+            const sanitized = sanitizeOnboardingUpdate(parsed.onboarding, {
+              migrateLegacyProgress: true
+            })
             return {
               ...defaults.onboarding,
               ...sanitized,
