@@ -722,7 +722,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   reorderRepos,
   prCache,
   workspaceStatuses,
-  projectGroups = [],
+  projectGroups = EMPTY_PROJECT_GROUPS,
   onMoveWorktreeToStatus,
   onMoveWorktreesToStatus,
   onPinWorktree,

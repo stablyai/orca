@@ -2,6 +2,8 @@ import type { GlobalSettings } from '../../../../shared/types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 
+const EMPTY_WSL_DISTROS: string[] = []
+
 type AgentDetectionRuntime = {
   runtime: 'host' | 'wsl'
   wslDistro?: string | null
@@ -56,7 +58,7 @@ export function AgentLocationSetting({
   refresh,
   wslSupportedPlatform = false,
   wslAvailable = false,
-  wslDistros = [],
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false
 }: AgentLocationSettingProps): React.JSX.Element | null {
   const agentRuntime = getSelectedAgentRuntime(

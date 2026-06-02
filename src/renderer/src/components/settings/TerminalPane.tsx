@@ -36,6 +36,8 @@ import { ManageSessionsSection } from './ManageSessionsSection'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 
+const EMPTY_WSL_DISTROS: string[] = []
+
 type TerminalPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
@@ -59,7 +61,7 @@ export function TerminalPane({
   scrollbackMode,
   setScrollbackMode,
   wslAvailable,
-  wslDistros = [],
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false,
   pwshAvailable,
   gitBashAvailable = false

@@ -50,6 +50,8 @@ type TerminalQuickCommandDialogProps = {
   onSave: (command: TerminalQuickCommand) => void
 }
 
+const EMPTY_REPOS: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[] = []
+
 export function createTerminalQuickCommandDraft(
   scope: TerminalQuickCommandScope = { type: 'global' }
 ): TerminalQuickCommand {
@@ -66,7 +68,7 @@ export function TerminalQuickCommandDialog({
   open,
   mode,
   command,
-  repos = [],
+  repos = EMPTY_REPOS,
   onOpenChange,
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {

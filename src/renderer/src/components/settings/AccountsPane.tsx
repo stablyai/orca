@@ -43,6 +43,8 @@ import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 
 export { ACCOUNTS_PANE_SEARCH_ENTRIES }
 
+const EMPTY_WSL_DISTROS: string[] = []
+
 type AccountsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
@@ -234,7 +236,7 @@ export function AccountsPane({
   updateSettings,
   wslSupportedPlatform = false,
   wslAvailable = false,
-  wslDistros = [],
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false
 }: AccountsPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)

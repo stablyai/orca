@@ -16,6 +16,8 @@ import {
 } from './tab-agent-launch-options'
 import type { TuiAgent } from '../../../../shared/types'
 
+const EMPTY_AGENT_OPTIONS: readonly TabAgentLaunchOption[] = []
+
 type TabBarCreateEntryProps = {
   agentOptions?: readonly TabAgentLaunchOption[]
   groupId: string
@@ -28,7 +30,7 @@ type TabBarCreateEntryProps = {
 }
 
 export default function TabBarCreateEntry({
-  agentOptions = [],
+  agentOptions = EMPTY_AGENT_OPTIONS,
   groupId,
   menuOpen,
   onDidOpenEntry,

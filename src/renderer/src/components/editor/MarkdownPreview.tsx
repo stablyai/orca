@@ -89,6 +89,8 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { dirname } from '@/lib/path'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 
+const EMPTY_MARKDOWN_DOCUMENTS: MarkdownDocument[] = []
+
 type MarkdownPreviewProps = {
   content: string
   filePath: string
@@ -434,7 +436,7 @@ export default function MarkdownPreview({
   initialAnchor = null,
   showTableOfContents = false,
   onCloseTableOfContents,
-  markdownDocuments = [],
+  markdownDocuments = EMPTY_MARKDOWN_DOCUMENTS,
   onOpenDocument,
   markdownAnnotationsEnabled = false
 }: MarkdownPreviewProps): React.JSX.Element {
