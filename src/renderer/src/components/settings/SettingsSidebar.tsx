@@ -98,14 +98,12 @@ function SettingsSetupGuideNavRow({
       />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[13px] font-medium leading-4">Onboarding checklist</span>
-        <span className="truncate text-[11px] font-normal leading-4 text-muted-foreground">
-          {progress.doneCount}/{progress.total} complete
-        </span>
       </span>
       <SetupGuideProgressRing
         done={progress.doneCount}
         total={progress.total}
         className="ml-auto shrink-0"
+        tooltipLabel={`${progress.doneCount}/${progress.total} complete`}
       />
     </button>
   )
