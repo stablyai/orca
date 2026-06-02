@@ -3610,6 +3610,43 @@ describe('connectPanePty', () => {
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'pty-local-detached')
   })
 
+  it('restores a detached local PTY from the reattach snapshot when remounted', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: 'snapshot-after-parking' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'wt-1@@detached-local' }]
+      },
+      settings: {
+        ...mockStoreState.settings
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'wt-1@@detached-local' })
+    )
+    expect(transport.attach).not.toHaveBeenCalled()
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith('snapshot-after-parking', expect.any(Function))
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'wt-1@@detached-local')
+  })
+
   it('attaches remote runtime PTY handles instead of creating a replacement terminal', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
