@@ -63,7 +63,6 @@ import {
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type {
   HostedReviewCreationEligibility,
-  HostedReviewInfo,
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices/hosted-review'
@@ -73,6 +72,7 @@ import {
   type HostedReviewClassificationOptions
 } from '../../../../shared/hosted-review-queue'
 import { hostedReviewSummaryFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
+import { type ChecksPanelReview, gitHubPRToChecksPanelReview } from './checks-panel-review'
 import { hostedReviewSummaryFromGitLabInfo } from '../../../../shared/hosted-review-gitlab'
 import {
   checksPanelAsyncResultKey,
@@ -110,12 +110,6 @@ type HostedReviewCreationSnapshot = {
   branch: string
   data: HostedReviewCreationEligibility
 }
-
-type ChecksPanelReview = Pick<
-  HostedReviewInfo,
-  'provider' | 'number' | 'title' | 'state' | 'url' | 'status' | 'updatedAt' | 'mergeable'
-> &
-  Partial<Pick<HostedReviewInfo, 'headSha' | 'conflictSummary'>>
 
 type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
@@ -197,21 +191,6 @@ export function ChecksPanelReviewHeader({
       )}
     </div>
   )
-}
-
-function gitHubPRToChecksPanelReview(pr: PRInfo): ChecksPanelReview {
-  return {
-    provider: 'github',
-    number: pr.number,
-    title: pr.title,
-    state: pr.state,
-    url: pr.url,
-    status: pr.checksStatus,
-    updatedAt: pr.updatedAt,
-    mergeable: pr.mergeable,
-    ...(pr.headSha ? { headSha: pr.headSha } : {}),
-    ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
-  }
 }
 
 function isGitLabChecksPanelReview(
