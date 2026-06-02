@@ -3759,6 +3759,12 @@ export default function TaskPage(): React.JSX.Element {
       : selectedLinearCustomView?.model === 'issue'
         ? canLoadMoreLinearCustomViewIssues
         : canLoadMorePlainLinearIssues
+  const activeLinearIssueLimit =
+    selectedLinearProject && linearProjectTab === 'issues'
+      ? linearProjectIssueLimit
+      : selectedLinearCustomView?.model === 'issue'
+        ? linearCustomViewIssueLimit
+        : linearIssueLimit
 
   const displayedLinearIssues = useMemo(
     () =>
@@ -3848,10 +3854,14 @@ export default function TaskPage(): React.JSX.Element {
     1,
     Math.ceil(filteredLinearIssues.length / LINEAR_ITEM_LIMIT)
   )
+  const loadedLinearIssueLastPageFull =
+    filteredLinearIssues.length > 0 && filteredLinearIssues.length % LINEAR_ITEM_LIMIT === 0
+  const canExposeUnloadedLinearIssuePage =
+    activeLinearIssueCanLoadMore && loadedLinearIssueLastPageFull
   const linearIssueTotalPages =
     filteredLinearIssues.length === 0
       ? 1
-      : loadedLinearIssuePages + (activeLinearIssueCanLoadMore ? 1 : 0)
+      : loadedLinearIssuePages + (canExposeUnloadedLinearIssuePage ? 1 : 0)
   const visibleLinearIssuePage = Math.min(
     activeLinearIssuePage,
     Math.max(0, loadedLinearIssuePages - 1)
@@ -3934,15 +3944,26 @@ export default function TaskPage(): React.JSX.Element {
     }
 
     const maxLoadedPage = Math.max(0, loadedLinearIssuePages - 1)
-    if (activeLinearIssueLoadingTargetPage <= maxLoadedPage || !activeLinearIssueCanLoadMore) {
+    const targetPageLoaded = activeLinearIssueLoadingTargetPage <= maxLoadedPage
+    const targetPageCannotLoad =
+      !activeLinearIssueCanLoadMore ||
+      !loadedLinearIssueLastPageFull ||
+      activeLinearIssueLimit >= LINEAR_ISSUE_LIST_MAX
+    if (targetPageLoaded || targetPageCannotLoad) {
       setActiveLinearIssuePage(Math.min(activeLinearIssueLoadingTargetPage, maxLoadedPage))
       setActiveLinearIssueLoadingTargetPage(null)
+      return
     }
+
+    ensureActiveLinearIssueLimit(activeLinearIssueLimit + LINEAR_ITEM_LIMIT)
   }, [
     activeLinearIssueCanLoadMore,
+    activeLinearIssueLimit,
     activeLinearIssueLoading,
     activeLinearIssueLoadingTargetPage,
+    ensureActiveLinearIssueLimit,
     loadedLinearIssuePages,
+    loadedLinearIssueLastPageFull,
     setActiveLinearIssueLoadingTargetPage,
     setActiveLinearIssuePage
   ])
