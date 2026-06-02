@@ -31,6 +31,7 @@ function installModuleMocks(
     getUserAgent: vi.fn(() => 'Mozilla/5.0 Electron/31 Orca'),
     setPermissionRequestHandler: vi.fn(),
     setPermissionCheckHandler: vi.fn(),
+    setDevicePermissionHandler: vi.fn(),
     setDisplayMediaRequestHandler: vi.fn(),
     on: vi.fn(),
     removeListener: vi.fn(),
