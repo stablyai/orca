@@ -573,6 +573,7 @@ export function useAutomationDispatchEvents(): void {
     const unsubscribeWorkspaceReady = useAppStore.subscribe((state) => {
       if (state.workspaceSessionReady) {
         sendRendererReady()
+        unsubscribeWorkspaceReady()
       }
     })
     if (useAppStore.getState().workspaceSessionReady) {

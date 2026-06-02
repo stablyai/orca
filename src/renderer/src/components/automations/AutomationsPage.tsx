@@ -1128,7 +1128,7 @@ export default function AutomationsPage(): React.JSX.Element {
         const next = current.filter((entry) => entry.id !== automation.id)
         return [...next, automation].sort((left, right) => left.name.localeCompare(right.name))
       })
-      setDraft((current) => ({ ...current, name: '', prompt: '' }))
+      setDraft((current) => ({ ...current, name: '', prompt: '', command: '', globalCwd: '' }))
       await refresh()
       selectAutomationId(automation.id)
       setCreateOpen(false)

@@ -528,7 +528,6 @@ export function AutomationEditorDialog({
                   </SelectTrigger>
                   <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
                     <SelectItem value="floating">Floating workspace</SelectItem>
-                    <SelectItem value="selected_worktree">Selected worktree</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
