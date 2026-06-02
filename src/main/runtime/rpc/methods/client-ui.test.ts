@@ -40,14 +40,14 @@ describe('client UI RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { settings } })
   })
 
-  it('persists the runtime host task source setting for mobile Tasks', async () => {
+  it('persists the runtime host task source settings for mobile Tasks', async () => {
     const settings = {
       defaultTuiAgent: null,
       disabledTuiAgents: ['claude'],
       agentCmdOverrides: {},
-      defaultTaskSource: 'linear',
+      defaultTaskSource: 'jira',
       defaultTaskViewPreset: 'issues',
-      visibleTaskProviders: ['github', 'linear'],
+      visibleTaskProviders: ['github', 'jira'],
       defaultRepoSelection: ['repo-1', 'repo-2'],
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: {
@@ -69,7 +69,8 @@ describe('client UI RPC methods', () => {
       makeRequest('settings.update', {
         defaultTuiAgent: 'codex',
         disabledTuiAgents: ['claude', 'not-real', 'claude'],
-        defaultTaskSource: 'linear',
+        defaultTaskSource: 'jira',
+        visibleTaskProviders: ['github', 'jira'],
         defaultTaskViewPreset: 'my-prs',
         defaultRepoSelection: settings.defaultRepoSelection,
         defaultLinearTeamSelection: ['team-1', 'team-2'],
@@ -80,7 +81,8 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateClientSettings).toHaveBeenCalledWith({
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
-      defaultTaskSource: 'linear',
+      defaultTaskSource: 'jira',
+      visibleTaskProviders: ['github', 'jira'],
       defaultTaskViewPreset: 'my-prs',
       defaultRepoSelection: settings.defaultRepoSelection,
       defaultLinearTeamSelection: ['team-1', 'team-2'],
