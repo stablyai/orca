@@ -146,16 +146,6 @@ export function SettingsSidebar({
         </Button>
       </div>
 
-      {showSetupGuideTopRow ? (
-        <div className="border-b border-border/50 px-3 py-3">
-          <SettingsSetupGuideNavRow
-            progress={setupGuideProgress}
-            setupActive={setupActive}
-            onSelect={(modifiers) => onSelectSection('setup-guide', modifiers)}
-          />
-        </div>
-      ) : null}
-
       <div className="border-b border-border/50 px-3 py-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -173,6 +163,16 @@ export function SettingsSidebar({
           ) : null}
         </div>
       </div>
+
+      {showSetupGuideTopRow ? (
+        <div className="border-b border-border/50 px-3 py-3">
+          <SettingsSetupGuideNavRow
+            progress={setupGuideProgress}
+            setupActive={setupActive}
+            onSelect={(modifiers) => onSelectSection('setup-guide', modifiers)}
+          />
+        </div>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
         <div className="space-y-5">
