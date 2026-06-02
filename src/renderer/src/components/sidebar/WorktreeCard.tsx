@@ -226,9 +226,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const hostedReview: HostedReviewInfo | null | undefined =
     hostedReviewEntry !== undefined ? hostedReviewEntry.data : undefined
-  const fallbackGitHubPRNumber =
-    worktree.linkedPR == null && hostedReview?.provider === 'github' ? hostedReview.number : null
-  const prDisplay = getWorktreeCardPrDisplay(hostedReview, worktree.linkedPR)
+  const linkedGitLabMR = worktree.linkedGitLabMR ?? null
+  const prDisplay = getWorktreeCardPrDisplay(hostedReview, worktree.linkedPR, linkedGitLabMR)
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
     ? issueEntry !== undefined
       ? issueEntry.data
@@ -299,12 +298,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
         return
       }
       // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR
-      // number from metadata or the visible cache whenever we have one.
+      // number from explicit metadata whenever we have one.
       void fetchHostedReviewForBranch(repo.path, branch, {
         repoId: repo.id,
         linkedGitHubPR: worktree.linkedPR ?? null,
-        fallbackGitHubPR: fallbackGitHubPRNumber,
-        linkedGitLabMR: worktree.linkedGitLabMR ?? null,
+        linkedGitLabMR,
         staleWhileRevalidate: true
       })
     }
@@ -320,8 +318,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     isFolder,
     worktree.isBare,
     worktree.linkedPR,
-    fallbackGitHubPRNumber,
-    worktree.linkedGitLabMR,
+    linkedGitLabMR,
     fetchHostedReviewForBranch,
     branch,
     hostedReviewCacheKey,

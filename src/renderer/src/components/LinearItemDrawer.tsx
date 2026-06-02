@@ -1,10 +1,8 @@
 /* eslint-disable max-lines -- Why: the Linear drawer co-locates read-only preview, edit controls, and comment input so the full issue surface stays in one file. */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  AlertTriangle,
   ArrowRight,
   ChevronDown,
-  Circle,
   ExternalLink,
   Gauge,
   LoaderCircle,
@@ -37,6 +35,7 @@ import {
   getLinearStateMarkerStyle,
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
+import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import type { LinearIssue, LinearComment } from '../../../shared/types'
 import {
   linearAddIssueComment,
@@ -440,11 +439,7 @@ export function LinearIssueEditSection({
                   className={propertyRowClass}
                   aria-busy={priorityPending}
                 >
-                  {localPriority === 1 ? (
-                    <AlertTriangle className="size-4 shrink-0 text-destructive" />
-                  ) : (
-                    <Circle className={propertyIconClass} />
-                  )}
+                  <LinearPriorityIcon priority={localPriority} />
                   <span className="min-w-0 flex-1 truncate">
                     {PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
                   </span>
@@ -458,10 +453,11 @@ export function LinearIssueEditSection({
                     type="button"
                     onClick={() => handlePriorityChange(String(p))}
                     className={cn(
-                      LINEAR_EDIT_MENU_ITEM_CLASS,
+                      LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS,
                       localPriority === p && 'bg-accent/50'
                     )}
                   >
+                    <LinearPriorityIcon priority={p} />
                     {PRIORITY_LABELS[p]}
                   </button>
                 ))}
@@ -743,6 +739,7 @@ export function LinearIssueEditSection({
             className={LINEAR_EDIT_CHIP_CLASS}
             aria-busy={priorityPending}
           >
+            <LinearPriorityIcon priority={localPriority} />
             <span className="truncate">
               {PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
             </span>
@@ -755,8 +752,12 @@ export function LinearIssueEditSection({
               key={p}
               type="button"
               onClick={() => handlePriorityChange(String(p))}
-              className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, localPriority === p && 'bg-accent/50')}
+              className={cn(
+                LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS,
+                localPriority === p && 'bg-accent/50'
+              )}
             >
+              <LinearPriorityIcon priority={p} />
               {PRIORITY_LABELS[p]}
             </button>
           ))}

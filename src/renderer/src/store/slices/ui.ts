@@ -1076,9 +1076,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       if (query) {
         state.prefetchLinearIssues({ kind: 'search', query, limit: LINEAR_TASK_PREFETCH_LIMIT })
       } else {
+        // Why: TaskPage no longer exposes Linear preset filters; keep warm
+        // prefetch aligned with the default unsearched issue list.
         state.prefetchLinearIssues({
           kind: 'list',
-          filter: resume?.linearPreset ?? 'all',
+          filter: 'all',
           limit: LINEAR_TASK_PREFETCH_LIMIT
         })
       }

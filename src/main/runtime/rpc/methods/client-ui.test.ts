@@ -40,7 +40,7 @@ describe('client UI RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { settings } })
   })
 
-  it('persists the runtime host task source setting for mobile Tasks', async () => {
+  it('persists the runtime host task source settings for mobile Tasks', async () => {
     const settings = {
       defaultTuiAgent: null,
       disabledTuiAgents: ['claude'],
@@ -70,6 +70,7 @@ describe('client UI RPC methods', () => {
         defaultTuiAgent: 'codex',
         disabledTuiAgents: ['claude', 'not-real', 'claude'],
         defaultTaskSource: 'linear',
+        visibleTaskProviders: ['github', 'linear'],
         defaultTaskViewPreset: 'my-prs',
         defaultRepoSelection: settings.defaultRepoSelection,
         defaultLinearTeamSelection: ['team-1', 'team-2'],
@@ -81,12 +82,26 @@ describe('client UI RPC methods', () => {
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
       defaultTaskSource: 'linear',
+      visibleTaskProviders: ['github', 'linear'],
       defaultTaskViewPreset: 'my-prs',
       defaultRepoSelection: settings.defaultRepoSelection,
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: settings.githubProjects
     })
     expect(response).toMatchObject({ ok: true, result: { settings } })
+
+    vi.mocked(runtime.updateClientSettings).mockClear()
+    await dispatcher.dispatch(
+      makeRequest('settings.update', {
+        defaultTaskSource: 'jira',
+        visibleTaskProviders: ['github', 'jira']
+      })
+    )
+
+    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      defaultTaskSource: 'jira',
+      visibleTaskProviders: ['github', 'jira']
+    })
   })
 
   it('returns the runtime host persisted UI state', async () => {

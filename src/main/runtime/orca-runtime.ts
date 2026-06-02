@@ -78,6 +78,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { getNextProjectGroupOrder } from '../../shared/project-groups'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
+import { TASK_PROVIDERS } from '../../shared/task-providers'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
@@ -1549,7 +1550,7 @@ export class OrcaRuntimeService {
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
-      visibleTaskProviders: settings.visibleTaskProviders ?? ['github', 'gitlab', 'linear'],
+      visibleTaskProviders: settings.visibleTaskProviders ?? [...TASK_PROVIDERS],
       defaultRepoSelection: settings.defaultRepoSelection ?? null,
       defaultLinearTeamSelection: settings.defaultLinearTeamSelection ?? null,
       githubProjects: settings.githubProjects
@@ -1564,6 +1565,7 @@ export class OrcaRuntimeService {
       | 'disabledTuiAgents'
       | 'defaultTaskSource'
       | 'defaultTaskViewPreset'
+      | 'visibleTaskProviders'
       | 'defaultRepoSelection'
       | 'defaultLinearTeamSelection'
       | 'githubProjects'
@@ -10133,13 +10135,13 @@ export class OrcaRuntimeService {
 
   async splitTerminal(
     handle: string,
-	    opts: {
-	      direction?: 'horizontal' | 'vertical'
-	      command?: string
-	      env?: Record<string, string>
-	      activate?: boolean
-	      telemetrySource?: TerminalPaneSplitSource
-	    } = {}
+    opts: {
+      direction?: 'horizontal' | 'vertical'
+      command?: string
+      env?: Record<string, string>
+      activate?: boolean
+      telemetrySource?: TerminalPaneSplitSource
+    } = {}
   ): Promise<RuntimeTerminalSplit> {
     const livePty = this.getLivePtyForHandle(handle)
     if (livePty) {
@@ -10158,11 +10160,11 @@ export class OrcaRuntimeService {
       }
     }
 
-	    this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
-	      direction,
-	      command: opts.command,
-	      telemetrySource: opts.telemetrySource
-	    })
+    this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
+      direction,
+      command: opts.command,
+      telemetrySource: opts.telemetrySource
+    })
 
     const newHandle = await this.waitForNewLeafInTab(leaf.tabId, leafKeysBefore)
     return { handle: newHandle, tabId: leaf.tabId, paneRuntimeId: leaf.paneRuntimeId }
@@ -10170,13 +10172,13 @@ export class OrcaRuntimeService {
 
   private async splitPtyBackedTerminal(
     pty: RuntimePtyWorktreeRecord,
-	    opts: {
-	      direction?: 'horizontal' | 'vertical'
-	      command?: string
-	      env?: Record<string, string>
-	      activate?: boolean
-	      telemetrySource?: TerminalPaneSplitSource
-	    } = {}
+    opts: {
+      direction?: 'horizontal' | 'vertical'
+      command?: string
+      env?: Record<string, string>
+      activate?: boolean
+      telemetrySource?: TerminalPaneSplitSource
+    } = {}
   ): Promise<RuntimeTerminalSplit> {
     if (!this.ptyController?.spawn) {
       throw new Error('runtime_unavailable')
@@ -10224,11 +10226,11 @@ export class OrcaRuntimeService {
         title: null,
         activate: opts.activate !== false,
         tabId: parentTabId,
-	        leafId,
-	        splitFromLeafId: parsedPaneKey.leafId,
-	        splitDirection: direction,
-	        splitTelemetrySource: opts.telemetrySource
-	      })
+        leafId,
+        splitFromLeafId: parsedPaneKey.leafId,
+        splitDirection: direction,
+        splitTelemetrySource: opts.telemetrySource
+      })
     } catch (error) {
       this.ptyController.kill?.(result.id)
       throw error

@@ -143,6 +143,53 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Loading PR')
   })
 
+  it('does not show cached branch PR details when the worktree has no linked PR', async () => {
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({ number: 456, title: 'Stale branch PR' }),
+        fetchedAt: Date.now(),
+        linkedReviewHintKey: 'github:456'
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('PR #456')
+    expect(markup).not.toContain('Stale branch PR')
+  })
+
+  it('shows branch-discovered hosted review providers without linked worktree metadata', async () => {
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({
+          provider: 'bitbucket',
+          number: 789,
+          title: 'Bitbucket branch PR',
+          url: 'https://bitbucket.org/acme/orca/pull-requests/789'
+        }),
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedPR: null })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked PR #789')
+  })
+
   it('shows issue, Linear issue, PR, and notes metadata in detailed cards', async () => {
     worktreeCardProperties = ['issue', 'linear-issue', 'pr', 'comment']
     const { default: WorktreeCard } = await import('./WorktreeCard')

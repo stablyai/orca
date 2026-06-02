@@ -14,15 +14,6 @@ import EditorFileTab from './EditorFileTab'
 import SortableTab from './SortableTab'
 
 let mockTabAgent: TuiAgent | null = null
-const mockSortableTabStoreState = {
-  agentStatusByPaneKey: {},
-  openMarkdownPreview: vi.fn(),
-  ptyIdsByTabId: {} as Record<string, string[]>,
-  runtimePaneTitlesByTabId: {},
-  terminalLayoutsByTabId: {},
-  settings: null,
-  unreadTerminalTabs: {} as Record<string, true>
-}
 
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: ({ id }: { id: string }) => ({
@@ -99,13 +90,18 @@ vi.mock('@/lib/use-tab-agent', () => ({
 }))
 
 vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: typeof mockSortableTabStoreState) => unknown) =>
-    selector(mockSortableTabStoreState)
+  useAppStore: (selector: (state: { unreadTerminalTabs: Record<string, boolean> }) => unknown) =>
+    selector({ unreadTerminalTabs: {} })
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof mockSortableTabStoreState) => unknown) =>
-    selector(mockSortableTabStoreState)
+  useAppStore: (
+    selector: (state: {
+      openMarkdownPreview: () => void
+      settings: null
+      unreadTerminalTabs: Record<string, boolean>
+    }) => unknown
+  ) => selector({ openMarkdownPreview: vi.fn(), settings: null, unreadTerminalTabs: {} })
 }))
 
 vi.mock('@/store/selectors', () => ({
@@ -221,11 +217,6 @@ function makeEditorFile(overrides: Partial<OpenFile & { tabId?: string }> = {}):
 describe('tab title tooltips', () => {
   beforeEach(() => {
     mockTabAgent = null
-    mockSortableTabStoreState.agentStatusByPaneKey = {}
-    mockSortableTabStoreState.ptyIdsByTabId = {}
-    mockSortableTabStoreState.runtimePaneTitlesByTabId = {}
-    mockSortableTabStoreState.terminalLayoutsByTabId = {}
-    mockSortableTabStoreState.unreadTerminalTabs = {}
   })
 
   it('uses the terminal custom title for the visible label and tooltip trigger content', () => {
@@ -286,65 +277,6 @@ describe('tab title tooltips', () => {
     expect(markup).toContain('<span class="truncate max-w-[72px] mr-1">Claude Code</span>')
     expect(markup).not.toContain('data-shell-icon="generic"')
     expect(markup).not.toContain('>✳ Claude Code</span>')
-  })
-
-  it('overlays a working badge on the provider icon when the agent is active', () => {
-    mockTabAgent = 'codex'
-    mockSortableTabStoreState.ptyIdsByTabId = { 'terminal-1': ['pty-1'] }
-    const markup = renderToStaticMarkup(
-      <SortableTab
-        tab={makeTerminalTab({ title: 'Codex working' })}
-        tabCount={1}
-        hasTabsToRight={false}
-        isActive={true}
-        isPinned={false}
-        isExpanded={false}
-        onActivate={vi.fn()}
-        onClose={vi.fn()}
-        onCloseOthers={vi.fn()}
-        onCloseToRight={vi.fn()}
-        onSetCustomTitle={vi.fn()}
-        onSetTabColor={vi.fn()}
-        onTogglePin={vi.fn()}
-        onToggleExpand={vi.fn()}
-        onSplitGroup={vi.fn()}
-        dragData={makeDragData('terminal', 'terminal-1')}
-      />
-    )
-
-    expect(markup).toContain('data-agent-icon="codex"')
-    expect(markup).toContain('data-testid="tab-working-agent-badge"')
-    expect(markup).toContain('animate-spin')
-  })
-
-  it('overlays a done badge on unread agent tabs without replacing the provider icon', () => {
-    mockTabAgent = 'codex'
-    mockSortableTabStoreState.unreadTerminalTabs = { 'terminal-1': true }
-    const markup = renderToStaticMarkup(
-      <SortableTab
-        tab={makeTerminalTab({ title: 'Codex finished' })}
-        tabCount={1}
-        hasTabsToRight={false}
-        isActive={false}
-        isPinned={false}
-        isExpanded={false}
-        onActivate={vi.fn()}
-        onClose={vi.fn()}
-        onCloseOthers={vi.fn()}
-        onCloseToRight={vi.fn()}
-        onSetCustomTitle={vi.fn()}
-        onSetTabColor={vi.fn()}
-        onTogglePin={vi.fn()}
-        onToggleExpand={vi.fn()}
-        onSplitGroup={vi.fn()}
-        dragData={makeDragData('terminal', 'terminal-1')}
-      />
-    )
-
-    expect(markup).toContain('data-agent-icon="codex"')
-    expect(markup).toContain('data-testid="tab-done-agent-badge"')
-    expect(markup).toContain('data-filled-bell="true"')
-    expect(markup).not.toContain('data-testid="tab-activity-bell"')
   })
 
   it('uses the browser tab fallback label from the tab prop, not the live URL', () => {

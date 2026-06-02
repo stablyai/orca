@@ -5,12 +5,16 @@ import {
 } from '../../../../shared/feature-interactions'
 import { isFeatureTipId } from '../../../../shared/feature-tips'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTaskProvider } from '../../../../shared/task-providers'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
-import type { PersistedUIState } from '../../../../shared/types'
+import type { PersistedUIState, TaskProvider } from '../../../../shared/types'
 import { defineMethod, type RpcMethod } from '../core'
 
 const NullableString = z.string().nullable()
 const StringArray = z.array(z.string())
+const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
+  message: 'Unknown task provider'
+})
 const FeatureTipIds = z.array(z.custom(isFeatureTipId, { message: 'Unknown feature tip id' }))
 const UnknownRecord = z.record(z.string(), z.unknown())
 const UnknownRecordArray = z.array(UnknownRecord)
@@ -110,7 +114,8 @@ const SettingsUpdate = z
       .unknown()
       .transform((value) => normalizeDisabledTuiAgents(value))
       .optional(),
-    defaultTaskSource: z.enum(['github', 'gitlab', 'linear']).optional(),
+    defaultTaskSource: TaskProviderParam.optional(),
+    visibleTaskProviders: z.array(TaskProviderParam).optional(),
     defaultTaskViewPreset: z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
       .optional(),

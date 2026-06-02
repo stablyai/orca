@@ -17,6 +17,11 @@ import { ExternalLink, LoaderCircle } from 'lucide-react'
 import type { WorktreeMeta } from '../../../../shared/types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
+type WorktreeMetaSavedPayload = {
+  worktreeId: string
+  updates: Partial<WorktreeMeta>
+}
+
 function parseExplicitGitHubIssueUrl(input: string): string | null {
   const trimmed = input.trim()
   const link = parseGitHubIssueOrPRLink(trimmed)
@@ -52,6 +57,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const currentComment =
     typeof modalData.currentComment === 'string' ? modalData.currentComment : ''
   const focusField = typeof modalData.focus === 'string' ? modalData.focus : 'comment'
+  const afterSave =
+    typeof modalData.afterSave === 'function'
+      ? (modalData.afterSave as (payload: WorktreeMetaSavedPayload) => void | Promise<void>)
+      : null
 
   const [displayNameInput, setDisplayNameInput] = useState('')
   const [issueInput, setIssueInput] = useState('')
@@ -167,6 +176,13 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
 
       await updateWorktreeMeta(worktreeId, updates)
       closeModal()
+      // Why: follow-up refreshes should not turn a successful metadata save
+      // into a failed dialog.
+      try {
+        void Promise.resolve(afterSave?.({ worktreeId, updates })).catch(console.error)
+      } catch (error) {
+        console.error(error)
+      }
     } finally {
       if (mountedRef.current) {
         setSaving(false)
@@ -182,6 +198,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     commentInput,
     updateWorktreeMeta,
     closeModal,
+    afterSave,
     mountedRef
   ])
 
