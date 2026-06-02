@@ -953,6 +953,10 @@ export type PreloadApi = {
       repoPath: string
       repoId?: string
     }) => Promise<{ owner: string; repo: string } | null>
+    repoUpstream: (args: {
+      repoPath: string
+      repoId?: string
+    }) => Promise<{ owner: string; repo: string } | null>
     prForBranch: (args: {
       repoPath: string
       repoId?: string

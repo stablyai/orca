@@ -20,6 +20,8 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
         'color',
         'hex',
         'badge',
+        'avatar',
+        'github',
         'emoji',
         'favicon'
       ]

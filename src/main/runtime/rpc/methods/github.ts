@@ -286,6 +286,11 @@ export const GITHUB_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.getRepoSlug(params.repo)
   }),
   defineMethod({
+    name: 'github.repoUpstream',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => runtime.getRepoUpstream(params.repo)
+  }),
+  defineMethod({
     name: 'github.rateLimit',
     params: RateLimit,
     handler: async (params, { runtime }) => runtime.getGitHubRateLimit(params)

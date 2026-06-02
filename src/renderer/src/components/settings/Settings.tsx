@@ -866,7 +866,8 @@ function Settings(): React.JSX.Element {
         ...section,
         badgeColor: repo?.badgeColor,
         isRemote: !!repo?.connectionId,
-        repoIcon: repo?.repoIcon
+        repoIcon: repo?.repoIcon,
+        upstream: repo?.upstream
       }
     })
   const isSectionMounted = (sectionId: string): boolean => neededSectionIds.has(sectionId)

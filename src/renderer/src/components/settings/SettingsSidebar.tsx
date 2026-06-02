@@ -3,9 +3,11 @@ import { ArrowLeft, Search, Server } from 'lucide-react'
 import logo from '../../../../../resources/logo.svg'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
+import type { GitHubRepositoryIdentity } from '../../../../shared/types'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { cn } from '@/lib/utils'
 import { RepoIconGlyph } from '../repo/repo-icon'
+import { RepoForkIndicator } from '../repo/repo-fork-indicator'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
@@ -30,6 +32,7 @@ type RepoNavSection = NavSection & {
   badgeColor?: string
   isRemote?: boolean
   repoIcon?: RepoIcon | null
+  upstream?: GitHubRepositoryIdentity | null
 }
 
 type SettingsSidebarProps = {
@@ -273,6 +276,7 @@ export function SettingsSidebar({
                         iconClassName="size-3.5"
                       />
                       <span className="truncate">{section.title}</span>
+                      <RepoForkIndicator upstream={section.upstream} />
                       {section.isRemote && (
                         <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
                           <Server className="size-3" />

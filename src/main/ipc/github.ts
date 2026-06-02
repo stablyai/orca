@@ -20,6 +20,7 @@ import {
   getPRForBranch,
   getIssue,
   getRepoSlug,
+  getRepoUpstream,
   listIssues,
   listWorkItems,
   countWorkItems,
@@ -402,6 +403,11 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   ipcMain.handle('gh:repoSlug', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args, store)
     return getRepoSlug(repo.path, repoConnectionId(repo))
+  })
+
+  ipcMain.handle('gh:repoUpstream', (_event, args: { repoPath: string }) => {
+    const repo = assertRegisteredRepo(args, store)
+    return getRepoUpstream(repo.path, repoConnectionId(repo))
   })
 
   ipcMain.handle(
