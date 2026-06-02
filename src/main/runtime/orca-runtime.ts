@@ -1134,12 +1134,23 @@ type ResolvedWorktreeInFlight = {
   promise: Promise<ResolvedWorktree[]>
 }
 
-export type MobileNotificationEvent = {
+export type MobileNotificationDispatchEvent = {
+  type: 'notification'
   source: 'agent-task-complete' | 'terminal-bell' | 'test'
   title: string
   body: string
   worktreeId?: string
+  notificationId?: string
 }
+
+export type MobileNotificationDismissEvent = {
+  type: 'dismiss'
+  notificationId: string
+}
+
+export type MobileNotificationEvent =
+  | MobileNotificationDispatchEvent
+  | MobileNotificationDismissEvent
 
 // Why: presence-based driver state for the mobile-presence lock. Exactly one
 // driver per PTY at any moment. See docs/mobile-presence-lock.md.
@@ -2988,6 +2999,10 @@ export class OrcaRuntimeService {
     for (const listener of this.notificationListeners) {
       listener(event)
     }
+  }
+
+  dismissMobileNotification(notificationId: string): void {
+    this.dispatchMobileNotification({ type: 'dismiss', notificationId })
   }
 
   // ─── Account Services (mobile RPC bridge) ─────────────────────

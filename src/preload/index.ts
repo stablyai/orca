@@ -27,6 +27,7 @@ import type {
   GhosttyImportPreview,
   ListWorkItemsResult,
   MemorySnapshot,
+  NotificationDismissResult,
   NotificationDispatchResult,
   NotificationPermissionStatusResult,
   NotificationSoundDataResult,
@@ -1580,6 +1581,8 @@ const api = {
   notifications: {
     dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
       ipcRenderer.invoke('notifications:dispatch', args),
+    dismiss: (ids: string[]): Promise<NotificationDismissResult> =>
+      ipcRenderer.invoke('notifications:dismiss', ids),
     openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings'),
     getPermissionStatus: (): Promise<NotificationPermissionStatusResult> =>
       ipcRenderer.invoke('notifications:getPermissionStatus'),

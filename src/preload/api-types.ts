@@ -108,6 +108,7 @@ import type {
   GetRateLimitResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
+  NotificationDismissResult,
   NotificationPermissionStatusResult,
   NotificationSoundResult,
   OnboardingState,
@@ -1593,6 +1594,7 @@ export type PreloadApi = {
   preflight: PreflightApi
   notifications: {
     dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
+    dismiss: (ids: string[]) => Promise<NotificationDismissResult>
     openSystemSettings: () => Promise<void>
     getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
     requestPermission: () => Promise<NotificationPermissionStatusResult>
