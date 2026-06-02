@@ -63,42 +63,6 @@ type SettingsSetupGuideRowProps = {
   onOpen: () => void
 }
 
-function SettingsSetupGuideRow({
-  progress,
-  setupActive,
-  onOpen
-}: SettingsSetupGuideRowProps): React.JSX.Element | null {
-  const setupGuideSidebarDismissed = useAppStore((s) => s.setupGuideSidebarDismissed)
-  const setupComplete = progress.firstIncompleteStepId === null
-
-  if (setupComplete || setupGuideSidebarDismissed) {
-    return null
-  }
-
-  return (
-    <div className="border-b border-border/60 pb-4">
-      <button
-        type="button"
-        aria-current={setupActive ? 'page' : undefined}
-        aria-label={`Get started with Orca, ${progress.doneCount} of ${progress.total} done. Open setup guide.`}
-        onClick={onOpen}
-        className={cn(
-          'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          setupActive ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-muted/60'
-        )}
-      >
-        <ListChecks className="size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate font-medium">Get started with Orca</span>
-        <SetupGuideProgressRing
-          done={progress.doneCount}
-          total={progress.total}
-          className="ml-auto"
-        />
-      </button>
-    </div>
-  )
-}
-
 function SettingsSetupGuideNavRow({
   progress,
   setupActive,
@@ -192,12 +156,6 @@ export function SettingsSidebar({
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
         <div className="space-y-5">
-          <SettingsSetupGuideRow
-            progress={setupGuideProgress}
-            setupActive={setupActive}
-            onOpen={openSetupGuide}
-          />
-
           {generalGroups.map((group) => (
             <div key={group.id} className="space-y-2">
               <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
