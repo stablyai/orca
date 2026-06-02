@@ -45,9 +45,9 @@ describe('client UI RPC methods', () => {
       defaultTuiAgent: null,
       disabledTuiAgents: ['claude'],
       agentCmdOverrides: {},
-      defaultTaskSource: 'jira',
+      defaultTaskSource: 'linear',
       defaultTaskViewPreset: 'issues',
-      visibleTaskProviders: ['github', 'jira'],
+      visibleTaskProviders: ['github', 'linear'],
       defaultRepoSelection: ['repo-1', 'repo-2'],
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: {
@@ -69,8 +69,8 @@ describe('client UI RPC methods', () => {
       makeRequest('settings.update', {
         defaultTuiAgent: 'codex',
         disabledTuiAgents: ['claude', 'not-real', 'claude'],
-        defaultTaskSource: 'jira',
-        visibleTaskProviders: ['github', 'jira'],
+        defaultTaskSource: 'linear',
+        visibleTaskProviders: ['github', 'linear'],
         defaultTaskViewPreset: 'my-prs',
         defaultRepoSelection: settings.defaultRepoSelection,
         defaultLinearTeamSelection: ['team-1', 'team-2'],
@@ -81,14 +81,27 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateClientSettings).toHaveBeenCalledWith({
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
-      defaultTaskSource: 'jira',
-      visibleTaskProviders: ['github', 'jira'],
+      defaultTaskSource: 'linear',
+      visibleTaskProviders: ['github', 'linear'],
       defaultTaskViewPreset: 'my-prs',
       defaultRepoSelection: settings.defaultRepoSelection,
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: settings.githubProjects
     })
     expect(response).toMatchObject({ ok: true, result: { settings } })
+
+    vi.mocked(runtime.updateClientSettings).mockClear()
+    await dispatcher.dispatch(
+      makeRequest('settings.update', {
+        defaultTaskSource: 'jira',
+        visibleTaskProviders: ['github', 'jira']
+      })
+    )
+
+    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      defaultTaskSource: 'jira',
+      visibleTaskProviders: ['github', 'jira']
+    })
   })
 
   it('returns the runtime host persisted UI state', async () => {
