@@ -1,5 +1,4 @@
-/* eslint-disable max-lines -- Why: notification settings keeps delivery toggles, system test feedback, and sound selection on one settings merge path. */
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
@@ -18,6 +17,7 @@ import { BellRing, Bot, FileAudio, Siren, Upload, Volume2 } from 'lucide-react'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
+import { NotificationSettingToggle } from './NotificationSettingToggle'
 export { NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './notifications-search'
 
 type NotificationsPaneProps = {
@@ -265,7 +265,7 @@ export function NotificationsPane({
 
   return (
     <div className="space-y-1">
-      <SettingToggle
+      <NotificationSettingToggle
         label="Enable Notifications"
         description="Native system notifications for background events."
         checked={notificationSettings.enabled}
@@ -279,7 +279,7 @@ export function NotificationsPane({
 
       <Separator />
 
-      <SettingToggle
+      <NotificationSettingToggle
         icon={<Bot className="size-4" />}
         label="Agent Task Complete"
         description="A coding agent finishes and becomes idle."
@@ -292,7 +292,7 @@ export function NotificationsPane({
         }
       />
 
-      <SettingToggle
+      <NotificationSettingToggle
         icon={<Siren className="size-4" />}
         label="Terminal Bell"
         description="A background terminal emits a bell character."
@@ -375,7 +375,7 @@ export function NotificationsPane({
 
       <Separator />
 
-      <SettingToggle
+      <NotificationSettingToggle
         label="Suppress While Focused"
         description="Skip notifications when the triggering worktree is already visible."
         checked={notificationSettings.suppressWhenFocused}
@@ -399,52 +399,6 @@ export function NotificationsPane({
           Send Test Notification
         </Button>
       </div>
-    </div>
-  )
-}
-
-export type SettingToggleProps = {
-  label: string
-  description: string
-  checked: boolean
-  onToggle: () => void
-  disabled?: boolean
-  icon?: ReactNode
-}
-
-export function SettingToggle({
-  label,
-  description,
-  checked,
-  onToggle,
-  disabled = false,
-  icon
-}: SettingToggleProps): React.JSX.Element {
-  return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div className="space-y-0.5">
-        <div className="flex items-center gap-2">
-          {icon}
-          <Label>{label}</Label>
-        </div>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <button
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        disabled={disabled}
-        onClick={onToggle}
-        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
-          checked ? 'bg-foreground' : 'bg-muted-foreground/30'
-        } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-      >
-        <span
-          className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-            checked ? 'translate-x-4' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
     </div>
   )
 }

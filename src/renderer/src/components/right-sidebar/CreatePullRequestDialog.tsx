@@ -1,6 +1,5 @@
-/* eslint-disable max-lines -- Why: create-review dialog keeps provider copy, base/head selection, template controls, and submit state together so GitHub PR and GitLab MR creation stay symmetric. */
 import React, { useCallback, useRef, useState } from 'react'
-import { Check, ChevronsUpDown, Loader2, Sparkles, Square, RefreshCw } from 'lucide-react'
+import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,7 +12,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import type {
@@ -30,6 +28,7 @@ import {
 } from '../../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
 import { getRuntimeGitScope } from '@/runtime/runtime-git-client'
+import { CreatePullRequestGenerateButton } from './CreatePullRequestGenerateButton'
 
 type CreatePullRequestDialogProps = {
   open: boolean
@@ -283,42 +282,15 @@ export function CreatePullRequestDialog({
           <div className="flex min-w-0 items-center justify-between gap-2 pr-8">
             <DialogTitle className="min-w-0 truncate">Create {copy.titleLabel}</DialogTitle>
             {aiGenerationEnabled ? (
-              <div className="shrink-0">
-                {generating ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCancelGenerate}
-                        title="Stop generating"
-                        aria-label={`Stop generating ${copy.reviewLabel} details`}
-                      >
-                        <RefreshCw className="size-4 animate-spin" />
-                        Generating…
-                        <Square className="size-3 fill-current" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left" sideOffset={6}>
-                      Generating {copy.shortLabel} details. Click to stop.
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={generateDisabled}
-                    onClick={() => void handleGenerate()}
-                    title={generateDisabledReason ?? `Generate ${copy.reviewLabel} details with AI`}
-                    aria-label={`Generate ${copy.reviewLabel} details with AI`}
-                  >
-                    <Sparkles className="size-4" />
-                    Generate with AI
-                  </Button>
-                )}
-              </div>
+              <CreatePullRequestGenerateButton
+                generating={generating}
+                generateDisabled={generateDisabled}
+                generateDisabledReason={generateDisabledReason}
+                shortLabel={copy.shortLabel}
+                reviewLabel={copy.reviewLabel}
+                onGenerate={() => void handleGenerate()}
+                onCancelGenerate={handleCancelGenerate}
+              />
             ) : null}
           </div>
           <DialogDescription>
