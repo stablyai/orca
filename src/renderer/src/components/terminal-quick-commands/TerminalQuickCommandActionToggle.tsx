@@ -1,5 +1,6 @@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { TerminalQuickCommandDialogAction } from './terminal-quick-command-dialog-draft'
+import { QUICK_COMMAND_TOGGLE_ITEM_CLASS } from './terminal-quick-command-toggle-style'
 
 type TerminalQuickCommandActionToggleProps = {
   selectedAction: TerminalQuickCommandDialogAction
@@ -20,9 +21,14 @@ export function TerminalQuickCommandActionToggle({
         }
       }}
       className="justify-start"
+      variant="outline"
     >
-      <ToggleGroupItem value="terminal-command">Terminal Command</ToggleGroupItem>
-      <ToggleGroupItem value="agent-prompt">Agent Prompt</ToggleGroupItem>
+      <ToggleGroupItem value="terminal-command" className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}>
+        Terminal Command
+      </ToggleGroupItem>
+      <ToggleGroupItem value="agent-prompt" className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}>
+        Agent Prompt
+      </ToggleGroupItem>
     </ToggleGroup>
   )
 }
